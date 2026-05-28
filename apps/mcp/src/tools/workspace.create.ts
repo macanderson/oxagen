@@ -1,4 +1,4 @@
-import { workspaceCreate } from "@oxagen/oxagen/capabilities/workspace.create";
+import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { workspaceCreateHandler } from "@oxagen/handlers/workspace.create";
 import { placeholderContext } from "../context.js";
 import type { McpTool } from "../server.js";

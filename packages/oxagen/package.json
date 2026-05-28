@@ -7,7 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./capabilities/*": "./src/capabilities/*.ts",
+    "./contracts/*": "./src/contracts/*.ts",
     "./registry": "./src/registry.ts",
     "./types": "./src/types.ts"
   },

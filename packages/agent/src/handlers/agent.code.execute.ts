@@ -60,6 +60,8 @@ export async function agentCodeExecuteHandler(
       external_server_id: null,
       risk_level: "high",
       required_approval: 1,
+      surface: ctx.surface,
+      provider: "",
       created_at: new Date().toISOString(),
     }).catch(() => undefined);
   }

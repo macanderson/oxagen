@@ -1,5 +1,5 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { billingSubscriptionRead } from "@oxagen/oxagen/capabilities/billing.subscription.read";
+import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
 import { db, schema } from "@oxagen/database";
 import { and, eq, inArray } from "drizzle-orm";
 

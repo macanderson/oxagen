@@ -17,6 +17,7 @@
     "@ai-sdk/anthropic": "^1.0.0",
     "@ai-sdk/openai": "^1.0.0",
     "@oxagen/config": "workspace:*",
+    "@oxagen/telemetry": "workspace:*",
     "zod": "^3.23.8"
   },
   "devDependencies": {

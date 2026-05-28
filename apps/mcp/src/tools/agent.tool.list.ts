@@ -1,4 +1,4 @@
-import { agentToolList } from "@oxagen/oxagen/capabilities/agent.tool.list";
+import { agentToolList } from "@oxagen/oxagen/contracts/agent.tool.list";
 import { agentToolListHandler } from "@oxagen/agent/handlers/agent.tool.list";
 import { placeholderContext } from "../context.js";
 import type { McpTool } from "../server.js";

@@ -1,5 +1,5 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { workspaceCreate } from "@oxagen/oxagen/capabilities/workspace.create";
+import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 

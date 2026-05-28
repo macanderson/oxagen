@@ -1,5 +1,5 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { billingSubscriptionUpgradeStart } from "@oxagen/oxagen/capabilities/billing.subscription.upgrade.start";
+import { billingSubscriptionUpgradeStart } from "@oxagen/oxagen/contracts/billing.subscription.upgrade.start";
 import { createCheckoutSession } from "@oxagen/billing";
 
 export const billingSubscriptionUpgradeStartHandler: CapabilityHandler<

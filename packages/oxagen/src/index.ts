@@ -5,26 +5,26 @@ export * from "./registry.js";
 // registry deduplicates and the manifest gate verifies layer presence.
 
 // Foundation
-import "./capabilities/tenant.create.js";
-import "./capabilities/workspace.create.js";
-import "./capabilities/billing.subscription.read.js";
-import "./capabilities/billing.subscription.upgrade.start.js";
-import "./capabilities/chat.message.send.js";
+import "./contracts/tenant.create.js";
+import "./contracts/workspace.create.js";
+import "./contracts/billing.subscription.read.js";
+import "./contracts/billing.subscription.upgrade.start.js";
+import "./contracts/chat.message.send.js";
 
 // Agent runtime
-import "./capabilities/agent.tool.list.js";
-import "./capabilities/agent.subagent.dispatch.js";
-import "./capabilities/agent.subagent.aggregate.js";
-import "./capabilities/agent.code.execute.js";
-import "./capabilities/agent.mcp.register.js";
-import "./capabilities/agent.mcp.list.js";
-import "./capabilities/agent.skill.list.js";
-import "./capabilities/agent.skill.load.js";
-import "./capabilities/agent.plan.create.js";
-import "./capabilities/agent.plan.approve.js";
-import "./capabilities/agent.task.background.start.js";
-import "./capabilities/agent.task.background.read.js";
-import "./capabilities/agent.task.background.cancel.js";
-import "./capabilities/agent.memory.recall.js";
-import "./capabilities/agent.memory.write.js";
-import "./capabilities/agent.approval.resolve.js";
+import "./contracts/agent.tool.list.js";
+import "./contracts/agent.subagent.dispatch.js";
+import "./contracts/agent.subagent.aggregate.js";
+import "./contracts/agent.code.execute.js";
+import "./contracts/agent.mcp.register.js";
+import "./contracts/agent.mcp.list.js";
+import "./contracts/agent.skill.list.js";
+import "./contracts/agent.skill.load.js";
+import "./contracts/agent.plan.create.js";
+import "./contracts/agent.plan.approve.js";
+import "./contracts/agent.task.background.start.js";
+import "./contracts/agent.task.background.read.js";
+import "./contracts/agent.task.background.cancel.js";
+import "./contracts/agent.memory.recall.js";
+import "./contracts/agent.memory.write.js";
+import "./contracts/agent.approval.resolve.js";

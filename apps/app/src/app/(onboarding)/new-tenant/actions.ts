@@ -2,8 +2,8 @@
 import { z } from "zod";
 import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
-import { tenantCreate } from "@oxagen/oxagen/capabilities/tenant.create";
-import { workspaceCreate } from "@oxagen/oxagen/capabilities/workspace.create";
+import { tenantCreate } from "@oxagen/oxagen/contracts/tenant.create";
+import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { getSessionOrRedirect } from "@/lib/session";
 
 const FormSchema = z.object({

@@ -1,5 +1,5 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { chatMessageSend } from "@oxagen/oxagen/capabilities/chat.message.send";
+import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 

@@ -1,4 +1,4 @@
-import { agentMemoryRecall } from "@oxagen/oxagen/capabilities/agent.memory.recall";
+import { agentMemoryRecall } from "@oxagen/oxagen/contracts/agent.memory.recall";
 import { agentMemoryRecallHandler } from "@oxagen/agent/handlers/agent.memory.recall";
 import { placeholderContext } from "../context.js";
 import type { McpTool } from "../server.js";

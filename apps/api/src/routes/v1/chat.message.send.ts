@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { chatMessageSend } from "@oxagen/oxagen/capabilities/chat.message.send";
+import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { chatMessageSendHandler } from "@oxagen/handlers/chat.message.send";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";

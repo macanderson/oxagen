@@ -1,5 +1,5 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { tenantCreate } from "@oxagen/oxagen/capabilities/tenant.create";
+import { tenantCreate } from "@oxagen/oxagen/contracts/tenant.create";
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 

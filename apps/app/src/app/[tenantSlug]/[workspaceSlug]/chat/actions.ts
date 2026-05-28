@@ -4,11 +4,11 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
-import { chatMessageSend } from "@oxagen/oxagen/capabilities/chat.message.send";
-import { agentApprovalResolve } from "@oxagen/oxagen/capabilities/agent.approval.resolve";
-import { agentPlanApprove } from "@oxagen/oxagen/capabilities/agent.plan.approve";
-import { agentTaskBackgroundCancel } from "@oxagen/oxagen/capabilities/agent.task.background.cancel";
-import { agentTaskBackgroundRead } from "@oxagen/oxagen/capabilities/agent.task.background.read";
+import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
+import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
+import { agentPlanApprove } from "@oxagen/oxagen/contracts/agent.plan.approve";
+import { agentTaskBackgroundCancel } from "@oxagen/oxagen/contracts/agent.task.background.cancel";
+import { agentTaskBackgroundRead } from "@oxagen/oxagen/contracts/agent.task.background.read";
 import { agentApprovalResolveHandler } from "@oxagen/agent/handlers/agent.approval.resolve";
 import { agentPlanApproveHandler } from "@oxagen/agent/handlers/agent.plan.approve";
 import { agentTaskBackgroundCancelHandler } from "@oxagen/agent/handlers/agent.task.background.cancel";
@@ -137,6 +137,12 @@ export async function sendMessageAction(
       messages: coreMessages,
       model: defaultModel(),
       tools: agentTools,
+      telemetry: {
+        tenantId: ctx.tenantId,
+        workspaceId: ctx.workspaceId,
+        surface: "app",
+        messageId: userMessageId,
+      },
       onFinish: async (event) => {
         fullText = event.text;
         const [assistantMsg] = await db()

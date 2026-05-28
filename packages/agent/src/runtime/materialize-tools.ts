@@ -1,8 +1,17 @@
 import { tool, type Tool, type ToolSet } from "ai";
+import { insertToolInvocation } from "@oxagen/telemetry";
 import type { CapabilityContext } from "../types.js";
 import { invokeCapability } from "../handlers/index.js";
 import { beforeTool, afterTool, onError } from "../hooks/runtime.js";
 import { createApprovalRequest, waitForApproval } from "./approval.js";
+
+function byteSize(v: unknown): number {
+  try {
+    return new TextEncoder().encode(JSON.stringify(v ?? null)).length;
+  } catch {
+    return 0;
+  }
+}
 
 // Imported dynamically to avoid a static package cycle:
 // @oxagen/oxagen handlers depend on @oxagen/agent for helpers; if this
@@ -68,6 +77,9 @@ export async function materializeTools(
       parameters: cap.input as any,
       execute: async (input: unknown) => {
         await beforeTool({ capability: cap.name, ctx, input });
+        const invocationId = crypto.randomUUID();
+        const startedAt = Date.now();
+        const inputBytes = byteSize(input);
         try {
           // Approval gate. Only fires when the capability declares
           // `requiresApproval: true` AND we have a `messageId` to attach the
@@ -89,6 +101,33 @@ export async function materializeTools(
           }
           const result = await invokeCapability(cap.name, input, ctx);
           await afterTool({ capability: cap.name, ctx, output: result });
+          // OXA-1351: every tool invocation lands one row in ClickHouse
+          // `tool_invocations` with surface + provider. Failure-isolated.
+          try {
+            await insertToolInvocation({
+              invocation_id: invocationId,
+              tenant_id: ctx.tenantId,
+              workspace_id: ctx.workspaceId,
+              capability_name: cap.name,
+              message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
+              parent_message_id: null,
+              execution_step_id: null,
+              status: "completed",
+              input_size_bytes: inputBytes,
+              output_size_bytes: byteSize(result),
+              latency_ms: Date.now() - startedAt,
+              error_class: null,
+              external_provider: "",
+              external_server_id: null,
+              risk_level: riskLevel,
+              required_approval: requiresApproval ? 1 : 0,
+              surface: ctx.surface,
+              provider: "",
+              created_at: new Date().toISOString(),
+            });
+          } catch {
+            /* telemetry must never fail the call */
+          }
           return result;
         } catch (err) {
           await onError({
@@ -96,6 +135,31 @@ export async function materializeTools(
             ctx,
             error: err instanceof Error ? err : new Error(String(err)),
           });
+          try {
+            await insertToolInvocation({
+              invocation_id: invocationId,
+              tenant_id: ctx.tenantId,
+              workspace_id: ctx.workspaceId,
+              capability_name: cap.name,
+              message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
+              parent_message_id: null,
+              execution_step_id: null,
+              status: "failed",
+              input_size_bytes: inputBytes,
+              output_size_bytes: 0,
+              latency_ms: Date.now() - startedAt,
+              error_class: err instanceof Error ? err.name : "UnknownError",
+              external_provider: "",
+              external_server_id: null,
+              risk_level: riskLevel,
+              required_approval: requiresApproval ? 1 : 0,
+              surface: ctx.surface,
+              provider: "",
+              created_at: new Date().toISOString(),
+            });
+          } catch {
+            /* swallow */
+          }
           throw err;
         }
       },

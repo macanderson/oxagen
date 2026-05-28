@@ -26,7 +26,7 @@ Sequenced after the foundations epic ships.
 ## Phase 3 — Capability declarations
 
 All 17 capabilities listed in spec §4 declared in
-`packages/oxagen/src/capabilities/`. Each ships every layer; manifest
+`packages/oxagen/src/contracts/`. Each ships every layer; manifest
 gate must remain green at all times — implement one capability
 top-to-bottom before starting the next.
 

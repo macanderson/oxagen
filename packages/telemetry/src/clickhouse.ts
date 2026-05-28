@@ -144,14 +144,24 @@ export interface ApiKeyEventRow {
   created_at: string;
 }
 
+export type Surface = "api" | "mcp" | "app" | "runner" | "";
+export type Provider = "anthropic" | "openai" | "";
+
 export interface TokenUsageRow {
   execution_step_id: string;
   tenant_id: string;
+  workspace_id: string;
   model: string;
+  provider: Provider;
   input_tokens: number;
   output_tokens: number;
   cached_tokens: number;
   cost_usd_micros: number;
+  /** Wall-clock for the LLM call (first request byte → final token). */
+  duration_ms: number;
+  surface: Surface;
+  /** SHA-256 of the rendered prompt, first 16 bytes hex. PII-free cohort key. */
+  prompt_hash: string;
   created_at: string;
 }
 
@@ -192,11 +202,33 @@ export interface ToolInvocationRow {
   external_server_id: string | null;
   risk_level: "low" | "medium" | "high";
   required_approval: 0 | 1;
+  surface: Surface;
+  /** Empty string when the underlying capability isn't model-backed. */
+  provider: Provider;
   created_at: string;
 }
 
 export const insertToolInvocation = (row: ToolInvocationRow) =>
   insertRows("tool_invocations", [row]);
+
+/**
+ * Deterministic, PII-free cohort key for prompts. SHA-256, first 16 bytes
+ * hex. Stable across runs so analytics can group "same prompt asked N
+ * times" without the prompt text leaving Postgres `chat.messages`.
+ */
+export async function hashPrompt(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text);
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", data);
+  const bytes = new Uint8Array(digest).slice(0, 16);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Map an AI SDK model id like `anthropic:claude-…` to its provider. */
+export function providerFromModelId(modelId: string): Provider {
+  const head = modelId.split(":")[0] ?? "";
+  if (head === "anthropic" || head === "openai") return head;
+  return "";
+}
 
 export const insertToolInvocations = (rows: readonly ToolInvocationRow[]) =>
   insertRows("tool_invocations", rows);

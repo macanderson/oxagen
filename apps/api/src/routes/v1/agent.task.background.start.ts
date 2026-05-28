@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { agentTaskBackgroundStart } from "@oxagen/oxagen/capabilities/agent.task.background.start";
+import { agentTaskBackgroundStart } from "@oxagen/oxagen/contracts/agent.task.background.start";
 import { agentTaskBackgroundStartHandler } from "@oxagen/agent/handlers/agent.task.background.start";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";

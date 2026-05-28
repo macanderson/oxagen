@@ -1,4 +1,4 @@
-import { billingSubscriptionUpgradeStart } from "@oxagen/oxagen/capabilities/billing.subscription.upgrade.start";
+import { billingSubscriptionUpgradeStart } from "@oxagen/oxagen/contracts/billing.subscription.upgrade.start";
 import { billingSubscriptionUpgradeStartHandler } from "@oxagen/handlers/billing.subscription.upgrade.start";
 import { placeholderContext } from "../context.js";
 import type { McpTool } from "../server.js";

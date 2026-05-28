@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { billingSubscriptionUpgradeStart } from "@oxagen/oxagen/capabilities/billing.subscription.upgrade.start";
+import { billingSubscriptionUpgradeStart } from "@oxagen/oxagen/contracts/billing.subscription.upgrade.start";
 import { billingSubscriptionUpgradeStartHandler } from "@oxagen/handlers/billing.subscription.upgrade.start";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";

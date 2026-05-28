@@ -15,7 +15,7 @@ they are conditions for the code being accepted by review.
 ## Capability-driven design
 
 Every feature in Oxagen is a capability. A capability is declared
-exactly once in `packages/oxagen/src/capabilities/<name>.ts` with its
+exactly once in `packages/oxagen/src/contracts/<name>.ts` with its
 Zod input and output schemas, then fanned out across the API route,
 the MCP tool, the unit test, the E2E stub, and the docs page. Do not
 write a route, a tool, or a test that imports its own schema; import

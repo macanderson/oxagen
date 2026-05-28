@@ -139,7 +139,7 @@ ECS, etc.) is a single-file swap.
 
 ## 4. New Capabilities
 
-Every capability is declared in `packages/oxagen/src/capabilities/`.
+Every capability is declared in `packages/oxagen/src/contracts/`.
 The `surfaces` column determines required layers; the `agent` block is
 present only when `agent` is in `surfaces`.
 

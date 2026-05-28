@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { workspaceCreate } from "@oxagen/oxagen/capabilities/workspace.create";
+import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { workspaceCreateHandler } from "@oxagen/handlers/workspace.create";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";

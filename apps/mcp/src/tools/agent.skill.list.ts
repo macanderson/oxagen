@@ -1,4 +1,4 @@
-import { agentSkillList } from "@oxagen/oxagen/capabilities/agent.skill.list";
+import { agentSkillList } from "@oxagen/oxagen/contracts/agent.skill.list";
 import { agentSkillListHandler } from "@oxagen/agent/handlers/agent.skill.list";
 import { placeholderContext } from "../context.js";
 import type { McpTool } from "../server.js";

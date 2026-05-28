@@ -1,4 +1,4 @@
-import { agentTaskBackgroundCancel } from "@oxagen/oxagen/capabilities/agent.task.background.cancel";
+import { agentTaskBackgroundCancel } from "@oxagen/oxagen/contracts/agent.task.background.cancel";
 import { agentTaskBackgroundCancelHandler } from "@oxagen/agent/handlers/agent.task.background.cancel";
 import { placeholderContext } from "../context.js";
 import type { McpTool } from "../server.js";

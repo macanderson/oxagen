@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { agentMcpRegister } from "@oxagen/oxagen/capabilities/agent.mcp.register";
+import { agentMcpRegister } from "@oxagen/oxagen/contracts/agent.mcp.register";
 import { agentMcpRegisterHandler } from "@oxagen/agent/handlers/agent.mcp.register";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";

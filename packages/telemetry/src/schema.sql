@@ -70,11 +70,16 @@ TTL toDateTime(created_at) + INTERVAL 90 DAY;
 CREATE TABLE IF NOT EXISTS token_usage (
   execution_step_id UUID,
   tenant_id UUID,
+  workspace_id UUID DEFAULT toUUID('00000000-0000-0000-0000-000000000000'),
   model LowCardinality(String),
+  provider LowCardinality(String) DEFAULT '',
   input_tokens UInt64,
   output_tokens UInt64,
   cached_tokens UInt64,
   cost_usd_micros UInt64,
+  duration_ms UInt32 DEFAULT 0,
+  surface LowCardinality(String) DEFAULT '',
+  prompt_hash String DEFAULT '',
   created_at DateTime64(3)
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(created_at)
@@ -103,6 +108,8 @@ CREATE TABLE IF NOT EXISTS tool_invocations (
   external_server_id Nullable(UUID),
   risk_level LowCardinality(String),
   required_approval UInt8,
+  surface LowCardinality(String) DEFAULT '',
+  provider LowCardinality(String) DEFAULT '',
   created_at DateTime64(3)
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(created_at)

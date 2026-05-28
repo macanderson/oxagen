@@ -10,7 +10,7 @@ import { readdirSync, existsSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const ROOT = resolve(process.cwd());
-const CAP_DIR = join(ROOT, "packages/oxagen/src/capabilities");
+const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
 const MANIFEST = join(ROOT, "packages/oxagen/capabilities.manifest.json");
 
 function slugify(name) {
