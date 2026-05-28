@@ -26,7 +26,7 @@ Escalate to **Opus** when any of these are true:
 - architectural decisions or changes to `/packages` public surfaces
 - anything touching the storage boundaries below
 - security-sensitive code (auth, permissions, billing, secrets)
-- multi-system changes coordinating MCP + API + app + runner
+- multi-system changes coordinating MCP + API + app
 - incident triage with production impact
 
 ### Parallelism — when it pays, when it doesn't
@@ -71,7 +71,7 @@ Do **not** parallelize when:
 - Next.js. Static / minimal. Hello-world surface for the foundations
   milestone — no interactive features.
 
-### `apps/api`, `apps/mcp`, `apps/runner`
+### `apps/api`, `apps/mcp`
 
 - Node services. No UI. Surface platform capabilities defined in
   `/packages` once and exposed identically through API and MCP.

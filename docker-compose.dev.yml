@@ -14,7 +14,9 @@ services:
       -c shared_preload_libraries=pg_stat_statements
       -c log_statement=none
     ports:
-      - "5432:5432"
+      # Host 5433 → container 5432; avoids collision with oxagen-platform's
+      # postgres on 5432. Update DATABASE_URL in .env.local accordingly.
+      - "5433:5432"
     volumes:
       - oxagen-postgres:/var/lib/postgresql/data
       - ./tools/scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -67,22 +69,7 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    container_name: oxagen-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - oxagen-redis:/data
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
 volumes:
   oxagen-postgres:
   oxagen-neo4j:
   oxagen-clickhouse:
-  oxagen-redis:

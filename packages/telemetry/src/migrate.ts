@@ -9,10 +9,19 @@ import { clickhouse, closeClickhouse } from "./clickhouse.js";
 export async function migrate(): Promise<void> {
   const here = dirname(fileURLToPath(import.meta.url));
   const sql = readFileSync(join(here, "schema.sql"), "utf8");
+  // Strip leading comment lines per chunk so a CREATE TABLE preceded by
+  // commentary still executes. Previous `startsWith("--")` filter silently
+  // dropped any commented-above statement.
   const statements = sql
     .split(/;\s*$/m)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0 && !s.startsWith("--"));
+    .map((s) =>
+      s
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("--"))
+        .join("\n")
+        .trim(),
+    )
+    .filter((s) => s.length > 0);
 
   const ch = clickhouse();
   for (const stmt of statements) {

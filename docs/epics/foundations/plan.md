@@ -28,7 +28,7 @@ Exit: every app builds and runs a "hello world" health endpoint.
 
 ## Phase 2 — Datastore infra
 
-- [ ] `docker-compose.dev.yml` for Postgres + Neo4j + ClickHouse + Redis
+- [ ] `docker-compose.dev.yml` for Postgres + Neo4j + ClickHouse
 - [ ] Migration tooling per store (Postgres via chosen ORM; ClickHouse
       via versioned `.sql` files; Neo4j via `cypher-shell` migrations)
 - [ ] `pnpm db:migrate`, `pnpm db:check`, `pnpm db:reset` commands

@@ -6,8 +6,8 @@ import { loadEnv } from "@oxagen/config/env";
 
 const env = loadEnv();
 
-// Shared Inngest client. Same id as apps/runner so events route to the
-// runner's function handlers without an extra registration.
+// Shared Inngest client. Same `id` as @oxagen/inngest-functions so events
+// route to the registered handlers (served from apps/api /api/inngest).
 const inngest = new Inngest({ id: "oxagen-runner", eventKey: env.INNGEST_EVENT_KEY });
 
 export interface FanoutChild {

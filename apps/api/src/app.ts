@@ -7,6 +7,7 @@ import { tenantMiddleware } from "./middleware/tenant.js";
 import { workspaceMiddleware } from "./middleware/workspace.js";
 import { health } from "./routes/health.js";
 import { stripeWebhook } from "./routes/stripe.js";
+import { inngestRoute } from "./routes/inngest.js";
 import { tenantCreateRoute } from "./routes/v1/tenant.create.js";
 import { workspaceCreateRoute } from "./routes/v1/workspace.create.js";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read.js";
@@ -43,6 +44,9 @@ app.onError(errorMiddleware);
 // the raw body for signature verification and is its own auth surface.
 app.route("/health", health);
 app.route("/webhooks/stripe", stripeWebhook);
+// Inngest cloud polls /api/inngest for the function manifest; signing-key
+// verification is enforced inside the inngest/hono serve handler.
+app.route("/api/inngest", inngestRoute);
 
 // /v1 user-level routes (tenant + workspace CRUD) require auth but no
 // tenant scope: a freshly-authenticated user can create their first

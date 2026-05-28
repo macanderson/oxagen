@@ -35,7 +35,6 @@ Enterprise agent platform. Monorepo. Built around three primitives:
 - `mcp` — MCP server exposing platform capabilities
 - `api` — HTTP API exposing the same capabilities
 - `app` — web app; hosts the interactive QA agent
-- `runner` — execution engine for agents and workflows
 - `website` — marketing site
 - `cli` — first-class CLI product (streaming, keyboard-driven, composable commands)
 

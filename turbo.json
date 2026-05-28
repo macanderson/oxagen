@@ -22,7 +22,6 @@
     "INNGEST_SIGNING_KEY",
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
-    "REDIS_URL",
     "NODE_ENV"
   ],
   "tasks": {

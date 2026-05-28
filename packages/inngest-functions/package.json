@@ -1,0 +1,30 @@
+{
+  "name": "@oxagen/inngest-functions",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/inngest.ts",
+    "./functions": "./src/functions.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'lint placeholder'"
+  },
+  "dependencies": {
+    "@oxagen/agent": "workspace:*",
+    "@oxagen/billing": "workspace:*",
+    "@oxagen/config": "workspace:*",
+    "@oxagen/database": "workspace:*",
+    "@oxagen/telemetry": "workspace:*",
+    "inngest": "^3.27.4",
+    "pino": "^9.4.0",
+    "drizzle-orm": "^0.36.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.2"
+  }
+}

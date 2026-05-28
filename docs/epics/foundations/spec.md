@@ -16,7 +16,7 @@ The epic is complete when **all** of the following are true.
 ### 2.1 Infra and tooling
 
 1. `pnpm dev` brings the full stack up locally — `apps/api`, `apps/mcp`,
-   `apps/runner`, `apps/app`, `apps/website` — each reachable on a stable
+   `apps/app`, `apps/website` — each reachable on a stable
    port, against Dockerized Postgres, Neo4j, and ClickHouse.
 2. `pnpm kill` cleanly tears down the stack and removes orphaned
    containers and volumes.
@@ -1099,7 +1099,7 @@ via an `embedding_status` column (e.g.
 
 ### 8.2 Mutation contract
 
-Neo4j writes happen only from `apps/runner` and the ontology service
+Neo4j writes happen only from Inngest functions (`@oxagen/inngest-functions`, served via `apps/api`) and the ontology service
 in `/packages/ontology`. `apps/api` does not write Neo4j directly —
 reads only.
 
@@ -1161,7 +1161,7 @@ until production hosting hardens.
 ### 12.1 `pnpm dev`
 
 1. Verifies Docker is running and `.env.local` exists.
-2. Starts `postgres`, `neo4j`, `clickhouse`, `redis` containers via
+2. Starts `postgres`, `neo4j`, `clickhouse` containers via
    `docker-compose.dev.yml`.
 3. Runs pending migrations (Postgres + ClickHouse + Neo4j ontology
    sync).
@@ -1255,7 +1255,7 @@ TypeScript-natively. Step-level state remains in Postgres
 (`execution.execution_steps`); Inngest holds in-flight orchestration.
 
 The `event.triggers` table maps Oxagen event types to Inngest function
-names. Inngest events are emitted from `apps/api` and `apps/runner`;
+names. Inngest events are emitted from `apps/api` and from agent capability handlers;
 the runner subscribes.
 
 ### 15.3 Vector embeddings — Neo4j

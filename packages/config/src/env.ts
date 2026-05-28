@@ -18,8 +18,6 @@ const envSchema = z.object({
   NEO4J_PASSWORD: z.string().min(1),
   NEO4J_DATABASE: z.string().default("neo4j"),
 
-  REDIS_URL: z.string().url().optional(),
-
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
 

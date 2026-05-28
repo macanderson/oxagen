@@ -17,6 +17,7 @@
     "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/inngest-functions": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "drizzle-orm": "^0.36.0",
