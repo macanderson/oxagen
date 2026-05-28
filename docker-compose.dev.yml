@@ -64,7 +64,9 @@ services:
     volumes:
       - oxagen-v2-clickhouse:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8123/ping || exit 1"]
+      # clickhouse-alpine doesn't ship wget. Use the bundled client binary
+      # to probe the server. Same signal, image-agnostic.
+      test: ["CMD", "clickhouse-client", "-q", "SELECT 1"]
       interval: 5s
       timeout: 5s
       retries: 10

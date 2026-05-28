@@ -1,22 +1,32 @@
 #!/usr/bin/env tsx
 import { execa } from "execa";
 import kleur from "kleur";
+import { resolve } from "node:path";
 
 const COMPOSE_FILE = "docker-compose.dev.yml";
 const withVolumes = process.argv.includes("--volumes");
+
+// Scope the kill to processes whose command line references the repo's
+// absolute path. Previous `pkill -f tsx` killed every tsx process on the
+// machine — unrelated projects included. OXA-1350.
+const REPO_ROOT = resolve(process.cwd());
 
 async function bestEffort(cmd: string, args: string[]): Promise<void> {
   try {
     await execa(cmd, args, { stdio: "inherit" });
   } catch {
-    // Best-effort: log and continue so the rest of the teardown still runs.
     console.log(kleur.yellow(`[kill] ${cmd} ${args.join(" ")} exited non-zero`));
   }
 }
 
 async function main(): Promise<void> {
-  console.log(kleur.cyan("[kill] stopping tsx app processes"));
-  await bestEffort("pkill", ["-f", "tsx"]);
+  // Match tsx / node processes whose argv contains this repo's path.
+  // `pgrep -f` matches against the full command line; `pkill -f` likewise.
+  // Anchoring with the repo path means a tsx process for a different repo
+  // is left alone.
+  const pattern = `(tsx|node).*${REPO_ROOT.replace(/[/\\$.*+?()[\]{}^|]/g, "\\$&")}`;
+  console.log(kleur.cyan(`[kill] stopping dev processes scoped to ${REPO_ROOT}`));
+  await bestEffort("pkill", ["-f", pattern]);
 
   const downArgs = ["compose", "-f", COMPOSE_FILE, "down", "--remove-orphans"];
   if (withVolumes) downArgs.push("--volumes");

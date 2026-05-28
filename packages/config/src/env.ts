@@ -3,8 +3,9 @@ import { z } from "zod";
 // Apps subset the global schema via `requiredEnv` and re-validate at boot.
 // Spec §11: missing required vars fail closed, no silent defaults beyond
 // what's marked optional here.
-const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
   DATABASE_URL: z.string().url(),
 
@@ -38,9 +39,36 @@ const envSchema = z.object({
 
   LINEAR_API_KEY: z.string().optional(),
 
-  NEXT_PUBLIC_APP_URL: z.string().url(),
-  NEXT_PUBLIC_API_URL: z.string().url(),
-});
+    NEXT_PUBLIC_APP_URL: z.string().url(),
+    NEXT_PUBLIC_API_URL: z.string().url(),
+
+    // OXA-1348: when true (default off in prod), agent.code.execute is
+    // materialized as an agent tool. Set false on Vercel until OXA-1348-A
+    // ships a Vercel-compatible sandbox driver.
+    SANDBOX_ENABLED: z
+      .union([z.literal("true"), z.literal("false")])
+      .optional()
+      .transform((v) => v === "true"),
+  })
+  // OXA-1349: Inngest signing/event keys must be present in production —
+  // the `/api/inngest` serve handler accepts unsigned requests otherwise.
+  .superRefine((env, ctx) => {
+    if (env.NODE_ENV !== "production") return;
+    if (!env.INNGEST_EVENT_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["INNGEST_EVENT_KEY"],
+        message: "required when NODE_ENV=production",
+      });
+    }
+    if (!env.INNGEST_SIGNING_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["INNGEST_SIGNING_KEY"],
+        message: "required when NODE_ENV=production",
+      });
+    }
+  });
 
 export type Env = z.infer<typeof envSchema>;
 export type EnvKey = keyof Env;
