@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { agentMemoryRecall } from "@oxagen/oxagen/capabilities/agent.memory.recall";
-import { agentMemoryRecallHandler } from "@oxagen/oxagen/capabilities/agent.memory.recall.handler";
+import { agentMemoryRecallHandler } from "@oxagen/agent/handlers/agent.memory.recall";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 

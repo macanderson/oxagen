@@ -27,6 +27,7 @@ export interface ChatShellProps {
   fetchBackgroundTask: (taskId: string) => Promise<BackgroundTaskSnapshot>;
   cancelBackgroundTask?: (taskId: string) => Promise<{ ok: boolean; error?: string }>;
   initialBackgroundTaskIds?: string[];
+  agentCapabilities?: readonly import("./plan-card").AgentCapability[];
 }
 
 // RSC streaming: the messages promise resolves inside a Suspense boundary
@@ -43,6 +44,7 @@ export function ChatShell({
   fetchBackgroundTask,
   cancelBackgroundTask,
   initialBackgroundTaskIds,
+  agentCapabilities,
 }: ChatShellProps) {
   return (
     <>
@@ -54,6 +56,7 @@ export function ChatShell({
           sendAction={sendAction}
           resolveApprovalAction={resolveApprovalAction}
           resolvePlanAction={resolvePlanAction}
+          agentCapabilities={agentCapabilities}
         />
       </Suspense>
       <BackgroundTaskTray
@@ -72,6 +75,7 @@ async function AsyncShell({
   sendAction,
   resolveApprovalAction,
   resolvePlanAction,
+  agentCapabilities,
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
@@ -79,6 +83,7 @@ async function AsyncShell({
   sendAction: ComposerAction;
   resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
   resolvePlanAction: ChatShellProps["resolvePlanAction"];
+  agentCapabilities?: ChatShellProps["agentCapabilities"];
 }) {
   const messages = await promise;
   return (
@@ -89,6 +94,7 @@ async function AsyncShell({
       sendAction={sendAction}
       resolveApprovalAction={resolveApprovalAction}
       resolvePlanAction={resolvePlanAction}
+      agentCapabilities={agentCapabilities}
     />
   );
 }

@@ -1,5 +1,5 @@
 import { agentMcpList } from "@oxagen/oxagen/capabilities/agent.mcp.list";
-import { agentMcpListHandler } from "@oxagen/oxagen/capabilities/agent.mcp.list.handler";
+import { agentMcpListHandler } from "@oxagen/agent/handlers/agent.mcp.list";
 import { placeholderContext } from "../context.js";
 import type { McpTool } from "../server.js";
 

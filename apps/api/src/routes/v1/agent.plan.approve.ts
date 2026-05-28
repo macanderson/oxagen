@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { agentPlanApprove } from "@oxagen/oxagen/capabilities/agent.plan.approve";
-import { agentPlanApproveHandler } from "@oxagen/oxagen/capabilities/agent.plan.approve.handler";
+import { agentPlanApproveHandler } from "@oxagen/agent/handlers/agent.plan.approve";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 

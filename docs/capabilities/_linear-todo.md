@@ -1,19 +1,34 @@
-# Linear backlog — foundations capabilities
+# Linear backlog — capabilities
 
-The four foundation-milestone capabilities below need first-class issues
-in the `oxagen-v2` Linear project. The MCP-based subagent that generated
-this scaffold did not have Linear access; file these by hand or via the
-human's local Linear MCP session.
+All 20 declared capabilities are filed in `oxagen-v2` (team OXA,
+project ID `31ab7de2-021f-486d-9f6f-718a7976c027`).
 
-| Capability                  | Domain        | Mode  | SPEC link                                 |
-| --------------------------- | ------------- | ----- | ----------------------------------------- |
-| `tenant.create`             | organization  | sync  | `docs/capabilities/tenant.create.md`      |
-| `workspace.create`          | workspace     | sync  | `docs/capabilities/workspace.create.md`   |
-| `billing.subscription.read` | billing       | sync  | `docs/capabilities/billing.subscription.read.md` |
-| `chat.message.send`         | chat          | async | `docs/capabilities/chat.message.send.md`  |
+## Foundations (4)
 
-Each issue should:
-- Link to the corresponding `docs/capabilities/<name>.md`.
-- List the layers it ships (schema, api, mcp, unit, e2e, docs).
-- Reference foundations spec `docs/epics/foundations/spec.md` and the
-  acceptance criterion the capability satisfies.
+| Capability                  | Linear   |
+| --------------------------- | -------- |
+| `tenant.create`             | OXA-1326 |
+| `workspace.create`          | OXA-1327 |
+| `billing.subscription.read` | OXA-1328 |
+| `chat.message.send`         | OXA-1329 |
+
+## Agent runtime (16)
+
+| Capability                       | Linear   |
+| -------------------------------- | -------- |
+| `agent.tool.list`                | OXA-1330 |
+| `agent.subagent.dispatch`        | OXA-1331 |
+| `agent.subagent.aggregate`       | OXA-1324 |
+| `agent.code.execute`             | OXA-1325 |
+| `agent.mcp.register`             | OXA-1332 |
+| `agent.mcp.list`                 | OXA-1333 |
+| `agent.skill.list`               | OXA-1334 |
+| `agent.skill.load`               | OXA-1335 |
+| `agent.plan.create`              | OXA-1336 |
+| `agent.plan.approve`             | OXA-1337 |
+| `agent.task.background.start`    | OXA-1338 |
+| `agent.task.background.read`     | OXA-1339 |
+| `agent.task.background.cancel`   | OXA-1340 |
+| `agent.memory.recall`            | OXA-1341 |
+| `agent.memory.write`             | OXA-1342 |
+| `agent.approval.resolve`         | OXA-1343 |

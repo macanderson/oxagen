@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { agentMcpList } from "@oxagen/oxagen/capabilities/agent.mcp.list";
-import { agentMcpListHandler } from "@oxagen/oxagen/capabilities/agent.mcp.list.handler";
+import { agentMcpListHandler } from "@oxagen/agent/handlers/agent.mcp.list";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 

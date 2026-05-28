@@ -9,10 +9,10 @@ import { agentApprovalResolve } from "@oxagen/oxagen/capabilities/agent.approval
 import { agentPlanApprove } from "@oxagen/oxagen/capabilities/agent.plan.approve";
 import { agentTaskBackgroundCancel } from "@oxagen/oxagen/capabilities/agent.task.background.cancel";
 import { agentTaskBackgroundRead } from "@oxagen/oxagen/capabilities/agent.task.background.read";
-import { agentApprovalResolveHandler } from "@oxagen/oxagen/capabilities/agent.approval.resolve.handler";
-import { agentPlanApproveHandler } from "@oxagen/oxagen/capabilities/agent.plan.approve.handler";
-import { agentTaskBackgroundCancelHandler } from "@oxagen/oxagen/capabilities/agent.task.background.cancel.handler";
-import { agentTaskBackgroundReadHandler } from "@oxagen/oxagen/capabilities/agent.task.background.read.handler";
+import { agentApprovalResolveHandler } from "@oxagen/agent/handlers/agent.approval.resolve";
+import { agentPlanApproveHandler } from "@oxagen/agent/handlers/agent.plan.approve";
+import { agentTaskBackgroundCancelHandler } from "@oxagen/agent/handlers/agent.task.background.cancel";
+import { agentTaskBackgroundReadHandler } from "@oxagen/agent/handlers/agent.task.background.read";
 import { streamAgentReply, defaultModel } from "@oxagen/ai";
 import { materializeTools } from "@oxagen/agent";
 import { randomUUID } from "node:crypto";

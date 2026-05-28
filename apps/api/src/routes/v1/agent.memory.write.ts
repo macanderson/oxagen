@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { agentMemoryWrite } from "@oxagen/oxagen/capabilities/agent.memory.write";
-import { agentMemoryWriteHandler } from "@oxagen/oxagen/capabilities/agent.memory.write.handler";
+import { agentMemoryWriteHandler } from "@oxagen/agent/handlers/agent.memory.write";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 

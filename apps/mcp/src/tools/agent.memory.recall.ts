@@ -1,5 +1,5 @@
 import { agentMemoryRecall } from "@oxagen/oxagen/capabilities/agent.memory.recall";
-import { agentMemoryRecallHandler } from "@oxagen/oxagen/capabilities/agent.memory.recall.handler";
+import { agentMemoryRecallHandler } from "@oxagen/agent/handlers/agent.memory.recall";
 import { placeholderContext } from "../context.js";
 import type { McpTool } from "../server.js";
 

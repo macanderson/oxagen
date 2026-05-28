@@ -28,7 +28,11 @@ export function SubagentFanout({
   }, [results]);
 
   return (
-    <div className="glass-panel my-2 space-y-3 p-4 animate-in">
+    <div
+      className="glass-panel my-2 space-y-3 p-4 animate-in"
+      data-component="subagent-fanout"
+      data-fanout-status={status}
+    >
       <div className="flex items-center gap-2">
         <Users className="h-4 w-4 text-accent" />
         <Badge variant="muted">{children.length} subagents</Badge>
@@ -74,6 +78,8 @@ function ChildCard({
     <button
       type="button"
       onClick={() => onSelect?.(child.childMessageId)}
+      data-role="child"
+      data-child-status={status}
       className={cn(
         "glass min-w-[10rem] flex-1 rounded-xl border border-[color:var(--glass-border)] p-2 text-left text-xs transition-all hover:translate-y-[-1px]",
       )}

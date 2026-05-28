@@ -1,5 +1,5 @@
 import { agentTaskBackgroundStart } from "@oxagen/oxagen/capabilities/agent.task.background.start";
-import { agentTaskBackgroundStartHandler } from "@oxagen/oxagen/capabilities/agent.task.background.start.handler";
+import { agentTaskBackgroundStartHandler } from "@oxagen/agent/handlers/agent.task.background.start";
 import { placeholderContext } from "../context.js";
 import type { McpTool } from "../server.js";
 

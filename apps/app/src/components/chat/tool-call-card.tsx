@@ -46,7 +46,12 @@ export function ToolCallCard(props: ToolCallCardProps) {
   }, [stdout, stderr, status]);
 
   return (
-    <div className="glass-panel my-2 overflow-hidden p-0 text-sm animate-in">
+    <div
+      className="glass-panel my-2 overflow-hidden p-0 text-sm animate-in"
+      data-component="tool-call-card"
+      data-capability={capability}
+      data-status={status}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

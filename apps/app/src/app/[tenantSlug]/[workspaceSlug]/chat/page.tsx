@@ -4,6 +4,8 @@ import { schema } from "@oxagen/database";
 import { resolveTenant, resolveWorkspace } from "@/lib/resolve-tenant";
 import { getSessionOrRedirect } from "@/lib/session";
 import { ChatShell, type ChatMessage } from "@/components/chat/chat-shell";
+import type { AgentCapability } from "@/components/chat/plan-card";
+import { listCapabilities, getSurfaces } from "@oxagen/oxagen";
 import {
   cancelBackgroundTaskAction,
   readBackgroundTaskAction,
@@ -94,6 +96,16 @@ export default async function ChatPage({
     workspaceId: workspace.id,
   });
 
+  // Agent-surface capabilities feed the plan-card amend UX. Computed
+  // once per render here so the client doesn't refetch / refilter.
+  const agentCapabilities: AgentCapability[] = listCapabilities()
+    .filter((c) => getSurfaces(c).includes("agent"))
+    .map((c) => ({
+      name: c.name,
+      description: c.description,
+      riskLevel: c.agent?.riskLevel ?? "low",
+    }));
+
   return (
     <div className="mx-auto h-full max-w-4xl">
       <ChatShell
@@ -105,6 +117,7 @@ export default async function ChatPage({
         resolvePlanAction={boundResolvePlan}
         fetchBackgroundTask={boundReadTask}
         cancelBackgroundTask={boundCancelTask}
+        agentCapabilities={agentCapabilities}
       />
     </div>
   );

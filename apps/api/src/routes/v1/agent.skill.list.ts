@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { agentSkillList } from "@oxagen/oxagen/capabilities/agent.skill.list";
-import { agentSkillListHandler } from "@oxagen/oxagen/capabilities/agent.skill.list.handler";
+import { agentSkillListHandler } from "@oxagen/agent/handlers/agent.skill.list";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 

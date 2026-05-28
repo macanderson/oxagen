@@ -43,7 +43,11 @@ export function CodeExecuteCard({
   }, [stdout, stderr, status]);
 
   return (
-    <div className="glass-panel my-2 space-y-3 p-3 text-sm animate-in">
+    <div
+      className="glass-panel my-2 space-y-3 p-3 text-sm animate-in"
+      data-component="code-execute-card"
+      data-status={status}
+    >
       <div className="flex items-center gap-2">
         <Badge variant="outline" className="font-mono">
           agent.code.execute

@@ -20,6 +20,7 @@ export function ChatShellClient({
   sendAction,
   resolveApprovalAction,
   resolvePlanAction,
+  agentCapabilities,
 }: {
   conversationId: string | null;
   activeLeafMessageId: string | null;
@@ -27,6 +28,7 @@ export function ChatShellClient({
   sendAction: ComposerAction;
   resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
   resolvePlanAction: ChatShellProps["resolvePlanAction"];
+  agentCapabilities?: ChatShellProps["agentCapabilities"];
 }) {
   const hasPendingApproval = React.useMemo(
     () =>
@@ -41,6 +43,7 @@ export function ChatShellClient({
   const callbacks: MessageBubbleCallbacks = {
     onResolveApproval: resolveApprovalAction,
     onResolvePlan: resolvePlanAction,
+    agentCapabilities,
     onNavigateToChild: (childMessageId) => {
       // Defer to the existing branch-switcher mechanism by updating the
       // URL hash; the page-level effect picks it up and refetches the

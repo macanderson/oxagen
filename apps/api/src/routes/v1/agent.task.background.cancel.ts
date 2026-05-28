@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { agentTaskBackgroundCancel } from "@oxagen/oxagen/capabilities/agent.task.background.cancel";
-import { agentTaskBackgroundCancelHandler } from "@oxagen/oxagen/capabilities/agent.task.background.cancel.handler";
+import { agentTaskBackgroundCancelHandler } from "@oxagen/agent/handlers/agent.task.background.cancel";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 

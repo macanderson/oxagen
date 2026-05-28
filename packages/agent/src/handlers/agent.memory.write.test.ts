@@ -1,0 +1,52 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  embedTextMock: vi.fn(),
+  writeMemoryMock: vi.fn(),
+}));
+
+mocks.embedTextMock.mockImplementation(async () => new Array(1536).fill(0.1));
+mocks.writeMemoryMock.mockImplementation(async () => ({ memoryId: "m_new" }));
+
+vi.mock("../memory/embed.js", () => ({ embedText: mocks.embedTextMock }));
+vi.mock("../memory/neo4j.js", () => ({ writeMemory: mocks.writeMemoryMock }));
+
+import { agentMemoryWriteHandler } from "./agent.memory.write.js";
+
+const CTX = {
+  tenantId: "ten_1",
+  workspaceId: "ws_1",
+  userId: "u_1",
+  apiKeyId: null,
+  requestId: "req_1",
+};
+
+describe("agent.memory.write handler", () => {
+  beforeEach(() => {
+    mocks.embedTextMock.mockClear();
+    mocks.writeMemoryMock.mockClear();
+  });
+
+  it("forwards inputs to writeMemory and returns memoryId + nodeRef", async () => {
+    const res = await agentMemoryWriteHandler(
+      {
+        nodeRef: "Function:foo",
+        weight: "high",
+        kind: "constraint",
+        lesson: "do not rerun migrations",
+        source: "feature",
+      },
+      CTX,
+    );
+    expect(mocks.embedTextMock).toHaveBeenCalledWith("do not rerun migrations");
+    expect(mocks.writeMemoryMock).toHaveBeenCalledTimes(1);
+    const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.tenantId).toBe("ten_1");
+    expect(arg.workspaceId).toBe("ws_1");
+    expect(arg.nodeRef).toBe("Function:foo");
+    expect(arg.weight).toBe("high");
+    expect(arg.kind).toBe("constraint");
+    expect(res.memoryId).toBe("m_new");
+    expect(res.nodeRef).toBe("Function:foo");
+  });
+});

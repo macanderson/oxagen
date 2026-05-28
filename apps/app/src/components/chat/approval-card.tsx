@@ -51,7 +51,11 @@ export function ApprovalCard({
   const expired = remaining <= 0 && !settled;
 
   return (
-    <div className="glass-panel my-2 space-y-3 border-l-4 border-l-amber-500/70 p-4 animate-in">
+    <div
+      className="glass-panel my-2 space-y-3 border-l-4 border-l-amber-500/70 p-4 animate-in"
+      data-component="approval-card"
+      data-approval-status={settled ? optimistic : expired ? "expired" : "pending"}
+    >
       <div className="flex items-center gap-2">
         <ShieldAlert className="h-4 w-4 text-amber-500" />
         <span className="font-semibold">Approval required</span>

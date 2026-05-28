@@ -20,7 +20,10 @@ export function MemoryCard({ memories, topN = 5 }: MemoryCardProps) {
   const top = memories.slice(0, topN);
   if (top.length === 0) return null;
   return (
-    <div className="glass-panel my-2 space-y-2 p-3 text-sm animate-in">
+    <div
+      className="glass-panel my-2 space-y-2 p-3 text-sm animate-in"
+      data-component="memory-card"
+    >
       <div className="flex items-center gap-2">
         <Brain className="h-4 w-4 text-accent" />
         <span className="font-semibold">Recalled memories</span>

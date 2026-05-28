@@ -1,5 +1,5 @@
 import { agentMemoryWrite } from "@oxagen/oxagen/capabilities/agent.memory.write";
-import { agentMemoryWriteHandler } from "@oxagen/oxagen/capabilities/agent.memory.write.handler";
+import { agentMemoryWriteHandler } from "@oxagen/agent/handlers/agent.memory.write";
 import { placeholderContext } from "../context.js";
 import type { McpTool } from "../server.js";
 

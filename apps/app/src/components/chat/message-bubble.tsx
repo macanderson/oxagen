@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ToolCallCard } from "./tool-call-card";
 import { ApprovalCard } from "./approval-card";
-import { PlanCard } from "./plan-card";
+import { PlanCard, type AgentCapability } from "./plan-card";
 import { SubagentFanout } from "./subagent-fanout";
 import { MemoryCard } from "./memory-card";
 import { CodeExecuteCard } from "./code-execute-card";
@@ -31,6 +31,7 @@ export interface MessageBubbleCallbacks {
     amendedSteps?: import("./stream-event-types").PlanStep[],
   ) => Promise<{ ok: boolean; error?: string }>;
   onNavigateToChild?: (childMessageId: string) => void;
+  agentCapabilities?: readonly AgentCapability[];
 }
 
 export function MessageBubble({
@@ -140,6 +141,7 @@ function renderBlock(
           steps={block.steps}
           rationale={block.rationale}
           status={block.status}
+          agentCapabilities={callbacks?.agentCapabilities}
           onResolve={callbacks?.onResolvePlan}
         />
       );
