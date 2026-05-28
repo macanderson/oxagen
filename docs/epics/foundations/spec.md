@@ -1138,32 +1138,39 @@ auditability, and lineage. Violating it blocks merge.
 
 ## 11. Secrets Policy
 
-1. **Google Secret Manager is the only source of secrets.** Local,
-   staging, production.
-2. No secrets in `.env` files committed to the repo. Local `.env.local`
-   is generated from Secret Manager at `pnpm dev` startup.
-3. No secrets in CI YAML. CI authenticates to Secret Manager via
-   Workload Identity Federation.
-4. No secrets in process arguments or container env at the orchestrator
-   level — apps fetch on boot using their service identity.
-5. Each app declares the secret names it needs in
-   `apps/<name>/secrets.json`. A pre-commit hook verifies no raw secret
-   values appear in tracked files.
-6. Secret rotation is a first-class capability: apps must re-fetch on
-   `SIGHUP` or scheduled interval.
+Foundations milestone uses environment variables. A migration to a
+managed secret store (Doppler, 1Password, or a vendor SM) is deferred
+until production hosting hardens.
+
+1. **`.env.example` at the repo root is canonical.** Every required
+   variable is listed with a short comment. CI greps the codebase to
+   verify no `process.env.X` reads outside the declared set.
+2. **`.env.local` is the only secret-bearing file** developers create,
+   and it is gitignored. Layout matches `.env.example`.
+3. **`packages/config` validates env via Zod on boot.** Apps fail closed
+   if a required variable is missing or malformed.
+4. **CI uses GitHub Actions Secrets** mapped to the same names as
+   `.env.example`. No raw secrets in workflow YAML.
+5. **Per-app declarations.** Each app exports `requiredEnv` from its
+   `env.ts`; the boot wrapper enforces the contract.
+6. **No secret rotation tooling yet.** Manual rotation via provider
+   dashboards. Documented as a follow-up.
 
 ## 12. Local Development Workflow
 
 ### 12.1 `pnpm dev`
 
-1. Verifies Docker is running.
+1. Verifies Docker is running and `.env.local` exists.
 2. Starts `postgres`, `neo4j`, `clickhouse`, `redis` containers via
    `docker-compose.dev.yml`.
 3. Runs pending migrations (Postgres + ClickHouse + Neo4j ontology
    sync).
-4. Pulls secrets from Google Secret Manager into `.env.local` (gitignored).
-5. Starts all `apps/*` in parallel via Turborepo, with consistent port
+4. Starts all `apps/*` in parallel via Turborepo, with consistent port
    assignment.
+
+Production-equivalent stack: Neon (Postgres), ClickHouse Cloud,
+Neo4j AuraDB. Local Docker images are kept version-pinned to those
+managed services.
 
 ### 12.2 `pnpm kill`
 
@@ -1223,7 +1230,11 @@ All must pass before merge.
 | ClickHouse client        | Official `@clickhouse/client`       |
 | Job / queue layer        | **Inngest**                         |
 | Vector store             | **Neo4j** (native vector index)     |
-| Secret manager           | Google Secret Manager               |
+| Secret manager           | Environment variables (`.env.local`)|
+| Postgres hosting         | **Neon**                            |
+| ClickHouse hosting       | **ClickHouse Cloud**                |
+| Neo4j hosting            | **Neo4j AuraDB Free**               |
+| Frontend hosting         | **Vercel**                          |
 | `apps/app` framework     | Next.js App Router + RSC streaming  |
 | Interactive agent SDK    | **Vercel AI SDK** (`ai` package)    |
 | Auth                     | **Better Auth** (Drizzle adapter)   |

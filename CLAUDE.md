@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+## Linear
+
+Oxagen uses the `oxagen-v2` linear project. Access the linear project via apis or the linear mcp server. The api key is stored as an environment variable in the root of this repo.
+
 ## Operating model
 
 **Default model: Haiku.** Haiku plans, routes, and handles the majority of

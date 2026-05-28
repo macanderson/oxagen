@@ -1,0 +1,14 @@
+import { Hono } from "hono";
+import { workspaceCreate } from "@oxagen/oxagen/capabilities/workspace.create";
+import { workspaceCreateHandler } from "../../capabilities/workspace.create.handler.js";
+import { capabilityContext } from "../../lib/context.js";
+import type { AppEnv } from "../../app.js";
+
+export const workspaceCreateRoute = new Hono<AppEnv>();
+
+workspaceCreateRoute.post("/", async (c) => {
+  const body = workspaceCreate.input.parse(await c.req.json());
+  const ctx = capabilityContext(c);
+  const out = await workspaceCreateHandler(body, ctx);
+  return c.json(out, 201);
+});

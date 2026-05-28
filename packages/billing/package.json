@@ -1,0 +1,25 @@
+{
+  "name": "@oxagen/billing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'lint placeholder'"
+  },
+  "dependencies": {
+    "@oxagen/config": "workspace:*",
+    "@oxagen/database": "workspace:*",
+    "@oxagen/telemetry": "workspace:*",
+    "stripe": "^17.3.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.2"
+  }
+}

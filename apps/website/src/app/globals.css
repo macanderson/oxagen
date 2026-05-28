@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --color-glass-bg: rgba(255, 255, 255, 0.06);
+  --color-glass-border: rgba(255, 255, 255, 0.12);
+  --color-ink: #f6f7f9;
+  --color-muted: #a1a7b3;
+}
+
+html,
+body {
+  background:
+    radial-gradient(1200px 800px at 20% -10%, rgba(99, 102, 241, 0.25), transparent 60%),
+    radial-gradient(900px 700px at 110% 10%, rgba(236, 72, 153, 0.18), transparent 60%),
+    #0a0b10;
+  color: var(--color-ink);
+  min-height: 100vh;
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}

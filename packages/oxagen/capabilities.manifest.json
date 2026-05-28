@@ -1,0 +1,78 @@
+{
+  "generatedAt": "2026-05-28T18:47:35.143Z",
+  "capabilities": [
+    {
+      "name": "billing.subscription.read",
+      "file": "billing.subscription.read.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "chat.message.send",
+      "file": "chat.message.send.ts",
+      "domain": "chat",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "tenant.create",
+      "file": "tenant.create.ts",
+      "domain": "organization",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "workspace.create",
+      "file": "workspace.create.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": true,
+        "docs": true
+      }
+    }
+  ]
+}

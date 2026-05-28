@@ -83,15 +83,17 @@ Exit: ontology contains live entities; vector similarity queries
 return expected nearest-neighbor results; traversal queries return
 expected paths.
 
-## Phase 6 — Secrets
+## Phase 6 — Env var contract
 
-- [ ] Per-app `secrets.json` declarations
-- [ ] Boot-time fetcher in `/packages/config`
-- [ ] Pre-commit hook scanning for raw secret values
-- [ ] `pnpm dev` writes `.env.local` from Secret Manager
-- [ ] CI authenticates via Workload Identity Federation
+- [ ] `.env.example` canonical at repo root
+- [ ] Zod-validated env loader in `/packages/config`; per-app
+      `requiredEnv` exports
+- [ ] Pre-commit hook scanning for raw secret values in tracked files
+- [ ] GitHub Actions Secrets mirror `.env.example` for CI
+- [ ] CI grep verifies no `process.env.X` outside the declared set
 
-Exit: zero secrets in tracked files; all apps fetch on boot.
+Exit: every app fails closed on missing env; `.env.local` is the only
+secret-bearing file and it is gitignored.
 
 ## Phase 6.5 — `apps/website`
 

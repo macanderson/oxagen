@@ -1,0 +1,26 @@
+{
+  "name": "@oxagen/telemetry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./migrate": "./src/migrate.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'lint placeholder'",
+    "migrate": "tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "@clickhouse/client": "^1.7.0",
+    "@oxagen/config": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.2"
+  }
+}
