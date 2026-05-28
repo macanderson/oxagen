@@ -1,0 +1,55 @@
+import { db, schema } from "@oxagen/database";
+import type { CapabilityContext } from "../types.js";
+import { createApprovalRequest } from "../runtime/approval.js";
+
+export interface AgentPlanCreateInput {
+  parentMessageId: string;
+  title: string;
+  steps: Array<{
+    id: string;
+    summary: string;
+    intent: string;
+    capability: string | null;
+    inputPreview: unknown;
+    dependsOn: string[];
+  }>;
+  rationale?: string;
+}
+
+export interface AgentPlanCreateOutput {
+  planId: string;
+  status: "pending_approval";
+}
+
+export async function agentPlanCreateHandler(
+  input: AgentPlanCreateInput,
+  ctx: CapabilityContext,
+): Promise<AgentPlanCreateOutput> {
+  // Insert plan steps as pending; the approval row is the gate.
+  const planRows = input.steps.map((s) => ({
+    tenantId: ctx.tenantId,
+    workspaceId: ctx.workspaceId,
+    executionStepId: ctx.requestId,
+    planStepKey: s.id,
+    summary: s.summary,
+    intent: s.intent,
+    capabilityName: s.capability,
+    inputPreview: (s.inputPreview ?? null) as object,
+    dependsOn: s.dependsOn as object,
+    status: "pending",
+  }));
+  const inserted = await db()
+    .insert(schema.planSteps)
+    .values(planRows)
+    .returning({ id: schema.planSteps.id });
+  const planId = inserted[0]?.id ?? ctx.requestId;
+  await createApprovalRequest({
+    tenantId: ctx.tenantId,
+    workspaceId: ctx.workspaceId,
+    messageId: input.parentMessageId,
+    capabilityName: "agent.plan.create",
+    inputPreview: { title: input.title, steps: input.steps, rationale: input.rationale ?? null },
+    riskLevel: "low",
+  });
+  return { planId, status: "pending_approval" };
+}

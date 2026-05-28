@@ -16,6 +16,11 @@ export const NodeLabels = {
   AgentMemory: "AgentMemory",
   Conversation: "Conversation",
   Message: "Message",
+  // Agent runtime epic (spec §6).
+  Skill: "Skill",
+  SkillVersion: "SkillVersion",
+  BackgroundTask: "BackgroundTask",
+  Plan: "Plan",
 } as const;
 export type NodeLabel = (typeof NodeLabels)[keyof typeof NodeLabels];
 
@@ -34,6 +39,11 @@ export const EdgeTypes = {
   REPLIES_TO: "REPLIES_TO",
   BRANCHED_FROM: "BRANCHED_FROM",
   CONTAINS: "CONTAINS",
+  // Agent runtime epic (spec §6).
+  INVOKED: "INVOKED",
+  LOADED_SKILL: "LOADED_SKILL",
+  BRANCHED_TO_SUBAGENT: "BRANCHED_TO_SUBAGENT",
+  APPROVED_BY: "APPROVED_BY",
 } as const;
 export type EdgeType = (typeof EdgeTypes)[keyof typeof EdgeTypes];
 

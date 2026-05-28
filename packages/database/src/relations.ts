@@ -10,6 +10,13 @@ import {
   toolVersions,
   toolAssignments,
   mcpServers,
+  skills,
+  skillVersions,
+  backgroundTasks,
+  approvalRequests,
+  subagentFanouts,
+  subagentRuns,
+  planSteps,
 } from "./schema/agent.js";
 import {
   playbooks,
@@ -143,6 +150,59 @@ export const toolAssignmentsRelations = relations(toolAssignments, ({ one }) => 
 
 export const mcpServersRelations = relations(mcpServers, ({ one }) => ({
   tenant: one(tenants, { fields: [mcpServers.tenantId], references: [tenants.id] }),
+}));
+
+// Agent-runtime epic relations. Cross-domain joins (messages, execution
+// steps) stay app-enforced; in-domain links use Drizzle relations.
+
+export const skillsRelations = relations(skills, ({ one, many }) => ({
+  workspace: one(workspaces, { fields: [skills.workspaceId], references: [workspaces.id] }),
+  versions: many(skillVersions),
+}));
+
+export const skillVersionsRelations = relations(skillVersions, ({ one }) => ({
+  skill: one(skills, { fields: [skillVersions.skillId], references: [skills.id] }),
+  parentVersion: one(skillVersions, {
+    fields: [skillVersions.parentVersionId],
+    references: [skillVersions.id],
+    relationName: "skill_version_parent",
+  }),
+}));
+
+export const backgroundTasksRelations = relations(backgroundTasks, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [backgroundTasks.workspaceId],
+    references: [workspaces.id],
+  }),
+}));
+
+export const approvalRequestsRelations = relations(approvalRequests, ({ one }) => ({
+  message: one(messages, {
+    fields: [approvalRequests.messageId],
+    references: [messages.id],
+  }),
+}));
+
+export const subagentFanoutsRelations = relations(subagentFanouts, ({ one, many }) => ({
+  parentMessage: one(messages, {
+    fields: [subagentFanouts.parentMessageId],
+    references: [messages.id],
+  }),
+  runs: many(subagentRuns),
+}));
+
+export const subagentRunsRelations = relations(subagentRuns, ({ one }) => ({
+  fanout: one(subagentFanouts, {
+    fields: [subagentRuns.fanoutId],
+    references: [subagentFanouts.id],
+  }),
+}));
+
+export const planStepsRelations = relations(planSteps, ({ one }) => ({
+  executionStep: one(executionSteps, {
+    fields: [planSteps.executionStepId],
+    references: [executionSteps.id],
+  }),
 }));
 
 export const playbooksRelations = relations(playbooks, ({ many }) => ({

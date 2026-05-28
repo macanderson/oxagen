@@ -171,3 +171,32 @@ export const insertApiKeyEvents = (rows: readonly ApiKeyEventRow[]) =>
   insertRows("api_key_events", rows);
 export const insertTokenUsage = (rows: readonly TokenUsageRow[]) =>
   insertRows("token_usage", rows);
+
+// Agent runtime epic (spec §9). One row per tool invocation. Analytics
+// mirror of execution.tool_calls; durable record stays in Postgres.
+export interface ToolInvocationRow {
+  invocation_id: string;
+  tenant_id: string;
+  workspace_id: string;
+  capability_name: string;
+  message_id: string;
+  parent_message_id: string | null;
+  execution_step_id: string | null;
+  status: "started" | "completed" | "failed" | "cancelled" | "timed_out";
+  input_size_bytes: number;
+  output_size_bytes: number;
+  latency_ms: number;
+  error_class: string | null;
+  // empty string sentinel — column is LowCardinality(String) DEFAULT ''.
+  external_provider: string;
+  external_server_id: string | null;
+  risk_level: "low" | "medium" | "high";
+  required_approval: 0 | 1;
+  created_at: string;
+}
+
+export const insertToolInvocation = (row: ToolInvocationRow) =>
+  insertRows("tool_invocations", [row]);
+
+export const insertToolInvocations = (rows: readonly ToolInvocationRow[]) =>
+  insertRows("tool_invocations", rows);

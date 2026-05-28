@@ -4,6 +4,15 @@ import { tenantCreateTool } from "./tools/tenant.create.js";
 import { workspaceCreateTool } from "./tools/workspace.create.js";
 import { billingSubscriptionReadTool } from "./tools/billing.subscription.read.js";
 import { chatMessageSendTool } from "./tools/chat.message.send.js";
+import { agentToolListTool } from "./tools/agent.tool.list.js";
+import { agentMcpRegisterTool } from "./tools/agent.mcp.register.js";
+import { agentMcpListTool } from "./tools/agent.mcp.list.js";
+import { agentSkillListTool } from "./tools/agent.skill.list.js";
+import { agentTaskBackgroundStartTool } from "./tools/agent.task.background.start.js";
+import { agentTaskBackgroundReadTool } from "./tools/agent.task.background.read.js";
+import { agentTaskBackgroundCancelTool } from "./tools/agent.task.background.cancel.js";
+import { agentMemoryRecallTool } from "./tools/agent.memory.recall.js";
+import { agentMemoryWriteTool } from "./tools/agent.memory.write.js";
 
 export type McpTool = {
   name: string;
@@ -16,6 +25,15 @@ const tools: McpTool[] = [
   workspaceCreateTool,
   billingSubscriptionReadTool,
   chatMessageSendTool,
+  agentToolListTool,
+  agentMcpRegisterTool,
+  agentMcpListTool,
+  agentSkillListTool,
+  agentTaskBackgroundStartTool,
+  agentTaskBackgroundReadTool,
+  agentTaskBackgroundCancelTool,
+  agentMemoryRecallTool,
+  agentMemoryWriteTool,
 ];
 
 export function buildServer() {

@@ -1,8 +1,12 @@
 import { Suspense } from "react";
-import { MessageTree } from "./message-tree";
 import { type ChatMessage } from "./message-bubble";
-import { MessageComposer, type ComposerAction } from "./message-composer";
+import { type ComposerAction } from "./message-composer";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ChatShellClient } from "./chat-shell-client";
+import {
+  BackgroundTaskTray,
+  type BackgroundTaskSnapshot,
+} from "./background-task-tray";
 
 export { type ChatMessage } from "./message-bubble";
 
@@ -11,40 +15,82 @@ export interface ChatShellProps {
   activeLeafMessageId: string | null;
   messagesPromise: Promise<ChatMessage[]>;
   sendAction: ComposerAction;
+  resolveApprovalAction: (
+    approvalId: string,
+    decision: "approved" | "denied",
+  ) => Promise<{ ok: boolean; error?: string }>;
+  resolvePlanAction: (
+    planId: string,
+    decision: "approved" | "denied" | "amended",
+    amendedSteps?: import("./stream-event-types").PlanStep[],
+  ) => Promise<{ ok: boolean; error?: string }>;
+  fetchBackgroundTask: (taskId: string) => Promise<BackgroundTaskSnapshot>;
+  cancelBackgroundTask?: (taskId: string) => Promise<{ ok: boolean; error?: string }>;
+  initialBackgroundTaskIds?: string[];
 }
 
 // RSC streaming: the messages promise resolves inside a Suspense boundary
 // so the composer paints immediately and the active-leaf path streams in
 // as Postgres returns rows. New tokens from the AI SDK are rendered by
 // `messagesPromise` being recomputed after the server action revalidates.
-export function ChatShell({ conversationId, activeLeafMessageId, messagesPromise, sendAction }: ChatShellProps) {
+export function ChatShell({
+  conversationId,
+  activeLeafMessageId,
+  messagesPromise,
+  sendAction,
+  resolveApprovalAction,
+  resolvePlanAction,
+  fetchBackgroundTask,
+  cancelBackgroundTask,
+  initialBackgroundTaskIds,
+}: ChatShellProps) {
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4">
-      <div className="min-h-0 flex-1 overflow-y-auto pr-2">
-        <Suspense fallback={<MessagesSkeleton />}>
-          <AsyncMessages promise={messagesPromise} />
-        </Suspense>
-      </div>
-      <MessageComposer
-        conversationId={conversationId}
-        parentMessageId={activeLeafMessageId}
-        action={sendAction}
+    <>
+      <Suspense fallback={<MessagesSkeleton />}>
+        <AsyncShell
+          promise={messagesPromise}
+          conversationId={conversationId}
+          activeLeafMessageId={activeLeafMessageId}
+          sendAction={sendAction}
+          resolveApprovalAction={resolveApprovalAction}
+          resolvePlanAction={resolvePlanAction}
+        />
+      </Suspense>
+      <BackgroundTaskTray
+        initialTaskIds={initialBackgroundTaskIds}
+        fetchTask={fetchBackgroundTask}
+        cancelTask={cancelBackgroundTask}
       />
-    </div>
+    </>
   );
 }
 
-async function AsyncMessages({ promise }: { promise: Promise<ChatMessage[]> }) {
+async function AsyncShell({
+  promise,
+  conversationId,
+  activeLeafMessageId,
+  sendAction,
+  resolveApprovalAction,
+  resolvePlanAction,
+}: {
+  promise: Promise<ChatMessage[]>;
+  conversationId: string | null;
+  activeLeafMessageId: string | null;
+  sendAction: ComposerAction;
+  resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
+  resolvePlanAction: ChatShellProps["resolvePlanAction"];
+}) {
   const messages = await promise;
-  if (messages.length === 0) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center text-center text-sm text-muted-foreground">
-        <p className="font-medium">Start a conversation.</p>
-        <p>Send a message below to begin.</p>
-      </div>
-    );
-  }
-  return <MessageTree messages={messages} />;
+  return (
+    <ChatShellClient
+      conversationId={conversationId}
+      activeLeafMessageId={activeLeafMessageId}
+      messages={messages}
+      sendAction={sendAction}
+      resolveApprovalAction={resolveApprovalAction}
+      resolvePlanAction={resolvePlanAction}
+    />
+  );
 }
 
 function MessagesSkeleton() {

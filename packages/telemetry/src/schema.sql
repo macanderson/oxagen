@@ -82,3 +82,29 @@ ORDER BY (tenant_id, created_at, execution_step_id)
 -- Token usage retained longer than raw logs: billing recomputation
 -- and dispute investigation routinely reach beyond 90 days.
 TTL toDateTime(created_at) + INTERVAL 365 DAY;
+
+-- Agent runtime epic (spec §6, §9). Separate from Postgres
+-- execution.tool_calls (the durable record); this is the analytics-side
+-- mirror for high-volume agent fanouts.
+CREATE TABLE IF NOT EXISTS tool_invocations (
+  invocation_id UUID,
+  tenant_id UUID,
+  workspace_id UUID,
+  capability_name LowCardinality(String),
+  message_id UUID,
+  parent_message_id Nullable(UUID),
+  execution_step_id Nullable(UUID),
+  status LowCardinality(String),
+  input_size_bytes UInt32,
+  output_size_bytes UInt32,
+  latency_ms UInt32,
+  error_class Nullable(String),
+  external_provider LowCardinality(String) DEFAULT '',
+  external_server_id Nullable(UUID),
+  risk_level LowCardinality(String),
+  required_approval UInt8,
+  created_at DateTime64(3)
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(created_at)
+ORDER BY (tenant_id, capability_name, created_at)
+TTL toDateTime(created_at) + INTERVAL 180 DAY;

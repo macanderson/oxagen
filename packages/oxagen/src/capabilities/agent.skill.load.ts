@@ -1,0 +1,25 @@
+import { z } from "zod";
+import { registerCapability } from "../registry.js";
+
+export const agentSkillLoad = registerCapability({
+  name: "agent.skill.load",
+  domain: "agent",
+  description: "Load a skill into the agent's working context for the current turn",
+  mode: "sync",
+  surfaces: ["agent"],
+  layers: ["schema", "unit", "docs"],
+  scoped: true,
+  agent: { requiresApproval: false, riskLevel: "low", category: "context" },
+  input: z.object({
+    slug: z.string(),
+    parentMessageId: z.string(),
+  }),
+  output: z.object({
+    slug: z.string(),
+    body: z.string(),
+    references: z.array(z.object({ path: z.string(), body: z.string() })),
+  }),
+});
+
+export type AgentSkillLoadInput = z.infer<typeof agentSkillLoad.input>;
+export type AgentSkillLoadOutput = z.infer<typeof agentSkillLoad.output>;

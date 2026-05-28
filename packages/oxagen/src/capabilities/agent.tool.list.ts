@@ -1,0 +1,32 @@
+import { z } from "zod";
+import { registerCapability } from "../registry.js";
+
+export const agentToolList = registerCapability({
+  name: "agent.tool.list",
+  domain: "agent",
+  description: "List the capabilities surfaced as agent tools for the active workspace, after allowlist and risk filtering",
+  mode: "sync",
+  surfaces: ["api", "mcp", "agent"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  scoped: true,
+  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  input: z.object({
+    includeExternal: z.boolean().default(true),
+  }),
+  output: z.object({
+    tools: z.array(
+      z.object({
+        name: z.string(),
+        description: z.string(),
+        domain: z.string(),
+        category: z.string().nullable(),
+        riskLevel: z.enum(["low", "medium", "high"]),
+        requiresApproval: z.boolean(),
+        external: z.boolean(),
+      }),
+    ),
+  }),
+});
+
+export type AgentToolListInput = z.infer<typeof agentToolList.input>;
+export type AgentToolListOutput = z.infer<typeof agentToolList.output>;

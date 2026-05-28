@@ -12,10 +12,14 @@ export function MessageComposer({
   conversationId,
   parentMessageId,
   action,
+  disabled = false,
+  disabledReason,
 }: {
   conversationId: string | null;
   parentMessageId: string | null;
   action: ComposerAction;
+  disabled?: boolean;
+  disabledReason?: string;
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -23,6 +27,7 @@ export function MessageComposer({
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (disabled) return;
     setError(null);
     const fd = new FormData(e.currentTarget);
     if (conversationId) fd.set("conversationId", conversationId);
@@ -42,14 +47,17 @@ export function MessageComposer({
       <Textarea
         name="content"
         required
-        placeholder="Send a message…"
+        placeholder={disabled ? (disabledReason ?? "Composer paused.") : "Send a message…"}
         rows={3}
-        disabled={pending}
+        disabled={pending || disabled}
         className="border-none bg-transparent shadow-none focus-visible:ring-0"
       />
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {disabled && disabledReason ? (
+        <p className="text-xs text-muted-foreground">{disabledReason}</p>
+      ) : null}
       <div className="flex items-center justify-end">
-        <Button type="submit" disabled={pending} size="sm">
+        <Button type="submit" disabled={pending || disabled} size="sm">
           <Send className="h-3.5 w-3.5" />
           {pending ? "Sending…" : "Send"}
         </Button>

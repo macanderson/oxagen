@@ -22,6 +22,21 @@ type Events = {
       } | null;
     };
   };
+  "agent/subagent.dispatch": {
+    data: { tenantId: string; workspaceId: string; fanoutId: string };
+  };
+  "agent/task.background.start": {
+    data: {
+      tenantId: string;
+      workspaceId: string;
+      taskId: string;
+      kind: string;
+      payload: unknown;
+    };
+  };
+  "agent/task.background.cancel": {
+    data: { tenantId: string; taskId: string };
+  };
 };
 
 const env = loadEnv();

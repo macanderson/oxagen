@@ -20,11 +20,24 @@ CREATE CONSTRAINT agent_memory_public_id IF NOT EXISTS FOR (n:AgentMemory) REQUI
 CREATE CONSTRAINT conversation_public_id IF NOT EXISTS FOR (n:Conversation) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT message_public_id IF NOT EXISTS FOR (n:Message) REQUIRE n.publicId IS UNIQUE;
 
+// --- Agent runtime epic (spec §6, agent-runtime) ---
+CREATE CONSTRAINT skill_public_id IF NOT EXISTS FOR (n:Skill) REQUIRE n.publicId IS UNIQUE;
+CREATE CONSTRAINT skill_version_public_id IF NOT EXISTS FOR (n:SkillVersion) REQUIRE n.publicId IS UNIQUE;
+CREATE CONSTRAINT background_task_public_id IF NOT EXISTS FOR (n:BackgroundTask) REQUIRE n.publicId IS UNIQUE;
+CREATE CONSTRAINT plan_public_id IF NOT EXISTS FOR (n:Plan) REQUIRE n.publicId IS UNIQUE;
+
+// New edge types (no Cypher DDL required; documented here for the registry):
+//   INVOKED              :Execution -> :ToolVersion (one per tool call)
+//   LOADED_SKILL         :AgentVersion -> :SkillVersion
+//   BRANCHED_TO_SUBAGENT :Message -> :Message (parent fanout to child)
+//   APPROVED_BY          :Execution -> :User (approval audit)
+
 // --- Tenant-scope range indexes for fast filtering ---
 CREATE INDEX execution_tenant IF NOT EXISTS FOR (n:Execution) ON (n.tenantId);
 CREATE INDEX document_tenant IF NOT EXISTS FOR (n:Document) ON (n.tenantId);
 CREATE INDEX message_conversation IF NOT EXISTS FOR (n:Message) ON (n.conversationId);
 CREATE INDEX agent_memory_tenant IF NOT EXISTS FOR (n:AgentMemory) ON (n.tenantId);
+CREATE INDEX background_task_tenant IF NOT EXISTS FOR (n:BackgroundTask) ON (n.tenantId);
 
 // --- Vector indexes (spec §8.1) ---
 CREATE VECTOR INDEX document_embedding_index IF NOT EXISTS

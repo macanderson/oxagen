@@ -4,7 +4,13 @@ import { schema } from "@oxagen/database";
 import { resolveTenant, resolveWorkspace } from "@/lib/resolve-tenant";
 import { getSessionOrRedirect } from "@/lib/session";
 import { ChatShell, type ChatMessage } from "@/components/chat/chat-shell";
-import { sendMessageAction } from "./actions";
+import {
+  cancelBackgroundTaskAction,
+  readBackgroundTaskAction,
+  resolveApprovalAction,
+  resolvePlanAction,
+  sendMessageAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -73,9 +79,17 @@ export default async function ChatPage({
     return walkActiveBranch(rows, activeLeafMessageId);
   })();
 
-  const sendAction = sendMessageAction.bind(null, {
+  const actionCtx = {
     tenantSlug,
     workspaceSlug,
+    tenantId: tenant.id,
+    workspaceId: workspace.id,
+  };
+  const sendAction = sendMessageAction.bind(null, actionCtx);
+  const boundResolveApproval = resolveApprovalAction.bind(null, actionCtx);
+  const boundResolvePlan = resolvePlanAction.bind(null, actionCtx);
+  const boundCancelTask = cancelBackgroundTaskAction.bind(null, actionCtx);
+  const boundReadTask = readBackgroundTaskAction.bind(null, {
     tenantId: tenant.id,
     workspaceId: workspace.id,
   });
@@ -87,6 +101,10 @@ export default async function ChatPage({
         activeLeafMessageId={activeLeafMessageId}
         messagesPromise={messagesPromise}
         sendAction={sendAction}
+        resolveApprovalAction={boundResolveApproval}
+        resolvePlanAction={boundResolvePlan}
+        fetchBackgroundTask={boundReadTask}
+        cancelBackgroundTask={boundCancelTask}
       />
     </div>
   );
@@ -113,5 +131,6 @@ function walkActiveBranch(rows: any[], leafId: string | null): ChatMessage[] {
     content: r.content,
     branchReason: r.branchReason,
     siblingCount: r.parentMessageId ? (childCount.get(r.parentMessageId) ?? 1) : 1,
+    contentBlocks: Array.isArray(r.contentBlocks) ? r.contentBlocks : undefined,
   }));
 }

@@ -13,9 +13,11 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
+    "@oxagen/agent": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "drizzle-orm": "^0.36.0",
     "hono": "^4.6.5",

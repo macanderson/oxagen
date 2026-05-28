@@ -11,6 +11,17 @@ import { tenantCreateRoute } from "./routes/v1/tenant.create.js";
 import { workspaceCreateRoute } from "./routes/v1/workspace.create.js";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read.js";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send.js";
+import { agentToolListRoute } from "./routes/v1/agent.tool.list.js";
+import { agentMcpRegisterRoute } from "./routes/v1/agent.mcp.register.js";
+import { agentMcpListRoute } from "./routes/v1/agent.mcp.list.js";
+import { agentSkillListRoute } from "./routes/v1/agent.skill.list.js";
+import { agentPlanApproveRoute } from "./routes/v1/agent.plan.approve.js";
+import { agentTaskBackgroundStartRoute } from "./routes/v1/agent.task.background.start.js";
+import { agentTaskBackgroundReadRoute } from "./routes/v1/agent.task.background.read.js";
+import { agentTaskBackgroundCancelRoute } from "./routes/v1/agent.task.background.cancel.js";
+import { agentMemoryRecallRoute } from "./routes/v1/agent.memory.recall.js";
+import { agentMemoryWriteRoute } from "./routes/v1/agent.memory.write.js";
+import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve.js";
 
 export type AppEnv = {
   Variables: {
@@ -47,4 +58,17 @@ tenantScoped.use("*", authMiddleware, tenantMiddleware, workspaceMiddleware);
 tenantScoped.route("/workspaces", workspaceCreateRoute);
 tenantScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 tenantScoped.route("/chat/messages", chatMessageSendRoute);
+// Agent-runtime routes live under the tenant + workspace scope so the runner
+// inherits the same auth, isolation, and audit envelope as every other v1 call.
+tenantScoped.route("/agent/tools", agentToolListRoute);
+tenantScoped.route("/agent/mcp-servers", agentMcpRegisterRoute);
+tenantScoped.route("/agent/mcp-servers", agentMcpListRoute);
+tenantScoped.route("/agent/skills", agentSkillListRoute);
+tenantScoped.route("/agent/plans/approve", agentPlanApproveRoute);
+tenantScoped.route("/agent/tasks", agentTaskBackgroundStartRoute);
+tenantScoped.route("/agent/tasks", agentTaskBackgroundReadRoute);
+tenantScoped.route("/agent/tasks/cancel", agentTaskBackgroundCancelRoute);
+tenantScoped.route("/agent/memory/recall", agentMemoryRecallRoute);
+tenantScoped.route("/agent/memory", agentMemoryWriteRoute);
+tenantScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 app.route("/v1/:tenant_slug/:workspace_slug", tenantScoped);
