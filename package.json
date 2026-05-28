@@ -15,7 +15,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "pnpm --filter @oxagen/app exec playwright test",
-    "db:migrate": "pnpm --filter @oxagen/database run migrate",
+    "db:migrate": "tsx --env-file=.env.local tools/scripts/db-migrate.ts",
     "db:generate": "pnpm --filter @oxagen/database run generate",
     "db:check": "tsx tools/scripts/db-check.ts",
     "db:reset": "tsx tools/scripts/db-reset.ts",

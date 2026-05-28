@@ -6,9 +6,10 @@ export const workspaceCreate = registerCapability({
   domain: "workspace",
   description: "Create a workspace within the active tenant",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
+  agent: { requiresApproval: true, riskLevel: "low", category: "workspace" },
   input: z.object({
     name: z.string().min(1).max(120),
     slug: z

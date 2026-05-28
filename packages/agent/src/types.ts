@@ -7,4 +7,6 @@ export interface CapabilityContext {
   userId: string | null;
   apiKeyId: string | null;
   requestId: string;
+  surface: "api" | "mcp" | "app" | "runner";
+  messageId: string | null;
 }

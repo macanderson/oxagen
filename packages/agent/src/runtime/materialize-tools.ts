@@ -1,6 +1,8 @@
 import { tool, type Tool, type ToolSet } from "ai";
 import type { CapabilityContext } from "../types.js";
 import { invokeCapability } from "../handlers/index.js";
+import { beforeTool, afterTool, onError } from "../hooks/runtime.js";
+import { createApprovalRequest, waitForApproval } from "./approval.js";
 
 // Imported dynamically to avoid a static package cycle:
 // @oxagen/oxagen handlers depend on @oxagen/agent for helpers; if this
@@ -58,11 +60,45 @@ export async function materializeTools(
     if (!surfacesFn(cap).includes("agent")) continue;
     if (opts.allowlist && !opts.allowlist.has(cap.name)) continue;
     if (!passesRisk(cap, opts.riskCeiling)) continue;
+    const riskLevel: "low" | "medium" | "high" = cap.agent?.riskLevel ?? "low";
+    const requiresApproval = cap.agent?.requiresApproval === true;
     out[cap.name] = tool({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cap.input is a zod schema; AI SDK accepts ZodTypeAny.
       description: cap.description,
       parameters: cap.input as any,
-      execute: async (input: unknown) => invokeCapability(cap.name, input, ctx),
+      execute: async (input: unknown) => {
+        await beforeTool({ capability: cap.name, ctx, input });
+        try {
+          // Approval gate. Only fires when the capability declares
+          // `requiresApproval: true` AND we have a `messageId` to attach the
+          // request to in the chat DAG. Direct API / MCP callers skip the
+          // gate (their auth surface is responsible for authorization).
+          if (requiresApproval && ctx.messageId) {
+            const { approvalId } = await createApprovalRequest({
+              tenantId: ctx.tenantId,
+              workspaceId: ctx.workspaceId,
+              messageId: ctx.messageId,
+              capabilityName: cap.name,
+              inputPreview: input,
+              riskLevel,
+            });
+            const resolution = await waitForApproval(approvalId);
+            if (resolution.resolution !== "approved") {
+              throw new Error(`approval ${resolution.resolution} for ${cap.name}`);
+            }
+          }
+          const result = await invokeCapability(cap.name, input, ctx);
+          await afterTool({ capability: cap.name, ctx, output: result });
+          return result;
+        } catch (err) {
+          await onError({
+            capability: cap.name,
+            ctx,
+            error: err instanceof Error ? err : new Error(String(err)),
+          });
+          throw err;
+        }
+      },
     });
   }
   return out;

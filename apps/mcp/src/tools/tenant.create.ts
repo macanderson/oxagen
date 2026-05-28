@@ -1,5 +1,5 @@
 import { tenantCreate } from "@oxagen/oxagen/capabilities/tenant.create";
-import { tenantCreateHandler } from "@oxagen/oxagen/capabilities/tenant.create.handler";
+import { tenantCreateHandler } from "@oxagen/handlers/tenant.create";
 import { placeholderContext } from "../context.js";
 import type { McpTool } from "../server.js";
 

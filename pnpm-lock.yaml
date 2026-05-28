@@ -44,6 +44,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@oxagen/handlers':
+        specifier: workspace:*
+        version: link:../../packages/handlers
       '@oxagen/inngest-functions':
         specifier: workspace:*
         version: link:../../packages/inngest-functions
@@ -254,6 +257,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@oxagen/handlers':
+        specifier: workspace:*
+        version: link:../../packages/handlers
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../../packages/oxagen
@@ -470,6 +476,34 @@ importers:
         specifier: ^2.1.2
         version: 2.1.9(@types/node@22.19.19)(lightningcss@1.32.0)
 
+  packages/handlers:
+    dependencies:
+      '@oxagen/billing':
+        specifier: workspace:*
+        version: link:../billing
+      '@oxagen/config':
+        specifier: workspace:*
+        version: link:../config
+      '@oxagen/database':
+        specifier: workspace:*
+        version: link:../database
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../oxagen
+      '@oxagen/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
+      drizzle-orm:
+        specifier: ^0.36.0
+        version: 0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@types/react@19.2.15)(kysely@0.28.17)(postgres@3.4.9)(react@19.0.0)
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.6.2
+        version: 5.9.3
+
   packages/inngest-functions:
     dependencies:
       '@oxagen/agent':
@@ -595,12 +629,21 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@oxagen/ontology':
+        specifier: workspace:*
+        version: link:../../packages/ontology
+      '@oxagen/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       execa:
         specifier: ^9.4.0
         version: 9.6.1
       kleur:
         specifier: ^4.1.5
         version: 4.1.5
+      postgres:
+        specifier: ^3.4.4
+        version: 3.4.9
     devDependencies:
       '@types/node':
         specifier: ^20.16.10

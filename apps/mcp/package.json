@@ -17,6 +17,7 @@
     "@oxagen/agent": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/handlers": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "hono": "^4.6.3",
     "zod": "^3.23.8"

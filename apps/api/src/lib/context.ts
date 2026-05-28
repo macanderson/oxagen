@@ -20,5 +20,7 @@ export function capabilityContext(
     userId: c.get("userId") ?? null,
     apiKeyId: c.get("apiKeyId") ?? null,
     requestId: c.get("requestId") ?? "",
+    surface: "api",
+    messageId: null,
   };
 }

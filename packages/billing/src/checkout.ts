@@ -8,6 +8,13 @@ export interface CreateCheckoutSessionInput {
   tenantId: string;
   planSlug: string;
   interval: "month" | "year";
+  /**
+   * Optional overrides. The agent surface needs to route the user back to the
+   * chat context that initiated the upgrade; the in-app billing UI keeps the
+   * env defaults.
+   */
+  successUrl?: string;
+  cancelUrl?: string;
 }
 
 export async function createCheckoutSession(
@@ -37,8 +44,9 @@ export async function createCheckoutSession(
     subscription_data: {
       metadata: { tenant_id: input.tenantId, plan_id: plan.id },
     },
-    success_url: `${env.NEXT_PUBLIC_APP_URL}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${env.NEXT_PUBLIC_APP_URL}/billing/plans`,
+    success_url:
+      input.successUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: input.cancelUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/plans`,
     allow_promotion_codes: true,
   });
   if (!session.url) throw new Error("Stripe did not return a checkout URL");

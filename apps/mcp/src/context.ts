@@ -10,5 +10,7 @@ export function placeholderContext(): CapabilityContext {
     userId: null,
     apiKeyId: null,
     requestId: crypto.randomUUID(),
+    surface: "mcp",
+    messageId: null,
   };
 }

@@ -3,6 +3,7 @@ import { listCapabilities } from "@oxagen/oxagen";
 import { tenantCreateTool } from "./tools/tenant.create.js";
 import { workspaceCreateTool } from "./tools/workspace.create.js";
 import { billingSubscriptionReadTool } from "./tools/billing.subscription.read.js";
+import { billingSubscriptionUpgradeStartTool } from "./tools/billing.subscription.upgrade.start.js";
 import { chatMessageSendTool } from "./tools/chat.message.send.js";
 import { agentToolListTool } from "./tools/agent.tool.list.js";
 import { agentMcpRegisterTool } from "./tools/agent.mcp.register.js";
@@ -24,6 +25,7 @@ const tools: McpTool[] = [
   tenantCreateTool,
   workspaceCreateTool,
   billingSubscriptionReadTool,
+  billingSubscriptionUpgradeStartTool,
   chatMessageSendTool,
   agentToolListTool,
   agentMcpRegisterTool,

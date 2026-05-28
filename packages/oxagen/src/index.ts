@@ -8,6 +8,7 @@ export * from "./registry.js";
 import "./capabilities/tenant.create.js";
 import "./capabilities/workspace.create.js";
 import "./capabilities/billing.subscription.read.js";
+import "./capabilities/billing.subscription.upgrade.start.js";
 import "./capabilities/chat.message.send.js";
 
 // Agent runtime

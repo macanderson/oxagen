@@ -1,5 +1,5 @@
 import { chatMessageSend } from "@oxagen/oxagen/capabilities/chat.message.send";
-import { chatMessageSendHandler } from "@oxagen/oxagen/capabilities/chat.message.send.handler";
+import { chatMessageSendHandler } from "@oxagen/handlers/chat.message.send";
 import { placeholderContext } from "../context.js";
 import type { McpTool } from "../server.js";
 

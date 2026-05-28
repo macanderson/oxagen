@@ -44,6 +44,8 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
           userId: null,
           apiKeyId: null,
           requestId: taskId,
+          surface: "runner",
+          messageId: null,
         });
       });
       await step.run("mark-completed", async () => {

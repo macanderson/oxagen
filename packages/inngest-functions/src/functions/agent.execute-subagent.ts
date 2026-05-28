@@ -41,6 +41,8 @@ export const agentExecuteSubagent = inngest.createFunction(
             userId: null,
             apiKeyId: null,
             requestId: r.childMessageId,
+            surface: "runner",
+            messageId: r.childMessageId,
           });
           await db()
             .update(schema.subagentRuns)

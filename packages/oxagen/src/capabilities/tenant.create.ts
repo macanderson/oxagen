@@ -6,9 +6,10 @@ export const tenantCreate = registerCapability({
   domain: "organization",
   description: "Create a new tenant with a globally-unique slug",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: false,
+  agent: { requiresApproval: true, riskLevel: "medium", category: "organization" },
   input: z.object({
     name: z.string().min(1).max(120),
     slug: z

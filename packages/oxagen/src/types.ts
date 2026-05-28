@@ -67,6 +67,14 @@ export interface CapabilityContext {
   userId: string | null;
   apiKeyId: string | null;
   requestId: string;
+  /** Surface the request originated from — propagated into telemetry. */
+  surface: "api" | "mcp" | "app" | "runner";
+  /**
+   * Present when the capability is invoked mid-chat by the in-app agent.
+   * Used by the approval gate to attach the request to the message DAG.
+   * Null for direct API / MCP calls.
+   */
+  messageId: string | null;
 }
 
 export interface CapabilityManifestEntry {

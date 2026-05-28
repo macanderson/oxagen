@@ -17,7 +17,7 @@ const CTX = {
   workspaceId: "ws_1",
   userId: "u_1",
   apiKeyId: null,
-  requestId: "req_1",
+  requestId: "req_1", surface: "runner" as const, messageId: null,
 };
 
 describe("hooks runtime", () => {

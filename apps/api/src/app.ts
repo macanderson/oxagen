@@ -11,6 +11,7 @@ import { inngestRoute } from "./routes/inngest.js";
 import { tenantCreateRoute } from "./routes/v1/tenant.create.js";
 import { workspaceCreateRoute } from "./routes/v1/workspace.create.js";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read.js";
+import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription.upgrade.start.js";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send.js";
 import { agentToolListRoute } from "./routes/v1/agent.tool.list.js";
 import { agentMcpRegisterRoute } from "./routes/v1/agent.mcp.register.js";
@@ -61,6 +62,7 @@ const tenantScoped = new Hono<AppEnv>();
 tenantScoped.use("*", authMiddleware, tenantMiddleware, workspaceMiddleware);
 tenantScoped.route("/workspaces", workspaceCreateRoute);
 tenantScoped.route("/billing/subscription", billingSubscriptionReadRoute);
+tenantScoped.route("/billing/subscription/upgrade/start", billingSubscriptionUpgradeStartRoute);
 tenantScoped.route("/chat/messages", chatMessageSendRoute);
 // Agent-runtime routes live under the tenant + workspace scope so the runner
 // inherits the same auth, isolation, and audit envelope as every other v1 call.

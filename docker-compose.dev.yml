@@ -1,9 +1,9 @@
-name: oxagen-dev
+name: oxagen-v2-dev
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: oxagen-postgres
+    container_name: oxagen-v2-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: oxagen
@@ -18,7 +18,7 @@ services:
       # postgres on 5432. Update DATABASE_URL in .env.local accordingly.
       - "5433:5432"
     volumes:
-      - oxagen-postgres:/var/lib/postgresql/data
+      - oxagen-v2-postgres:/var/lib/postgresql/data
       - ./tools/scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U oxagen -d oxagen"]
@@ -28,7 +28,7 @@ services:
 
   neo4j:
     image: neo4j:5.24-community
-    container_name: oxagen-neo4j
+    container_name: oxagen-v2-neo4j
     restart: unless-stopped
     environment:
       NEO4J_AUTH: neo4j/oxagen-dev
@@ -38,7 +38,7 @@ services:
       - "7474:7474"
       - "7687:7687"
     volumes:
-      - oxagen-neo4j:/data
+      - oxagen-v2-neo4j:/data
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:7474 >/dev/null 2>&1 || exit 1"]
       interval: 10s
@@ -47,7 +47,7 @@ services:
 
   clickhouse:
     image: clickhouse/clickhouse-server:24.8-alpine
-    container_name: oxagen-clickhouse
+    container_name: oxagen-v2-clickhouse
     restart: unless-stopped
     environment:
       CLICKHOUSE_DB: oxagen
@@ -62,7 +62,7 @@ services:
         soft: 262144
         hard: 262144
     volumes:
-      - oxagen-clickhouse:/var/lib/clickhouse
+      - oxagen-v2-clickhouse:/var/lib/clickhouse
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:8123/ping || exit 1"]
       interval: 5s
@@ -70,6 +70,6 @@ services:
       retries: 10
 
 volumes:
-  oxagen-postgres:
-  oxagen-neo4j:
-  oxagen-clickhouse:
+  oxagen-v2-postgres:
+  oxagen-v2-neo4j:
+  oxagen-v2-clickhouse:

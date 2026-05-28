@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-28T21:41:38.561Z",
+  "generatedAt": "2026-05-28T22:19:39.883Z",
   "capabilities": [
     {
       "name": "agent.approval.resolve",
@@ -295,6 +295,25 @@
       }
     },
     {
+      "name": "billing.subscription.upgrade.start",
+      "file": "billing.subscription.upgrade.start.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": true,
+        "docs": true
+      }
+    },
+    {
       "name": "chat.message.send",
       "file": "chat.message.send.ts",
       "domain": "chat",
@@ -319,7 +338,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "schema": true,
@@ -337,7 +357,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "schema": true,

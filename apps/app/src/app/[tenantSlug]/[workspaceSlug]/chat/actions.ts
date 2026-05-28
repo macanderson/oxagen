@@ -130,6 +130,8 @@ export async function sendMessageAction(
       userId: session.user.id,
       apiKeyId: null,
       requestId: userMessageId ?? randomUUID(),
+      surface: "app",
+      messageId: userMessageId,
     });
     const result = streamAgentReply({
       messages: coreMessages,

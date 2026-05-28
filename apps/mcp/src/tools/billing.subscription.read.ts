@@ -1,5 +1,5 @@
 import { billingSubscriptionRead } from "@oxagen/oxagen/capabilities/billing.subscription.read";
-import { billingSubscriptionReadHandler } from "@oxagen/oxagen/capabilities/billing.subscription.read.handler";
+import { billingSubscriptionReadHandler } from "@oxagen/handlers/billing.subscription.read";
 import { placeholderContext } from "../context.js";
 import type { McpTool } from "../server.js";
 
