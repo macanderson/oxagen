@@ -1,0 +1,6 @@
+.DS_Store
+.env
+.worktrees
+.ignore
+.env.local
+.env.*.local
