@@ -4,7 +4,7 @@ Sequenced after the foundations epic ships.
 
 ## Phase 0 — ADRs
 
-- [ ] ADR-007: Cloudflare Workers (Workers for Platforms) as code sandbox
+- [ ] ADR-007: Docker (vendor-neutral) as code sandbox
 - [ ] ADR-008: Skills as filesystem-first with DB augmentation
 - [ ] ADR-009: Unified capability/tool model via `surfaces` field
 - [ ] ADR-010: Subagent fanout via Inngest invoke vs separate worker pool

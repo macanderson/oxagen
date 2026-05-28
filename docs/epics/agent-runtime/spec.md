@@ -190,13 +190,16 @@ Filesystem + DB skill loader.
 
 ### 5.3 `packages/sandbox`
 
-Cloudflare Workers driver.
+Docker driver. Vendor-neutral; runs anywhere Docker runs.
 
-- `src/cloudflare.ts` — dispatch-namespace client.
-- `src/session.ts` — per-tenant subworker lifecycle: ensure, invoke,
-  expire.
-- `src/types.ts` — driver interface so a future Firecracker driver is
-  a one-file swap.
+- `src/types.ts` — `SandboxDriver` interface plus `SandboxRequest`,
+  `SandboxResult`, `SandboxStreamChunk` shapes.
+- `src/docker.ts` — driver implementation; uses `dockerode` to spawn,
+  stream, and tear down containers per invocation.
+- `src/images.ts` — pinned image registry per language.
+- `src/policy.ts` — workspace-scoped policy: which languages, what
+  caps, network on/off, wallclock + memory ceilings.
+- `src/index.ts` — exports a `createSandbox(driver?)` factory.
 
 ## 6. Schema Additions
 
