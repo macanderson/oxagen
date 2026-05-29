@@ -19,6 +19,7 @@
     "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "inngest": "^3.27.4",
     "pino": "^9.4.0",

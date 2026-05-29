@@ -29,6 +29,17 @@ export const billingSubscriptionRead = registerCapability({
       })
       .nullable(),
     creditBalanceCents: z.number().int(),
+    // OXA-1347: current-period usage snapshot so the billing panel can
+    // render token + cost totals without a second round trip.
+    periodUsage: z
+      .object({
+        inputTokens: z.number().int().nonnegative(),
+        outputTokens: z.number().int().nonnegative(),
+        cachedTokens: z.number().int().nonnegative(),
+        costMicros: z.number().int().nonnegative(),
+        executions: z.number().int().nonnegative(),
+      })
+      .nullable(),
   }),
 });
 

@@ -1,5 +1,6 @@
 import { tool, type Tool, type ToolSet } from "ai";
 import { insertToolInvocation } from "@oxagen/telemetry";
+import { loadEnv } from "@oxagen/config/env";
 import type { CapabilityContext } from "../types.js";
 import { invokeCapability } from "../handlers/index.js";
 import { beforeTool, afterTool, onError } from "../hooks/runtime.js";
@@ -64,11 +65,16 @@ export async function materializeTools(
   const surfacesFn = _getSurfaces;
   if (!listFn || !surfacesFn) throw new Error("registry not initialized");
   const all = listFn();
+  // OXA-1348: agent.code.execute requires a sandbox driver. Until the
+  // Vercel-compatible driver ships, gate materialization on SANDBOX_ENABLED.
+  // Off by default in prod so the tool is not advertised to the model.
+  const sandboxEnabled = loadEnv().SANDBOX_ENABLED === true;
   const out: Record<string, Tool> = {};
   for (const cap of all) {
     if (!surfacesFn(cap).includes("agent")) continue;
     if (opts.allowlist && !opts.allowlist.has(cap.name)) continue;
     if (!passesRisk(cap, opts.riskCeiling)) continue;
+    if (cap.name === "agent.code.execute" && !sandboxEnabled) continue;
     const riskLevel: "low" | "medium" | "high" = cap.agent?.riskLevel ?? "low";
     const requiresApproval = cap.agent?.requiresApproval === true;
     out[cap.name] = tool({

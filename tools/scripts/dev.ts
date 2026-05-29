@@ -75,7 +75,13 @@ async function migrate(): Promise<void> {
 
 async function turbo(): Promise<void> {
   console.log(kleur.cyan("[dev] starting turbo dev"));
-  await execa("pnpm", ["turbo", "dev", "--parallel"], { stdio: "inherit" });
+  // @oxagen/cli is an Ink commander that exits 1 without a subcommand; excluded
+  // from the long-running dev set. Invoke it ad-hoc via `pnpm cli <command>`.
+  await execa(
+    "pnpm",
+    ["turbo", "dev", "--parallel", "--filter=!@oxagen/cli"],
+    { stdio: "inherit" },
+  );
 }
 
 async function main(): Promise<void> {

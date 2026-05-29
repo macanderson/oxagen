@@ -18,7 +18,9 @@ import postgres from "postgres";
 import kleur from "kleur";
 import { loadEnv } from "@oxagen/config/env";
 import { migrate as migrateClickhouse } from "@oxagen/telemetry/migrate";
+import { closeClickhouse } from "@oxagen/telemetry";
 import { migrate as migrateNeo4j } from "@oxagen/ontology/migrate";
+import { closeDriver } from "@oxagen/ontology/client";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = resolve(__filename, "..");
@@ -65,13 +67,25 @@ async function main(): Promise<void> {
   console.log(kleur.bold("[migrate] postgres"));
   await migratePostgres();
   console.log(kleur.bold("[migrate] clickhouse"));
-  await migrateClickhouse();
+  try {
+    await migrateClickhouse();
+  } finally {
+    // The CH client holds a keepalive HTTP socket that prevents process
+    // exit; close it here since the imported migrate() doesn't.
+    await closeClickhouse();
+  }
   console.log(kleur.bold("[migrate] neo4j"));
-  await migrateNeo4j();
+  try {
+    await migrateNeo4j();
+  } finally {
+    await closeDriver();
+  }
   console.log(kleur.green().bold("[migrate] all stores complete"));
 }
 
-main().catch((err: unknown) => {
-  console.error(kleur.red(err instanceof Error ? err.message : String(err)));
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((err: unknown) => {
+    console.error(kleur.red(err instanceof Error ? err.message : String(err)));
+    process.exit(1);
+  });

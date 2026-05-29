@@ -521,6 +521,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../oxagen
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry

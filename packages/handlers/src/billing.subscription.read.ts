@@ -1,6 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
 import { db, schema } from "@oxagen/database";
+import { sumTokenUsage } from "@oxagen/telemetry";
 import { and, eq, inArray } from "drizzle-orm";
 
 const ACTIVE_STATUSES = ["trialing", "active", "past_due", "paused"];
@@ -42,6 +43,36 @@ export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSub
       columns: { balanceCents: true },
     });
 
+    // OXA-1347: roll up the current billing period's token + cost totals
+    // from ClickHouse when a subscription is active. Telemetry is best-
+    // effort: if CH is down the panel still renders subscription + balance.
+    let periodUsage: {
+      inputTokens: number;
+      outputTokens: number;
+      cachedTokens: number;
+      costMicros: number;
+      executions: number;
+    } | null = null;
+    if (sub) {
+      try {
+        const rollup = await sumTokenUsage({
+          tenantId: ctx.tenantId,
+          periodStart: sub.currentPeriodStart,
+          periodEnd: sub.currentPeriodEnd,
+        });
+        const get = (m: string) => rollup.find((r) => r.metric === m);
+        periodUsage = {
+          inputTokens: get("tokens_input")?.quantity ?? 0,
+          outputTokens: get("tokens_output")?.quantity ?? 0,
+          cachedTokens: get("tokens_cached")?.quantity ?? 0,
+          costMicros: Number(get("executions")?.costMicros ?? 0n),
+          executions: get("executions")?.quantity ?? 0,
+        };
+      } catch {
+        /* CH failure should not break the billing panel */
+      }
+    }
+
     return {
       subscription:
         sub && planSlug
@@ -59,5 +90,6 @@ export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSub
             }
           : null,
       creditBalanceCents: Number(balance?.balanceCents ?? 0n),
+      periodUsage,
     };
   };

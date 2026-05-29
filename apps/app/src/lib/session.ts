@@ -2,7 +2,7 @@ import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
-import { auth } from "./auth.js";
+import { auth } from "./auth";
 
 // React `cache()` memoizes per-request; this collapses the Better Auth
 // session lookup to a single DB hit across all RSCs in one request.
