@@ -1,7 +1,10 @@
 #!/usr/bin/env tsx
 import { execa } from "execa";
 import kleur from "kleur";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 
+const ROOT = resolve(process.cwd());
 const COMPOSE_FILE = "docker-compose.dev.yml";
 
 async function checkDocker(): Promise<void> {
@@ -13,25 +16,22 @@ async function checkDocker(): Promise<void> {
   }
 }
 
-async function checkEnv(): Promise<void> {
-  // Secrets live in Doppler (project: oxagen). The dev script is invoked via
-  // `doppler run -- tsx tools/scripts/dev.ts` so by the time we get here, the
-  // expected variables should already be in process.env. We sanity-check one
-  // canonical secret so a missing/misconfigured Doppler context fails loud.
-  if (!process.env.DATABASE_URL) {
-    console.error(
-      kleur.red(
-        "DATABASE_URL not set. Run `doppler setup` (project oxagen, config dev_personal) " +
-          "and invoke pnpm dev so commands wrap in `doppler run --`.",
-      ),
-    );
-    process.exit(1);
-  }
+async function ensureEnvFile(): Promise<void> {
+  // Vercel is the source of truth for env vars. `.env.local` is hydrated from
+  // the linked project's Development environment via `vercel env pull`.
+  // If absent, we bootstrap it here so first-time setup is one command.
+  const envPath = resolve(ROOT, ".env.local");
+  if (existsSync(envPath)) return;
+
+  console.log(kleur.cyan("[dev] .env.local missing — running `pnpm env:pull`"));
   try {
-    await execa("doppler", ["me"], { stdio: "ignore" });
+    await execa("pnpm", ["env:pull"], { stdio: "inherit" });
   } catch {
     console.error(
-      kleur.red("Doppler CLI not authenticated. Run `doppler login` then `doppler setup`."),
+      kleur.red(
+        "Failed to pull env from Vercel. Run `vercel login` and `vercel link` " +
+          "(project oxagen-v2-app, scope 02beta), then `pnpm env:pull`.",
+      ),
     );
     process.exit(1);
   }
@@ -96,7 +96,7 @@ async function turbo(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  await checkEnv();
+  await ensureEnvFile();
   await checkDocker();
   await up();
   await waitForHealthy();
