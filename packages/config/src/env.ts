@@ -43,12 +43,18 @@ const envSchema = z
     NEXT_PUBLIC_API_URL: z.string().url(),
 
     // OXA-1348: when true (default off in prod), agent.code.execute is
-    // materialized as an agent tool. Set false on Vercel until OXA-1348-A
-    // ships a Vercel-compatible sandbox driver.
+    // materialized as an agent tool. Set true on Vercel once the Modal
+    // runner is deployed (see ops/modal/README.md).
     SANDBOX_ENABLED: z
       .union([z.literal("true"), z.literal("false")])
       .optional()
       .transform((v) => v === "true"),
+    // Driver selection for @oxagen/sandbox. `modal` routes through the
+    // hosted Firecracker runner; `docker` runs Dockerode locally. Unset
+    // = auto-detect (modal if MODAL_RUNNER_URL is present, else docker).
+    SANDBOX_DRIVER: z.enum(["modal", "docker"]).optional(),
+    MODAL_RUNNER_URL: z.string().url().optional(),
+    MODAL_RUNNER_TOKEN: z.string().min(16).optional(),
   })
   // OXA-1349: Inngest signing/event keys must be present in production —
   // the `/api/inngest` serve handler accepts unsigned requests otherwise.
