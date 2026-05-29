@@ -88,9 +88,11 @@ async function turbo(): Promise<void> {
   console.log(kleur.cyan("[dev] starting turbo dev"));
   // @oxagen/cli is an Ink commander that exits 1 without a subcommand; excluded
   // from the long-running dev set. Invoke it ad-hoc via `pnpm cli <command>`.
+  // Turbo 2 runs `persistent: true` tasks (see turbo.json) in parallel by
+  // default — no --parallel flag needed.
   await execa(
     "pnpm",
-    ["turbo", "dev", "--parallel", "--filter=!@oxagen/cli"],
+    ["turbo", "dev", "--filter=!@oxagen/cli"],
     { stdio: "inherit" },
   );
 }
