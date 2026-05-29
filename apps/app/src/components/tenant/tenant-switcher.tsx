@@ -30,7 +30,7 @@ export function TenantSwitcher({ current, tenants }: { current: TenantOption; te
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuLabel>Tenants</DropdownMenuLabel>
+        <DropdownMenuLabel>Organizations</DropdownMenuLabel>
         {tenants.map((t) => (
           <DropdownMenuItem key={t.publicId} onSelect={() => router.push(`/${t.slug}`)}>
             <span className="flex-1">{t.name}</span>
@@ -40,7 +40,7 @@ export function TenantSwitcher({ current, tenants }: { current: TenantOption; te
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link href="/new-tenant" className="flex items-center gap-2">
-            <Plus className="h-3.5 w-3.5" /> New tenant
+            <Plus className="h-3.5 w-3.5" /> New organization
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>

@@ -26,7 +26,7 @@ export async function createTenantAction(
     name: parsedForm.data.name,
     slug: parsedForm.data.slug,
   });
-  if (!tenantInput.success) return { ok: false, error: tenantInput.error.issues[0]?.message ?? "Invalid tenant" };
+  if (!tenantInput.success) return { ok: false, error: tenantInput.error.issues[0]?.message ?? "Invalid organization" };
 
   const workspaceInput = workspaceCreate.input.safeParse({
     name: "Default",
@@ -84,7 +84,7 @@ export async function createTenantAction(
 
     return { ok: true, ...result };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to create tenant";
+    const message = err instanceof Error ? err.message : "Failed to create organization";
     if (message.toLowerCase().includes("unique")) {
       return { ok: false, error: "Slug is already taken" };
     }

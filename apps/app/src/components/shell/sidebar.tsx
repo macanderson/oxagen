@@ -38,7 +38,7 @@ export function Sidebar({ tenantSlug, workspaceSlug }: SidebarProps) {
               {label}
             </Link>
           ))}
-          <div className="mt-4 px-2 pb-1 text-xs uppercase tracking-wider text-muted-foreground">Tenant</div>
+          <div className="mt-4 px-2 pb-1 text-xs uppercase tracking-wider text-muted-foreground">Organization</div>
         </>
       ) : null}
       {tenantNav.map(({ href, label, icon: Icon }) => (

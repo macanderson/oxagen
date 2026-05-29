@@ -1,4 +1,4 @@
-import { customType, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, customType, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { authSchema } from "./_schemas.js";
 import { auditMixin, citext, idMixin, softDeleteMixin, tenantScopeMixin } from "./_mixins.js";
 
@@ -22,6 +22,9 @@ export const users = authSchema.table(
     displayName: text("display_name"),
     avatarUrl: text("avatar_url"),
     status: text("status").notNull(),
+    // Better Auth tracks email verification as a boolean; we also track the
+    // verification timestamp for our own audit purposes.
+    emailVerified: boolean("email_verified").notNull().default(false),
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true, mode: "date" }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true, mode: "date" }),
   },

@@ -5,8 +5,10 @@ import { schema } from "@oxagen/database";
 import { loadEnv } from "@oxagen/config/env";
 
 // Better Auth binds to the canonical auth.users row, not a parallel table.
-// We remap the Better Auth field names to our spec-§6.2 column names so the
-// adapter writes into the same row our application code already reads.
+// The Drizzle adapter looks up columns via JS property lookup
+// (`schemaModel[fieldName]`), so the fields map must use camelCase Drizzle
+// field names — Drizzle handles the camelCase → snake_case translation when
+// it emits SQL.
 const env = loadEnv();
 
 export const auth = betterAuth({
@@ -26,9 +28,8 @@ export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   user: {
     fields: {
-      name: "display_name",
-      image: "avatar_url",
-      emailVerified: "email_verified_at",
+      name: "displayName",
+      image: "avatarUrl",
     },
     additionalFields: {
       status: { type: "string", required: false, defaultValue: "active" },
