@@ -61,6 +61,11 @@ export const auth = betterAuth({
       httpOnly: true,
       sameSite: "lax",
     },
+    // users.id is a uuid column (idMixin). Better Auth's default ID generator
+    // produces nanoid-style strings that postgres rejects when cast to uuid.
+    database: {
+      generateId: () => crypto.randomUUID(),
+    },
   },
 });
 
