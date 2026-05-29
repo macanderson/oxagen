@@ -12,11 +12,13 @@ const env = loadEnv();
 export const auth = betterAuth({
   database: drizzleAdapter(db(), {
     provider: "pg",
+    // Better Auth resolves models by name; with usePlural=true the names
+    // become "users", "sessions", etc., so the schema keys must match.
     schema: {
-      user: schema.users,
-      session: schema.sessions,
-      account: schema.accounts,
-      verification: schema.verifications,
+      users: schema.users,
+      sessions: schema.sessions,
+      accounts: schema.accounts,
+      verifications: schema.verifications,
     },
     usePlural: true,
   }),
