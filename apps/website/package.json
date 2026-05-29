@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --port 3100",
+    "dev": "doppler run -- next dev --port 3100",
     "build": "next build",
-    "start": "next start --port 3100",
+    "start": "doppler run -- next start --port 3100",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
