@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --env-file=../../.env.local src/index.ts",
-    "start": "tsx --env-file=../../.env.local src/index.ts",
+    "dev": "doppler run -- tsx watch src/index.ts",
+    "start": "doppler run -- tsx src/index.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'lint placeholder'",

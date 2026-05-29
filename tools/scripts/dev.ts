@@ -1,10 +1,7 @@
 #!/usr/bin/env tsx
 import { execa } from "execa";
 import kleur from "kleur";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
 
-const ROOT = resolve(process.cwd());
 const COMPOSE_FILE = "docker-compose.dev.yml";
 
 async function checkDocker(): Promise<void> {
@@ -16,11 +13,25 @@ async function checkDocker(): Promise<void> {
   }
 }
 
-function checkEnv(): void {
-  // Spec §11: .env.local is the only secret-bearing file.
-  if (!existsSync(resolve(ROOT, ".env.local"))) {
+async function checkEnv(): Promise<void> {
+  // Secrets live in Doppler (project: oxagen). The dev script is invoked via
+  // `doppler run -- tsx tools/scripts/dev.ts` so by the time we get here, the
+  // expected variables should already be in process.env. We sanity-check one
+  // canonical secret so a missing/misconfigured Doppler context fails loud.
+  if (!process.env.DATABASE_URL) {
     console.error(
-      kleur.red(".env.local missing. Copy .env.example to .env.local and fill values."),
+      kleur.red(
+        "DATABASE_URL not set. Run `doppler setup` (project oxagen, config dev_personal) " +
+          "and invoke pnpm dev so commands wrap in `doppler run --`.",
+      ),
+    );
+    process.exit(1);
+  }
+  try {
+    await execa("doppler", ["me"], { stdio: "ignore" });
+  } catch {
+    console.error(
+      kleur.red("Doppler CLI not authenticated. Run `doppler login` then `doppler setup`."),
     );
     process.exit(1);
   }
@@ -85,7 +96,7 @@ async function turbo(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  checkEnv();
+  await checkEnv();
   await checkDocker();
   await up();
   await waitForHealthy();

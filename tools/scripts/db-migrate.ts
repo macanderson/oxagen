@@ -8,8 +8,9 @@
  * them ourselves and track applied filenames in `public._migrations`.
  *
  * Run via `pnpm db:migrate`, which invokes
- *   tsx --env-file=.env.local tools/scripts/db-migrate.ts
- * so env validation in @oxagen/config has values to validate.
+ *   doppler run -- tsx tools/scripts/db-migrate.ts
+ * so env validation in @oxagen/config has values to validate (sourced from
+ * the Doppler `oxagen` project / `dev_personal` config).
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
