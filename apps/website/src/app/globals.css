@@ -1,10 +1,15 @@
-@import "tailwindcss";
+/**
+ * Marketing site styles.
+ *
+ * The shared @oxagen/ui base provides Tailwind v4, design tokens, and the
+ * cross-app primitives (glass utility, dark variant). The website inherits
+ * those and overlays its own dark hero treatment so the surface feels
+ * distinct from the app shell while still rendering the same components.
+ */
+@import "@oxagen/ui/styles/globals.css";
 
 @theme {
-  --color-glass-bg: rgba(255, 255, 255, 0.06);
-  --color-glass-border: rgba(255, 255, 255, 0.12);
   --color-ink: #f6f7f9;
-  --color-muted: #a1a7b3;
 }
 
 html,

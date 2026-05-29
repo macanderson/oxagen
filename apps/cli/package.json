@@ -17,12 +17,12 @@
     "@oxagen/config": "workspace:*",
     "commander": "^12.1.0",
     "ink": "^5.0.1",
-    "react": "^18.3.1"
+    "react": "^19.2.6"
   },
   "devDependencies": {
-    "@types/node": "^20.16.10",
-    "@types/react": "^18.3.10",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
     "tsx": "^4.19.1",
-    "typescript": "^5.6.2"
+    "typescript": "^6.0.3"
   }
 }
