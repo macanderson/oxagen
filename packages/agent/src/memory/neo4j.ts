@@ -17,7 +17,7 @@ const WEIGHT_RANK: Record<string, number> = { low: 0, high: 1, critical: 2 };
 // the foundation migration; we filter by tenant + workspace + weight at
 // query time so the result set is already scoped before we score it.
 export async function recallMemories(args: {
-  tenantId: string;
+  orgId: string;
   workspaceId: string;
   embedding: number[];
   minWeight: "low" | "high" | "critical";
@@ -31,7 +31,7 @@ export async function recallMemories(args: {
       /* cypher */ `
         CALL db.index.vector.queryNodes('agent_memory_embedding', $limit, $embedding)
         YIELD node, score
-        WHERE node.tenantId = $tenantId
+        WHERE node.orgId = $orgId
           AND node.workspaceId = $workspaceId
           AND (CASE node.weight WHEN 'critical' THEN 2 WHEN 'high' THEN 1 ELSE 0 END) >= $minRank
           AND ($nodeRef IS NULL OR node.nodeRef = $nodeRef)
@@ -48,7 +48,7 @@ export async function recallMemories(args: {
         LIMIT $limit
       `,
       {
-        tenantId: args.tenantId,
+        orgId: args.orgId,
         workspaceId: args.workspaceId,
         embedding: args.embedding,
         minRank,
@@ -72,7 +72,7 @@ export async function recallMemories(args: {
 }
 
 export interface WriteMemoryArgs {
-  tenantId: string;
+  orgId: string;
   workspaceId: string;
   nodeRef: string;
   embedding: number[];
@@ -82,7 +82,7 @@ export interface WriteMemoryArgs {
   source: string;
 }
 
-// MERGE on (tenantId, workspaceId, nodeRef, lesson) so identical writes
+// MERGE on (orgId, workspaceId, nodeRef, lesson) so identical writes
 // from repeated reflection don't accumulate duplicates.
 export async function writeMemory(args: WriteMemoryArgs): Promise<{ memoryId: string }> {
   const s = neo4jSession();
@@ -90,7 +90,7 @@ export async function writeMemory(args: WriteMemoryArgs): Promise<{ memoryId: st
     const result = await s.run(
       /* cypher */ `
         MERGE (m:AgentMemory {
-          tenantId: $tenantId,
+          orgId: $orgId,
           workspaceId: $workspaceId,
           nodeRef: $nodeRef,
           lesson: $lesson
@@ -116,7 +116,7 @@ export async function writeMemory(args: WriteMemoryArgs): Promise<{ memoryId: st
         RETURN m.id AS id
       `,
       {
-        tenantId: args.tenantId,
+        orgId: args.orgId,
         workspaceId: args.workspaceId,
         nodeRef: args.nodeRef,
         lesson: args.lesson,

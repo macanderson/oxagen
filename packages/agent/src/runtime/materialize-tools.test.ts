@@ -5,7 +5,7 @@ import { z } from "zod";
 // one high-risk agent.
 const FIXTURE = [
   {
-    name: "tenant.create",
+    name: "organization.create",
     description: "non-agent capability",
     surfaces: ["api", "mcp"] as const,
     input: z.object({}),
@@ -64,7 +64,7 @@ import { materializeTools } from "./materialize-tools.js";
 import { invokeCapability } from "../handlers/index.js";
 
 const CTX = {
-  tenantId: "ten_1",
+  orgId: "ten_1",
   workspaceId: "ws_1",
   userId: "u_1",
   apiKeyId: null,
@@ -79,7 +79,7 @@ describe("materializeTools", () => {
   it("returns only agent-surfaced capabilities", async () => {
     const tools = await materializeTools(CTX);
     expect(Object.keys(tools).sort()).toEqual(["capA", "capB"]);
-    expect(tools["tenant.create"]).toBeUndefined();
+    expect(tools["organization.create"]).toBeUndefined();
   });
 
   it("filters by allowlist", async () => {

@@ -8,7 +8,7 @@ vi.mock("./agent.tool.list.js", () => ({
 import { resolveHandler, invokeCapability } from "./index.js";
 
 const CTX = {
-  tenantId: "ten_1",
+  orgId: "ten_1",
   workspaceId: "ws_1",
   userId: "u_1",
   apiKeyId: null,

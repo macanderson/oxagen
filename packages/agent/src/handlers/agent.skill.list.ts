@@ -24,7 +24,7 @@ export async function agentSkillListHandler(
   // from packages/skills are seeded with source='builtin'; tenant-authored
   // rows carry source='tenant'.
   const conditions = [
-    eq(schema.skills.tenantId, ctx.tenantId),
+    eq(schema.skills.orgId, ctx.orgId),
     eq(schema.skills.workspaceId, ctx.workspaceId),
   ];
   if (input.filter) conditions.push(ilike(schema.skills.name, `%${input.filter}%`));

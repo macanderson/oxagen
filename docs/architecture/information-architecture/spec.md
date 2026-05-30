@@ -606,3 +606,5 @@ When a decision in this document changes:
 
 - 2026-05-29 — Initial specification consolidated from product discussion.
 - 2026-05-29 — Org roles cleaned up to single-word labels: `Owner / Admin / Compliance / Billing` (was `Owner / Admin / Security Admin`). Mirrors Google Workspace, Vercel, Linear, Notion conventions.
+- 2026-05-29 — Production URL convention: until oxagen.ai launches, prod uses the vercel.app domains (`https://oxagen-v2-app.vercel.app`, `https://oxagen-v2-website.vercel.app`, `https://oxagen-v2-api.vercel.app`, `https://oxagen-v2-admin.vercel.app`). All URL values live in env vars; never hard-coded.
+- 2026-05-29 — Google OAuth scope locked to `openid profile email`. The `hd` claim from the Google ID token is captured to `users.orgDomain` so the app can detect Google Workspace accounts and prefill organization name on signup.

@@ -3,7 +3,7 @@
 export * from "./_mixins.js";
 export * from "./_schemas.js";
 
-export * from "./organization.js";
+export * from "./org.js";
 export * from "./auth.js";
 export * from "./workspace.js";
 export * from "./integration.js";

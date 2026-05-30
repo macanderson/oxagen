@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { listCapabilities } from "@oxagen/oxagen";
-import { tenantCreateTool } from "./tools/tenant.create.js";
+import { organizationCreateTool } from "./tools/organization.create.js";
 import { workspaceCreateTool } from "./tools/workspace.create.js";
 import { billingSubscriptionReadTool } from "./tools/billing.subscription.read.js";
 import { billingSubscriptionUpgradeStartTool } from "./tools/billing.subscription.upgrade.start.js";
@@ -22,7 +22,7 @@ export type McpTool = {
 };
 
 const tools: McpTool[] = [
-  tenantCreateTool,
+  organizationCreateTool,
   workspaceCreateTool,
   billingSubscriptionReadTool,
   billingSubscriptionUpgradeStartTool,

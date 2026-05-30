@@ -8,7 +8,7 @@ import neo4j, { type Driver, type Session } from "neo4j-driver";
 // state from a previous aborted run.
 
 export interface FixtureOptions {
-  tenantSlug: string;
+  orgSlug: string;
   workspaceSlug: string;
   userEmail: string;
 }
@@ -27,11 +27,11 @@ export interface Neo4jState {
 }
 
 export interface AgentRuntimeFixture {
-  tenantId: string;
+  orgId: string;
   workspaceId: string;
   userId: string;
   sessionToken: string;
-  tenantSlug: string;
+  orgSlug: string;
   workspaceSlug: string;
   queryDbState(): Promise<DbState>;
   queryNeo4jState(): Promise<Neo4jState>;
@@ -69,17 +69,17 @@ export async function setupAgentRuntimeFixture(
   const sql = getPg();
 
   const [tenantRow] = await sql<{ id: string }[]>`
-    INSERT INTO organization.tenants (name, slug, plan_type, status)
+    INSERT INTO org.organizations (name, slug, plan_type, status)
     VALUES (
-      ${"E2E " + opts.tenantSlug},
-      ${opts.tenantSlug},
+      ${"E2E " + opts.orgSlug},
+      ${opts.orgSlug},
       'free',
       'active'
     )
     ON CONFLICT (slug) DO UPDATE SET status = 'active'
     RETURNING id
   `;
-  const tenantId = tenantRow.id;
+  const orgId = tenantRow.id;
 
   const [userRow] = await sql<{ id: string }[]>`
     INSERT INTO auth.users (email, display_name, status, email_verified_at)
@@ -95,17 +95,17 @@ export async function setupAgentRuntimeFixture(
   const userId = userRow.id;
 
   const [wsRow] = await sql<{ id: string }[]>`
-    INSERT INTO workspace.workspaces (tenant_id, name, slug)
-    VALUES (${tenantId}, 'Main', ${opts.workspaceSlug})
-    ON CONFLICT (tenant_id, slug) DO UPDATE SET name = EXCLUDED.name
+    INSERT INTO workspace.workspaces (org_id, name, slug)
+    VALUES (${orgId}, 'Main', ${opts.workspaceSlug})
+    ON CONFLICT (org_id, slug) DO UPDATE SET name = EXCLUDED.name
     RETURNING id
   `;
   const workspaceId = wsRow.id;
 
   await sql`
-    INSERT INTO organization.tenant_users (tenant_id, user_id, role, joined_at)
-    VALUES (${tenantId}, ${userId}, 'owner', now())
-    ON CONFLICT (tenant_id, user_id) DO NOTHING
+    INSERT INTO org.org_users (org_id, user_id, role, joined_at)
+    VALUES (${orgId}, ${userId}, 'owner', now())
+    ON CONFLICT (org_id, user_id) DO NOTHING
   `;
   await sql`
     INSERT INTO workspace.workspace_users (workspace_id, user_id, role, joined_at)
@@ -115,7 +115,7 @@ export async function setupAgentRuntimeFixture(
 
   // Better Auth session row — used by the auth helper to inject a logged-in
   // cookie without going through OAuth.
-  const sessionToken = `e2e-session-${tenantId}-${Date.now()}`;
+  const sessionToken = `e2e-session-${orgId}-${Date.now()}`;
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
   await sql`
     INSERT INTO auth.sessions (id, token, user_id, expires_at, ip_address, user_agent)
@@ -131,11 +131,11 @@ export async function setupAgentRuntimeFixture(
   `;
 
   const fixture: AgentRuntimeFixture = {
-    tenantId,
+    orgId,
     workspaceId,
     userId,
     sessionToken,
-    tenantSlug: opts.tenantSlug,
+    orgSlug: opts.orgSlug,
     workspaceSlug: opts.workspaceSlug,
     async queryDbState(): Promise<DbState> {
       const toolCalls = await sql<
@@ -158,14 +158,14 @@ export async function setupAgentRuntimeFixture(
       >`
         SELECT id::text AS id, resolution
         FROM agent.approval_requests
-        WHERE tenant_id = ${tenantId}
+        WHERE org_id = ${orgId}
       `;
       const subagentFanouts = await sql<
         { id: string; status: string; totalChildren: number }[]
       >`
         SELECT id::text AS id, status, total_children AS "totalChildren"
         FROM agent.subagent_fanouts
-        WHERE tenant_id = ${tenantId}
+        WHERE org_id = ${orgId}
       `;
       const subagentRuns = await sql<
         { id: string; status: string; capability: string }[]
@@ -175,7 +175,7 @@ export async function setupAgentRuntimeFixture(
                sr.capability_name AS capability
         FROM agent.subagent_runs sr
         JOIN agent.subagent_fanouts f ON f.id = sr.fanout_id
-        WHERE f.tenant_id = ${tenantId}
+        WHERE f.org_id = ${orgId}
       `;
       return {
         toolCalls,
@@ -191,13 +191,13 @@ export async function setupAgentRuntimeFixture(
       try {
         const invoked = await session.run(
           `MATCH (a)-[r:INVOKED]->(b)
-           WHERE r.tenantId = $tenantId
+           WHERE r.orgId = $orgId
            RETURN count(r) AS c`,
-          { tenantId },
+          { orgId },
         );
         const mem = await session.run(
-          `MATCH (m:AgentMemory) WHERE m.tenantId = $tenantId RETURN count(m) AS c`,
-          { tenantId },
+          `MATCH (m:AgentMemory) WHERE m.orgId = $orgId RETURN count(m) AS c`,
+          { orgId },
         );
         return {
           invokedEdges: Number(invoked.records[0]?.get("c") ?? 0),
@@ -217,28 +217,28 @@ export async function setupAgentRuntimeFixture(
 }
 
 export async function teardownFixture(opts: {
-  tenantSlug: string;
+  orgSlug: string;
 }): Promise<void> {
   const sql = getPg();
   const [t] = await sql<{ id: string }[]>`
     SELECT id::text AS id
-    FROM organization.tenants
-    WHERE slug = ${opts.tenantSlug}
+    FROM org.organizations
+    WHERE slug = ${opts.orgSlug}
   `;
   if (t) {
-    const tenantId = t.id;
+    const orgId = t.id;
     // Order matters where FKs are app-enforced rather than DB-enforced.
     await sql`DELETE FROM agent.subagent_runs WHERE fanout_id IN (
-      SELECT id FROM agent.subagent_fanouts WHERE tenant_id = ${tenantId}
+      SELECT id FROM agent.subagent_fanouts WHERE org_id = ${orgId}
     )`;
-    await sql`DELETE FROM agent.subagent_fanouts WHERE tenant_id = ${tenantId}`;
-    await sql`DELETE FROM agent.approval_requests WHERE tenant_id = ${tenantId}`;
+    await sql`DELETE FROM agent.subagent_fanouts WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM agent.approval_requests WHERE org_id = ${orgId}`;
     await sql`DELETE FROM workspace.workspace_users WHERE workspace_id IN (
-      SELECT id FROM workspace.workspaces WHERE tenant_id = ${tenantId}
+      SELECT id FROM workspace.workspaces WHERE org_id = ${orgId}
     )`;
-    await sql`DELETE FROM workspace.workspaces WHERE tenant_id = ${tenantId}`;
-    await sql`DELETE FROM organization.tenant_users WHERE tenant_id = ${tenantId}`;
-    await sql`DELETE FROM organization.tenants WHERE id = ${tenantId}`;
+    await sql`DELETE FROM workspace.workspaces WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM org.org_users WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM org.organizations WHERE id = ${orgId}`;
 
     // Best-effort Neo4j cleanup.
     try {
@@ -246,8 +246,8 @@ export async function teardownFixture(opts: {
       const session = driver.session();
       try {
         await session.run(
-          `MATCH (n) WHERE n.tenantId = $tenantId DETACH DELETE n`,
-          { tenantId },
+          `MATCH (n) WHERE n.orgId = $orgId DETACH DELETE n`,
+          { orgId },
         );
       } finally {
         await session.close();

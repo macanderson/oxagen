@@ -111,7 +111,7 @@ async function createAndLoad(
     User: NOBODY,
     HostConfig: hostConfigFor(req, spec),
     Labels: {
-      "oxagen.tenant": req.tenantId,
+      "oxagen.org": req.orgId,
       "oxagen.workspace": req.workspaceId,
     },
   });

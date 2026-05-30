@@ -19,7 +19,7 @@ vi.mock("@oxagen/database", () => ({
   schema: {
     approvalRequests: {
       id: "id",
-      tenantId: "tenantId",
+      orgId: "orgId",
       expiresAt: "expiresAt",
       resolution: "resolution",
     },
@@ -46,7 +46,7 @@ vi.mock("../runtime/approval.js", () => ({
 import { agentApprovalResolveHandler } from "./agent.approval.resolve.js";
 
 const CTX = {
-  tenantId: "ten_1",
+  orgId: "ten_1",
   workspaceId: "ws_1",
   userId: "u_1",
   apiKeyId: null,

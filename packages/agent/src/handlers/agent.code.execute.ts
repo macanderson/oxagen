@@ -28,7 +28,7 @@ export async function agentCodeExecuteHandler(
 ): Promise<AgentCodeExecuteOutput> {
   const invocationId = randomUUID();
   const req = applyPolicy(
-    { ...input, tenantId: ctx.tenantId, workspaceId: ctx.workspaceId },
+    { ...input, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
     DEFAULT_POLICY,
   );
   const sandbox = getSandbox();
@@ -44,7 +44,7 @@ export async function agentCodeExecuteHandler(
   } finally {
     await insertToolInvocation({
       invocation_id: invocationId,
-      tenant_id: ctx.tenantId,
+      org_id: ctx.orgId,
       workspace_id: ctx.workspaceId,
       capability_name: "agent.code.execute",
       message_id: ctx.requestId,

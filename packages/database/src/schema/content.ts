@@ -1,13 +1,13 @@
 import { bigint, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { contentSchema } from "./_schemas.js";
-import { auditMixin, idMixin, tenantScopeMixin } from "./_mixins.js";
+import { auditMixin, idMixin, orgScopeMixin } from "./_mixins.js";
 
 export const files = contentSchema.table(
   "files",
   {
     ...idMixin("fil"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     storageProvider: text("storage_provider").notNull(),
     storageBucket: text("storage_bucket").notNull(),
     storageKey: text("storage_key").notNull(),
@@ -18,8 +18,8 @@ export const files = contentSchema.table(
   },
   (t) => ({
     storageIdx: uniqueIndex("files_storage_idx").on(t.storageProvider, t.storageBucket, t.storageKey),
-    tenantIdx: index("files_tenant_idx").on(t.tenantId, t.workspaceId),
-    checksumIdx: index("files_checksum_idx").on(t.tenantId, t.checksumSha256),
+    orgIdx: index("files_org_idx").on(t.orgId, t.workspaceId),
+    checksumIdx: index("files_checksum_idx").on(t.orgId, t.checksumSha256),
   }),
 );
 
@@ -28,7 +28,7 @@ export const documents = contentSchema.table(
   {
     ...idMixin("doc"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     fileId: uuid("file_id").notNull(),
     folderId: uuid("folder_id"),
     title: text("title").notNull(),
@@ -36,7 +36,7 @@ export const documents = contentSchema.table(
     embeddingStatus: text("embedding_status").notNull(),
   },
   (t) => ({
-    tenantIdx: index("documents_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("documents_org_idx").on(t.orgId, t.workspaceId),
     fileIdx: index("documents_file_idx").on(t.fileId),
     folderIdx: index("documents_folder_idx").on(t.folderId),
     embeddingStatusIdx: index("documents_embedding_status_idx").on(t.embeddingStatus),
@@ -48,7 +48,7 @@ export const contentGenerations = contentSchema.table(
   {
     ...idMixin("cgn"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     executionStepId: uuid("execution_step_id").notNull(),
     generationType: text("generation_type").notNull(),
     sourceDocumentIds: uuid("source_document_ids").array(),
@@ -56,7 +56,7 @@ export const contentGenerations = contentSchema.table(
     recipeConfig: jsonb("recipe_config").notNull(),
   },
   (t) => ({
-    tenantIdx: index("content_generations_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("content_generations_org_idx").on(t.orgId, t.workspaceId),
     stepIdx: index("content_generations_step_idx").on(t.executionStepId),
   }),
 );

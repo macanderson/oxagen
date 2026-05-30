@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { tenants, tenantUsers } from "./schema/organization.js";
+import { organizations, orgUsers } from "./schema/org.js";
 import { users, sessions, accounts, apiKeys, credentials } from "./schema/auth.js";
 import { workspaces, workspaceUsers, folders } from "./schema/workspace.js";
 import { connections, connectionSyncJobs } from "./schema/integration.js";
@@ -48,8 +48,8 @@ import {
 // DDL lives in the initial migration only for within-domain relationships;
 // cross-domain joins are app-enforced per CLAUDE.md/spec §10.
 
-export const tenantsRelations = relations(tenants, ({ many }) => ({
-  tenantUsers: many(tenantUsers),
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  orgUsers: many(orgUsers),
   workspaces: many(workspaces),
   subscriptions: many(subscriptions),
   paymentMethods: many(paymentMethods),
@@ -57,13 +57,13 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
   apiKeys: many(apiKeys),
 }));
 
-export const tenantUsersRelations = relations(tenantUsers, ({ one }) => ({
-  tenant: one(tenants, { fields: [tenantUsers.tenantId], references: [tenants.id] }),
-  user: one(users, { fields: [tenantUsers.userId], references: [users.id] }),
+export const orgUsersRelations = relations(orgUsers, ({ one }) => ({
+  org: one(organizations, { fields: [orgUsers.orgId], references: [organizations.id] }),
+  user: one(users, { fields: [orgUsers.userId], references: [users.id] }),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
-  tenantMemberships: many(tenantUsers),
+  orgMemberships: many(orgUsers),
   workspaceMemberships: many(workspaceUsers),
   sessions: many(sessions),
   accounts: many(accounts),
@@ -79,7 +79,7 @@ export const accountsRelations = relations(accounts, ({ one }) => ({
 }));
 
 export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
-  tenant: one(tenants, { fields: [workspaces.tenantId], references: [tenants.id] }),
+  org: one(organizations, { fields: [workspaces.orgId], references: [organizations.id] }),
   members: many(workspaceUsers),
   folders: many(folders),
 }));
@@ -149,7 +149,7 @@ export const toolAssignmentsRelations = relations(toolAssignments, ({ one }) => 
 }));
 
 export const mcpServersRelations = relations(mcpServers, ({ one }) => ({
-  tenant: one(tenants, { fields: [mcpServers.tenantId], references: [tenants.id] }),
+  org: one(organizations, { fields: [mcpServers.orgId], references: [organizations.id] }),
 }));
 
 // Agent-runtime epic relations. Cross-domain joins (messages, execution
@@ -387,18 +387,18 @@ export const plansRelations = relations(plans, ({ many }) => ({
 }));
 
 export const subscriptionsRelations = relations(subscriptions, ({ one, many }) => ({
-  tenant: one(tenants, { fields: [subscriptions.tenantId], references: [tenants.id] }),
+  org: one(organizations, { fields: [subscriptions.orgId], references: [organizations.id] }),
   plan: one(plans, { fields: [subscriptions.planId], references: [plans.id] }),
   invoices: many(invoices),
   usageRecords: many(usageRecords),
 }));
 
 export const paymentMethodsRelations = relations(paymentMethods, ({ one }) => ({
-  tenant: one(tenants, { fields: [paymentMethods.tenantId], references: [tenants.id] }),
+  org: one(organizations, { fields: [paymentMethods.orgId], references: [organizations.id] }),
 }));
 
 export const invoicesRelations = relations(invoices, ({ one, many }) => ({
-  tenant: one(tenants, { fields: [invoices.tenantId], references: [tenants.id] }),
+  org: one(organizations, { fields: [invoices.orgId], references: [organizations.id] }),
   subscription: one(subscriptions, {
     fields: [invoices.subscriptionId],
     references: [subscriptions.id],
@@ -411,7 +411,7 @@ export const invoiceLineItemsRelations = relations(invoiceLineItems, ({ one }) =
 }));
 
 export const usageRecordsRelations = relations(usageRecords, ({ one }) => ({
-  tenant: one(tenants, { fields: [usageRecords.tenantId], references: [tenants.id] }),
+  org: one(organizations, { fields: [usageRecords.orgId], references: [organizations.id] }),
   subscription: one(subscriptions, {
     fields: [usageRecords.subscriptionId],
     references: [subscriptions.id],
@@ -419,9 +419,9 @@ export const usageRecordsRelations = relations(usageRecords, ({ one }) => ({
 }));
 
 export const creditBalancesRelations = relations(creditBalances, ({ one }) => ({
-  tenant: one(tenants, { fields: [creditBalances.tenantId], references: [tenants.id] }),
+  org: one(organizations, { fields: [creditBalances.orgId], references: [organizations.id] }),
 }));
 
 export const creditLedgerRelations = relations(creditLedger, ({ one }) => ({
-  tenant: one(tenants, { fields: [creditLedger.tenantId], references: [tenants.id] }),
+  org: one(organizations, { fields: [creditLedger.orgId], references: [organizations.id] }),
 }));

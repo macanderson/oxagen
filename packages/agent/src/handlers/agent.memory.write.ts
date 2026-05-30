@@ -21,7 +21,7 @@ export async function agentMemoryWriteHandler(
 ): Promise<AgentMemoryWriteOutput> {
   const embedding = await embedText(input.lesson);
   const { memoryId } = await writeMemory({
-    tenantId: ctx.tenantId,
+    orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
     nodeRef: input.nodeRef,
     embedding,

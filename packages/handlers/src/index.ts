@@ -1,4 +1,4 @@
-export { tenantCreateHandler } from "./tenant.create.js";
+export { organizationCreateHandler } from "./organization.create.js";
 export { workspaceCreateHandler } from "./workspace.create.js";
 export { billingSubscriptionReadHandler } from "./billing.subscription.read.js";
 export { billingSubscriptionUpgradeStartHandler } from "./billing.subscription.upgrade.start.js";

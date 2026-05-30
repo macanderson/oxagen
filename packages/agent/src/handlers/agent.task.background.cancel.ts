@@ -27,7 +27,7 @@ export async function agentTaskBackgroundCancelHandler(
     .where(
       and(
         eq(schema.backgroundTasks.publicId, input.taskId),
-        eq(schema.backgroundTasks.tenantId, ctx.tenantId),
+        eq(schema.backgroundTasks.orgId, ctx.orgId),
       ),
     )
     .limit(1);
@@ -42,7 +42,7 @@ export async function agentTaskBackgroundCancelHandler(
 
   await inngest.send({
     name: "agent/task.background.cancel",
-    data: { tenantId: ctx.tenantId, taskId: input.taskId },
+    data: { orgId: ctx.orgId, taskId: input.taskId },
   });
 
   return { taskId: input.taskId, status: "cancelled" };

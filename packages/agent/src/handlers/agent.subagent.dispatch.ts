@@ -16,7 +16,7 @@ export async function agentSubagentDispatchHandler(
   ctx: CapabilityContext,
 ): Promise<AgentSubagentDispatchOutput> {
   return dispatchFanout({
-    tenantId: ctx.tenantId,
+    orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
     parentMessageId: input.parentMessageId,
     children: input.fanout,

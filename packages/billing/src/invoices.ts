@@ -5,20 +5,20 @@ import { stripeClient } from "./client.js";
 
 const ALLOWED_STATUSES = new Set(["draft", "open", "paid", "void", "uncollectible"]);
 
-function resolveTenantIdFromMetadata(invoice: Stripe.Invoice): string | null {
-  return (invoice.metadata?.tenant_id as string | undefined) ?? null;
+function resolveOrgIdFromMetadata(invoice: Stripe.Invoice): string | null {
+  return (invoice.metadata?.org_id as string | undefined) ?? null;
 }
 
-async function resolveTenantIdFromSubscription(invoice: Stripe.Invoice): Promise<string | null> {
+async function resolveOrgIdFromSubscription(invoice: Stripe.Invoice): Promise<string | null> {
   const subRef = invoice.subscription;
   if (!subRef) return null;
   const subId = typeof subRef === "string" ? subRef : subRef.id;
   const d = db();
   const row = await d.query.subscriptions.findFirst({
     where: eq(schema.subscriptions.stripeSubscriptionId, subId),
-    columns: { tenantId: true, id: true },
+    columns: { orgId: true, id: true },
   });
-  return row?.tenantId ?? null;
+  return row?.orgId ?? null;
 }
 
 /**
@@ -32,9 +32,9 @@ export async function syncInvoiceFromStripe(stripeInvoiceId: string): Promise<vo
     expand: ["lines.data.price"],
   });
 
-  const tenantId =
-    resolveTenantIdFromMetadata(invoice) ?? (await resolveTenantIdFromSubscription(invoice));
-  if (!tenantId) return; // Can't bind to a tenant yet; skip.
+  const orgId =
+    resolveOrgIdFromMetadata(invoice) ?? (await resolveOrgIdFromSubscription(invoice));
+  if (!orgId) return; // Can't bind to a tenant yet; skip.
 
   const subRef = invoice.subscription;
   const subId = subRef ? (typeof subRef === "string" ? subRef : subRef.id) : null;
@@ -55,7 +55,7 @@ export async function syncInvoiceFromStripe(stripeInvoiceId: string): Promise<vo
     const inserted = await tx
       .insert(schema.invoices)
       .values({
-        tenantId,
+        orgId,
         subscriptionId: sub?.id ?? null,
         stripeInvoiceId: invoice.id,
         number: invoice.number,

@@ -8,7 +8,7 @@ import postgres from "postgres";
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
 
 export interface CreateApprovalArgs {
-  tenantId: string;
+  orgId: string;
   workspaceId: string;
   messageId: string;
   capabilityName: string;
@@ -64,7 +64,7 @@ export async function createApprovalRequest(
   const [row] = await db()
     .insert(schema.approvalRequests)
     .values({
-      tenantId: args.tenantId,
+      orgId: args.orgId,
       workspaceId: args.workspaceId,
       messageId: args.messageId,
       capabilityName: args.capabilityName,
@@ -105,12 +105,12 @@ export async function notifyResolution(r: ApprovalResolution): Promise<void> {
 }
 
 // Used by handlers that need a tenant-scoped lookup before update.
-export async function readApproval(approvalId: string, tenantId: string) {
+export async function readApproval(approvalId: string, orgId: string) {
   const [row] = await db()
     .select()
     .from(schema.approvalRequests)
     .where(
-      and(eq(schema.approvalRequests.id, approvalId), eq(schema.approvalRequests.tenantId, tenantId)),
+      and(eq(schema.approvalRequests.id, approvalId), eq(schema.approvalRequests.orgId, orgId)),
     )
     .limit(1);
   return row ?? null;

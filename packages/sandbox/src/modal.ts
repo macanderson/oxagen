@@ -39,7 +39,7 @@ interface ModalRunRequest {
   timeout_ms: number;
   memory_mb: number;
   network: "allow" | "deny";
-  tenant_id: string;
+  org_id: string;
   workspace_id: string;
   image: string;
 }
@@ -63,7 +63,7 @@ function toRunnerBody(req: SandboxRequest): ModalRunRequest {
     timeout_ms: req.timeoutMs,
     memory_mb: req.memoryMb,
     network: req.network,
-    tenant_id: req.tenantId,
+    org_id: req.orgId,
     workspace_id: req.workspaceId,
     // The runner uses this for image selection; we keep the source of
     // truth in @oxagen/sandbox/images so swapping drivers is a config

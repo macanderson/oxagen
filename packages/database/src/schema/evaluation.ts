@@ -1,19 +1,19 @@
 import { index, jsonb, numeric, text, uuid } from "drizzle-orm/pg-core";
 import { evaluationSchema } from "./_schemas.js";
-import { auditMixin, executionStatusMixin, idMixin, tenantScopeMixin } from "./_mixins.js";
+import { auditMixin, executionStatusMixin, idMixin, orgScopeMixin } from "./_mixins.js";
 
 export const evals = evaluationSchema.table(
   "evals",
   {
     ...idMixin("evl"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     name: text("name").notNull(),
     evalType: text("eval_type").notNull(),
     datasetConfig: jsonb("dataset_config").notNull(),
   },
   (t) => ({
-    tenantIdx: index("evals_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("evals_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 

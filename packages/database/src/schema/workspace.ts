@@ -1,22 +1,22 @@
 import { boolean, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { workspaceSchema } from "./_schemas.js";
-import { auditMixin, citext, idMixin, ltree, tenantScopeMixin } from "./_mixins.js";
+import { auditMixin, citext, idMixin, ltree, orgScopeMixin } from "./_mixins.js";
 
 export const workspaces = workspaceSchema.table(
   "workspaces",
   {
     ...idMixin("wrk"),
     ...auditMixin(),
-    tenantId: uuid("tenant_id").notNull(),
+    orgId: uuid("org_id").notNull(),
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
     defaultGraphId: uuid("default_graph_id"),
     settings: jsonb("settings").notNull().default(sql`'{}'::jsonb`),
   },
   (t) => ({
-    tenantSlugIdx: uniqueIndex("workspaces_tenant_slug_idx").on(t.tenantId, t.slug),
-    tenantIdx: index("workspaces_tenant_idx").on(t.tenantId),
+    orgSlugIdx: uniqueIndex("workspaces_org_slug_idx").on(t.orgId, t.slug),
+    orgIdx: index("workspaces_org_idx").on(t.orgId),
   }),
 );
 
@@ -42,13 +42,13 @@ export const folders = workspaceSchema.table(
   {
     ...idMixin("fld"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     parentFolderId: uuid("parent_folder_id"),
     name: text("name").notNull(),
     path: ltree("path").notNull(),
   },
   (t) => ({
-    tenantIdx: index("folders_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("folders_org_idx").on(t.orgId, t.workspaceId),
     // GIST index on ltree path enables subtree containment queries
     // (path <@ ancestor) without sequential scans. Hand-written in the
     // initial migration since Drizzle has no first-class GIST helper.

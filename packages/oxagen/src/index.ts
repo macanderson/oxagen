@@ -5,7 +5,7 @@ export * from "./registry.js";
 // registry deduplicates and the manifest gate verifies layer presence.
 
 // Foundation
-import "./contracts/tenant.create.js";
+import "./contracts/organization.create.js";
 import "./contracts/workspace.create.js";
 import "./contracts/billing.subscription.read.js";
 import "./contracts/billing.subscription.upgrade.start.js";

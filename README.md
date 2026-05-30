@@ -66,7 +66,7 @@ decay when their evidence weakens or their sources go stale.
 
 ### Built for enterprise from day one
 
-- **Multitenant isolation by construction.** Postgres row-level
+- **Per-org isolation by construction.** Postgres row-level
   security, ClickHouse predicate enforcement, per-workspace knowledge
   graphs.
 - **Bring your own infrastructure.** BYO Neo4j endpoint, BYO LLM
@@ -75,7 +75,7 @@ decay when their evidence weakens or their sources go stale.
   customer controls; deny by default.
 - **Full audit trail.** Every capability invocation, every agent
   memory change, every inferred entity, every model choice — traced
-  to a tenant, workspace, user, run, model, and source data.
+  to an org, workspace, user, run, model, and source data.
 - **Memory you can govern.** Agent memories and inferred entities
   carry weights and half-life policies; you can see what was learned,
   when it decayed, and why.
@@ -91,7 +91,7 @@ back to the evidence that produced it.
 
 ### Built for enterprise from day one
 
-- **Multitenant isolation by construction.** Postgres row-level
+- **Per-org isolation by construction.** Postgres row-level
   security, ClickHouse predicate enforcement, per-workspace knowledge
   graphs.
 - **Bring your own infrastructure.** BYO Neo4j endpoint, BYO LLM
@@ -99,7 +99,7 @@ back to the evidence that produced it.
 - **Least-privilege ACL/RBAC.** Per-capability access policies the
   customer controls; deny by default.
 - **Full audit trail.** Every capability invocation, every agent
-  memory change, every model choice — traced to a tenant, workspace,
+  memory change, every model choice — traced to an org, workspace,
   user, model, and timestamp.
 - **Memory you can govern.** Agent memories carry weights and
   half-life policies; you can see what was learned, when it decayed,

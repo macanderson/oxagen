@@ -11,10 +11,10 @@ import "@oxagen/oxagen";
  * child failure — the parent message aggregates partials.
  */
 export const agentExecuteSubagent = inngest.createFunction(
-  { id: "agent.execute-subagent", retries: 0, concurrency: { limit: 8, key: "event.data.tenantId" } },
+  { id: "agent.execute-subagent", retries: 0, concurrency: { limit: 8, key: "event.data.orgId" } },
   { event: "agent/subagent.dispatch" },
   async ({ event, step }) => {
-    const { tenantId, workspaceId, fanoutId } = event.data;
+    const { orgId, workspaceId, fanoutId } = event.data;
 
     const runs = await step.run("load-children", async () =>
       db()
@@ -36,7 +36,7 @@ export const agentExecuteSubagent = inngest.createFunction(
       const childOk = await step.run(`child-${r.id}`, async () => {
         try {
           const output = await invokeCapability(r.capabilityName, r.inputPayload, {
-            tenantId,
+            orgId,
             workspaceId,
             userId: null,
             apiKeyId: null,
@@ -71,7 +71,7 @@ export const agentExecuteSubagent = inngest.createFunction(
         .update(schema.subagentFanouts)
         .set({ status: finalStatus, completedChildren: completed })
         .where(
-          and(eq(schema.subagentFanouts.id, fanoutId), eq(schema.subagentFanouts.tenantId, tenantId)),
+          and(eq(schema.subagentFanouts.id, fanoutId), eq(schema.subagentFanouts.orgId, orgId)),
         );
     });
 

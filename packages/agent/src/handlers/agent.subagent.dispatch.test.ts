@@ -16,7 +16,7 @@ vi.mock("../dispatch/subagent.js", () => ({
 import { agentSubagentDispatchHandler } from "./agent.subagent.dispatch.js";
 
 const CTX = {
-  tenantId: "ten_1",
+  orgId: "ten_1",
   workspaceId: "ws_1",
   userId: "u_1",
   apiKeyId: null,
@@ -41,7 +41,7 @@ describe("agent.subagent.dispatch handler", () => {
     );
     expect(mocks.dispatchFanoutMock).toHaveBeenCalledTimes(1);
     const arg = mocks.dispatchFanoutMock.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(arg.tenantId).toBe("ten_1");
+    expect(arg.orgId).toBe("ten_1");
     expect(arg.workspaceId).toBe("ws_1");
     expect(arg.parentMessageId).toBe("msg_p");
     expect(Array.isArray(arg.children)).toBe(true);

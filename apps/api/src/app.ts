@@ -3,12 +3,12 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import { requestLogger } from "./middleware/logger.js";
 import { errorMiddleware } from "./middleware/error.js";
 import { authMiddleware } from "./middleware/auth.js";
-import { tenantMiddleware } from "./middleware/tenant.js";
+import { tenantMiddleware } from "./middleware/org.js";
 import { workspaceMiddleware } from "./middleware/workspace.js";
 import { health } from "./routes/health.js";
 import { stripeWebhook } from "./routes/stripe.js";
 import { inngestRoute } from "./routes/inngest.js";
-import { tenantCreateRoute } from "./routes/v1/tenant.create.js";
+import { organizationCreateRoute } from "./routes/v1/organization.create.js";
 import { workspaceCreateRoute } from "./routes/v1/workspace.create.js";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read.js";
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription.upgrade.start.js";
@@ -30,7 +30,7 @@ export type AppEnv = {
     requestId: string;
     userId: string | null;
     apiKeyId: string | null;
-    tenantId: string | null;
+    orgId: string | null;
     workspaceId: string | null;
     capabilityContext?: CapabilityContext;
   };
@@ -54,7 +54,7 @@ app.route("/api/inngest", inngestRoute);
 // tenant without one existing.
 const userScoped = new Hono<AppEnv>();
 userScoped.use("*", authMiddleware);
-userScoped.route("/tenants", tenantCreateRoute);
+userScoped.route("/organizations", organizationCreateRoute);
 app.route("/v1", userScoped);
 
 // /v1/:tenant_slug/:workspace_slug/* — tenant + workspace scoped routes.

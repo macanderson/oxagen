@@ -2,15 +2,15 @@ import { and, eq } from "drizzle-orm";
 import { db, closeDatabase } from "./client.js";
 import {
   plans,
-  tenants,
-  tenantUsers,
+  organizations,
+  orgUsers,
   users,
   workspaces,
   workspaceUsers,
 } from "./schema/index.js";
 
 // Seed runs idempotently. Re-running won't duplicate plans, the dev
-// tenant, the dev user, or their memberships — every insert is guarded
+// org, the dev user, or their memberships — every insert is guarded
 // by ON CONFLICT DO NOTHING against a stable unique column, and lookup
 // fallbacks fetch existing rows if the conflict fires.
 
@@ -66,15 +66,15 @@ export async function seed(): Promise<void> {
     await database.insert(plans).values(plan).onConflictDoNothing({ target: plans.slug });
   }
 
-  const tenantSlug = "oxagen-dev";
+  const orgSlug = "oxagen-dev";
   await database
-    .insert(tenants)
-    .values({ name: "Oxagen Dev", slug: tenantSlug, planType: "free", status: "active" })
-    .onConflictDoNothing({ target: tenants.slug });
-  const tenantRow = (
-    await database.select().from(tenants).where(eq(tenants.slug, tenantSlug)).limit(1)
+    .insert(organizations)
+    .values({ name: "Oxagen Dev", slug: orgSlug, planType: "free", status: "active" })
+    .onConflictDoNothing({ target: organizations.slug });
+  const orgRow = (
+    await database.select().from(organizations).where(eq(organizations.slug, orgSlug)).limit(1)
   )[0];
-  if (!tenantRow) throw new Error("Failed to upsert dev tenant");
+  if (!orgRow) throw new Error("Failed to upsert dev org");
 
   const userEmail = "dev@oxagen.ai";
   await database
@@ -89,26 +89,26 @@ export async function seed(): Promise<void> {
   const workspaceSlug = "playground";
   await database
     .insert(workspaces)
-    .values({ tenantId: tenantRow.id, name: "Playground", slug: workspaceSlug })
-    .onConflictDoNothing({ target: [workspaces.tenantId, workspaces.slug] });
+    .values({ orgId: orgRow.id, name: "Playground", slug: workspaceSlug })
+    .onConflictDoNothing({ target: [workspaces.orgId, workspaces.slug] });
   const workspaceRow = (
     await database
       .select()
       .from(workspaces)
-      .where(and(eq(workspaces.tenantId, tenantRow.id), eq(workspaces.slug, workspaceSlug)))
+      .where(and(eq(workspaces.orgId, orgRow.id), eq(workspaces.slug, workspaceSlug)))
       .limit(1)
   )[0];
   if (!workspaceRow) throw new Error("Failed to upsert dev workspace");
 
   await database
-    .insert(tenantUsers)
+    .insert(orgUsers)
     .values({
-      tenantId: tenantRow.id,
+      orgId: orgRow.id,
       userId: userRow.id,
       role: "owner",
       joinedAt: new Date(),
     })
-    .onConflictDoNothing({ target: [tenantUsers.tenantId, tenantUsers.userId] });
+    .onConflictDoNothing({ target: [orgUsers.orgId, orgUsers.userId] });
 
   await database
     .insert(workspaceUsers)

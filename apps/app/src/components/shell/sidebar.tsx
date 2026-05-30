@@ -3,7 +3,7 @@ import { MessageSquare, Settings, Users, Workflow, Bot, Activity, CreditCard } f
 import { cn } from "@/lib/utils";
 
 export interface SidebarProps {
-  tenantSlug: string;
+  orgSlug: string;
   workspaceSlug?: string;
 }
 
@@ -15,12 +15,12 @@ const workspaceNav = [
   { href: "settings", label: "Settings", icon: Settings },
 ];
 
-const tenantNav = [
+const orgNav = [
   { href: "settings/billing", label: "Billing", icon: CreditCard },
   { href: "settings/members", label: "Members", icon: Users },
 ];
 
-export function Sidebar({ tenantSlug, workspaceSlug }: SidebarProps) {
+export function Sidebar({ orgSlug, workspaceSlug }: SidebarProps) {
   return (
     <aside className="hidden h-full w-64 flex-col gap-1 border-r border-border/40 bg-background/30 p-3 backdrop-blur-xl md:flex">
       {workspaceSlug ? (
@@ -29,7 +29,7 @@ export function Sidebar({ tenantSlug, workspaceSlug }: SidebarProps) {
           {workspaceNav.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
-              href={`/${tenantSlug}/${workspaceSlug}/${href === "" ? "" : href}`}
+              href={`/${orgSlug}/${workspaceSlug}/${href === "" ? "" : href}`}
               className={cn(
                 "flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/10 hover:text-foreground",
               )}
@@ -41,10 +41,10 @@ export function Sidebar({ tenantSlug, workspaceSlug }: SidebarProps) {
           <div className="mt-4 px-2 pb-1 text-xs uppercase tracking-wider text-muted-foreground">Organization</div>
         </>
       ) : null}
-      {tenantNav.map(({ href, label, icon: Icon }) => (
+      {orgNav.map(({ href, label, icon: Icon }) => (
         <Link
           key={href}
-          href={`/${tenantSlug}/${href}`}
+          href={`/${orgSlug}/${href}`}
           className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/10 hover:text-foreground"
         >
           <Icon className="h-4 w-4" />

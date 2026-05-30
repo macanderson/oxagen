@@ -27,7 +27,7 @@ export async function agentSubagentAggregateHandler(
 ): Promise<AgentSubagentAggregateOutput> {
   const deadline = Date.now() + input.timeoutMs;
   while (true) {
-    const snap = await readFanout(input.fanoutId, ctx.tenantId);
+    const snap = await readFanout(input.fanoutId, ctx.orgId);
     if (!snap) {
       throw new Error(`Fanout ${input.fanoutId} not found in tenant`);
     }

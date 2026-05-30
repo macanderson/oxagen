@@ -17,7 +17,7 @@ export interface FanoutChild {
 }
 
 export interface DispatchFanoutArgs {
-  tenantId: string;
+  orgId: string;
   workspaceId: string;
   parentMessageId: string;
   children: FanoutChild[];
@@ -36,7 +36,7 @@ export async function dispatchFanout(args: DispatchFanoutArgs): Promise<Dispatch
     const [fan] = await tx
       .insert(schema.subagentFanouts)
       .values({
-        tenantId: args.tenantId,
+        orgId: args.orgId,
         workspaceId: args.workspaceId,
         parentMessageId: args.parentMessageId,
         status: "pending",
@@ -60,7 +60,7 @@ export async function dispatchFanout(args: DispatchFanoutArgs): Promise<Dispatch
   await inngest.send({
     name: "agent/subagent.dispatch",
     data: {
-      tenantId: args.tenantId,
+      orgId: args.orgId,
       workspaceId: args.workspaceId,
       fanoutId,
     },
@@ -83,13 +83,13 @@ export interface FanoutSnapshot {
 
 export async function readFanout(
   fanoutId: string,
-  tenantId: string,
+  orgId: string,
 ): Promise<FanoutSnapshot | null> {
   const [fan] = await db()
     .select()
     .from(schema.subagentFanouts)
     .where(
-      and(eq(schema.subagentFanouts.id, fanoutId), eq(schema.subagentFanouts.tenantId, tenantId)),
+      and(eq(schema.subagentFanouts.id, fanoutId), eq(schema.subagentFanouts.orgId, orgId)),
     )
     .limit(1);
   if (!fan) return null;

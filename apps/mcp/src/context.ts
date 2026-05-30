@@ -5,7 +5,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 // handler signature stays stable across layers.
 export function placeholderContext(): CapabilityContext {
   return {
-    tenantId: "00000000-0000-0000-0000-000000000000",
+    orgId: "00000000-0000-0000-0000-000000000000",
     workspaceId: "00000000-0000-0000-0000-000000000000",
     userId: null,
     apiKeyId: null,

@@ -93,7 +93,7 @@ export async function materializeTools(
           // gate (their auth surface is responsible for authorization).
           if (requiresApproval && ctx.messageId) {
             const { approvalId } = await createApprovalRequest({
-              tenantId: ctx.tenantId,
+              orgId: ctx.orgId,
               workspaceId: ctx.workspaceId,
               messageId: ctx.messageId,
               capabilityName: cap.name,
@@ -112,7 +112,7 @@ export async function materializeTools(
           try {
             await insertToolInvocation({
               invocation_id: invocationId,
-              tenant_id: ctx.tenantId,
+              org_id: ctx.orgId,
               workspace_id: ctx.workspaceId,
               capability_name: cap.name,
               message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
@@ -144,7 +144,7 @@ export async function materializeTools(
           try {
             await insertToolInvocation({
               invocation_id: invocationId,
-              tenant_id: ctx.tenantId,
+              org_id: ctx.orgId,
               workspace_id: ctx.workspaceId,
               capability_name: cap.name,
               message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",

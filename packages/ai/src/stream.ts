@@ -15,13 +15,13 @@ export interface StreamAgentReplyArgs {
   temperature?: number;
   /**
    * Required for OXA-1351 instrumentation. The caller's CapabilityContext
-   * carries `tenantId`, `workspaceId`, and `surface`; pass them through so
+   * carries `orgId`, `workspaceId`, and `surface`; pass them through so
    * every LLM call lands in `token_usage` with provider, duration_ms,
    * surface, and prompt_hash. `messageId` is the user message that
    * initiated the turn — used as the execution_step_id correlation key.
    */
   telemetry: {
-    tenantId: string;
+    orgId: string;
     workspaceId: string;
     surface: Surface;
     messageId: string;
@@ -70,7 +70,7 @@ export function streamAgentReply(args: StreamAgentReplyArgs) {
         await insertTokenUsage([
           {
             execution_step_id: args.telemetry.messageId,
-            tenant_id: args.telemetry.tenantId,
+            org_id: args.telemetry.orgId,
             workspace_id: args.telemetry.workspaceId,
             model: model.modelId,
             provider,

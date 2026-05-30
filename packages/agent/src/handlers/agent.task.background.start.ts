@@ -28,7 +28,7 @@ export async function agentTaskBackgroundStartHandler(
   const [row] = await db()
     .insert(schema.backgroundTasks)
     .values({
-      tenantId: ctx.tenantId,
+      orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       kind: input.kind,
       label: input.label ?? null,
@@ -43,7 +43,7 @@ export async function agentTaskBackgroundStartHandler(
   await inngest.send({
     name: "agent/task.background.start",
     data: {
-      tenantId: ctx.tenantId,
+      orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       taskId: row.publicId,
       kind: input.kind,

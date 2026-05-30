@@ -31,7 +31,7 @@ export const subscriptions = billingSchema.table(
   {
     ...idMixin("sub"),
     ...auditMixin(),
-    tenantId: uuid("tenant_id").notNull(),
+    orgId: uuid("org_id").notNull(),
     planId: uuid("plan_id").notNull(),
     stripeSubscriptionId: text("stripe_subscription_id").notNull(),
     stripeCustomerId: text("stripe_customer_id").notNull(),
@@ -47,8 +47,8 @@ export const subscriptions = billingSchema.table(
   (t) => ({
     stripeSubIdx: uniqueIndex("subscriptions_stripe_sub_idx").on(t.stripeSubscriptionId),
     // Spec §6.13: index targets the "active subscription for tenant" hot path
-    // — composite over (tenant_id, status) avoids a tenant-id-only scan.
-    tenantStatusIdx: index("subscriptions_tenant_status_idx").on(t.tenantId, t.status),
+    // — composite over (org_id, status) avoids a tenant-id-only scan.
+    tenantStatusIdx: index("subscriptions_org_status_idx").on(t.orgId, t.status),
   }),
 );
 
@@ -58,7 +58,7 @@ export const paymentMethods = billingSchema.table(
     ...idMixin("pm"),
     ...auditMixin(),
     ...softDeleteMixin(),
-    tenantId: uuid("tenant_id").notNull(),
+    orgId: uuid("org_id").notNull(),
     stripeCustomerId: text("stripe_customer_id").notNull(),
     stripePaymentMethodId: text("stripe_payment_method_id").notNull(),
     type: text("type").notNull(),
@@ -70,7 +70,7 @@ export const paymentMethods = billingSchema.table(
   },
   (t) => ({
     stripePmIdx: uniqueIndex("payment_methods_stripe_pm_idx").on(t.stripePaymentMethodId),
-    tenantIdx: index("payment_methods_tenant_idx").on(t.tenantId),
+    orgIdx: index("payment_methods_org_idx").on(t.orgId),
   }),
 );
 
@@ -79,7 +79,7 @@ export const invoices = billingSchema.table(
   {
     ...idMixin("inv"),
     ...auditMixin(),
-    tenantId: uuid("tenant_id").notNull(),
+    orgId: uuid("org_id").notNull(),
     subscriptionId: uuid("subscription_id"),
     stripeInvoiceId: text("stripe_invoice_id").notNull(),
     number: text("number"),
@@ -97,7 +97,7 @@ export const invoices = billingSchema.table(
   },
   (t) => ({
     stripeInvIdx: uniqueIndex("invoices_stripe_inv_idx").on(t.stripeInvoiceId),
-    tenantIdx: index("invoices_tenant_idx").on(t.tenantId, t.status),
+    orgIdx: index("invoices_org_idx").on(t.orgId, t.status),
   }),
 );
 
@@ -123,7 +123,7 @@ export const usageRecords = billingSchema.table(
   {
     ...idMixin("usg"),
     ...auditMixin(),
-    tenantId: uuid("tenant_id").notNull(),
+    orgId: uuid("org_id").notNull(),
     subscriptionId: uuid("subscription_id").notNull(),
     metric: text("metric").notNull(),
     quantity: numeric("quantity", { precision: 20, scale: 6 }).notNull(),
@@ -140,7 +140,7 @@ export const usageRecords = billingSchema.table(
       t.periodStart,
       t.periodEnd,
     ),
-    tenantIdx: index("usage_records_tenant_idx").on(t.tenantId),
+    orgIdx: index("usage_records_org_idx").on(t.orgId),
   }),
 );
 
@@ -149,12 +149,12 @@ export const creditBalances = billingSchema.table(
   {
     ...idMixin("cbl"),
     ...auditMixin(),
-    tenantId: uuid("tenant_id").notNull(),
+    orgId: uuid("org_id").notNull(),
     balanceCents: bigint("balance_cents", { mode: "bigint" }).notNull().default(0n),
     lastEventAt: timestamp("last_event_at", { withTimezone: true, mode: "date" }),
   },
   (t) => ({
-    tenantIdx: uniqueIndex("credit_balances_tenant_idx").on(t.tenantId),
+    orgIdx: uniqueIndex("credit_balances_org_idx").on(t.orgId),
   }),
 );
 
@@ -162,7 +162,7 @@ export const creditLedger = billingSchema.table(
   "credit_ledger",
   {
     ...idMixin("cld"),
-    tenantId: uuid("tenant_id").notNull(),
+    orgId: uuid("org_id").notNull(),
     deltaCents: bigint("delta_cents", { mode: "bigint" }).notNull(),
     reason: text("reason").notNull(),
     referenceType: text("reference_type"),
@@ -171,7 +171,7 @@ export const creditLedger = billingSchema.table(
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (t) => ({
-    tenantCreatedIdx: index("credit_ledger_tenant_created_idx").on(t.tenantId, t.createdAt),
+    organizationCreatedIdx: index("credit_ledger_org_created_idx").on(t.orgId, t.createdAt),
   }),
 );
 

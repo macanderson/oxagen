@@ -13,7 +13,7 @@ const ALLOWED_REASONS = new Set([
 ]);
 
 export interface GrantCreditsArgs {
-  tenantId: string;
+  orgId: string;
   deltaCents: bigint;
   reason: string;
   referenceType?: string;
@@ -34,7 +34,7 @@ export async function grantCredits(args: GrantCreditsArgs): Promise<{ balanceCen
   const d = db();
   return await d.transaction(async (tx) => {
     await tx.insert(schema.creditLedger).values({
-      tenantId: args.tenantId,
+      orgId: args.orgId,
       deltaCents: args.deltaCents,
       reason: args.reason,
       referenceType: args.referenceType ?? null,
@@ -43,16 +43,16 @@ export async function grantCredits(args: GrantCreditsArgs): Promise<{ balanceCen
     });
 
     // Upsert the balance: INSERT new row at zero+delta, or atomically add
-    // to existing balance. ON CONFLICT requires the unique index on tenant_id.
+    // to existing balance. ON CONFLICT requires the unique index on org_id.
     const updated = await tx
       .insert(schema.creditBalances)
       .values({
-        tenantId: args.tenantId,
+        orgId: args.orgId,
         balanceCents: args.deltaCents,
         lastEventAt: new Date(),
       })
       .onConflictDoUpdate({
-        target: schema.creditBalances.tenantId,
+        target: schema.creditBalances.orgId,
         set: {
           balanceCents: sql`${schema.creditBalances.balanceCents} + ${args.deltaCents}`,
           lastEventAt: new Date(),

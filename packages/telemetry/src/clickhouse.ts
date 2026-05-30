@@ -31,12 +31,12 @@ export interface TokenUsageRollup {
 }
 
 /**
- * Sum token_usage rows for a tenant between two timestamps.
+ * Sum token_usage rows for an org between two timestamps.
  * Used by billing.usage.getCurrentPeriodUsage and the scheduled
  * billing.rollup-usage Inngest function.
  */
 export async function sumTokenUsage(args: {
-  tenantId: string;
+  orgId: string;
   periodStart: Date;
   periodEnd: Date;
 }): Promise<TokenUsageRollup[]> {
@@ -52,12 +52,12 @@ export async function sumTokenUsage(args: {
         sum(cost_usd_micros) AS cost_micros,
         count()            AS row_count
       FROM token_usage
-      WHERE tenant_id = {tenantId:UUID}
+      WHERE org_id = {orgId:UUID}
         AND created_at >= {periodStart:DateTime64(3)}
         AND created_at <  {periodEnd:DateTime64(3)}
     `,
     query_params: {
-      tenantId: args.tenantId,
+      orgId: args.orgId,
       periodStart: args.periodStart.toISOString(),
       periodEnd: args.periodEnd.toISOString(),
     },
@@ -96,7 +96,7 @@ export async function sumTokenUsage(args: {
 export interface ExecutionLogRow {
   execution_id: string;
   step_id: string;
-  tenant_id: string;
+  org_id: string;
   workspace_id: string;
   log_level: "debug" | "info" | "warn" | "error" | "fatal";
   message: string;
@@ -107,7 +107,7 @@ export interface ExecutionLogRow {
 export interface TraceRow {
   trace_id: string;
   execution_id: string;
-  tenant_id: string;
+  org_id: string;
   started_at: string;
   completed_at: string | null;
 }
@@ -117,7 +117,7 @@ export interface SpanRow {
   trace_id: string;
   parent_span_id: string | null;
   span_type: string;
-  tenant_id: string;
+  org_id: string;
   started_at: string;
   completed_at: string | null;
   metadata: string;
@@ -125,7 +125,7 @@ export interface SpanRow {
 
 export interface EventRow {
   event_id: string;
-  tenant_id: string;
+  org_id: string;
   workspace_id: string;
   event_type: string;
   source_system: string;
@@ -136,7 +136,7 @@ export interface EventRow {
 
 export interface ApiKeyEventRow {
   api_key_id: string;
-  tenant_id: string;
+  org_id: string;
   ip_address: string;
   user_agent: string;
   request_path: string;
@@ -149,7 +149,7 @@ export type Provider = "anthropic" | "openai" | "";
 
 export interface TokenUsageRow {
   execution_step_id: string;
-  tenant_id: string;
+  org_id: string;
   workspace_id: string;
   model: string;
   provider: Provider;
@@ -186,7 +186,7 @@ export const insertTokenUsage = (rows: readonly TokenUsageRow[]) =>
 // mirror of execution.tool_calls; durable record stays in Postgres.
 export interface ToolInvocationRow {
   invocation_id: string;
-  tenant_id: string;
+  org_id: string;
   workspace_id: string;
   capability_name: string;
   message_id: string;

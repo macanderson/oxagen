@@ -35,7 +35,7 @@ export async function agentMcpRegisterHandler(
   const [row] = await db()
     .insert(schema.mcpServers)
     .values({
-      tenantId: ctx.tenantId,
+      orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       name: input.name,
       transportType: input.transportType,

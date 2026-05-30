@@ -1,14 +1,14 @@
 import { boolean, index, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { chatSchema } from "./_schemas.js";
-import { auditMixin, idMixin, tenantScopeMixin } from "./_mixins.js";
+import { auditMixin, idMixin, orgScopeMixin } from "./_mixins.js";
 
 export const conversations = chatSchema.table(
   "conversations",
   {
     ...idMixin("cnv"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     userId: uuid("user_id").notNull(),
     agentVersionId: uuid("agent_version_id"),
     title: text("title"),
@@ -16,7 +16,7 @@ export const conversations = chatSchema.table(
     activeLeafMessageId: uuid("active_leaf_message_id"),
   },
   (t) => ({
-    tenantIdx: index("conversations_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("conversations_org_idx").on(t.orgId, t.workspaceId),
     userIdx: index("conversations_user_idx").on(t.userId),
   }),
 );
@@ -26,7 +26,7 @@ export const messages = chatSchema.table(
   {
     ...idMixin("msg"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     conversationId: uuid("conversation_id").notNull(),
     parentMessageId: uuid("parent_message_id"),
     role: text("role").notNull(),
@@ -40,6 +40,6 @@ export const messages = chatSchema.table(
     // Spec §6.9: tree traversal needs (conversation_id, parent_message_id)
     // for fast walk-from-leaf-to-root reconstruction.
     conversationParentIdx: index("messages_conversation_parent_idx").on(t.conversationId, t.parentMessageId),
-    tenantIdx: index("messages_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("messages_org_idx").on(t.orgId, t.workspaceId),
   }),
 );

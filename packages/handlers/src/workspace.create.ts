@@ -10,17 +10,17 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
   if (!ctx.userId) throw new Error("workspace.create requires an authenticated user");
   const d = db();
 
-  const tenant = await d.query.tenants.findFirst({
-    where: eq(schema.tenants.id, ctx.tenantId),
+  const tenant = await d.query.organizations.findFirst({
+    where: eq(schema.organizations.id, ctx.orgId),
     columns: { slug: true },
   });
   if (!tenant) throw new Error("tenant not found");
 
-  // (tenant_id, slug) uniqueness pre-checked for friendly errors. The
+  // (org_id, slug) uniqueness pre-checked for friendly errors. The
   // composite unique index still enforces it as a hard constraint.
   const existing = await d.query.workspaces.findFirst({
     where: and(
-      eq(schema.workspaces.tenantId, ctx.tenantId),
+      eq(schema.workspaces.orgId, ctx.orgId),
       eq(schema.workspaces.slug, input.slug),
     ),
     columns: { id: true },
@@ -31,7 +31,7 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
     const [ws] = await tx
       .insert(schema.workspaces)
       .values({
-        tenantId: ctx.tenantId,
+        orgId: ctx.orgId,
         name: input.name,
         slug: input.slug,
         createdByUserId: ctx.userId,
@@ -60,7 +60,7 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
       publicId: ws.publicId,
       name: ws.name,
       slug: ws.slug,
-      tenantSlug: tenant.slug,
+      orgSlug: tenant.slug,
       createdAt: ws.createdAt.toISOString(),
     };
   });

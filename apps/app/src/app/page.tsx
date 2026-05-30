@@ -10,17 +10,17 @@ export default async function RootPage() {
 
   const rows = await db()
     .select({
-      tenantSlug: schema.tenants.slug,
+      orgSlug: schema.organizations.slug,
       workspaceSlug: schema.workspaces.slug,
     })
-    .from(schema.tenantUsers)
-    .innerJoin(schema.tenants, eq(schema.tenants.id, schema.tenantUsers.tenantId))
-    .leftJoin(schema.workspaces, eq(schema.workspaces.tenantId, schema.tenants.id))
-    .where(eq(schema.tenantUsers.userId, session.user.id))
+    .from(schema.orgUsers)
+    .innerJoin(schema.organizations, eq(schema.organizations.id, schema.orgUsers.orgId))
+    .leftJoin(schema.workspaces, eq(schema.workspaces.orgId, schema.organizations.id))
+    .where(eq(schema.orgUsers.userId, session.user.id))
     .limit(1);
 
   const first = rows[0];
-  if (!first) redirect("/new-tenant");
-  if (first.workspaceSlug) redirect(`/${first.tenantSlug}/${first.workspaceSlug}`);
-  redirect(`/${first.tenantSlug}`);
+  if (!first) redirect("/new-organization");
+  if (first.workspaceSlug) redirect(`/${first.orgSlug}/${first.workspaceSlug}`);
+  redirect(`/${first.orgSlug}`);
 }

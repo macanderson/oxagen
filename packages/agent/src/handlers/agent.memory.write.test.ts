@@ -14,7 +14,7 @@ vi.mock("../memory/neo4j.js", () => ({ writeMemory: mocks.writeMemoryMock }));
 import { agentMemoryWriteHandler } from "./agent.memory.write.js";
 
 const CTX = {
-  tenantId: "ten_1",
+  orgId: "ten_1",
   workspaceId: "ws_1",
   userId: "u_1",
   apiKeyId: null,
@@ -41,7 +41,7 @@ describe("agent.memory.write handler", () => {
     expect(mocks.embedTextMock).toHaveBeenCalledWith("do not rerun migrations");
     expect(mocks.writeMemoryMock).toHaveBeenCalledTimes(1);
     const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(arg.tenantId).toBe("ten_1");
+    expect(arg.orgId).toBe("ten_1");
     expect(arg.workspaceId).toBe("ws_1");
     expect(arg.nodeRef).toBe("Function:foo");
     expect(arg.weight).toBe("high");

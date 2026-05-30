@@ -42,8 +42,8 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
   });
   const d = db();
 
-  const tenantId = (sub.metadata?.tenant_id as string | undefined) ?? null;
-  if (!tenantId) {
+  const orgId = (sub.metadata?.org_id as string | undefined) ?? null;
+  if (!orgId) {
     // No tenant metadata = subscription was created outside our flow.
     // Bail silently; later events may carry the tenant once attached.
     return;
@@ -60,7 +60,7 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
 
   const row = {
-    tenantId,
+    orgId,
     planId,
     stripeSubscriptionId: sub.id,
     stripeCustomerId: customerId,

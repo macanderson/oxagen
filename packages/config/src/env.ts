@@ -82,12 +82,35 @@ export type EnvKey = keyof Env;
 let cached: Env | null = null;
 
 /**
+ * Strip one balanced surrounding double-quote pair from each value.
+ *
+ * Env values pasted into the Vercel dashboard with literal quotes arrive
+ * double-wrapped (`vercel env pull` writes `KEY="\"value\""`); Node's
+ * `--env-file` unwraps only the outer pair, leaving `"value"` — which then
+ * fails URL/enum validation. This normalization is a no-op for clean values
+ * (it only triggers when a value both starts and ends with `"`).
+ */
+function normalizeEnv(source: NodeJS.ProcessEnv): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(source)) {
+    out[key] =
+      typeof value === "string" &&
+      value.length >= 2 &&
+      value.startsWith('"') &&
+      value.endsWith('"')
+        ? value.slice(1, -1)
+        : value;
+  }
+  return out;
+}
+
+/**
  * Validate the entire env once at process start. Apps may also call
  * `requireEnv(["KEY1", "KEY2"])` for a subset check that throws early.
  */
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   if (cached) return cached;
-  const parsed = envSchema.safeParse(source);
+  const parsed = envSchema.safeParse(normalizeEnv(source));
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)

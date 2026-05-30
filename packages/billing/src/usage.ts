@@ -15,12 +15,12 @@ export interface CurrentPeriodUsageRow {
  * Empty array when no active subscription exists.
  */
 export async function getCurrentPeriodUsage(
-  tenantId: string,
+  orgId: string,
 ): Promise<CurrentPeriodUsageRow[]> {
   const d = db();
   const sub = await d.query.subscriptions.findFirst({
     where: and(
-      eq(schema.subscriptions.tenantId, tenantId),
+      eq(schema.subscriptions.orgId, orgId),
       eq(schema.subscriptions.status, "active"),
     ),
     columns: {
@@ -31,7 +31,7 @@ export async function getCurrentPeriodUsage(
   if (!sub) return [];
 
   return await sumTokenUsage({
-    tenantId,
+    orgId,
     periodStart: sub.currentPeriodStart,
     periodEnd: sub.currentPeriodEnd,
   });

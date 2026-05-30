@@ -7,7 +7,7 @@ import {
   idMixin,
   jsonContractMixin,
   softDeleteMixin,
-  tenantScopeMixin,
+  orgScopeMixin,
   versionMixin,
 } from "./_mixins.js";
 
@@ -16,15 +16,15 @@ export const playbooks = workflowSchema.table(
   {
     ...idMixin("pbk"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     ...softDeleteMixin(),
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
     description: text("description"),
   },
   (t) => ({
-    tenantSlugIdx: uniqueIndex("playbooks_tenant_slug_idx").on(t.tenantId, t.slug),
-    tenantIdx: index("playbooks_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgSlugIdx: uniqueIndex("playbooks_org_slug_idx").on(t.orgId, t.slug),
+    orgIdx: index("playbooks_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 
@@ -33,7 +33,7 @@ export const playbookVersions = workflowSchema.table(
   {
     ...idMixin("pbv"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     ...versionMixin(),
     playbookId: uuid("playbook_id").notNull(),
     entryStepId: uuid("entry_step_id"),
@@ -57,7 +57,7 @@ export const playbookSteps = workflowSchema.table(
   {
     ...idMixin("stp"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     ...jsonContractMixin(),
     playbookVersionId: uuid("playbook_version_id").notNull(),
     stepKey: text("step_key").notNull(),
@@ -94,13 +94,13 @@ export const promptTemplates = workflowSchema.table(
   {
     ...idMixin("tpl"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
   },
   (t) => ({
-    tenantSlugIdx: uniqueIndex("prompt_templates_tenant_slug_idx").on(t.tenantId, t.slug),
-    tenantIdx: index("prompt_templates_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgSlugIdx: uniqueIndex("prompt_templates_org_slug_idx").on(t.orgId, t.slug),
+    orgIdx: index("prompt_templates_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 

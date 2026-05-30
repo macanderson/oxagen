@@ -5,7 +5,7 @@ import { stripeClient } from "./client.js";
 import { ensureStripeCustomer } from "./customers.js";
 
 export interface CreateCheckoutSessionInput {
-  tenantId: string;
+  orgId: string;
   planSlug: string;
   interval: "month" | "year";
   /**
@@ -33,7 +33,7 @@ export async function createCheckoutSession(
     throw new Error(`plan ${input.planSlug} has no ${input.interval} price`);
   }
 
-  const customerId = await ensureStripeCustomer(input.tenantId);
+  const customerId = await ensureStripeCustomer(input.orgId);
 
   const session = await stripeClient().checkout.sessions.create({
     mode: "subscription",
@@ -42,7 +42,7 @@ export async function createCheckoutSession(
     // Carry tenant on the session — the resulting subscription metadata
     // inherits this and lets webhook handlers route without a DB lookup.
     subscription_data: {
-      metadata: { tenant_id: input.tenantId, plan_id: plan.id },
+      metadata: { org_id: input.orgId, plan_id: plan.id },
     },
     success_url:
       input.successUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
