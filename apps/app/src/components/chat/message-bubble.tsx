@@ -151,7 +151,7 @@ function renderBlock(
           key={block.fanoutId}
           fanoutId={block.fanoutId}
           parentMessageId={block.parentMessageId}
-          children={block.children}
+          subagents={block.children}
           status={block.status}
           results={block.results}
           onSelectChild={callbacks?.onNavigateToChild}

@@ -24,6 +24,13 @@ describe("billing.subscription.read capability", () => {
         seatCount: 3,
       },
       creditBalanceCents: 1000,
+      periodUsage: {
+        inputTokens: 1200,
+        outputTokens: 800,
+        cachedTokens: 100,
+        costMicros: 4500,
+        executions: 7,
+      },
     });
     expect(parsed.subscription?.planSlug).toBe("pro");
   });
@@ -32,6 +39,7 @@ describe("billing.subscription.read capability", () => {
     const parsed = billingSubscriptionRead.output.parse({
       subscription: null,
       creditBalanceCents: 0,
+      periodUsage: null,
     });
     expect(parsed.subscription).toBeNull();
   });
