@@ -18,7 +18,10 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "pnpm dev",
+    // In CI we serve a production build (`next start`); the gate builds the
+    // app in a prior step so this just boots it. Locally we use the dev
+    // server for fast iteration.
+    command: process.env.CI ? "pnpm start" : "pnpm dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
