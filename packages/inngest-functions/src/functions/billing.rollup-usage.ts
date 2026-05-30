@@ -1,6 +1,6 @@
 import { inngest } from "../inngest.js";
 import { db, schema } from "@oxagen/database";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, gt, inArray } from "drizzle-orm";
 import { sumTokenUsage } from "@oxagen/telemetry";
 import { logger } from "../logger.js";
 
@@ -35,14 +35,16 @@ export const billingRollupUsage = inngest.createFunction(
 
     // Drizzle keyset pagination on subscriptions.id (UUIDv7 ⇒ sortable).
     while (true) {
-      const batch: SubRow[] = await step.run(`load-batch-${cursor ?? "first"}`, async () => {
+      const batch: SubRow[] = await step.run(`load-batch-${cursor ?? "first"}`, async (): Promise<SubRow[]> => {
         const d = db();
-        return await d.query.subscriptions.findMany({
+        const rows = await d.query.subscriptions.findMany({
           where: cursor
             ? and(
                 inArray(schema.subscriptions.status, ACTIVE_STATUSES),
-                // gt(schema.subscriptions.id, cursor) // keyset
-                eq(schema.subscriptions.status, schema.subscriptions.status),
+                // Keyset: only rows after the last id processed. Paired with the
+                // id ordering below this advances every batch — a no-op
+                // predicate here re-fetches page 1 forever (infinite loop).
+                gt(schema.subscriptions.id, cursor),
               )
             : inArray(schema.subscriptions.status, ACTIVE_STATUSES),
           columns: {
@@ -51,8 +53,22 @@ export const billingRollupUsage = inngest.createFunction(
             currentPeriodStart: true,
             currentPeriodEnd: true,
           },
+          // Keyset pagination needs a deterministic order on the cursor column;
+          // without it `cursor = last.id` is meaningless and pages can repeat.
+          orderBy: (subscriptions, { asc }) => [asc(subscriptions.id)],
           limit: batchSize,
         });
+        // Map to SubRow explicitly: ensures required fields are present and
+        // converts Date fields to ISO strings before Inngest serializes them.
+        // This makes JsonifyObject<SubRow> structurally identical to SubRow,
+        // which resolves the emit-mode TS2322 caused by Drizzle inferring
+        // default-valued columns (e.g. `id`) as optional in select results.
+        return rows.map((row) => ({
+          id: row.id ?? "",
+          orgId: row.orgId,
+          currentPeriodStart: row.currentPeriodStart.toISOString(),
+          currentPeriodEnd: row.currentPeriodEnd.toISOString(),
+        }));
       });
 
       if (batch.length === 0) break;

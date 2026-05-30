@@ -1,6 +1,9 @@
 import type { CapabilityContext } from "../types.js";
+import type { AgentToolListInput, AgentToolListOutput } from "@oxagen/oxagen/contracts/agent.tool.list";
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
+
+export type { AgentToolListInput, AgentToolListOutput };
 
 // Dynamic import keeps oxagen out of the static package graph; otherwise
 // oxagen handler shims → @oxagen/agent → @oxagen/oxagen creates a cycle.
@@ -16,22 +19,6 @@ async function loadRegistry() {
     getSurfaces: (c: { surfaces?: readonly ("api" | "mcp" | "agent")[] }) => readonly string[];
   };
   return mod;
-}
-
-export interface AgentToolListInput {
-  includeExternal: boolean;
-}
-
-export interface AgentToolListOutput {
-  tools: Array<{
-    name: string;
-    description: string;
-    domain: string;
-    category: string | null;
-    riskLevel: "low" | "medium" | "high";
-    requiresApproval: boolean;
-    external: boolean;
-  }>;
 }
 
 export async function agentToolListHandler(
