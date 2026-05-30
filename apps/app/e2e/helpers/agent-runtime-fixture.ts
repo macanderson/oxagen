@@ -69,8 +69,9 @@ export async function setupAgentRuntimeFixture(
   const sql = getPg();
 
   const [tenantRow] = await sql<{ id: string }[]>`
-    INSERT INTO org.organizations (name, slug, plan_type, status)
+    INSERT INTO org.organizations (public_id, name, slug, plan_type, status)
     VALUES (
+      'org_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 22),
       ${"E2E " + opts.orgSlug},
       ${opts.orgSlug},
       'free',
@@ -82,8 +83,9 @@ export async function setupAgentRuntimeFixture(
   const orgId = tenantRow.id;
 
   const [userRow] = await sql<{ id: string }[]>`
-    INSERT INTO auth.users (email, display_name, status, email_verified_at)
+    INSERT INTO auth.users (public_id, email, display_name, status, email_verified_at)
     VALUES (
+      'usr_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 22),
       ${opts.userEmail},
       'E2E Runtime',
       'active',
@@ -95,21 +97,21 @@ export async function setupAgentRuntimeFixture(
   const userId = userRow.id;
 
   const [wsRow] = await sql<{ id: string }[]>`
-    INSERT INTO workspace.workspaces (org_id, name, slug)
-    VALUES (${orgId}, 'Main', ${opts.workspaceSlug})
+    INSERT INTO workspace.workspaces (public_id, org_id, name, slug)
+    VALUES ('wrk_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 22), ${orgId}, 'Main', ${opts.workspaceSlug})
     ON CONFLICT (org_id, slug) DO UPDATE SET name = EXCLUDED.name
     RETURNING id
   `;
   const workspaceId = wsRow.id;
 
   await sql`
-    INSERT INTO org.org_users (org_id, user_id, role, joined_at)
-    VALUES (${orgId}, ${userId}, 'owner', now())
+    INSERT INTO org.org_users (public_id, org_id, user_id, role, joined_at)
+    VALUES ('oru_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 22), ${orgId}, ${userId}, 'owner', now())
     ON CONFLICT (org_id, user_id) DO NOTHING
   `;
   await sql`
-    INSERT INTO workspace.workspace_users (workspace_id, user_id, role, joined_at)
-    VALUES (${workspaceId}, ${userId}, 'owner', now())
+    INSERT INTO workspace.workspace_users (public_id, workspace_id, user_id, role, joined_at)
+    VALUES ('wsu_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 22), ${workspaceId}, ${userId}, 'owner', now())
     ON CONFLICT (workspace_id, user_id) DO NOTHING
   `;
 
