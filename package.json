@@ -2,12 +2,13 @@
   "name": "oxagen-monorepo",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@9.12.0",
+  "packageManager": "pnpm@10.34.1",
   "engines": {
-    "node": ">=22.11.0",
-    "pnpm": ">=9.0.0"
+    "node": ">=24",
+    "pnpm": ">=10"
   },
   "scripts": {
+    "preinstall": "npx only-allow pnpm",
     "dev": "tsx tools/scripts/dev.ts",
     "kill": "tsx tools/scripts/kill.ts",
     "env:pull": "tsx tools/scripts/env-pull.ts",
@@ -38,6 +39,14 @@
     "overrides": {
       "drizzle-orm": "0.45.2",
       "typescript": "6.0.3"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "cpu-features",
+      "esbuild",
+      "protobufjs",
+      "sharp",
+      "ssh2",
+      "unrs-resolver"
+    ]
   }
 }
