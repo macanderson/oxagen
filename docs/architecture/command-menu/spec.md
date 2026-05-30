@@ -107,7 +107,7 @@ When the user presses Enter (or clicks an item), the selected item's intent dete
 |---|---|---|
 | **Navigate** | Route reference | Push the route, close the menu. |
 | **Search → Navigate** | Entity reference | Push the route to that entity's detail page. |
-| **Action** | Capability invocation | Open the action UI (form, confirm dialog) pre-filled. Action runs through `withCapabilityCheck`, audit-logged. |
+| **Action** | Capability invocation | Open the action UI (form, confirm dialog) pre-filled. Action dispatched via `contract.invoke()` from the registry, audit-logged. |
 | **Template** | Prompt template + auto-submit flag | Render the template against current context, insert into Ask Drawer, optionally auto-submit. |
 | **Ask** | Free-text prompt | Insert input as-is into Ask Drawer and submit. |
 
@@ -512,3 +512,4 @@ The Command Menu is ready to ship when:
 ## 20. Changelog
 
 - 2026-05-29 — Initial specification.
+- 2026-05-30 — §5 intent routing: `withCapabilityCheck` → `contract.invoke()` from registry.

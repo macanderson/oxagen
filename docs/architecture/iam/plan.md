@@ -33,7 +33,7 @@ Phase 1: Rename tenant → org
          ↓
 Phase 2: IAM data layer (Postgres + ClickHouse, seeds)
          ↓
-Phase 3: Capability check + resolver + audit emission + handler sweep
+Phase 3: defineContract() helper + resolver + audit emission + handler sweep
 ```
 
 Phase 1 must land first because IAM schemas reference `org_id`. Phase 3 depends on Phase 2's schemas and on Phase 1's column naming.
@@ -116,13 +116,13 @@ Single-shot revert of the rename migration. Drizzle schema files revert via git.
 
 **Ticket:** OXA-XXX
 
-**Deliverable:** Single PR that adds the Postgres + ClickHouse schemas for the IAM model, exports them from `@oxagen/database`, seeds default roles + policies, and provides the capability registry helper.
+**Deliverable:** Single PR that adds the Postgres + ClickHouse schemas for the IAM model, exports them from `@oxagen/database`, and seeds default roles + grants directly from each contract's `defaultRoles` declaration.
 
 ### Scope
 
 **New Postgres schema (`org` extended)**
 
-Migration `0004_iam_foundation.sql`. All tables under the `org` schema (one PG schema for the whole IAM model — no separate `iam` schema).
+Migration `0004_iam_foundation.sql`. All tables under the `org` schema (one PG schema for the whole IAM model — no separate `iam` schema). **6 tables total** — there is no `capability_registry` table; capability metadata lives on each contract's `defineContract` call and is discovered at runtime by walking the package `contracts` arrays.
 
 ```
 org.principals          all humans, agents, services
@@ -132,10 +132,9 @@ org.grants              direct principal → capability grants
 org.policies            conditional grants, enforced flag, sensitivity tags
 org.access_requests     JIT access requests
 org.sessions            principal sessions (active + revoked)
-org.capability_registry mirror of the contract registry (read-only, hydrated by app)
 ```
 
-Each table uses `idMixin('prn' / 'rol' / 'grn' / 'pol' / 'arq' / 'ses' / 'cap')`, `auditMixin()`, and `orgScopeMixin()` (where appropriate — capability_registry is org-scoped because it caches per-org enabled capabilities; principals can be org or workspace scoped).
+Each table uses `idMixin('prn' / 'rol' / 'grn' / 'pol' / 'arq' / 'ses')`, `auditMixin()`, and `orgScopeMixin()` (where appropriate — principals can be org or workspace scoped).
 
 Key columns:
 
@@ -154,8 +153,6 @@ access_requests: requester_id, capability_id, scope_kind, scope_id,
                  approver_id, approved_at, ttl_seconds
 sessions: principal_id, started_at, expires_at, ip, ua, idp_session_id,
           revoked_at, revoked_by, revoke_reason
-capability_registry: capability_id (text PK), domain, sensitivity, default_effect,
-                     description, requires_approval_default
 ```
 
 Indexes designed for the resolver's read patterns: lookups by `(principal_id, capability_id, scope)` are hot; everything else is occasional.
@@ -196,7 +193,7 @@ Hash-chaining is implemented at write time, not at storage time — the applicat
 
 **Drizzle exports**
 
-- `packages/database/src/schema/iam.ts` — new file with all 7 PG tables.
+- `packages/database/src/schema/iam.ts` — new file with all 6 PG tables.
 - `packages/database/src/schema/index.ts` — re-export.
 - `packages/database/src/relations.ts` — relations between principals, roles, grants, sessions.
 
@@ -217,34 +214,17 @@ Workspace roles (per-workspace rows):
   Viewer
 ```
 
-Each system role gets a `role_grants` set derived from the default capability matrix (see `packages/oxagen/src/iam/default-role-grants.ts` — a typed dataset).
-
-**Capability registry helper (`packages/oxagen/src/iam/capability-registry.ts`)**
-
-Reads the contract module exports, builds the in-memory registry:
-
-```ts
-type CapabilityDef = {
-  id: string;                  // 'organization.create'
-  domain: string;              // 'organization'
-  sensitivity: 'low' | 'medium' | 'high' | 'destructive';
-  defaultEffect: 'allow' | 'deny' | 'require_approval';
-  requiresApprovalByDefault: boolean;
-  description: string;         // from contract JSDoc
-};
-```
-
-The contracts get a metadata addition — `withMetadata({ sensitivity, defaultEffect })` — that the registry walks at startup. Contracts without metadata fail a unit test.
+Each system role gets its `role_grants` rows written directly from the `defaultRoles` field on each contract. The seed migration script walks the `contracts` arrays exported from `@oxagen/oxagen/contracts` and `@oxagen/agent/handlers`, reads each contract's `defaultRoles: { org: { Owner: 'allow', ... }, workspace: { ... } }` declaration, and writes the corresponding `role_grants` rows. There is no separate `default-role-grants.ts` dataset — the contracts are the authoritative source. Adding a new contract automatically includes its default grants in the next seed run.
 
 ### Acceptance
 
-- [ ] Postgres migration applies; tables exist with correct indexes.
+- [ ] Postgres migration applies; 6 IAM tables exist with correct indexes (no `capability_registry` table).
 - [ ] ClickHouse migration applies; `audit_events` table exists.
 - [ ] Seed migration inserts 4 org roles + 3 workspace roles per existing org/workspace.
+- [ ] `role_grants` rows are seeded from each contract's `defaultRoles` field — verified by querying the DB and comparing to the `defaultRoles` declarations in the contract source.
 - [ ] New org creation (via existing `organization.create` flow) writes the 4 default roles automatically.
 - [ ] `pnpm typecheck` green.
-- [ ] Capability registry test passes — every contract in `packages/oxagen/src/contracts/` has metadata.
-- [ ] `pnpm db:check` reports the new IAM tables.
+- [ ] `pnpm db:check` reports the 6 new IAM tables.
 
 ### Risks
 
@@ -257,13 +237,47 @@ Drop the IAM tables in reverse FK order. ClickHouse table drop. Seed reverses cl
 
 ---
 
-## Phase 3 — Capability check + resolver + audit emission + handler sweep
+## Phase 3 — defineContract() + resolver + audit emission + handler sweep
 
 **Ticket:** OXA-XXX
 
-**Deliverable:** Single PR that introduces the load-bearing `withCapabilityCheck` boundary, the pure resolver function, the audit event emitter, the CI guard, and migrates every existing contract handler through the new boundary.
+**Deliverable:** Single PR that introduces the `defineContract()` helper as the single load-bearing capability boundary, the pure resolver function, the audit event emitter, and migrates every existing contract handler through `defineContract`.
 
 ### Scope
+
+**`defineContract()` helper (`packages/oxagen/src/iam/define-contract.ts`)**
+
+`defineContract` is the only entrypoint for declaring a governable action. It accepts a single typed argument and returns an object with `{ id, metadata, invoke(ctx, input) }`. The raw handler closure never escapes the helper — there is no way to call the handler without going through the capability check by construction.
+
+```ts
+// packages/oxagen/src/contracts/organization.create.ts
+export const organizationCreate = defineContract({
+  id: "organization.create",
+  domain: "organization",
+  description: "Create a new organization with an owner",
+  sensitivity: "high",
+  defaultEffect: "deny",
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: {},
+  },
+  input: z.object({ name: z.string(), slug: z.string() }),
+  output: z.object({ id: z.string() }),
+  handler: async (ctx, input) => { /* … */ },
+});
+```
+
+Argument shape enforced by TypeScript — `sensitivity`, `defaultEffect`, `defaultRoles`, `input`, and `output` are all required fields. There is no separate metadata decoration step; the type system rejects an incomplete `defineContract` call at compile time.
+
+`invoke(rawCtx, input)` internally:
+
+1. Resolves the principal from the request session.
+2. Fetches grants, roles, and policies for that principal scoped to the call.
+3. Runs the pure resolver (`resolve.ts`).
+4. Emits an audit event with the full trace (fire-and-forget).
+5. On `allow` — calls the handler with a `CheckedContext` (resolved principal + scope).
+6. On `deny` — returns a structured denial response without touching the handler.
+7. On `pending_approval` — creates an `access_requests` row, returns a denial with the request ID.
 
 **Pure resolver (`packages/oxagen/src/iam/resolve.ts`)**
 
@@ -272,7 +286,6 @@ type ResolveInput = {
   principal: Principal;
   capability: string;
   scope: { kind: 'org' | 'workspace'; orgId: string; workspaceId?: string };
-  capabilityRegistry: CapabilityRegistry;
   grants: Grant[];           // pre-fetched from DB by caller
   roles: Role[];             // pre-fetched
   policies: Policy[];        // pre-fetched
@@ -300,37 +313,45 @@ Implements the documented order (see IA spec §12):
 7. Role-inherited grant → inherit role
 8. Default-deny
 
-Pure function: takes pre-fetched data, returns a decision + trace. No I/O. Easy to unit-test exhaustively.
-
-**Capability check wrapper (`packages/oxagen/src/iam/with-capability-check.ts`)**
-
-```ts
-export function withCapabilityCheck<TInput, TOutput>(
-  capability: string,
-  handler: (ctx: CheckedContext, input: TInput) => Promise<TOutput>,
-): (raw: RawInvocation<TInput>) => Promise<TOutput | DenialResponse>;
-```
-
-Resolves the principal from the request session, fetches grants/roles/policies for that principal scoped to the call, runs the resolver, writes an audit event with the trace, and either invokes the handler with a `CheckedContext` (which carries the resolved principal + scope) or returns a structured denial.
-
-For `pending_approval`: creates an `access_requests` row, returns a denial response with the request ID so the UI can route to the approval queue.
+Pure function: takes pre-fetched data, returns a decision + trace. No I/O. `defineContract`'s `invoke` is the only caller. Easy to unit-test exhaustively. Note: the `capabilityRegistry` parameter from the original design is removed — capability metadata is carried on each contract object and does not need to be passed into the resolver.
 
 **Audit emitter (`packages/oxagen/src/iam/emit-audit.ts`)**
 
-Builds the `AuditEvent` payload from the resolver trace + invocation context, computes the hash-chain pointer (read the latest event for `(org_id, capability)`, hash it with this event), writes to ClickHouse via `@oxagen/telemetry`. The write is fire-and-forget but logs failures loudly — auditing failures are critical incidents.
+Builds the `AuditEvent` payload from the resolver trace + invocation context, computes the hash-chain pointer (read the latest event for `(org_id, capability)`, hash it with this event), writes to ClickHouse via `@oxagen/telemetry`. Called from one place only: inside `invoke()` in `define-contract.ts`. The write is fire-and-forget but logs failures loudly — auditing failures are critical incidents.
 
-**CI guard (`tools/scripts/check-capability-wrapper.mjs`)**
+**Contract discovery model**
 
-Static analysis script that:
+Each package exposes a `contracts` array as its public surface for capability discovery. Everything that needs to read the registry — the seed migration, the access matrix UI in Wave 5, capability auto-docs — walks these arrays. Adding a contract means creating the file and adding one line to the array:
 
-1. Walks `packages/oxagen/src/contracts/*.ts` and `packages/agent/src/handlers/*.ts`.
-2. For each exported handler symbol, requires either `withCapabilityCheck(...)` in its chain OR a `// @capability-skip: <reason>` comment with an issue link.
-3. Fails CI if a new contract handler is found without one of those.
-4. Added to `package.json` root `gate` script.
+```ts
+// packages/oxagen/src/contracts/index.ts
+export const contracts = [
+  organizationCreate,
+  workspaceCreate,
+  chatMessageSend,
+] as const;
+```
+
+```ts
+// packages/agent/src/handlers/index.ts
+export const contracts = [
+  agentApprovalResolve,
+  agentPlanApprove,
+  agentTaskBackgroundCancel,
+  agentTaskBackgroundRead,
+  agentCodeExecute,
+] as const;
+```
+
+The `contracts` array is the canonical registry. No database table mirrors it. Any tooling that previously queried `capability_registry` now imports the array directly (or via dynamic `import()` in the seed script).
+
+**CI guard (`tools/scripts/check-contracts.mjs`)**
+
+Structurally there is no bypass to guard against — the capability check lives inside `defineContract` and the handler never escapes. The lighter check that remains: verify that the package-level `contracts` array contains every `defineContract` call found in that package's `contracts/` directory. This is a ~20-line glob + grep script. It catches forgotten exports (contract file exists but was not added to the array), not bypasses. Added to the root `gate` script.
 
 **Handler sweep**
 
-Every existing contract handler in the codebase is migrated through `withCapabilityCheck`. Inventory from earlier explorations:
+Every existing contract handler in the codebase is refactored through `defineContract`. Inventory from earlier explorations:
 
 | Contract | File | Capability id |
 |---|---|---|
@@ -343,11 +364,7 @@ Every existing contract handler in the codebase is migrated through `withCapabil
 | agent.task.background.read | `packages/agent/src/handlers/agent.task.background.read.ts` | `agent.task.background.read` |
 | agent.code.execute | `packages/agent/src/handlers/agent.code.execute.ts` | `agent.code.execute` |
 
-Each gets:
-
-1. A capability metadata addition (`sensitivity`, `defaultEffect`) on the contract definition.
-2. The handler body wrapped in `withCapabilityCheck`.
-3. Server actions that call the handler updated to handle the structured denial response.
+Each file is refactored to export a single `defineContract({...})` call containing `id`, `domain`, `description`, `sensitivity`, `defaultEffect`, `defaultRoles`, `input`, `output`, and `handler`. The old separate handler export is removed. Server actions that call the handler are updated to call `.invoke(rawCtx, input)` and handle the structured denial response.
 
 **Unit tests**
 
@@ -367,9 +384,9 @@ Aim for >95% line coverage on `resolve.ts`.
 ### Acceptance
 
 - [ ] All resolver branches unit-tested; coverage >95%.
-- [ ] Every existing contract handler is wrapped; CI guard passes.
-- [ ] CI guard fails when a deliberately-unwrapped contract is added in a test PR.
-- [ ] Audit events appear in ClickHouse after invoking any wrapped contract end-to-end.
+- [ ] Every existing contract handler is refactored through `defineContract`; CI `contracts` array check passes.
+- [ ] CI guard (`check-contracts.mjs`) fails when a contract file exists in `contracts/` but is not added to the package `contracts` array.
+- [ ] Audit events appear in ClickHouse after invoking any contract end-to-end.
 - [ ] Hash chain verification: a script can replay events for an `(org_id, capability)` pair and confirm chain integrity.
 - [ ] `pnpm dev` end-to-end smoke: signup → org create → workspace create → chat → background task all succeed, each writes audit events.
 - [ ] Denial response shape is consistent across all handlers (uniform structured error).
@@ -379,11 +396,11 @@ Aim for >95% line coverage on `resolve.ts`.
 
 - **ClickHouse write latency** on hot paths. Mitigation: fire-and-forget with a bounded retry queue in-process. If ClickHouse is unavailable, queue locally up to 1000 events, then circuit-break and log. Audit writes never block user actions.
 - **Hash chain race conditions** if two contract invocations for the same `(org_id, capability)` happen concurrently. Mitigation: chain hash is best-effort linkage, not a strict-ordering guarantee. Tamper-detection is at the *range* level (any reorder is detectable), not at the per-event level. Document this clearly.
-- **The sweep missing a handler.** Mitigation: the CI guard is exhaustive — if it passes, every exported handler is wrapped.
+- **Forgotten export.** Mitigation: the CI `contracts` array check catches any contract file not added to the package array. Structurally there is no bypass to miss.
 
 ### Rollback
 
-Wrappers can be removed; the underlying handlers still work. The audit table accumulates events but doesn't block anything. Removing the CI guard is a one-line change. No data state to unwind.
+`defineContract` can be split back into separate handler + wrapper exports; the underlying handlers still work. The audit table accumulates events but doesn't block anything. Removing the CI guard is a one-line change. No data state to unwind.
 
 ---
 
@@ -392,16 +409,17 @@ Wrappers can be removed; the underlying handlers still work. The audit table acc
 Wave 1 lands. The platform now has:
 
 - A clean schema with no tenant terminology.
-- A unified principal/grant/role/policy data model.
+- A unified principal/grant/role/policy data model (6 Postgres tables).
 - A pure, tested resolver that decides every capability invocation.
-- A wrapper boundary that catches every contract call and writes an audit event.
-- A CI guard that prevents future bypass.
-- A capability registry that documents every governable action.
+- A `defineContract()` boundary that is structurally impossible to bypass — the capability check, audit emission, and handler invocation are collapsed into one call.
+- A per-package `contracts` array that is the canonical capability registry, discoverable without a database table.
+- A lightweight CI guard that ensures every contract file is exported in its package array.
 
-The shell rework (Wave 2) and route restructure (Wave 3) can start in parallel because they don't touch any of this. Wave 5 (the Access zone UI) becomes a "read the data model and render it" problem, which is exactly what we want for a stable IAM ship.
+The shell rework (Wave 2) and route restructure (Wave 3) can start in parallel because they don't touch any of this. Wave 5 (the Access zone UI) becomes a "walk the contracts arrays, read the data model, and render it" problem, which is exactly what we want for a stable IAM ship.
 
 ---
 
 ## Changelog
 
 - 2026-05-29 — Initial Wave 1 plan. Schema rename committed to `org` schema + `organizations` table (no view alias), per locked product decision.
+- 2026-05-29 — Capabilities architecture collapsed: single `defineContract()` helper replaces `withMetadata` + `withCapabilityCheck` + `default-role-grants.ts` + `capability_registry` table + CI guard. Discovery is a per-package `contracts` array.

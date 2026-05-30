@@ -4,7 +4,7 @@ import { registerCapability } from "../registry.js";
 export const organizationCreate = registerCapability({
   name: "organization.create",
   domain: "organization",
-  description: "Create a new tenant with a globally-unique slug",
+  description: "Create a new organization with a globally-unique slug",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],

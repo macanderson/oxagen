@@ -5,13 +5,13 @@ import type { AppEnv } from "../app.js";
 
 export function capabilityContext(
   c: Context<AppEnv>,
-  options: { requireTenant?: boolean } = {},
+  options: { requireOrg?: boolean } = {},
 ): CapabilityContext {
   const orgId = c.get("orgId");
   const workspaceId = c.get("workspaceId");
-  if (options.requireTenant !== false) {
+  if (options.requireOrg !== false) {
     if (!orgId || !workspaceId) {
-      throw new HTTPException(400, { message: "Tenant/workspace scope required" });
+      throw new HTTPException(400, { message: "Org/workspace scope required" });
     }
   }
   return {

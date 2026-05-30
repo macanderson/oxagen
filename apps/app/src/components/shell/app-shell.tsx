@@ -4,20 +4,20 @@ import { Topbar } from "./topbar";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
 
 export interface AppShellProps {
-  tenant: ResolvedOrg;
+  org: ResolvedOrg;
   workspace?: ResolvedWorkspace;
   availableOrgs: { publicId: string; slug: string; name: string }[];
   availableWorkspaces?: { publicId: string; slug: string; name: string }[];
   children: ReactNode;
 }
 
-export function AppShell({ tenant, workspace, availableOrgs, availableWorkspaces, children }: AppShellProps) {
+export function AppShell({ org, workspace, availableOrgs, availableWorkspaces, children }: AppShellProps) {
   return (
     <div className="flex h-dvh w-full overflow-hidden">
-      <Sidebar orgSlug={tenant.slug} workspaceSlug={workspace?.slug} />
+      <Sidebar orgSlug={org.slug} workspaceSlug={workspace?.slug} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
-          tenant={tenant}
+          org={org}
           workspace={workspace}
           availableOrgs={availableOrgs}
           availableWorkspaces={availableWorkspaces}

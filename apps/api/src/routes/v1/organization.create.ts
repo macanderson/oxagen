@@ -8,7 +8,7 @@ export const organizationCreateRoute = new Hono<AppEnv>();
 
 organizationCreateRoute.post("/", async (c) => {
   const body = organizationCreate.input.parse(await c.req.json());
-  const ctx = capabilityContext(c, { requireTenant: false });
+  const ctx = capabilityContext(c, { requireOrg: false });
   const out = await organizationCreateHandler(body, ctx);
   return c.json(out, 201);
 });

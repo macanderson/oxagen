@@ -5,7 +5,7 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
 import { AppShell } from "@/components/shell/app-shell";
 
-export default async function TenantLayout({
+export default async function OrgLayout({
   children,
   params,
 }: {
@@ -14,7 +14,7 @@ export default async function TenantLayout({
 }) {
   const session = await getSessionOrRedirect();
   const { orgSlug } = await params;
-  const tenant = await resolveOrg(orgSlug);
+  const org = await resolveOrg(orgSlug);
 
   const [orgsRows, workspacesRows] = await Promise.all([
     db()
@@ -29,11 +29,11 @@ export default async function TenantLayout({
         name: schema.workspaces.name,
       })
       .from(schema.workspaces)
-      .where(eq(schema.workspaces.orgId, tenant.id)),
+      .where(eq(schema.workspaces.orgId, org.id)),
   ]);
 
   return (
-    <AppShell tenant={tenant} availableOrgs={orgsRows} availableWorkspaces={workspacesRows}>
+    <AppShell org={org} availableOrgs={orgsRows} availableWorkspaces={workspacesRows}>
       {children}
     </AppShell>
   );

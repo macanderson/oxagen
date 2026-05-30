@@ -3,7 +3,7 @@ import { z } from "zod";
 // Apps subset the global schema via `requiredEnv` and re-validate at boot.
 // Spec §11: missing required vars fail closed, no silent defaults beyond
 // what's marked optional here.
-const envSchema = z
+const baseEnvSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
@@ -55,7 +55,13 @@ const envSchema = z
     SANDBOX_DRIVER: z.enum(["modal", "docker"]).optional(),
     MODAL_RUNNER_URL: z.string().url().optional(),
     MODAL_RUNNER_TOKEN: z.string().min(16).optional(),
-  })
+  });
+
+// The exact set of keys this schema validates. `normalizeEnv` only ever
+// touches these — never arbitrary env vars another tool may have set.
+const KNOWN_ENV_KEYS: ReadonlySet<string> = new Set(Object.keys(baseEnvSchema.shape));
+
+const envSchema = baseEnvSchema
   // OXA-1349: Inngest signing/event keys must be present in production —
   // the `/api/inngest` serve handler accepts unsigned requests otherwise.
   .superRefine((env, ctx) => {
@@ -82,24 +88,38 @@ export type EnvKey = keyof Env;
 let cached: Env | null = null;
 
 /**
- * Strip one balanced surrounding double-quote pair from each value.
+ * Strip one balanced surrounding double-quote pair from **known** env keys.
  *
  * Env values pasted into the Vercel dashboard with literal quotes arrive
  * double-wrapped (`vercel env pull` writes `KEY="\"value\""`); Node's
  * `--env-file` unwraps only the outer pair, leaving `"value"` — which then
- * fails URL/enum validation. This normalization is a no-op for clean values
- * (it only triggers when a value both starts and ends with `"`).
+ * fails URL/enum validation. To keep the side-effect visible and bounded we
+ * (a) only touch keys this schema actually validates — never arbitrary vars
+ * another tool set — and (b) warn once, listing exactly what was stripped, so
+ * a legitimately-quoted value isn't silently mutated.
  */
 function normalizeEnv(source: NodeJS.ProcessEnv): Record<string, string | undefined> {
   const out: Record<string, string | undefined> = {};
+  const stripped: string[] = [];
   for (const [key, value] of Object.entries(source)) {
-    out[key] =
+    if (
+      KNOWN_ENV_KEYS.has(key) &&
       typeof value === "string" &&
       value.length >= 2 &&
       value.startsWith('"') &&
       value.endsWith('"')
-        ? value.slice(1, -1)
-        : value;
+    ) {
+      out[key] = value.slice(1, -1);
+      stripped.push(key);
+    } else {
+      out[key] = value;
+    }
+  }
+  if (stripped.length > 0) {
+    console.warn(
+      `[config] normalizeEnv stripped surrounding double-quotes from: ${stripped.join(", ")}. ` +
+        `These values are double-quoted at the source (e.g. the Vercel dashboard) — fix them there.`,
+    );
   }
   return out;
 }

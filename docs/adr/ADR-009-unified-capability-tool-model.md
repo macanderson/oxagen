@@ -1,3 +1,5 @@
+> **Implementation superseded.** The core decision (tools are capabilities) holds. The implementation references (`listCapabilities()`, `CapabilityDeclaration`, `registerCapability`) were replaced by `defineContract()` + per-package `contracts` arrays. See [`docs/architecture/iam/plan.md`](../architecture/iam/plan.md) for current state.
+
 # ADR-009 — Unified capability/tool model via `surfaces`
 
 **Date:** 2026-05-28

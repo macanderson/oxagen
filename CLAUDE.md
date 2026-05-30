@@ -164,6 +164,11 @@ Do **not** parallelize when:
 - Server actions handle mutations; client components subscribe to
   streamed responses.
 - Auth lives in server components; client never sees session tokens.
+- **Request interception uses `proxy.ts`, not `middleware.ts`.** Next.js 16
+  (this repo runs 16.2.x) deprecated and renamed the `middleware` file
+  convention to `proxy` — the file lives at `apps/app/src/proxy.ts`, exports
+  a `proxy` function, and runs on the Node.js runtime. `middleware.ts` is no
+  longer recognized; do not create one.
 
 ### `apps/website`
 

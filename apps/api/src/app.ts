@@ -3,7 +3,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import { requestLogger } from "./middleware/logger.js";
 import { errorMiddleware } from "./middleware/error.js";
 import { authMiddleware } from "./middleware/auth.js";
-import { tenantMiddleware } from "./middleware/org.js";
+import { orgMiddleware } from "./middleware/org.js";
 import { workspaceMiddleware } from "./middleware/workspace.js";
 import { health } from "./routes/health.js";
 import { stripeWebhook } from "./routes/stripe.js";
@@ -49,32 +49,32 @@ app.route("/webhooks/stripe", stripeWebhook);
 // verification is enforced inside the inngest/hono serve handler.
 app.route("/api/inngest", inngestRoute);
 
-// /v1 user-level routes (tenant + workspace CRUD) require auth but no
-// tenant scope: a freshly-authenticated user can create their first
-// tenant without one existing.
+// /v1 user-level routes (org + workspace CRUD) require auth but no
+// org scope: a freshly-authenticated user can create their first
+// org without one existing.
 const userScoped = new Hono<AppEnv>();
 userScoped.use("*", authMiddleware);
 userScoped.route("/organizations", organizationCreateRoute);
 app.route("/v1", userScoped);
 
-// /v1/:tenant_slug/:workspace_slug/* — tenant + workspace scoped routes.
-const tenantScoped = new Hono<AppEnv>();
-tenantScoped.use("*", authMiddleware, tenantMiddleware, workspaceMiddleware);
-tenantScoped.route("/workspaces", workspaceCreateRoute);
-tenantScoped.route("/billing/subscription", billingSubscriptionReadRoute);
-tenantScoped.route("/billing/subscription/upgrade/start", billingSubscriptionUpgradeStartRoute);
-tenantScoped.route("/chat/messages", chatMessageSendRoute);
-// Agent-runtime routes live under the tenant + workspace scope so the runner
+// /v1/:org_slug/:workspace_slug/* — org + workspace scoped routes.
+const orgScoped = new Hono<AppEnv>();
+orgScoped.use("*", authMiddleware, orgMiddleware, workspaceMiddleware);
+orgScoped.route("/workspaces", workspaceCreateRoute);
+orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
+orgScoped.route("/billing/subscription/upgrade/start", billingSubscriptionUpgradeStartRoute);
+orgScoped.route("/chat/messages", chatMessageSendRoute);
+// Agent-runtime routes live under the org + workspace scope so the runner
 // inherits the same auth, isolation, and audit envelope as every other v1 call.
-tenantScoped.route("/agent/tools", agentToolListRoute);
-tenantScoped.route("/agent/mcp-servers", agentMcpRegisterRoute);
-tenantScoped.route("/agent/mcp-servers", agentMcpListRoute);
-tenantScoped.route("/agent/skills", agentSkillListRoute);
-tenantScoped.route("/agent/plans/approve", agentPlanApproveRoute);
-tenantScoped.route("/agent/tasks", agentTaskBackgroundStartRoute);
-tenantScoped.route("/agent/tasks", agentTaskBackgroundReadRoute);
-tenantScoped.route("/agent/tasks/cancel", agentTaskBackgroundCancelRoute);
-tenantScoped.route("/agent/memory/recall", agentMemoryRecallRoute);
-tenantScoped.route("/agent/memory", agentMemoryWriteRoute);
-tenantScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
-app.route("/v1/:tenant_slug/:workspace_slug", tenantScoped);
+orgScoped.route("/agent/tools", agentToolListRoute);
+orgScoped.route("/agent/mcp-servers", agentMcpRegisterRoute);
+orgScoped.route("/agent/mcp-servers", agentMcpListRoute);
+orgScoped.route("/agent/skills", agentSkillListRoute);
+orgScoped.route("/agent/plans/approve", agentPlanApproveRoute);
+orgScoped.route("/agent/tasks", agentTaskBackgroundStartRoute);
+orgScoped.route("/agent/tasks", agentTaskBackgroundReadRoute);
+orgScoped.route("/agent/tasks/cancel", agentTaskBackgroundCancelRoute);
+orgScoped.route("/agent/memory/recall", agentMemoryRecallRoute);
+orgScoped.route("/agent/memory", agentMemoryWriteRoute);
+orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
+app.route("/v1/:org_slug/:workspace_slug", orgScoped);

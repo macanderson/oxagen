@@ -88,9 +88,9 @@ The manifest gate only requires layer files for surfaces actually
 declared. A capability with `surfaces: ['agent']` skips the `api`,
 `mcp`, and `e2e` layers; it still ships `schema`, `unit`, and `docs`.
 
-This collapses the previously-separate tool registry into the
-capability registry. The agent runtime queries
-`listCapabilities().filter(c => getSurfaces(c).includes('agent'))` to
+This collapses the previously-separate tool registry into the contracts
+array. The agent runtime filters the per-package `contracts` arrays
+(`contracts.filter(c => c.metadata.surfaces.includes('agent'))`) to
 materialize its tool list per turn.
 
 ### 3.2 Docker as code sandbox

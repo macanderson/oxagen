@@ -1,3 +1,5 @@
+> **Snapshot — superseded.** This document was captured before the capabilities architecture was finalized. The `registerCapability` / no-`defineContract` findings in the examples below reflect pre-architecture code that no longer exists. For current state see [`docs/architecture/iam/plan.md`](../architecture/iam/plan.md).
+
 # Reference — What an `Explore` agent "file-level map" looks like
 
 When you dispatch an `Explore` (or `general-purpose`) subagent to map part of the
