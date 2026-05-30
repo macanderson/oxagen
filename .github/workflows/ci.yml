@@ -8,7 +8,7 @@ on:
 jobs:
   gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -69,6 +69,11 @@ jobs:
       STRIPE_WEBHOOK_SECRET: whsec_test_ci
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       NEXT_PUBLIC_API_URL: http://localhost:4000
+      # Required by the env schema when NODE_ENV=production, which `next build`
+      # sets. Without them the production build fails collecting page data for
+      # routes that call loadEnv() at module load (e.g. /api/auth/[...all]).
+      INNGEST_EVENT_KEY: ci_inngest_event
+      INNGEST_SIGNING_KEY: signkey-test-ci0000000000000000000000000000000000000000000000000000000000
 
     steps:
       - uses: actions/checkout@v4
@@ -92,5 +97,22 @@ jobs:
       - name: Migrate
         run: pnpm db:migrate
 
+      # Playwright e2e is part of the gate. Install the browser and build the
+      # app up front; the Playwright webServer serves the build via `next
+      # start` (see apps/app/playwright.config.ts).
+      - name: Install Playwright browsers
+        run: pnpm --filter @oxagen/app exec playwright install --with-deps chromium
+
+      - name: Build app
+        run: pnpm --filter @oxagen/app build
+
       - name: Gate
         run: pnpm gate
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/app/playwright-report/
+          retention-days: 7

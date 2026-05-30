@@ -12,7 +12,8 @@
     "./memory/*": "./src/memory/*.ts",
     "./hooks/*": "./src/hooks/*.ts",
     "./handlers": "./src/handlers/index.ts",
-    "./handlers/*": "./src/handlers/*.ts"
+    "./handlers/*": "./src/handlers/*.ts",
+    "./register": "./src/register.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -32,12 +33,12 @@
     "drizzle-orm": "^0.36.0",
     "inngest": "^3.27.0",
     "neo4j-driver": "^5.27.0",
+    "@oxagen/oxagen": "workspace:*",
     "pino": "^9.5.0",
     "postgres": "^3.4.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@oxagen/oxagen": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^2.1.2"
   }

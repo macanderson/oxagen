@@ -9,14 +9,14 @@ import type { SubagentChild, SubagentStatus } from "./stream-event-types";
 export interface SubagentFanoutProps {
   fanoutId: string;
   parentMessageId: string;
-  children: SubagentChild[];
+  subagents: SubagentChild[];
   status: SubagentStatus;
   results?: Array<{ childMessageId: string; output: unknown }>;
   onSelectChild?: (childMessageId: string) => void;
 }
 
 export function SubagentFanout({
-  children,
+  subagents,
   status,
   results,
   onSelectChild,
@@ -35,12 +35,12 @@ export function SubagentFanout({
     >
       <div className="flex items-center gap-2">
         <Users className="h-4 w-4 text-accent" />
-        <Badge variant="muted">{children.length} subagents</Badge>
+        <Badge variant="muted">{subagents.length} subagents</Badge>
         <FanoutStatus status={status} />
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {children.map((child) => (
+        {subagents.map((child) => (
           <ChildCard
             key={child.childMessageId}
             child={child}
