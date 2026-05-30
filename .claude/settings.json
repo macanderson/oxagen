@@ -127,7 +127,8 @@
       "Bash(tofu providers*)",
       "Bash(tofu import*)",
       "Bash(tofu show*)",
-      "Bash(tofu version*)"
+      "Bash(tofu version*)",
+      "Bash(pnpm *)"
     ],
     "deny": [
       "Read(./.env)",
@@ -325,66 +326,18 @@
       "Bash(docker push *)",
       "Bash(docker rm *)",
       "Bash(docker rmi *)"
+
     ],
     "defaultMode": "acceptEdits"
   },
   "model": "claude-haiku-4-5",
   "availableModels": [
-    "claude-opus-4-7",
+    "claude-opus-4-8",
     "claude-sonnet-4-6",
     "claude-haiku-4-5"
   ],
   "enableAllProjectMcpServers": true,
   "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/check_model_migrations.py"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/log-oxagents-prompt.py"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/log-oxagents-prompt.py"
-          },
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/claude-session-recap.py"
-          },
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/autosave.sh"
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/autosave.sh"
-          }
-        ]
-      }
-    ]
   },
   "enabledPlugins": {
     "github@claude-plugins-official": true,

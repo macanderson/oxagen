@@ -1,8 +1,107 @@
 # CLAUDE.md
 
+## Working with this user
+
+The user routinely sends **multi-part prompts** — a single message asks for
+several only-loosely-related things in one shot. When you read one and find
+≥2 logically independent units of work, decompose immediately and dispatch
+subagents in parallel for the independent pieces. Never serialize work
+that has no dependency chain — it wastes the user's time and the user has
+explicitly asked for this pattern.
+
+**Delegate by default.** When you've identified work, your first move is
+to dispatch agents for it, not to start executing it yourself in a long
+sequence of tool calls. Grinding through a queue of tasks personally is
+the *failure mode* the user has explicitly called out. Pattern:
+
+1. Parse the user's request and decompose into independent units.
+2. For each unit, decide: is this a single 1-2 line edit OR a multi-step
+   chunk? If multi-step, dispatch an agent. If trivially small, batch
+   into a single parallel tool-call block, do NOT serialize.
+3. Send the dispatches in **one message** with multiple Agent calls.
+4. Use the agents' results to inform your response; don't re-do their
+   work in the parent context.
+
+The only time to keep work in the parent context is when later steps
+depend on earlier ones AND each step is small. Otherwise delegate.
+
+The decomposition rule of thumb:
+
+- Research / investigation → dispatch an agent (good context isolation)
+- File edits in known locations → do yourself in parallel tool calls
+- Codebase mapping or breadth search → dispatch `Explore` agent
+- Anything that touches a different repo/system → its own agent
+
+Examples of independence:
+- "Fix X, document Y, ask about Z" — three agents, send in one message
+- "Update the spec and create the tickets" — sequential (tickets reference the spec)
+
+## Production URLs (interim)
+
+Until oxagen.ai is launched, production deploys use Vercel-managed domains:
+
+- App: `https://oxagen-v2-app.vercel.app`
+- Website: `https://oxagen-v2-website.vercel.app`
+- API: `https://oxagen-v2-api.vercel.app`
+- Admin: `https://oxagen-v2-admin.vercel.app`
+
+When generating OAuth callback URLs, env values, allowedOrigins, or any
+docs/spec content that references prod URLs, use the vercel.app domains.
+Switch back to oxagen.ai is a single env-var sweep when the brand domain
+is ready — keep the URL values isolated to env vars and config, not hard-
+coded in source.
+
 ## Linear
 
-Oxagen uses the `oxagen-v2` linear project. Access the linear project via apis or the linear mcp server. The api key is stored as an environment variable in the root of this repo.
+Oxagen uses the `oxagen-v2` linear project. Access the linear project via
+apis or the linear mcp server. The api key is stored as an environment
+variable in the root of this repo.
+
+### Ticket convention (apply on every ticket you create)
+
+- **One ticket = one pull request.** Never split a single PR across two
+  tickets. Never bundle two unrelated PRs into one ticket. The goal is
+  one CI run per ticket so the user's Vercel build budget is preserved.
+- **Sub-issues for chunks of work** *inside* the ticket. A sub-issue is
+  a tracking unit (a reviewer can resolve them as each chunk merges into
+  the parent branch), not a separate PR. Aim for 3–6 sub-issues per
+  parent ticket; more is a sign the parent is too big.
+- **Assignee: Mac Anderson** (`mac@oxagen.ai`,
+  uuid `aa47fc28-1b3a-4b45-bb02-d18f2e59c6bb`). Always set on creation.
+- **Labels — every ticket:**
+  - `agent-created` (workspace label, mandatory)
+  - One or more **functional-area** labels: `foundations`,
+    `application-shell`, `iam`, `SOC2`, `security`, `observability`,
+    `infra`, `tech-debt`, etc. Check `list_issue_labels` before
+    inventing a new one. If a new area emerges (e.g. `command-menu`,
+    `studio`, `agent-runtime`), create it with `create_issue_label`
+    and write its description.
+- **T-shirt size** every ticket using Linear `estimate`:
+  - XS (1): ≤1h, single-file, no schema impact, near-zero risk.
+  - S (2): half-day, ≤5 files, isolated module, low risk.
+  - M (3): one day, ≤20 files, one package, modest test surface.
+  - L (5): multi-day, ≤100 files, crosses packages, moderate risk
+    (e.g. requires a migration but no behavior change).
+  - XL (8): week-plus, >100 files OR security-critical OR
+    requires exhaustive testing OR touches IAM/audit boundary.
+  Reconsider sizing on three axes — **risk** (what happens if it
+  goes wrong?), **blast radius** (how many files/packages touched?),
+  **effort** (raw time). The largest of the three sets the size.
+- **Priority** matches business need, not "everything is Urgent."
+  P1 = Urgent for foundation work that blocks other work; P2 = High
+  for the next quarter's milestones; P3 = Medium / P4 = Low otherwise.
+- **Description structure** — always include:
+  1. One-sentence purpose.
+  2. Link to the relevant `docs/architecture/<topic>/spec.md` (or
+     `plan.md`) section.
+  3. What changes — explicit file list / migration name / contract
+     id, not vague verbs.
+  4. Acceptance criteria as a checklist.
+  5. Risks + mitigations.
+  6. Rollback plan.
+
+Following this convention means future agent sessions can hand the user
+a coherent backlog without re-deciding ticket shape each time.
 
 ## Operating model
 
@@ -65,6 +164,11 @@ Do **not** parallelize when:
 - Server actions handle mutations; client components subscribe to
   streamed responses.
 - Auth lives in server components; client never sees session tokens.
+- **Request interception uses `proxy.ts`, not `middleware.ts`.** Next.js 16
+  (this repo runs 16.2.x) deprecated and renamed the `middleware` file
+  convention to `proxy` — the file lives at `apps/app/src/proxy.ts`, exports
+  a `proxy` function, and runs on the Node.js runtime. `middleware.ts` is no
+  longer recognized; do not create one.
 
 ### `apps/website`
 

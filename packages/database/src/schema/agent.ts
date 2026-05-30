@@ -7,7 +7,7 @@ import {
   idMixin,
   jsonContractMixin,
   softDeleteMixin,
-  tenantScopeMixin,
+  orgScopeMixin,
   versionMixin,
 } from "./_mixins.js";
 
@@ -16,7 +16,7 @@ export const agents = agentSchema.table(
   {
     ...idMixin("agt"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     ...softDeleteMixin(),
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
@@ -25,8 +25,8 @@ export const agents = agentSchema.table(
     isSystemAgent: boolean("is_system_agent").notNull().default(false),
   },
   (t) => ({
-    tenantSlugIdx: uniqueIndex("agents_tenant_slug_idx").on(t.tenantId, t.slug),
-    tenantIdx: index("agents_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgSlugIdx: uniqueIndex("agents_org_slug_idx").on(t.orgId, t.slug),
+    orgIdx: index("agents_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 
@@ -35,7 +35,7 @@ export const agentVersions = agentSchema.table(
   {
     ...idMixin("agv"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     ...versionMixin(),
     ...jsonContractMixin(),
     agentId: uuid("agent_id").notNull(),
@@ -52,7 +52,7 @@ export const agentVersions = agentSchema.table(
       .on(t.agentId)
       .where(sql`is_latest = true`),
     agentVersionIdx: uniqueIndex("agent_versions_agent_version_idx").on(t.agentId, t.versionNumber),
-    tenantIdx: index("agent_versions_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("agent_versions_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 
@@ -61,7 +61,7 @@ export const tools = agentSchema.table(
   {
     ...idMixin("tol"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
     toolType: text("tool_type").notNull(),
@@ -74,8 +74,8 @@ export const tools = agentSchema.table(
     category: text("category"),
   },
   (t) => ({
-    tenantSlugIdx: uniqueIndex("tools_tenant_slug_idx").on(t.tenantId, t.slug),
-    tenantIdx: index("tools_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgSlugIdx: uniqueIndex("tools_org_slug_idx").on(t.orgId, t.slug),
+    orgIdx: index("tools_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 
@@ -125,7 +125,7 @@ export const skills = agentSchema.table(
   {
     ...idMixin("skl"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     ...softDeleteMixin(),
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
@@ -135,7 +135,7 @@ export const skills = agentSchema.table(
   },
   (t) => ({
     workspaceSlugIdx: uniqueIndex("skills_workspace_slug_idx").on(t.workspaceId, t.slug),
-    tenantIdx: index("skills_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("skills_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 
@@ -144,7 +144,7 @@ export const skillVersions = agentSchema.table(
   {
     ...idMixin("slv"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     ...versionMixin(),
     skillId: uuid("skill_id").notNull(),
     body: text("body").notNull(),
@@ -157,7 +157,7 @@ export const skillVersions = agentSchema.table(
       .on(t.skillId)
       .where(sql`is_latest = true`),
     skillVersionIdx: uniqueIndex("skill_versions_skill_version_idx").on(t.skillId, t.versionNumber),
-    tenantIdx: index("skill_versions_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("skill_versions_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 
@@ -167,7 +167,7 @@ export const backgroundTasks = agentSchema.table(
   {
     ...idMixin("bgt"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     kind: text("kind").notNull(),
     label: text("label"),
     inngestRunId: text("inngest_run_id").notNull().unique(),
@@ -181,12 +181,12 @@ export const backgroundTasks = agentSchema.table(
     createdByUserId: uuid("created_by_user_id"),
   },
   (t) => ({
-    tenantStatusIdx: index("background_tasks_tenant_status_idx").on(
-      t.tenantId,
+    tenantStatusIdx: index("background_tasks_org_status_idx").on(
+      t.orgId,
       t.workspaceId,
       t.status,
     ),
-    tenantIdx: index("background_tasks_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("background_tasks_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 
@@ -198,7 +198,7 @@ export const approvalRequests = agentSchema.table(
   {
     ...idMixin("apr"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     executionStepId: uuid("execution_step_id"),
     toolCallId: uuid("tool_call_id"),
     messageId: uuid("message_id").notNull(),
@@ -213,12 +213,12 @@ export const approvalRequests = agentSchema.table(
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
   },
   (t) => ({
-    tenantResolutionIdx: index("approval_requests_tenant_resolution_idx").on(
-      t.tenantId,
+    tenantResolutionIdx: index("approval_requests_org_resolution_idx").on(
+      t.orgId,
       t.workspaceId,
       t.resolution,
     ),
-    tenantIdx: index("approval_requests_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("approval_requests_org_idx").on(t.orgId, t.workspaceId),
     messageIdx: index("approval_requests_message_idx").on(t.messageId),
   }),
 );
@@ -229,7 +229,7 @@ export const subagentFanouts = agentSchema.table(
   {
     ...idMixin("fan"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     parentMessageId: uuid("parent_message_id").notNull(),
     inngestEventId: text("inngest_event_id"),
     // CHECK pending|running|completed|partial|timed_out in migration.
@@ -238,7 +238,7 @@ export const subagentFanouts = agentSchema.table(
     completedChildren: integer("completed_children").notNull().default(0),
   },
   (t) => ({
-    tenantIdx: index("subagent_fanouts_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("subagent_fanouts_org_idx").on(t.orgId, t.workspaceId),
     parentMessageIdx: index("subagent_fanouts_parent_message_idx").on(t.parentMessageId),
   }),
 );
@@ -272,7 +272,7 @@ export const planSteps = agentSchema.table(
   {
     ...idMixin("pls"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     executionStepId: uuid("execution_step_id").notNull(),
     planStepKey: text("plan_step_key").notNull(),
     summary: text("summary").notNull(),
@@ -284,10 +284,10 @@ export const planSteps = agentSchema.table(
     status: citext("status").notNull(),
   },
   (t) => ({
-    tenantIdx: index("plan_steps_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("plan_steps_org_idx").on(t.orgId, t.workspaceId),
     executionStepIdx: index("plan_steps_execution_step_idx").on(t.executionStepId),
-    tenantStatusIdx: index("plan_steps_tenant_status_idx").on(
-      t.tenantId,
+    tenantStatusIdx: index("plan_steps_org_status_idx").on(
+      t.orgId,
       t.workspaceId,
       t.status,
     ),
@@ -299,7 +299,7 @@ export const mcpServers = agentSchema.table(
   {
     ...idMixin("mcs"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     name: text("name").notNull(),
     transportType: text("transport_type").notNull(),
     endpointUrl: text("endpoint_url").notNull(),
@@ -310,6 +310,6 @@ export const mcpServers = agentSchema.table(
     discoveredTools: jsonb("discovered_tools").notNull().default(sql`'[]'::jsonb`),
   },
   (t) => ({
-    tenantIdx: index("mcp_servers_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("mcp_servers_org_idx").on(t.orgId, t.workspaceId),
   }),
 );

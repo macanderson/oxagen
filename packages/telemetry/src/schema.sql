@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS execution_logs (
   execution_id UUID,
   step_id UUID,
-  tenant_id UUID,
+  org_id UUID,
   workspace_id UUID,
   log_level LowCardinality(String),
   message String,
@@ -12,18 +12,18 @@ CREATE TABLE IF NOT EXISTS execution_logs (
   created_at DateTime64(3)
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(created_at)
-ORDER BY (tenant_id, execution_id, created_at)
+ORDER BY (org_id, execution_id, created_at)
 TTL toDateTime(created_at) + INTERVAL 90 DAY;
 
 CREATE TABLE IF NOT EXISTS traces (
   trace_id String,
   execution_id UUID,
-  tenant_id UUID,
+  org_id UUID,
   started_at DateTime64(3),
   completed_at Nullable(DateTime64(3))
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(started_at)
-ORDER BY (tenant_id, trace_id, started_at)
+ORDER BY (org_id, trace_id, started_at)
 TTL toDateTime(started_at) + INTERVAL 90 DAY;
 
 CREATE TABLE IF NOT EXISTS spans (
@@ -31,18 +31,18 @@ CREATE TABLE IF NOT EXISTS spans (
   trace_id String,
   parent_span_id Nullable(String),
   span_type LowCardinality(String),
-  tenant_id UUID,
+  org_id UUID,
   started_at DateTime64(3),
   completed_at Nullable(DateTime64(3)),
   metadata String
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(started_at)
-ORDER BY (tenant_id, trace_id, started_at)
+ORDER BY (org_id, trace_id, started_at)
 TTL toDateTime(started_at) + INTERVAL 90 DAY;
 
 CREATE TABLE IF NOT EXISTS events (
   event_id UUID,
-  tenant_id UUID,
+  org_id UUID,
   workspace_id UUID,
   event_type LowCardinality(String),
   source_system LowCardinality(String),
@@ -51,12 +51,12 @@ CREATE TABLE IF NOT EXISTS events (
   emitted_at DateTime64(3)
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(emitted_at)
-ORDER BY (tenant_id, event_type, emitted_at)
+ORDER BY (org_id, event_type, emitted_at)
 TTL toDateTime(emitted_at) + INTERVAL 90 DAY;
 
 CREATE TABLE IF NOT EXISTS api_key_events (
   api_key_id UUID,
-  tenant_id UUID,
+  org_id UUID,
   ip_address IPv6,
   user_agent String,
   request_path String,
@@ -64,12 +64,12 @@ CREATE TABLE IF NOT EXISTS api_key_events (
   created_at DateTime64(3)
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(created_at)
-ORDER BY (tenant_id, api_key_id, created_at)
+ORDER BY (org_id, api_key_id, created_at)
 TTL toDateTime(created_at) + INTERVAL 90 DAY;
 
 CREATE TABLE IF NOT EXISTS token_usage (
   execution_step_id UUID,
-  tenant_id UUID,
+  org_id UUID,
   workspace_id UUID DEFAULT toUUID('00000000-0000-0000-0000-000000000000'),
   model LowCardinality(String),
   provider LowCardinality(String) DEFAULT '',
@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS token_usage (
   created_at DateTime64(3)
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(created_at)
-ORDER BY (tenant_id, created_at, execution_step_id)
+ORDER BY (org_id, created_at, execution_step_id)
 -- Token usage retained longer than raw logs: billing recomputation
 -- and dispute investigation routinely reach beyond 90 days.
 TTL toDateTime(created_at) + INTERVAL 365 DAY;
@@ -93,7 +93,7 @@ TTL toDateTime(created_at) + INTERVAL 365 DAY;
 -- mirror for high-volume agent fanouts.
 CREATE TABLE IF NOT EXISTS tool_invocations (
   invocation_id UUID,
-  tenant_id UUID,
+  org_id UUID,
   workspace_id UUID,
   capability_name LowCardinality(String),
   message_id UUID,
@@ -113,5 +113,5 @@ CREATE TABLE IF NOT EXISTS tool_invocations (
   created_at DateTime64(3)
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(created_at)
-ORDER BY (tenant_id, capability_name, created_at)
+ORDER BY (org_id, capability_name, created_at)
 TTL toDateTime(created_at) + INTERVAL 180 DAY;

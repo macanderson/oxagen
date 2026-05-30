@@ -31,7 +31,7 @@ export async function agentApprovalResolveHandler(
     .where(
       and(
         eq(schema.approvalRequests.id, input.approvalId),
-        eq(schema.approvalRequests.tenantId, ctx.tenantId),
+        eq(schema.approvalRequests.orgId, ctx.orgId),
         sql`${schema.approvalRequests.expiresAt} > now()`,
         sql`${schema.approvalRequests.resolution} IS NULL`,
       ),

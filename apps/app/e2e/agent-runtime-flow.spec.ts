@@ -29,14 +29,14 @@ let fixture: AgentRuntimeFixture;
 test.describe("agent runtime end-to-end", () => {
   test.beforeAll(async () => {
     fixture = await setupAgentRuntimeFixture({
-      tenantSlug: TENANT_SLUG,
+      orgSlug: TENANT_SLUG,
       workspaceSlug: WORKSPACE_SLUG,
       userEmail: USER_EMAIL,
     });
   });
 
   test.afterAll(async () => {
-    await teardownFixture({ tenantSlug: TENANT_SLUG });
+    await teardownFixture({ orgSlug: TENANT_SLUG });
   });
 
   test("plan → approve → fanout → sandbox → memory write", async ({

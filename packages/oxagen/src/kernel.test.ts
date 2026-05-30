@@ -13,7 +13,7 @@ import {
 } from "./kernel.js";
 
 const ctx: CapabilityContext = {
-  tenantId: "t",
+  orgId: "t",
   workspaceId: "w",
   userId: "u",
   apiKeyId: null,

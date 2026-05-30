@@ -35,7 +35,7 @@ describe("memory neo4j", () => {
       ],
     });
     const rows = await recallMemories({
-      tenantId: "ten_1",
+      orgId: "ten_1",
       workspaceId: "ws_1",
       embedding: new Array(1536).fill(0.1),
       minWeight: "high",
@@ -44,11 +44,11 @@ describe("memory neo4j", () => {
     expect(sessionRun).toHaveBeenCalledTimes(1);
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
     expect(cypher).toContain("agent_memory_embedding");
-    expect(cypher).toContain("tenantId");
+    expect(cypher).toContain("orgId");
     expect(cypher).toContain("workspaceId");
     expect(cypher).toContain("$minRank");
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(params.tenantId).toBe("ten_1");
+    expect(params.orgId).toBe("ten_1");
     expect(params.workspaceId).toBe("ws_1");
     expect(params.minRank).toBe(1);
     expect(rows).toHaveLength(1);
@@ -62,7 +62,7 @@ describe("memory neo4j", () => {
       records: [fakeRecord({ id: "m_new" })],
     });
     const res = await writeMemory({
-      tenantId: "ten_1",
+      orgId: "ten_1",
       workspaceId: "ws_1",
       nodeRef: "Function:foo",
       embedding: new Array(1536).fill(0.2),
@@ -74,7 +74,7 @@ describe("memory neo4j", () => {
     expect(res.memoryId).toBe("m_new");
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
     expect(cypher).toContain("MERGE (m:AgentMemory");
-    expect(cypher).toContain("tenantId: $tenantId");
+    expect(cypher).toContain("orgId: $orgId");
     expect(cypher).toContain("nodeRef: $nodeRef");
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(params.lesson).toBe("be careful");

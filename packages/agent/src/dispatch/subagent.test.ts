@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   txInsertCalls: [] as Array<{ table: string; values: unknown }>,
-  fanoutRow: { id: "fan_123", tenantId: "ten_1", status: "pending" },
+  fanoutRow: { id: "fan_123", orgId: "ten_1", status: "pending" },
   runsRows: [] as Array<Record<string, unknown>>,
   inngestSend: vi.fn(async () => undefined),
   limitFanout: vi.fn(),
@@ -38,7 +38,7 @@ vi.mock("@oxagen/database", () => ({
     }),
   }),
   schema: {
-    subagentFanouts: { _name: "subagentFanouts", id: "id", tenantId: "tenantId" },
+    subagentFanouts: { _name: "subagentFanouts", id: "id", orgId: "orgId" },
     subagentRuns: { _name: "subagentRuns", fanoutId: "fanoutId" },
   },
 }));
@@ -68,7 +68,7 @@ describe("subagent dispatch", () => {
 
   it("dispatchFanout inserts fanout + child rows in one batch and sends Inngest event", async () => {
     const res = await dispatchFanout({
-      tenantId: "ten_1",
+      orgId: "ten_1",
       workspaceId: "ws_1",
       parentMessageId: "msg_parent",
       children: [
@@ -93,7 +93,7 @@ describe("subagent dispatch", () => {
     const evt = calls[0]![0];
     expect(evt.name).toBe("agent/subagent.dispatch");
     expect(evt.data.fanoutId).toBe("fan_123");
-    expect(evt.data.tenantId).toBe("ten_1");
+    expect(evt.data.orgId).toBe("ten_1");
   });
 
   it("readFanout returns current state when fanout exists", async () => {

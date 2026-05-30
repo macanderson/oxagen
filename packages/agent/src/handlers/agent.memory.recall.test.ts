@@ -25,7 +25,7 @@ vi.mock("../memory/neo4j.js", () => ({ recallMemories: mocks.recallMemoriesMock 
 import { agentMemoryRecallHandler } from "./agent.memory.recall.js";
 
 const CTX = {
-  tenantId: "ten_1",
+  orgId: "ten_1",
   workspaceId: "ws_1",
   userId: "u_1",
   apiKeyId: null,
@@ -46,7 +46,7 @@ describe("agent.memory.recall handler", () => {
     expect(mocks.embedTextMock).toHaveBeenCalledWith("find me");
     expect(mocks.recallMemoriesMock).toHaveBeenCalledTimes(1);
     const arg = mocks.recallMemoriesMock.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(arg.tenantId).toBe("ten_1");
+    expect(arg.orgId).toBe("ten_1");
     expect(arg.workspaceId).toBe("ws_1");
     expect(arg.minWeight).toBe("high");
     expect(arg.limit).toBe(5);

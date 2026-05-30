@@ -28,7 +28,7 @@ export const billingRollupUsage = inngest.createFunction(
     // where Date is required.
     type SubRow = {
       id: string;
-      tenantId: string;
+      orgId: string;
       currentPeriodStart: string;
       currentPeriodEnd: string;
     };
@@ -47,7 +47,7 @@ export const billingRollupUsage = inngest.createFunction(
             : inArray(schema.subscriptions.status, ACTIVE_STATUSES),
           columns: {
             id: true,
-            tenantId: true,
+            orgId: true,
             currentPeriodStart: true,
             currentPeriodEnd: true,
           },
@@ -62,7 +62,7 @@ export const billingRollupUsage = inngest.createFunction(
           const periodStart = new Date(sub.currentPeriodStart);
           const periodEnd = new Date(sub.currentPeriodEnd);
           const usage = await sumTokenUsage({
-            tenantId: sub.tenantId,
+            orgId: sub.orgId,
             periodStart,
             periodEnd,
           });
@@ -72,7 +72,7 @@ export const billingRollupUsage = inngest.createFunction(
             .insert(schema.usageRecords)
             .values(
               usage.map((u) => ({
-                tenantId: sub.tenantId,
+                orgId: sub.orgId,
                 subscriptionId: sub.id,
                 metric: u.metric,
                 quantity: String(u.quantity),

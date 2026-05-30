@@ -1,6 +1,6 @@
 import { boolean, customType, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { authSchema } from "./_schemas.js";
-import { auditMixin, citext, idMixin, softDeleteMixin, tenantScopeMixin } from "./_mixins.js";
+import { auditMixin, citext, idMixin, softDeleteMixin, orgScopeMixin } from "./_mixins.js";
 
 // bytea for encrypted_payload — Drizzle has no first-class bytea helper, so
 // we declare it inline. KMS unwraps the payload at the credential service
@@ -39,7 +39,7 @@ export const credentials = authSchema.table(
   {
     ...idMixin("crd"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     ...softDeleteMixin(),
     provider: text("provider").notNull(),
     credentialType: text("credential_type").notNull(),
@@ -49,8 +49,8 @@ export const credentials = authSchema.table(
     lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
   },
   (t) => ({
-    tenantIdx: index("credentials_tenant_idx").on(t.tenantId, t.workspaceId),
-    providerIdx: index("credentials_provider_idx").on(t.tenantId, t.provider),
+    orgIdx: index("credentials_org_idx").on(t.orgId, t.workspaceId),
+    providerIdx: index("credentials_provider_idx").on(t.orgId, t.provider),
   }),
 );
 
@@ -59,7 +59,7 @@ export const apiKeys = authSchema.table(
   {
     ...idMixin("aky"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     ...softDeleteMixin(),
     keyPrefix: text("key_prefix").notNull(),
     keyHash: text("key_hash").notNull(),
@@ -70,7 +70,7 @@ export const apiKeys = authSchema.table(
   },
   (t) => ({
     keyPrefixIdx: uniqueIndex("api_keys_key_prefix_idx").on(t.keyPrefix),
-    tenantIdx: index("api_keys_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("api_keys_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 

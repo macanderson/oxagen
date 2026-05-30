@@ -27,9 +27,9 @@ describe("workspace.create capability", () => {
       publicId: "wrk_abc",
       name: "Default",
       slug: "default",
-      tenantSlug: "acme",
+      orgSlug: "acme",
       createdAt: new Date().toISOString(),
     });
-    expect(parsed.tenantSlug).toBe("acme");
+    expect(parsed.orgSlug).toBe("acme");
   });
 });

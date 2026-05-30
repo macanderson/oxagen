@@ -21,7 +21,7 @@ async function emit(level: "info" | "error", h: HookContext, message: string): P
       {
         execution_id: h.executionId ?? h.ctx.requestId,
         step_id: h.stepId ?? "",
-        tenant_id: h.ctx.tenantId,
+        org_id: h.ctx.orgId,
         workspace_id: h.ctx.workspaceId,
         log_level: level === "error" ? "error" : "info",
         message,

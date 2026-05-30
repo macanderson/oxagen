@@ -9,7 +9,7 @@ import type { AppEnv } from "../app.js";
  * Resolves the caller via Better Auth session cookie or `Authorization:
  * Bearer <api-key>` header. The two paths produce different scope
  * primitives — a user session is tenant-agnostic until tenantMiddleware
- * picks a tenant; an API key is bound to (tenant_id, workspace_id) at
+ * picks a tenant; an API key is bound to (org_id, workspace_id) at
  * issuance and short-circuits later scoping.
  */
 export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
@@ -62,7 +62,7 @@ async function authenticateApiKey(c: Parameters<MiddlewareHandler<AppEnv>>[0], r
     columns: {
       id: true,
       keyHash: true,
-      tenantId: true,
+      orgId: true,
       workspaceId: true,
       expiresAt: true,
     },
@@ -76,6 +76,6 @@ async function authenticateApiKey(c: Parameters<MiddlewareHandler<AppEnv>>[0], r
   c.set("apiKeyId", row.id);
   // API keys pre-bind scope; downstream tenant/workspace middleware reads
   // these and skips slug resolution.
-  c.set("tenantId", row.tenantId);
+  c.set("orgId", row.orgId);
   c.set("workspaceId", row.workspaceId);
 }

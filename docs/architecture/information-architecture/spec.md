@@ -364,14 +364,23 @@ Single cause per Trigger in v2. Multi-cause is a future enhancement (`cause` →
 
 ### Capability invocation boundary
 
-Every contract call passes through `withCapabilityCheck(principal, capability, scope)`. No alternate path. If a contract ships without the wrapper, CI fails. This boundary IS the IAM enforcement.
+Every contract call passes through `contract.invoke(rawCtx, input)`. No alternate path. The handler is captured inside `defineContract()` and unreachable from outside — enforcement is structural, not a wrapper that can be omitted. A lightweight CI guard confirms each `defineContract` call is exported in its package's `contracts` array; there is nothing else to guard.
 
 ```ts
-withCapabilityCheck({
-  principal,
-  capability,
-  scope: { kind: 'workspace', orgId, workspaceId },
-})
+// packages/oxagen/src/contracts/organization.create.ts
+export const organizationCreate = defineContract({
+  id: "organization.create",
+  domain: "organization",
+  sensitivity: "high",
+  defaultEffect: "deny",
+  defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
+  input: z.object({ ... }),
+  output: z.object({ ... }),
+  handler: async (ctx, input) => { /* … */ },
+});
+
+// call site (server action)
+await organizationCreate.invoke(rawCtx, input);
 ```
 
 ### Audit event
@@ -454,7 +463,7 @@ Workspace roles use exactly these three labels — **Owner**, **Member**, **View
 
 ## 12. Resolution order
 
-When `withCapabilityCheck(principal, capability, scope)` evaluates a request:
+When `contract.invoke(rawCtx, input)` evaluates a request (via the pure `resolve()` function in `packages/oxagen/src/iam/resolve.ts`):
 
 ```
 1. workspace deny             (explicit, in this workspace)        → DENY
@@ -606,3 +615,6 @@ When a decision in this document changes:
 
 - 2026-05-29 — Initial specification consolidated from product discussion.
 - 2026-05-29 — Org roles cleaned up to single-word labels: `Owner / Admin / Compliance / Billing` (was `Owner / Admin / Security Admin`). Mirrors Google Workspace, Vercel, Linear, Notion conventions.
+- 2026-05-29 — Production URL convention: until oxagen.ai launches, prod uses the vercel.app domains (`https://oxagen-v2-app.vercel.app`, `https://oxagen-v2-website.vercel.app`, `https://oxagen-v2-api.vercel.app`, `https://oxagen-v2-admin.vercel.app`). All URL values live in env vars; never hard-coded.
+- 2026-05-29 — Google OAuth scope locked to `openid profile email`. The `hd` claim from the Google ID token is captured to `users.orgDomain` so the app can detect Google Workspace accounts and prefill organization name on signup.
+- 2026-05-30 — Capability invocation boundary updated: `withCapabilityCheck` removed; enforcement is now structural via `defineContract()` + `contract.invoke()`. §9 and §12 updated accordingly. See `docs/architecture/iam/plan.md` for the full design.

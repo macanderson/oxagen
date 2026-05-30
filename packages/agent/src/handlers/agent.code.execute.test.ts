@@ -28,7 +28,7 @@ vi.mock("@oxagen/telemetry", () => ({
 import { agentCodeExecuteHandler } from "./agent.code.execute.js";
 
 const CTX = {
-  tenantId: "ten_1",
+  orgId: "ten_1",
   workspaceId: "ws_1",
   userId: "u_1",
   apiKeyId: null,
@@ -65,7 +65,7 @@ describe("agent.code.execute handler", () => {
     );
     expect(applyPolicyMock).toHaveBeenCalledTimes(1);
     const reqArg = applyPolicyMock.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(reqArg.tenantId).toBe("ten_1");
+    expect(reqArg.orgId).toBe("ten_1");
     expect(reqArg.workspaceId).toBe("ws_1");
     expect(sandboxRun).toHaveBeenCalledTimes(1);
     expect(res.stdout).toBe("ok");
@@ -75,7 +75,7 @@ describe("agent.code.execute handler", () => {
     const calls = insertToolInvocationMock.mock.calls as unknown as Array<[Record<string, unknown>]>;
     const row = calls[0]![0];
     expect(row.capability_name).toBe("agent.code.execute");
-    expect(row.tenant_id).toBe("ten_1");
+    expect(row.org_id).toBe("ten_1");
     expect(row.workspace_id).toBe("ws_1");
     expect(row.risk_level).toBe("high");
   });

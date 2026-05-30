@@ -1,13 +1,13 @@
 import { bigint, index, jsonb, text, timestamp, uuid, boolean } from "drizzle-orm/pg-core";
 import { integrationSchema } from "./_schemas.js";
-import { auditMixin, executionStatusMixin, idMixin, softDeleteMixin, tenantScopeMixin } from "./_mixins.js";
+import { auditMixin, executionStatusMixin, idMixin, softDeleteMixin, orgScopeMixin } from "./_mixins.js";
 
 export const connections = integrationSchema.table(
   "connections",
   {
     ...idMixin("con"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     ...softDeleteMixin(),
     provider: text("provider").notNull(),
     displayName: text("display_name").notNull(),
@@ -18,8 +18,8 @@ export const connections = integrationSchema.table(
     config: jsonb("config").notNull(),
   },
   (t) => ({
-    tenantIdx: index("connections_tenant_idx").on(t.tenantId, t.workspaceId),
-    providerIdx: index("connections_provider_idx").on(t.tenantId, t.provider),
+    orgIdx: index("connections_org_idx").on(t.orgId, t.workspaceId),
+    providerIdx: index("connections_provider_idx").on(t.orgId, t.provider),
   }),
 );
 

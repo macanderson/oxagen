@@ -5,7 +5,7 @@ import { pgSchema } from "drizzle-orm/pg-core";
 // foreign-key shortcuts inside table builders; the relations file ties
 // things together.
 export const authSchema = pgSchema("auth");
-export const organizationSchema = pgSchema("organization");
+export const orgSchema = pgSchema("org");
 export const workspaceSchema = pgSchema("workspace");
 export const integrationSchema = pgSchema("integration");
 export const agentSchema = pgSchema("agent");

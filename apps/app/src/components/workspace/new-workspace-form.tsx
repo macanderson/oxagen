@@ -9,7 +9,7 @@ export interface NewWorkspaceAction {
   (formData: FormData): Promise<{ ok: true; workspaceSlug: string } | { ok: false; error: string }>;
 }
 
-export function NewWorkspaceForm({ tenantSlug, action }: { tenantSlug: string; action: NewWorkspaceAction }) {
+export function NewWorkspaceForm({ orgSlug, action }: { orgSlug: string; action: NewWorkspaceAction }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -24,7 +24,7 @@ export function NewWorkspaceForm({ tenantSlug, action }: { tenantSlug: string; a
         setError(res.error);
         return;
       }
-      router.push(`/${tenantSlug}/${res.workspaceSlug}`);
+      router.push(`/${orgSlug}/${res.workspaceSlug}`);
       router.refresh();
     });
   };

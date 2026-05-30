@@ -6,7 +6,7 @@ export const billingSubscriptionUpgradeStartHandler: CapabilityHandler<
   typeof billingSubscriptionUpgradeStart
 > = async (input, ctx) => {
   const { url } = await createCheckoutSession({
-    tenantId: ctx.tenantId,
+    orgId: ctx.orgId,
     planSlug: input.planSlug,
     interval: input.interval,
     successUrl: input.successUrl,

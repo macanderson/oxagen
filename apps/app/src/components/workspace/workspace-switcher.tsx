@@ -18,11 +18,11 @@ export interface WorkspaceOption {
 }
 
 export function WorkspaceSwitcher({
-  tenantSlug,
+  orgSlug,
   current,
   workspaces,
 }: {
-  tenantSlug: string;
+  orgSlug: string;
   current: WorkspaceOption;
   workspaces: WorkspaceOption[];
 }) {
@@ -40,14 +40,14 @@ export function WorkspaceSwitcher({
         {workspaces.map((w) => (
           <DropdownMenuItem
             key={w.publicId}
-            onSelect={() => router.push(`/${tenantSlug}/${w.slug}`)}
+            onSelect={() => router.push(`/${orgSlug}/${w.slug}`)}
           >
             <span className="flex-1">{w.name}</span>
             {w.publicId === current.publicId ? <Check className="h-3.5 w-3.5" /> : null}
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => router.push(`/${tenantSlug}/settings/members`)}>
+        <DropdownMenuItem onSelect={() => router.push(`/${orgSlug}/settings/members`)}>
           <Plus className="h-3.5 w-3.5" /> New workspace
         </DropdownMenuItem>
       </DropdownMenuContent>

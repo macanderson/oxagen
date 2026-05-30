@@ -37,7 +37,7 @@ export async function agentPlanApproveHandler(
     .update(schema.planSteps)
     .set({ status })
     .where(
-      and(eq(schema.planSteps.id, input.planId), eq(schema.planSteps.tenantId, ctx.tenantId)),
+      and(eq(schema.planSteps.id, input.planId), eq(schema.planSteps.orgId, ctx.orgId)),
     );
   // PG NOTIFY so a paused stream listening for this plan can resume.
   await db().execute(

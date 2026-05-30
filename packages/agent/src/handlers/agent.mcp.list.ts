@@ -31,7 +31,7 @@ export async function agentMcpListHandler(
     .from(schema.mcpServers)
     .where(
       and(
-        eq(schema.mcpServers.tenantId, ctx.tenantId),
+        eq(schema.mcpServers.orgId, ctx.orgId),
         eq(schema.mcpServers.workspaceId, ctx.workspaceId),
       ),
     );

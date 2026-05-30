@@ -13,7 +13,7 @@ vi.mock("@oxagen/telemetry", () => ({
 import { beforeTool, afterTool, onError } from "./runtime.js";
 
 const CTX = {
-  tenantId: "ten_1",
+  orgId: "ten_1",
   workspaceId: "ws_1",
   userId: "u_1",
   apiKeyId: null,
@@ -31,7 +31,7 @@ describe("hooks runtime", () => {
     expect(mocks.insertExecutionLogsMock).toHaveBeenCalledTimes(1);
     const row = (mocks.insertExecutionLogsMock.mock.calls[0]?.[0] as Array<Record<string, unknown>>)[0]!;
     expect(row.log_level).toBe("info");
-    expect(row.tenant_id).toBe("ten_1");
+    expect(row.org_id).toBe("ten_1");
     expect(row.workspace_id).toBe("ws_1");
   });
 

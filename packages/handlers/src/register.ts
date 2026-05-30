@@ -6,8 +6,8 @@ import { registerHandler, type CapabilityHandlerFn } from "@oxagen/oxagen/kernel
 // in Stripe / Drizzle until a capability is actually invoked.
 
 registerHandler(
-  "tenant.create",
-  async () => (await import("./tenant.create.js")).tenantCreateHandler as CapabilityHandlerFn,
+  "organization.create",
+  async () => (await import("./organization.create.js")).organizationCreateHandler as CapabilityHandlerFn,
 );
 registerHandler(
   "workspace.create",

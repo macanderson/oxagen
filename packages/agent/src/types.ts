@@ -2,7 +2,7 @@
 // cycle. The shape is structurally identical so handlers in either
 // package interop without an adapter.
 export interface CapabilityContext {
-  tenantId: string;
+  orgId: string;
   workspaceId: string;
   userId: string | null;
   apiKeyId: string | null;

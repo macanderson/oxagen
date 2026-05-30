@@ -62,7 +62,7 @@ export type CapabilityHandler<C extends CapabilityDeclaration> = (
 ) => Promise<z.infer<C["output"]>>;
 
 export interface CapabilityContext {
-  tenantId: string;
+  orgId: string;
   workspaceId: string;
   userId: string | null;
   apiKeyId: string | null;

@@ -8,7 +8,7 @@ export interface SandboxRequest {
   timeoutMs: number;
   memoryMb: number;
   network: "allow" | "deny";
-  tenantId: string;
+  orgId: string;
   workspaceId: string;
 }
 

@@ -1,25 +1,25 @@
 import type { ReactNode } from "react";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
-import type { ResolvedTenant, ResolvedWorkspace } from "@/lib/resolve-tenant";
+import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
 
 export interface AppShellProps {
-  tenant: ResolvedTenant;
+  org: ResolvedOrg;
   workspace?: ResolvedWorkspace;
-  availableTenants: { publicId: string; slug: string; name: string }[];
+  availableOrgs: { publicId: string; slug: string; name: string }[];
   availableWorkspaces?: { publicId: string; slug: string; name: string }[];
   children: ReactNode;
 }
 
-export function AppShell({ tenant, workspace, availableTenants, availableWorkspaces, children }: AppShellProps) {
+export function AppShell({ org, workspace, availableOrgs, availableWorkspaces, children }: AppShellProps) {
   return (
     <div className="flex h-dvh w-full overflow-hidden">
-      <Sidebar tenantSlug={tenant.slug} workspaceSlug={workspace?.slug} />
+      <Sidebar orgSlug={org.slug} workspaceSlug={workspace?.slug} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
-          tenant={tenant}
+          org={org}
           workspace={workspace}
-          availableTenants={availableTenants}
+          availableOrgs={availableOrgs}
           availableWorkspaces={availableWorkspaces}
         />
         <main className="flex-1 overflow-y-auto p-6">{children}</main>

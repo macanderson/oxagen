@@ -92,7 +92,7 @@ async function upsertPaymentMethod(event: Stripe.Event): Promise<void> {
   const d = db();
   const sub = await d.query.subscriptions.findFirst({
     where: eq(schema.subscriptions.stripeCustomerId, customerId),
-    columns: { tenantId: true },
+    columns: { orgId: true },
   });
   if (!sub) return;
 
@@ -107,7 +107,7 @@ async function upsertPaymentMethod(event: Stripe.Event): Promise<void> {
   await d
     .insert(schema.paymentMethods)
     .values({
-      tenantId: sub.tenantId,
+      orgId: sub.orgId,
       stripeCustomerId: customerId,
       stripePaymentMethodId: pm.id,
       type: pm.type,

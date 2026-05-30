@@ -11,7 +11,7 @@ const valuesMock = vi.fn((v: unknown) => {
 });
 const insertMock = vi.fn(() => ({ values: valuesMock }));
 
-const limitMock = vi.fn(async () => [{ id: "appr_123", tenantId: "ten_1" }]);
+const limitMock = vi.fn(async () => [{ id: "appr_123", orgId: "ten_1" }]);
 const whereMock = vi.fn(() => ({ limit: limitMock }));
 const fromMock = vi.fn(() => ({ where: whereMock }));
 const selectMock = vi.fn(() => ({ from: fromMock }));
@@ -27,7 +27,7 @@ vi.mock("@oxagen/database", () => ({
   schema: {
     approvalRequests: {
       id: "id",
-      tenantId: "tenantId",
+      orgId: "orgId",
       expiresAt: "expiresAt",
       resolution: "resolution",
     },
@@ -68,7 +68,7 @@ describe("approval runtime", () => {
   it("createApprovalRequest inserts row with computed expiresAt", async () => {
     const before = Date.now();
     const res = await createApprovalRequest({
-      tenantId: "ten_1",
+      orgId: "ten_1",
       workspaceId: "ws_1",
       messageId: "msg_1",
       capabilityName: "agent.code.execute",
@@ -132,12 +132,12 @@ describe("approval runtime", () => {
     }
   });
 
-  it("readApproval shapes select with id + tenantId filters", async () => {
+  it("readApproval shapes select with id + orgId filters", async () => {
     const row = await readApproval("appr_1", "ten_1");
     expect(selectMock).toHaveBeenCalledTimes(1);
     expect(fromMock).toHaveBeenCalledTimes(1);
     expect(whereMock).toHaveBeenCalledTimes(1);
     expect(limitMock).toHaveBeenCalledTimes(1);
-    expect(row).toEqual({ id: "appr_123", tenantId: "ten_1" });
+    expect(row).toEqual({ id: "appr_123", orgId: "ten_1" });
   });
 });

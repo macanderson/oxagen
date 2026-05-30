@@ -47,3 +47,5 @@ Use the architecture folder for *durable* design docs. Use ADRs to record *decis
 |---|---|
 | [`information-architecture/`](./information-architecture/spec.md) | Spec'd |
 | [`application-shell/`](./application-shell/spec.md) | Spec'd |
+| [`command-menu/`](./command-menu/spec.md) | Spec'd |
+| [`iam/`](./iam/plan.md) | Spec'd in IA · Wave 1 plan ready · OXA-1388/1389/1390 created |

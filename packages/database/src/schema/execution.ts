@@ -1,14 +1,14 @@
 import { bigint, index, integer, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { executionSchema } from "./_schemas.js";
-import { auditMixin, executionStatusMixin, idMixin, tenantScopeMixin } from "./_mixins.js";
+import { auditMixin, executionStatusMixin, idMixin, orgScopeMixin } from "./_mixins.js";
 
 export const executions = executionSchema.table(
   "executions",
   {
     ...idMixin("exe"),
     ...executionStatusMixin(),
-    tenantId: uuid("tenant_id").notNull(),
+    orgId: uuid("org_id").notNull(),
     workspaceId: uuid("workspace_id").notNull(),
     playbookVersionId: uuid("playbook_version_id").notNull(),
     triggerEventId: uuid("trigger_event_id"),
@@ -22,7 +22,7 @@ export const executions = executionSchema.table(
     failureReason: text("failure_reason"),
   },
   (t) => ({
-    tenantIdx: index("executions_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("executions_org_idx").on(t.orgId, t.workspaceId),
     statusIdx: index("executions_status_idx").on(t.status),
     startedAtIdx: index("executions_started_at_idx").on(t.startedAt),
     playbookVersionIdx: index("executions_playbook_version_idx").on(t.playbookVersionId),
@@ -80,7 +80,7 @@ export const executionArtifacts = executionSchema.table(
   {
     ...idMixin("arf"),
     ...auditMixin(),
-    ...tenantScopeMixin(),
+    ...orgScopeMixin(),
     executionId: uuid("execution_id").notNull(),
     artifactType: text("artifact_type").notNull(),
     documentId: uuid("document_id"),
@@ -89,7 +89,7 @@ export const executionArtifacts = executionSchema.table(
   },
   (t) => ({
     executionIdx: index("execution_artifacts_execution_idx").on(t.executionId),
-    tenantIdx: index("execution_artifacts_tenant_idx").on(t.tenantId, t.workspaceId),
+    orgIdx: index("execution_artifacts_org_idx").on(t.orgId, t.workspaceId),
     documentIdx: index("execution_artifacts_document_idx").on(t.documentId),
   }),
 );

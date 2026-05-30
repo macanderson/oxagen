@@ -34,7 +34,7 @@ export async function agentSkillLoadHandler(
     .where(
       and(
         eq(schema.skills.slug, input.slug),
-        eq(schema.skills.tenantId, ctx.tenantId),
+        eq(schema.skills.orgId, ctx.orgId),
         eq(schema.skills.workspaceId, ctx.workspaceId),
       ),
     )

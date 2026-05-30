@@ -11,7 +11,7 @@ export default defineConfig({
   },
   schemaFilter: [
     "auth",
-    "organization",
+    "org",
     "workspace",
     "integration",
     "agent",

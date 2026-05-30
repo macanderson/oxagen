@@ -6,10 +6,10 @@ import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
 import { loadEnv } from "@oxagen/config/env";
 import { getSession } from "@/lib/session";
-import { resolveTenant } from "@/lib/resolve-tenant";
+import { resolveOrg } from "@/lib/resolve-org";
 
 const BodySchema = z.object({
-  tenantSlug: z.string(),
+  orgSlug: z.string(),
   planSlug: z.string(),
   interval: z.enum(["month", "year"]),
 });
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const body = BodySchema.safeParse(await req.json().catch(() => ({})));
   if (!body.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
-  const tenant = await resolveTenant(body.data.tenantSlug);
+  const tenant = await resolveOrg(body.data.orgSlug);
   const tables = schema as unknown as Record<string, any>;
   if (!tables.plans) return NextResponse.json({ error: "Billing not configured" }, { status: 503 });
 
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
           .from(tables.subscriptions)
           .where(
             and(
-              eq(tables.subscriptions.tenantId, tenant.id),
+              eq(tables.subscriptions.orgId, tenant.id),
               sql`${tables.subscriptions.status} in ('active','trialing','past_due')`,
             ),
           )
@@ -57,11 +57,11 @@ export async function POST(req: Request) {
     line_items: [{ price: priceId, quantity: 1 }],
     customer: existingSub?.stripeCustomerId,
     customer_email: existingSub ? undefined : session.user.email,
-    success_url: `${env.NEXT_PUBLIC_APP_URL}/${body.data.tenantSlug}/settings/billing?status=success`,
-    cancel_url: `${env.NEXT_PUBLIC_APP_URL}/${body.data.tenantSlug}/settings/billing?status=canceled`,
+    success_url: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/settings/billing?status=success`,
+    cancel_url: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/settings/billing?status=canceled`,
     client_reference_id: tenant.id,
-    metadata: { tenantId: tenant.id, planId: plan.id, interval: body.data.interval },
-    subscription_data: { metadata: { tenantId: tenant.id, planId: plan.id } },
+    metadata: { orgId: tenant.id, planId: plan.id, interval: body.data.interval },
+    subscription_data: { metadata: { orgId: tenant.id, planId: plan.id } },
   });
 
   if (!stripeSession.url) return NextResponse.json({ error: "No checkout URL" }, { status: 500 });

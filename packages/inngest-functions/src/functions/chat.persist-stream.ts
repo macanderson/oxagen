@@ -16,7 +16,7 @@ export const chatPersistStream = inngest.createFunction(
   { id: "chat.persist-stream", retries: 3 },
   { event: "chat/message.streamed" },
   async ({ event, step }) => {
-    const { tenantId, assistantMessageId, content, tokenUsage } = event.data;
+    const { orgId, assistantMessageId, content, tokenUsage } = event.data;
 
     await step.run("update-message", async () => {
       const d = db();
@@ -38,7 +38,7 @@ export const chatPersistStream = inngest.createFunction(
           values: [
             {
               execution_step_id: assistantMessageId,
-              tenant_id: tenantId,
+              org_id: orgId,
               model: tokenUsage.model,
               input_tokens: tokenUsage.inputTokens,
               output_tokens: tokenUsage.outputTokens,

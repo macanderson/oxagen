@@ -60,15 +60,15 @@ export const auditMixin = () => ({
   updatedByUserId: uuid("updated_by_user_id"),
 });
 
-/** soft_delete_mixin — hard deletes prohibited on tenant-scoped tables. */
+/** soft_delete_mixin — hard deletes prohibited on org-scoped tables. */
 export const softDeleteMixin = () => ({
   deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
   deletedByUserId: uuid("deleted_by_user_id"),
 });
 
-/** tenant_scope_mixin — required on every tenant-owned table. */
-export const tenantScopeMixin = () => ({
-  tenantId: uuid("tenant_id").notNull(),
+/** org_scope_mixin — required on every org-owned table. */
+export const orgScopeMixin = () => ({
+  orgId: uuid("org_id").notNull(),
   workspaceId: uuid("workspace_id").notNull(),
 });
 

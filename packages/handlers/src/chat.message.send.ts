@@ -28,7 +28,7 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
       const [conv] = await tx
         .insert(schema.conversations)
         .values({
-          tenantId: ctx.tenantId,
+          orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
           userId: ctx.userId!,
           agentVersionId: input.agentVersionId,
@@ -46,7 +46,7 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
       const exists = await tx.query.conversations.findFirst({
         where: and(
           eq(schema.conversations.id, conversationId),
-          eq(schema.conversations.tenantId, ctx.tenantId),
+          eq(schema.conversations.orgId, ctx.orgId),
         ),
         columns: { id: true },
       });
@@ -57,7 +57,7 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
     const [userMessage] = await tx
       .insert(schema.messages)
       .values({
-        tenantId: ctx.tenantId,
+        orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
         conversationId,
         parentMessageId: input.parentMessageId,
@@ -79,7 +79,7 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
     const [assistantMessage] = await tx
       .insert(schema.messages)
       .values({
-        tenantId: ctx.tenantId,
+        orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
         conversationId,
         parentMessageId: userMessage.id,

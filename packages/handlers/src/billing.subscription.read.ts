@@ -14,7 +14,7 @@ export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSub
     // balance. No N+1 — three indexed lookups, all bounded result sets.
     const sub = await d.query.subscriptions.findFirst({
       where: and(
-        eq(schema.subscriptions.tenantId, ctx.tenantId),
+        eq(schema.subscriptions.orgId, ctx.orgId),
         inArray(schema.subscriptions.status, ACTIVE_STATUSES),
       ),
       columns: {
@@ -39,7 +39,7 @@ export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSub
       : null;
 
     const balance = await d.query.creditBalances.findFirst({
-      where: eq(schema.creditBalances.tenantId, ctx.tenantId),
+      where: eq(schema.creditBalances.orgId, ctx.orgId),
       columns: { balanceCents: true },
     });
 
@@ -56,7 +56,7 @@ export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSub
     if (sub) {
       try {
         const rollup = await sumTokenUsage({
-          tenantId: ctx.tenantId,
+          orgId: ctx.orgId,
           periodStart: sub.currentPeriodStart,
           periodEnd: sub.currentPeriodEnd,
         });

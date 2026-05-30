@@ -28,7 +28,7 @@ export async function agentTaskBackgroundReadHandler(
     .where(
       and(
         eq(schema.backgroundTasks.publicId, input.taskId),
-        eq(schema.backgroundTasks.tenantId, ctx.tenantId),
+        eq(schema.backgroundTasks.orgId, ctx.orgId),
         eq(schema.backgroundTasks.workspaceId, ctx.workspaceId),
       ),
     )

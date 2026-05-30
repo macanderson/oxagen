@@ -27,7 +27,7 @@ export async function agentPlanCreateHandler(
 ): Promise<AgentPlanCreateOutput> {
   // Insert plan steps as pending; the approval row is the gate.
   const planRows = input.steps.map((s) => ({
-    tenantId: ctx.tenantId,
+    orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
     executionStepId: ctx.requestId,
     planStepKey: s.id,
@@ -44,7 +44,7 @@ export async function agentPlanCreateHandler(
     .returning({ id: schema.planSteps.id });
   const planId = inserted[0]?.id ?? ctx.requestId;
   await createApprovalRequest({
-    tenantId: ctx.tenantId,
+    orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
     messageId: input.parentMessageId,
     capabilityName: "agent.plan.create",

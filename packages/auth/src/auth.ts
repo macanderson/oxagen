@@ -33,6 +33,10 @@ export const auth = betterAuth({
     },
     additionalFields: {
       status: { type: "string", required: false, defaultValue: "active" },
+      // `hd` is the hosted-domain claim Google includes in the ID token for
+      // Google Workspace accounts. Capturing it lets us detect Workspace users
+      // and prefill organization name on signup (e.g. "acme.com" → "Acme").
+      orgDomain: { type: "string", required: false },
     },
   },
   emailAndPassword: {
@@ -43,7 +47,16 @@ export const auth = betterAuth({
   socialProviders: {
     google:
       env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
-        ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
+        ? {
+            clientId: env.GOOGLE_CLIENT_ID,
+            clientSecret: env.GOOGLE_CLIENT_SECRET,
+            // Explicit minimal scopes — prevents Google Cloud Console pre-authorized
+            // scopes from silently expanding the consent screen.
+            scope: ["openid", "profile", "email"],
+            mapProfileToUser: (profile: { hd?: string }) => ({
+              orgDomain: profile.hd ?? null,
+            }),
+          }
         : undefined,
     github:
       env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET
@@ -57,7 +70,11 @@ export const auth = betterAuth({
   },
   advanced: {
     cookiePrefix: "oxagen",
-    useSecureCookies: env.NODE_ENV === "production",
+    // Secure cookies in production — EXCEPT under E2E, where Playwright drives
+    // a production build (`next start`) over http://localhost. `__Secure-`
+    // cookies are never sent over http, so the e2e auth helper could never
+    // inject a session. The flag is set only by the Playwright webServer.
+    useSecureCookies: env.NODE_ENV === "production" && process.env.E2E_TEST !== "true",
     defaultCookieAttributes: {
       httpOnly: true,
       sameSite: "lax",

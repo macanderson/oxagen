@@ -25,5 +25,8 @@ export default defineConfig({
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    // E2E serves a production build over http; tell Better Auth not to use
+    // `__Secure-` cookies so the auth helper's injected session is honored.
+    env: { ...process.env, E2E_TEST: "true" },
   },
 });

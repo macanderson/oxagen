@@ -29,7 +29,7 @@ Each tool: `{ name, description, domain, category | null, riskLevel, requiresApp
 
 ## Side effects
 
-None — read-only against the in-process capability registry plus the
+None — read-only against the in-process contracts array plus the
 workspace policy row.
 
 ## Errors

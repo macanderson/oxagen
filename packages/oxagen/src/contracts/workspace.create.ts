@@ -22,7 +22,7 @@ export const workspaceCreate = registerCapability({
     publicId: z.string(),
     name: z.string(),
     slug: z.string(),
-    tenantSlug: z.string(),
+    orgSlug: z.string(),
     createdAt: z.string(),
   }),
 });

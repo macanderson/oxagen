@@ -8,7 +8,7 @@ type Events = {
   "stripe/invoice.updated": { data: { stripeInvoiceId: string } };
   "chat/message.streamed": {
     data: {
-      tenantId: string;
+      orgId: string;
       workspaceId: string;
       conversationId: string;
       assistantMessageId: string;
@@ -23,11 +23,11 @@ type Events = {
     };
   };
   "agent/subagent.dispatch": {
-    data: { tenantId: string; workspaceId: string; fanoutId: string };
+    data: { orgId: string; workspaceId: string; fanoutId: string };
   };
   "agent/task.background.start": {
     data: {
-      tenantId: string;
+      orgId: string;
       workspaceId: string;
       taskId: string;
       kind: string;
@@ -35,7 +35,7 @@ type Events = {
     };
   };
   "agent/task.background.cancel": {
-    data: { tenantId: string; taskId: string };
+    data: { orgId: string; taskId: string };
   };
 };
 

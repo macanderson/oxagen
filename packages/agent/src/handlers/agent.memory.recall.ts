@@ -28,7 +28,7 @@ export async function agentMemoryRecallHandler(
 ): Promise<AgentMemoryRecallOutput> {
   const embedding = await embedText(input.query);
   const memories = await recallMemories({
-    tenantId: ctx.tenantId,
+    orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
     embedding,
     minWeight: input.minWeight,

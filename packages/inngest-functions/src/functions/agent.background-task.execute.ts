@@ -17,10 +17,10 @@ interface BgPayload {
 }
 
 export const agentBackgroundTaskExecute = inngest.createFunction(
-  { id: "agent.background-task.execute", retries: 0, concurrency: { limit: 16, key: "event.data.tenantId" } },
+  { id: "agent.background-task.execute", retries: 0, concurrency: { limit: 16, key: "event.data.orgId" } },
   { event: "agent/task.background.start" },
   async ({ event, step }) => {
-    const { tenantId, workspaceId, taskId, payload } = event.data;
+    const { orgId, workspaceId, taskId, payload } = event.data;
     const p = (payload ?? {}) as BgPayload;
 
     await step.run("mark-running", async () => {
@@ -30,7 +30,7 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
         .where(
           and(
             eq(schema.backgroundTasks.publicId, taskId),
-            eq(schema.backgroundTasks.tenantId, tenantId),
+            eq(schema.backgroundTasks.orgId, orgId),
           ),
         );
     });
@@ -39,7 +39,7 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
       const output = await step.run("invoke", async () => {
         if (!p.capability) throw new Error("background task payload missing 'capability'");
         return invokeCapability(p.capability, p.input ?? p, {
-          tenantId,
+          orgId,
           workspaceId,
           userId: null,
           apiKeyId: null,
@@ -59,7 +59,7 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
           .where(
             and(
               eq(schema.backgroundTasks.publicId, taskId),
-              eq(schema.backgroundTasks.tenantId, tenantId),
+              eq(schema.backgroundTasks.orgId, orgId),
             ),
           );
       });
@@ -76,7 +76,7 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
           .where(
             and(
               eq(schema.backgroundTasks.publicId, taskId),
-              eq(schema.backgroundTasks.tenantId, tenantId),
+              eq(schema.backgroundTasks.orgId, orgId),
             ),
           );
       });

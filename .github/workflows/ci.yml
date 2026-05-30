@@ -29,13 +29,17 @@ jobs:
         image: clickhouse/clickhouse-server:24.8-alpine
         env:
           CLICKHOUSE_DB: oxagen
-          CLICKHOUSE_USER: default
-          CLICKHOUSE_PASSWORD: ""
+          # Do NOT set CLICKHOUSE_USER/PASSWORD: overriding the built-in
+          # `default` user writes a users.d password config that makes the
+          # HTTP interface (8123) reject the empty-password login the
+          # migrator uses, even though the native-protocol healthcheck
+          # passes. Leaving them unset keeps `default` truly passwordless.
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
         ports:
           - 8123:8123
           - 9000:9000
         options: >-
-          --health-cmd "wget -q -O - http://localhost:8123/ping || exit 1"
+          --health-cmd "clickhouse-client -q 'SELECT 1' || exit 1"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -89,7 +93,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
