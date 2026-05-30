@@ -32,6 +32,10 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.skill.load": () => import("./agent.skill.load.js"),
 };
 
+/** Capability names this package supplies handlers for. Consumed by
+ * `../register.ts` to bind them into the shared kernel. */
+export const agentHandlerNames: string[] = Object.keys(LOADERS);
+
 const cache = new Map<string, CapabilityHandlerFn>();
 
 // Convert "agent.code.execute" → "agentCodeExecuteHandler", matching the

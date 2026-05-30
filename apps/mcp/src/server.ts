@@ -1,19 +1,22 @@
 import { Hono } from "hono";
-import { listCapabilities } from "@oxagen/oxagen";
-import { tenantCreateTool } from "./tools/tenant.create.js";
-import { workspaceCreateTool } from "./tools/workspace.create.js";
-import { billingSubscriptionReadTool } from "./tools/billing.subscription.read.js";
-import { billingSubscriptionUpgradeStartTool } from "./tools/billing.subscription.upgrade.start.js";
-import { chatMessageSendTool } from "./tools/chat.message.send.js";
-import { agentToolListTool } from "./tools/agent.tool.list.js";
-import { agentMcpRegisterTool } from "./tools/agent.mcp.register.js";
-import { agentMcpListTool } from "./tools/agent.mcp.list.js";
-import { agentSkillListTool } from "./tools/agent.skill.list.js";
-import { agentTaskBackgroundStartTool } from "./tools/agent.task.background.start.js";
-import { agentTaskBackgroundReadTool } from "./tools/agent.task.background.read.js";
-import { agentTaskBackgroundCancelTool } from "./tools/agent.task.background.cancel.js";
-import { agentMemoryRecallTool } from "./tools/agent.memory.recall.js";
-import { agentMemoryWriteTool } from "./tools/agent.memory.write.js";
+import {
+  CapabilityError,
+  capabilitiesForSurface,
+  invoke,
+} from "@oxagen/oxagen";
+// Side-effect imports: bind foundation + agent handlers into the kernel.
+// Loaders are lazy, so this registers thunks without pulling in the heavy
+// handler dependency chains until a capability is actually invoked.
+import "@oxagen/handlers/register";
+import "@oxagen/agent/register";
+import { placeholderContext } from "./context.js";
+
+// MCP tools are no longer hand-listed. The server derives its tool surface
+// from the capability registry — every capability whose contract includes the
+// `mcp` surface is exposed automatically, and dispatch goes through the single
+// kernel `invoke()` path (input/output validation + surface enforcement, and —
+// once auth lands — the principal + spend gate). Adding a capability needs no
+// edits here.
 
 export type McpTool = {
   name: string;
@@ -21,51 +24,36 @@ export type McpTool = {
   invoke: (raw: unknown) => Promise<unknown>;
 };
 
-const tools: McpTool[] = [
-  tenantCreateTool,
-  workspaceCreateTool,
-  billingSubscriptionReadTool,
-  billingSubscriptionUpgradeStartTool,
-  chatMessageSendTool,
-  agentToolListTool,
-  agentMcpRegisterTool,
-  agentMcpListTool,
-  agentSkillListTool,
-  agentTaskBackgroundStartTool,
-  agentTaskBackgroundReadTool,
-  agentTaskBackgroundCancelTool,
-  agentMemoryRecallTool,
-  agentMemoryWriteTool,
-];
-
 export function buildServer() {
   const app = new Hono();
 
   app.get("/healthz", (c) => c.json({ ok: true }));
 
-  // /mcp/tools — list registered tools so clients can discover surface.
+  // /mcp/tools — discovery: every capability exposed on the mcp surface.
   app.get("/mcp/tools", (c) => {
-    return c.json({
-      tools: tools.map((t) => ({ name: t.name, description: t.description })),
-      capabilities: listCapabilities().map((cap) => ({
-        name: cap.name,
-        domain: cap.domain,
-        mode: cap.mode,
-      })),
-    });
+    const tools = capabilitiesForSurface("mcp").map((cap) => ({
+      name: cap.name,
+      description: cap.description,
+      domain: cap.domain,
+      mode: cap.mode,
+    }));
+    return c.json({ tools });
   });
 
-  // /mcp/tools/:name — invoke by name; the handler stubs throw "not
-  // implemented" until apps/api wires them in.
+  // /mcp/tools/:name — invoke by name through the kernel.
   app.post("/mcp/tools/:name", async (c) => {
     const name = c.req.param("name");
-    const tool = tools.find((t) => t.name === name);
-    if (!tool) return c.json({ error: "unknown tool" }, 404);
     const body = await c.req.json().catch(() => ({}));
     try {
-      const result = await tool.invoke(body);
+      // TODO(auth increment): replace placeholderContext with a principal
+      // resolved from the MCP transport's Bearer key / OAuth token.
+      const result = await invoke(name, body, placeholderContext(), { surface: "mcp" });
       return c.json({ result });
     } catch (err) {
+      if (err instanceof CapabilityError) {
+        const status = err.code === "unknown_capability" ? 404 : 400;
+        return c.json({ error: err.message, code: err.code }, status);
+      }
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: message }, 500);
     }

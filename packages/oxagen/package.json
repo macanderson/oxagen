@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./contracts/*": "./src/contracts/*.ts",
     "./registry": "./src/registry.ts",
+    "./kernel": "./src/kernel.ts",
     "./types": "./src/types.ts"
   },
   "scripts": {
