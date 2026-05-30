@@ -94,3 +94,107 @@ jobs:
 
       - name: Gate
         run: pnpm gate
+
+  # End-to-end tests run in a dedicated job, separate from the blocking gate.
+  # They are slower and boot the Next app via Playwright's webServer, so they
+  # are kept off the critical path; mark only `gate` as a required check.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: oxagen
+          POSTGRES_PASSWORD: oxagen
+          POSTGRES_DB: oxagen
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oxagen -d oxagen"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8-alpine
+        env:
+          CLICKHOUSE_DB: oxagen
+          CLICKHOUSE_USER: default
+          CLICKHOUSE_PASSWORD: ""
+        ports:
+          - 8123:8123
+          - 9000:9000
+        options: >-
+          --health-cmd "wget -q -O - http://localhost:8123/ping || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      neo4j:
+        image: neo4j:5.24-community
+        env:
+          NEO4J_AUTH: neo4j/oxagen-dev
+        ports:
+          - 7474:7474
+          - 7687:7687
+        options: >-
+          --health-cmd "wget -q -O - http://localhost:7474 >/dev/null 2>&1 || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://oxagen:oxagen@localhost:5432/oxagen
+      CLICKHOUSE_URL: http://localhost:8123
+      CLICKHOUSE_USERNAME: default
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DATABASE: oxagen
+      NEO4J_URI: bolt://localhost:7687
+      NEO4J_USERNAME: neo4j
+      NEO4J_PASSWORD: oxagen-dev
+      BETTER_AUTH_SECRET: ci-secret-ci-secret-ci-secret-ci-x
+      BETTER_AUTH_URL: http://localhost:3000
+      STRIPE_SECRET_KEY: sk_test_ci
+      STRIPE_PUBLISHABLE_KEY: pk_test_ci
+      STRIPE_WEBHOOK_SECRET: whsec_test_ci
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      CI: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply Postgres init schemas
+        run: |
+          sudo apt-get install -y postgresql-client
+          psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Migrate
+        run: pnpm db:migrate
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @oxagen/app exec playwright install --with-deps chromium
+
+      - name: E2E
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/app/playwright-report/
+          retention-days: 7
