@@ -69,6 +69,11 @@ jobs:
       STRIPE_WEBHOOK_SECRET: whsec_test_ci
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       NEXT_PUBLIC_API_URL: http://localhost:4000
+      # Required by the env schema when NODE_ENV=production, which `next build`
+      # sets. Without them the production build fails collecting page data for
+      # routes that call loadEnv() at module load (e.g. /api/auth/[...all]).
+      INNGEST_EVENT_KEY: ci_inngest_event
+      INNGEST_SIGNING_KEY: signkey-test-ci0000000000000000000000000000000000000000000000000000000000
 
     steps:
       - uses: actions/checkout@v4
