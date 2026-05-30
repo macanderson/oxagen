@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  drizzle-orm: 0.36.4
+
 importers:
 
   .:
@@ -57,7 +60,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/telemetry
       drizzle-orm:
-        specifier: ^0.36.0
+        specifier: 0.36.4
         version: 0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@types/react@19.2.15)(kysely@0.28.17)(postgres@3.4.9)(react@19.2.6)
       hono:
         specifier: ^4.6.5
@@ -154,7 +157,7 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       drizzle-orm:
-        specifier: ^0.36.0
+        specifier: 0.36.4
         version: 0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@types/react@19.2.15)(kysely@0.28.17)(postgres@3.4.9)(react@19.2.6)
       lucide-react:
         specifier: ^0.469.0
@@ -380,7 +383,7 @@ importers:
         specifier: ^4.0.0
         version: 4.3.19(react@19.2.6)(zod@3.25.76)
       drizzle-orm:
-        specifier: ^0.36.0
+        specifier: 0.36.4
         version: 0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@types/react@19.2.15)(kysely@0.28.17)(postgres@3.4.9)(react@19.2.6)
       inngest:
         specifier: ^3.27.0
@@ -442,7 +445,7 @@ importers:
         specifier: ^1.1.0
         version: 1.6.11(@opentelemetry/api@1.9.1)(drizzle-orm@0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@types/react@19.2.15)(kysely@0.28.17)(postgres@3.4.9)(react@19.2.6))(next@16.2.6(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@2.1.9(@types/node@25.9.1)(lightningcss@1.32.0))
       drizzle-orm:
-        specifier: ^0.36.0
+        specifier: 0.36.4
         version: 0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@types/react@19.2.15)(kysely@0.28.17)(postgres@3.4.9)(react@19.2.6)
     devDependencies:
       typescript:
@@ -490,7 +493,7 @@ importers:
         specifier: workspace:*
         version: link:../config
       drizzle-orm:
-        specifier: ^0.36.0
+        specifier: 0.36.4
         version: 0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@types/react@19.2.15)(kysely@0.28.17)(postgres@3.4.9)(react@19.2.6)
       postgres:
         specifier: ^3.4.4
@@ -530,7 +533,7 @@ importers:
         specifier: workspace:*
         version: link:../telemetry
       drizzle-orm:
-        specifier: ^0.36.0
+        specifier: 0.36.4
         version: 0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@types/react@19.2.15)(kysely@0.28.17)(postgres@3.4.9)(react@19.2.6)
       zod:
         specifier: ^3.23.8
@@ -561,7 +564,7 @@ importers:
         specifier: workspace:*
         version: link:../telemetry
       drizzle-orm:
-        specifier: ^0.36.0
+        specifier: 0.36.4
         version: 0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@types/react@19.2.15)(kysely@0.28.17)(postgres@3.4.9)(react@19.2.6)
       inngest:
         specifier: ^3.27.4
@@ -896,7 +899,7 @@ packages:
     peerDependencies:
       '@better-auth/core': ^1.6.11
       '@better-auth/utils': 0.4.0
-      drizzle-orm: ^0.45.2
+      drizzle-orm: 0.36.4
     peerDependenciesMeta:
       drizzle-orm:
         optional: true
@@ -3716,7 +3719,7 @@ packages:
       '@tanstack/solid-start': ^1.0.0
       better-sqlite3: ^12.0.0
       drizzle-kit: '>=0.31.4'
-      drizzle-orm: ^0.45.2
+      drizzle-orm: 0.36.4
       mongodb: ^6.0.0 || ^7.0.0
       mysql2: ^3.0.0
       next: ^14.0.0 || ^15.0.0 || ^16.0.0
