@@ -51,7 +51,17 @@ export function buildServer() {
       return c.json({ result });
     } catch (err) {
       if (err instanceof CapabilityError) {
-        const status = err.code === "unknown_capability" ? 404 : 400;
+        // Map the failure class to an honest HTTP status: client mistakes are
+        // 4xx, server-side misconfiguration / handler bugs are 5xx, so monitors
+        // don't misclassify our bugs as bad client requests.
+        const status =
+          err.code === "unknown_capability"
+            ? 404
+            : err.code === "surface_denied"
+              ? 403
+              : err.code === "invalid_input"
+                ? 400
+                : 500; // no_handler, invalid_output — server-side faults
         return c.json({ error: err.message, code: err.code }, status);
       }
       const message = err instanceof Error ? err.message : String(err);
