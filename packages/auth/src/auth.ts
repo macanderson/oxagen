@@ -70,7 +70,11 @@ export const auth = betterAuth({
   },
   advanced: {
     cookiePrefix: "oxagen",
-    useSecureCookies: env.NODE_ENV === "production",
+    // Secure cookies in production — EXCEPT under E2E, where Playwright drives
+    // a production build (`next start`) over http://localhost. `__Secure-`
+    // cookies are never sent over http, so the e2e auth helper could never
+    // inject a session. The flag is set only by the Playwright webServer.
+    useSecureCookies: env.NODE_ENV === "production" && process.env.E2E_TEST !== "true",
     defaultCookieAttributes: {
       httpOnly: true,
       sameSite: "lax",
