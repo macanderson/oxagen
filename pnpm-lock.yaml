@@ -367,6 +367,9 @@ importers:
       '@oxagen/ontology':
         specifier: workspace:*
         version: link:../ontology
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../oxagen
       '@oxagen/sandbox':
         specifier: workspace:*
         version: link:../sandbox
@@ -395,9 +398,6 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
-      '@oxagen/oxagen':
-        specifier: workspace:*
-        version: link:../oxagen
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
