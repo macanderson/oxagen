@@ -4,6 +4,17 @@ import { eq, and } from "drizzle-orm";
 import { invokeCapability } from "@oxagen/agent";
 import "@oxagen/oxagen";
 
+/** Pure helper — exported for unit testing. */
+export function deriveFanoutStatus(
+  completed: number,
+  total: number,
+  anyFailed: boolean,
+): "completed" | "failed" | "partial" {
+  if (completed === total) return "completed";
+  if (anyFailed && completed === 0) return "failed";
+  return "partial";
+}
+
 /**
  * Subagent fanout executor. Triggered by agent.subagent.dispatch via the
  * runtime's dispatchFanout(). Each child runs in its own step.run so
@@ -65,7 +76,7 @@ export const agentExecuteSubagent = inngest.createFunction(
       else anyFailed = true;
     }
 
-    const finalStatus = anyFailed && completed === 0 ? "completed" : completed === runs.length ? "completed" : "partial";
+    const finalStatus = deriveFanoutStatus(completed, runs.length, anyFailed);
     await step.run("finalize", async () => {
       await db()
         .update(schema.subagentFanouts)

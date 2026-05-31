@@ -3,6 +3,7 @@ import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscr
 import { db, schema } from "@oxagen/database";
 import { sumTokenUsage } from "@oxagen/telemetry";
 import { and, eq, inArray } from "drizzle-orm";
+import { logger } from "./logger.js";
 
 const ACTIVE_STATUSES = ["trialing", "active", "past_due", "paused"];
 
@@ -68,8 +69,12 @@ export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSub
           costMicros: Number(get("executions")?.costMicros ?? 0n),
           executions: get("executions")?.quantity ?? 0,
         };
-      } catch {
-        /* CH failure should not break the billing panel */
+      } catch (err) {
+        // CH failure must not break the billing panel, but must not be silent.
+        logger.warn(
+          { err, orgId: ctx.orgId },
+          "billing.subscription.read: ClickHouse sumTokenUsage failed — periodUsage will be null",
+        );
       }
     }
 
