@@ -3,6 +3,7 @@ import * as React from "react";
 import type {
   ApprovalResolution,
   MemoryRecallHit,
+  MemoryWeight,
   PlanDecision,
   PlanStep,
   RiskLevel,
@@ -62,6 +63,13 @@ export interface LiveMemoryRecall {
   memories: MemoryRecallHit[];
 }
 
+/** A committed memory node, surfaced as a confirmation card after write. */
+export interface LiveMemoryWrite {
+  memoryId: string;
+  nodeRef: string;
+  weight: MemoryWeight | string;
+}
+
 export interface ToolStreamState {
   messages: Record<string, LiveAssistantMessage>;
   toolCalls: Record<string, LiveToolCall>;
@@ -69,6 +77,7 @@ export interface ToolStreamState {
   plans: Record<string, LivePlan>;
   activeFanouts: Record<string, LiveFanout>;
   memoryRecalls: Record<string, LiveMemoryRecall>;
+  memoryWrites: Record<string, LiveMemoryWrite>;
 }
 
 const INITIAL_STATE: ToolStreamState = {
@@ -78,6 +87,7 @@ const INITIAL_STATE: ToolStreamState = {
   plans: {},
   activeFanouts: {},
   memoryRecalls: {},
+  memoryWrites: {},
 };
 
 type Action = { type: "event"; event: StreamEvent } | { type: "reset" };
@@ -227,23 +237,60 @@ function reducer(state: ToolStreamState, action: Action): ToolStreamState {
         },
       };
     }
-    case "memory-written":
-      // Surfaced via toast / activity log elsewhere; not part of the live
-      // chat state we render inline.
-      return state;
+    case "memory-written": {
+      // Track the committed memory node so a confirmation card renders inline.
+      return {
+        ...state,
+        memoryWrites: {
+          ...state.memoryWrites,
+          [e.memoryId]: {
+            memoryId: e.memoryId,
+            nodeRef: e.nodeRef,
+            weight: e.weight,
+          },
+        },
+      };
+    }
     default:
       return state;
   }
+}
+
+// A pending-approval waiter is a Promise that resolves when the approval
+// with the given approvalId gets a resolution. The consumer calls
+// `registerWaiter(approvalId)` before dispatching `approval-required`, then
+// awaits the returned Promise before processing subsequent events.
+// `signalResolved(approvalId)` is called by `ChatShellClient` when the user
+// (or an incoming `approval-resolved` stream event) settles the approval.
+interface ApprovalWaiter {
+  promise: Promise<void>;
+  resolve: () => void;
 }
 
 export interface UseToolStreamResult extends ToolStreamState {
   consume: (stream: ReadableStream<StreamEvent> | AsyncIterable<StreamEvent>) => Promise<void>;
   reset: () => void;
   hasBlockingApproval: boolean;
+  /** Signal that a pending approval has been resolved (by user action or
+   *  incoming stream event). Unblocks the `consume` loop so the stream
+   *  continues processing subsequent events. */
+  signalApprovalResolved: (approvalId: string) => void;
 }
 
 export function useToolStream(): UseToolStreamResult {
   const [state, dispatch] = React.useReducer(reducer, INITIAL_STATE);
+
+  // Map from approvalId → waiter. Populated when `approval-required` is
+  // dispatched, resolved when the UI or stream signals completion.
+  const approvalWaiters = React.useRef<Map<string, ApprovalWaiter>>(new Map());
+
+  const signalApprovalResolved = React.useCallback((approvalId: string) => {
+    const waiter = approvalWaiters.current.get(approvalId);
+    if (waiter) {
+      waiter.resolve();
+      approvalWaiters.current.delete(approvalId);
+    }
+  }, []);
 
   const consume = React.useCallback(
     async (stream: ReadableStream<StreamEvent> | AsyncIterable<StreamEvent>) => {
@@ -251,13 +298,46 @@ export function useToolStream(): UseToolStreamResult {
         ? readableToAsyncIterable(stream)
         : stream;
       for await (const event of iter) {
+        // If the stream itself carries an `approval-resolved` event, signal
+        // the waiter BEFORE dispatching so the loop doesn't deadlock. The
+        // dispatch below then updates the UI to show the resolved state.
+        if (event.type === "approval-resolved") {
+          signalApprovalResolved(event.approvalId);
+        }
+
         dispatch({ type: "event", event });
+
+        // For `approval-required` events, pause the consume loop until the
+        // approval is resolved (either by the user clicking Approve/Deny or
+        // by a subsequent `approval-resolved` event from the stream). This
+        // ensures intermediate UI states (disabled composer, visible approval
+        // card) are observable before the stream continues — critical for
+        // correct UX and for the Playwright e2e assertions.
+        if (event.type === "approval-required") {
+          let resolveWaiter!: () => void;
+          const promise = new Promise<void>((r) => {
+            resolveWaiter = r;
+          });
+          const waiter: ApprovalWaiter = { promise, resolve: resolveWaiter };
+          approvalWaiters.current.set(event.approvalId, waiter);
+          // Use a macrotask boundary so React has time to flush the
+          // approval-required dispatch above and actually render the
+          // approval card + disabled composer before we process more events.
+          await new Promise<void>((r) => setTimeout(r, 0));
+          await waiter.promise;
+        }
       }
     },
-    [],
+    [signalApprovalResolved],
   );
 
-  const reset = React.useCallback(() => dispatch({ type: "reset" }), []);
+  const reset = React.useCallback(() => {
+    // Resolve all pending waiters so any in-flight consume loop unblocks
+    // and exits cleanly on reset.
+    for (const w of approvalWaiters.current.values()) w.resolve();
+    approvalWaiters.current.clear();
+    dispatch({ type: "reset" });
+  }, []);
 
   const hasBlockingApproval = React.useMemo(
     () =>
@@ -267,7 +347,7 @@ export function useToolStream(): UseToolStreamResult {
     [state.pendingApprovals],
   );
 
-  return { ...state, consume, reset, hasBlockingApproval };
+  return { ...state, consume, reset, hasBlockingApproval, signalApprovalResolved };
 }
 
 function isReadable<T>(

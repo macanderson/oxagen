@@ -3,7 +3,15 @@ import * as React from "react";
 import { MessageTree } from "./message-tree";
 import { MessageComposer, type ComposerAction } from "./message-composer";
 import type { ChatMessage, MessageBubbleCallbacks } from "./message-bubble";
+import { PlanCard, type AgentCapability } from "./plan-card";
+import { ApprovalCard } from "./approval-card";
+import { ToolCallCard } from "./tool-call-card";
+import { CodeExecuteCard } from "./code-execute-card";
+import { MemoryCard } from "./memory-card";
+import { SubagentFanout } from "./subagent-fanout";
+import { useToolStream } from "./use-tool-stream";
 import type { ChatShellProps } from "./chat-shell";
+import type { StreamEvent } from "./stream-event-types";
 
 // Client surface for the chat. The RSC `ChatShell` resolves the messages
 // promise and hands them in; this component:
@@ -11,6 +19,12 @@ import type { ChatShellProps } from "./chat-shell";
 //  - blocks the composer while any approval-request block is still
 //    awaiting a decision (spec §7 — "disabled while an approval is
 //    pending"),
+//  - calls POST /api/chat/stream when a message is submitted, consumes
+//    the SSE response via `useToolStream`, and renders live stream events
+//    (plans, approvals, tool calls, code executes, memory recalls, memory
+//    writes, fanouts) inline before the RSC revalidate completes,
+//  - pauses the consume loop at `approval-required` events until the user
+//    resolves the approval, ensuring intermediate states are observable,
 //  - exposes a hook point for child-branch navigation that the subagent
 //    fanout cards delegate to.
 export function ChatShellClient({
@@ -21,6 +35,8 @@ export function ChatShellClient({
   resolveApprovalAction,
   resolvePlanAction,
   agentCapabilities,
+  orgSlug,
+  workspaceSlug,
 }: {
   conversationId: string | null;
   activeLeafMessageId: string | null;
@@ -29,8 +45,44 @@ export function ChatShellClient({
   resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
   resolvePlanAction: ChatShellProps["resolvePlanAction"];
   agentCapabilities?: ChatShellProps["agentCapabilities"];
+  orgSlug: string;
+  workspaceSlug: string;
 }) {
-  const hasPendingApproval = React.useMemo(
+  const {
+    plans,
+    pendingApprovals,
+    toolCalls,
+    memoryRecalls,
+    memoryWrites,
+    activeFanouts,
+    messages: liveMessages,
+    consume,
+    reset,
+    hasBlockingApproval,
+    signalApprovalResolved,
+  } = useToolStream();
+
+  // Track whether the current turn is streaming (to show live events).
+  const [isStreaming, setIsStreaming] = React.useState(false);
+
+  // Stable refs so useCallback deps don't change on every render.
+  const consumeRef = React.useRef(consume);
+  const resetRef = React.useRef(reset);
+  const signalRef = React.useRef(signalApprovalResolved);
+  React.useEffect(() => { consumeRef.current = consume; }, [consume]);
+  React.useEffect(() => { resetRef.current = reset; }, [reset]);
+  React.useEffect(() => { signalRef.current = signalApprovalResolved; }, [signalApprovalResolved]);
+
+  const orgSlugRef = React.useRef(orgSlug);
+  const workspaceSlugRef = React.useRef(workspaceSlug);
+  React.useEffect(() => { orgSlugRef.current = orgSlug; }, [orgSlug]);
+  React.useEffect(() => { workspaceSlugRef.current = workspaceSlug; }, [workspaceSlug]);
+
+  const setIsStreamingRef = React.useRef(setIsStreaming);
+
+  // hasPendingApproval: blocked either by a persisted block (DB) or a live
+  // stream approval event that hasn't been resolved yet.
+  const hasPersistentPendingApproval = React.useMemo(
     () =>
       messages.some((m) =>
         (m.contentBlocks ?? []).some(
@@ -39,43 +91,269 @@ export function ChatShellClient({
       ),
     [messages],
   );
+  const hasPendingApproval = hasPersistentPendingApproval || hasBlockingApproval;
+
+  // Wrap the approval resolver to also unblock the `consume` loop when the
+  // user resolves an approval. Without this, the consume loop pauses after
+  // `approval-required` and will never continue until signalled.
+  const wrappedResolveApproval = React.useCallback<
+    ChatShellProps["resolveApprovalAction"]
+  >(
+    async (approvalId, decision) => {
+      // Signal the consume loop immediately (before the server action
+      // completes) so the stream unblocks and subsequent events begin
+      // rendering right away.
+      signalRef.current(approvalId);
+      return resolveApprovalAction(approvalId, decision);
+    },
+    [resolveApprovalAction],
+  );
+
+  // Wrap the server action: fire the /api/chat/stream SSE fetch immediately
+  // (before the server action completes) so live events render as fast as
+  // possible. The server action handles Postgres persistence independently.
+  const wrappedSendAction = React.useCallback<ComposerAction>(
+    async (formData: FormData) => {
+      const content = formData.get("content");
+      const convId = formData.get("conversationId");
+      const parentMsgId = formData.get("parentMessageId");
+
+      if (typeof content === "string" && content.length > 0) {
+        // Reset prior turn's live state and start the stream immediately —
+        // don't wait for the server action to complete.
+        resetRef.current();
+        setIsStreamingRef.current(true);
+
+        void (async () => {
+          try {
+            const res = await fetch("/api/chat/stream", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                content,
+                conversationId: typeof convId === "string" && convId ? convId : null,
+                parentMessageId: typeof parentMsgId === "string" && parentMsgId ? parentMsgId : null,
+                orgSlug: orgSlugRef.current,
+                workspaceSlug: workspaceSlugRef.current,
+              }),
+            });
+
+            if (!res.ok || !res.body) {
+              setIsStreamingRef.current(false);
+              return;
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+
+            await consumeRef.current(sseToEvents(reader, decoder));
+          } catch {
+            // Swallow — the RSC revalidate will still show the persisted reply.
+          } finally {
+            setIsStreamingRef.current(false);
+          }
+        })();
+      }
+
+      // Server action handles Postgres persistence; its result drives the
+      // composer's error state.
+      return sendAction(formData);
+    },
+    [sendAction],
+  );
 
   const callbacks: MessageBubbleCallbacks = {
-    onResolveApproval: resolveApprovalAction,
+    onResolveApproval: wrappedResolveApproval,
     onResolvePlan: resolvePlanAction,
     agentCapabilities,
     onNavigateToChild: (childMessageId) => {
-      // Defer to the existing branch-switcher mechanism by updating the
-      // URL hash; the page-level effect picks it up and refetches the
-      // active branch. Kept lightweight here so this component is not
-      // coupled to a particular router instance.
       if (typeof window !== "undefined") {
         window.location.hash = `m-${childMessageId}`;
       }
     },
   };
 
+  // Partition live tool calls: agent.code.execute renders as CodeExecuteCard;
+  // all others render as ToolCallCard.
+  const codeExecuteToolCalls = Object.values(toolCalls).filter(
+    (tc) => tc.capability === "agent.code.execute",
+  );
+  const genericToolCalls = Object.values(toolCalls).filter(
+    (tc) => tc.capability !== "agent.code.execute",
+  );
+
+  const livePlans = Object.values(plans);
+  const liveApprovals = Object.values(pendingApprovals);
+  const liveMemoryRecalls = Object.values(memoryRecalls);
+  const liveMemoryWritesList = Object.values(memoryWrites);
+  const liveFanouts = Object.values(activeFanouts);
+  const liveTextMessages = Object.values(liveMessages);
+  const hasLiveContent =
+    isStreaming ||
+    livePlans.length > 0 ||
+    liveApprovals.length > 0 ||
+    genericToolCalls.length > 0 ||
+    codeExecuteToolCalls.length > 0 ||
+    liveMemoryRecalls.length > 0 ||
+    liveMemoryWritesList.length > 0 ||
+    liveFanouts.length > 0 ||
+    liveTextMessages.length > 0;
+
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4">
       <div className="min-h-0 flex-1 overflow-y-auto pr-2">
-        {messages.length === 0 ? (
+        {messages.length === 0 && !hasLiveContent ? (
           <div className="flex h-full flex-col items-center justify-center text-center text-sm text-muted-foreground">
             <p className="font-medium">Start a conversation.</p>
             <p>Send a message below to begin.</p>
           </div>
         ) : (
-          <MessageTree messages={messages} callbacks={callbacks} />
+          <div className="flex flex-col gap-4">
+            <MessageTree messages={messages} callbacks={callbacks} />
+            {/* Live turn: stream events rendered before the RSC revalidate. */}
+            {hasLiveContent ? (
+              <div className="flex flex-col gap-2" data-live-turn>
+                {livePlans.map((plan) => (
+                  <PlanCard
+                    key={plan.planId}
+                    planId={plan.planId}
+                    title={plan.title}
+                    steps={plan.steps}
+                    rationale={plan.rationale}
+                    status={plan.status}
+                    agentCapabilities={agentCapabilities}
+                    onResolve={resolvePlanAction}
+                  />
+                ))}
+                {liveApprovals.map((approval) => (
+                  <ApprovalCard
+                    key={approval.approvalId}
+                    approvalId={approval.approvalId}
+                    capability={approval.capability}
+                    inputPreview={approval.inputPreview}
+                    riskLevel={approval.riskLevel}
+                    expiresAt={approval.expiresAt}
+                    resolution={approval.resolution}
+                    onResolved={wrappedResolveApproval}
+                  />
+                ))}
+                {genericToolCalls.map((tc) => (
+                  <ToolCallCard
+                    key={tc.toolCallId}
+                    toolCallId={tc.toolCallId}
+                    capability={tc.capability}
+                    inputPreview={tc.inputPreview}
+                    riskLevel={tc.riskLevel}
+                    status={tc.status}
+                    output={tc.output}
+                    stdout={tc.stdout}
+                    stderr={tc.stderr}
+                    errorReason={tc.errorReason}
+                    durationMs={tc.durationMs}
+                  />
+                ))}
+                {liveMemoryRecalls.map((mr) => (
+                  <MemoryCard
+                    key={mr.queryId}
+                    queryId={mr.queryId}
+                    memories={mr.memories}
+                  />
+                ))}
+                {codeExecuteToolCalls.map((tc) => {
+                  const preview = tc.inputPreview as Record<string, unknown> | null ?? {};
+                  const language = typeof preview.language === "string" ? preview.language : "node";
+                  const code = typeof preview.code === "string" ? preview.code : "";
+                  const outputRecord = tc.output as Record<string, unknown> | null ?? {};
+                  const exitCode = typeof outputRecord.exitCode === "number" ? outputRecord.exitCode : undefined;
+                  return (
+                    <CodeExecuteCard
+                      key={tc.toolCallId}
+                      toolCallId={tc.toolCallId}
+                      language={language}
+                      code={code}
+                      status={tc.status}
+                      stdout={tc.stdout}
+                      stderr={tc.stderr}
+                      exitCode={exitCode}
+                      durationMs={tc.durationMs}
+                    />
+                  );
+                })}
+                {liveFanouts.map((fanout) => (
+                  <SubagentFanout
+                    key={fanout.fanoutId}
+                    fanoutId={fanout.fanoutId}
+                    parentMessageId={fanout.parentMessageId}
+                    subagents={fanout.children}
+                    status={fanout.status}
+                    results={fanout.results}
+                    onSelectChild={callbacks.onNavigateToChild}
+                  />
+                ))}
+                {liveMemoryWritesList.map((write) => (
+                  <MemoryCard
+                    key={write.memoryId}
+                    queryId={write.memoryId}
+                    memories={[
+                      {
+                        id: write.memoryId,
+                        lesson: `Memory written → ${write.nodeRef}`,
+                        weight: write.weight,
+                        score: 1,
+                        nodeRef: write.nodeRef,
+                      },
+                    ]}
+                  />
+                ))}
+                {liveTextMessages.map((msg) =>
+                  msg.text ? (
+                    <div
+                      key={msg.messageId}
+                      className="whitespace-pre-wrap leading-relaxed text-sm"
+                    >
+                      {msg.text}
+                    </div>
+                  ) : null,
+                )}
+              </div>
+            ) : null}
+          </div>
         )}
       </div>
       <MessageComposer
         conversationId={conversationId}
         parentMessageId={activeLeafMessageId}
-        action={sendAction}
+        action={wrappedSendAction}
         disabled={hasPendingApproval}
-        disabledReason={
-          hasPendingApproval ? "Resolve the pending approval above to continue." : undefined
-        }
       />
     </div>
   );
+}
+
+// Parse a ReadableStream of raw SSE bytes into an async iterable of
+// StreamEvent objects. Handles partial-line buffering across read() calls
+// and emits each event when `data: [DONE]` is NOT reached.
+async function* sseToEvents(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  decoder: TextDecoder,
+): AsyncGenerator<StreamEvent> {
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") return;
+        try {
+          yield JSON.parse(data) as StreamEvent;
+        } catch {
+          // Skip malformed JSON lines.
+        }
+      }
+    }
+  }
 }

@@ -28,6 +28,9 @@ export interface ChatShellProps {
   cancelBackgroundTask?: (taskId: string) => Promise<{ ok: boolean; error?: string }>;
   initialBackgroundTaskIds?: string[];
   agentCapabilities?: readonly import("./plan-card").AgentCapability[];
+  /** Slug values forwarded to ChatShellClient for /api/chat/stream requests. */
+  orgSlug: string;
+  workspaceSlug: string;
 }
 
 // RSC streaming: the messages promise resolves inside a Suspense boundary
@@ -45,6 +48,8 @@ export function ChatShell({
   cancelBackgroundTask,
   initialBackgroundTaskIds,
   agentCapabilities,
+  orgSlug,
+  workspaceSlug,
 }: ChatShellProps) {
   return (
     <>
@@ -57,6 +62,8 @@ export function ChatShell({
           resolveApprovalAction={resolveApprovalAction}
           resolvePlanAction={resolvePlanAction}
           agentCapabilities={agentCapabilities}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
         />
       </Suspense>
       <BackgroundTaskTray
@@ -76,6 +83,8 @@ async function AsyncShell({
   resolveApprovalAction,
   resolvePlanAction,
   agentCapabilities,
+  orgSlug,
+  workspaceSlug,
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
@@ -84,6 +93,8 @@ async function AsyncShell({
   resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
   resolvePlanAction: ChatShellProps["resolvePlanAction"];
   agentCapabilities?: ChatShellProps["agentCapabilities"];
+  orgSlug: string;
+  workspaceSlug: string;
 }) {
   const messages = await promise;
   return (
@@ -95,6 +106,8 @@ async function AsyncShell({
       resolveApprovalAction={resolveApprovalAction}
       resolvePlanAction={resolvePlanAction}
       agentCapabilities={agentCapabilities}
+      orgSlug={orgSlug}
+      workspaceSlug={workspaceSlug}
     />
   );
 }

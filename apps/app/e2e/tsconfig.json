@@ -1,0 +1,13 @@
+{
+  "//": "Playwright e2e specs + helpers are excluded from the app tsconfig (they",
+  "//2": "must not be part of `next build` typecheck). This separate project gives",
+  "//3": "them Node globals (process) and DOM types for page-evaluate code.",
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "noEmit": true,
+    "moduleResolution": "Bundler"
+  },
+  "include": ["**/*.ts"]
+}
