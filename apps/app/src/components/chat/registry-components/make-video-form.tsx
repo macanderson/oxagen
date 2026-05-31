@@ -3,6 +3,7 @@
  * File owned by the V agent; this stub is the R-agent placeholder.
  * Remove when the V agent delivers the real implementation.
  */
+import type React from "react";
 export interface MakeVideoFormProps {
   /** Pre-populated prompt text for the video */
   prompt?: string;
