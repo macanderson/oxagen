@@ -49,7 +49,6 @@ function makeTx(balanceRow: { balanceCents: bigint } = { balanceCents: 500n }) {
 
 // Build a realistic transaction mock that captures the callback and executes it.
 function makeDb(balanceRow: { balanceCents: bigint } = { balanceCents: 500n }) {
-
   // The creditLedger insert: values() resolves immediately (no .returning)
   // The creditBalances insert: values() → onConflictDoUpdate() → returning()
 
