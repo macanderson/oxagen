@@ -1,81 +1,48 @@
 import type { MiddlewareHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { createHash } from "node:crypto";
-import { db, schema } from "@oxagen/database";
-import { and, eq, isNull } from "drizzle-orm";
+import {
+  parseSessionCookie,
+  resolveSession,
+  resolveApiKey,
+} from "@oxagen/auth";
 import type { AppEnv } from "../app.js";
 
 /**
- * Resolves the caller via Better Auth session cookie or `Authorization:
- * Bearer <api-key>` header. The two paths produce different scope
- * primitives — a user session is tenant-agnostic until tenantMiddleware
- * picks a tenant; an API key is bound to (org_id, workspace_id) at
- * issuance and short-circuits later scoping.
+ * Thin HTTP adapter — §7.3. Extracts the bearer token or session cookie
+ * from the request and delegates all identity logic to the transport-agnostic
+ * resolvers in @oxagen/auth. Sets userId / apiKeyId / orgId / workspaceId on
+ * the Hono context; downstream org/workspace middleware reads those values.
  */
 export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const auth = c.req.header("authorization");
-  if (auth?.startsWith("Bearer ")) {
-    await authenticateApiKey(c, auth.slice("Bearer ".length).trim());
+  const authHeader = c.req.header("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const rawKey = authHeader.slice("Bearer ".length).trim();
+    const result = await resolveApiKey(rawKey);
+    if (!result.ok) {
+      const messages: Record<string, string> = {
+        malformed: "Malformed API key",
+        invalid: "Invalid API key",
+        expired: "API key expired",
+      };
+      throw new HTTPException(401, { message: messages[result.kind] ?? "Unauthorized" });
+    }
+    c.set("userId", null);
+    c.set("apiKeyId", result.apiKeyId);
+    // API keys pre-bind scope; downstream org/workspace middleware skips
+    // slug resolution when these are already set.
+    c.set("orgId", result.orgId);
+    c.set("workspaceId", result.workspaceId);
     return next();
   }
 
-  // Better Auth session cookie. The session token lives in the cookie
-  // verbatim and is looked up in auth.sessions; expired rows fail closed.
-  const cookieToken = readSessionCookie(c.req.header("cookie"));
+  // Better Auth session cookie path.
+  const cookieToken = parseSessionCookie(c.req.header("cookie"));
   if (!cookieToken) throw new HTTPException(401, { message: "Missing credentials" });
 
-  const d = db();
-  const session = await d.query.sessions.findFirst({
-    where: eq(schema.sessions.token, cookieToken),
-    columns: { userId: true, expiresAt: true },
-  });
-  if (!session || session.expiresAt.getTime() < Date.now()) {
-    throw new HTTPException(401, { message: "Session expired" });
-  }
+  const session = await resolveSession(cookieToken);
+  if (!session) throw new HTTPException(401, { message: "Session expired" });
+
   c.set("userId", session.userId);
   c.set("apiKeyId", null);
   return next();
 };
-
-function readSessionCookie(header: string | undefined): string | null {
-  if (!header) return null;
-  // Better Auth defaults: cookie name "better-auth.session_token".
-  for (const part of header.split(";")) {
-    const [k, v] = part.trim().split("=");
-    if (k === "better-auth.session_token" && v) return decodeURIComponent(v);
-  }
-  return null;
-}
-
-async function authenticateApiKey(c: Parameters<MiddlewareHandler<AppEnv>>[0], rawKey: string): Promise<void> {
-  // Format: <prefix>_<secret>. The prefix is stored in plain text for index
-  // lookup; the secret is hashed (sha256) and compared in constant-ish time
-  // via direct equality after lookup.
-  const sep = rawKey.indexOf("_");
-  if (sep < 0) throw new HTTPException(401, { message: "Malformed API key" });
-  const prefix = rawKey.slice(0, sep);
-  const hash = createHash("sha256").update(rawKey).digest("hex");
-
-  const d = db();
-  const row = await d.query.apiKeys.findFirst({
-    where: and(eq(schema.apiKeys.keyPrefix, prefix), isNull(schema.apiKeys.deletedAt)),
-    columns: {
-      id: true,
-      keyHash: true,
-      orgId: true,
-      workspaceId: true,
-      expiresAt: true,
-    },
-  });
-  if (!row || row.keyHash !== hash) throw new HTTPException(401, { message: "Invalid API key" });
-  if (row.expiresAt && row.expiresAt.getTime() < Date.now()) {
-    throw new HTTPException(401, { message: "API key expired" });
-  }
-
-  c.set("userId", null);
-  c.set("apiKeyId", row.id);
-  // API keys pre-bind scope; downstream tenant/workspace middleware reads
-  // these and skips slug resolution.
-  c.set("orgId", row.orgId);
-  c.set("workspaceId", row.workspaceId);
-}

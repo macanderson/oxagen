@@ -91,6 +91,9 @@ importers:
       '@oxagen/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@oxagen/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../../packages/billing
@@ -571,6 +574,9 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^2.1.2
+        version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)
 
   packages/billing:
     dependencies:
