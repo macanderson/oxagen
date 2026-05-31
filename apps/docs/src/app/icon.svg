@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" fill="none" aria-label="Oxagen logomark" viewBox="0 0 256 256">
+  <title>Oxagen</title>
+  <desc>Cored node O: a ring with filled center and three radiating edges.</desc>
+  <style>
+    :root { color: #0A0A0A }
+    @media (prefers-color-scheme: dark) { :root { color: #FFFFFF } }
+  </style>
+  <circle cx="138.37" cy="128" r="50.69" stroke="currentColor" stroke-width="11.52"/>
+  <path stroke="currentColor" stroke-linecap="round" stroke-width="10.37" d="m174.22 92.15 37.88-37.89m-37.88 109.59 37.88 37.89M87.67 128H46.2"/>
+  <circle cx="138.37" cy="128" r="16.13" fill="currentColor"/>
+  <circle cx="221.33" cy="45.04" r="12.67" fill="currentColor"/>
+  <circle cx="221.33" cy="210.96" r="12.67" fill="currentColor"/>
+  <circle cx="34.67" cy="128" r="12.67" fill="currentColor"/>
+</svg>
