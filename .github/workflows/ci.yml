@@ -160,54 +160,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history so the Linear release step can diff commit ranges
-          # (git rev-parse HEAD^ and git log PREV_SHA..GITHUB_SHA). The default
-          # shallow clone (fetch-depth: 1) would break both and silently shrink
-          # the release to whatever is in the single HEAD commit.
+          # Full history so linear-release-action can scan all commits in the
+          # range since the previous deploy and associate the right OXA-#### issues.
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
       # Vercel deploys are triggered by Vercel's own GitHub integration on push
-      # to main; this job exists as the CI side-car that can run post-merge
-      # steps (e.g. production migrations, cache warm-up) without re-running
-      # the full test suite. Add steps here as needed.
+      # to main; this job exists as the CI side-car that runs post-merge steps
+      # (e.g. production migrations, cache warm-up) without re-running the full
+      # test suite.  Add steps here as needed.
       - name: Deploy confirmation
         run: echo "Merge to main detected. Vercel deploy triggered by GitHub integration."
 
-      # ── Linear Release ────────────────────────────────────────────────────
-      # Creates a Linear Release in the oxagen-v2 pipeline and associates
-      # every OXA-#### issue referenced in commits since the last deploy.
-      # Soft-fail: an error here logs loudly but does not abort the deploy.
-      # Requires: LINEAR_ACCESS_KEY secret set in repo/org settings.
-      - name: Resolve previous deploy SHA
-        id: prev_sha
-        run: |
-          # The previous commit on main is the parent of GITHUB_SHA.
-          # Falls back to the empty tree SHA if this is the very first push,
-          # which causes git log to return all history (harmless for issue extraction).
-          PREV=$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || echo "4b825dc642cb6eb9a060e54bf8d69288fbee4904")
-          echo "sha=${PREV}" >> "$GITHUB_OUTPUT"
-
+      # ── Linear Release ─────────────────────────────────────────────────────
+      # Uses the official linear/linear-release-action@v0 to scan every commit
+      # since the last deploy for OXA-#### references and automatically create
+      # a completed release in the configured Linear pipeline.
+      #
+      # Prerequisites (one-time, done in the Linear UI — see docs/ops/linear-releases-ci.md):
+      #   1. Linear Settings → Releases → New pipeline → Continuous.
+      #   2. Copy the pipeline's access key (NOT a personal API key).
+      #   3. Add it as a repo secret: Settings → Secrets → Actions → LINEAR_ACCESS_KEY.
+      #
+      # Requires: Business or Enterprise Linear plan.
+      # Soft-fail: continue-on-error so a Linear outage never blocks the deploy.
       - name: Create Linear Release
-        # No if-guard on the secret: secrets in if: conditions are always
-        # redacted to empty string by GHA and the comparison never works.
-        # Instead the script calls requireEnv("LINEAR_ACCESS_KEY") and exits 1
-        # on a hard missing-key failure, which is a clear signal to add the
-        # secret. If LINEAR_ACCESS_KEY is present but Linear is unreachable the
-        # script exits 0 (soft-fail) so the deploy is never blocked.
-        #
-        # github.run_number and github.sha are GHA system values — not
-        # user-controlled input — so they are safe to interpolate here.
-        env:
-          LINEAR_ACCESS_KEY: ${{ secrets.LINEAR_ACCESS_KEY }}
-          PREV_SHA: ${{ steps.prev_sha.outputs.sha }}
-          RELEASE_NAME: "${{ github.run_number }} — ${{ github.sha }}"
-        run: node .github/scripts/linear-release.mjs
+        continue-on-error: true
+        uses: linear/linear-release-action@v0
+        with:
+          access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
