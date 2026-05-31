@@ -109,7 +109,16 @@
       "Bash(tofu import*)",
       "Bash(tofu show*)",
       "Bash(tofu version*)",
-      "Bash(pnpm *)"
+      "Bash(pnpm *)",
+      "Bash(pnpm install *)",
+      "Read(//private/tmp/vlink/**)",
+      "Bash(vercel teams *)",
+      "Bash(vercel link *)",
+      "Bash(vercel env *)",
+      "Bash(git fetch *)",
+      "mcp__claude_ai_Linear__list_issue_statuses",
+      "mcp__claude_ai_Linear__list_milestones",
+      "mcp__claude_ai_Linear__list_issues"
     ],
     "deny": [
       "Read(./secrets/**)",
@@ -263,6 +272,9 @@
       "Bash(docker rmi *)"
       ],
     "ask": [
+      "Read(.env)",
+      "Read(.env.*.local)",
+      "Read(.env.local)",
       "Bash(rm -rf *)",
       "Bash(git push --force *)",
       "Bash(git push -f *)",
