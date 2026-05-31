@@ -7,7 +7,8 @@ import type { AppEnv } from "../../app.js";
 export const agentToolListRoute = new Hono<AppEnv>();
 
 agentToolListRoute.post("/", async (c) => {
-  const body = agentToolList.input.parse(await c.req.json().catch(() => ({})));
+  const raw = await c.req.json().catch(() => null);
+  const body = agentToolList.input.parse(raw ?? {});
   const ctx = capabilityContext(c);
   const out = await agentToolListHandler(body, ctx);
   return c.json(out);

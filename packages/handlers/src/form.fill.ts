@@ -2,6 +2,7 @@ import { z } from "zod";
 import { generateObjectFor } from "@oxagen/ai";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { formFill, type FormFillInput } from "@oxagen/oxagen/contracts/form.fill";
+import { logger } from "./logger.js";
 
 // Derive the field shape from the contract input so this file never drifts.
 type FieldSpec = FormFillInput["fields"][number];
@@ -159,8 +160,12 @@ export const formFillHandler: CapabilityHandler<typeof formFill> = async (input,
       },
     });
     modelObject = result.object;
-  } catch {
+  } catch (err) {
     // Model error → return all fields unchanged, no throw (policy §0.5).
+    logger.warn(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "form.fill: generateObjectFor failed — returning fields unchanged",
+    );
     return {
       fields: fields.map((f) => ({
         name: f.name,

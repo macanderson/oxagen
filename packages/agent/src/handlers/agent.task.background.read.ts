@@ -10,7 +10,17 @@ export async function agentTaskBackgroundReadHandler(
   ctx: CapabilityContext,
 ): Promise<AgentTaskBackgroundReadOutput> {
   const [row] = await db()
-    .select()
+    .select({
+      publicId: schema.backgroundTasks.publicId,
+      kind: schema.backgroundTasks.kind,
+      status: schema.backgroundTasks.status,
+      label: schema.backgroundTasks.label,
+      resultPayload: schema.backgroundTasks.resultPayload,
+      failureReason: schema.backgroundTasks.failureReason,
+      createdAt: schema.backgroundTasks.createdAt,
+      startedAt: schema.backgroundTasks.startedAt,
+      completedAt: schema.backgroundTasks.completedAt,
+    })
     .from(schema.backgroundTasks)
     .where(
       and(

@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { NodeLabels, EdgeTypes, VectorIndexes } from "./types.js";
 
 // These tests guard the ontology type registry against accidental drift.
-// The VectorIndexes array is iterated by migrate.ts to create Neo4j vector
-// indexes — any structural regression here would produce a silent schema mismatch.
+// VectorIndexes is consumed at runtime by the Neo4j client; structural regressions
+// here (missing fields, wrong dimensions, duplicate names) would produce silent schema mismatches.
 
 describe("NodeLabels (@oxagen/ontology)", () => {
   it("exports every expected label constant", () => {

@@ -5,6 +5,7 @@ import { resolveOrg } from "@/lib/resolve-org";
 import { SubscriptionSummary } from "@/components/billing/subscription-summary";
 import { CreditBalance } from "@/components/billing/credit-balance";
 import { PlansGrid } from "../plans-grid";
+import { safeQuery } from "../safe-query";
 
 export default async function BillingSubscriptionPage({
   params,
@@ -13,14 +14,6 @@ export default async function BillingSubscriptionPage({
 }) {
   const { orgSlug } = await params;
   const tenant = await resolveOrg(orgSlug);
-
-  const safeQuery = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
-    try {
-      return await fn();
-    } catch {
-      return fallback;
-    }
-  };
 
   const plans = await safeQuery(
     () => db().select().from(schema.plans).where(eq(schema.plans.isPublic, true)),

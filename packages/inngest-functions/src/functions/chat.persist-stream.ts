@@ -1,7 +1,8 @@
 import { inngest } from "../inngest.js";
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
-import { clickhouse } from "@oxagen/telemetry";
+import { insertTokenUsage } from "@oxagen/telemetry";
+import { logger } from "../logger.js";
 
 /**
  * Terminal persistence for a streamed assistant turn. The streaming UI
@@ -16,7 +17,7 @@ export const chatPersistStream = inngest.createFunction(
   { id: "chat.persist-stream", retries: 3 },
   { event: "chat/message.streamed" },
   async ({ event, step }) => {
-    const { orgId, assistantMessageId, content, tokenUsage } = event.data;
+    const { orgId, workspaceId, assistantMessageId, content, tokenUsage } = event.data;
 
     await step.run("update-message", async () => {
       const d = db();
@@ -32,26 +33,30 @@ export const chatPersistStream = inngest.createFunction(
 
     if (tokenUsage) {
       await step.run("insert-token-usage", async () => {
-        const ch = clickhouse();
-        await ch.insert({
-          table: "token_usage",
-          values: [
-            {
-              execution_step_id: assistantMessageId,
-              org_id: orgId,
-              model: tokenUsage.model,
-              input_tokens: tokenUsage.inputTokens,
-              output_tokens: tokenUsage.outputTokens,
-              cached_tokens: tokenUsage.cachedTokens,
-              cost_usd_micros: tokenUsage.costMicros,
-              created_at: new Date().toISOString(),
-            },
-          ],
-          format: "JSONEachRow",
-        });
+        // provider, duration_ms, and prompt_hash are not available at this
+        // callsite; sentinel values are used. TODO(OXA): thread provider and
+        // duration through the chat/message.streamed event payload.
+        await insertTokenUsage([
+          {
+            execution_step_id: assistantMessageId,
+            org_id: orgId,
+            workspace_id: workspaceId,
+            model: tokenUsage.model,
+            provider: "",
+            input_tokens: tokenUsage.inputTokens,
+            output_tokens: tokenUsage.outputTokens,
+            cached_tokens: tokenUsage.cachedTokens,
+            cost_usd_micros: tokenUsage.costMicros,
+            duration_ms: 0,
+            surface: "runner",
+            prompt_hash: "",
+            created_at: new Date().toISOString(),
+          },
+        ]);
       });
     }
 
+    logger.info({ assistantMessageId, hasTokenUsage: tokenUsage !== null }, "chat.persist-stream complete");
     return { persisted: assistantMessageId };
   },
 );

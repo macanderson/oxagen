@@ -71,8 +71,10 @@ describe("SecurityEventInput — append-only column contract", () => {
     expect(event).toHaveProperty("actorUserId");
     expect(event).toHaveProperty("orgId");
     expect(event).toHaveProperty("outcome");
-    // occurredAt is optional (DB defaults to now())
-    expect("occurredAt" in event || true).toBe(true);
+    // occurredAt is optional (DB defaults to now()) — must not appear in the
+    // manually constructed event object above since it was not set.
+    const keys = Object.keys(event);
+    expect(keys).not.toContain("occurredAt");
   });
 });
 

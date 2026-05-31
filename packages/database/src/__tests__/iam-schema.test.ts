@@ -31,56 +31,7 @@ import {
   accessRequests,
   iamSessions,
 } from "../schema/index.js";
-
-// ---------------------------------------------------------------------------
-// Internal types for Drizzle query chunk inspection (mirrors schema-append-only.test.ts)
-// ---------------------------------------------------------------------------
-
-interface SqlLiteralChunk {
-  value: string[];
-}
-
-interface ColumnRefChunk {
-  name: string;
-}
-
-type QueryChunk = SqlLiteralChunk | ColumnRefChunk | unknown;
-
-interface DrizzleCheck {
-  name: string;
-  value: {
-    queryChunks?: QueryChunk[];
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function flattenCheckSql(check: DrizzleCheck): string {
-  const chunks = check.value.queryChunks ?? [];
-  return chunks
-    .map((chunk) => {
-      if (chunk === null || typeof chunk !== "object") return "";
-      const c = chunk as Record<string, unknown>;
-      if (typeof c["name"] === "string") return c["name"];
-      if (Array.isArray(c["value"])) {
-        return (c["value"] as unknown[])
-          .filter((v): v is string => typeof v === "string")
-          .join("");
-      }
-      return "";
-    })
-    .join("");
-}
-
-function sqlColumnNames(table: Parameters<typeof getTableConfig>[0]): string[] {
-  return getTableConfig(table).columns.map((col) => col.name);
-}
-
-function getChecks(table: Parameters<typeof getTableConfig>[0]): DrizzleCheck[] {
-  return getTableConfig(table).checks as DrizzleCheck[];
-}
+import { flattenCheckSql, sqlColumnNames, getChecks, type DrizzleCheck } from "./_test-helpers.js";
 
 // ---------------------------------------------------------------------------
 // 1. All 7 IAM tables are importable from schema/index

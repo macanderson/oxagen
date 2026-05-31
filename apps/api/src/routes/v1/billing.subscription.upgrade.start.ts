@@ -10,5 +10,5 @@ billingSubscriptionUpgradeStartRoute.post("/", async (c) => {
   const body = billingSubscriptionUpgradeStart.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
   const result = await billingSubscriptionUpgradeStartHandler(body, ctx);
-  return c.json(billingSubscriptionUpgradeStart.output.parse(result));
+  return c.json(result);
 });

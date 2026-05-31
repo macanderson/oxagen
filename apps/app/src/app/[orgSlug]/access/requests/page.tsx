@@ -9,7 +9,7 @@ export default function AccessRequestsPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">JIT access requests</p>
         <p className="text-xs text-muted-foreground">
-          Just-in-time access requests and approval routing will appear here. Phase 2 delivery.
+          Just-in-time access requests and approval routing will appear here. Coming soon.
         </p>
       </div>
     </div>

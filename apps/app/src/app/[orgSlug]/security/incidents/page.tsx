@@ -9,7 +9,7 @@ export default function SecurityIncidentsPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">Incident log</p>
         <p className="text-xs text-muted-foreground">
-          Break-glass procedure log and incident routing rules will appear here. Phase 2 delivery.
+          Break-glass procedure log and incident routing rules will appear here. Coming soon.
         </p>
       </div>
     </div>

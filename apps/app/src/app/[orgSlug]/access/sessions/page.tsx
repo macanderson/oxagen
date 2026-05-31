@@ -9,7 +9,7 @@ export default function AccessSessionsPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">Active sessions</p>
         <p className="text-xs text-muted-foreground">
-          All active principal sessions with force-revoke controls will appear here. Phase 2 delivery.
+          All active principal sessions with force-revoke controls will appear here. Coming soon.
         </p>
       </div>
     </div>

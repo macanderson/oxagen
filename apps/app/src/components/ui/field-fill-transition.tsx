@@ -21,13 +21,12 @@
 "use client";
 
 import * as React from "react";
-import { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export interface FieldFillTransitionProps {
   /** When true, plays the accent-glow highlight. */
   active: boolean;
-  children: ReactNode;
+  children: React.ReactNode;
   className?: string;
 }
 

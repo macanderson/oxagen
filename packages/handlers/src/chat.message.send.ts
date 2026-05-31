@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
+import { logger } from "./logger.js";
 
 /**
  * Foundation-milestone variant: persists the user turn and a placeholder
@@ -18,7 +19,10 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
   input,
   ctx,
 ) => {
-  if (!ctx.userId) throw new Error("chat.message.send requires an authenticated user");
+  if (!ctx.userId) {
+    logger.warn({ orgId: ctx.orgId }, "chat.message.send: rejected — no authenticated user");
+    throw new Error("chat.message.send requires an authenticated user");
+  }
   const d = db();
 
   return await d.transaction(async (tx) => {
@@ -100,11 +104,23 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
       .set({ activeLeafMessageId: assistantMessage.id, updatedAt: new Date() })
       .where(eq(schema.conversations.id, conversationId));
 
-    return {
+    const result = {
       conversationId,
       userMessageId: userMessage.id,
       assistantMessageId: assistantMessage.id,
       activeLeafMessageId: assistantMessage.id,
     };
+    logger.info(
+      {
+        conversationId,
+        userMessageId: userMessage.id,
+        assistantMessageId: assistantMessage.id,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        surface: ctx.surface,
+      },
+      "chat.message.send: message persisted successfully",
+    );
+    return result;
   });
 };

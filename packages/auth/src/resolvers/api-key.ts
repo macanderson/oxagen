@@ -10,7 +10,7 @@
  * This function has no HTTP dependency — it can be called identically from
  * API middleware, MCP handler, CLI, or tests.
  */
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@oxagen/database";
 
@@ -56,7 +56,10 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
     },
   });
 
-  if (!row || row.keyHash !== hash) return { ok: false, kind: "invalid" };
+  if (!row) return { ok: false, kind: "invalid" };
+  const storedHashBuf = Buffer.from(row.keyHash, "hex");
+  const computedHashBuf = Buffer.from(hash, "hex");
+  if (!timingSafeEqual(storedHashBuf, computedHashBuf)) return { ok: false, kind: "invalid" };
   if (row.expiresAt && row.expiresAt.getTime() < Date.now()) {
     return { ok: false, kind: "expired" };
   }

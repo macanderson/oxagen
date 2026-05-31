@@ -15,8 +15,7 @@ import { lazy, type LazyExoticComponent } from "react";
 // LazyExoticComponent is generic over component props. We widen to a common
 // props shape for the registry map — consumers spread `block.props` which is
 // typed as `Record<string, unknown>` in the content block.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyLazy = LazyExoticComponent<(props: any) => React.ReactElement | null>;
+type AnyLazy = LazyExoticComponent<(props: Record<string, unknown>) => React.ReactElement | null>;
 
 /**
  * Registry keyed by componentId string. All entries are React.lazy so the
@@ -28,6 +27,20 @@ type AnyLazy = LazyExoticComponent<(props: any) => React.ReactElement | null>;
  *   "install-instructions" — renders a copy-able installation step block (M agent)
  *   "make-video-form"      — renders the make-a-video request form (V agent)
  */
+/**
+ * Emit a structured warning when a componentId arrives with no registered
+ * renderer. Called from both message-bubble and chat-shell-client so the
+ * signal appears at exactly one definition site.
+ *
+ * Replace this with a telemetry/logger import when one is available —
+ * the call sites don't need to change.
+ */
+export function logUnknownComponent(componentId: string): void {
+  console.warn(
+    `[chat-component-registry] unknown componentId "${componentId}" — no renderer registered`,
+  );
+}
+
 export const CHAT_COMPONENTS: Record<string, AnyLazy> = {
   "svg-preview": lazy(
     () => import("@/components/chat/registry-components/svg-preview"),

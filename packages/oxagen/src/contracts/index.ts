@@ -1,7 +1,7 @@
 // contracts/index.ts — canonical per-package contracts array (OXA-1390, Phase 3).
 //
-// Every defineContract() call in this package appears in this array. The array
-// is the canonical registry for tooling that needs to discover capabilities
+// Every capability registered via registerCapability() in this package is re-exported here.
+// The array is the canonical registry for tooling that needs to discover capabilities
 // (seed migration, check-contracts.mjs CI guard, Wave 5 access UI). Adding a
 // new contract file requires a corresponding entry here.
 //

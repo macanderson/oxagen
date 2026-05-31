@@ -39,58 +39,7 @@ import {
   securityEvents,
   creditBalances,
 } from "../schema/index.js";
-
-// ---------------------------------------------------------------------------
-// Internal types for Drizzle query chunk inspection
-// ---------------------------------------------------------------------------
-
-interface SqlLiteralChunk {
-  value: string[];
-}
-
-interface ColumnRefChunk {
-  name: string;
-}
-
-type QueryChunk = SqlLiteralChunk | ColumnRefChunk | unknown;
-
-interface DrizzleCheck {
-  name: string;
-  value: {
-    queryChunks?: QueryChunk[];
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Helper: flatten queryChunks into a single inspectable SQL string.
-// ---------------------------------------------------------------------------
-
-function flattenCheckSql(check: DrizzleCheck): string {
-  const chunks = check.value.queryChunks ?? [];
-  return chunks
-    .map((chunk) => {
-      if (chunk === null || typeof chunk !== "object") return "";
-      const c = chunk as Record<string, unknown>;
-      // Column reference: carries a `name` property (SQL column name).
-      if (typeof c["name"] === "string") return c["name"];
-      // SQL literal: carries a `value` array of string fragments.
-      if (Array.isArray(c["value"])) {
-        return (c["value"] as unknown[])
-          .filter((v): v is string => typeof v === "string")
-          .join("");
-      }
-      return "";
-    })
-    .join("");
-}
-
-// ---------------------------------------------------------------------------
-// Helper: collect SQL column names from a table via getTableConfig.
-// ---------------------------------------------------------------------------
-
-function sqlColumnNames(table: Parameters<typeof getTableConfig>[0]): string[] {
-  return getTableConfig(table).columns.map((col) => col.name);
-}
+import { flattenCheckSql, sqlColumnNames, type DrizzleCheck } from "./_test-helpers.js";
 
 // ---------------------------------------------------------------------------
 // 1. Append-only tables: must have no updated_at or deleted_at columns

@@ -9,7 +9,7 @@ export default function DeveloperTokensPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">API tokens</p>
         <p className="text-xs text-muted-foreground">
-          Create and manage API keys as scoped service principal credentials. Phase 2 delivery.
+          Create and manage API keys as scoped service principal credentials. Coming soon.
         </p>
       </div>
     </div>

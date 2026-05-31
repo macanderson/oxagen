@@ -1,4 +1,5 @@
 import { tool, type Tool, type ToolSet } from "ai";
+import type { ZodTypeAny } from "zod";
 import { insertToolInvocation } from "@oxagen/telemetry";
 import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityContext } from "../types.js";
@@ -21,7 +22,7 @@ type AnyCapability = {
   name: string;
   description: string;
   agent?: { riskLevel?: "low" | "medium" | "high"; category?: string; requiresApproval?: boolean };
-  input: unknown;
+  input: ZodTypeAny;
   surfaces?: readonly ("api" | "mcp" | "agent")[];
 };
 
@@ -77,10 +78,12 @@ export async function materializeTools(
     if (cap.name === "agent.code.execute" && !sandboxEnabled) continue;
     const riskLevel: "low" | "medium" | "high" = cap.agent?.riskLevel ?? "low";
     const requiresApproval = cap.agent?.requiresApproval === true;
+    // Derive the provider dimension for ClickHouse rollups from the capability
+    // domain prefix (e.g. "documents.generate" → provider "documents").
+    const capProvider = cap.name.includes(".") ? (cap.name.split(".")[0] ?? "oxagen") : "oxagen";
     out[cap.name] = tool({
       description: cap.description,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cap.input is a zod schema; AI SDK accepts ZodTypeAny.
-      parameters: cap.input as any,
+      parameters: cap.input,
       execute: async (input: unknown) => {
         await beforeTool({ capability: cap.name, ctx, input });
         const invocationId = crypto.randomUUID();
@@ -128,7 +131,7 @@ export async function materializeTools(
               risk_level: riskLevel,
               required_approval: requiresApproval ? 1 : 0,
               surface: ctx.surface,
-              provider: "",
+              provider: capProvider,
               created_at: new Date().toISOString(),
             });
           } catch {
@@ -160,7 +163,7 @@ export async function materializeTools(
               risk_level: riskLevel,
               required_approval: requiresApproval ? 1 : 0,
               surface: ctx.surface,
-              provider: "",
+              provider: capProvider,
               created_at: new Date().toISOString(),
             });
           } catch {

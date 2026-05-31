@@ -1,9 +1,9 @@
 "use client";
 import * as React from "react";
-import { Check, ChevronDown, ChevronRight, Loader2, X } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import { RiskBadge } from "./risk-badge";
+import { StatusIcon } from "./status-icon";
 import type { RiskLevel, ToolCallStatus } from "./stream-event-types";
 
 export interface ToolCallCardProps {
@@ -109,15 +109,6 @@ export function ToolCallCard(props: ToolCallCardProps) {
   );
 }
 
-function StatusIcon({ status }: { status: ToolCallStatus }) {
-  if (status === "running") {
-    return <Loader2 className={cn("h-3.5 w-3.5 animate-spin text-accent")} aria-label="Running" />;
-  }
-  if (status === "completed") {
-    return <Check className="h-3.5 w-3.5 text-emerald-500" aria-label="Completed" />;
-  }
-  return <X className="h-3.5 w-3.5 text-destructive" aria-label="Failed" />;
-}
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (

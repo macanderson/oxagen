@@ -1,12 +1,7 @@
 import { streamText, type CoreMessage, type LanguageModel, type ToolSet } from "ai";
-import {
-  hashPrompt,
-  insertTokenUsage,
-  providerFromModelId,
-  type Surface,
-} from "@oxagen/telemetry";
-import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
+import { providerFromModelId, type Surface } from "@oxagen/telemetry";
 import { defaultModel } from "./models.js";
+import { recordAIUsage } from "./meter.js";
 
 export interface StreamAgentReplyArgs {
   messages: CoreMessage[];
@@ -59,59 +54,26 @@ export function streamAgentReply(args: StreamAgentReplyArgs) {
       const durationMs = Date.now() - startedAt;
       const inputTokens = event.usage.promptTokens ?? 0;
       const outputTokens = event.usage.completionTokens ?? 0;
-      // The cost meter (provider rate card) turns tokens-in/out-by-model into
-      // the USD a provider invoices us. This is the input to both the telemetry
-      // cost column and the credit charge below.
+      // cachedTokens defaults to 0 — prompt caching is not yet enabled on
+      // this surface (no cache-control markers). When turned on, forward the
+      // provider's cache-read count so the meter prices cached tokens at the
+      // cheaper rate (e.g. event.providerMetadata.anthropic.cacheReadInputTokens).
       //
-      // cachedTokens is omitted (defaults to 0) because this gate does not yet
-      // enable prompt caching — there are no cache-control markers on the
-      // messages/system, so the provider reports zero cached reads. If caching
-      // is turned on, forward the provider's cache-read count here (e.g.
-      // event.providerMetadata.anthropic.cacheReadInputTokens) so the meter
-      // prices those tokens at the cheaper cached rate; otherwise the customer
-      // is over-charged on the cached portion.
-      const usage = { model: model.modelId, inputTokens, outputTokens };
-      const costUsdMicros = providerCostUsdMicros(usage);
-
-      // Telemetry write is best-effort; if ClickHouse is unreachable, the
-      // chat still completes and the message persists in Postgres.
-      try {
-        const promptHash = await hashPrompt(promptTextForHash);
-        await insertTokenUsage([
-          {
-            execution_step_id: args.telemetry.messageId,
-            org_id: args.telemetry.orgId,
-            workspace_id: args.telemetry.workspaceId,
-            model: model.modelId,
-            provider,
-            input_tokens: inputTokens,
-            output_tokens: outputTokens,
-            cached_tokens: 0,
-            cost_usd_micros: costUsdMicros,
-            duration_ms: durationMs,
-            surface: args.telemetry.surface,
-            prompt_hash: promptHash,
-            created_at: new Date().toISOString(),
-          },
-        ]);
-      } catch {
-        // Swallow — telemetry must never fail the chat turn.
-      }
-
-      // The gate: debit the org's credits for what this call cost us, marked
-      // up to the target margin. Best-effort and post-call — a metering
-      // failure must never fail the user's turn. Admission control (refusing a
-      // turn when the balance is empty) is the caller's pre-turn guard via
-      // billing.hasCreditBalance.
-      try {
-        await chargeUsageCredits({
-          orgId: args.telemetry.orgId,
-          referenceId: args.telemetry.messageId,
-          ...usage,
-        });
-      } catch {
-        // Swallow — credit metering must never fail the chat turn.
-      }
+      // Telemetry + credit metering via shared helper (best-effort; never
+      // fails the chat turn). Admission control is the caller's pre-turn
+      // guard via billing.hasCreditBalance.
+      await recordAIUsage({
+        executionStepId: args.telemetry.messageId,
+        orgId: args.telemetry.orgId,
+        workspaceId: args.telemetry.workspaceId,
+        model: model.modelId,
+        provider,
+        inputTokens,
+        outputTokens,
+        durationMs,
+        surface: args.telemetry.surface,
+        promptTextForHash,
+      });
       await args.onFinish?.({
         text: event.text,
         usage: {

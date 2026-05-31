@@ -9,7 +9,7 @@ export default function SecurityMfaPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">MFA enforcement</p>
         <p className="text-xs text-muted-foreground">
-          Enforcement policies and accepted factors will be configured here. Phase 2 delivery.
+          Enforcement policies and accepted factors will be configured here. Coming soon.
         </p>
       </div>
     </div>

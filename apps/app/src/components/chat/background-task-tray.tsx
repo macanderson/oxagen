@@ -114,9 +114,14 @@ export function BackgroundTaskTray({ initialTaskIds, fetchTask, cancelTask }: Ba
       cancelled = true;
       clearInterval(interval);
     };
-    // We intentionally exclude `snapshots` from deps: re-evaluating each
-    // tick is enough; including it would reset the interval on every poll.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `snapshots` is intentionally excluded: the tick updater always reads
+    // fresh state via `setSnapshots(prev => ...)`, so a stale closure is
+    // safe. Including `snapshots` would reset the interval on every poll,
+    // causing thrash. The `hasActive()` check on line above reads the
+    // in-scope `snapshots` from the render that set up this effect — a
+    // one-tick lag is acceptable because the interval self-clears on the
+    // next run once all tasks are terminal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshots intentionally excluded; see comment above
   }, [taskIds, fetchTask]);
 
   if (taskIds.length === 0) return null;

@@ -9,7 +9,7 @@ export default function SecurityCompliancePage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">Compliance dashboards</p>
         <p className="text-xs text-muted-foreground">
-          SOC2 and ISO 27001 control coverage dashboards will appear here. Phase 2 delivery.
+          SOC2 and ISO 27001 control coverage dashboards will appear here. Coming soon.
         </p>
       </div>
     </div>

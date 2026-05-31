@@ -107,15 +107,9 @@ export function WorkspaceGeneralForm({
     e.preventDefault();
     setIsSaving(true);
     try {
-      // Stub: log the values. A real implementation would call a server action
+      // Stub: A real implementation would call a server action
       // that writes `name` to `workspaces.name` and `description` to
       // `workspaces.settings->>'description'` (or a future dedicated column).
-      console.log("[workspace-general] save", {
-        orgSlug,
-        workspaceSlug,
-        workspaceId,
-        values,
-      });
       // Simulate async
       await new Promise<void>((resolve) => setTimeout(resolve, 400));
       setSavedAt(new Date());

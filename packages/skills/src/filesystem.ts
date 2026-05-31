@@ -1,4 +1,4 @@
-import { readdir, stat } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { loadSkillFile } from "./loader.js";
 import type { Skill } from "./types.js";
@@ -13,21 +13,19 @@ export async function scanSkillsDir(root: string): Promise<Skill[]> {
 }
 
 async function walk(dir: string, out: Skill[]): Promise<void> {
-  let entries: string[] = [];
+  let entries: import("node:fs").Dirent[] = [];
   try {
-    entries = await readdir(dir);
+    entries = await readdir(dir, { withFileTypes: true });
   } catch {
     return;
   }
   for (const entry of entries) {
-    const full = join(dir, entry);
-    const info = await stat(full).catch(() => null);
-    if (!info) continue;
-    if (info.isDirectory()) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
       await walk(full, out);
       continue;
     }
-    if (info.isFile() && entry.endsWith(".skill.md")) {
+    if (entry.isFile() && entry.name.endsWith(".skill.md")) {
       const skill = await loadSkillFile(full, { source: "builtin" });
       out.push(skill);
     }

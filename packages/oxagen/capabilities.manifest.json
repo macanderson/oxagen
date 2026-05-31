@@ -1,4 +1,5 @@
 {
+  "generatedAt": "2026-05-31T00:00:00.000Z",
   "capabilities": [
     {
       "name": "agent.approval.resolve",
@@ -418,6 +419,24 @@
         "mcp": true,
         "unit": true,
         "e2e": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "video.generate",
+      "file": "video.generate.ts",
+      "domain": "video",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
         "docs": true
       }
     },

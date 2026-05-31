@@ -74,6 +74,8 @@ export interface KernelSecurityEvent {
   requestId: string;
   /** The CapabilityErrorCode that caused a deny/error, if any. */
   errorCode: CapabilityErrorCode | null;
+  /** Wall-clock milliseconds from invoke() entry to emit. */
+  durationMs: number;
 }
 
 type SecurityEventEmitter = (event: KernelSecurityEvent) => void;
@@ -163,6 +165,7 @@ export async function invoke(
   ctx: CapabilityContext,
   opts: InvokeOptions = {},
 ): Promise<unknown> {
+  const startMs = Date.now();
   const cap = getCapability(name);
   if (!cap) {
     emitSecurityEvent({
@@ -174,6 +177,7 @@ export async function invoke(
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
       errorCode: "unknown_capability",
+      durationMs: Date.now() - startMs,
     });
     throw new CapabilityError(name, "unknown_capability", `Unknown capability "${name}"`);
   }
@@ -188,6 +192,7 @@ export async function invoke(
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
       errorCode: "surface_denied",
+      durationMs: Date.now() - startMs,
     });
     throw new CapabilityError(
       name,
@@ -207,6 +212,7 @@ export async function invoke(
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
       errorCode: "invalid_input",
+      durationMs: Date.now() - startMs,
     });
     throw new CapabilityError(
       name,
@@ -232,6 +238,7 @@ export async function invoke(
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
       errorCode: isCapErr ? err.code : null,
+      durationMs: Date.now() - startMs,
     });
     throw err;
   }
@@ -247,6 +254,7 @@ export async function invoke(
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
       errorCode: "invalid_output",
+      durationMs: Date.now() - startMs,
     });
     throw new CapabilityError(
       name,
@@ -265,6 +273,7 @@ export async function invoke(
     actorUserId: ctx.userId,
     requestId: ctx.requestId,
     errorCode: null,
+    durationMs: Date.now() - startMs,
   });
 
   return outputResult.data;

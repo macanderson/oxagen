@@ -1,8 +1,8 @@
 "use client";
 import * as React from "react";
-import { Check, Loader2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { StatusIcon } from "./status-icon";
 import { formatDuration } from "./tool-call-card";
 import type { ToolCallStatus } from "./stream-event-types";
 
@@ -104,8 +104,3 @@ export function CodeExecuteCard({
   );
 }
 
-function StatusIcon({ status }: { status: ToolCallStatus }) {
-  if (status === "running") return <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />;
-  if (status === "completed") return <Check className="h-3.5 w-3.5 text-emerald-500" />;
-  return <X className="h-3.5 w-3.5 text-destructive" />;
-}

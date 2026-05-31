@@ -104,11 +104,11 @@ if (isDirectRun) {
   seed()
     .then(() => closeDatabase())
     .then(() => {
-      console.log("Seed complete");
+      process.stdout.write("Seed complete\n");
       process.exit(0);
     })
     .catch((err) => {
-      console.error("Seed failed:", err);
+      process.stderr.write(`Seed failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`);
       process.exit(1);
     });
 }

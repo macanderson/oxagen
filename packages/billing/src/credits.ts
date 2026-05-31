@@ -1,17 +1,8 @@
 import { db, schema } from "@oxagen/database";
 import { eq, sql } from "drizzle-orm";
+import { CREDIT_REASONS } from "./constants.js";
 
-const ALLOWED_REASONS = new Set([
-  "grant_signup",
-  "grant_plan_renewal",
-  "grant_credit_pack",
-  "grant_manual",
-  "consume_execution",
-  "consume_tool_call",
-  "consume_token_overage",
-  "refund",
-  "adjustment",
-]);
+const ALLOWED_REASONS = new Set<string>(Object.values(CREDIT_REASONS));
 
 export interface GrantCreditsArgs {
   orgId: string;

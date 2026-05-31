@@ -7,4 +7,3 @@ export const PORTS = {
   mcp: 4100,
 } as const;
 
-export type AppName = keyof typeof PORTS;

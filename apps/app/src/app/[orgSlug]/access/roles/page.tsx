@@ -9,7 +9,7 @@ export default function AccessRolesPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">Role builder</p>
         <p className="text-xs text-muted-foreground">
-          Custom roles and IdP group mappings will be managed here. Phase 2 delivery.
+          Custom roles and IdP group mappings will be managed here. Coming soon.
         </p>
       </div>
     </div>

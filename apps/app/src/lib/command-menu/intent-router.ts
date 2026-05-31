@@ -158,8 +158,8 @@ export function classifyIntent(options: ClassifyOptions): Intent {
   }
 
   // 2. Navigate: strip nav prefixes and fuzzy-match against known targets.
-  if (looksLikeNavigate(trimmed) || true) {
-    // Always attempt nav match (not gated on prefix — short exact labels match well).
+  // Always attempt nav match — not gated on prefix, short exact labels match well.
+  {
     const stripped = NAV_PREFIXES.reduce((acc, p) => {
       if (n.startsWith(p + " ")) return acc.slice(p.length + 1).trim();
       return acc;

@@ -27,4 +27,5 @@ import "./contracts/documents.generate.js";
 import "./contracts/documents.pdf.create.js";
 import "./contracts/form.fill.js";
 import "./contracts/organization.create.js";
+import "./contracts/video.generate.js";
 import "./contracts/workspace.create.js";

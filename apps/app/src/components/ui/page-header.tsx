@@ -19,7 +19,6 @@
 "use client";
 
 import * as React from "react";
-import { type ReactNode } from "react";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,9 +26,9 @@ export interface PageHeaderProps {
   title: string;
   description?: string;
   /** Rendered above the title row — typically a <Breadcrumb /> */
-  breadcrumb?: ReactNode;
+  breadcrumb?: React.ReactNode;
   /** Rendered right-aligned beside the optional Ask button */
-  actions?: ReactNode;
+  actions?: React.ReactNode;
   /** When provided, an "Ask about this" button is shown */
   onAskAboutThis?: () => void;
   className?: string;

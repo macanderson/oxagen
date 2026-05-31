@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
+import { logger } from "./logger.js";
 
 // Postgres unique_violation. Two concurrent creates with the same slug can
 // both pass the pre-check before either insert lands; the loser hits the
@@ -12,6 +13,7 @@ function isSlugConflict(err: unknown): boolean {
 
 export const organizationCreateHandler: CapabilityHandler<typeof organizationCreate> = async (input, ctx) => {
   if (!ctx.userId) {
+    logger.warn({ orgId: ctx.orgId }, "organization.create: rejected — no authenticated user");
     throw new Error("organization.create requires an authenticated user");
   }
   const d = db();
@@ -58,17 +60,24 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
       updatedByUserId: ctx.userId,
     });
 
-      return {
+      const result = {
         publicId: org.publicId,
         name: org.name,
         slug: org.slug,
         createdAt: org.createdAt.toISOString(),
       };
+      logger.info(
+        { orgId: org.id, slug: org.slug, surface: ctx.surface },
+        "organization.create: organization created successfully",
+      );
+      return result;
     });
   } catch (err) {
     if (isSlugConflict(err)) {
+      logger.warn({ slug: input.slug, orgId: ctx.orgId }, "organization.create: slug conflict");
       throw new Error(`slug "${input.slug}" already in use`);
     }
+    logger.error({ err, orgId: ctx.orgId }, "organization.create: transaction failed");
     throw err;
   }
 };
