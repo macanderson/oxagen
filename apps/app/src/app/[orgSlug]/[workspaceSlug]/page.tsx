@@ -33,7 +33,7 @@ export default async function WorkspaceHome({
         <Card>
           <CardHeader>
             <CardTitle>Workspace settings</CardTitle>
-            <CardDescription>Members, defaults, and graph routing.</CardDescription>
+            <CardDescription>Members, defaults, and connections.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline">
