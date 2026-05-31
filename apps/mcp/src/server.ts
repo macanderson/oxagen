@@ -9,7 +9,7 @@ import {
 // handler dependency chains until a capability is actually invoked.
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
-import { placeholderContext } from "./context.js";
+import { resolveMcpContext } from "./context.js";
 
 // MCP tools are no longer hand-listed. The server derives its tool surface
 // from the capability registry — every capability whose contract includes the
@@ -30,7 +30,14 @@ export function buildServer() {
   app.get("/healthz", (c) => c.json({ ok: true }));
 
   // /mcp/tools — discovery: every capability exposed on the mcp surface.
-  app.get("/mcp/tools", (c) => {
+  // Auth required: a caller must present a valid Bearer token to enumerate
+  // available tools. This prevents unauthenticated capability enumeration.
+  app.get("/mcp/tools", async (c) => {
+    const resolution = await resolveMcpContext(c.req.header("Authorization"));
+    if (!resolution.ok) {
+      return c.json({ error: "Unauthorized", reason: resolution.reason }, 401);
+    }
+
     const tools = capabilitiesForSurface("mcp").map((cap) => ({
       name: cap.name,
       description: cap.description,
@@ -41,14 +48,19 @@ export function buildServer() {
   });
 
   // /mcp/tools/:name — invoke by name through the kernel.
+  // Auth required: reject with 401 before the capability is looked up so
+  // that the error surface is uniform regardless of capability name.
   app.post("/mcp/tools/:name", async (c) => {
+    const resolution = await resolveMcpContext(c.req.header("Authorization"));
+    if (!resolution.ok) {
+      return c.json({ error: "Unauthorized", reason: resolution.reason }, 401);
+    }
+
     const name = c.req.param("name");
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Hono c.req.json() returns any; body is passed opaquely to the capability kernel which validates its own input via Zod.
     const body = await c.req.json().catch(() => ({}));
     try {
-      // TODO(auth increment): replace placeholderContext with a principal
-      // resolved from the MCP transport's Bearer key / OAuth token.
-      const result = await invoke(name, body, placeholderContext(), { surface: "mcp" });
+      const result = await invoke(name, body, resolution.ctx, { surface: "mcp" });
       return c.json({ result });
     } catch (err) {
       if (err instanceof CapabilityError) {

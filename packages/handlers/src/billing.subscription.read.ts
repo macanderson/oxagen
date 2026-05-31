@@ -9,6 +9,17 @@ const ACTIVE_STATUSES = ["trialing", "active", "past_due", "paused"];
 
 export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSubscriptionRead> =
   async (_input, ctx) => {
+    // Authorization guard: a resolved principal (user or API key) is required.
+    // API-key calls always carry a non-empty orgId; session calls that lack
+    // org scope are rejected here rather than at the transport layer so the
+    // check is surface-agnostic (API, MCP, agent — same code path).
+    if (!ctx.userId && !ctx.apiKeyId) {
+      throw new Error("Unauthorized: no authenticated principal");
+    }
+    if (!ctx.orgId) {
+      throw new Error("Forbidden: orgId is required to read billing data");
+    }
+
     const d = db();
 
     // Single round trip per panel render: subscription + plan + credit

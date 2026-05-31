@@ -78,6 +78,52 @@ beforeEach(() => {
   balanceFindFirst.mockResolvedValue({ balanceCents: 0n });
 });
 
+// ── authz guard tests ─────────────────────────────────────────────────────────
+
+describe("billingSubscriptionReadHandler — authorization guards", () => {
+  it("throws when no principal is present (no userId and no apiKeyId)", async () => {
+    const unauthenticatedCtx: CapabilityContext = {
+      ...ctx,
+      userId: null,
+      apiKeyId: null,
+    };
+    await expect(billingSubscriptionReadHandler({}, unauthenticatedCtx)).rejects.toThrow(
+      /Unauthorized/,
+    );
+  });
+
+  it("throws when orgId is empty (session-authenticated, unscoped)", async () => {
+    const unscopedCtx: CapabilityContext = {
+      ...ctx,
+      userId: "usr-scoped",
+      apiKeyId: null,
+      orgId: "",
+    };
+    await expect(billingSubscriptionReadHandler({}, unscopedCtx)).rejects.toThrow(
+      /Forbidden/,
+    );
+  });
+
+  it("does not throw when authenticated via userId with a valid orgId", async () => {
+    subFindFirst.mockResolvedValue(null);
+    const result = await billingSubscriptionReadHandler({}, ctx);
+    expect(result.subscription).toBeNull();
+  });
+
+  it("does not throw when authenticated via apiKeyId with a valid orgId", async () => {
+    subFindFirst.mockResolvedValue(null);
+    const apiKeyCtx: CapabilityContext = {
+      ...ctx,
+      userId: null,
+      apiKeyId: "aky_abc",
+    };
+    const result = await billingSubscriptionReadHandler({}, apiKeyCtx);
+    expect(result.subscription).toBeNull();
+  });
+});
+
+// ── ClickHouse failure path ───────────────────────────────────────────────────
+
 describe("billingSubscriptionReadHandler — ClickHouse failure path", () => {
   it("returns periodUsage=null and logs at warn when sumTokenUsage throws", async () => {
     subFindFirst.mockResolvedValue(activeSub);
