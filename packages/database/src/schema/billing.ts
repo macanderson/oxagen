@@ -37,7 +37,7 @@ export const plans = billingSchema.table(
   },
   (t) => ({
     slugIdx: uniqueIndex("plans_slug_idx").on(t.slug),
-    tierCheck: check("plans_tier_check", sql`${t.tier} IN ('free','pro','enterprise')`),
+    tierCheck: check("plans_tier_check", sql`${t.tier} IN ('free','build','scale','enterprise')`),
   }),
 );
 
