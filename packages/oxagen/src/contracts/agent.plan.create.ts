@@ -10,6 +10,8 @@ export const agentPlanCreate = registerCapability({
   layers: ["schema", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "low", category: "planning" },
+  sensitivity: "low",
+  defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow" },

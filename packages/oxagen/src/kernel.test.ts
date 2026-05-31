@@ -32,6 +32,9 @@ const echoCap = () =>
     mode: "sync" as const,
     surfaces: ["api", "mcp"] as const,
     layers: ["unit"] as const,
+    sensitivity: "low" as const,
+    defaultEffect: "deny" as const,
+    defaultRoles: { org: {}, workspace: {} },
     input: z.object({ value: z.string() }),
     output: z.object({ value: z.string() }),
   });

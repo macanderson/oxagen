@@ -9,6 +9,20 @@ const nextConfig = {
   turbopack: {
     resolveExtensions: [".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx", ".json"],
   },
+  webpack: (config) => {
+    // fumadocs-mdx loads source files via a dynamic `import(url.href)` that
+    // webpack can't statically analyse (the docs dev runs `next dev --webpack`).
+    // It's harmless at runtime; silence the build-dependency parse warning.
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings ?? []),
+      { module: /fumadocs-mdx/, message: /Parsing of .* for build dependencies failed/ },
+    ];
+    // The warning is emitted by webpack's filesystem cache
+    // (PackFileCacheStrategy/FileSystemInfo), which ignoreWarnings does not
+    // cover — silence infrastructure logging below warning level.
+    config.infrastructureLogging = { ...(config.infrastructureLogging ?? {}), level: "error" };
+    return config;
+  },
 };
 
 export default withMDX(nextConfig);

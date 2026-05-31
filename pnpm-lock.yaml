@@ -733,6 +733,34 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0)
 
+  packages/iam:
+    dependencies:
+      '@oxagen/config':
+        specifier: workspace:*
+        version: link:../config
+      '@oxagen/database':
+        specifier: workspace:*
+        version: link:../database
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../oxagen
+      '@oxagen/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0)
+
   packages/inngest-functions:
     dependencies:
       '@oxagen/agent':
@@ -956,6 +984,9 @@ importers:
       '@oxagen/ontology':
         specifier: workspace:*
         version: link:../../packages/ontology
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../../packages/oxagen
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry

@@ -10,6 +10,8 @@ export const workspaceCreate = registerCapability({
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "low", category: "workspace" },
+  sensitivity: "medium",
+  defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow" },

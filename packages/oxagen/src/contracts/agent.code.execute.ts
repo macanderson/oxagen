@@ -10,6 +10,8 @@ export const agentCodeExecute = registerCapability({
   layers: ["schema", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "execution" },
+  sensitivity: "destructive",
+  defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow" },
     workspace: { Owner: "allow" },

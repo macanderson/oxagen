@@ -9,6 +9,8 @@ export const agentMcpRegister = registerCapability({
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
+  sensitivity: "medium",
+  defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow" },

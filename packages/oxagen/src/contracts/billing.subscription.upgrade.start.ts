@@ -16,6 +16,8 @@ export const billingSubscriptionUpgradeStart = registerCapability({
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "billing" },
+  sensitivity: "high",
+  defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Billing: "allow" },
     workspace: {},

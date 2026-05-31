@@ -1,5 +1,5 @@
 {
-  "name": "@oxagen/oxagen",
+  "name": "@oxagen/iam",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,13 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./contracts/*": "./src/contracts/*.ts",
-    "./registry": "./src/registry.ts",
-    "./kernel": "./src/kernel.ts",
-    "./types": "./src/types.ts",
-    "./define-contract": "./src/define-contract.ts",
-    "./iam": "./src/iam/index.ts",
-    "./contracts": "./src/contracts/index.ts"
+    "./*": "./src/*.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -21,6 +15,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@oxagen/config": "workspace:*",
+    "@oxagen/database": "workspace:*",
+    "@oxagen/oxagen": "workspace:*",
+    "@oxagen/telemetry": "workspace:*",
+    "drizzle-orm": "0.45.2",
     "zod": "3.25.76"
   },
   "devDependencies": {
