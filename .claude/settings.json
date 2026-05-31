@@ -326,7 +326,6 @@
       "Bash(docker push *)",
       "Bash(docker rm *)",
       "Bash(docker rmi *)"
-
     ],
     "defaultMode": "acceptEdits"
   },
@@ -337,8 +336,7 @@
     "claude-haiku-4-5"
   ],
   "enableAllProjectMcpServers": true,
-  "hooks": {
-  },
+  "hooks": {},
   "enabledPlugins": {
     "github@claude-plugins-official": true,
     "linear@claude-plugins-official": true,
