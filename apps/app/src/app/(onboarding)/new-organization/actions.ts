@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
+import { grantFreeCredits } from "@oxagen/billing";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { getSessionOrRedirect } from "@/lib/session";
@@ -79,10 +80,19 @@ export async function createOrgAction(
         updatedByUserId: session.user.id,
       });
 
-      return { orgSlug: tenant.slug, workspaceSlug: workspace.slug };
+      return { orgId: tenant.id, orgSlug: tenant.slug, workspaceSlug: workspace.slug };
     });
 
-    return { ok: true, ...result };
+    // Grant the non-expiring Free signup credits ($5) outside the org
+    // transaction, mirroring organizationCreateHandler. A grant hiccup must not
+    // fail signup — the org already exists and the grant is recoverable.
+    try {
+      await grantFreeCredits(result.orgId);
+    } catch (grantErr) {
+      console.error("[onboarding] grantFreeCredits failed for org", result.orgId, grantErr);
+    }
+
+    return { ok: true, orgSlug: result.orgSlug, workspaceSlug: result.workspaceSlug };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to create organization";
     if (message.toLowerCase().includes("unique")) {

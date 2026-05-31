@@ -88,11 +88,11 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
   // Grant the free $5 (500 credits) signup bonus AFTER the org transaction
   // commits so a billing failure never rolls back the org creation itself.
   // grantFreeCredits is idempotent — safe to re-run on retries.
-  await grantFreeCredits(orgId).catch((err) => {
+  await grantFreeCredits(orgId).catch((err: unknown) => {
     // Log but do not fail org creation. The grant can be re-applied manually.
     console.error("[org.create] grantFreeCredits failed — org created, credits not granted", {
       orgId,
-      err,
+      err: err instanceof Error ? err.message : String(err),
     });
   });
 
