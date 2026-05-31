@@ -27,6 +27,7 @@ import { agentToolList } from "./agent.tool.list.js";
 import { billingSubscriptionRead } from "./billing.subscription.read.js";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription.upgrade.start.js";
 import { chatMessageSend } from "./chat.message.send.js";
+import { formFill } from "./form.fill.js";
 import { organizationCreate } from "./organization.create.js";
 import { workspaceCreate } from "./workspace.create.js";
 
@@ -50,6 +51,7 @@ export {
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   chatMessageSend,
+  formFill,
   organizationCreate,
   workspaceCreate,
 };
@@ -82,6 +84,7 @@ export const contracts = [
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   chatMessageSend,
+  formFill,
   organizationCreate,
   workspaceCreate,
 ] as const;

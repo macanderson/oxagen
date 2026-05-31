@@ -33,10 +33,32 @@ export function proxy(request: NextRequest): NextResponse {
     return NextResponse.redirect(new URL(`${dest}${search}`, request.url), 308);
   }
 
-  // 2. Public pages need no session.
+  // 2. v1 → v2 workspace route renames (§16 of the IA spec).
+  //    Pattern: /{org}/{ws}/{old-segment}(/{rest})? → /{org}/{ws}/{new-segment}(/{rest})?
+  //    Uses 301 (permanent, GET-preserving) per spec — these routes moved for good.
+  {
+    const wsRouteMove = pathname.match(
+      /^(\/[^/]+\/[^/]+)\/(executions|agents|playbooks)(\/.*)?$/,
+    );
+    if (wsRouteMove) {
+      const [, wsBase, segment, rest = ""] = wsRouteMove;
+      const newSegment =
+        segment === "executions"
+          ? "activity/runs"
+          : segment === "agents"
+            ? "automation/agents"
+            : "automation/playbooks";
+      return NextResponse.redirect(
+        new URL(`${wsBase}/${newSegment}${rest}${search}`, request.url),
+        301,
+      );
+    }
+  }
+
+  // 3. Public pages need no session.
   if (PUBLIC_PATHS.some((re) => re.test(pathname))) return NextResponse.next();
 
-  // 3. Auth boundary for every other matched (page) route.
+  // 4. Auth boundary for every other matched (page) route.
   if (!hasSession(request)) {
     return NextResponse.redirect(new URL("/login", request.url));
   }

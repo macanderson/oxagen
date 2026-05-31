@@ -24,6 +24,7 @@ import { agentTaskBackgroundCancelRoute } from "./routes/v1/agent.task.backgroun
 import { agentMemoryRecallRoute } from "./routes/v1/agent.memory.recall.js";
 import { agentMemoryWriteRoute } from "./routes/v1/agent.memory.write.js";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve.js";
+import { formFillRoute } from "./routes/v1/form.fill.js";
 
 export type AppEnv = {
   Variables: {
@@ -77,4 +78,5 @@ orgScoped.route("/agent/tasks/cancel", agentTaskBackgroundCancelRoute);
 orgScoped.route("/agent/memory/recall", agentMemoryRecallRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
+orgScoped.route("/forms/fill", formFillRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

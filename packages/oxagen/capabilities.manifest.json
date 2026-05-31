@@ -331,6 +331,24 @@
       }
     },
     {
+      "name": "form.fill",
+      "file": "form.fill.ts",
+      "domain": "form",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "organization.create",
       "file": "organization.create.ts",
       "domain": "organization",

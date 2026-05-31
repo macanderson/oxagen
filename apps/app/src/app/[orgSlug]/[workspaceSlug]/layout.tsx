@@ -9,6 +9,7 @@ export default async function WorkspaceLayout({
 }) {
   const { orgSlug, workspaceSlug } = await params;
   const tenant = await resolveOrg(orgSlug);
+  // Validates the workspace exists and returns notFound() if not.
   await resolveWorkspace(tenant.id, workspaceSlug);
   return <>{children}</>;
 }

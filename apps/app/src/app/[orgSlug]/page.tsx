@@ -13,5 +13,5 @@ export default async function OrgHome({ params }: { params: Promise<{ orgSlug: s
     .where(eq(schema.workspaces.orgId, org.id))
     .limit(1);
   if (rows[0]) redirect(`/${orgSlug}/${rows[0].slug}`);
-  redirect(`/${orgSlug}/settings/members`);
+  redirect(`/${orgSlug}/members`);
 }

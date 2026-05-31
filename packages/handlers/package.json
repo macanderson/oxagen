@@ -15,6 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@oxagen/ai": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",

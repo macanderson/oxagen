@@ -31,3 +31,8 @@ registerHandler(
   async () =>
     (await import("./chat.message.send.js")).chatMessageSendHandler as CapabilityHandlerFn,
 );
+registerHandler(
+  "form.fill",
+  async () =>
+    (await import("./form.fill.js")).formFillHandler as CapabilityHandlerFn,
+);

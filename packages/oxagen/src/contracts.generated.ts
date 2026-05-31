@@ -22,5 +22,6 @@ import "./contracts/agent.tool.list.js";
 import "./contracts/billing.subscription.read.js";
 import "./contracts/billing.subscription.upgrade.start.js";
 import "./contracts/chat.message.send.js";
+import "./contracts/form.fill.js";
 import "./contracts/organization.create.js";
 import "./contracts/workspace.create.js";

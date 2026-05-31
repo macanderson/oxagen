@@ -4,6 +4,15 @@ import { schema } from "@oxagen/database";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
 import { AppShell } from "@/components/shell/app-shell";
+import { PageContextProvider } from "@/lib/page-context";
+import { AskDrawer } from "@/components/shell/ask/ask-drawer";
+import { CommandMenu } from "@/components/shell/ask/command-menu";
+import { FillOverlay } from "@/components/shell/ask/fill-overlay";
+import {
+  orgShellSendAction,
+  orgShellResolveApprovalAction,
+  orgShellResolvePlanAction,
+} from "./shell-actions";
 
 export default async function OrgLayout({
   children,
@@ -32,9 +41,42 @@ export default async function OrgLayout({
       .where(eq(schema.workspaces.orgId, org.id)),
   ]);
 
+  const user = {
+    id: session.user.id,
+    name: session.user.name ?? null,
+    email: session.user.email,
+    image: session.user.image ?? null,
+  };
+
+  // The ctx passed to the shell's Ask system has no workspaceSlug at this
+  // layout level. The sidebar is a client component that reads usePathname()
+  // and resolveSidebarMode to correctly detect workspace mode from the URL.
+  const ctx = { orgSlug };
+
   return (
-    <AppShell org={org} availableOrgs={orgsRows} availableWorkspaces={workspacesRows}>
-      {children}
-    </AppShell>
+    <PageContextProvider>
+      <AppShell
+        org={org}
+        availableOrgs={orgsRows}
+        availableWorkspaces={workspacesRows}
+        user={user}
+      >
+        {children}
+      </AppShell>
+
+      {/* Ask drawer — mounted once at the org shell boundary. */}
+      <AskDrawer
+        ctx={ctx}
+        sendAction={orgShellSendAction}
+        resolveApprovalAction={orgShellResolveApprovalAction}
+        resolvePlanAction={orgShellResolvePlanAction}
+      />
+
+      {/* Command menu — Cmd+K overlay */}
+      <CommandMenu ctx={ctx} />
+
+      {/* Fill overlay — renders AI form-fill suggestions from AskBar */}
+      <FillOverlay />
+    </PageContextProvider>
   );
 }
