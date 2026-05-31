@@ -49,7 +49,7 @@ loadEnv(); // validates all ~30 vars, caches result
 | `@oxagen/inngest-functions` | `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` (required in prod), `NODE_ENV` | Enforces prod requirement locally; base schema has both as optional |
 | `@oxagen/ai` | `ANTHROPIC_API_KEY` (optional), `OPENAI_API_KEY` (optional) | Falls back to provider default key resolution if absent |
 | `@oxagen/agent` | Union of: `INNGEST_EVENT_KEY` (dispatch/handlers), `OPENAI_API_KEY` (embed), `DATABASE_URL` (approval), `SANDBOX_ENABLED` (materialize-tools) | Each file calls `requireEnv` for only its subset |
-| `@oxagen/sandbox` | Reads `SANDBOX_DRIVER`, `MODAL_RUNNER_URL`, `MODAL_RUNNER_TOKEN` directly from `process.env` (not via `requireEnv`; vars are optional and auto-detected) | — |
+| `@oxagen/sandbox` | Reads `SANDBOX_DRIVER`, `MODAL_RUNNER_URL`, `MODAL_RUNNER_TOKEN`, `VERCEL_SANDBOX_TOKEN`, `VERCEL_SANDBOX_TEAM_ID`, `VERCEL_SANDBOX_PROJECT_ID` directly from `process.env` (not via `requireEnv`; vars are optional and auto-detected) | Vercel auth vars not needed on Vercel Functions (OIDC auto-resolves); required for local dev with `SANDBOX_DRIVER=vercel` |
 
 ---
 
@@ -59,7 +59,7 @@ Derived from each app's workspace dependencies and transitive requirements.
 
 | Service | Packages used | Env vars needed |
 |---------|--------------|-----------------|
-| `apps/api` | database, billing, agent, inngest-functions, telemetry, config | `DATABASE_URL`, `NODE_ENV`, `CLICKHOUSE_URL`, `CLICKHOUSE_USERNAME`, `CLICKHOUSE_PASSWORD`, `CLICKHOUSE_DATABASE`, `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_APP_URL`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` (prod), `ANTHROPIC_API_KEY`¹, `OPENAI_API_KEY`¹, `SANDBOX_ENABLED`¹ |
+| `apps/api` | database, billing, agent, inngest-functions, telemetry, config | `DATABASE_URL`, `NODE_ENV`, `CLICKHOUSE_URL`, `CLICKHOUSE_USERNAME`, `CLICKHOUSE_PASSWORD`, `CLICKHOUSE_DATABASE`, `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_APP_URL`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` (prod), `ANTHROPIC_API_KEY`¹, `OPENAI_API_KEY`¹, `SANDBOX_ENABLED`¹, `SANDBOX_DRIVER`¹, `VERCEL_SANDBOX_TOKEN`¹, `VERCEL_SANDBOX_TEAM_ID`¹, `VERCEL_SANDBOX_PROJECT_ID`¹ |
 | `apps/app` | agent, auth, ai, database, billing (via route handlers) | `DATABASE_URL`, `NODE_ENV`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`¹, `GOOGLE_CLIENT_SECRET`¹, `GITHUB_CLIENT_ID`¹, `GITHUB_CLIENT_SECRET`¹, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`², `ANTHROPIC_API_KEY`¹, `OPENAI_API_KEY`¹, `INNGEST_EVENT_KEY`¹, `SANDBOX_ENABLED`¹ |
 | `apps/mcp` | agent, database, config | `DATABASE_URL`, `NODE_ENV`, `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, `INNGEST_EVENT_KEY`, `OPENAI_API_KEY`¹, `SANDBOX_ENABLED`¹ |
 | `apps/website` | ui (no `@oxagen/*` data packages) | None |

@@ -54,11 +54,20 @@ export const baseEnvSchema = z.object({
     .optional()
     .transform((v) => v === "true"),
   // Driver selection for @oxagen/sandbox. `modal` routes through the
-  // hosted Firecracker runner; `docker` runs Dockerode locally. Unset
-  // = auto-detect (modal if MODAL_RUNNER_URL is present, else docker).
-  SANDBOX_DRIVER: z.enum(["modal", "docker"]).optional(),
+  // hosted Firecracker runner; `docker` runs Dockerode locally; `vercel`
+  // runs Firecracker microVMs via @vercel/sandbox (first-party, no extra
+  // deployment needed on Vercel Functions). Unset = auto-detect (modal if
+  // MODAL_RUNNER_URL is present, else docker). See ADR-011.
+  SANDBOX_DRIVER: z.enum(["modal", "docker", "vercel"]).optional(),
   MODAL_RUNNER_URL: z.string().url().optional(),
   MODAL_RUNNER_TOKEN: z.string().min(16).optional(),
+  // OXA-1348: Vercel Sandbox driver credentials. All three are optional
+  // in the base schema because Vercel Functions auto-resolve auth via OIDC
+  // (VERCEL_OIDC_TOKEN injected by the runtime). Only required for local
+  // dev when SANDBOX_DRIVER=vercel outside a Vercel project.
+  VERCEL_SANDBOX_TOKEN: z.string().min(1).optional(),
+  VERCEL_SANDBOX_TEAM_ID: z.string().min(1).optional(),
+  VERCEL_SANDBOX_PROJECT_ID: z.string().min(1).optional(),
 
   // OXA-1420: KMS CMK used to wrap OAuth token data encryption keys.
   // Required in production; optional in development/test so local dev
