@@ -17,6 +17,7 @@
  * It dynamically imports `@oxagen/oxagen` so that the registry is populated
  * by the time `listCapabilities()` is called.
  */
+import { createHash } from "node:crypto";
 import postgres from "postgres";
 import kleur from "kleur";
 import { loadEnv } from "@oxagen/config/env";
@@ -95,12 +96,17 @@ async function main(): Promise<void> {
       return;
     }
 
-    // Generate a stable public_id for a role_grant row.
-    // Format: rlg_ + first 8 chars of role_id + first 8 chars of capability (sanitised).
+    // Generate a stable, collision-free public_id for a role_grant row.
+    // Deterministic so re-runs are idempotent against the public_id UNIQUE
+    // constraint. A previous version truncated the capability id to 14 chars,
+    // which collided for capabilities sharing a prefix (e.g.
+    // agent.task.background.{start,read,cancel}) and silently dropped grants.
     function makePublicId(roleId: string, capabilityId: string): string {
-      const rolePart = roleId.replace(/-/g, "").slice(0, 8);
-      const capPart = capabilityId.replace(/[^a-z0-9]/gi, "").slice(0, 14).toLowerCase();
-      return `rlg_${rolePart}${capPart}`;
+      const digest = createHash("sha256")
+        .update(`${roleId}:${capabilityId}`)
+        .digest("hex")
+        .slice(0, 24);
+      return `rlg_${digest}`;
     }
 
     let inserted = 0;
