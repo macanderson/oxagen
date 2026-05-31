@@ -12,6 +12,7 @@
     "dev": "tsx tools/scripts/dev.ts",
     "kill": "tsx tools/scripts/kill.ts",
     "env:pull": "tsx tools/scripts/env-pull.ts",
+    "env:manager": "pnpm --filter @oxagen/env-manager dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
