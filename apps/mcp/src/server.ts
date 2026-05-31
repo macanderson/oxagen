@@ -43,6 +43,7 @@ export function buildServer() {
   // /mcp/tools/:name — invoke by name through the kernel.
   app.post("/mcp/tools/:name", async (c) => {
     const name = c.req.param("name");
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Hono c.req.json() returns any; body is passed opaquely to the capability kernel which validates its own input via Zod.
     const body = await c.req.json().catch(() => ({}));
     try {
       // TODO(auth increment): replace placeholderContext with a principal

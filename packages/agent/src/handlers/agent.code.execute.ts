@@ -48,7 +48,6 @@ export async function agentCodeExecuteHandler(
       message_id: ctx.requestId,
       parent_message_id: null,
       execution_step_id: null,
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- set above
       status: status,
       input_size_bytes: Buffer.byteLength(input.code ?? "", "utf8"),
       output_size_bytes: 0,

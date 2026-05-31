@@ -163,6 +163,7 @@ export function createDockerSandbox(): SandboxDriver {
     const timer = new Promise<"timeout">((resolve) =>
       setTimeout(() => resolve("timeout"), req.timeoutMs),
     );
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- @types/dockerode types container.wait() as Promise<any>; outcome is only compared against "timeout" string, never accessed.
     const outcome = await Promise.race([wait, timer]);
     if (outcome === "timeout") {
       timedOut = true;

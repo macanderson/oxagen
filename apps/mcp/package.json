@@ -9,7 +9,7 @@
     "start": "tsx --env-file=.env.local src/index.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'lint placeholder'"
+    "lint": "eslint src --max-warnings 0"
   },
   "dependencies": {
     "@hono/node-server": "1.19.14",
