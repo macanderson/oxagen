@@ -14,7 +14,7 @@
     "./components/*": "./src/components/*.tsx"
   },
   "scripts": {
-    "lint": "echo 'lint placeholder'",
+    "lint": "eslint src --max-warnings 0",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

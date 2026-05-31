@@ -56,6 +56,7 @@ export async function recallMemories(args: {
         limit: BigInt(args.limit),
       },
     );
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment -- neo4j-driver Record.get() is typed as `any`; shape is guaranteed by the Cypher projection above. */
     return result.records.map((r) => ({
       id: r.get("id"),
       nodeRef: r.get("nodeRef"),
@@ -66,6 +67,7 @@ export async function recallMemories(args: {
       score: Number(r.get("score")),
       createdAt: r.get("createdAt"),
     }));
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
   } finally {
     await s.close();
   }

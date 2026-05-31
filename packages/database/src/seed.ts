@@ -126,12 +126,10 @@ if (isDirectRun) {
   seed()
     .then(() => closeDatabase())
     .then(() => {
-      // eslint-disable-next-line no-console
       console.log("Seed complete");
       process.exit(0);
     })
     .catch((err) => {
-      // eslint-disable-next-line no-console
       console.error("Seed failed:", err);
       process.exit(1);
     });

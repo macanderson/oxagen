@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'lint placeholder'"
+    "lint": "eslint src --max-warnings 0"
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",

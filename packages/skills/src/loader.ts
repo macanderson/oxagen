@@ -31,6 +31,7 @@ export function parseSkill(raw: string, options: ParseSkillOptions = {}): Skill 
     throw new Error("Skill file is missing YAML frontmatter");
   }
   const [, yamlBlock, body] = match;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- js-yaml parseYaml() returns any; Zod parse below validates the shape.
   const parsedYaml = parseYaml(yamlBlock ?? "");
   const frontmatter = skillFrontmatterSchema.parse(parsedYaml);
 
