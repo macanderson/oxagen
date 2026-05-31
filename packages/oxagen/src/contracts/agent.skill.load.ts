@@ -10,6 +10,10 @@ export const agentSkillLoad = registerCapability({
   layers: ["schema", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "context" },
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow" },
+  },
   input: z.object({
     slug: z.string(),
     parentMessageId: z.string(),

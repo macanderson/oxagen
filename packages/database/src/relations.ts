@@ -1,5 +1,13 @@
 import { relations } from "drizzle-orm";
 import { organizations, orgUsers } from "./schema/org.js";
+import {
+  principals,
+  roles,
+  roleGrants,
+  grants,
+  accessRequests,
+  iamSessions,
+} from "./schema/iam.js";
 import { users, sessions, accounts, apiKeys, credentials } from "./schema/auth.js";
 import { workspaces, workspaceUsers, folders } from "./schema/workspace.js";
 import { connections, connectionSyncJobs } from "./schema/integration.js";
@@ -440,4 +448,47 @@ export const stripeEventProcessingRelations = relations(stripeEventProcessing, (
     fields: [stripeEventProcessing.stripeEventId],
     references: [stripeEvents.id],
   }),
+}));
+
+// ── IAM relations ─────────────────────────────────────────────────────────────
+// Cross-domain FK to org.organizations stays app-enforced (not a Drizzle FK on
+// the table builder) to match the existing pattern in this file. The in-domain
+// links between IAM tables use Drizzle relations so the ORM can join them.
+
+export const principalsRelations = relations(principals, ({ one, many }) => ({
+  org: one(organizations, { fields: [principals.orgId], references: [organizations.id] }),
+  grants: many(grants),
+  sessions: many(iamSessions),
+  accessRequests: many(accessRequests),
+}));
+
+export const rolesRelations = relations(roles, ({ one, many }) => ({
+  org: one(organizations, { fields: [roles.orgId], references: [organizations.id] }),
+  roleGrants: many(roleGrants),
+  parentRole: one(roles, {
+    fields: [roles.parentRoleId],
+    references: [roles.id],
+    relationName: "role_parent",
+  }),
+  childRoles: many(roles, { relationName: "role_parent" }),
+}));
+
+export const roleGrantsRelations = relations(roleGrants, ({ one }) => ({
+  role: one(roles, { fields: [roleGrants.roleId], references: [roles.id] }),
+  org: one(organizations, { fields: [roleGrants.orgId], references: [organizations.id] }),
+}));
+
+export const grantsRelations = relations(grants, ({ one }) => ({
+  principal: one(principals, { fields: [grants.principalId], references: [principals.id] }),
+  org: one(organizations, { fields: [grants.orgId], references: [organizations.id] }),
+}));
+
+export const accessRequestsRelations = relations(accessRequests, ({ one }) => ({
+  requester: one(principals, { fields: [accessRequests.requesterId], references: [principals.id] }),
+  org: one(organizations, { fields: [accessRequests.orgId], references: [organizations.id] }),
+}));
+
+export const iamSessionsRelations = relations(iamSessions, ({ one }) => ({
+  principal: one(principals, { fields: [iamSessions.principalId], references: [principals.id] }),
+  org: one(organizations, { fields: [iamSessions.orgId], references: [organizations.id] }),
 }));

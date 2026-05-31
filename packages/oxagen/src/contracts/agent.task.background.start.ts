@@ -10,6 +10,10 @@ export const agentTaskBackgroundStart = registerCapability({
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "background" },
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow" },
+  },
   input: z.object({
     kind: z.string(),
     payload: z.unknown(),

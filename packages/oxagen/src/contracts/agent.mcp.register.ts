@@ -9,6 +9,10 @@ export const agentMcpRegister = registerCapability({
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow" },
+  },
   input: z.object({
     name: z.string().min(1).max(120),
     transportType: z.enum(["streamable-http", "stdio"]),

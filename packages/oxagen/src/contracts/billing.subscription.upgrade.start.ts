@@ -16,6 +16,10 @@ export const billingSubscriptionUpgradeStart = registerCapability({
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "billing" },
+  defaultRoles: {
+    org: { Owner: "allow", Billing: "allow" },
+    workspace: {},
+  },
   input: z.object({
     planSlug: z.string().min(1),
     interval: z.enum(["month", "year"]),

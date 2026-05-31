@@ -2,6 +2,17 @@ import type { z } from "zod";
 
 export type ExecutionMode = "sync" | "async" | "batch";
 
+// ── IAM role types ────────────────────────────────────────────────────────────
+
+/** Effect of a grant or role-grant entry. */
+export type GrantEffect = "allow" | "deny" | "require_approval";
+
+/** System-defined org-level roles that exist in every org. */
+export type SystemOrgRole = "Owner" | "Admin" | "Compliance" | "Billing";
+
+/** System-defined workspace-level roles that exist in every workspace. */
+export type SystemWorkspaceRole = "Owner" | "Member" | "Viewer";
+
 export type CapabilityLayer =
   | "schema"
   | "api"
@@ -46,6 +57,19 @@ export interface CapabilityDeclaration<
    * resolved scope. Default true.
    */
   scoped?: boolean;
+  /**
+   * Default role-based grants for this capability. Optional — absence means
+   * the capability inherits no default grants and relies on explicit grants.
+   * Added in Phase 2 (OXA-1389); required by the defineContract helper in
+   * Phase 3 (OXA-1390).
+   *
+   * `org` grants apply when the scope is org-level.
+   * `workspace` grants apply when the scope is workspace-level.
+   */
+  defaultRoles?: {
+    org?: Partial<Record<SystemOrgRole, GrantEffect>>;
+    workspace?: Partial<Record<SystemWorkspaceRole, GrantEffect>>;
+  };
 }
 
 export const DEFAULT_SURFACES: readonly CapabilitySurface[] = ["api", "mcp"];

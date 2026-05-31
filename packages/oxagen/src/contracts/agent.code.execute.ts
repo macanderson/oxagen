@@ -10,6 +10,10 @@ export const agentCodeExecute = registerCapability({
   layers: ["schema", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "execution" },
+  defaultRoles: {
+    org: { Owner: "allow" },
+    workspace: { Owner: "allow" },
+  },
   input: z.object({
     language: z.enum(["node", "python", "shell"]),
     code: z.string().min(1).max(100_000),

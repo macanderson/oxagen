@@ -10,6 +10,10 @@ export const organizationCreate = registerCapability({
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: false,
   agent: { requiresApproval: true, riskLevel: "medium", category: "organization" },
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: {},
+  },
   input: z.object({
     name: z.string().min(1).max(120),
     slug: z

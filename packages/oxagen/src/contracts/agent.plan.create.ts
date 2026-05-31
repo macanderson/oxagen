@@ -10,6 +10,10 @@ export const agentPlanCreate = registerCapability({
   layers: ["schema", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "low", category: "planning" },
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow" },
+  },
   input: z.object({
     parentMessageId: z.string(),
     title: z.string().min(1).max(200),

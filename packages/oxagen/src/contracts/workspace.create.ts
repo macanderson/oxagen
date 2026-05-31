@@ -10,6 +10,10 @@ export const workspaceCreate = registerCapability({
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "low", category: "workspace" },
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow" },
+  },
   input: z.object({
     name: z.string().min(1).max(120),
     slug: z
