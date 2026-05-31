@@ -4,10 +4,10 @@ import { eq } from "drizzle-orm";
 import { stripeClient } from "./client.js";
 import { syncSubscriptionFromStripe } from "./subscriptions.js";
 import { syncInvoiceFromStripe } from "./invoices.js";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 
 export function verifyStripeSignature(rawBody: string, signature: string): Stripe.Event {
-  const env = loadEnv();
+  const env = requireEnv(["STRIPE_WEBHOOK_SECRET"] as const);
   return stripeClient().webhooks.constructEvent(rawBody, signature, env.STRIPE_WEBHOOK_SECRET);
 }
 

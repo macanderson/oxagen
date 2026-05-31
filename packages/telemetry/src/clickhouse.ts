@@ -1,5 +1,5 @@
 import { createClient, type ClickHouseClient } from "@clickhouse/client";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 
 // Singleton client per process. ClickHouse Cloud handles concurrency
 // upstream; we just reuse a single keepalive connection pool.
@@ -7,7 +7,12 @@ let _client: ClickHouseClient | null = null;
 
 export function clickhouse(): ClickHouseClient {
   if (_client) return _client;
-  const env = loadEnv();
+  const env = requireEnv([
+    "CLICKHOUSE_URL",
+    "CLICKHOUSE_USERNAME",
+    "CLICKHOUSE_PASSWORD",
+    "CLICKHOUSE_DATABASE",
+  ] as const);
   _client = createClient({
     url: env.CLICKHOUSE_URL,
     username: env.CLICKHOUSE_USERNAME,

@@ -2,14 +2,22 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 
 // Better Auth binds to the canonical auth.users row, not a parallel table.
 // The Drizzle adapter looks up columns via JS property lookup
 // (`schemaModel[fieldName]`), so the fields map must use camelCase Drizzle
 // field names — Drizzle handles the camelCase → snake_case translation when
 // it emits SQL.
-const env = loadEnv();
+const env = requireEnv([
+  "BETTER_AUTH_SECRET",
+  "BETTER_AUTH_URL",
+  "NODE_ENV",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GITHUB_CLIENT_ID",
+  "GITHUB_CLIENT_SECRET",
+] as const);
 
 export const auth = betterAuth({
   database: drizzleAdapter(db(), {

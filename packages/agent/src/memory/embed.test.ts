@@ -15,7 +15,7 @@ mocks.createOpenAISpy.mockImplementation(() => ({ embedding: mocks.embeddingSpy 
 vi.mock("ai", () => ({ embed: mocks.embedSpy }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI: mocks.createOpenAISpy }));
 vi.mock("@oxagen/config/env", () => ({
-  loadEnv: () => ({ OPENAI_API_KEY: "sk-test" }),
+  requireEnv: () => ({ OPENAI_API_KEY: "sk-test" }),
 }));
 
 import { embedText } from "./embed.js";
