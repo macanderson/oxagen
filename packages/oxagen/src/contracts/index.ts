@@ -33,6 +33,7 @@ import { chatMessageSend } from "./chat.message.send.js";
 import { formFill } from "./form.fill.js";
 import { organizationCreate } from "./organization.create.js";
 import { workspaceCreate } from "./workspace.create.js";
+import { videoGenerate } from "./video.generate.js";
 
 export {
   agentApprovalResolve,
@@ -60,6 +61,7 @@ export {
   formFill,
   organizationCreate,
   workspaceCreate,
+  videoGenerate,
 };
 
 /**
@@ -96,4 +98,5 @@ export const contracts = [
   formFill,
   organizationCreate,
   workspaceCreate,
+  videoGenerate,
 ] as const;
