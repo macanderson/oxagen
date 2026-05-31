@@ -15,12 +15,12 @@
     "lint": "echo 'lint placeholder'"
   },
   "dependencies": {
-    "better-auth": "^1.1.0",
+    "better-auth": "1.6.11",
     "@oxagen/database": "workspace:*",
     "@oxagen/config": "workspace:*",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "6.0.3"
   }
 }

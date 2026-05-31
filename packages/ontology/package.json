@@ -18,10 +18,10 @@
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
-    "neo4j-driver": "^5.25.0"
+    "neo4j-driver": "5.28.3"
   },
   "devDependencies": {
-    "tsx": "^4.19.0",
-    "typescript": "^6.0.3"
+    "tsx": "4.22.3",
+    "typescript": "6.0.3"
   }
 }

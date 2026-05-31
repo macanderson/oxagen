@@ -21,11 +21,11 @@
     "@oxagen/database": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
-    "inngest": "^3.27.4",
-    "pino": "^9.4.0",
-    "drizzle-orm": "^0.45.2"
+    "inngest": "3.54.2",
+    "pino": "9.14.0",
+    "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "6.0.3"
   }
 }
