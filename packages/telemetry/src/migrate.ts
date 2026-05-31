@@ -49,11 +49,13 @@ if (isDirectRun) {
   migrate()
     .then(() => closeClickhouse())
     .then(() => {
-      console.log("ClickHouse migration complete");
+      process.stdout.write(JSON.stringify({ level: "info", msg: "ClickHouse migration complete" }) + "\n");
       process.exit(0);
     })
-    .catch((err) => {
-      console.error("ClickHouse migration failed:", err);
+    .catch((err: unknown) => {
+      process.stderr.write(
+        JSON.stringify({ level: "error", msg: "ClickHouse migration failed", err: String(err) }) + "\n",
+      );
       process.exit(1);
     });
 }

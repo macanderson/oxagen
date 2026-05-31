@@ -414,7 +414,7 @@ function SortableStepRow({
           />
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="space-y-1">
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <label htmlFor={`${step.id}-capability`} className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Capability
               </label>
               <Select
@@ -423,7 +423,7 @@ function SortableStepRow({
                   onChange(step.id, { capability: v === "__none__" ? null : v })
                 }
               >
-                <SelectTrigger className="h-9 text-xs">
+                <SelectTrigger id={`${step.id}-capability`} className="h-9 text-xs">
                   <SelectValue placeholder="Choose capability" />
                 </SelectTrigger>
                 <SelectContent>
@@ -444,12 +444,13 @@ function SortableStepRow({
               </Select>
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <label htmlFor={`${step.id}-depends-on`} className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Depends on
               </label>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
+                    id={`${step.id}-depends-on`}
                     type="button"
                     variant="outline"
                     size="sm"

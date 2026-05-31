@@ -10,7 +10,7 @@ export default function DeveloperDocsPage() {
         <p className="text-sm font-medium text-foreground">Capability catalog</p>
         <p className="text-xs text-muted-foreground">
           Auto-generated docs from the contract registry with stable URLs per capability.
-          Phase 2 delivery.
+          Coming soon.
         </p>
       </div>
     </div>

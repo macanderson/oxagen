@@ -1,13 +1,9 @@
 import { db, schema } from "@oxagen/database";
-import { Inngest } from "inngest";
-import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityContext } from "../types.js";
+import { getInngestClient } from "../dispatch/inngest-client.js";
 import type { AgentTaskBackgroundStartInput, AgentTaskBackgroundStartOutput } from "@oxagen/oxagen/contracts/agent.task.background.start";
 
 export type { AgentTaskBackgroundStartInput, AgentTaskBackgroundStartOutput };
-
-const env = requireEnv(["INNGEST_EVENT_KEY"] as const);
-const inngest = new Inngest({ id: "oxagen-runner", eventKey: env.INNGEST_EVENT_KEY });
 
 export async function agentTaskBackgroundStartHandler(
   input: AgentTaskBackgroundStartInput,
@@ -32,7 +28,7 @@ export async function agentTaskBackgroundStartHandler(
     .returning({ publicId: schema.backgroundTasks.publicId });
   if (!row) throw new Error("background_tasks insert failed");
 
-  await inngest.send({
+  await getInngestClient().send({
     name: "agent/task.background.start",
     data: {
       orgId: ctx.orgId,

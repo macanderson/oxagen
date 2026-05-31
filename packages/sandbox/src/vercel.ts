@@ -132,6 +132,13 @@ export function createVercelSandbox(config: VercelSandboxConfig): SandboxDriver 
     }
 
     const durationMs = Date.now() - start;
+    // Heuristic: treat the run as timed-out when wall-clock (including
+    // Sandbox.create() + fs.writeFile() warmup) meets or exceeds the
+    // configured limit. This can produce false positives for fast sandboxes
+    // that exit near the boundary, and false negatives when warmup consumes
+    // significant time.
+    // TODO: adopt a dedicated timeout signal from @vercel/sandbox when the
+    // SDK exposes one on CommandFinished (track via @vercel/sandbox release notes).
     const timedOut = durationMs >= req.timeoutMs;
 
     const stdout = await finished.stdout().catch(() => "");

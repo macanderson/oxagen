@@ -90,12 +90,7 @@ export const baseEnvSchema = z.object({
 // touches these — never arbitrary env vars another tool may have set.
 const KNOWN_ENV_KEYS: ReadonlySet<string> = new Set(Object.keys(baseEnvSchema.shape));
 
-// Full schema — no production superRefine here; @oxagen/inngest-functions
-// enforces the INNGEST key requirement locally so callers that don't use
-// Inngest are not forced to provide those vars.
-const envSchema = baseEnvSchema;
-
-export type Env = z.infer<typeof envSchema>;
+export type Env = z.infer<typeof baseEnvSchema>;
 export type EnvKey = keyof Env;
 
 let cached: Env | null = null;
@@ -145,7 +140,7 @@ export function normalizeEnv(source: NodeJS.ProcessEnv): Record<string, string |
  */
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   if (cached) return cached;
-  const parsed = envSchema.safeParse(normalizeEnv(source));
+  const parsed = baseEnvSchema.safeParse(normalizeEnv(source));
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)

@@ -30,7 +30,7 @@ export async function closeClickhouse(): Promise<void> {
 }
 
 export interface TokenUsageRollup {
-  metric: "tokens_input" | "tokens_output" | "tokens_cached" | "executions" | "tool_calls";
+  metric: "tokens_input" | "tokens_output" | "tokens_cached" | "executions";
   quantity: number;
   costMicros: bigint;
 }
@@ -252,9 +252,6 @@ export function providerFromModelId(modelId: string): Provider {
   }
   return "";
 }
-
-export const insertToolInvocations = (rows: readonly ToolInvocationRow[]) =>
-  insertRows("tool_invocations", rows);
 
 // ── IAM audit events (OXA-1390, Phase 3) ─────────────────────────────────────
 //

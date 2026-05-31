@@ -2,6 +2,7 @@
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { formFillHandler } from "@oxagen/handlers/form.fill";
+import { logger } from "@oxagen/handlers/logger";
 import type { FillableFormSpec, FormFillResult } from "./fill-types";
 
 export interface FillFormActionInput {
@@ -81,8 +82,9 @@ export async function fillFormAction(input: FillFormActionInput): Promise<FormFi
       ...(typeof f.reason === "string" ? { reason: f.reason } : {}),
     }));
     return { fields };
-  } catch {
+  } catch (err) {
     // Policy §0.5: never throw from a server action that has a safe fallback.
+    logger.error({ err, route: input.context.route }, "fillFormAction failed");
     return noopResult;
   }
 }

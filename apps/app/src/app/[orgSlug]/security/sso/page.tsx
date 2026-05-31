@@ -9,7 +9,7 @@ export default function SecuritySsoPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">Single sign-on</p>
         <p className="text-xs text-muted-foreground">
-          SAML 2.0 and OIDC identity provider configuration will appear here. Phase 2 delivery.
+          SAML 2.0 and OIDC identity provider configuration will appear here. Coming soon.
         </p>
       </div>
     </div>

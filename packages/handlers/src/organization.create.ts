@@ -3,6 +3,7 @@ import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { grantFreeCredits } from "@oxagen/billing";
+import { logger } from "./logger.js";
 
 // Postgres unique_violation. Two concurrent creates with the same slug can
 // both pass the pre-check before either insert lands; the loser hits the
@@ -13,6 +14,7 @@ function isSlugConflict(err: unknown): boolean {
 
 export const organizationCreateHandler: CapabilityHandler<typeof organizationCreate> = async (input, ctx) => {
   if (!ctx.userId) {
+    logger.warn({ orgId: ctx.orgId }, "organization.create: rejected — no authenticated user");
     throw new Error("organization.create requires an authenticated user");
   }
   const d = db();
@@ -78,10 +80,16 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
       slug: txResult.slug,
       createdAt: txResult.createdAt,
     };
+    logger.info(
+      { orgId: txResult.id, slug: txResult.slug, surface: ctx.surface },
+      "organization.create: organization created successfully",
+    );
   } catch (err) {
     if (isSlugConflict(err)) {
+      logger.warn({ slug: input.slug, orgId: ctx.orgId }, "organization.create: slug conflict");
       throw new Error(`slug "${input.slug}" already in use`);
     }
+    logger.error({ err, orgId: ctx.orgId }, "organization.create: transaction failed");
     throw err;
   }
 
@@ -90,10 +98,10 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
   // grantFreeCredits is idempotent — safe to re-run on retries.
   await grantFreeCredits(orgId).catch((err: unknown) => {
     // Log but do not fail org creation. The grant can be re-applied manually.
-    console.error("[org.create] grantFreeCredits failed — org created, credits not granted", {
-      orgId,
-      err: err instanceof Error ? err.message : String(err),
-    });
+    logger.error(
+      { err, orgId },
+      "organization.create: grantFreeCredits failed — org created, credits not granted",
+    );
   });
 
   return result;

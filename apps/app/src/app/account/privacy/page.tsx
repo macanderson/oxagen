@@ -10,7 +10,7 @@ export default function AccountPrivacyPage() {
         <p className="text-sm font-medium text-foreground">Privacy</p>
         <p className="text-xs text-muted-foreground">
           GDPR data export, account deletion, consent settings, and retention preview.
-          Phase 2 delivery.
+          Coming soon.
         </p>
       </div>
     </div>

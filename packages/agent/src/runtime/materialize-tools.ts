@@ -1,4 +1,5 @@
 import { tool, type Tool, type ToolSet } from "ai";
+import type { ZodTypeAny } from "zod";
 import { insertToolInvocation } from "@oxagen/telemetry";
 import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityContext } from "../types.js";
@@ -21,7 +22,7 @@ type AnyCapability = {
   name: string;
   description: string;
   agent?: { riskLevel?: "low" | "medium" | "high"; category?: string; requiresApproval?: boolean };
-  input: unknown;
+  input: ZodTypeAny;
   surfaces?: readonly ("api" | "mcp" | "agent")[];
 };
 
@@ -79,8 +80,7 @@ export async function materializeTools(
     const requiresApproval = cap.agent?.requiresApproval === true;
     out[cap.name] = tool({
       description: cap.description,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cap.input is a zod schema; AI SDK accepts ZodTypeAny.
-      parameters: cap.input as any,
+      parameters: cap.input,
       execute: async (input: unknown) => {
         await beforeTool({ capability: cap.name, ctx, input });
         const invocationId = crypto.randomUUID();

@@ -10,7 +10,7 @@ export default function AccountSecurityPage() {
         <p className="text-sm font-medium text-foreground">Account security</p>
         <p className="text-xs text-muted-foreground">
           Password changes, MFA factors, passkeys, linked accounts, and active sessions.
-          Phase 2 delivery.
+          Coming soon.
         </p>
       </div>
     </div>

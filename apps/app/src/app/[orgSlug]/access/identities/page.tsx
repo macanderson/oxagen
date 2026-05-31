@@ -9,7 +9,7 @@ export default function AccessIdentitiesPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">Principal directory</p>
         <p className="text-xs text-muted-foreground">
-          Human, agent, and service principal identities will be managed here. Phase 2 delivery.
+          Human, agent, and service principal identities will be managed here. Coming soon.
         </p>
       </div>
     </div>

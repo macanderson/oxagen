@@ -11,7 +11,7 @@ import { ToolCallCard } from "./tool-call-card";
 import { CodeExecuteCard } from "./code-execute-card";
 import { MemoryCard } from "./memory-card";
 import { SubagentFanout } from "./subagent-fanout";
-import { CHAT_COMPONENTS } from "./chat-component-registry";
+import { CHAT_COMPONENTS, logUnknownComponent } from "./chat-component-registry";
 import { useToolStream } from "./use-tool-stream";
 import type { ChatShellProps } from "./chat-shell";
 import type { StreamEvent } from "./stream-event-types";
@@ -152,8 +152,9 @@ export function ChatShellClient({
             const decoder = new TextDecoder();
 
             await consumeRef.current(sseToEvents(reader, decoder));
-          } catch {
+          } catch (err) {
             // Swallow — the RSC revalidate will still show the persisted reply.
+            console.warn("[chat] stream fetch failed", err);
           } finally {
             setIsStreamingRef.current(false);
           }
@@ -325,9 +326,7 @@ export function ChatShellClient({
                 {liveComponentList.map((lc) => {
                   const Component = CHAT_COMPONENTS[lc.componentId];
                   if (!Component) {
-                    console.log(
-                      `[chat-component-registry] unknown componentId "${lc.componentId}" — no renderer registered`,
-                    );
+                    logUnknownComponent(lc.componentId);
                     return null;
                   }
                   return (

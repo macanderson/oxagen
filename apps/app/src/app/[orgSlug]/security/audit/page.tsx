@@ -9,7 +9,7 @@ export default function SecurityAuditPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">Audit log</p>
         <p className="text-xs text-muted-foreground">
-          The append-only audit stream with SIEM export will appear here. Phase 2 delivery.
+          The append-only audit stream with SIEM export will appear here. Coming soon.
         </p>
       </div>
     </div>

@@ -76,7 +76,8 @@ export default async function ChatPage({
       .select()
       .from(schema.messages)
       .where(eq(schema.messages.conversationId, conversationId))
-      .orderBy(desc(schema.messages.createdAt));
+      .orderBy(desc(schema.messages.createdAt))
+      .limit(200);
     return walkActiveBranch(rows, activeLeafMessageId);
   })();
 

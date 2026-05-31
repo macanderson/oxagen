@@ -9,7 +9,7 @@ export default function DeveloperWebhooksPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">Outbound webhooks</p>
         <p className="text-xs text-muted-foreground">
-          Route events, runs, and audit entries to external systems. Phase 2 delivery.
+          Route events, runs, and audit entries to external systems. Coming soon.
         </p>
       </div>
     </div>

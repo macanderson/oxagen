@@ -9,7 +9,7 @@ export default function AccountCasesPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">Cases</p>
         <p className="text-xs text-muted-foreground">
-          Account events, security alerts, and support tickets will appear here. Phase 2 delivery.
+          Account events, security alerts, and support tickets will appear here. Coming soon.
         </p>
       </div>
     </div>

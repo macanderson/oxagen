@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { createCreditLot } from "./credits.js";
 import { stripeClient } from "./client.js";
 import { syncSubscriptionFromStripe } from "./subscriptions.js";
+import { CREDIT_REASONS } from "./constants.js";
 
 /**
  * The grant half of the credit loop: payments deposit credits into lots, the
@@ -141,7 +142,7 @@ export async function grantPlanCreditsForInvoicePaid(invoice: Stripe.Invoice): P
   const referenceId = invoiceRow?.id;
   if (
     referenceId &&
-    (await alreadyGranted(sub.orgId, "grant_plan_renewal", "stripe_invoice", referenceId))
+    (await alreadyGranted(sub.orgId, CREDIT_REASONS.GRANT_PLAN_RENEWAL, "stripe_invoice", referenceId))
   ) {
     return;
   }
@@ -155,7 +156,7 @@ export async function grantPlanCreditsForInvoicePaid(invoice: Stripe.Invoice): P
     amountCents: BigInt(credits),
     source: "subscription",
     expiresAt,
-    reason: "grant_plan_renewal",
+    reason: CREDIT_REASONS.GRANT_PLAN_RENEWAL,
     referenceType: "stripe_invoice",
     referenceId,
   });
@@ -175,18 +176,17 @@ export async function grantCreditPackForCheckout(session: Stripe.Checkout.Sessio
   if (!orgId) return;
 
   const referenceId = deterministicUuid(`stripe_checkout_session:${session.id}`);
-  if (await alreadyGranted(orgId, "grant_credit_pack", "stripe_checkout_session", referenceId)) {
+  if (await alreadyGranted(orgId, CREDIT_REASONS.GRANT_CREDIT_PACK, "stripe_checkout_session", referenceId)) {
     return;
   }
 
   const stripe = stripeClient();
-  const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
-    expand: ["data.price.product"],
-    limit: 100,
-  });
+  const lineItems = await stripe.checkout.sessions
+    .listLineItems(session.id, { expand: ["data.price.product"], limit: 100 })
+    .autoPagingToArray({ limit: 10_000 });
 
   let totalCredits = 0;
-  for (const item of lineItems.data) {
+  for (const item of lineItems) {
     const price = item.price;
     const product = price?.product;
     const creditsStr =
@@ -211,7 +211,7 @@ export async function grantCreditPackForCheckout(session: Stripe.Checkout.Sessio
     amountCents: BigInt(totalCredits),
     source: "purchase",
     expiresAt,
-    reason: "grant_credit_pack",
+    reason: CREDIT_REASONS.GRANT_CREDIT_PACK,
     referenceType: "stripe_checkout_session",
     referenceId,
   });

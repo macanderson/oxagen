@@ -3,6 +3,7 @@ import { db, schema } from "@oxagen/database";
 import type { PlanRow, SubscriptionRow } from "@oxagen/database";
 import { resolveOrg } from "@/lib/resolve-org";
 import { PlansGrid } from "../plans-grid";
+import { safeQuery } from "../safe-query";
 
 export default async function BillingPlansPage({
   params,
@@ -11,14 +12,6 @@ export default async function BillingPlansPage({
 }) {
   const { orgSlug } = await params;
   const tenant = await resolveOrg(orgSlug);
-
-  const safeQuery = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
-    try {
-      return await fn();
-    } catch {
-      return fallback;
-    }
-  };
 
   const plans = await safeQuery(
     () => db().select().from(schema.plans).where(eq(schema.plans.isPublic, true)),

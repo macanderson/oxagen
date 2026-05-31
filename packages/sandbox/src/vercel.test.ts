@@ -6,7 +6,7 @@
  * selection path in getSandbox(). SANDBOX_DRIVER is process.env-gated in
  * integration environments; set it in CI env to choose the appropriate driver.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   createVercelSandbox,
   runtimeFor,
@@ -145,5 +145,75 @@ describe("getSandbox() with SANDBOX_DRIVER=vercel", () => {
       }
       setSandboxForTests(null);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getSandbox() — docker fallback branch
+// ---------------------------------------------------------------------------
+
+describe("getSandbox() docker fallback", () => {
+  const originalDriver = process.env.SANDBOX_DRIVER;
+  const originalUrl = process.env.MODAL_RUNNER_URL;
+  const originalToken = process.env.MODAL_RUNNER_TOKEN;
+
+  beforeEach(() => {
+    setSandboxForTests(null);
+  });
+
+  afterEach(() => {
+    if (originalDriver === undefined) {
+      delete process.env.SANDBOX_DRIVER;
+    } else {
+      process.env.SANDBOX_DRIVER = originalDriver;
+    }
+    if (originalUrl === undefined) {
+      delete process.env.MODAL_RUNNER_URL;
+    } else {
+      process.env.MODAL_RUNNER_URL = originalUrl;
+    }
+    if (originalToken === undefined) {
+      delete process.env.MODAL_RUNNER_TOKEN;
+    } else {
+      process.env.MODAL_RUNNER_TOKEN = originalToken;
+    }
+    setSandboxForTests(null);
+  });
+
+  it("returns a docker driver when SANDBOX_DRIVER is unset and MODAL_RUNNER_URL is absent", () => {
+    delete process.env.SANDBOX_DRIVER;
+    delete process.env.MODAL_RUNNER_URL;
+    delete process.env.MODAL_RUNNER_TOKEN;
+
+    const driver = getSandbox();
+
+    expect(driver.name).toBe("docker");
+  });
+
+  it("returns a docker driver when SANDBOX_DRIVER is unset and only MODAL_RUNNER_URL is set (no token)", () => {
+    delete process.env.SANDBOX_DRIVER;
+    process.env.MODAL_RUNNER_URL = "https://example.modal.run";
+    delete process.env.MODAL_RUNNER_TOKEN;
+
+    // Auto-detect requires BOTH URL and TOKEN; missing token falls through to docker.
+    const driver = getSandbox();
+
+    expect(driver.name).toBe("docker");
+  });
+
+  it("throws when SANDBOX_DRIVER=modal but MODAL_RUNNER_URL is missing", () => {
+    process.env.SANDBOX_DRIVER = "modal";
+    delete process.env.MODAL_RUNNER_URL;
+    process.env.MODAL_RUNNER_TOKEN = "tok_test";
+
+    expect(() => getSandbox()).toThrow(/MODAL_RUNNER_URL/);
+  });
+
+  it("throws when SANDBOX_DRIVER=modal but MODAL_RUNNER_TOKEN is missing", () => {
+    process.env.SANDBOX_DRIVER = "modal";
+    process.env.MODAL_RUNNER_URL = "https://example.modal.run";
+    delete process.env.MODAL_RUNNER_TOKEN;
+
+    expect(() => getSandbox()).toThrow(/MODAL_RUNNER_TOKEN/);
   });
 });

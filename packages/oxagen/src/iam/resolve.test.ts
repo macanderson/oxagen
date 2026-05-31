@@ -145,6 +145,9 @@ describe("resolve — Rule 6: org default grant", () => {
     const grant = makeGrant({ scopeKind: "org", scopeId: ORG_ID, effect: "deny" });
     const result = resolve(baseInput({ grants: [grant] }));
     expect(result.outcome).toBe("deny");
+    if (result.outcome === "deny") {
+      expect(result.reason).toBe("no_grant");
+    }
     expect(result.trace.decidedBy.rule).toBe("6:org_grant");
   });
 
@@ -318,6 +321,9 @@ describe("resolve — Rule 7: role-inherited grant", () => {
     const rg = makeRoleGrant({ effect: "deny" });
     const result = resolve(baseInput({ roles: [role], roleGrants: [rg] }));
     expect(result.outcome).toBe("deny");
+    if (result.outcome === "deny") {
+      expect(result.reason).toBe("no_grant");
+    }
     expect(result.trace.decidedBy.rule).toBe("7:role_grant");
   });
 

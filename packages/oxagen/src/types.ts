@@ -61,8 +61,7 @@ export type CapabilityLayer =
   | "mcp"
   | "unit"
   | "e2e"
-  | "docs"
-  | "marketing";
+  | "docs";
 
 // Where a capability is exposed. A capability with `surfaces: ['agent']`
 // is invoked only by the in-app agent mid-stream and skips the /v1

@@ -166,7 +166,7 @@ export function AskBar({ ctx, className }: AskBarProps) {
     [handleSubmit],
   );
 
-  const isMac = typeof navigator !== "undefined" && /mac/i.test(navigator.platform);
+  const isMac = typeof navigator !== "undefined" && (navigator.userAgentData?.platform ?? navigator.platform ?? "").toLowerCase().includes("mac");
   const kbdHint = isMac ? "⌘K" : "Ctrl+K";
 
   return (

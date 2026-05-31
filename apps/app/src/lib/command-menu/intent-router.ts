@@ -106,12 +106,6 @@ function looksLikeFill(text: string): boolean {
   return FILL_VERBS.some((v) => n.startsWith(v));
 }
 
-/** True when the query text looks like a navigation intent. */
-function looksLikeNavigate(text: string): boolean {
-  const n = normalise(text);
-  return NAV_PREFIXES.some((p) => n.startsWith(p));
-}
-
 /** True when the query text looks like a question or search. */
 function looksLikeSearch(text: string): boolean {
   const n = normalise(text);
@@ -158,8 +152,8 @@ export function classifyIntent(options: ClassifyOptions): Intent {
   }
 
   // 2. Navigate: strip nav prefixes and fuzzy-match against known targets.
-  if (looksLikeNavigate(trimmed) || true) {
-    // Always attempt nav match (not gated on prefix — short exact labels match well).
+  // Always attempt nav match — not gated on prefix, short exact labels match well.
+  {
     const stripped = NAV_PREFIXES.reduce((acc, p) => {
       if (n.startsWith(p + " ")) return acc.slice(p.length + 1).trim();
       return acc;

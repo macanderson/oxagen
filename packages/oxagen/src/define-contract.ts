@@ -42,7 +42,6 @@ import type {
   ResolvedPrincipal,
 } from "./types.js";
 import { isDenial } from "./types.js";
-import type { InvokeOptions } from "./kernel.js";
 
 // ── IAM runtime injection ─────────────────────────────────────────────────────
 //
@@ -163,7 +162,6 @@ export interface DefinedContract<
   invoke(
     rawCtx: CapabilityContext,
     rawInput: unknown,
-    opts?: InvokeOptions,
   ): Promise<z.infer<TOutput> | DenialResponse>;
 }
 
@@ -217,9 +215,6 @@ export function defineContract<
     async invoke(
       rawCtx: CapabilityContext,
       rawInput: unknown,
-      // Reserved: trace/surface-origin options will be threaded into the IAM
-      // check + audit emit once IAMCheckFn accepts them. Unused today.
-      _opts: InvokeOptions = {},
     ): Promise<z.infer<TOutput> | DenialResponse> {
       // 1. Validate input against the contract schema.
       const inputResult = spec.input.safeParse(rawInput);

@@ -18,6 +18,7 @@
  */
 
 import * as React from "react";
+import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowUpRight, X, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -121,6 +122,13 @@ export function AskDrawer({
 // into the topbar chunk when the drawer is closed.
 // ---------------------------------------------------------------------------
 
+// React.lazy defers the chat bundle until the drawer first opens.
+const LazyChatShellClient = React.lazy(() =>
+  import("@/components/chat/chat-shell-client").then((m) => ({
+    default: m.ChatShellClient,
+  })),
+);
+
 function AskDrawerChatShell({
   ctx,
   sendAction,
@@ -132,35 +140,24 @@ function AskDrawerChatShell({
   resolveApprovalAction: import("@/components/chat/chat-shell").ChatShellProps["resolveApprovalAction"];
   resolvePlanAction: import("@/components/chat/chat-shell").ChatShellProps["resolvePlanAction"];
 }) {
-  // Lazy import so the chat bundle is not loaded until the drawer opens.
-  const [ChatShellClient, setChatShellClient] = React.useState<
-    typeof import("@/components/chat/chat-shell-client").ChatShellClient | null
-  >(null);
-
-  React.useEffect(() => {
-    void import("@/components/chat/chat-shell-client").then((m) => {
-      setChatShellClient(() => m.ChatShellClient);
-    });
-  }, []);
-
-  if (!ChatShellClient) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" aria-label="Loading" />
-      </div>
-    );
-  }
-
   return (
-    <ChatShellClient
-      conversationId={null}
-      activeLeafMessageId={null}
-      messages={[]}
-      sendAction={sendAction}
-      resolveApprovalAction={resolveApprovalAction}
-      resolvePlanAction={resolvePlanAction}
-      orgSlug={ctx.orgSlug}
-      workspaceSlug={ctx.workspaceSlug ?? ""}
-    />
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" aria-label="Loading" />
+        </div>
+      }
+    >
+      <LazyChatShellClient
+        conversationId={null}
+        activeLeafMessageId={null}
+        messages={[]}
+        sendAction={sendAction}
+        resolveApprovalAction={resolveApprovalAction}
+        resolvePlanAction={resolvePlanAction}
+        orgSlug={ctx.orgSlug}
+        workspaceSlug={ctx.workspaceSlug ?? ""}
+      />
+    </Suspense>
   );
 }

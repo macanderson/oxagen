@@ -39,12 +39,6 @@ export interface Skill {
   version: string;
 }
 
-export interface SkillVersion {
-  slug: string;
-  version: string;
-  raw: string;
-}
-
 // dbAdapter shape: handlers pass a thin async function that returns
 // tenant-defined skills sourced from `workflow.prompt_templates`. The
 // registry merges the result with filesystem skills. Kept as a function

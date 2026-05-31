@@ -38,9 +38,9 @@ export async function listMcpTools(client: Client): Promise<string[]> {
   return tools.map((t) => t.name);
 }
 
-// Wrap each MCP-side tool as an AI SDK Tool. We keep parameters loose
-// (`z.any()`) because the MCP server's JSONSchema isn't a Zod schema; the
-// remote server re-validates on call.
+// Wrap each MCP-side tool as an AI SDK Tool. We use z.record(z.string(), z.unknown())
+// because the MCP server's JSONSchema isn't a Zod schema; the remote server
+// re-validates on call. z.record is type-safe while still accepting arbitrary k/v.
 export async function materializeMcpTools(
   client: Client,
   prefix: string,
@@ -51,7 +51,7 @@ export async function materializeMcpTools(
     const key = `${prefix}.${t.name}`;
     out[key] = tool({
       description: t.description ?? `External MCP tool ${t.name}`,
-      parameters: z.any(),
+      parameters: z.record(z.string(), z.unknown()),
       execute: async (input: unknown) => {
         const res = await client.callTool({ name: t.name, arguments: input as Record<string, unknown> });
         return res.content;

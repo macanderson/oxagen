@@ -1,21 +1,8 @@
 import { db, schema } from "@oxagen/database";
 import { and, asc, eq, isNull, or, sql, gt } from "drizzle-orm";
+import { CREDIT_REASONS } from "./constants.js";
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const ALLOWED_REASONS = new Set([
-  "grant_signup",
-  "grant_plan_renewal",
-  "grant_credit_pack",
-  "grant_manual",
-  "consume_execution",
-  "consume_tool_call",
-  "consume_token_overage",
-  "refund",
-  "adjustment",
-]);
+const ALLOWED_REASONS = new Set<string>(Object.values(CREDIT_REASONS));
 
 // ---------------------------------------------------------------------------
 // Grant: create a credit lot

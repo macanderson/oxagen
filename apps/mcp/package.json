@@ -8,7 +8,7 @@
     "start": "node dist/http.js",
     "start:stdio": "node dist/stdio.js",
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'lint placeholder'"
+    "lint": "eslint src --max-warnings 0"
   },
   "dependencies": {
     "@oxagen/agent": "workspace:*",
@@ -18,12 +18,12 @@
     "@oxagen/handlers": "workspace:*",
     "@oxagen/iam": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
-    "xmcp": "^0.6.10",
-    "zod": "^3.25.76"
+    "xmcp": "0.6.10",
+    "zod": "3.25.76"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
-    "swc-loader": "^0.2.6",
-    "typescript": "^6.0.3"
+    "@types/node": "25.9.1",
+    "swc-loader": "0.2.6",
+    "typescript": "6.0.3"
   }
 }

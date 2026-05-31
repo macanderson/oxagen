@@ -10,7 +10,7 @@ export default function DeveloperMcpPage() {
         <p className="text-sm font-medium text-foreground">MCP server</p>
         <p className="text-xs text-muted-foreground">
           Unified install instructions for Claude Code, Cursor, Claude Desktop, and more will appear here.
-          Phase 2 delivery.
+          Coming soon.
         </p>
       </div>
     </div>

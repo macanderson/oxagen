@@ -21,7 +21,7 @@ const SheetOverlay = React.forwardRef<
     {...props}
   />
 ));
-SheetOverlay.displayName = DialogPrimitive.Overlay.displayName;
+SheetOverlay.displayName = "SheetOverlay";
 
 interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
@@ -61,7 +61,7 @@ const SheetContent = React.forwardRef<
     </DialogPrimitive.Content>
   </DialogPrimitive.Portal>
 ));
-SheetContent.displayName = DialogPrimitive.Content.displayName;
+SheetContent.displayName = "SheetContent";
 
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn("flex flex-col space-y-2", className)} {...props} />
@@ -78,7 +78,7 @@ const SheetTitle = React.forwardRef<
     {...props}
   />
 ));
-SheetTitle.displayName = DialogPrimitive.Title.displayName;
+SheetTitle.displayName = "SheetTitle";
 
 const SheetDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
@@ -90,7 +90,7 @@ const SheetDescription = React.forwardRef<
     {...props}
   />
 ));
-SheetDescription.displayName = DialogPrimitive.Description.displayName;
+SheetDescription.displayName = "SheetDescription";
 
 export {
   Sheet,

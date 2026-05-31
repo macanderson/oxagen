@@ -9,7 +9,7 @@ export default function SecurityScimPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">Directory sync</p>
         <p className="text-xs text-muted-foreground">
-          SCIM 2.0 provisioning status and attribute mapping will appear here. Phase 2 delivery.
+          SCIM 2.0 provisioning status and attribute mapping will appear here. Coming soon.
         </p>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { inngest } from "../inngest.js";
 import { syncSubscriptionFromStripe } from "@oxagen/billing";
+import { logger } from "../logger.js";
 
 // Event-driven mirror: API webhook emits the event after persisting the
 // raw payload, runner re-syncs the canonical record. Decoupling keeps the
@@ -12,6 +13,7 @@ export const stripeSyncSubscription = inngest.createFunction(
     await step.run("sync", async () => {
       await syncSubscriptionFromStripe(event.data.stripeSubscriptionId);
     });
+    logger.info({ stripeSubscriptionId: event.data.stripeSubscriptionId }, "stripe.sync-subscription complete");
     return { synced: event.data.stripeSubscriptionId };
   },
 );

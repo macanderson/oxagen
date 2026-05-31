@@ -9,7 +9,7 @@ export default function AccountNotificationsPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">Notifications</p>
         <p className="text-xs text-muted-foreground">
-          Per-topic and per-channel notification preferences will appear here. Phase 2 delivery.
+          Per-topic and per-channel notification preferences will appear here. Coming soon.
         </p>
       </div>
     </div>

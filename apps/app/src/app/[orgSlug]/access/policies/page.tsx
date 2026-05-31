@@ -9,7 +9,7 @@ export default function AccessPoliciesPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">Conditional policies</p>
         <p className="text-xs text-muted-foreground">
-          Time windows, IP allowlists, and attribute predicates will appear here. Phase 2 delivery.
+          Time windows, IP allowlists, and attribute predicates will appear here. Coming soon.
         </p>
       </div>
     </div>

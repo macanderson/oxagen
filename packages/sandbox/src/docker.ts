@@ -15,6 +15,16 @@ import type {
 const NANOCPUS = 500_000_000;
 const NOBODY = "65534:65534";
 
+// Maximum bytes accumulated from stdout+stderr across the Docker socket.
+// Container memory (memoryMb) caps RAM inside the container; this caps
+// host-side buffering of the multiplexed output stream.
+const MAX_OUTPUT_BYTES = 8 * 1024 * 1024; // 8 MB
+
+// Maximum chunks allowed in the stream() queue before the container is
+// killed. Prevents a fast-printing container from exhausting host memory
+// when the async iterator consumer is slower than the output rate.
+const MAX_QUEUE_ITEMS = 1000;
+
 // Docker's built-in hardened seccomp policy (ships with every Docker Engine
 // ≥ 1.10 and Docker Desktop).  "seccomp=builtin" is the canonical reference
 // added in Docker 25+ / Moby 25+ for the profile that was previously known
@@ -150,7 +160,18 @@ export function createDockerSandbox(): SandboxDriver {
     });
 
     const chunks: Buffer[] = [];
-    stream.on("data", (c: Buffer) => chunks.push(c));
+    let accumulatedBytes = 0;
+    let outputTruncated = false;
+    stream.on("data", (c: Buffer) => {
+      if (accumulatedBytes + c.length > MAX_OUTPUT_BYTES) {
+        outputTruncated = true;
+        // Kill the container so it stops producing more output.
+        container.kill({ signal: "SIGKILL" }).catch(() => undefined);
+        return;
+      }
+      chunks.push(c);
+      accumulatedBytes += c.length;
+    });
 
     await container.start();
     if (req.stdin) {
@@ -192,14 +213,15 @@ export function createDockerSandbox(): SandboxDriver {
 
     const merged = Buffer.concat(chunks);
     const { stdout, stderr } = demux(merged);
-    return {
+    const result: SandboxResult = {
       exitCode,
-      stdout,
+      stdout: outputTruncated ? stdout + "\n[output truncated: exceeded 8 MB limit]" : stdout,
       stderr,
       durationMs: Date.now() - start,
       timedOut,
       oomKilled,
     };
+    return result;
   }
 
   async function* stream(req: SandboxRequest): AsyncIterable<SandboxStreamChunk> {
@@ -232,10 +254,18 @@ export function createDockerSandbox(): SandboxDriver {
       }
     };
     stdoutPipe.on("data", (c: Buffer) => {
+      if (queue.length >= MAX_QUEUE_ITEMS) {
+        container.kill({ signal: "SIGKILL" }).catch(() => undefined);
+        return;
+      }
       queue.push({ channel: "stdout", data: c.toString("utf8"), at: Date.now() });
       notify();
     });
     stderrPipe.on("data", (c: Buffer) => {
+      if (queue.length >= MAX_QUEUE_ITEMS) {
+        container.kill({ signal: "SIGKILL" }).catch(() => undefined);
+        return;
+      }
       queue.push({ channel: "stderr", data: c.toString("utf8"), at: Date.now() });
       notify();
     });

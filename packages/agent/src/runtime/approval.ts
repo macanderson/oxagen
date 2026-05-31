@@ -96,6 +96,18 @@ export async function waitForApproval(
   });
 }
 
+// Closes the PG NOTIFY listener connection and resets module state.
+// Register this with process SIGTERM/SIGINT handlers in host apps, and call
+// it in afterAll/afterEach blocks in tests that need clean module isolation
+// (instead of relying on vi.resetModules()).
+export async function closeApprovalListener(): Promise<void> {
+  if (!listenerStarted) return;
+  await listenSql?.end();
+  listenSql = null;
+  listenerStarted = false;
+  waiters.clear();
+}
+
 // Called from the agent.approval.resolve handler after it updates the DB.
 export async function notifyResolution(r: ApprovalResolution): Promise<void> {
   const payload = JSON.stringify(r);
@@ -107,7 +119,12 @@ export async function notifyResolution(r: ApprovalResolution): Promise<void> {
 // Used by handlers that need a tenant-scoped lookup before update.
 export async function readApproval(approvalId: string, orgId: string) {
   const [row] = await db()
-    .select()
+    .select({
+      id: schema.approvalRequests.id,
+      orgId: schema.approvalRequests.orgId,
+      resolution: schema.approvalRequests.resolution,
+      expiresAt: schema.approvalRequests.expiresAt,
+    })
     .from(schema.approvalRequests)
     .where(
       and(eq(schema.approvalRequests.id, approvalId), eq(schema.approvalRequests.orgId, orgId)),

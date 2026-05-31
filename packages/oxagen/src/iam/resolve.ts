@@ -355,7 +355,7 @@ export function resolve(input: ResolveInput): ResolveResult {
       outcome: "deny",
     };
     steps.push(step);
-    return { outcome: "deny", reason: "workspace_deny", trace: { steps, decidedBy: step } };
+    return { outcome: "deny", reason: "no_grant", trace: { steps, decidedBy: step } };
   }
   // Check expired org grants.
   const orgExpiredGrant = orgGrants.find((g) => isExpired(g));

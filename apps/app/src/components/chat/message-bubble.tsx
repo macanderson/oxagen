@@ -8,7 +8,7 @@ import { PlanCard, type AgentCapability } from "./plan-card";
 import { SubagentFanout } from "./subagent-fanout";
 import { MemoryCard } from "./memory-card";
 import { CodeExecuteCard } from "./code-execute-card";
-import { CHAT_COMPONENTS } from "./chat-component-registry";
+import { CHAT_COMPONENTS, logUnknownComponent } from "./chat-component-registry";
 import type { AssistantContentBlock } from "./stream-event-types";
 
 export interface ChatMessage {
@@ -167,9 +167,7 @@ function renderBlock(
       if (!Component) {
         // Unknown componentId — log intent but render nothing rather than
         // crashing so a stale persisted block doesn't break the whole chat.
-        console.log(
-          `[chat-component-registry] unknown componentId "${block.componentId}" — no renderer registered`,
-        );
+        logUnknownComponent(block.componentId);
         return null;
       }
       return (

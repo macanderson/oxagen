@@ -9,7 +9,7 @@ export default function AccessGrantsPage() {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-foreground">Capability grants</p>
         <p className="text-xs text-muted-foreground">
-          The capability &times; principal matrix will appear here. Phase 2 delivery.
+          The capability &times; principal matrix will appear here. Coming soon.
         </p>
       </div>
     </div>

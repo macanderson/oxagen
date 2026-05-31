@@ -6,9 +6,6 @@ const withMDX = createMDX();
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@oxagen/ui"],
-  turbopack: {
-    resolveExtensions: [".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx", ".json"],
-  },
   webpack: (config) => {
     // fumadocs-mdx loads source files via a dynamic `import(url.href)` that
     // webpack can't statically analyse (the docs dev runs `next dev --webpack`).

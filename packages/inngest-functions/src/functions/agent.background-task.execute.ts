@@ -3,6 +3,7 @@ import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { invokeCapability } from "@oxagen/agent";
 import "@oxagen/oxagen";
+import { logger } from "../logger.js";
 
 /**
  * Background task executor. The payload's `capability` field names the
@@ -17,7 +18,20 @@ interface BgPayload {
 }
 
 export const agentBackgroundTaskExecute = inngest.createFunction(
-  { id: "agent.background-task.execute", retries: 0, concurrency: { limit: 16, key: "event.data.orgId" } },
+  {
+    id: "agent.background-task.execute",
+    retries: 0,
+    concurrency: { limit: 16, key: "event.data.orgId" },
+    // Cancel the in-flight Inngest execution when the cancel event arrives for
+    // the same task + org. Without cancelOn the DB row is marked cancelled but
+    // the execution continues running until it finishes naturally.
+    cancelOn: [
+      {
+        event: "agent/task.background.cancel",
+        if: "event.data.taskId == async.data.taskId && event.data.orgId == async.data.orgId",
+      },
+    ],
+  },
   { event: "agent/task.background.start" },
   async ({ event, step }) => {
     const { orgId, workspaceId, taskId, payload } = event.data;
@@ -63,6 +77,7 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
             ),
           );
       });
+      logger.info({ taskId, orgId, workspaceId }, "agent.background-task.execute completed");
       return { taskId, status: "completed" };
     } catch (err) {
       await step.run("mark-failed", async () => {
@@ -80,6 +95,7 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
             ),
           );
       });
+      logger.error({ taskId, orgId, err }, "agent.background-task.execute failed");
       throw err;
     }
   },

@@ -114,10 +114,7 @@ export function createModalSandbox(config: ModalSandboxConfig): SandboxDriver {
         clearTimeout(httpTimeout);
       }
     },
-    // Streaming is intentionally a fallback to buffered run() for now.
-    // Modal's exec endpoint supports SSE streaming on the runner; we'll
-    // wire that under OXA-1347 follow-up. Buffered is correct for the
-    // 80% case (sub-30s runs) and avoids a half-baked stream contract.
+    // Falls back to buffered run(); streaming over SSE is not yet wired.
     async *stream(req: SandboxRequest): AsyncIterable<SandboxStreamChunk> {
       const result = await this.run(req);
       const now = Date.now();
