@@ -249,42 +249,21 @@ ALTER TABLE billing.usage_records
   DROP COLUMN IF EXISTS updated_by_user_id;
 
 -- invoice_line_items: drop public_id.
--- Internal detail table; no external ID surface. The public_id unique index
--- must be dropped first.
-DO $$ BEGIN
-  IF EXISTS (
-    SELECT 1 FROM pg_indexes
-    WHERE schemaname = 'billing' AND tablename = 'invoice_line_items'
-      AND indexname = 'invoice_line_items_public_id_key'
-  ) THEN
-    DROP INDEX billing.invoice_line_items_public_id_key;
-  END IF;
-END $$;
+-- Internal detail table; no external ID surface. public_id carries a UNIQUE
+-- constraint (invoice_line_items_public_id_key). DROP COLUMN cascades to that
+-- constraint and its backing index, so an explicit DROP INDEX is redundant
+-- AND invalid — Postgres errors "cannot drop index ... constraint requires it"
+-- because the index backs a constraint.
 ALTER TABLE billing.invoice_line_items DROP COLUMN IF EXISTS public_id;
 
--- credit_ledger: drop public_id.
-DO $$ BEGIN
-  IF EXISTS (
-    SELECT 1 FROM pg_indexes
-    WHERE schemaname = 'billing' AND tablename = 'credit_ledger'
-      AND indexname = 'credit_ledger_public_id_key'
-  ) THEN
-    DROP INDEX billing.credit_ledger_public_id_key;
-  END IF;
-END $$;
+-- credit_ledger: drop public_id (DROP COLUMN cascades to the UNIQUE
+-- constraint credit_ledger_public_id_key and its backing index).
 ALTER TABLE billing.credit_ledger DROP COLUMN IF EXISTS public_id;
 
 -- stripe_events: drop public_id, processed_at, processing_error.
 -- processed_at and processing_error move to stripe_event_processing below.
-DO $$ BEGIN
-  IF EXISTS (
-    SELECT 1 FROM pg_indexes
-    WHERE schemaname = 'billing' AND tablename = 'stripe_events'
-      AND indexname = 'stripe_events_public_id_key'
-  ) THEN
-    DROP INDEX billing.stripe_events_public_id_key;
-  END IF;
-END $$;
+-- DROP COLUMN public_id cascades to the UNIQUE constraint
+-- stripe_events_public_id_key and its backing index.
 ALTER TABLE billing.stripe_events
   DROP COLUMN IF EXISTS public_id,
   DROP COLUMN IF EXISTS processed_at,
