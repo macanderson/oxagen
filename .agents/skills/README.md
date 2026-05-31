@@ -17,6 +17,7 @@ This is the single source of truth — there is no parallel `docs/agents/` copy.
 | [`oxagen-design-system`](oxagen-design-system/SKILL.md) | Oxagen brand & visual identity — palette, the indigo→green gradient ring, Aeonik type, motion tokens, glass/card, iconography, voice & casing. | Building or restyling any user-facing UI or product copy in `apps/app` / `apps/website`. |
 | [`frontend-patterns`](frontend-patterns/SKILL.md) | 136 web-platform technique guides (`techniques/`) — CSS, a11y, Core Web Vitals, forms/autofill, passkeys, view transitions, scroll animation, privacy, security, built-in AI, WebMCP. | Building/reviewing frontend — open the matching technique file(s), not the whole library. |
 | [`vendor-better-auth`](vendor-better-auth/SKILL.md) | Documentation map (llms.txt index) for the Better Auth framework (`reference.md`). | Finding the right Better Auth doc page fast. |
+| [`oxagen-code-audit`](oxagen-code-audit/SKILL.md) | Full-repo engineering-law audit → adversarial verify → safe auto-fix in a worktree → interactive HTML dashboard (`scripts/`). | "audit my code", "give me an audit report", "what scale/architecture problems will bite me later", scoring package health against `.agents/skills`. |
 
 ## Better Auth skills (workflow guides)
 

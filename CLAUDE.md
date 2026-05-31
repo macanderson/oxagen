@@ -62,6 +62,10 @@ them too, so name the relevant skill in an agent's prompt.
 - **`vendor-better-auth`** — documentation map (llms.txt index) for Better Auth.
   Use to jump to the right official doc; pair with the `*-best-practices` auth
   skills for hands-on setup.
+- **`oxagen-code-audit`** — full-repo audit against the engineering law:
+  fan-out auditors → adversarial verify → safe auto-fix in a worktree → Linear
+  tickets for approvals → interactive HTML dashboard. Use when asked to "audit
+  my code", "give me an audit report", or score package health.
 
 Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first. Building UI →
 `oxagen-design-system` (identity) + `frontend-patterns` (technique). Auth →
