@@ -10,3 +10,5 @@ export * from "./credits.js";
 export * from "./grants.js";
 export * from "./pricing.js";
 export * from "./metering.js";
+export * from "./tier.js";
+export * from "./entitlements.js";

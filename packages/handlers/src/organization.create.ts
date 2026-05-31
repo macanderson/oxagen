@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
+import { grantFreeCredits } from "@oxagen/billing";
 import { logger } from "./logger.js";
 
 // Postgres unique_violation. Two concurrent creates with the same slug can
@@ -27,51 +28,62 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
     throw new Error(`slug "${input.slug}" already in use`);
   }
 
+  let orgId: string;
+  let result: { publicId: string; name: string; slug: string; createdAt: string };
+
   try {
-    return await d.transaction(async (tx) => {
-    const [org] = await tx
-      .insert(schema.organizations)
-      .values({
-        name: input.name,
-        slug: input.slug,
-        planType: input.planSlug,
-        status: "active",
+    const txResult = await d.transaction(async (tx) => {
+      const [org] = await tx
+        .insert(schema.organizations)
+        .values({
+          name: input.name,
+          slug: input.slug,
+          planType: input.planSlug,
+          status: "active",
+          createdByUserId: ctx.userId,
+          updatedByUserId: ctx.userId,
+        })
+        .returning({
+          publicId: schema.organizations.publicId,
+          name: schema.organizations.name,
+          slug: schema.organizations.slug,
+          createdAt: schema.organizations.createdAt,
+          id: schema.organizations.id,
+        });
+
+      if (!org) throw new Error("organization insert returned no row");
+
+      // Creator becomes owner. Membership row paired in same tx so callers
+      // never see an org they cannot reach.
+      await tx.insert(schema.orgUsers).values({
+        orgId: org.id,
+        userId: ctx.userId!,
+        role: "owner",
+        joinedAt: new Date(),
         createdByUserId: ctx.userId,
         updatedByUserId: ctx.userId,
-      })
-      .returning({
-        publicId: schema.organizations.publicId,
-        name: schema.organizations.name,
-        slug: schema.organizations.slug,
-        createdAt: schema.organizations.createdAt,
-        id: schema.organizations.id,
       });
 
-    if (!org) throw new Error("organization insert returned no row");
-
-    // Creator becomes owner. Membership row paired in same tx so callers
-    // never see an org they cannot reach.
-    await tx.insert(schema.orgUsers).values({
-      orgId: org.id,
-      userId: ctx.userId!,
-      role: "owner",
-      joinedAt: new Date(),
-      createdByUserId: ctx.userId,
-      updatedByUserId: ctx.userId,
-    });
-
-      const result = {
+      return {
         publicId: org.publicId,
         name: org.name,
         slug: org.slug,
         createdAt: org.createdAt.toISOString(),
+        id: org.id,
       };
-      logger.info(
-        { orgId: org.id, slug: org.slug, surface: ctx.surface },
-        "organization.create: organization created successfully",
-      );
-      return result;
     });
+
+    orgId = txResult.id;
+    result = {
+      publicId: txResult.publicId,
+      name: txResult.name,
+      slug: txResult.slug,
+      createdAt: txResult.createdAt,
+    };
+    logger.info(
+      { orgId: txResult.id, slug: txResult.slug, surface: ctx.surface },
+      "organization.create: organization created successfully",
+    );
   } catch (err) {
     if (isSlugConflict(err)) {
       logger.warn({ slug: input.slug, orgId: ctx.orgId }, "organization.create: slug conflict");
@@ -80,4 +92,17 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
     logger.error({ err, orgId: ctx.orgId }, "organization.create: transaction failed");
     throw err;
   }
+
+  // Grant the free $5 (500 credits) signup bonus AFTER the org transaction
+  // commits so a billing failure never rolls back the org creation itself.
+  // grantFreeCredits is idempotent — safe to re-run on retries.
+  await grantFreeCredits(orgId).catch((err: unknown) => {
+    // Log but do not fail org creation. The grant can be re-applied manually.
+    logger.error(
+      { err, orgId },
+      "organization.create: grantFreeCredits failed — org created, credits not granted",
+    );
+  });
+
+  return result;
 };

@@ -100,7 +100,15 @@ describe("createModalSandbox — run() HTTP 200 success", () => {
     expect(fetchSpy).toHaveBeenCalledOnce();
     const [url, init] = (fetchSpy as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://example.modal.run/run");
-    const body = JSON.parse(init.body as string);
+    const body = JSON.parse(init.body as string) as {
+      language: string;
+      code: string;
+      timeout_ms: number;
+      memory_mb: number;
+      network: string;
+      org_id: string;
+      workspace_id: string;
+    };
     expect(body.language).toBe("python");
     expect(body.code).toBe("print('ok')");
     expect(body.timeout_ms).toBe(10_000);
@@ -155,22 +163,31 @@ describe("createModalSandbox — AbortController timeout", () => {
 
     let capturedSignal: AbortSignal | undefined;
     const hangingFetch = vi.fn((_url: unknown, init: RequestInit) => {
-      capturedSignal = init.signal as AbortSignal;
-      return new Promise<Response>(() => undefined); // never resolves
+      const sig = init.signal as AbortSignal;
+      capturedSignal = sig;
+      // Mirrors real fetch: reject with AbortError when the signal fires so
+      // the run() promise settles (otherwise the test hangs waiting for it).
+      return new Promise<Response>((_resolve, reject) => {
+        sig.addEventListener("abort", () => {
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+        });
+      });
     }) as unknown as typeof fetch;
 
     const driver = createModalSandbox({ ...BASE_CONFIG, fetchImpl: hangingFetch });
     const req = makeReq({ timeoutMs: 5_000 });
 
     const runPromise = driver.run(req);
+    // Attach rejection handler immediately so the promise is never unhandled.
+    const rejectAssertion = expect(runPromise).rejects.toBeDefined();
 
     // Advance past the HTTP timeout (timeoutMs + 15_000 ms = 20_000 ms).
     await vi.advanceTimersByTimeAsync(20_001);
 
     expect(capturedSignal?.aborted).toBe(true);
 
-    // The promise should reject (AbortError).
-    await expect(runPromise).rejects.toBeDefined();
+    // Await the pre-attached rejection assertion.
+    await rejectAssertion;
 
     vi.useRealTimers();
   });

@@ -51,3 +51,24 @@ registerHandler(
   async () =>
     (await import("./brandkit.apply.js")).brandkitApplyHandler as CapabilityHandlerFn,
 );
+registerHandler(
+  "video.generate",
+  async () =>
+    (await import("./video.generate.js")).videoGenerateHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "svg.generate",
+  async () =>
+    (await import("./svg.generate.js")).svgGenerateHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "image.generate",
+  async () =>
+    (await import("./image.generate.js")).imageGenerateHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "system.install.instructions",
+  async () =>
+    (await import("./system.install.instructions.js"))
+      .systemInstallInstructionsHandler as CapabilityHandlerFn,
+);

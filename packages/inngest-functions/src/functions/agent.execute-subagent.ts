@@ -3,7 +3,6 @@ import { db, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { invokeCapability } from "@oxagen/agent";
 import "@oxagen/oxagen";
-import { logger } from "../logger.js";
 
 /** Pure helper — exported for unit testing. */
 export function deriveFanoutStatus(
@@ -87,7 +86,6 @@ export const agentExecuteSubagent = inngest.createFunction(
         );
     });
 
-    logger.info({ fanoutId, completed, total: runs.length, status: finalStatus }, "agent.execute-subagent complete");
     return { fanoutId, completed, status: finalStatus };
   },
 );

@@ -12,27 +12,35 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
+// Hoisted mock stubs — vi.mock factories are hoisted to the top of the file,
+// so any variables they reference must be declared with vi.hoisted() first.
+// ---------------------------------------------------------------------------
+
+const { notFoundMock, mockRows, mockDb } = vi.hoisted(() => {
+  const mockRows: unknown[] = [];
+  const mockLimit = vi.fn(() => Promise.resolve(mockRows));
+  const mockWhere = vi.fn(() => ({ limit: mockLimit }));
+  const mockFrom = vi.fn(() => ({ where: mockWhere }));
+  const mockSelect = vi.fn(() => ({ from: mockFrom }));
+  const mockDb = vi.fn(() => ({ select: mockSelect }));
+  const notFoundMock = vi.fn(() => {
+    throw new Error("NEXT_NOT_FOUND");
+  });
+
+  return { notFoundMock, mockRows, mockDb };
+});
+
+// ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
 // next/navigation notFound() throws a special Next.js error in production;
 // for tests we just let it throw so we can assert it was called.
-const notFoundMock = vi.fn(() => {
-  throw new Error("NEXT_NOT_FOUND");
-});
-
 vi.mock("next/navigation", () => ({
   notFound: notFoundMock,
 }));
 
 // Drizzle query builder mock — returns a chainable object that resolves to rows.
-const mockRows: unknown[] = [];
-const mockLimit = vi.fn(() => Promise.resolve(mockRows));
-const mockWhere = vi.fn(() => ({ limit: mockLimit }));
-const mockFrom = vi.fn(() => ({ where: mockWhere }));
-const mockSelect = vi.fn(() => ({ from: mockFrom }));
-const mockDb = vi.fn(() => ({ select: mockSelect }));
-
 vi.mock("@oxagen/database/client", () => ({
   db: mockDb,
 }));

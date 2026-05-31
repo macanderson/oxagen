@@ -14,14 +14,14 @@ const mockEncrypt = vi.fn();
 const mockDecrypt = vi.fn();
 
 vi.mock("@oxagen/crypto", () => ({
-  encrypt: (...args: unknown[]) => mockEncrypt(...args),
-  decrypt: (...args: unknown[]) => mockDecrypt(...args),
+  encrypt: (...args: unknown[]) => mockEncrypt(...args) as unknown,
+  decrypt: (...args: unknown[]) => mockDecrypt(...args) as unknown,
 }));
 
 const mockRequireEnv = vi.fn();
 
 vi.mock("@oxagen/config/env", () => ({
-  requireEnv: (...args: unknown[]) => mockRequireEnv(...args),
+  requireEnv: (...args: unknown[]) => mockRequireEnv(...args) as unknown,
 }));
 
 import {

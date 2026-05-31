@@ -6,7 +6,7 @@
  * selection path in getSandbox(). SANDBOX_DRIVER is process.env-gated in
  * integration environments; set it in CI env to choose the appropriate driver.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   createVercelSandbox,
   runtimeFor,

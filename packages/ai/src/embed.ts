@@ -1,21 +1,12 @@
 import { embed } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { requireEnv } from "@oxagen/config/env";
-import { providerFromModelId, type Surface } from "@oxagen/telemetry";
-import { recordAIUsage } from "./meter.js";
+import { insertTokenUsage, providerFromModelId, hashPrompt, type Surface } from "@oxagen/telemetry";
+import { providerCostUsdMicros } from "@oxagen/billing";
 
 // Match the 1536-dim AgentMemory vector index. Swapping models requires a
 // re-index, so we pin here and treat the index name as the contract.
 const MODEL = "text-embedding-3-small";
-
-// Construct the client and embedding model once at module load. requireEnv
-// parses process.env on every call, so hoisting it avoids per-request overhead
-// on high-frequency paths (semantic search, memory indexing).
-const _env = requireEnv(["OPENAI_API_KEY"] as const);
-const _openaiClient = _env.OPENAI_API_KEY
-  ? createOpenAI({ apiKey: _env.OPENAI_API_KEY })
-  : createOpenAI();
-const _embeddingModel = _openaiClient.embedding(MODEL);
 
 export interface EmbedTextOpts {
   /**
@@ -40,29 +31,43 @@ export interface EmbedTextOpts {
  * language-model calls (OXA-1351 / OXA-1425).
  */
 export async function embedText(text: string, opts: EmbedTextOpts = {}): Promise<number[]> {
+  const env = requireEnv(["OPENAI_API_KEY"] as const);
+  const client = env.OPENAI_API_KEY
+    ? createOpenAI({ apiKey: env.OPENAI_API_KEY })
+    : createOpenAI();
+  const model = client.embedding(MODEL);
   const startedAt = Date.now();
 
-  const { embedding, usage } = await embed({ model: _embeddingModel, value: text });
+  const { embedding, usage } = await embed({ model, value: text });
 
   if (opts.telemetry) {
     const { orgId, workspaceId, surface, executionStepId } = opts.telemetry;
     const durationMs = Date.now() - startedAt;
     const inputTokens = usage?.tokens ?? 0;
-
-    // Telemetry + credit metering via shared helper (best-effort; never fails
-    // the caller). Embeddings are input-only; outputTokens is 0.
-    await recordAIUsage({
-      executionStepId,
-      orgId,
-      workspaceId,
-      model: MODEL,
-      provider: providerFromModelId(`openai:${MODEL}`),
-      inputTokens,
-      outputTokens: 0,
-      durationMs,
-      surface,
-      promptTextForHash: text,
-    });
+    // Embeddings are input-only; the rate card prices them per the same meter.
+    const costUsdMicros = providerCostUsdMicros({ model: MODEL, inputTokens, outputTokens: 0 });
+    try {
+      const promptHash = await hashPrompt(text);
+      await insertTokenUsage([
+        {
+          execution_step_id: executionStepId,
+          org_id: orgId,
+          workspace_id: workspaceId,
+          model: MODEL,
+          provider: providerFromModelId(`openai:${MODEL}`),
+          input_tokens: inputTokens,
+          output_tokens: 0,
+          cached_tokens: 0,
+          cost_usd_micros: costUsdMicros,
+          duration_ms: durationMs,
+          surface,
+          prompt_hash: promptHash,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    } catch {
+      // Telemetry is best-effort; never fail the caller.
+    }
   }
 
   return embedding;

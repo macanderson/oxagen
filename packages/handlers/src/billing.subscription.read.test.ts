@@ -161,7 +161,6 @@ describe("billingSubscriptionReadHandler — ClickHouse failure path", () => {
       { metric: "tokens_output", quantity: 200, costMicros: 0n },
       { metric: "tokens_cached", quantity: 50, costMicros: 0n },
       { metric: "executions", quantity: 10, costMicros: 5000n },
-      { metric: "tool_calls", quantity: 3, costMicros: 0n },
     ]);
 
     const result = await billingSubscriptionReadHandler({}, ctx);

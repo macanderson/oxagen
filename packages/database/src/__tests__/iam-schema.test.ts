@@ -31,7 +31,7 @@ import {
   accessRequests,
   iamSessions,
 } from "../schema/index.js";
-import { flattenCheckSql, sqlColumnNames, getChecks, type DrizzleCheck } from "./_test-helpers.js";
+import { flattenCheckSql, sqlColumnNames, getChecks } from "./_test-helpers.js";
 
 // ---------------------------------------------------------------------------
 // 1. All 7 IAM tables are importable from schema/index

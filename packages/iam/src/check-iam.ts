@@ -8,11 +8,37 @@
 //
 // If pending_approval: the caller (define-contract.ts) also calls
 // createAccessRequest() before returning the DenialResponse.
+//
+// Plan-tier ACL gate (§entitlements):
+//   For Enterprise-only capabilities (those whose defaultEffect is 'deny' and
+//   whose capability name is in the ACL namespace), the gate resolves the org's
+//   plan tier and bypasses ACL resolution to ALLOW for non-enterprise orgs —
+//   there is nothing to enforce when the feature is not available. For
+//   enterprise orgs the normal IAM resolution path runs so the capability can
+//   be granted or denied per explicit policy.
 
 import type { CapabilityContext, CapabilityEffect, ResolvedPrincipal } from "@oxagen/oxagen";
 import { resolve, type ResolveResult } from "@oxagen/oxagen/iam";
 import { fetchAuthz } from "./fetch-authz.js";
 import { emitAudit } from "./emit-audit.js";
+import { resolveOrgTier, canAccessACL } from "@oxagen/billing";
+
+/**
+ * Capabilities in the `iam.*` namespace manage grants, roles, and access
+ * policies — the ACL feature set. Enterprise orgs have these features
+ * available and their IAM tables are fully populated; non-Enterprise orgs
+ * do not configure explicit ACL policies, so the resolver is bypassed and
+ * the request is ALLOWED (role membership is sufficient).
+ *
+ * Use this to determine whether a capability name is in the ACL namespace.
+ */
+function isAclCapability(capability: string): boolean {
+  return (
+    capability.startsWith("iam.") ||
+    capability.startsWith("billing.acl.") ||
+    capability === "iam"
+  );
+}
 
 export interface CheckIAMArgs {
   capability: string;
@@ -33,9 +59,52 @@ export interface CheckIAMResult {
  *
  * Returns the resolver result and the resolved principal so the handler
  * can record authoring metadata.
+ *
+ * ACL plan-tier gate: for capabilities in the `iam.*` namespace, the org's
+ * plan tier is checked first. Non-enterprise orgs do not configure explicit
+ * ACL policies, so the resolver is bypassed and the request is ALLOWED —
+ * role membership is the correct (and only) access control for those orgs.
+ * Enterprise orgs run through the full resolver so explicit ACL grants and
+ * policies are enforced.
  */
 export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
   const { capability, ctx, defaultEffect, rawInputJson } = args;
+
+  // ── Plan-tier ACL gate ──────────────────────────────────────────────────────
+  // For ACL-namespace capabilities, resolve the org's tier. Non-enterprise
+  // orgs bypass the resolver and are ALLOWED (they have no ACL policies to
+  // enforce — role membership is their access model). Enterprise orgs fall
+  // through to the full resolver below.
+  if (isAclCapability(capability)) {
+    const tier = ctx.planTier ?? (await resolveOrgTier(ctx.orgId));
+    if (!canAccessACL(tier)) {
+      // Non-enterprise org: ACL policies don't apply. Allow and return an
+      // 'allow' trace without running the resolver so non-enterprise role
+      // members can still reach the (simpler) ACL-adjacent features.
+      const bypassStep = {
+        rule: "tier_gate",
+        description: `tier:${tier} — non-enterprise org bypasses ACL resolver → allow`,
+        decided: true,
+        outcome: "allow" as const,
+      };
+      const bypassResult: ResolveResult = {
+        outcome: "allow",
+        trace: { steps: [bypassStep], decidedBy: bypassStep },
+      };
+      emitAudit({
+        capability,
+        ctx,
+        principal: null,
+        result: bypassResult,
+        trace: bypassResult.trace,
+        rawInputJson,
+      }).catch((err: unknown) => {
+        console.error("[iam:audit] CRITICAL — audit event emission failed:", err);
+      });
+      return { result: bypassResult, principal: null };
+    }
+    // Enterprise org: fall through to the full resolver.
+  }
 
   // 1. Fetch authz data — falls back to empty if IAM tables are absent.
   const authz = await fetchAuthz({

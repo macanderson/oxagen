@@ -1,7 +1,14 @@
 import { db, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { getInngestClient } from "./inngest-client.js";
+import { Inngest } from "inngest";
+import { requireEnv } from "@oxagen/config/env";
+
+const env = requireEnv(["INNGEST_EVENT_KEY"] as const);
+
+// Shared Inngest client. Same `id` as @oxagen/inngest-functions so events
+// route to the registered handlers (served from apps/api /api/inngest).
+const inngest = new Inngest({ id: "oxagen-runner", eventKey: env.INNGEST_EVENT_KEY });
 
 export interface FanoutChild {
   capability: string;
@@ -50,7 +57,7 @@ export async function dispatchFanout(args: DispatchFanoutArgs): Promise<Dispatch
     return { fanoutId: fan.id };
   });
 
-  await getInngestClient().send({
+  await inngest.send({
     name: "agent/subagent.dispatch",
     data: {
       orgId: args.orgId,
@@ -79,30 +86,17 @@ export async function readFanout(
   orgId: string,
 ): Promise<FanoutSnapshot | null> {
   const [fan] = await db()
-    .select({
-      id: schema.subagentFanouts.id,
-      status: schema.subagentFanouts.status,
-    })
+    .select()
     .from(schema.subagentFanouts)
     .where(
       and(eq(schema.subagentFanouts.id, fanoutId), eq(schema.subagentFanouts.orgId, orgId)),
     )
     .limit(1);
   if (!fan) return null;
-  // Cap at 500 children to avoid loading unbounded result sets into memory
-  // on every poll cycle. Fanouts larger than this indicate a design issue
-  // upstream and should be split into chunked fanouts.
   const runs = await db()
-    .select({
-      childMessageId: schema.subagentRuns.childMessageId,
-      capabilityName: schema.subagentRuns.capabilityName,
-      status: schema.subagentRuns.status,
-      outputPayload: schema.subagentRuns.outputPayload,
-      errorReason: schema.subagentRuns.errorReason,
-    })
+    .select()
     .from(schema.subagentRuns)
-    .where(eq(schema.subagentRuns.fanoutId, fanoutId))
-    .limit(500);
+    .where(eq(schema.subagentRuns.fanoutId, fanoutId));
   return {
     fanoutId,
     status: (fan.status as FanoutSnapshot["status"]) ?? "pending",

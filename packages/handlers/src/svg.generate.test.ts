@@ -1,0 +1,149 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// ── hoisted mocks ─────────────────────────────────────────────────────────────
+
+const mocks = vi.hoisted(() => ({
+  generateObjectFor: vi.fn(),
+}));
+
+vi.mock("@oxagen/ai", () => ({
+  generateObjectFor: mocks.generateObjectFor,
+}));
+
+// ── import under test ─────────────────────────────────────────────────────────
+
+import { svgGenerateHandler } from "./svg.generate.js";
+import type { CapabilityContext } from "@oxagen/oxagen";
+
+// ── fixtures ──────────────────────────────────────────────────────────────────
+
+const CTX: CapabilityContext = {
+  orgId: "org_1",
+  workspaceId: "ws_1",
+  userId: "u_1",
+  apiKeyId: null,
+  requestId: "req_1",
+  surface: "api",
+  messageId: "msg_1",
+};
+
+const VALID_SVG = '<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><circle cx="200" cy="200" r="100" fill="currentColor"/></svg>';
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("svgGenerateHandler", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns svg, title and a render directive on success", async () => {
+    mocks.generateObjectFor.mockResolvedValueOnce({
+      object: { svg: VALID_SVG, title: "A Blue Circle" },
+      usage: { promptTokens: 20, completionTokens: 80, totalTokens: 100 },
+    });
+
+    const result = await svgGenerateHandler({ prompt: "A blue circle" }, CTX);
+
+    expect(result.svg).toContain("<svg");
+    expect(result.title).toBe("A Blue Circle");
+    expect(result.render.componentId).toBe("svg-preview");
+    expect(result.render.props["svg"]).toBe(result.svg);
+    expect(result.render.props["title"]).toBe("A Blue Circle");
+  });
+
+  it("strips <script> tags from the model output", async () => {
+    const maliciousSvg =
+      '<svg viewBox="0 0 400 400"><script>alert(1)</script><circle r="50" fill="currentColor"/></svg>';
+    mocks.generateObjectFor.mockResolvedValueOnce({
+      object: { svg: maliciousSvg, title: "Malicious" },
+      usage: { promptTokens: 10, completionTokens: 50, totalTokens: 60 },
+    });
+
+    const result = await svgGenerateHandler({ prompt: "test" }, CTX);
+
+    expect(result.svg).not.toContain("<script");
+    expect(result.svg).not.toContain("alert(1)");
+    expect(result.svg).toContain("<circle");
+  });
+
+  it("strips on* event handler attributes from the model output", async () => {
+    const maliciousSvg =
+      '<svg viewBox="0 0 400 400"><rect onclick="evil()" width="100" height="100"/></svg>';
+    mocks.generateObjectFor.mockResolvedValueOnce({
+      object: { svg: maliciousSvg, title: "Evil Rect" },
+      usage: { promptTokens: 10, completionTokens: 50, totalTokens: 60 },
+    });
+
+    const result = await svgGenerateHandler({ prompt: "test" }, CTX);
+
+    expect(result.svg).not.toContain("onclick");
+    expect(result.svg).not.toContain("evil()");
+    expect(result.svg).toContain("<rect");
+  });
+
+  it("returns a placeholder SVG and does not throw when model errors", async () => {
+    mocks.generateObjectFor.mockRejectedValueOnce(new Error("Model unavailable"));
+
+    const result = await svgGenerateHandler({ prompt: "A mountain", title: "Mountain" }, CTX);
+
+    // Handler must not throw — it returns a valid fallback.
+    expect(result.svg).toContain("<svg");
+    expect(result.title).toBe("Mountain");
+    expect(result.render.componentId).toBe("svg-preview");
+  });
+
+  it("falls back to requestId when messageId is null", async () => {
+    let capturedTelemetry: Record<string, unknown> | null = null;
+    mocks.generateObjectFor.mockImplementationOnce(
+      (args: { telemetry: Record<string, unknown> }) => {
+        capturedTelemetry = args.telemetry;
+        return Promise.resolve({
+          object: { svg: VALID_SVG, title: "Test" },
+          usage: { promptTokens: 5, completionTokens: 20, totalTokens: 25 },
+        });
+      },
+    );
+
+    await svgGenerateHandler({ prompt: "test" }, { ...CTX, messageId: null });
+
+    expect(capturedTelemetry?.["messageId"]).toBe("req_1");
+  });
+
+  it("forwards telemetry context to generateObjectFor", async () => {
+    let capturedTelemetry: Record<string, unknown> | null = null;
+    mocks.generateObjectFor.mockImplementationOnce(
+      (args: { telemetry: Record<string, unknown> }) => {
+        capturedTelemetry = args.telemetry;
+        return Promise.resolve({
+          object: { svg: VALID_SVG, title: "T" },
+          usage: { promptTokens: 5, completionTokens: 20, totalTokens: 25 },
+        });
+      },
+    );
+
+    await svgGenerateHandler({ prompt: "test" }, CTX);
+
+    expect(capturedTelemetry?.["orgId"]).toBe("org_1");
+    expect(capturedTelemetry?.["workspaceId"]).toBe("ws_1");
+    expect(capturedTelemetry?.["messageId"]).toBe("msg_1");
+    expect(capturedTelemetry?.["surface"]).toBe("api");
+  });
+
+  it("passes width and height defaults when not provided", async () => {
+    let capturedPrompt: string | undefined;
+    mocks.generateObjectFor.mockImplementationOnce(
+      (args: { system: string }) => {
+        capturedPrompt = args.system;
+        return Promise.resolve({
+          object: { svg: VALID_SVG, title: "Default" },
+          usage: { promptTokens: 5, completionTokens: 20, totalTokens: 25 },
+        });
+      },
+    );
+
+    await svgGenerateHandler({ prompt: "test" }, CTX);
+
+    // The system prompt should reference the default 400×400 dimensions.
+    expect(capturedPrompt).toContain("400");
+  });
+});

@@ -16,6 +16,7 @@
   "dependencies": {
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "stripe": "17.7.0",
     "zod": "3.25.76"

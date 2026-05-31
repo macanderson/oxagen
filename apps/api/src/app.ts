@@ -28,6 +28,10 @@ import { formFillRoute } from "./routes/v1/form.fill.js";
 import { documentsGenerateRoute } from "./routes/v1/documents.generate.js";
 import { documentsPdfCreateRoute } from "./routes/v1/documents.pdf.create.js";
 import { brandkitApplyRoute } from "./routes/v1/brandkit.apply.js";
+import { videoGenerateRoute } from "./routes/v1/video.generate.js";
+import { svgGenerateRoute } from "./routes/v1/svg.generate.js";
+import { imageGenerateRoute } from "./routes/v1/image.generate.js";
+import { systemInstallInstructionsRoute } from "./routes/v1/system.install.instructions.js";
 
 export type AppEnv = {
   Variables: {
@@ -85,4 +89,8 @@ orgScoped.route("/forms/fill", formFillRoute);
 orgScoped.route("/documents/generate", documentsGenerateRoute);
 orgScoped.route("/documents/pdf", documentsPdfCreateRoute);
 orgScoped.route("/brandkit/apply", brandkitApplyRoute);
+orgScoped.route("/video/generate", videoGenerateRoute);
+orgScoped.route("/svg/generate", svgGenerateRoute);
+orgScoped.route("/image/generate", imageGenerateRoute);
+orgScoped.route("/system/install-instructions", systemInstallInstructionsRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

@@ -251,6 +251,23 @@ const accountConfig: SidebarConfig = {
 };
 
 // ---------------------------------------------------------------------------
+// Reserved org-scope route segments
+//
+// When the second URL segment matches one of these names it is an org-level
+// page, NOT a workspace slug. This list must stay in sync with the route
+// tree under apps/app/src/app/[orgSlug]/.
+// ---------------------------------------------------------------------------
+
+const ORG_SCOPE_ROUTES = new Set([
+  "members",
+  "access",
+  "security",
+  "billing",
+  "developer",
+  "settings",
+]);
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -274,8 +291,14 @@ export function getSidebarConfig(mode: SidebarMode): SidebarConfig {
  *
  * Rules (application-shell spec §3):
  *   /account/...         → "account"
- *   /{org}/{ws}/...      → "workspace" (workspaceSlug present in ctx)
+ *   /{org}/{ws}/...      → "workspace"
+ *       where the 2nd segment is NOT a reserved org-scope route
  *   /{org}/...           → "org"
+ *
+ * The ctx.workspaceSlug fast-path is honoured when present, but the
+ * AppShell at the org-layout boundary never sets workspaceSlug (it has no
+ * access to the workspace param at that layout level). The pathname
+ * derivation is therefore the canonical path for workspace detection.
  *
  * Pathname must be the raw Next.js `pathname` string (no query params).
  */
@@ -283,7 +306,16 @@ export function resolveSidebarMode(pathname: string, ctx: ScopeContext): Sidebar
   if (pathname.startsWith("/account")) {
     return "account";
   }
+  // Fast-path: ctx already carries a workspaceSlug (e.g. injected by a
+  // workspace-level layout that has access to the param).
   if (ctx.workspaceSlug) {
+    return "workspace";
+  }
+  // Derive from URL shape: /{org}/{segment}/... where segment is not a
+  // reserved org-scope route → workspace mode.
+  const parts = pathname.split("/").filter(Boolean);
+  // parts[0] = orgSlug, parts[1] = second segment (workspace slug or reserved route)
+  if (parts.length >= 2 && !ORG_SCOPE_ROUTES.has(parts[1] as string)) {
     return "workspace";
   }
   return "org";

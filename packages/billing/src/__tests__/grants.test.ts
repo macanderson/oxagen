@@ -30,9 +30,9 @@ import type Stripe from "stripe";
 // Module mocks — registered before any module import.
 // ---------------------------------------------------------------------------
 
-const grantCreditsMock = vi.fn().mockResolvedValue({ balanceCents: 1000n });
+const createCreditLotMock = vi.fn().mockResolvedValue({ lotId: "lot-mock-1", effectiveBalanceCents: 1000n });
 vi.mock("../credits.js", () => ({
-  grantCredits: grantCreditsMock,
+  createCreditLot: createCreditLotMock,
 }));
 
 const syncSubscriptionMock = vi.fn().mockResolvedValue(undefined);
@@ -108,7 +108,6 @@ vi.mock("../client.js", () => ({
 const { grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } = await import(
   "../grants.js"
 );
-
 // ---------------------------------------------------------------------------
 // Fixture helpers
 // ---------------------------------------------------------------------------
@@ -166,7 +165,7 @@ function makeLineItem(creditCount: number, quantity: number = 1): Stripe.LineIte
 describe("grantPlanCreditsForInvoicePaid", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    grantCreditsMock.mockResolvedValue({ balanceCents: 1000n });
+    createCreditLotMock.mockResolvedValue({ lotId: "lot-mock-1", effectiveBalanceCents: 1000n });
     syncSubscriptionMock.mockResolvedValue(undefined);
   });
 
@@ -189,10 +188,17 @@ describe("grantPlanCreditsForInvoicePaid", () => {
 
     await grantPlanCreditsForInvoicePaid(makeInvoice({ billing_reason: "subscription_create" }));
 
-    expect(grantCreditsMock).toHaveBeenCalledOnce();
-    const call = grantCreditsMock.mock.calls[0]![0] as { deltaCents: bigint; reason: string };
-    expect(call.deltaCents).toBe(5000n);
+    expect(createCreditLotMock).toHaveBeenCalledOnce();
+    const call = createCreditLotMock.mock.calls[0]![0] as {
+      amountCents: bigint;
+      source: string;
+      reason: string;
+      expiresAt: Date | null;
+    };
+    expect(call.amountCents).toBe(5000n);
+    expect(call.source).toBe("subscription");
     expect(call.reason).toBe("grant_plan_renewal");
+    expect(call.expiresAt).toBeInstanceOf(Date);
   });
 
   it("subscription_cycle billing reason — grants plan credits", async () => {
@@ -213,7 +219,7 @@ describe("grantPlanCreditsForInvoicePaid", () => {
 
     await grantPlanCreditsForInvoicePaid(makeInvoice({ billing_reason: "subscription_cycle" }));
 
-    expect(grantCreditsMock).toHaveBeenCalledOnce();
+    expect(createCreditLotMock).toHaveBeenCalledOnce();
   });
 
   it("already granted (ledger row exists) — grantCredits is NOT called", async () => {
@@ -235,10 +241,10 @@ describe("grantPlanCreditsForInvoicePaid", () => {
 
     await grantPlanCreditsForInvoicePaid(makeInvoice());
 
-    expect(grantCreditsMock).not.toHaveBeenCalled();
+    expect(createCreditLotMock).not.toHaveBeenCalled();
   });
 
-  it("missing invoice row — grantCredits is NOT called", async () => {
+  it("missing invoice row — createCreditLot is NOT called", async () => {
     dbState.instance = makeDb({
       subscriptions: {
         findFirst: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
@@ -257,13 +263,10 @@ describe("grantPlanCreditsForInvoicePaid", () => {
 
     await grantPlanCreditsForInvoicePaid(makeInvoice());
 
-    // referenceId is undefined → alreadyGranted check is skipped, grantCredits
-    // is called with referenceId: undefined. The function still calls grantCredits
-    // because the guard is: "if (referenceId && alreadyGranted)".
-    // So when referenceId is undefined the idempotency guard is bypassed and
-    // grantCredits IS still called.  This is the observed behaviour of the
-    // source and the test documents it faithfully.
-    expect(grantCreditsMock).toHaveBeenCalledOnce();
+    // referenceId is undefined → the idempotency guard ("if (referenceId && alreadyGranted)")
+    // is bypassed, so createCreditLot IS called even without a referenceId. This is the
+    // observed behaviour of the source and the test documents it faithfully.
+    expect(createCreditLotMock).toHaveBeenCalledOnce();
   });
 
   it("non-subscription billing reason (manual) — returns early, no grant", async () => {
@@ -272,7 +275,7 @@ describe("grantPlanCreditsForInvoicePaid", () => {
     await grantPlanCreditsForInvoicePaid(makeInvoice({ billing_reason: "manual" }));
 
     expect(syncSubscriptionMock).not.toHaveBeenCalled();
-    expect(grantCreditsMock).not.toHaveBeenCalled();
+    expect(createCreditLotMock).not.toHaveBeenCalled();
   });
 });
 
@@ -283,7 +286,7 @@ describe("grantPlanCreditsForInvoicePaid", () => {
 describe("grantCreditPackForCheckout", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    grantCreditsMock.mockResolvedValue({ balanceCents: 500n });
+    createCreditLotMock.mockResolvedValue({ lotId: "lot-mock-1", effectiveBalanceCents: 500n });
   });
 
   it("happy path — line items with price.metadata.credits grants correct total", async () => {
@@ -300,10 +303,19 @@ describe("grantCreditPackForCheckout", () => {
 
     await grantCreditPackForCheckout(makeSession());
 
-    expect(grantCreditsMock).toHaveBeenCalledOnce();
-    const call = grantCreditsMock.mock.calls[0]![0] as { deltaCents: bigint; reason: string };
-    expect(call.deltaCents).toBe(250n);
+    expect(createCreditLotMock).toHaveBeenCalledOnce();
+    const call = createCreditLotMock.mock.calls[0]![0] as {
+      amountCents: bigint;
+      source: string;
+      reason: string;
+      expiresAt: Date | null;
+    };
+    expect(call.amountCents).toBe(250n);
+    expect(call.source).toBe("purchase");
     expect(call.reason).toBe("grant_credit_pack");
+    // Purchase lots expire 1 year from the grant date — check it's in the future.
+    expect(call.expiresAt).toBeInstanceOf(Date);
+    expect((call.expiresAt as Date).getTime()).toBeGreaterThan(Date.now());
   });
 
   it("already granted — grantCredits is NOT called", async () => {
@@ -317,7 +329,7 @@ describe("grantCreditPackForCheckout", () => {
     await grantCreditPackForCheckout(makeSession());
 
     expect(stripeCheckoutSessionsMock.listLineItems).not.toHaveBeenCalled();
-    expect(grantCreditsMock).not.toHaveBeenCalled();
+    expect(createCreditLotMock).not.toHaveBeenCalled();
   });
 
   it("session mode is subscription — returns early, no grant", async () => {
@@ -325,7 +337,7 @@ describe("grantCreditPackForCheckout", () => {
 
     await grantCreditPackForCheckout(makeSession({ mode: "subscription" }));
 
-    expect(grantCreditsMock).not.toHaveBeenCalled();
+    expect(createCreditLotMock).not.toHaveBeenCalled();
   });
 
   it("payment_status is not paid — returns early, no grant", async () => {
@@ -333,7 +345,7 @@ describe("grantCreditPackForCheckout", () => {
 
     await grantCreditPackForCheckout(makeSession({ payment_status: "unpaid" }));
 
-    expect(grantCreditsMock).not.toHaveBeenCalled();
+    expect(createCreditLotMock).not.toHaveBeenCalled();
   });
 
   it("no org_id on metadata — returns early, no grant", async () => {
@@ -341,6 +353,6 @@ describe("grantCreditPackForCheckout", () => {
 
     await grantCreditPackForCheckout(makeSession({ metadata: {} }));
 
-    expect(grantCreditsMock).not.toHaveBeenCalled();
+    expect(createCreditLotMock).not.toHaveBeenCalled();
   });
 });

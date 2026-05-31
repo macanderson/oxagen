@@ -1,8 +1,13 @@
 import { generateObject, type LanguageModel, type CoreMessage } from "ai";
 import { z } from "zod";
-import { providerFromModelId, type Surface } from "@oxagen/telemetry";
+import {
+  hashPrompt,
+  insertTokenUsage,
+  providerFromModelId,
+  type Surface,
+} from "@oxagen/telemetry";
+import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
 import { defaultModel } from "./models.js";
-import { recordAIUsage } from "./meter.js";
 
 export interface GenerateObjectArgs<T> {
   /**
@@ -106,21 +111,45 @@ export async function generateObjectFor<T>(
   const durationMs = Date.now() - startedAt;
   const inputTokens = result.usage.promptTokens ?? 0;
   const outputTokens = result.usage.completionTokens ?? 0;
+  const usage = { model: model.modelId, inputTokens, outputTokens };
+  const costUsdMicros = providerCostUsdMicros(usage);
 
-  // Telemetry + credit metering via shared helper (best-effort; never fails
-  // the caller — same contract as stream.ts).
-  await recordAIUsage({
-    executionStepId: args.telemetry.messageId,
-    orgId: args.telemetry.orgId,
-    workspaceId: args.telemetry.workspaceId,
-    model: model.modelId,
-    provider,
-    inputTokens,
-    outputTokens,
-    durationMs,
-    surface: args.telemetry.surface,
-    promptTextForHash,
-  });
+  // Telemetry write is best-effort; if ClickHouse is unreachable the caller
+  // still gets the object back (same contract as stream.ts).
+  try {
+    const promptHash = await hashPrompt(promptTextForHash);
+    await insertTokenUsage([
+      {
+        execution_step_id: args.telemetry.messageId,
+        org_id: args.telemetry.orgId,
+        workspace_id: args.telemetry.workspaceId,
+        model: model.modelId,
+        provider,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cached_tokens: 0,
+        cost_usd_micros: costUsdMicros,
+        duration_ms: durationMs,
+        surface: args.telemetry.surface,
+        prompt_hash: promptHash,
+        created_at: new Date().toISOString(),
+      },
+    ]);
+  } catch {
+    // Swallow — telemetry must never fail a capability call.
+  }
+
+  // Debit the org's credits for what this call cost us at the target margin.
+  // Best-effort and post-call — a metering failure must not fail the caller.
+  try {
+    await chargeUsageCredits({
+      orgId: args.telemetry.orgId,
+      referenceId: args.telemetry.messageId,
+      ...usage,
+    });
+  } catch {
+    // Swallow — credit metering must never fail a capability call.
+  }
 
   return {
     object: result.object,

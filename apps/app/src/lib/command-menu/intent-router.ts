@@ -106,12 +106,6 @@ function looksLikeFill(text: string): boolean {
   return FILL_VERBS.some((v) => n.startsWith(v));
 }
 
-/** True when the query text looks like a navigation intent. */
-function looksLikeNavigate(text: string): boolean {
-  const n = normalise(text);
-  return NAV_PREFIXES.some((p) => n.startsWith(p));
-}
-
 /** True when the query text looks like a question or search. */
 function looksLikeSearch(text: string): boolean {
   const n = normalise(text);

@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import { stripeClient } from "./client.js";
 import { ensureStripeCustomer } from "./customers.js";
+import { resolveOrgTier } from "./tier.js";
+import { canBuyCredits, TierDeniedError } from "./entitlements.js";
 
 export interface CreateCheckoutSessionInput {
   orgId: string;
@@ -66,10 +68,20 @@ export interface CreateCreditPackCheckoutInput {
  * One-time Checkout for a credit pack. `org_id` rides on the session metadata
  * so the `checkout.session.completed` webhook can deposit the pack's credits
  * via {@link import("./grants.js").grantCreditPackForCheckout}.
+ *
+ * Plan-tier gate: Free orgs cannot purchase credit packs — they must subscribe
+ * to Build or above first. Throws {@link TierDeniedError} when the gate fails
+ * so the caller can surface an appropriate upgrade prompt.
  */
 export async function createCreditPackCheckoutSession(
   input: CreateCreditPackCheckoutInput,
 ): Promise<{ url: string; sessionId: string }> {
+  // ── Credit-purchase entitlement gate ────────────────────────────────────────
+  const tier = await resolveOrgTier(input.orgId);
+  if (!canBuyCredits(tier)) {
+    throw new TierDeniedError(tier, "build", "credit-packs");
+  }
+
   const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
   const customerId = await ensureStripeCustomer(input.orgId);
 

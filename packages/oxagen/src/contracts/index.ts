@@ -34,6 +34,9 @@ import { formFill } from "./form.fill.js";
 import { organizationCreate } from "./organization.create.js";
 import { workspaceCreate } from "./workspace.create.js";
 import { videoGenerate } from "./video.generate.js";
+import { imageGenerate } from "./image.generate.js";
+import { svgGenerate } from "./svg.generate.js";
+import { systemInstallInstructions } from "./system.install.instructions.js";
 
 export {
   agentApprovalResolve,
@@ -62,6 +65,9 @@ export {
   organizationCreate,
   workspaceCreate,
   videoGenerate,
+  imageGenerate,
+  svgGenerate,
+  systemInstallInstructions,
 };
 
 /**
@@ -99,4 +105,7 @@ export const contracts = [
   organizationCreate,
   workspaceCreate,
   videoGenerate,
+  imageGenerate,
+  svgGenerate,
+  systemInstallInstructions,
 ] as const;

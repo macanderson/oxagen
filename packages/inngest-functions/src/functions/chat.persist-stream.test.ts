@@ -125,6 +125,7 @@ describe("chatPersistStream Inngest handler", () => {
     const [rows] = mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>];
     expect(rows).toHaveLength(1);
     const row = rows[0];
+    if (!row) throw new Error("expected exactly one token_usage row");
     expect(row.execution_step_id).toBe("msg_1");
     expect(row.org_id).toBe("org_1");
     expect(row.workspace_id).toBe("ws_1");

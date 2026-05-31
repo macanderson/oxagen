@@ -1,26 +1,27 @@
 /**
  * Unit tests for the cost meter / gate (packages/billing/src/metering.ts).
  *
- * Mocks two seams: `@oxagen/database` (the read-only balance check) and
- * `../credits.js` `consumeCredits` (the atomic clamped debit — its own
- * row-locking/clamp behaviour is tested in credits.test.ts). Here we verify the
- * meter's arithmetic and that it delegates the debit with the right arguments.
+ * Mocks two seams:
+ *  - `../credits.js` `effectiveBalance` — hasCreditBalance now reads from lots
+ *    (lazy expiry) rather than the cached credit_balances mirror.
+ *  - `../credits.js` `consumeCredits` — the atomic clamped debit (its own
+ *    lot-based logic is tested in consume-credits.test.ts).
+ *
+ * We verify the meter's arithmetic and that it delegates correctly.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const dbState: { balance: bigint | null } = { balance: null };
-const findFirst = vi.fn(async () => (dbState.balance === null ? undefined : { balanceCents: dbState.balance }));
-
-vi.mock("@oxagen/database", () => ({
-  db: () => ({ query: { creditBalances: { findFirst } } }),
-  schema: { creditBalances: { orgId: "org_id_col" } },
-}));
-
-// consumeCredits is mocked to echo a configurable charge/shortfall so we can
-// assert the meter delegates correctly and maps the result back.
-const consumeState: { chargedCents: bigint; shortfallCents: bigint } = { chargedCents: 0n, shortfallCents: 0n };
+// consumeCredits + effectiveBalance are both in ../credits.js
+const consumeState: { chargedCents: bigint; shortfallCents: bigint } = {
+  chargedCents: 0n,
+  shortfallCents: 0n,
+};
 const consumeCredits = vi.fn(async () => ({ ...consumeState, balanceCents: 0n }));
-vi.mock("../credits.js", () => ({ consumeCredits }));
+
+const effectiveBalanceState: { value: bigint } = { value: 0n };
+const effectiveBalance = vi.fn(async (_orgId: string) => effectiveBalanceState.value);
+
+vi.mock("../credits.js", () => ({ consumeCredits, effectiveBalance }));
 
 const { chargeUsageCredits, hasCreditBalance, meterCreditsForUsage } = await import("../metering.js");
 
@@ -35,9 +36,9 @@ describe("meterCreditsForUsage", () => {
   });
 
   it("returns 0 credits for a zero-cost call", () => {
-    expect(meterCreditsForUsage({ model: "claude-sonnet-4-6", inputTokens: 0, outputTokens: 0 }, { markup: MARKUP })).toBe(
-      0n,
-    );
+    expect(
+      meterCreditsForUsage({ model: "claude-sonnet-4-6", inputTokens: 0, outputTokens: 0 }, { markup: MARKUP }),
+    ).toBe(0n);
   });
 });
 
@@ -93,21 +94,23 @@ describe("chargeUsageCredits", () => {
 
 describe("hasCreditBalance", () => {
   beforeEach(() => {
-    dbState.balance = null;
+    vi.clearAllMocks();
+    effectiveBalanceState.value = 0n;
   });
 
-  it("is true when the balance is positive", async () => {
-    dbState.balance = 10n;
+  it("is true when the effective balance is positive", async () => {
+    effectiveBalanceState.value = 10n;
     expect(await hasCreditBalance("org-1")).toBe(true);
+    expect(effectiveBalance).toHaveBeenCalledWith("org-1");
   });
 
-  it("is false at zero balance", async () => {
-    dbState.balance = 0n;
+  it("is false at zero effective balance", async () => {
+    effectiveBalanceState.value = 0n;
     expect(await hasCreditBalance("org-1")).toBe(false);
   });
 
-  it("is false when no balance row exists", async () => {
-    dbState.balance = null;
+  it("is false when effectiveBalance returns 0 (no lots or all expired)", async () => {
+    effectiveBalanceState.value = 0n;
     expect(await hasCreditBalance("org-1")).toBe(false);
   });
 });

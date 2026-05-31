@@ -40,6 +40,23 @@ describe("resolveSidebarMode", () => {
     expect(resolveSidebarMode("/acme/production/knowledge/sources", wsCtx)).toBe("workspace");
   });
 
+  it("returns 'workspace' from pathname when ctx has no workspaceSlug (org-layout boundary)", () => {
+    // The AppShell at the org layout level has no workspaceSlug in ctx.
+    // resolveSidebarMode must derive workspace mode purely from the URL.
+    expect(resolveSidebarMode("/acme/production/chat", orgCtx)).toBe("workspace");
+    expect(resolveSidebarMode("/acme/production/settings/general", orgCtx)).toBe("workspace");
+    expect(resolveSidebarMode("/acme/my-ws/knowledge", orgCtx)).toBe("workspace");
+  });
+
+  it("returns 'org' for reserved org-scope routes even without workspaceSlug", () => {
+    expect(resolveSidebarMode("/acme/members", orgCtx)).toBe("org");
+    expect(resolveSidebarMode("/acme/access", orgCtx)).toBe("org");
+    expect(resolveSidebarMode("/acme/security", orgCtx)).toBe("org");
+    expect(resolveSidebarMode("/acme/billing", orgCtx)).toBe("org");
+    expect(resolveSidebarMode("/acme/developer", orgCtx)).toBe("org");
+    expect(resolveSidebarMode("/acme/settings", orgCtx)).toBe("org");
+  });
+
   it("returns 'org' when no workspaceSlug and path is not /account", () => {
     expect(resolveSidebarMode("/acme", orgCtx)).toBe("org");
     expect(resolveSidebarMode("/acme/members", orgCtx)).toBe("org");

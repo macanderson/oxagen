@@ -41,7 +41,6 @@ function makeDb(opts: {
   subscriptionRow?: { orgId: string; id: string } | null;
   invoiceInsertedId?: string | null;
 } = {}) {
-  const orgId = opts.orgId !== undefined ? opts.orgId : "org-abc";
   const subscriptionRow =
     opts.subscriptionRow !== undefined
       ? opts.subscriptionRow

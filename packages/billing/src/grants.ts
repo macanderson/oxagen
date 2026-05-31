@@ -2,22 +2,27 @@ import type Stripe from "stripe";
 import { createHash } from "node:crypto";
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
-import { grantCredits } from "./credits.js";
+import { createCreditLot } from "./credits.js";
 import { stripeClient } from "./client.js";
 import { syncSubscriptionFromStripe } from "./subscriptions.js";
 import { CREDIT_REASONS } from "./constants.js";
 
 /**
- * The grant half of the credit loop: payments deposit credits, the gate
- * ({@link import("./metering.js").chargeUsageCredits}) spends them. Both halves
- * funnel through {@link grantCredits} so every balance move is one ledger row.
+ * The grant half of the credit loop: payments deposit credits into lots, the
+ * gate ({@link import("./metering.js").chargeUsageCredits}) spends them.
+ * All grants go through {@link createCreditLot} so every balance move creates
+ * both a lot entry and a ledger row.
  *
  * Idempotency is enforced twice over: callers run inside
  * {@link import("./webhooks.js").processStripeEvent} (de-dups per
  * stripe_event_id), AND each grant is keyed by a stable `referenceId` and
  * skipped if the ledger already holds that grant. Belt-and-suspenders means a
- * Stripe retry — even one that re-enters dispatch after a prior partial failure
- * — deposits credits exactly once.
+ * Stripe retry deposits credits exactly once.
+ *
+ * EXPIRY RULES:
+ *   free_grant   → expires_at NULL (never expires; used for signup grants too)
+ *   subscription → expires_at = end of the grant month (use-it-or-lose-it)
+ *   purchase     → expires_at = granted_at + 1 year
  */
 
 const SUBSCRIPTION_GRANT_REASONS: ReadonlySet<string> = new Set([
@@ -26,9 +31,8 @@ const SUBSCRIPTION_GRANT_REASONS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * A stable UUID derived from an external (non-UUID) Stripe id, so it can live in
- * the `uuid`-typed credit_ledger.reference_id and key idempotency. Deterministic
- * → the same Stripe object always maps to the same reference id.
+ * A stable UUID derived from an external (non-UUID) Stripe id, so it can live
+ * in the `uuid`-typed credit_ledger.reference_id and key idempotency.
  */
 function deterministicUuid(seed: string): string {
   const h = createHash("sha256").update(seed).digest("hex");
@@ -55,11 +59,56 @@ async function alreadyGranted(
 }
 
 /**
+ * Returns the last moment of the month containing the given date (UTC).
+ * Subscription credits expire at end-of-grant-month so unused allotments
+ * don't roll over.
+ */
+function endOfGrantMonth(grantDate: Date): Date {
+  // First day of the following month at midnight UTC, minus 1ms.
+  const d = new Date(Date.UTC(grantDate.getUTCFullYear(), grantDate.getUTCMonth() + 1, 1));
+  d.setUTCMilliseconds(-1);
+  return d;
+}
+
+// ---------------------------------------------------------------------------
+// Free signup grant — 500 credits, never expiring
+// ---------------------------------------------------------------------------
+
+const FREE_SIGNUP_CREDITS = 500n; // 500 credits = $5.00
+
+/**
+ * Grant 500 non-expiring free credits to a newly-created org.
+ * Called immediately after org creation so the org can start using the
+ * platform without a payment method. Idempotent: if the ledger already holds
+ * a grant_signup entry for the org it is skipped.
+ */
+export async function grantFreeCredits(orgId: string): Promise<void> {
+  // Idempotency: only grant once per org.
+  if (await alreadyGranted(orgId, "grant_signup", "org", orgId)) return;
+
+  await createCreditLot({
+    orgId,
+    amountCents: FREE_SIGNUP_CREDITS,
+    source: "free_grant",
+    expiresAt: null, // free grants never expire
+    reason: "grant_signup",
+    referenceType: "org",
+    referenceId: orgId,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Subscription plan credit grant (invoice.paid)
+// ---------------------------------------------------------------------------
+
+/**
  * Grant a subscription's included credits when its invoice is paid. Fires on
  * the first invoice (`subscription_create`) and every renewal
  * (`subscription_cycle`); upgrades/one-offs are ignored so we never
- * double-grant within a period. Keyed by the internal invoice UUID — one grant
- * per invoice, forever.
+ * double-grant within a period.
+ *
+ * Subscription credits expire at the end of the calendar month in which the
+ * invoice was paid (use-it-or-lose-it).
  */
 export async function grantPlanCreditsForInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
   if (!invoice.billing_reason || !SUBSCRIPTION_GRANT_REASONS.has(invoice.billing_reason)) return;
@@ -69,9 +118,7 @@ export async function grantPlanCreditsForInvoicePaid(invoice: Stripe.Invoice): P
       : invoice.subscription?.id ?? null;
   if (!subId) return;
 
-  // Make sure our subscriptions row exists before resolving the plan — the
-  // sync is idempotent, so calling it here is safe even if subscription.created
-  // already ran.
+  // Make sure our subscriptions row exists before resolving the plan.
   await syncSubscriptionFromStripe(subId);
 
   const d = db();
@@ -88,31 +135,40 @@ export async function grantPlanCreditsForInvoicePaid(invoice: Stripe.Invoice): P
   const credits = plan?.includedCreditCents ?? 0;
   if (credits <= 0) return;
 
-  // syncInvoiceFromStripe (run earlier in the webhook dispatch) mirrored the
-  // invoice, so its internal UUID exists and keys the grant idempotently.
   const invoiceRow = await d.query.invoices.findFirst({
     where: eq(schema.invoices.stripeInvoiceId, invoice.id),
     columns: { id: true },
   });
   const referenceId = invoiceRow?.id;
-  if (referenceId && (await alreadyGranted(sub.orgId, CREDIT_REASONS.GRANT_PLAN_RENEWAL, "stripe_invoice", referenceId))) {
+  if (
+    referenceId &&
+    (await alreadyGranted(sub.orgId, CREDIT_REASONS.GRANT_PLAN_RENEWAL, "stripe_invoice", referenceId))
+  ) {
     return;
   }
 
-  await grantCredits({
+  // Subscription credits expire at the end of the grant month.
+  const grantDate = new Date();
+  const expiresAt = endOfGrantMonth(grantDate);
+
+  await createCreditLot({
     orgId: sub.orgId,
-    deltaCents: BigInt(credits),
+    amountCents: BigInt(credits),
+    source: "subscription",
+    expiresAt,
     reason: CREDIT_REASONS.GRANT_PLAN_RENEWAL,
     referenceType: "stripe_invoice",
     referenceId,
   });
 }
 
+// ---------------------------------------------------------------------------
+// Credit pack purchase grant (checkout.session.completed)
+// ---------------------------------------------------------------------------
+
 /**
  * Grant a one-time credit pack's credits when its Checkout session completes.
- * Credit counts ride on the price metadata (`credits`) written by the sync
- * script, falling back to the product metadata. Keyed by a deterministic UUID
- * of the session id so a retry deposits exactly once.
+ * Purchase packs expire 1 year from the grant date.
  */
 export async function grantCreditPackForCheckout(session: Stripe.Checkout.Session): Promise<void> {
   if (session.mode !== "payment" || session.payment_status !== "paid") return;
@@ -120,7 +176,9 @@ export async function grantCreditPackForCheckout(session: Stripe.Checkout.Sessio
   if (!orgId) return;
 
   const referenceId = deterministicUuid(`stripe_checkout_session:${session.id}`);
-  if (await alreadyGranted(orgId, CREDIT_REASONS.GRANT_CREDIT_PACK, "stripe_checkout_session", referenceId)) return;
+  if (await alreadyGranted(orgId, CREDIT_REASONS.GRANT_CREDIT_PACK, "stripe_checkout_session", referenceId)) {
+    return;
+  }
 
   const stripe = stripeClient();
   const lineItems = await stripe.checkout.sessions
@@ -143,9 +201,16 @@ export async function grantCreditPackForCheckout(session: Stripe.Checkout.Sessio
   }
   if (totalCredits <= 0) return;
 
-  await grantCredits({
+  // Purchase packs expire 1 year from today.
+  const grantDate = new Date();
+  const expiresAt = new Date(grantDate);
+  expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+  await createCreditLot({
     orgId,
-    deltaCents: BigInt(totalCredits),
+    amountCents: BigInt(totalCredits),
+    source: "purchase",
+    expiresAt,
     reason: CREDIT_REASONS.GRANT_CREDIT_PACK,
     referenceType: "stripe_checkout_session",
     referenceId,

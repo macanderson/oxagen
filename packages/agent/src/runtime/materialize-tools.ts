@@ -3,7 +3,7 @@ import type { ZodTypeAny } from "zod";
 import { insertToolInvocation } from "@oxagen/telemetry";
 import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityContext } from "../types.js";
-import { invokeCapability } from "../handlers/index.js";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { beforeTool, afterTool, onError } from "../hooks/runtime.js";
 import { createApprovalRequest, waitForApproval } from "./approval.js";
 
@@ -78,9 +78,6 @@ export async function materializeTools(
     if (cap.name === "agent.code.execute" && !sandboxEnabled) continue;
     const riskLevel: "low" | "medium" | "high" = cap.agent?.riskLevel ?? "low";
     const requiresApproval = cap.agent?.requiresApproval === true;
-    // Derive the provider dimension for ClickHouse rollups from the capability
-    // domain prefix (e.g. "documents.generate" → provider "documents").
-    const capProvider = cap.name.includes(".") ? (cap.name.split(".")[0] ?? "oxagen") : "oxagen";
     out[cap.name] = tool({
       description: cap.description,
       parameters: cap.input,
@@ -108,7 +105,7 @@ export async function materializeTools(
               throw new Error(`approval ${resolution.resolution} for ${cap.name}`);
             }
           }
-          const result = await invokeCapability(cap.name, input, ctx);
+          const result = await invoke(cap.name, input, ctx, { surface: "agent" });
           await afterTool({ capability: cap.name, ctx, output: result });
           // OXA-1351: every tool invocation lands one row in ClickHouse
           // `tool_invocations` with surface + provider. Failure-isolated.
@@ -131,7 +128,7 @@ export async function materializeTools(
               risk_level: riskLevel,
               required_approval: requiresApproval ? 1 : 0,
               surface: ctx.surface,
-              provider: capProvider,
+              provider: "",
               created_at: new Date().toISOString(),
             });
           } catch {
@@ -163,7 +160,7 @@ export async function materializeTools(
               risk_level: riskLevel,
               required_approval: requiresApproval ? 1 : 0,
               surface: ctx.surface,
-              provider: capProvider,
+              provider: "",
               created_at: new Date().toISOString(),
             });
           } catch {

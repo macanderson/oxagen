@@ -139,6 +139,15 @@ export type CapabilityHandler<C extends CapabilityDeclaration> = (
   ctx: CapabilityContext,
 ) => Promise<z.infer<C["output"]>>;
 
+/**
+ * Subscription tier for the org that owns this request.
+ * Optional — populated by org-scope resolution in the API/MCP middleware once
+ * the billing tables are available. Absent on internal service calls that
+ * bypass the middleware chain. Use `resolveOrgTier` to fetch it explicitly
+ * when gating features inside a handler.
+ */
+export type PlanTier = "free" | "build" | "scale" | "enterprise";
+
 export interface CapabilityContext {
   orgId: string;
   workspaceId: string;
@@ -153,6 +162,12 @@ export interface CapabilityContext {
    * Null for direct API / MCP calls.
    */
   messageId: string | null;
+  /**
+   * The org's effective subscription tier. Optional — populated during
+   * org-scope resolution. Handlers that gate features must read this or
+   * call `resolveOrgTier(ctx.orgId)` directly.
+   */
+  planTier?: PlanTier;
 }
 
 /**

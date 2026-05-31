@@ -7,3 +7,7 @@ export { formFillHandler } from "./form.fill.js";
 export { documentsGenerateHandler } from "./documents.generate.js";
 export { documentsPdfCreateHandler } from "./documents.pdf.create.js";
 export { brandkitApplyHandler } from "./brandkit.apply.js";
+export { videoGenerateHandler } from "./video.generate.js";
+export { svgGenerateHandler } from "./svg.generate.js";
+export { imageGenerateHandler } from "./image.generate.js";
+export { systemInstallInstructionsHandler } from "./system.install.instructions.js";

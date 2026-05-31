@@ -8,6 +8,12 @@ import { randomUUID } from "node:crypto";
 import type { CoreMessage } from "ai";
 import type { RenderDirective, StreamEvent } from "@/components/chat/stream-event-types";
 
+// Side-effect imports: bind every handler into the shared kernel BEFORE
+// materializeTools runs so invoke() can resolve both agent.* and all
+// non-agent.* agent-surface capabilities (form.fill, svg.generate, etc.).
+import "@oxagen/handlers/register";
+import "@oxagen/agent/register";
+
 /**
  * Concrete shapes for the `fullStream` parts we process. We iterate
  * `result.fullStream as AsyncIterable<unknown>` and type-narrow each part

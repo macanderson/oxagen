@@ -133,8 +133,8 @@ describe("billingRollupUsage Inngest handler", () => {
     // sumTokenUsage called with correct period
     expect(mocks.sumTokenUsage).toHaveBeenCalledWith({
       orgId: "org_1",
-      periodStart: expect.any(Date),
-      periodEnd: expect.any(Date),
+      periodStart: expect.any(Date) as unknown,
+      periodEnd: expect.any(Date) as unknown,
     });
     // Upsert issued once
     expect(mocks.dbInsertValues).toHaveBeenCalledTimes(1);

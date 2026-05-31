@@ -36,6 +36,20 @@ vi.mock("@oxagen/config/env", () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Tier mock — resolveOrgTier is the only call into tier.ts from checkout.ts.
+// Default to "build" so canBuyCredits() returns true and tests can proceed
+// to the Stripe layer.  Individual tests that exercise the tier-denied path
+// can override resolveOrgTierMock.mockResolvedValueOnce("free").
+// ---------------------------------------------------------------------------
+
+import type { PlanTier } from "@oxagen/oxagen/types";
+
+const resolveOrgTierMock = vi.fn<() => Promise<PlanTier>>().mockResolvedValue("build");
+vi.mock("../tier.js", () => ({
+  resolveOrgTier: resolveOrgTierMock,
+}));
+
+// ---------------------------------------------------------------------------
 // Stripe client mock
 // ---------------------------------------------------------------------------
 
@@ -49,7 +63,10 @@ vi.mock("../client.js", () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// DB mock
+// DB mock — only createCheckoutSession uses db().query.plans.findFirst.
+// createCreditPackCheckoutSession delegates its DB access to resolveOrgTier
+// (mocked above) and ensureStripeCustomer (mocked above), so no chainable
+// select() is needed here.
 // ---------------------------------------------------------------------------
 
 const dbPlansFindFirst = vi.fn();
@@ -189,6 +206,8 @@ describe("createCreditPackCheckoutSession", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ensureStripeCustomerMock.mockResolvedValue("cus_test_001");
+    // Restore tier default after vi.clearAllMocks() wipes mock implementations.
+    resolveOrgTierMock.mockResolvedValue("build");
   });
 
   it("Stripe returns no URL — throws", async () => {

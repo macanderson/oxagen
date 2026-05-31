@@ -37,7 +37,7 @@ export const plans = billingSchema.table(
   },
   (t) => ({
     slugIdx: uniqueIndex("plans_slug_idx").on(t.slug),
-    tierCheck: check("plans_tier_check", sql`${t.tier} IN ('free','pro','enterprise')`),
+    tierCheck: check("plans_tier_check", sql`${t.tier} IN ('free','build','scale','enterprise')`),
   }),
 );
 
@@ -265,6 +265,50 @@ export const creditLedger = billingSchema.table(
     deltaNonZeroCheck: check(
       "credit_ledger_delta_non_zero",
       sql`${t.deltaCents} <> 0`,
+    ),
+  }),
+);
+
+// credit_lots: the authoritative source of truth for credit holdings. Each
+// grant creates a lot with a source, original_cents, remaining_cents, and
+// an optional expires_at. Consumption drains lots SOONEST-EXPIRING-FIRST
+// (expires_at NULLS LAST). credit_balances remains a cached mirror for
+// compatibility but lots are the source of truth.
+export const creditLots = billingSchema.table(
+  "credit_lots",
+  {
+    ...idMixin("clt"),
+    ...auditMixin(),
+    // FK → org.organizations.id
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    // CHECK: source IN ('free_grant','subscription','purchase')
+    source: text("source").notNull(),
+    // The original amount when the lot was granted.
+    originalCents: bigint("original_cents", { mode: "bigint" }).notNull(),
+    // Remaining balance for this lot. Decremented as credits are consumed.
+    // CHECK: 0 <= remaining_cents <= original_cents
+    remainingCents: bigint("remaining_cents", { mode: "bigint" }).notNull(),
+    // When this lot was granted.
+    grantedAt: timestamp("granted_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    // Nullable = this lot never expires. Otherwise: end-of-grant-month for
+    // subscription allotments, granted_at + 1yr for purchase packs.
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    orgExpiryIdx: index("credit_lots_org_expiry_idx").on(t.orgId, t.expiresAt),
+    sourceCheck: check(
+      "credit_lots_source_check",
+      sql`${t.source} IN ('free_grant','subscription','purchase')`,
+    ),
+    remainingNonNegativeCheck: check(
+      "credit_lots_remaining_non_negative",
+      sql`${t.remainingCents} >= 0`,
+    ),
+    remainingLeOriginalCheck: check(
+      "credit_lots_remaining_le_original",
+      sql`${t.remainingCents} <= ${t.originalCents}`,
     ),
   }),
 );

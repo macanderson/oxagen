@@ -41,7 +41,13 @@ export function logUnknownComponent(componentId: string): void {
   );
 }
 
-export const CHAT_COMPONENTS: Record<string, AnyLazy> = {
+// The registry is heterogeneous — each component declares its own prop shape —
+// but the renderer always supplies props as `Record<string, unknown>` (spread
+// from `block.props`). The precise prop types are erased into the uniform
+// `AnyLazy` value type at this single, documented boundary. No `any` involved:
+// the erasure goes through `unknown`, which the policy permits where a precise
+// type cannot be expressed.
+export const CHAT_COMPONENTS = {
   "svg-preview": lazy(
     () => import("@/components/chat/registry-components/svg-preview"),
   ),
@@ -54,4 +60,4 @@ export const CHAT_COMPONENTS: Record<string, AnyLazy> = {
   "make-video-form": lazy(
     () => import("@/components/chat/registry-components/make-video-form"),
   ),
-} as const;
+} as unknown as Record<string, AnyLazy>;
