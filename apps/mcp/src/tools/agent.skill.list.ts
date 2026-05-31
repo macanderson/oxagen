@@ -1,14 +1,28 @@
+import { z } from "zod";
+import { type InferSchema, type ToolMetadata } from "xmcp";
+import { headers } from "xmcp/headers";
 import { agentSkillList } from "@oxagen/oxagen/contracts/agent.skill.list";
 import { agentSkillListHandler } from "@oxagen/agent/handlers/agent.skill.list";
-import { placeholderContext } from "../context.js";
-import type { McpTool } from "../server.js";
+import { buildContext } from "../context.js";
 
-export const agentSkillListTool: McpTool = {
+export const schema = {
+  filter: z.string().optional().describe("Optional name/slug filter"),
+};
+
+export const metadata: ToolMetadata = {
   name: agentSkillList.name,
   description: agentSkillList.description,
-  invoke: async (raw) => {
-    const input = agentSkillList.input.parse(raw ?? {});
-    const output = await agentSkillListHandler(input, placeholderContext());
-    return agentSkillList.output.parse(output);
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
   },
 };
+
+export default async function agentSkillListTool(
+  args: InferSchema<typeof schema>,
+) {
+  const ctx = buildContext(headers());
+  const output = await agentSkillListHandler(args, ctx);
+  return agentSkillList.output.parse(output);
+}

@@ -1,17 +1,25 @@
+import { type InferSchema, type ToolMetadata } from "xmcp";
+import { headers } from "xmcp/headers";
 import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
 import { billingSubscriptionReadHandler } from "@oxagen/handlers/billing.subscription.read";
-import { placeholderContext } from "../context.js";
-import type { McpTool } from "../server.js";
+import { buildContext } from "../context.js";
 
-export const billingSubscriptionReadTool: McpTool = {
+export const schema = {};
+
+export const metadata: ToolMetadata = {
   name: billingSubscriptionRead.name,
   description: billingSubscriptionRead.description,
-  invoke: async (raw) => {
-    const input = billingSubscriptionRead.input.parse(raw);
-    const output = await billingSubscriptionReadHandler(
-      input,
-      placeholderContext(),
-    );
-    return billingSubscriptionRead.output.parse(output);
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
   },
 };
+
+export default async function billingSubscriptionReadTool(
+  _args: InferSchema<typeof schema>,
+) {
+  const ctx = buildContext(headers());
+  const output = await billingSubscriptionReadHandler({}, ctx);
+  return billingSubscriptionRead.output.parse(output);
+}
