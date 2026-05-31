@@ -28,7 +28,7 @@ mocks.txUpdateSetWhere.mockResolvedValue(undefined);
 mocks.txFn.mockImplementation(async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
   let insertCount = 0;
   const tx = {
-    insert: (table: unknown): unknown => {
+    insert: (_table: unknown): unknown => {
       insertCount++;
       if (insertCount === 1) {
         // First insert: conversation row (new-conversation path)
@@ -152,7 +152,7 @@ describe("chatMessageSendHandler (@oxagen/handlers)", () => {
       async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
         let insertCount = 0;
         const tx = {
-          insert: (table: unknown): unknown => {
+          insert: (_table: unknown): unknown => {
             insertCount++;
             if (insertCount === 1) {
               return {
@@ -264,7 +264,7 @@ describe("chatMessageSendHandler (@oxagen/handlers)", () => {
       async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
         let insertCount = 0;
         const tx = {
-          insert: (table: unknown): unknown => {
+          insert: (_table: unknown): unknown => {
             insertCount++;
             // In the existing-conv path: insert #1 = user message, #2 = assistant
             if (insertCount === 1) {

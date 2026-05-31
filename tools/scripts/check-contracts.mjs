@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * check-contracts.mjs — verify every contract file in packages/*/src/contracts/
- * appears in that package's exported `contracts` array (contracts/index.ts).
+ * check-contracts.mjs — verify every contract file under a package's
+ * src/contracts/ directory appears in that package's exported `contracts`
+ * array (contracts/index.ts).
  *
  * OXA-1390, Phase 3.
  *

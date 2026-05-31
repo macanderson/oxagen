@@ -25,7 +25,6 @@
 
 import type { z } from "zod";
 import { registerCapability } from "./registry.js";
-import { invoke as kernelInvoke } from "./kernel.js";
 import type {
   CapabilityDeclaration,
   CapabilityContext,
@@ -218,7 +217,9 @@ export function defineContract<
     async invoke(
       rawCtx: CapabilityContext,
       rawInput: unknown,
-      opts: InvokeOptions = {},
+      // Reserved: trace/surface-origin options will be threaded into the IAM
+      // check + audit emit once IAMCheckFn accepts them. Unused today.
+      _opts: InvokeOptions = {},
     ): Promise<z.infer<TOutput> | DenialResponse> {
       // 1. Validate input against the contract schema.
       const inputResult = spec.input.safeParse(rawInput);

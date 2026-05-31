@@ -83,6 +83,7 @@ function readCapabilities() {
     .filter(
       (f) =>
         f.endsWith(".ts") &&
+        f !== "index.ts" && // the contracts barrel/array, not a capability
         !f.endsWith(".test.ts") &&
         !f.endsWith(".handler.ts"),
     )

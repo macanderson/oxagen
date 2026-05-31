@@ -75,7 +75,11 @@ export async function fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
 }
 
 async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
-  const { userId, orgId, workspaceId, capability } = args;
+  // workspaceId is intentionally not read here: this layer scopes by orgId
+  // (tenant isolation), and the pure resolver applies workspace-scope matching
+  // against scope.workspaceId (see resolve.ts). Fetching all org grants and
+  // filtering by scope in-memory keeps the query count flat.
+  const { userId, orgId, capability } = args;
   const d = db();
 
   // Resolve the principal from the userId (human kind).
