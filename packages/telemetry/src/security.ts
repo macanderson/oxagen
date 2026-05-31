@@ -111,7 +111,6 @@ export function recordSecurityEvent(
     } else {
       // Default: log enough to triage without emitting PII. Do NOT expand
       // `event` here — it may contain ip / user_agent.
-      // eslint-disable-next-line no-console
       console.error(
         "[security-audit] failed to write event",
         event.eventType,

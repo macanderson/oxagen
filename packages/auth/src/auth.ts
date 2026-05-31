@@ -26,10 +26,13 @@ const env = requireEnv([
 ] as const);
 
 // OXA-1420: KMS adapter for OAuth token envelope encryption.
-// The KMS client uses the ambient AWS credentials (IAM role / env vars);
-// never pass explicit credentials here — they would be visible in logs.
-const kmsClient = new KMSClient({ region: "us-east-2" });
-const kmsAdapter = createAwsKmsAdapter(kmsClient);
+// Only created when AUTH_TOKEN_KMS_KEY_ID is present so that development /
+// local builds without AWS credentials can still boot.
+const kmsKeyId = process.env.AUTH_TOKEN_KMS_KEY_ID;
+const kmsAdapter =
+  kmsKeyId
+    ? createAwsKmsAdapter(new KMSClient({ region: "us-east-2" }))
+    : null;
 
 // ---------------------------------------------------------------------------
 // Security audit setup
@@ -170,7 +173,10 @@ export const auth = betterAuth({
   //       from the API/MCP sign-in route handler instead.
   // ---------------------------------------------------------------------------
   databaseHooks: {
-    account: buildAccountTokenHooks(kmsAdapter),
+    // Account token encryption is only active when AUTH_TOKEN_KMS_KEY_ID is
+    // set. In dev/CI without AWS credentials the hooks are omitted so the
+    // process boots without throwing on the missing key.
+    ...(kmsAdapter ? { account: buildAccountTokenHooks(kmsAdapter) } : {}),
     session: {
       create: {
         after: async (session) => {

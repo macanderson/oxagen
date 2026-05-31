@@ -68,8 +68,8 @@ describe("embedText (@oxagen/ai)", () => {
       },
     });
     expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-    const rows: unknown[] = (mocks.insertTokenUsage.mock.calls as any)[0][0];
+    const firstCall = mocks.insertTokenUsage.mock.calls[0] as [unknown[], ...unknown[]];
+    const rows: unknown[] = firstCall[0];
     expect(rows).toHaveLength(1);
     const row = rows[0] as Record<string, unknown>;
     expect(row.org_id).toBe("org_1");

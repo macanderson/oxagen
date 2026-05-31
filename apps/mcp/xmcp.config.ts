@@ -8,8 +8,10 @@ const config: XmcpConfig = {
     silent: true,
   },
   // Disable unused feature directories to prevent xmcp from erroring on
-  // missing paths. Tools live in src/tools/ (the default).
+  // missing paths. Tools were deleted in OXA-1416 (dead MCP tools purge);
+  // capabilities are now exposed via the capability registry, not hand-listed.
   paths: {
+    tools: false,
     prompts: false,
     resources: false,
   },
