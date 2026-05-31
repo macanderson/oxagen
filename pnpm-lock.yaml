@@ -655,6 +655,9 @@ importers:
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
+      pino:
+        specifier: ^9.4.0
+        version: 9.14.0
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -662,6 +665,9 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^2.1.2
+        version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)
 
   packages/inngest-functions:
     dependencies:
@@ -696,6 +702,9 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^2.1.2
+        version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)
 
   packages/ontology:
     dependencies:

@@ -11,7 +11,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'lint placeholder'"
+    "lint": "echo 'lint placeholder'",
+    "test": "vitest run"
   },
   "dependencies": {
     "@oxagen/billing": "workspace:*",
@@ -20,9 +21,11 @@
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "drizzle-orm": "^0.45.2",
+    "pino": "^9.4.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^2.1.2"
   }
 }
