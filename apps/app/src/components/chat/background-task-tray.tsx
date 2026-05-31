@@ -127,7 +127,7 @@ export function BackgroundTaskTray({ initialTaskIds, fetchTask, cancelTask }: Ba
   }).length;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-80 max-w-[calc(100vw-2rem)]">
+    <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] right-4 z-50 w-80 max-w-[calc(100vw-2rem)] md:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
       <div className="glass-panel overflow-hidden p-0">
         <button
           type="button"
