@@ -1,5 +1,9 @@
 import { db, schema } from "@oxagen/database";
-import { eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, or, sql, gt } from "drizzle-orm";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 
 const ALLOWED_REASONS = new Set([
   "grant_signup",
@@ -13,6 +17,122 @@ const ALLOWED_REASONS = new Set([
   "adjustment",
 ]);
 
+// ---------------------------------------------------------------------------
+// Grant: create a credit lot
+// ---------------------------------------------------------------------------
+
+export interface CreateCreditLotArgs {
+  orgId: string;
+  /** Amount in credits (1 credit = 1 cent). */
+  amountCents: bigint;
+  /** Source of the lot. */
+  source: "free_grant" | "subscription" | "purchase";
+  /** Expiry date. NULL means the lot never expires. */
+  expiresAt: Date | null;
+  /** Ledger reason tag (must be in ALLOWED_REASONS). */
+  reason: string;
+  referenceType?: string;
+  referenceId?: string;
+  createdByUserId?: string;
+}
+
+export interface CreateCreditLotResult {
+  lotId: string;
+  /** New effective balance (sum of all non-expired remaining_cents). */
+  effectiveBalanceCents: bigint;
+}
+
+/**
+ * Create a credit lot and a matching credit_ledger row in one transaction.
+ * Also upserts credit_balances so legacy callers that read the cached mirror
+ * remain correct.
+ *
+ * Invariants:
+ *  - amountCents must be > 0
+ *  - reason must be in ALLOWED_REASONS
+ *  - source must be one of the three allowed values
+ */
+export async function createCreditLot(args: CreateCreditLotArgs): Promise<CreateCreditLotResult> {
+  if (!ALLOWED_REASONS.has(args.reason)) {
+    throw new Error(`invalid credit reason: ${args.reason}`);
+  }
+  if (args.amountCents <= 0n) {
+    throw new Error("amountCents must be greater than zero");
+  }
+
+  const d = db();
+  return await d.transaction(async (tx) => {
+    // 1. Insert the lot.
+    const [lot] = await tx
+      .insert(schema.creditLots)
+      .values({
+        orgId: args.orgId,
+        source: args.source,
+        originalCents: args.amountCents,
+        remainingCents: args.amountCents,
+        grantedAt: new Date(),
+        expiresAt: args.expiresAt ?? null,
+        createdByUserId: args.createdByUserId ?? null,
+        updatedByUserId: args.createdByUserId ?? null,
+      })
+      .returning({ id: schema.creditLots.id });
+
+    const lotId = lot?.id;
+    if (!lotId) throw new Error("credit lot insert returned no row");
+
+    // 2. Append a ledger row.
+    await tx.insert(schema.creditLedger).values({
+      orgId: args.orgId,
+      deltaCents: args.amountCents,
+      reason: args.reason,
+      referenceType: args.referenceType ?? null,
+      referenceId: args.referenceId ?? null,
+      createdByUserId: args.createdByUserId ?? null,
+    });
+
+    // 3. Mirror into credit_balances (cached derived value).
+    await tx
+      .insert(schema.creditBalances)
+      .values({
+        orgId: args.orgId,
+        balanceCents: args.amountCents,
+        lastEventAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: schema.creditBalances.orgId,
+        set: {
+          balanceCents: sql`${schema.creditBalances.balanceCents} + ${args.amountCents}`,
+          lastEventAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+
+    // 4. Compute the new effective balance (lazy expiry — expired lots excluded).
+    const now = new Date();
+    const balanceRows = await tx
+      .select({ remaining: schema.creditLots.remainingCents })
+      .from(schema.creditLots)
+      .where(
+        and(
+          eq(schema.creditLots.orgId, args.orgId),
+          or(isNull(schema.creditLots.expiresAt), gt(schema.creditLots.expiresAt, now)),
+        ),
+      );
+
+    const effectiveBalanceCents = balanceRows.reduce(
+      (acc, r) => acc + (typeof r.remaining === "bigint" ? r.remaining : BigInt(r.remaining)),
+      0n,
+    );
+
+    return { lotId, effectiveBalanceCents };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Legacy grantCredits shim — preserved so callers compile without changes.
+// Internally creates a lot with source='free_grant' and no expiry.
+// ---------------------------------------------------------------------------
+
 export interface GrantCreditsArgs {
   orgId: string;
   deltaCents: bigint;
@@ -23,49 +143,75 @@ export interface GrantCreditsArgs {
 }
 
 /**
- * Writes one ledger row and atomically bumps the balance. The transaction
- * boundary is the contract: a partial write that updates the ledger but
- * leaves the balance stale would silently corrupt billing. Postgres row-
- * level locking on credit_balances serializes concurrent writers.
+ * @deprecated Prefer `createCreditLot` which carries source and expiry.
+ * This shim is kept for backward compatibility: positive deltas create a
+ * free_grant lot; negative deltas (consumption) call consumeCredits internally.
  */
 export async function grantCredits(args: GrantCreditsArgs): Promise<{ balanceCents: bigint }> {
   if (!ALLOWED_REASONS.has(args.reason)) {
     throw new Error(`invalid credit reason: ${args.reason}`);
   }
-  const d = db();
-  return await d.transaction(async (tx) => {
-    await tx.insert(schema.creditLedger).values({
+
+  if (args.deltaCents > 0n) {
+    const { effectiveBalanceCents } = await createCreditLot({
       orgId: args.orgId,
-      deltaCents: args.deltaCents,
+      amountCents: args.deltaCents,
+      source: "free_grant",
+      expiresAt: null,
       reason: args.reason,
-      referenceType: args.referenceType ?? null,
-      referenceId: args.referenceId ?? null,
-      createdByUserId: args.createdByUserId ?? null,
+      referenceType: args.referenceType,
+      referenceId: args.referenceId,
+      createdByUserId: args.createdByUserId,
     });
+    return { balanceCents: effectiveBalanceCents };
+  }
 
-    // Upsert the balance: INSERT new row at zero+delta, or atomically add
-    // to existing balance. ON CONFLICT requires the unique index on org_id.
-    const updated = await tx
-      .insert(schema.creditBalances)
-      .values({
-        orgId: args.orgId,
-        balanceCents: args.deltaCents,
-        lastEventAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: schema.creditBalances.orgId,
-        set: {
-          balanceCents: sql`${schema.creditBalances.balanceCents} + ${args.deltaCents}`,
-          lastEventAt: new Date(),
-          updatedAt: new Date(),
-        },
-      })
-      .returning({ balanceCents: schema.creditBalances.balanceCents });
+  // Negative delta = consumption — delegate to consumeCredits.
+  if (args.deltaCents < 0n) {
+    const { balanceCents } = await consumeCredits({
+      orgId: args.orgId,
+      requestedCents: -args.deltaCents,
+      reason: args.reason,
+      referenceType: args.referenceType,
+      referenceId: args.referenceId,
+    });
+    return { balanceCents };
+  }
 
-    const balance = updated[0]?.balanceCents ?? 0n;
-    return { balanceCents: typeof balance === "bigint" ? balance : BigInt(balance) };
-  });
+  // Zero delta — no-op, just return current effective balance.
+  return { balanceCents: await effectiveBalance(args.orgId) };
 }
+
+// ---------------------------------------------------------------------------
+// Effective balance — lazy expiry, sum of non-expired lots
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the org's effective credit balance: SUM(remaining_cents) for lots
+ * that are not yet expired. Lazy expiry — expired lots are excluded from the
+ * sum without being deleted.
+ */
+export async function effectiveBalance(orgId: string): Promise<bigint> {
+  const now = new Date();
+  const rows = await db()
+    .select({ remaining: schema.creditLots.remainingCents })
+    .from(schema.creditLots)
+    .where(
+      and(
+        eq(schema.creditLots.orgId, orgId),
+        or(isNull(schema.creditLots.expiresAt), gt(schema.creditLots.expiresAt, now)),
+      ),
+    );
+
+  return rows.reduce(
+    (acc, r) => acc + (typeof r.remaining === "bigint" ? r.remaining : BigInt(r.remaining)),
+    0n,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Consume credits — soonest-expiring-first, no overdraft
+// ---------------------------------------------------------------------------
 
 export interface ConsumeCreditsArgs {
   orgId: string;
@@ -81,20 +227,19 @@ export interface ConsumeCreditsResult {
   chargedCents: bigint;
   /** Requested − charged. Non-zero only when the balance was exhausted. */
   shortfallCents: bigint;
-  /** Resulting balance. */
+  /** Resulting effective balance. */
   balanceCents: bigint;
 }
 
 /**
- * Atomically debit up to `requestedCents` credits, never driving the balance
- * below zero (credit_balances enforces `balance_cents >= 0`). The balance row
- * is locked `FOR UPDATE` inside the transaction so concurrent consumers can't
- * race past the clamp — the read, the clamp, the ledger insert, and the balance
- * decrement are one atomic unit. Returns the amount actually charged and any
- * shortfall (the caller outran its credits).
+ * Atomically debit up to `requestedCents` credits from the org's lots, drawing
+ * from soonest-expiring lots first (expires_at NULLS LAST). Never drives any
+ * lot's remaining_cents below zero. Returns the amount actually charged and any
+ * shortfall.
  *
- * A zero or fully-clamped debit writes NO ledger row (the ledger CHECK forbids a
- * zero delta).
+ * A zero or fully-clamped debit writes NO ledger row (the ledger CHECK forbids
+ * a zero delta). credit_balances is decremented in the same transaction to keep
+ * the cached mirror consistent.
  */
 export async function consumeCredits(args: ConsumeCreditsArgs): Promise<ConsumeCreditsResult> {
   if (!ALLOWED_REASONS.has(args.reason)) {
@@ -103,21 +248,56 @@ export async function consumeCredits(args: ConsumeCreditsArgs): Promise<ConsumeC
   if (args.requestedCents <= 0n) {
     return { chargedCents: 0n, shortfallCents: 0n, balanceCents: 0n };
   }
+
   const d = db();
   return await d.transaction(async (tx) => {
-    const locked = await tx
-      .select({ balanceCents: schema.creditBalances.balanceCents })
-      .from(schema.creditBalances)
-      .where(eq(schema.creditBalances.orgId, args.orgId))
+    const now = new Date();
+
+    // Lock and read all non-expired lots for this org, soonest-expiring first.
+    // expires_at NULLS LAST → non-expiring (free) lots are consumed last.
+    const lots = await tx
+      .select({
+        id: schema.creditLots.id,
+        remainingCents: schema.creditLots.remainingCents,
+        expiresAt: schema.creditLots.expiresAt,
+      })
+      .from(schema.creditLots)
+      .where(
+        and(
+          eq(schema.creditLots.orgId, args.orgId),
+          or(isNull(schema.creditLots.expiresAt), gt(schema.creditLots.expiresAt, now)),
+          gt(schema.creditLots.remainingCents, 0n),
+        ),
+      )
+      .orderBy(asc(schema.creditLots.expiresAt))
       .for("update");
-    const balance = locked[0]?.balanceCents ?? 0n;
-    const charge = args.requestedCents <= balance ? args.requestedCents : balance;
+
+    // Compute how much we can charge across all lots.
+    const totalAvailable = lots.reduce(
+      (acc, l) => acc + (typeof l.remainingCents === "bigint" ? l.remainingCents : BigInt(l.remainingCents)),
+      0n,
+    );
+    const charge = args.requestedCents <= totalAvailable ? args.requestedCents : totalAvailable;
     const shortfall = args.requestedCents - charge;
 
     if (charge <= 0n) {
-      return { chargedCents: 0n, shortfallCents: shortfall, balanceCents: balance };
+      return { chargedCents: 0n, shortfallCents: shortfall, balanceCents: totalAvailable };
     }
 
+    // Drain lots in order, decrementing remaining_cents.
+    let remaining = charge;
+    for (const lot of lots) {
+      if (remaining <= 0n) break;
+      const lotRemaining = typeof lot.remainingCents === "bigint" ? lot.remainingCents : BigInt(lot.remainingCents);
+      const debit = remaining <= lotRemaining ? remaining : lotRemaining;
+      remaining -= debit;
+      await tx
+        .update(schema.creditLots)
+        .set({ remainingCents: sql`${schema.creditLots.remainingCents} - ${debit}`, updatedAt: new Date() })
+        .where(eq(schema.creditLots.id, lot.id));
+    }
+
+    // Write the ledger entry.
     await tx.insert(schema.creditLedger).values({
       orgId: args.orgId,
       deltaCents: -charge,
@@ -125,21 +305,22 @@ export async function consumeCredits(args: ConsumeCreditsArgs): Promise<ConsumeC
       referenceType: args.referenceType ?? null,
       referenceId: args.referenceId ?? null,
     });
-    const updated = await tx
+
+    // Keep credit_balances mirror in sync.
+    await tx
       .update(schema.creditBalances)
       .set({
-        balanceCents: sql`${schema.creditBalances.balanceCents} - ${charge}`,
-        lastEventAt: new Date(),
-        updatedAt: new Date(),
+        balanceCents: sql`GREATEST(${schema.creditBalances.balanceCents} - ${charge}, 0)`,
+        lastEventAt: now,
+        updatedAt: now,
       })
-      .where(eq(schema.creditBalances.orgId, args.orgId))
-      .returning({ balanceCents: schema.creditBalances.balanceCents });
+      .where(eq(schema.creditBalances.orgId, args.orgId));
 
-    const newBalance = updated[0]?.balanceCents ?? balance - charge;
+    const newBalance = totalAvailable - charge;
     return {
       chargedCents: charge,
       shortfallCents: shortfall,
-      balanceCents: typeof newBalance === "bigint" ? newBalance : BigInt(newBalance),
+      balanceCents: newBalance,
     };
   });
 }

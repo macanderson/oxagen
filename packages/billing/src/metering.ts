@@ -1,6 +1,4 @@
-import { db, schema } from "@oxagen/database";
-import { eq } from "drizzle-orm";
-import { consumeCredits } from "./credits.js";
+import { consumeCredits, effectiveBalance } from "./credits.js";
 import {
   providerCostUsd,
   providerCostUsdMicros,
@@ -81,12 +79,11 @@ export async function chargeUsageCredits(args: ChargeUsageArgs): Promise<ChargeU
   };
 }
 
-/** True when the org has any credits left — the pre-turn admission check. */
+/**
+ * True when the org has any non-expired credits left — the pre-turn admission
+ * check. Reads the effective balance from lots (lazy expiry) rather than the
+ * cached credit_balances mirror so it is always authoritative.
+ */
 export async function hasCreditBalance(orgId: string): Promise<boolean> {
-  const d = db();
-  const row = await d.query.creditBalances.findFirst({
-    where: eq(schema.creditBalances.orgId, orgId),
-    columns: { balanceCents: true },
-  });
-  return (row?.balanceCents ?? 0n) > 0n;
+  return (await effectiveBalance(orgId)) > 0n;
 }

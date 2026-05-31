@@ -189,10 +189,21 @@ Do **not** parallelize when:
 ### `apps/app` — interactive agent UI
 
 - **Next.js App Router** with **React Server Components** and streaming.
-- The interactive agent is built on the **Vercel AI SDK** (`ai` package)
-  with streaming UI — `streamUI` / `streamText` rendered through RSC.
+- The interactive agent is built on the **Vercel AI SDK Core** (`ai`
+  package — `streamText` / `generateText` / `streamObject` /
+  `generateObject`) on the server and **AI SDK UI** (`@ai-sdk/react` —
+  `useChat` / `useCompletion`) on the client. **Do NOT use AI SDK RSC**
+  (`ai/rsc`, `streamUI`, `createStreamableUI`, `createAI`) — it is
+  flagged experimental and not recommended for production. No experimental
+  or unstable SDKs ship in this product.
+- Generative UI ("generate UI components from a prompt") is done **without
+  RSC**: the model returns structured tool-call / `generateObject` output
+  and the client maps it to React components via the chat component
+  registry. The model streams *data*, not server-rendered React trees.
 - Tool calls, generative UI, and message branching all flow through the
-  AI SDK's streaming primitives — do not roll a parallel transport.
+  AI SDK Core/UI streaming primitives (`streamText` + `useChat` data
+  parts / tool invocations) — do not roll a parallel transport, and do
+  not reach for `ai/rsc` to get there.
 - Server actions handle mutations; client components subscribe to
   streamed responses.
 - Auth lives in server components; client never sees session tokens.
