@@ -19,12 +19,26 @@ export const orgMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (!userId) throw new HTTPException(401, { message: "Unauthenticated" });
 
   const result = await resolveOrgScope(userId, slug);
-  if (!result.ok) {
-    if (result.kind === "not_found") throw new HTTPException(404, { message: "Organization not found" });
-    if (result.kind === "not_member") throw new HTTPException(403, { message: "Not a member of this organization" });
-  } else {
+  if (result.ok) {
     c.set("orgId", result.orgId);
+    return next();
   }
 
-  return next();
+  switch (result.kind) {
+    case "not_found":
+      throw new HTTPException(404, { message: "Organization not found" });
+    case "not_member":
+      throw new HTTPException(403, { message: "Not a member of this organization" });
+    default:
+      // Exhaustiveness guard: a new OrgScopeResolutionError kind fails to
+      // compile here, and at runtime throws 500 rather than silently calling
+      // next() with orgId unset (which would slip past the membership gate).
+      return assertNever(result);
+  }
 };
+
+function assertNever(value: never): never {
+  throw new HTTPException(500, {
+    message: `Unhandled org scope resolution error: ${JSON.stringify(value)}`,
+  });
+}
