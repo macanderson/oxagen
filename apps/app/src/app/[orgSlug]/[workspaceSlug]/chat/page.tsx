@@ -118,6 +118,8 @@ export default async function ChatPage({
         fetchBackgroundTask={boundReadTask}
         cancelBackgroundTask={boundCancelTask}
         agentCapabilities={agentCapabilities}
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
       />
     </div>
   );

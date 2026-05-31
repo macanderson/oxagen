@@ -49,6 +49,7 @@
   "devDependencies": {
     "@playwright/test": "^1.48.0",
     "@tailwindcss/postcss": "^4.3.0",
+    "neo4j-driver": "^5.28.3",
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",

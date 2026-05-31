@@ -267,6 +267,9 @@ importers:
       globals:
         specifier: ^17.6.0
         version: 17.6.0
+      neo4j-driver:
+        specifier: ^5.28.3
+        version: 5.28.3
       postcss:
         specifier: ^8.4.47
         version: 8.5.15
