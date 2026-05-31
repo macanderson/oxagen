@@ -36,3 +36,18 @@ registerHandler(
   async () =>
     (await import("./form.fill.js")).formFillHandler as CapabilityHandlerFn,
 );
+registerHandler(
+  "documents.generate",
+  async () =>
+    (await import("./documents.generate.js")).documentsGenerateHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "documents.pdf.create",
+  async () =>
+    (await import("./documents.pdf.create.js")).documentsPdfCreateHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "brandkit.apply",
+  async () =>
+    (await import("./brandkit.apply.js")).brandkitApplyHandler as CapabilityHandlerFn,
+);

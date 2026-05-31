@@ -1,5 +1,7 @@
 "use client";
 import * as React from "react";
+import { Suspense } from "react";
+import { cn } from "@/lib/utils";
 import { MessageTree } from "./message-tree";
 import { MessageComposer, type ComposerAction } from "./message-composer";
 import type { ChatMessage, MessageBubbleCallbacks } from "./message-bubble";
@@ -9,6 +11,7 @@ import { ToolCallCard } from "./tool-call-card";
 import { CodeExecuteCard } from "./code-execute-card";
 import { MemoryCard } from "./memory-card";
 import { SubagentFanout } from "./subagent-fanout";
+import { CHAT_COMPONENTS } from "./chat-component-registry";
 import { useToolStream } from "./use-tool-stream";
 import type { ChatShellProps } from "./chat-shell";
 import type { StreamEvent } from "./stream-event-types";
@@ -55,7 +58,9 @@ export function ChatShellClient({
     memoryRecalls,
     memoryWrites,
     activeFanouts,
+    components: liveComponents,
     messages: liveMessages,
+    turnUsage,
     consume,
     reset,
     hasBlockingApproval,
@@ -188,6 +193,7 @@ export function ChatShellClient({
   const liveMemoryWritesList = Object.values(memoryWrites);
   const liveFanouts = Object.values(activeFanouts);
   const liveTextMessages = Object.values(liveMessages);
+  const liveComponentList = Object.values(liveComponents);
   const hasLiveContent =
     isStreaming ||
     livePlans.length > 0 ||
@@ -197,7 +203,8 @@ export function ChatShellClient({
     liveMemoryRecalls.length > 0 ||
     liveMemoryWritesList.length > 0 ||
     liveFanouts.length > 0 ||
-    liveTextMessages.length > 0;
+    liveTextMessages.length > 0 ||
+    liveComponentList.length > 0;
 
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4">
@@ -315,6 +322,43 @@ export function ChatShellClient({
                     </div>
                   ) : null,
                 )}
+                {liveComponentList.map((lc) => {
+                  const Component = CHAT_COMPONENTS[lc.componentId];
+                  if (!Component) {
+                    console.log(
+                      `[chat-component-registry] unknown componentId "${lc.componentId}" — no renderer registered`,
+                    );
+                    return null;
+                  }
+                  return (
+                    <Suspense
+                      key={lc.toolCallId}
+                      fallback={
+                        <div
+                          className={cn(
+                            "glass rounded-xl px-4 py-3",
+                            "animate-pulse space-y-2",
+                          )}
+                          aria-busy="true"
+                          aria-label="Loading component"
+                        >
+                          <div className="h-3 w-2/3 rounded bg-muted-foreground/20" />
+                          <div className="h-3 w-1/2 rounded bg-muted-foreground/15" />
+                        </div>
+                      }
+                    >
+                      <Component {...lc.props} />
+                    </Suspense>
+                  );
+                })}
+                {turnUsage !== undefined ? (
+                  <div className="text-xs text-muted-foreground text-right tabular-nums">
+                    {turnUsage.totalTokens.toLocaleString()} tokens
+                    {turnUsage.creditsCharged !== undefined
+                      ? ` · ${turnUsage.creditsCharged} credit${turnUsage.creditsCharged === 1 ? "" : "s"}`
+                      : null}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

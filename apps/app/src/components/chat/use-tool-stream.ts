@@ -11,6 +11,7 @@ import type {
   SubagentChild,
   SubagentStatus,
   ToolCallStatus,
+  TurnUsage,
 } from "./stream-event-types";
 
 export interface LiveAssistantMessage {
@@ -70,6 +71,16 @@ export interface LiveMemoryWrite {
   weight: MemoryWeight | string;
 }
 
+/**
+ * A live component directive received from a "component" stream event.
+ * Keyed by toolCallId in `ToolStreamState.components`.
+ */
+export interface LiveComponent {
+  toolCallId: string;
+  componentId: string;
+  props: Record<string, unknown>;
+}
+
 export interface ToolStreamState {
   messages: Record<string, LiveAssistantMessage>;
   toolCalls: Record<string, LiveToolCall>;
@@ -78,6 +89,10 @@ export interface ToolStreamState {
   activeFanouts: Record<string, LiveFanout>;
   memoryRecalls: Record<string, LiveMemoryRecall>;
   memoryWrites: Record<string, LiveMemoryWrite>;
+  /** Live component directives received this turn, keyed by toolCallId. */
+  components: Record<string, LiveComponent>;
+  /** Usage summary from the turn's "usage" event; undefined until the event arrives. */
+  turnUsage: TurnUsage | undefined;
 }
 
 const INITIAL_STATE: ToolStreamState = {
@@ -88,6 +103,8 @@ const INITIAL_STATE: ToolStreamState = {
   activeFanouts: {},
   memoryRecalls: {},
   memoryWrites: {},
+  components: {},
+  turnUsage: undefined,
 };
 
 type Action = { type: "event"; event: StreamEvent } | { type: "reset" };
@@ -251,6 +268,22 @@ function reducer(state: ToolStreamState, action: Action): ToolStreamState {
         },
       };
     }
+    case "component": {
+      return {
+        ...state,
+        components: {
+          ...state.components,
+          [e.toolCallId]: {
+            toolCallId: e.toolCallId,
+            componentId: e.componentId,
+            props: e.props,
+          },
+        },
+      };
+    }
+    case "usage": {
+      return { ...state, turnUsage: e.usage };
+    }
     default:
       return state;
   }
@@ -275,6 +308,9 @@ export interface UseToolStreamResult extends ToolStreamState {
    *  incoming stream event). Unblocks the `consume` loop so the stream
    *  continues processing subsequent events. */
   signalApprovalResolved: (approvalId: string) => void;
+  /** Token + credit usage for the completed turn. Undefined until the
+   *  "usage" event arrives (just before [DONE]). */
+  turnUsage: TurnUsage | undefined;
 }
 
 export function useToolStream(): UseToolStreamResult {

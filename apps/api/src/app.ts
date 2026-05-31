@@ -25,6 +25,9 @@ import { agentMemoryRecallRoute } from "./routes/v1/agent.memory.recall.js";
 import { agentMemoryWriteRoute } from "./routes/v1/agent.memory.write.js";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve.js";
 import { formFillRoute } from "./routes/v1/form.fill.js";
+import { documentsGenerateRoute } from "./routes/v1/documents.generate.js";
+import { documentsPdfCreateRoute } from "./routes/v1/documents.pdf.create.js";
+import { brandkitApplyRoute } from "./routes/v1/brandkit.apply.js";
 
 export type AppEnv = {
   Variables: {
@@ -79,4 +82,7 @@ orgScoped.route("/agent/memory/recall", agentMemoryRecallRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/forms/fill", formFillRoute);
+orgScoped.route("/documents/generate", documentsGenerateRoute);
+orgScoped.route("/documents/pdf", documentsPdfCreateRoute);
+orgScoped.route("/brandkit/apply", brandkitApplyRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

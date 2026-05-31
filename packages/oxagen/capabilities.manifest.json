@@ -313,6 +313,24 @@
       }
     },
     {
+      "name": "brandkit.apply",
+      "file": "brandkit.apply.ts",
+      "domain": "brandkit",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "chat.message.send",
       "file": "chat.message.send.ts",
       "domain": "chat",
@@ -327,6 +345,42 @@
         "mcp": true,
         "unit": true,
         "e2e": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "documents.generate",
+      "file": "documents.generate.ts",
+      "domain": "documents",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "documents.pdf.create",
+      "file": "documents.pdf.create.ts",
+      "domain": "documents",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
         "docs": true
       }
     },

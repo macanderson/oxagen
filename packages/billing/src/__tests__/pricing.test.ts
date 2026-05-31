@@ -83,10 +83,12 @@ describe("derivePricing", () => {
     }
   });
 
-  it("default target margin is 65% and solves a markup of ~3.32", () => {
+  it("default target margin is 65% and solves a markup of ~3.38", () => {
     const d = derivePricing(DEFAULT_TARGET_MARGIN);
     expect(d.targetMargin).toBe(0.65);
-    expect(d.meterMarkup).toBeCloseTo(3.319, 2);
+    // Mix: Build (1.2¢), Scale (1.33¢), Enterprise (1.4¢) + three packs,
+    // weighted and solved to a 65% blended margin.
+    expect(d.meterMarkup).toBeCloseTo(3.381, 2);
     expect(d.creditValueUsd).toBe(CREDIT_VALUE_USD);
   });
 

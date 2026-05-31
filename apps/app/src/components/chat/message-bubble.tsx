@@ -1,3 +1,5 @@
+import * as React from "react";
+import { Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ToolCallCard } from "./tool-call-card";
@@ -6,6 +8,7 @@ import { PlanCard, type AgentCapability } from "./plan-card";
 import { SubagentFanout } from "./subagent-fanout";
 import { MemoryCard } from "./memory-card";
 import { CodeExecuteCard } from "./code-execute-card";
+import { CHAT_COMPONENTS } from "./chat-component-registry";
 import type { AssistantContentBlock } from "./stream-event-types";
 
 export interface ChatMessage {
@@ -159,6 +162,39 @@ function renderBlock(
       );
     case "memory-recall":
       return <MemoryCard key={block.queryId} queryId={block.queryId} memories={block.memories} />;
+    case "component": {
+      const Component = CHAT_COMPONENTS[block.componentId];
+      if (!Component) {
+        // Unknown componentId — log intent but render nothing rather than
+        // crashing so a stale persisted block doesn't break the whole chat.
+        console.log(
+          `[chat-component-registry] unknown componentId "${block.componentId}" — no renderer registered`,
+        );
+        return null;
+      }
+      return (
+        <Suspense
+          key={block.toolCallId}
+          fallback={
+            // Tasteful skeleton: glass card matching the design-system glass
+            // style, two shimmer lines to suggest loading content.
+            <div
+              className={cn(
+                "glass rounded-xl px-4 py-3",
+                "animate-pulse space-y-2",
+              )}
+              aria-busy="true"
+              aria-label="Loading component"
+            >
+              <div className="h-3 w-2/3 rounded bg-muted-foreground/20" />
+              <div className="h-3 w-1/2 rounded bg-muted-foreground/15" />
+            </div>
+          }
+        >
+          <Component {...block.props} />
+        </Suspense>
+      );
+    }
     default: {
       const _exhaustive: never = block;
       return _exhaustive;

@@ -4,3 +4,6 @@ export { billingSubscriptionReadHandler } from "./billing.subscription.read.js";
 export { billingSubscriptionUpgradeStartHandler } from "./billing.subscription.upgrade.start.js";
 export { chatMessageSendHandler } from "./chat.message.send.js";
 export { formFillHandler } from "./form.fill.js";
+export { documentsGenerateHandler } from "./documents.generate.js";
+export { documentsPdfCreateHandler } from "./documents.pdf.create.js";
+export { brandkitApplyHandler } from "./brandkit.apply.js";

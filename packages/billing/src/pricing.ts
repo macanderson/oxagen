@@ -130,8 +130,8 @@ export interface SubscriptionPlanDef {
   slug: string;
   /** Stripe product display name — NO version suffix. */
   displayName: string;
-  /** Maps to the billing.plans.tier CHECK (free | pro | enterprise). */
-  tier: "free" | "pro" | "enterprise";
+  /** Maps to the billing.plans.tier CHECK (free | build | scale | enterprise). */
+  tier: "free" | "build" | "scale" | "enterprise";
   /** Credits granted per monthly period (1 credit = 1 cent). */
   includedCredits: number;
   /** Monthly price in cents. */
@@ -165,9 +165,9 @@ export interface CreditPackDef {
  */
 export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
   {
-    slug: "pro-v2",
-    displayName: "Pro",
-    tier: "pro",
+    slug: "build-v2",
+    displayName: "Build",
+    tier: "build",
     includedCredits: 2_400, // $24 face value, sold for $20 → 16.7% discount
     monthlyCents: 2_000,
     annualCents: 20_000, // 2 months free
@@ -178,13 +178,38 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
   {
     slug: "scale-v2",
     displayName: "Scale",
-    tier: "enterprise",
+    tier: "scale",
     includedCredits: 13_200, // $132 face value, sold for $99 → 25% discount
     monthlyCents: 9_900,
     annualCents: 99_000, // 2 months free
     seats: 25,
     weight: 0.2,
-    features: { tools: "all", agents: "unlimited", support: "priority", seats: 25, sso: true },
+    features: { tools: "all", agents: "unlimited", support: "priority", seats: 25 },
+  },
+  {
+    // Priced self-serve plan (Enterprise customers may also engage at rate card
+    // via credit packs). Home of the SOC2 access-control surface: ACLs, SSO,
+    // SCIM, and the immutable audit log are Enterprise-only entitlements. The
+    // credit allotment sits on the Build→Scale cr/¢ ladder (1.2 → 1.33 → 1.4)
+    // and is solved into the 65% blended-margin target.
+    slug: "enterprise-v2",
+    displayName: "Enterprise",
+    tier: "enterprise",
+    includedCredits: 70_000, // $700 face value, sold for $500 → 28.6% discount (1.4 cr/¢)
+    monthlyCents: 50_000,
+    annualCents: 500_000, // 2 months free
+    seats: 5,
+    weight: 0.1,
+    features: {
+      tools: "all",
+      agents: "unlimited",
+      support: "dedicated",
+      seats: 5,
+      acls: true,
+      sso: true,
+      scim: true,
+      audit: true,
+    },
   },
 ];
 

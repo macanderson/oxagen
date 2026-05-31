@@ -6,7 +6,25 @@ import { streamAgentReply, defaultModel } from "@oxagen/ai";
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
 import { randomUUID } from "node:crypto";
 import type { CoreMessage } from "ai";
-import type { StreamEvent } from "@/components/chat/stream-event-types";
+import type { RenderDirective, StreamEvent } from "@/components/chat/stream-event-types";
+
+/**
+ * Concrete shapes for the `fullStream` parts we process. We iterate
+ * `result.fullStream as AsyncIterable<unknown>` and type-narrow each part
+ * via `isStreamPart` rather than relying on the SDK's
+ * `TextStreamPart<ToolSet>` generic, which does not resolve the `tool-result`
+ * arm to a concrete narrowable shape when TOOLS is the wide `ToolSet` alias.
+ */
+interface TextDeltaPart { type: "text-delta"; textDelta: string }
+interface ToolCallPart { type: "tool-call"; toolCallId: string; toolName: string; args: unknown }
+interface ToolResultPart { type: "tool-result"; toolCallId: string; toolName: string; result: unknown }
+interface FinishPart { type: "finish"; usage: { promptTokens: number; completionTokens: number; totalTokens: number } }
+
+function partType(p: unknown): string | undefined {
+  return typeof p === "object" && p !== null && "type" in p
+    ? String((p as { type: unknown }).type)
+    : undefined;
+}
 
 const BodySchema = z.object({
   content: z.string().min(1),
@@ -114,8 +132,83 @@ export async function POST(request: NextRequest): Promise<Response> {
           },
         });
 
-        for await (const chunk of result.textStream) {
-          emit({ type: "text", messageId: requestId, text: chunk });
+        // Iterate result.fullStream so we see every event type:
+        //   text-delta   → emit "text"
+        //   tool-call    → emit "tool-call-start"
+        //   tool-result  → emit "tool-call-end" + optional "component" (render directive)
+        //   finish       → emit "usage"
+        //
+        // We iterate as AsyncIterable<unknown> and use partType() to narrow
+        // because the SDK's TextStreamPart<ToolSet> generic does not produce a
+        // concrete discriminated union when TOOLS is the wide ToolSet alias —
+        // the tool-result arm becomes an unresolvable intersection.
+        const toolStartedAt: Record<string, number> = {};
+
+        for await (const raw of result.fullStream as AsyncIterable<unknown>) {
+          const pType = partType(raw);
+          if (pType === "text-delta") {
+            const part = raw as TextDeltaPart;
+            emit({ type: "text", messageId: requestId, text: part.textDelta });
+          } else if (pType === "tool-call") {
+            const part = raw as ToolCallPart;
+            toolStartedAt[part.toolCallId] = Date.now();
+            emit({
+              type: "tool-call-start",
+              messageId: requestId,
+              toolCallId: part.toolCallId,
+              capability: part.toolName,
+              inputPreview: part.args,
+              // Default risk level; capabilities may override via tool metadata.
+              riskLevel: "low",
+            });
+          } else if (pType === "tool-result") {
+            const part = raw as ToolResultPart;
+            const durationMs =
+              toolStartedAt[part.toolCallId] !== undefined
+                ? Date.now() - (toolStartedAt[part.toolCallId] as number)
+                : 0;
+            emit({
+              type: "tool-call-end",
+              toolCallId: part.toolCallId,
+              status: "completed",
+              output: part.result,
+              durationMs,
+            });
+            // If the tool result carries a render directive, emit a "component"
+            // event so the client renders the typed React component inline.
+            const rawResult = part.result;
+            if (rawResult !== null && rawResult !== undefined && typeof rawResult === "object") {
+              const render = (rawResult as Record<string, unknown>)["render"] as
+                | RenderDirective
+                | undefined;
+              if (
+                render !== undefined &&
+                typeof render.componentId === "string" &&
+                render.props !== null &&
+                typeof render.props === "object"
+              ) {
+                emit({
+                  type: "component",
+                  toolCallId: part.toolCallId,
+                  componentId: render.componentId,
+                  props: render.props,
+                });
+              }
+            }
+          } else if (pType === "finish") {
+            const part = raw as FinishPart;
+            // Emit usage so the client can show credits consumed this turn.
+            emit({
+              type: "usage",
+              usage: {
+                promptTokens: part.usage.promptTokens ?? 0,
+                completionTokens: part.usage.completionTokens ?? 0,
+                totalTokens: part.usage.totalTokens ?? 0,
+              },
+            });
+          }
+          // step-start, step-finish, tool-call-streaming-start, tool-call-delta,
+          // error, reasoning, source — intentionally not forwarded to the client.
         }
       } catch (err) {
         // Surface stream errors as a text event so the client can show them.

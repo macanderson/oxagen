@@ -10,6 +10,9 @@
 
 import { agentApprovalResolve } from "./agent.approval.resolve.js";
 import { agentCodeExecute } from "./agent.code.execute.js";
+import { brandkitApply } from "./brandkit.apply.js";
+import { documentsGenerate } from "./documents.generate.js";
+import { documentsPdfCreate } from "./documents.pdf.create.js";
 import { agentMcpList } from "./agent.mcp.list.js";
 import { agentMcpRegister } from "./agent.mcp.register.js";
 import { agentMemoryRecall } from "./agent.memory.recall.js";
@@ -34,6 +37,9 @@ import { workspaceCreate } from "./workspace.create.js";
 export {
   agentApprovalResolve,
   agentCodeExecute,
+  brandkitApply,
+  documentsGenerate,
+  documentsPdfCreate,
   agentMcpList,
   agentMcpRegister,
   agentMemoryRecall,
@@ -66,6 +72,9 @@ export {
  */
 export const contracts = [
   agentApprovalResolve,
+  brandkitApply,
+  documentsGenerate,
+  documentsPdfCreate,
   agentCodeExecute,
   agentMcpList,
   agentMcpRegister,

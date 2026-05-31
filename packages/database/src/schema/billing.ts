@@ -22,7 +22,8 @@ export const plans = billingSchema.table(
     ...auditMixin(),
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
-    // CHECK: tier IN ('free','pro','enterprise') — confirmed from seed.ts
+    // CHECK: tier IN ('free','build','scale','enterprise'). Build + Scale are
+    // self-serve; Enterprise is sales-led (ACLs/SSO/SCIM/audit live here).
     tier: text("tier").notNull(),
     stripeProductId: text("stripe_product_id").notNull(),
     stripePriceIdMonthly: text("stripe_price_id_monthly"),
