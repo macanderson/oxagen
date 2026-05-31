@@ -1,8 +1,11 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { KMSClient } from "@aws-sdk/client-kms";
 import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
 import { requireEnv } from "@oxagen/config/env";
+import { createAwsKmsAdapter } from "@oxagen/crypto/kms";
+import { buildAccountTokenHooks } from "./token-encryption.js";
 
 // Better Auth binds to the canonical auth.users row, not a parallel table.
 // The Drizzle adapter looks up columns via JS property lookup
@@ -18,6 +21,12 @@ const env = requireEnv([
   "GITHUB_CLIENT_ID",
   "GITHUB_CLIENT_SECRET",
 ] as const);
+
+// OXA-1420: KMS adapter for OAuth token envelope encryption.
+// The KMS client uses the ambient AWS credentials (IAM role / env vars);
+// never pass explicit credentials here — they would be visible in logs.
+const kmsClient = new KMSClient({ region: "us-east-2" });
+const kmsAdapter = createAwsKmsAdapter(kmsClient);
 
 export const auth = betterAuth({
   database: drizzleAdapter(db(), {
@@ -70,6 +79,14 @@ export const auth = betterAuth({
       env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET
         ? { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET }
         : undefined,
+  },
+  // OXA-1420: Encrypt OAuth tokens at rest using envelope encryption.
+  // The hooks dual-write: plaintext columns are kept (EXPAND phase) so
+  // existing rows remain readable until the backfill job runs.  The
+  // CONTRACT migration (separate ticket) will drop the plaintext columns
+  // once all rows have been backfilled and reads no longer fall back to them.
+  databaseHooks: {
+    account: buildAccountTokenHooks(kmsAdapter),
   },
   session: {
     expiresIn: 60 * 60 * 24 * 30,
