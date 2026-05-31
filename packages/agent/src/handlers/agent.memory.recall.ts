@@ -1,26 +1,9 @@
 import type { CapabilityContext } from "../types.js";
 import { recallMemories } from "../memory/neo4j.js";
 import { embedText } from "../memory/embed.js";
+import type { AgentMemoryRecallInput, AgentMemoryRecallOutput } from "@oxagen/oxagen/contracts/agent.memory.recall";
 
-export interface AgentMemoryRecallInput {
-  query: string;
-  minWeight: "low" | "high" | "critical";
-  limit: number;
-  nodeRef?: string;
-}
-
-export interface AgentMemoryRecallOutput {
-  memories: Array<{
-    id: string;
-    nodeRef: string;
-    weight: "low" | "high" | "critical";
-    kind: string;
-    lesson: string;
-    source: string;
-    score: number;
-    createdAt: string;
-  }>;
-}
+export type { AgentMemoryRecallInput, AgentMemoryRecallOutput };
 
 export async function agentMemoryRecallHandler(
   input: AgentMemoryRecallInput,

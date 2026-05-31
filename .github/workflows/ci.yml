@@ -88,12 +88,10 @@ jobs:
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.0
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile

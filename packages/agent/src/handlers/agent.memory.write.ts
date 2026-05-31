@@ -1,19 +1,9 @@
 import type { CapabilityContext } from "../types.js";
 import { writeMemory } from "../memory/neo4j.js";
 import { embedText } from "../memory/embed.js";
+import type { AgentMemoryWriteInput, AgentMemoryWriteOutput } from "@oxagen/oxagen/contracts/agent.memory.write";
 
-export interface AgentMemoryWriteInput {
-  nodeRef: string;
-  weight: "low" | "high" | "critical";
-  kind: "routine-change" | "constraint" | "bug-root-cause" | "convention-deviation" | "gotcha";
-  lesson: string;
-  source: "feature" | "fix" | "exception-watcher" | "bug-report";
-}
-
-export interface AgentMemoryWriteOutput {
-  memoryId: string;
-  nodeRef: string;
-}
+export type { AgentMemoryWriteInput, AgentMemoryWriteOutput };
 
 export async function agentMemoryWriteHandler(
   input: AgentMemoryWriteInput,

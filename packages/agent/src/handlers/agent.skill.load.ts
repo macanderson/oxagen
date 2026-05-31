@@ -1,17 +1,9 @@
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import type { CapabilityContext } from "../types.js";
+import type { AgentSkillLoadInput, AgentSkillLoadOutput } from "@oxagen/oxagen/contracts/agent.skill.load";
 
-export interface AgentSkillLoadInput {
-  slug: string;
-  parentMessageId: string;
-}
-
-export interface AgentSkillLoadOutput {
-  slug: string;
-  body: string;
-  references: Array<{ path: string; body: string }>;
-}
+export type { AgentSkillLoadInput, AgentSkillLoadOutput };
 
 export async function agentSkillLoadHandler(
   input: AgentSkillLoadInput,

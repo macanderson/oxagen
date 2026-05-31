@@ -35,7 +35,7 @@ vi.mock("@oxagen/database", () => ({
 }));
 
 vi.mock("@oxagen/config/env", () => ({
-  loadEnv: () => ({ DATABASE_URL: "postgres://test" }),
+  requireEnv: () => ({ DATABASE_URL: "postgres://test" }),
 }));
 
 // Postgres listen client: capture the handler so we can fire synthetic NOTIFY.

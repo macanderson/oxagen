@@ -32,5 +32,5 @@ export const agentMemoryRecall = registerCapability({
   }),
 });
 
-export type AgentMemoryRecallInput = z.infer<typeof agentMemoryRecall.input>;
-export type AgentMemoryRecallOutput = z.infer<typeof agentMemoryRecall.output>;
+export type AgentMemoryRecallInput = z.output<typeof agentMemoryRecall.input>;
+export type AgentMemoryRecallOutput = z.output<typeof agentMemoryRecall.output>;

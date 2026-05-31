@@ -1,20 +1,9 @@
 import { db, schema } from "@oxagen/database";
 import { and, eq, ilike } from "drizzle-orm";
 import type { CapabilityContext } from "../types.js";
+import type { AgentSkillListInput, AgentSkillListOutput } from "@oxagen/oxagen/contracts/agent.skill.list";
 
-export interface AgentSkillListInput {
-  filter?: string;
-}
-
-export interface AgentSkillListOutput {
-  skills: Array<{
-    slug: string;
-    name: string;
-    description: string;
-    source: "builtin" | "tenant";
-    version: string;
-  }>;
-}
+export type { AgentSkillListInput, AgentSkillListOutput };
 
 export async function agentSkillListHandler(
   input: AgentSkillListInput,

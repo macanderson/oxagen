@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Oxagen env-manager</title>
+    <style>
+      :root { color-scheme: dark; --bg:#0b0d10; --panel:#14171c; --line:#262b33; --muted:#8b949e; --ok:#2ea043; --warn:#d29922; --err:#f85149; --acc:#3b82f6; }
+      * { box-sizing: border-box; }
+      body { margin:0; font:14px/1.45 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:#e6edf3; }
+      header { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:16px; flex-wrap:wrap; position:sticky; top:0; background:var(--bg); z-index:5; }
+      h1 { font-size:16px; margin:0; font-weight:650; }
+      .sub { color:var(--muted); font-size:12px; }
+      .spacer { flex:1; }
+      button { font:inherit; background:var(--panel); color:#e6edf3; border:1px solid var(--line); border-radius:8px; padding:7px 12px; cursor:pointer; }
+      button:hover { border-color:#3a4150; }
+      button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+      button:disabled { opacity:.5; cursor:not-allowed; }
+      main { padding:16px 20px 80px; }
+      table { width:100%; border-collapse:collapse; }
+      th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+      th { color:var(--muted); font-weight:550; font-size:12px; position:sticky; top:57px; background:var(--bg); }
+      .grp td { background:#10131a; color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+      .key { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600; }
+      .desc { color:var(--muted); font-size:12px; max-width:380px; }
+      .chip { display:inline-block; font-size:11px; padding:1px 7px; border-radius:999px; border:1px solid var(--line); margin:1px 3px 1px 0; color:var(--muted); }
+      .src { font-size:11px; color:var(--muted); font-family:ui-monospace,monospace; }
+      .cell .svc { display:inline-flex; gap:3px; align-items:center; font-size:11px; margin-right:6px; }
+      .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+      .dot.on { background:var(--ok); } .dot.off { background:#3a4150; }
+      .badge-secret { color:var(--warn); border-color:var(--warn); }
+      #log { position:fixed; right:0; bottom:0; left:0; max-height:38vh; overflow:auto; background:#0d1117; border-top:1px solid var(--line); padding:10px 20px; font-family:ui-monospace,monospace; font-size:12px; display:none; }
+      #log .ok{color:var(--ok)} #log .error{color:var(--err)} #log .manual{color:var(--warn)} #log .skipped{color:var(--muted)}
+      .note { background:#1c2128; border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:14px; color:var(--muted); font-size:12px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div><h1>Oxagen env-manager</h1><div class="sub" id="tokstatus">loading…</div></div>
+      <div class="spacer"></div>
+      <button onclick="refresh()">↻ Refresh state</button>
+      <button class="primary" onclick="deploy('development')">Deploy development</button>
+      <button class="primary" onclick="deploy('preview')">Deploy preview</button>
+      <button class="primary" onclick="deploy('production')">Deploy production</button>
+    </header>
+    <main>
+      <div class="note" id="note"></div>
+      <table id="grid"><thead><tr>
+        <th>Variable</th><th>Source per env<br/>(dev · prev · prod)</th>
+        <th>development</th><th>preview</th><th>production</th>
+      </tr></thead><tbody id="rows"></tbody></table>
+    </main>
+    <div id="log"></div>
+
+    <script>
+      let DATA = null, STATE = {};
+      const srcLabel = (s) => !s ? "—" : s.type === "gsm" ? "gsm:" + s.secret.replace("oxagen-", "") : s.type === "static" ? "static" : s.type;
+
+      async function load() {
+        DATA = await (await fetch("/api/catalog")).json();
+        document.getElementById("tokstatus").textContent =
+          (DATA.hasToken ? "VERCEL_TOKEN set · " : "⚠ VERCEL_TOKEN missing · ") +
+          Object.keys(DATA.projects).length + " projects";
+        document.getElementById("note").innerHTML =
+          "Each row deploys to the projects in its <b>services</b>. <b>Deploy &lt;env&gt;</b> resolves every value from its source " +
+          "(GSM / generated / static) and pushes to the right Vercel project + target. <b>manual</b> rows (Inngest, LLM keys) you set yourself. " +
+          "Env changes take effect on the next deployment.";
+        await refresh();
+      }
+      async function refresh() {
+        try {
+          const r = await fetch("/api/state");
+          const j = await r.json();
+          STATE = j.state || {};
+        } catch (e) { STATE = {}; }
+        render();
+      }
+      function svcDots(entry, env) {
+        return entry.services.map((svc) => {
+          const set = (STATE[svc]?.[entry.key] || []).includes(env);
+          return `<span class="svc" title="${svc}"><span class="dot ${set ? "on" : "off"}"></span>${svc}</span>`;
+        }).join("");
+      }
+      function render() {
+        const rows = document.getElementById("rows");
+        rows.innerHTML = "";
+        let group = null;
+        for (const e of DATA.catalog) {
+          if (e.group !== group) {
+            group = e.group;
+            rows.insertAdjacentHTML("beforeend", `<tr class="grp"><td colspan="5">${group}</td></tr>`);
+          }
+          const secret = e.secret ? `<span class="chip badge-secret">secret</span>` : "";
+          rows.insertAdjacentHTML("beforeend", `<tr>
+            <td><div class="key">${e.key}</div>${secret}<div class="desc">${e.description}</div>
+                <div>${e.services.map(s=>`<span class="chip">${s}</span>`).join("")}</div></td>
+            <td class="src">${srcLabel(e.sources.development)}<br/>${srcLabel(e.sources.preview)}<br/>${srcLabel(e.sources.production)}</td>
+            <td class="cell">${e.sources.development ? svcDots(e,"development") : '<span class="src">—</span>'}</td>
+            <td class="cell">${e.sources.preview ? svcDots(e,"preview") : '<span class="src">—</span>'}</td>
+            <td class="cell">${e.sources.production ? svcDots(e,"production") : '<span class="src">—</span>'}</td>
+          </tr>`);
+        }
+      }
+      async function deploy(env) {
+        if (!confirm(`Deploy ${env.toUpperCase()} env vars to Vercel (all services)?`)) return;
+        const log = document.getElementById("log");
+        log.style.display = "block";
+        log.innerHTML = `<div>deploying ${env}…</div>`;
+        try {
+          const r = await fetch("/api/deploy", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ env }) });
+          const j = await r.json();
+          if (j.error) { log.innerHTML = `<div class="error">${j.error}</div>`; return; }
+          const lines = j.results.map((x) => `<div class="${x.status}">[${x.status}] ${x.key} → ${x.service}/${x.env}${x.detail ? "  — " + x.detail : ""}</div>`);
+          const ok = j.results.filter((x) => x.status === "ok").length;
+          log.innerHTML = `<div><b>${env}: ${ok}/${j.results.length} ok</b> — re-deploy the affected Vercel projects to apply.</div>` + lines.join("");
+          await refresh();
+        } catch (e) { log.innerHTML = `<div class="error">${e}</div>`; }
+      }
+      load();
+    </script>
+  </body>
+</html>

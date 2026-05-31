@@ -26,5 +26,5 @@ export const agentMcpList = registerCapability({
   }),
 });
 
-export type AgentMcpListInput = z.infer<typeof agentMcpList.input>;
-export type AgentMcpListOutput = z.infer<typeof agentMcpList.output>;
+export type AgentMcpListInput = z.output<typeof agentMcpList.input>;
+export type AgentMcpListOutput = z.output<typeof agentMcpList.output>;

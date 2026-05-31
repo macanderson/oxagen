@@ -23,5 +23,5 @@ export const agentMcpRegister = registerCapability({
   }),
 });
 
-export type AgentMcpRegisterInput = z.infer<typeof agentMcpRegister.input>;
-export type AgentMcpRegisterOutput = z.infer<typeof agentMcpRegister.output>;
+export type AgentMcpRegisterInput = z.output<typeof agentMcpRegister.input>;
+export type AgentMcpRegisterOutput = z.output<typeof agentMcpRegister.output>;

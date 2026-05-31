@@ -21,5 +21,5 @@ export const agentTaskBackgroundStart = registerCapability({
   }),
 });
 
-export type AgentTaskBackgroundStartInput = z.infer<typeof agentTaskBackgroundStart.input>;
-export type AgentTaskBackgroundStartOutput = z.infer<typeof agentTaskBackgroundStart.output>;
+export type AgentTaskBackgroundStartInput = z.output<typeof agentTaskBackgroundStart.input>;
+export type AgentTaskBackgroundStartOutput = z.output<typeof agentTaskBackgroundStart.output>;

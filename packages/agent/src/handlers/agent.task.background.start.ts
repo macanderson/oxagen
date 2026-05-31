@@ -1,21 +1,13 @@
 import { db, schema } from "@oxagen/database";
 import { Inngest } from "inngest";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityContext } from "../types.js";
+import type { AgentTaskBackgroundStartInput, AgentTaskBackgroundStartOutput } from "@oxagen/oxagen/contracts/agent.task.background.start";
 
-const env = loadEnv();
+export type { AgentTaskBackgroundStartInput, AgentTaskBackgroundStartOutput };
+
+const env = requireEnv(["INNGEST_EVENT_KEY"] as const);
 const inngest = new Inngest({ id: "oxagen-runner", eventKey: env.INNGEST_EVENT_KEY });
-
-export interface AgentTaskBackgroundStartInput {
-  kind: string;
-  payload: unknown;
-  label?: string;
-}
-
-export interface AgentTaskBackgroundStartOutput {
-  taskId: string;
-  inngestRunId: string;
-}
 
 export async function agentTaskBackgroundStartHandler(
   input: AgentTaskBackgroundStartInput,

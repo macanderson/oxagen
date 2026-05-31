@@ -43,5 +43,5 @@ export const billingSubscriptionRead = registerCapability({
   }),
 });
 
-export type BillingSubscriptionReadInput = z.infer<typeof billingSubscriptionRead.input>;
-export type BillingSubscriptionReadOutput = z.infer<typeof billingSubscriptionRead.output>;
+export type BillingSubscriptionReadInput = z.output<typeof billingSubscriptionRead.input>;
+export type BillingSubscriptionReadOutput = z.output<typeof billingSubscriptionRead.output>;

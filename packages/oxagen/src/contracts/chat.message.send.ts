@@ -29,5 +29,5 @@ export const chatMessageSend = registerCapability({
   }),
 });
 
-export type ChatMessageSendInput = z.infer<typeof chatMessageSend.input>;
-export type ChatMessageSendOutput = z.infer<typeof chatMessageSend.output>;
+export type ChatMessageSendInput = z.output<typeof chatMessageSend.input>;
+export type ChatMessageSendOutput = z.output<typeof chatMessageSend.output>;

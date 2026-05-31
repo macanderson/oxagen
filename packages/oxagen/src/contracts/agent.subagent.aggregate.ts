@@ -30,5 +30,5 @@ export const agentSubagentAggregate = registerCapability({
   }),
 });
 
-export type AgentSubagentAggregateInput = z.infer<typeof agentSubagentAggregate.input>;
-export type AgentSubagentAggregateOutput = z.infer<typeof agentSubagentAggregate.output>;
+export type AgentSubagentAggregateInput = z.output<typeof agentSubagentAggregate.input>;
+export type AgentSubagentAggregateOutput = z.output<typeof agentSubagentAggregate.output>;

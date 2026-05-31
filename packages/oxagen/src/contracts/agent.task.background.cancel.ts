@@ -20,5 +20,5 @@ export const agentTaskBackgroundCancel = registerCapability({
   }),
 });
 
-export type AgentTaskBackgroundCancelInput = z.infer<typeof agentTaskBackgroundCancel.input>;
-export type AgentTaskBackgroundCancelOutput = z.infer<typeof agentTaskBackgroundCancel.output>;
+export type AgentTaskBackgroundCancelInput = z.output<typeof agentTaskBackgroundCancel.input>;
+export type AgentTaskBackgroundCancelOutput = z.output<typeof agentTaskBackgroundCancel.output>;

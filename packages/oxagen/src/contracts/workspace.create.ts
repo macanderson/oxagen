@@ -27,5 +27,5 @@ export const workspaceCreate = registerCapability({
   }),
 });
 
-export type WorkspaceCreateInput = z.infer<typeof workspaceCreate.input>;
-export type WorkspaceCreateOutput = z.infer<typeof workspaceCreate.output>;
+export type WorkspaceCreateInput = z.output<typeof workspaceCreate.input>;
+export type WorkspaceCreateOutput = z.output<typeof workspaceCreate.output>;

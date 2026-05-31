@@ -1,6 +1,6 @@
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 import { stripeClient } from "./client.js";
 import { ensureStripeCustomer } from "./customers.js";
 
@@ -20,7 +20,7 @@ export interface CreateCheckoutSessionInput {
 export async function createCheckoutSession(
   input: CreateCheckoutSessionInput,
 ): Promise<{ url: string; sessionId: string }> {
-  const env = loadEnv();
+  const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
   const d = db();
   const plan = await d.query.plans.findFirst({
     where: eq(schema.plans.slug, input.planSlug),

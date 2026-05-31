@@ -30,7 +30,7 @@
     "@oxagen/sandbox": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "ai": "^4.0.0",
-    "drizzle-orm": "^0.36.0",
+    "drizzle-orm": "^0.45.2",
     "inngest": "^3.27.0",
     "neo4j-driver": "^5.27.0",
     "@oxagen/oxagen": "workspace:*",
