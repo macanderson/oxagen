@@ -14,7 +14,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
-    "migrate": "tsx src/migrate.ts"
+    "migrate": "tsx src/migrate.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "tsx": "4.22.3",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "2.1.9"
   }
 }
