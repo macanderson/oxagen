@@ -1,4 +1,5 @@
 import { bigint, index, jsonb, text, timestamp, uuid, boolean } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { integrationSchema } from "./_schemas.js";
 import { auditMixin, executionStatusMixin, idMixin, softDeleteMixin, orgScopeMixin } from "./_mixins.js";
 
@@ -31,7 +32,9 @@ export const connectionSyncJobs = integrationSchema.table(
     connectionId: uuid("connection_id").notNull(),
     startedCursor: text("started_cursor"),
     completedCursor: text("completed_cursor"),
-    recordsProcessed: bigint("records_processed", { mode: "bigint" }).notNull().default(0n),
+    // default uses sql`0` not BigInt 0n to avoid drizzle-kit snapshot-
+    // serialization bug (BigInt in JSON.stringify) affecting drizzle-kit ≤0.31.
+    recordsProcessed: bigint("records_processed", { mode: "bigint" }).notNull().default(sql`0`),
     errorPayload: jsonb("error_payload"),
   },
   (t) => ({
