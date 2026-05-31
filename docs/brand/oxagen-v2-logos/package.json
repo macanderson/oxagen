@@ -1,0 +1,15 @@
+{
+  "name": "@oxagen/brand",
+  "version": "1.0.0",
+  "description": "Oxagen brand assets and web asset generator.",
+  "type": "module",
+  "scripts": {
+    "generate": "tsx scripts/generate-assets.ts",
+    "generate:public": "tsx scripts/generate-assets.ts --outdir public"
+  },
+  "devDependencies": {
+    "png-to-ico": "^2.1.8",
+    "sharp": "^0.33.5",
+    "tsx": "^4.19.2"
+  }
+}

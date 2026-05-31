@@ -1,6 +1,6 @@
 import { db, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 import postgres from "postgres";
 
 // Default expiry window for an approval request. Approvals that age out
@@ -38,7 +38,7 @@ let listenSql: ReturnType<typeof postgres> | null = null;
 
 async function ensureListener(): Promise<void> {
   if (listenerStarted) return;
-  const env = loadEnv();
+  const env = requireEnv(["DATABASE_URL"] as const);
   // A dedicated single-connection client; the pooled `db()` client cannot
   // hold a long-lived LISTEN.
   listenSql = postgres(env.DATABASE_URL, { max: 1, prepare: false });

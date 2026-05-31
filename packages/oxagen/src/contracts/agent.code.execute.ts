@@ -29,5 +29,5 @@ export const agentCodeExecute = registerCapability({
   }),
 });
 
-export type AgentCodeExecuteInput = z.infer<typeof agentCodeExecute.input>;
-export type AgentCodeExecuteOutput = z.infer<typeof agentCodeExecute.output>;
+export type AgentCodeExecuteInput = z.output<typeof agentCodeExecute.input>;
+export type AgentCodeExecuteOutput = z.output<typeof agentCodeExecute.output>;

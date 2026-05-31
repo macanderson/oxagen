@@ -21,5 +21,5 @@ export const agentApprovalResolve = registerCapability({
   }),
 });
 
-export type AgentApprovalResolveInput = z.infer<typeof agentApprovalResolve.input>;
-export type AgentApprovalResolveOutput = z.infer<typeof agentApprovalResolve.output>;
+export type AgentApprovalResolveInput = z.output<typeof agentApprovalResolve.input>;
+export type AgentApprovalResolveOutput = z.output<typeof agentApprovalResolve.output>;

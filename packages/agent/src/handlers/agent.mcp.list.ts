@@ -1,21 +1,12 @@
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import type { CapabilityContext } from "../types.js";
+import type { AgentMcpListInput, AgentMcpListOutput } from "@oxagen/oxagen/contracts/agent.mcp.list";
 
-export interface AgentMcpListOutput {
-  servers: Array<{
-    publicId: string;
-    name: string;
-    transportType: "streamable-http" | "stdio";
-    endpointUrl: string;
-    healthStatus: "healthy" | "degraded" | "unreachable";
-    lastHealthcheckAt: string | null;
-    toolCount: number;
-  }>;
-}
+export type { AgentMcpListInput, AgentMcpListOutput };
 
 export async function agentMcpListHandler(
-  _input: Record<string, never>,
+  _input: AgentMcpListInput,
   ctx: CapabilityContext,
 ): Promise<AgentMcpListOutput> {
   const rows = await db()

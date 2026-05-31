@@ -1,21 +1,14 @@
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { Inngest } from "inngest";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityContext } from "../types.js";
+import type { AgentTaskBackgroundCancelInput, AgentTaskBackgroundCancelOutput } from "@oxagen/oxagen/contracts/agent.task.background.cancel";
 
-const env = loadEnv();
+export type { AgentTaskBackgroundCancelInput, AgentTaskBackgroundCancelOutput };
+
+const env = requireEnv(["INNGEST_EVENT_KEY"] as const);
 const inngest = new Inngest({ id: "oxagen-runner", eventKey: env.INNGEST_EVENT_KEY });
-
-export interface AgentTaskBackgroundCancelInput {
-  taskId: string;
-  reason?: string;
-}
-
-export interface AgentTaskBackgroundCancelOutput {
-  taskId: string;
-  status: "cancelled" | "already_completed" | "already_cancelled";
-}
 
 export async function agentTaskBackgroundCancelHandler(
   input: AgentTaskBackgroundCancelInput,

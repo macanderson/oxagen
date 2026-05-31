@@ -2,9 +2,9 @@ import { db, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { Inngest } from "inngest";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 
-const env = loadEnv();
+const env = requireEnv(["INNGEST_EVENT_KEY"] as const);
 
 // Shared Inngest client. Same `id` as @oxagen/inngest-functions so events
 // route to the registered handlers (served from apps/api /api/inngest).
@@ -12,7 +12,7 @@ const inngest = new Inngest({ id: "oxagen-runner", eventKey: env.INNGEST_EVENT_K
 
 export interface FanoutChild {
   capability: string;
-  input: unknown;
+  input?: unknown;
   label?: string;
 }
 

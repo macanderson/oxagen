@@ -18,7 +18,7 @@
     "better-auth": "^1.1.0",
     "@oxagen/database": "workspace:*",
     "@oxagen/config": "workspace:*",
-    "drizzle-orm": "^0.36.0"
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

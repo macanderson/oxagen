@@ -1,6 +1,6 @@
 import { tool, type Tool, type ToolSet } from "ai";
 import { insertToolInvocation } from "@oxagen/telemetry";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityContext } from "../types.js";
 import { invokeCapability } from "../handlers/index.js";
 import { beforeTool, afterTool, onError } from "../hooks/runtime.js";
@@ -68,7 +68,7 @@ export async function materializeTools(
   // OXA-1348: agent.code.execute requires a sandbox driver. Until the
   // Vercel-compatible driver ships, gate materialization on SANDBOX_ENABLED.
   // Off by default in prod so the tool is not advertised to the model.
-  const sandboxEnabled = loadEnv().SANDBOX_ENABLED === true;
+  const sandboxEnabled = requireEnv(["SANDBOX_ENABLED"] as const).SANDBOX_ENABLED === true;
   const out: Record<string, Tool> = {};
   for (const cap of all) {
     if (!surfacesFn(cap).includes("agent")) continue;

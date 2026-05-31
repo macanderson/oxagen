@@ -1,7 +1,7 @@
 import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
 import { openai, createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 
 export type ProviderName = "anthropic" | "openai";
 
@@ -19,7 +19,7 @@ const DEFAULTS = {
 } as const satisfies Record<ProviderName, string>;
 
 export function selectModel(selector: ModelSelector = {}): LanguageModel {
-  const env = loadEnv();
+  const env = requireEnv(["ANTHROPIC_API_KEY", "OPENAI_API_KEY"] as const);
   const provider = selector.provider ?? "anthropic";
   const modelId = selector.model ?? DEFAULTS[provider];
 

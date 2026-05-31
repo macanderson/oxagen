@@ -1,25 +1,9 @@
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import type { CapabilityContext } from "../types.js";
+import type { AgentPlanApproveInput, AgentPlanApproveOutput } from "@oxagen/oxagen/contracts/agent.plan.approve";
 
-export interface AgentPlanApproveInput {
-  planId: string;
-  decision: "approve" | "deny" | "amend";
-  amendedSteps?: Array<{
-    id: string;
-    summary: string;
-    intent: string;
-    capability: string | null;
-    inputPreview?: unknown;
-    dependsOn: string[];
-  }>;
-  note?: string;
-}
-
-export interface AgentPlanApproveOutput {
-  planId: string;
-  status: "approved" | "denied" | "amended";
-}
+export type { AgentPlanApproveInput, AgentPlanApproveOutput };
 
 const DECISION_TO_STATUS: Record<AgentPlanApproveInput["decision"], "approved" | "denied" | "amended"> = {
   approve: "approved",

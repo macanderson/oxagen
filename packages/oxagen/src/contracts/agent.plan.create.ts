@@ -33,5 +33,5 @@ export const agentPlanCreate = registerCapability({
   }),
 });
 
-export type AgentPlanCreateInput = z.infer<typeof agentPlanCreate.input>;
-export type AgentPlanCreateOutput = z.infer<typeof agentPlanCreate.output>;
+export type AgentPlanCreateInput = z.output<typeof agentPlanCreate.input>;
+export type AgentPlanCreateOutput = z.output<typeof agentPlanCreate.output>;

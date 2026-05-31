@@ -29,5 +29,5 @@ export const agentSubagentDispatch = registerCapability({
   }),
 });
 
-export type AgentSubagentDispatchInput = z.infer<typeof agentSubagentDispatch.input>;
-export type AgentSubagentDispatchOutput = z.infer<typeof agentSubagentDispatch.output>;
+export type AgentSubagentDispatchInput = z.output<typeof agentSubagentDispatch.input>;
+export type AgentSubagentDispatchOutput = z.output<typeof agentSubagentDispatch.output>;

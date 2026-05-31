@@ -101,7 +101,10 @@ function main() {
   writeContractBarrel(caps.map((c) => c.file));
   console.log(`Wrote ${BARREL} with ${caps.length} contract imports.`);
 
-  const manifest = { generatedAt: new Date().toISOString(), capabilities: [] };
+  // No timestamp: this file is committed, so a `generatedAt` would make it
+  // nondeterministic and churn git on every regeneration. The content is a
+  // pure function of the contract files, which is what we want to track.
+  const manifest = { capabilities: [] };
   const gaps = [];
 
   for (const cap of caps) {

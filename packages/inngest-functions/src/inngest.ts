@@ -1,5 +1,6 @@
 import { Inngest, EventSchemas } from "inngest";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv, normalizeEnv } from "@oxagen/config/env";
+import { z } from "zod";
 
 // Inngest event registry. Adding an event here is the only way it becomes
 // callable from inside the runner — typed at the boundary, never inferred.
@@ -39,7 +40,26 @@ type Events = {
   };
 };
 
-const env = loadEnv();
+// OXA-1349: INNGEST keys are optional in the base schema (not every service
+// runs Inngest) but must be present in production when this package is loaded.
+// Enforce the production requirement here, not in the global envSchema.
+function resolveInngestEnv() {
+  const base = requireEnv(["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY", "NODE_ENV"] as const);
+  if (base.NODE_ENV === "production") {
+    const prodSchema = z.object({
+      INNGEST_EVENT_KEY: z.string().min(1, "INNGEST_EVENT_KEY required when NODE_ENV=production"),
+      INNGEST_SIGNING_KEY: z.string().min(1, "INNGEST_SIGNING_KEY required when NODE_ENV=production"),
+    });
+    const parsed = prodSchema.safeParse(normalizeEnv(process.env));
+    if (!parsed.success) {
+      const issues = parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
+      throw new Error(`Invalid environment:\n${issues}`);
+    }
+  }
+  return base;
+}
+
+const env = resolveInngestEnv();
 
 export const inngest = new Inngest({
   id: "oxagen-runner",

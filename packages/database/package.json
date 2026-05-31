@@ -20,13 +20,13 @@
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
-    "drizzle-orm": "^0.36.0",
+    "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.4",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/pg": "^8.11.10",
-    "drizzle-kit": "^0.28.0",
+    "drizzle-kit": "^0.31.10",
     "typescript": "^6.0.3",
     "vitest": "^2.1.2"
   }

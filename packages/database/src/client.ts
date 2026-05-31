@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 import * as schema from "./schema/index.js";
 
 // One pool per process. Neon's pooled URL handles concurrency upstream
@@ -10,7 +10,7 @@ let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
 export function db() {
   if (_db) return _db;
-  const env = loadEnv();
+  const env = requireEnv(["DATABASE_URL", "NODE_ENV"] as const);
   _client = postgres(env.DATABASE_URL, {
     max: env.NODE_ENV === "production" ? 20 : 5,
     prepare: false,

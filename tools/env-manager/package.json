@@ -1,0 +1,20 @@
+{
+  "name": "@oxagen/env-manager",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-only web UI to view env/secrets per environment and deploy the right values to the right Vercel project + environment. No auth — binds to 127.0.0.1.",
+  "scripts": {
+    "dev": "tsx --env-file-if-exists=../../.env.local src/server.ts",
+    "start": "tsx --env-file-if-exists=../../.env.local src/server.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsx": "^4.19.1",
+    "typescript": "^6.0.3"
+  }
+}

@@ -28,5 +28,5 @@ export const agentToolList = registerCapability({
   }),
 });
 
-export type AgentToolListInput = z.infer<typeof agentToolList.input>;
-export type AgentToolListOutput = z.infer<typeof agentToolList.output>;
+export type AgentToolListInput = z.output<typeof agentToolList.input>;
+export type AgentToolListOutput = z.output<typeof agentToolList.output>;
