@@ -5,6 +5,7 @@ import {
   resolveSession,
   resolveApiKey,
 } from "@oxagen/auth";
+import type { ApiKeyResolutionError } from "@oxagen/auth";
 import type { AppEnv } from "../app.js";
 
 /**
@@ -24,7 +25,8 @@ export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
         invalid: "Invalid API key",
         expired: "API key expired",
       };
-      throw new HTTPException(401, { message: messages[result.kind] ?? "Unauthorized" });
+      const { kind } = result as ApiKeyResolutionError;
+      throw new HTTPException(401, { message: messages[kind] ?? "Unauthorized" });
     }
     c.set("userId", null);
     c.set("apiKeyId", result.apiKeyId);
