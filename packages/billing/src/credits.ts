@@ -1,9 +1,10 @@
 import { db, schema } from "@oxagen/database";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 const ALLOWED_REASONS = new Set([
   "grant_signup",
   "grant_plan_renewal",
+  "grant_credit_pack",
   "grant_manual",
   "consume_execution",
   "consume_tool_call",
@@ -63,5 +64,82 @@ export async function grantCredits(args: GrantCreditsArgs): Promise<{ balanceCen
 
     const balance = updated[0]?.balanceCents ?? 0n;
     return { balanceCents: typeof balance === "bigint" ? balance : BigInt(balance) };
+  });
+}
+
+export interface ConsumeCreditsArgs {
+  orgId: string;
+  /** Credits the caller wants to spend (positive). 1 credit = 1 cent. */
+  requestedCents: bigint;
+  reason: string;
+  referenceType?: string;
+  referenceId?: string;
+}
+
+export interface ConsumeCreditsResult {
+  /** Credits actually debited (== requested unless the balance was short). */
+  chargedCents: bigint;
+  /** Requested − charged. Non-zero only when the balance was exhausted. */
+  shortfallCents: bigint;
+  /** Resulting balance. */
+  balanceCents: bigint;
+}
+
+/**
+ * Atomically debit up to `requestedCents` credits, never driving the balance
+ * below zero (credit_balances enforces `balance_cents >= 0`). The balance row
+ * is locked `FOR UPDATE` inside the transaction so concurrent consumers can't
+ * race past the clamp — the read, the clamp, the ledger insert, and the balance
+ * decrement are one atomic unit. Returns the amount actually charged and any
+ * shortfall (the caller outran its credits).
+ *
+ * A zero or fully-clamped debit writes NO ledger row (the ledger CHECK forbids a
+ * zero delta).
+ */
+export async function consumeCredits(args: ConsumeCreditsArgs): Promise<ConsumeCreditsResult> {
+  if (!ALLOWED_REASONS.has(args.reason)) {
+    throw new Error(`invalid credit reason: ${args.reason}`);
+  }
+  if (args.requestedCents <= 0n) {
+    return { chargedCents: 0n, shortfallCents: 0n, balanceCents: 0n };
+  }
+  const d = db();
+  return await d.transaction(async (tx) => {
+    const locked = await tx
+      .select({ balanceCents: schema.creditBalances.balanceCents })
+      .from(schema.creditBalances)
+      .where(eq(schema.creditBalances.orgId, args.orgId))
+      .for("update");
+    const balance = locked[0]?.balanceCents ?? 0n;
+    const charge = args.requestedCents <= balance ? args.requestedCents : balance;
+    const shortfall = args.requestedCents - charge;
+
+    if (charge <= 0n) {
+      return { chargedCents: 0n, shortfallCents: shortfall, balanceCents: balance };
+    }
+
+    await tx.insert(schema.creditLedger).values({
+      orgId: args.orgId,
+      deltaCents: -charge,
+      reason: args.reason,
+      referenceType: args.referenceType ?? null,
+      referenceId: args.referenceId ?? null,
+    });
+    const updated = await tx
+      .update(schema.creditBalances)
+      .set({
+        balanceCents: sql`${schema.creditBalances.balanceCents} - ${charge}`,
+        lastEventAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.creditBalances.orgId, args.orgId))
+      .returning({ balanceCents: schema.creditBalances.balanceCents });
+
+    const newBalance = updated[0]?.balanceCents ?? balance - charge;
+    return {
+      chargedCents: charge,
+      shortfallCents: shortfall,
+      balanceCents: typeof newBalance === "bigint" ? newBalance : BigInt(newBalance),
+    };
   });
 }

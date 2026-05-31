@@ -57,7 +57,10 @@ vi.mock("@oxagen/config/env", () => ({
  * `insertedRows` controls what `.returning()` on the first insert yields.
  * An empty array simulates a duplicate (ON CONFLICT DO NOTHING, no row back).
  */
-function makeDb(insertedRows: Array<{ id: string }> = [{ id: "row-uuid-1" }]) {
+function makeDb(
+  insertedRows: Array<{ id: string }> = [{ id: "row-uuid-1" }],
+  opts: { existingEventId?: string | null; processedAt?: Date | null } = {},
+) {
   // Processing insert chain (no .returning needed, just resolves).
   const processingInsertChain = {
     onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
@@ -86,6 +89,17 @@ function makeDb(insertedRows: Array<{ id: string }> = [{ id: "row-uuid-1" }]) {
     insert: insertFn,
     query: {
       subscriptions: { findFirst: vi.fn().mockResolvedValue(null) },
+      // Re-entrancy lookups used when the event row already exists.
+      stripeEvents: {
+        findFirst: vi.fn().mockResolvedValue(
+          opts.existingEventId === undefined ? null : opts.existingEventId === null ? null : { id: opts.existingEventId },
+        ),
+      },
+      stripeEventProcessing: {
+        findFirst: vi.fn().mockResolvedValue(
+          opts.processedAt === undefined ? null : { processedAt: opts.processedAt },
+        ),
+      },
     },
     _processingInsertChain: processingInsertChain,
     _callIdx: () => callIdx,
@@ -156,9 +170,10 @@ describe("processStripeEvent", () => {
     expect(dbState.instance!._processingInsertChain.onConflictDoUpdate).toHaveBeenCalledOnce();
   });
 
-  it("duplicate event — ON CONFLICT yields zero rows → returns 'duplicate' without dispatching", async () => {
-    // Empty array from .returning() simulates a DO NOTHING conflict.
-    dbState.instance = makeDb([]);
+  it("already-processed duplicate — conflict + processed row → 'duplicate', no dispatch", async () => {
+    // Empty array from .returning() = ON CONFLICT DO NOTHING; the event was
+    // already processed successfully (processedAt set), so it's a true dupe.
+    dbState.instance = makeDb([], { existingEventId: "evt-row-1", processedAt: new Date() });
 
     const event = makeStripeEvent({ id: "evt_dupe_001" });
     const result = await processStripeEvent(event);
@@ -168,6 +183,20 @@ describe("processStripeEvent", () => {
     expect(dbState.instance!.insert).toHaveBeenCalledTimes(1);
     // Business logic must NOT run.
     expect(syncSubscriptionMock).not.toHaveBeenCalled();
+  });
+
+  it("retry after a failed dispatch — conflict + no processed row → re-dispatches → 'applied'", async () => {
+    // Event row exists but was never processed successfully (processedAt null):
+    // a Stripe retry must re-enter dispatch and self-heal.
+    dbState.instance = makeDb([], { existingEventId: "evt-row-2", processedAt: null });
+
+    const event = makeStripeEvent({ id: "evt_retry_001" });
+    const result = await processStripeEvent(event);
+
+    expect(result).toEqual({ status: "applied" });
+    expect(syncSubscriptionMock).toHaveBeenCalledWith("sub_test_001");
+    // Event insert (no-op conflict) + processing-row upsert.
+    expect(dbState.instance!.insert).toHaveBeenCalledTimes(2);
   });
 
   it("invoice.paid event dispatches syncInvoiceFromStripe", async () => {

@@ -52,3 +52,37 @@ export async function createCheckoutSession(
   if (!session.url) throw new Error("Stripe did not return a checkout URL");
   return { url: session.url, sessionId: session.id };
 }
+
+export interface CreateCreditPackCheckoutInput {
+  orgId: string;
+  /** Stripe one-time price id for the credit pack (from billing.stripe-sync). */
+  priceId: string;
+  quantity?: number;
+  successUrl?: string;
+  cancelUrl?: string;
+}
+
+/**
+ * One-time Checkout for a credit pack. `org_id` rides on the session metadata
+ * so the `checkout.session.completed` webhook can deposit the pack's credits
+ * via {@link import("./grants.js").grantCreditPackForCheckout}.
+ */
+export async function createCreditPackCheckoutSession(
+  input: CreateCreditPackCheckoutInput,
+): Promise<{ url: string; sessionId: string }> {
+  const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
+  const customerId = await ensureStripeCustomer(input.orgId);
+
+  const session = await stripeClient().checkout.sessions.create({
+    mode: "payment",
+    customer: customerId,
+    line_items: [{ price: input.priceId, quantity: input.quantity ?? 1 }],
+    metadata: { org_id: input.orgId },
+    success_url:
+      input.successUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: input.cancelUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/credits`,
+    allow_promotion_codes: true,
+  });
+  if (!session.url) throw new Error("Stripe did not return a checkout URL");
+  return { url: session.url, sessionId: session.id };
+}

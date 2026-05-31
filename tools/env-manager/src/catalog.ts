@@ -68,6 +68,12 @@ export const CATALOG: CatalogEntry[] = [
   { key: "STRIPE_PUBLISHABLE_KEY", group: "Stripe", description: "Stripe publishable key (pk_live in prod, pk_test in preview/dev).", secret: false, services: ["api", "app"], sources: { production: { type: "gsm", secret: "oxagen-stripe-publishable-key" }, preview: { type: "gsm", secret: "oxagen-stripe-secret-staging" }, development: { type: "gsm", secret: "oxagen-stripe-secret-staging" } } },
   { key: "STRIPE_WEBHOOK_SECRET", group: "Stripe", description: "Stripe webhook signing secret (whsec_).", secret: true, services: ["api", "app"], sources: gsmAll("oxagen-stripe-webhook-secret") },
 
+  // ---- Billing / usage meter (static; the knob behind all product pricing) ----
+  // Target blended gross margin across all products. The gate (packages/billing
+  // /src/pricing.ts) solves the meter markup from this + the product mix. Change
+  // it here AND run `pnpm billing:stripe-sync --apply` to keep Stripe in sync.
+  { key: "OXAGEN_TARGET_MARGIN", group: "Billing", description: "Target blended gross margin in (0,1). Drives the usage-meter markup. Keep in sync with the Stripe products via billing:stripe-sync.", secret: false, services: ["api", "app", "mcp"], sources: { production: { type: "static", value: "0.65" }, preview: { type: "static", value: "0.65" }, development: { type: "static", value: "0.65" } } },
+
   // ---- Inngest (manual: app.inngest.com -> your app -> Keys) ----
   { key: "INNGEST_EVENT_KEY", group: "Inngest (manual)", description: "From app.inngest.com -> app -> Keys. Required in prod + preview.", secret: true, services: ["api", "app"], sources: { production: { type: "manual" }, preview: { type: "manual" } } },
   { key: "INNGEST_SIGNING_KEY", group: "Inngest (manual)", description: "From app.inngest.com -> app -> Keys. Required in prod + preview.", secret: true, services: ["api", "app"], sources: { production: { type: "manual" }, preview: { type: "manual" } } },

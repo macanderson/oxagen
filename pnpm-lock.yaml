@@ -551,6 +551,9 @@ importers:
       '@ai-sdk/openai':
         specifier: 1.3.24
         version: 1.3.24(zod@3.25.76)
+      '@oxagen/billing':
+        specifier: workspace:*
+        version: link:../billing
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
@@ -941,9 +944,15 @@ importers:
 
   tools/scripts:
     dependencies:
+      '@oxagen/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@oxagen/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@oxagen/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@oxagen/ontology':
         specifier: workspace:*
         version: link:../../packages/ontology
