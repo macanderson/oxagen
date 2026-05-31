@@ -1,30 +1,45 @@
 import type { CapabilityContext } from "@oxagen/oxagen";
 
+/** Fixed placeholder tenant scope used until per-tenant MCP auth lands. */
+const PLACEHOLDER_UUID = "00000000-0000-0000-0000-000000000000";
+
 /**
- * Build a CapabilityContext from xmcp request headers.
- * Headers are set by the middleware after bearer-token / API-key validation.
- * Falls back to placeholder values until auth lands (matching current behaviour).
+ * Build a CapabilityContext for an MCP tool invocation.
  *
- * Accepts the wider HttpHeaders type returned by xmcp's headers() helper
- * (values may be string | string[] | undefined). When an array is present,
- * the first element is used.
+ * SECURITY: tenant identity (orgId / workspaceId / userId / apiKeyId) is NEVER
+ * read from inbound request headers. Those headers are fully client-controlled,
+ * and the Phase 1 middleware only validates a single shared MCP_API_KEY — it
+ * sets no identity server-side. Trusting `x-oxagen-org-id` & friends would let
+ * any holder of MCP_API_KEY inject an arbitrary org and operate on a real
+ * tenant's data. With a shared key there is no authenticated tenant, so the
+ * only honest scope is the fixed placeholder below (matching the injection-
+ * immune behaviour of the former placeholderContext()).
+ *
+ * Phase 2 will resolve identity server-side from the validated credential
+ * (@oxagen/auth resolveApiKey) inside the middleware and thread the resolved
+ * org/workspace/apiKeyId through a trusted, non-client channel — at which point
+ * this function reads from that channel, never from raw request headers.
+ *
+ * Only requestId is taken from headers: it is a trace-correlation id, not a
+ * security boundary, and falls back to a fresh UUID when absent. Accepts the
+ * wider HttpHeaders type returned by xmcp's headers() helper (values may be
+ * string | string[] | undefined; the first element is used for arrays).
  */
 export function buildContext(
   hdrs: Record<string, string | string[] | undefined>,
 ): CapabilityContext {
-  const get = (key: string): string | undefined => {
-    const v = hdrs[key];
-    if (Array.isArray(v)) return v[0];
-    return v;
-  };
+  const requestIdHeader = hdrs["x-request-id"];
+  const requestId = Array.isArray(requestIdHeader)
+    ? requestIdHeader[0]
+    : requestIdHeader;
 
   return {
-    orgId:       get("x-oxagen-org-id")       ?? "00000000-0000-0000-0000-000000000000",
-    workspaceId: get("x-oxagen-workspace-id") ?? "00000000-0000-0000-0000-000000000000",
-    userId:      get("x-oxagen-user-id")      ?? null,
-    apiKeyId:    get("x-oxagen-api-key-id")   ?? null,
-    requestId:   get("x-request-id")          ?? crypto.randomUUID(),
-    surface:     "mcp",
-    messageId:   null,
+    orgId: PLACEHOLDER_UUID,
+    workspaceId: PLACEHOLDER_UUID,
+    userId: null,
+    apiKeyId: null,
+    requestId: requestId ?? crypto.randomUUID(),
+    surface: "mcp",
+    messageId: null,
   };
 }
