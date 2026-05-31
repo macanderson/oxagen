@@ -13,7 +13,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "echo 'lint placeholder'",
-    "migrate": "tsx src/migrate.ts"
+    "migrate": "tsx src/migrate.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@clickhouse/client": "^1.7.0",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "tsx": "^4.19.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^2.1.2"
   }
 }

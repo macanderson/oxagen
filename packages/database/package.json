@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
-    "./client": "./src/client.ts"
+    "./client": "./src/client.ts",
+    "./security": "./src/security.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -25,6 +26,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@oxagen/telemetry": "workspace:*",
     "@types/pg": "^8.11.10",
     "drizzle-kit": "^0.31.10",
     "typescript": "^6.0.3",
