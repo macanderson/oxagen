@@ -6,11 +6,11 @@ export default function PlaybooksStubPage() {
       <Card>
         <CardHeader>
           <CardTitle>Playbooks</CardTitle>
-          <CardDescription>The playbook authoring surface ships in a later epic.</CardDescription>
+          <CardDescription>Playbook authoring is coming soon.</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Playbook tables and versions are migrated. The UI is intentionally stubbed for the foundations milestone.
+            Playbooks are supported in the API today. A visual authoring experience is on the way.
           </p>
         </CardContent>
       </Card>

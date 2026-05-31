@@ -8,26 +8,28 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
-    "./client": "./src/client.ts"
+    "./client": "./src/client.ts",
+    "./security": "./src/security.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'lint placeholder'",
+    "lint": "eslint src --max-warnings 0",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "studio": "drizzle-kit studio",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
-    "drizzle-orm": "^0.45.2",
-    "postgres": "^3.4.4",
-    "zod": "^3.23.8"
+    "drizzle-orm": "0.45.2",
+    "postgres": "3.4.9",
+    "zod": "3.25.76"
   },
   "devDependencies": {
-    "@types/pg": "^8.11.10",
-    "drizzle-kit": "^0.31.10",
-    "typescript": "^6.0.3",
-    "vitest": "^2.1.2"
+    "@oxagen/telemetry": "workspace:*",
+    "@types/pg": "8.20.0",
+    "drizzle-kit": "0.31.10",
+    "typescript": "6.0.3",
+    "vitest": "2.1.9"
   }
 }

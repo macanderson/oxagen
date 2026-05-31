@@ -78,8 +78,8 @@ export async function materializeTools(
     const riskLevel: "low" | "medium" | "high" = cap.agent?.riskLevel ?? "low";
     const requiresApproval = cap.agent?.requiresApproval === true;
     out[cap.name] = tool({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cap.input is a zod schema; AI SDK accepts ZodTypeAny.
       description: cap.description,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cap.input is a zod schema; AI SDK accepts ZodTypeAny.
       parameters: cap.input as any,
       execute: async (input: unknown) => {
         await beforeTool({ capability: cap.name, ctx, input });

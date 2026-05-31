@@ -49,12 +49,10 @@ if (isDirectRun) {
   migrate()
     .then(() => closeClickhouse())
     .then(() => {
-      // eslint-disable-next-line no-console
       console.log("ClickHouse migration complete");
       process.exit(0);
     })
     .catch((err) => {
-      // eslint-disable-next-line no-console
       console.error("ClickHouse migration failed:", err);
       process.exit(1);
     });

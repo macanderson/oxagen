@@ -6,12 +6,11 @@ export default function AgentsStubPage() {
       <Card>
         <CardHeader>
           <CardTitle>Agents</CardTitle>
-          <CardDescription>The agent authoring surface ships in a later epic.</CardDescription>
+          <CardDescription>Agent authoring is coming soon.</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Agent records exist in the database and are reachable via the API. UI for authoring lands after the
-            foundations milestone.
+            Agents are available via the API today. A full authoring UI is on the way.
           </p>
         </CardContent>
       </Card>

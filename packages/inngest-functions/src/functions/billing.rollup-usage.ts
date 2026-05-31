@@ -118,7 +118,6 @@ export const billingRollupUsage = inngest.createFunction(
               set: {
                 quantity: schema.usageRecords.quantity,
                 totalCostMicros: schema.usageRecords.totalCostMicros,
-                updatedAt: new Date(),
               },
             });
         });

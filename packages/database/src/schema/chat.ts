@@ -1,4 +1,4 @@
-import { boolean, index, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, jsonb, text, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { chatSchema } from "./_schemas.js";
 import { auditMixin, idMixin, orgScopeMixin } from "./_mixins.js";

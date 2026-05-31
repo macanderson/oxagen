@@ -12,15 +12,17 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'lint placeholder'",
-    "migrate": "tsx src/migrate.ts"
+    "lint": "eslint src --max-warnings 0",
+    "migrate": "tsx src/migrate.ts",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@clickhouse/client": "^1.7.0",
+    "@clickhouse/client": "1.19.0",
     "@oxagen/config": "workspace:*"
   },
   "devDependencies": {
-    "tsx": "^4.19.0",
-    "typescript": "^6.0.3"
+    "tsx": "4.22.3",
+    "typescript": "6.0.3",
+    "vitest": "2.1.9"
   }
 }

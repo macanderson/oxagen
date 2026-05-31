@@ -19,7 +19,7 @@ export const metadata: ToolMetadata = {
 export default async function billingSubscriptionReadTool(
   _args: InferSchema<typeof schema>,
 ) {
-  const ctx = buildContext(headers());
+  const ctx = await buildContext(headers());
   const output = await billingSubscriptionReadHandler({}, ctx);
   return billingSubscriptionRead.output.parse(output);
 }

@@ -11,18 +11,18 @@
     "start": "tsx src/index.tsx",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'lint placeholder'"
+    "lint": "eslint src --max-warnings 0"
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
-    "commander": "^12.1.0",
-    "ink": "^5.0.1",
-    "react": "^19.2.6"
+    "commander": "12.1.0",
+    "ink": "5.2.1",
+    "react": "19.2.6"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
-    "@types/react": "^19.2.15",
-    "tsx": "^4.19.1",
-    "typescript": "^6.0.3"
+    "@types/node": "25.9.1",
+    "@types/react": "19.2.15",
+    "tsx": "4.22.3",
+    "typescript": "6.0.3"
   }
 }

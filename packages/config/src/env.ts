@@ -59,6 +59,12 @@ export const baseEnvSchema = z.object({
   SANDBOX_DRIVER: z.enum(["modal", "docker"]).optional(),
   MODAL_RUNNER_URL: z.string().url().optional(),
   MODAL_RUNNER_TOKEN: z.string().min(16).optional(),
+
+  // OXA-1420: KMS CMK used to wrap OAuth token data encryption keys.
+  // Required in production; optional in development/test so local dev
+  // doesn't require live AWS credentials.  The crypto package enforces
+  // presence at call-time when a real KMS client is provided.
+  AUTH_TOKEN_KMS_KEY_ID: z.string().min(1).optional(),
 });
 
 // The exact set of keys this schema validates. `normalizeEnv` only ever

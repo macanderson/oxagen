@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   recallMemoriesMock: vi.fn(),
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-return -- vitest mock; Array.fill() returns any[], shape is correct for the vector dimension.
 mocks.embedTextMock.mockImplementation(async (q: string) => new Array(1536).fill(q.length));
 mocks.recallMemoriesMock.mockImplementation(async () => [
   {

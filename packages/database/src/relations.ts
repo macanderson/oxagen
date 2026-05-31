@@ -41,6 +41,8 @@ import {
   usageRecords,
   creditBalances,
   creditLedger,
+  stripeEvents,
+  stripeEventProcessing,
 } from "./schema/billing.js";
 
 // Cross-domain relations are declared here, not as Drizzle FK constraints,
@@ -424,4 +426,18 @@ export const creditBalancesRelations = relations(creditBalances, ({ one }) => ({
 
 export const creditLedgerRelations = relations(creditLedger, ({ one }) => ({
   org: one(organizations, { fields: [creditLedger.orgId], references: [organizations.id] }),
+}));
+
+export const stripeEventsRelations = relations(stripeEvents, ({ one }) => ({
+  processing: one(stripeEventProcessing, {
+    fields: [stripeEvents.id],
+    references: [stripeEventProcessing.stripeEventId],
+  }),
+}));
+
+export const stripeEventProcessingRelations = relations(stripeEventProcessing, ({ one }) => ({
+  event: one(stripeEvents, {
+    fields: [stripeEventProcessing.stripeEventId],
+    references: [stripeEvents.id],
+  }),
 }));

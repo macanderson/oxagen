@@ -38,7 +38,7 @@ export const metadata: ToolMetadata = {
 export default async function agentMemoryWriteTool(
   args: InferSchema<typeof schema>,
 ) {
-  const ctx = buildContext(headers());
+  const ctx = await buildContext(headers());
   const output = await agentMemoryWriteHandler(args, ctx);
   return agentMemoryWrite.output.parse(output);
 }

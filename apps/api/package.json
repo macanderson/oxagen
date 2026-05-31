@@ -8,11 +8,11 @@
     "start": "tsx --env-file=.env.local src/index.ts",
     "build": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'lint placeholder'",
+    "lint": "eslint src --max-warnings 0",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@hono/node-server": "^1.13.7",
+    "@hono/node-server": "1.19.14",
     "@oxagen/agent": "workspace:*",
     "@oxagen/auth": "workspace:*",
     "@oxagen/billing": "workspace:*",
@@ -22,15 +22,15 @@
     "@oxagen/inngest-functions": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
-    "drizzle-orm": "^0.45.2",
-    "hono": "^4.6.5",
-    "pino": "^9.5.0",
-    "stripe": "^17.3.0",
-    "zod": "^3.23.8"
+    "drizzle-orm": "0.45.2",
+    "hono": "4.12.23",
+    "pino": "9.14.0",
+    "stripe": "17.7.0",
+    "zod": "3.25.76"
   },
   "devDependencies": {
-    "tsx": "^4.19.1",
-    "typescript": "^6.0.3",
-    "vitest": "^2.1.2"
+    "tsx": "4.22.3",
+    "typescript": "6.0.3",
+    "vitest": "2.1.9"
   }
 }

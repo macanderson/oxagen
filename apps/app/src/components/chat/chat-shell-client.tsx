@@ -3,7 +3,7 @@ import * as React from "react";
 import { MessageTree } from "./message-tree";
 import { MessageComposer, type ComposerAction } from "./message-composer";
 import type { ChatMessage, MessageBubbleCallbacks } from "./message-bubble";
-import { PlanCard, type AgentCapability } from "./plan-card";
+import { PlanCard } from "./plan-card";
 import { ApprovalCard } from "./approval-card";
 import { ToolCallCard } from "./tool-call-card";
 import { CodeExecuteCard } from "./code-execute-card";

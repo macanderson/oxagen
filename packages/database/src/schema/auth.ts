@@ -2,9 +2,9 @@ import { boolean, customType, index, jsonb, text, timestamp, uniqueIndex, uuid }
 import { authSchema } from "./_schemas.js";
 import { auditMixin, citext, idMixin, softDeleteMixin, orgScopeMixin } from "./_mixins.js";
 
-// bytea for encrypted_payload — Drizzle has no first-class bytea helper, so
-// we declare it inline. KMS unwraps the payload at the credential service
-// boundary; the column is opaque to the rest of the app.
+// bytea for encrypted columns — Drizzle has no first-class bytea helper, so
+// we declare it inline. KMS unwraps the payload at the service boundary; the
+// column is opaque to the rest of the app.
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() {
     return "bytea";
@@ -103,9 +103,26 @@ export const accounts = authSchema.table(
     userId: uuid("user_id").notNull(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
+
+    // OXA-1420 EXPAND phase: plaintext columns kept for the dual-write /
+    // read-fallback transition period.  They will be dropped in the
+    // follow-up CONTRACT migration once all rows have been backfilled and
+    // the application no longer reads from them.
+    // DO NOT remove these columns in this PR.
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     idToken: text("id_token"),
+
+    // OXA-1420 EXPAND phase: envelope-encrypted replacements for the
+    // plaintext token columns above.  Written by the better-auth account
+    // hook on every create/update; read with decrypt-then-fallback logic.
+    accessTokenEnc: bytea("access_token_enc"),
+    refreshTokenEnc: bytea("refresh_token_enc"),
+    idTokenEnc: bytea("id_token_enc"),
+    // The KMS CMK id used to wrap the DEK for this row.  Stored so that
+    // per-row key rotation is possible without re-querying config.
+    tokenKmsKeyId: text("token_kms_key_id"),
+
     accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true, mode: "date" }),
     refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { withTimezone: true, mode: "date" }),
     scope: text("scope"),

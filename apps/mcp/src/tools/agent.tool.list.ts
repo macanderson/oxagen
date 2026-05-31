@@ -25,7 +25,7 @@ export const metadata: ToolMetadata = {
 export default async function agentToolListTool(
   args: InferSchema<typeof schema>,
 ) {
-  const ctx = buildContext(headers());
+  const ctx = await buildContext(headers());
   const output = await agentToolListHandler(args, ctx);
   return agentToolList.output.parse(output);
 }

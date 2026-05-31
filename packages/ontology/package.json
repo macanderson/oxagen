@@ -13,15 +13,17 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'lint placeholder'",
-    "migrate": "tsx src/migrate.ts"
+    "lint": "eslint src --max-warnings 0",
+    "migrate": "tsx src/migrate.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
-    "neo4j-driver": "^5.25.0"
+    "neo4j-driver": "5.28.3"
   },
   "devDependencies": {
-    "tsx": "^4.19.0",
-    "typescript": "^6.0.3"
+    "tsx": "4.22.3",
+    "typescript": "6.0.3",
+    "vitest": "2.1.9"
   }
 }

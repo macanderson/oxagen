@@ -34,7 +34,7 @@ export const metadata: ToolMetadata = {
 export default async function agentMemoryRecallTool(
   args: InferSchema<typeof schema>,
 ) {
-  const ctx = buildContext(headers());
+  const ctx = await buildContext(headers());
   const output = await agentMemoryRecallHandler(args, ctx);
   return agentMemoryRecall.output.parse(output);
 }

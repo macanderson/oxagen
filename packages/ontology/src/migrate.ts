@@ -35,12 +35,10 @@ if (isDirectRun) {
   migrate()
     .then(() => closeDriver())
     .then(() => {
-      // eslint-disable-next-line no-console
       console.log("Neo4j migration complete");
       process.exit(0);
     })
     .catch((err) => {
-      // eslint-disable-next-line no-console
       console.error("Neo4j migration failed:", err);
       process.exit(1);
     });

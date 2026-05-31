@@ -22,7 +22,7 @@ export const metadata: ToolMetadata = {
 export default async function agentSkillListTool(
   args: InferSchema<typeof schema>,
 ) {
-  const ctx = buildContext(headers());
+  const ctx = await buildContext(headers());
   const output = await agentSkillListHandler(args, ctx);
   return agentSkillList.output.parse(output);
 }

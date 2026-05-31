@@ -2,7 +2,6 @@
 import * as React from "react";
 import { Check, ChevronDown, ChevronRight, Loader2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { RiskBadge } from "./risk-badge";
 import type { RiskLevel, ToolCallStatus } from "./stream-event-types";

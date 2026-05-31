@@ -9,12 +9,12 @@
     "start": "tsx --env-file-if-exists=../../.env.local src/server.ts"
   },
   "dependencies": {
-    "@hono/node-server": "^1.13.7",
-    "hono": "^4.6.5"
+    "@hono/node-server": "1.19.14",
+    "hono": "4.12.23"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
-    "tsx": "^4.19.1",
-    "typescript": "^6.0.3"
+    "@types/node": "25.9.1",
+    "tsx": "4.22.3",
+    "typescript": "6.0.3"
   }
 }

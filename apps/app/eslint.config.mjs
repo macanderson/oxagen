@@ -14,6 +14,17 @@ const config = [
       // warning rather than a hard error so it's visible without blocking the
       // gate; tighten to "error" once the capability kernel owns these paths.
       "@typescript-eslint/no-explicit-any": "warn",
+      // Align with the workspace-wide convention: _-prefixed vars/args are
+      // intentionally unused (ignored values, placeholder params, etc.).
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+        },
+      ],
     },
   },
 ];

@@ -3,7 +3,6 @@ import * as React from "react";
 import { Check, Loader2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
 import { formatDuration } from "./tool-call-card";
 import type { ToolCallStatus } from "./stream-event-types";
 

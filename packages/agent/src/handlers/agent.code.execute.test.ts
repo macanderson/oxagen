@@ -4,6 +4,9 @@ const mocks = vi.hoisted(() => ({
   sandboxRun: vi.fn(),
   getSandboxMock: vi.fn(),
   applyPolicyMock: vi.fn(),
+  // OXA-1425: insertToolInvocation is NOT called inside the handler; the
+  // materialize-tools wrapper is the sole writer. We still mock the module
+  // to detect any accidental re-introduction of a second write.
   insertToolInvocationMock: vi.fn(async () => undefined),
 }));
 const { sandboxRun, getSandboxMock, applyPolicyMock, insertToolInvocationMock } = mocks;
@@ -32,7 +35,9 @@ const CTX = {
   workspaceId: "ws_1",
   userId: "u_1",
   apiKeyId: null,
-  requestId: "req_1", surface: "runner" as const, messageId: null,
+  requestId: "req_1",
+  surface: "runner" as const,
+  messageId: null,
 };
 
 describe("agent.code.execute handler", () => {
@@ -69,15 +74,26 @@ describe("agent.code.execute handler", () => {
     expect(reqArg.workspaceId).toBe("ws_1");
     expect(sandboxRun).toHaveBeenCalledTimes(1);
     expect(res.stdout).toBe("ok");
+  });
 
-    // Tool invocation row written (fire-and-forget).
-    expect(insertToolInvocationMock).toHaveBeenCalledTimes(1);
-    const calls = insertToolInvocationMock.mock.calls as unknown as Array<[Record<string, unknown>]>;
-    const row = calls[0]![0];
-    expect(row.capability_name).toBe("agent.code.execute");
-    expect(row.org_id).toBe("ten_1");
-    expect(row.workspace_id).toBe("ws_1");
-    expect(row.risk_level).toBe("high");
+  it("does NOT write a tool_invocations row — materialize-tools is the sole writer (OXA-1425)", async () => {
+    // This is the key regression guard: exactly ZERO calls to insertToolInvocation
+    // from the handler itself. materialize-tools.ts records the single row with
+    // real latency; a second write here would double-count every code.execute call
+    // in the billing rollup.
+    sandboxRun.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: "1\n",
+      stderr: "",
+      durationMs: 8,
+      timedOut: false,
+      oomKilled: false,
+    });
+    await agentCodeExecuteHandler(
+      { language: "node", code: "console.log(1)", timeoutMs: 5_000, memoryMb: 128, network: "deny" },
+      CTX,
+    );
+    expect(insertToolInvocationMock).toHaveBeenCalledTimes(0);
   });
 
   it("propagates policy violation errors", async () => {

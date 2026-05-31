@@ -29,7 +29,7 @@ export const metadata: ToolMetadata = {
 export default async function organizationCreateTool(
   args: InferSchema<typeof schema>,
 ) {
-  const ctx = buildContext(headers());
+  const ctx = await buildContext(headers());
   const output = await organizationCreateHandler(args, ctx);
   return organizationCreate.output.parse(output);
 }

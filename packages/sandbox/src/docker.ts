@@ -15,12 +15,27 @@ import type {
 const NANOCPUS = 500_000_000;
 const NOBODY = "65534:65534";
 
+// Docker's built-in hardened seccomp policy (ships with every Docker Engine
+// ≥ 1.10 and Docker Desktop).  "seccomp=builtin" is the canonical reference
+// added in Docker 25+ / Moby 25+ for the profile that was previously known
+// as the "default" profile.  Using the explicit name rather than relying on
+// the daemon's implicit default means:
+//   1. The policy is applied even if a future daemon changes its default.
+//   2. The intent is visible in code review without consulting daemon config.
+//   3. It composes correctly with no-new-privileges (both stay in the array).
+//
+// We do NOT use seccomp=unconfined — that would remove the kernel call filter
+// entirely and contradict the zero-privilege posture of this sandbox.  If a
+// language runtime requires a syscall blocked by builtin, add a targeted
+// allow-rule via a custom JSON profile rather than lifting the whole profile.
+const SECCOMP_BUILTIN = "seccomp=builtin";
+
 function envArray(env: Record<string, string> | undefined): string[] {
   if (!env) return [];
   return Object.entries(env).map(([k, v]) => `${k}=${v}`);
 }
 
-function hostConfigFor(req: SandboxRequest, spec: ImageSpec): Dockerode.HostConfig {
+export function hostConfigFor(req: SandboxRequest, spec: ImageSpec): Dockerode.HostConfig {
   return {
     AutoRemove: true,
     Memory: req.memoryMb * 1024 * 1024,
@@ -34,7 +49,7 @@ function hostConfigFor(req: SandboxRequest, spec: ImageSpec): Dockerode.HostConf
       "/tmp": `rw,size=${spec.tmpfsBytes}`,
     },
     CapDrop: ["ALL"],
-    SecurityOpt: ["no-new-privileges"],
+    SecurityOpt: ["no-new-privileges", SECCOMP_BUILTIN],
   };
 }
 
@@ -148,6 +163,7 @@ export function createDockerSandbox(): SandboxDriver {
     const timer = new Promise<"timeout">((resolve) =>
       setTimeout(() => resolve("timeout"), req.timeoutMs),
     );
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- @types/dockerode types container.wait() as Promise<any>; outcome is only compared against "timeout" string, never accessed.
     const outcome = await Promise.race([wait, timer]);
     if (outcome === "timeout") {
       timedOut = true;

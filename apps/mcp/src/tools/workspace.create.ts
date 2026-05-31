@@ -28,7 +28,7 @@ export const metadata: ToolMetadata = {
 export default async function workspaceCreateTool(
   args: InferSchema<typeof schema>,
 ) {
-  const ctx = buildContext(headers());
+  const ctx = await buildContext(headers());
   const output = await workspaceCreateHandler(args, ctx);
   return workspaceCreate.output.parse(output);
 }

@@ -37,7 +37,7 @@ describe("memory neo4j", () => {
     const rows = await recallMemories({
       orgId: "ten_1",
       workspaceId: "ws_1",
-      embedding: new Array(1536).fill(0.1),
+      embedding: new Array<number>(1536).fill(0.1),
       minWeight: "high",
       limit: 10,
     });
@@ -65,7 +65,7 @@ describe("memory neo4j", () => {
       orgId: "ten_1",
       workspaceId: "ws_1",
       nodeRef: "Function:foo",
-      embedding: new Array(1536).fill(0.2),
+      embedding: new Array<number>(1536).fill(0.2),
       weight: "high",
       kind: "constraint",
       lesson: "be careful",

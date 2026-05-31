@@ -41,6 +41,71 @@ export class CapabilityError extends Error {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Security event emitter — pluggable, fire-and-forget.
+//
+// Surfaces (api/mcp bootstraps) inject the emitter once via
+// `setSecurityEventEmitter`. The kernel calls it after every capability
+// invocation attempt (allow / deny / error) without awaiting the result so
+// the audit write never blocks the response path.
+//
+// Keeping the emitter behind a setter rather than a static import means:
+//   - The kernel has no dependency on @oxagen/database or @oxagen/telemetry.
+//   - Tests can inject a spy or omit the emitter entirely.
+//   - The emitter is optional: if no emitter is registered (e.g. local dev
+//     without a DB), invocations proceed normally.
+// ---------------------------------------------------------------------------
+
+export type KernelSecurityOutcome = "allow" | "deny" | "error";
+
+export interface KernelSecurityEvent {
+  capability: string;
+  outcome: KernelSecurityOutcome;
+  /**
+   * Surface the call arrived on. Combines both CapabilityContext.surface
+   * (api/mcp/app/runner) and CapabilitySurface (api/mcp/agent) since
+   * opts.surface may be "agent" while ctx.surface is always a transport-level
+   * surface. The emitter should coerce unknown values to a safe fallback.
+   */
+  surface: string | undefined;
+  orgId: string;
+  workspaceId: string;
+  actorUserId: string | null;
+  requestId: string;
+  /** The CapabilityErrorCode that caused a deny/error, if any. */
+  errorCode: CapabilityErrorCode | null;
+}
+
+type SecurityEventEmitter = (event: KernelSecurityEvent) => void;
+
+let _securityEventEmitter: SecurityEventEmitter | null = null;
+
+/**
+ * Register a fire-and-forget emitter for capability authz events.
+ * Call once during surface bootstrap (API server startup, MCP init, etc.).
+ * Re-registration is intentionally allowed — surfaces that restart can
+ * re-register without a process restart.
+ */
+export function setSecurityEventEmitter(emitter: SecurityEventEmitter): void {
+  _securityEventEmitter = emitter;
+}
+
+/** Remove the current emitter. Primarily used in tests. */
+export function clearSecurityEventEmitter(): void {
+  _securityEventEmitter = null;
+}
+
+function emitSecurityEvent(event: KernelSecurityEvent): void {
+  if (_securityEventEmitter) {
+    try {
+      _securityEventEmitter(event);
+    } catch {
+      // Never let a broken emitter crash a capability invocation.
+      // Silence — the surface's emitter implementation should handle its own errors.
+    }
+  }
+}
+
 /**
  * Bind a handler to a capability name. Throws on a double-registration so a
  * copy-paste that shadows an existing handler fails loudly at boot rather
@@ -86,6 +151,11 @@ export interface InvokeOptions {
  * The one dispatch path. Resolves the contract, validates input against the
  * contract schema, runs the bound handler, and validates the output so a
  * drifting handler can never return a shape that violates the contract.
+ *
+ * Emits a `KernelSecurityEvent` after every invocation attempt — allow,
+ * deny (surface/input/unknown errors), or error (output validation / handler
+ * throw). The emit is fire-and-forget; the capability response is never
+ * delayed by the audit write.
  */
 export async function invoke(
   name: string,
@@ -95,10 +165,30 @@ export async function invoke(
 ): Promise<unknown> {
   const cap = getCapability(name);
   if (!cap) {
+    emitSecurityEvent({
+      capability: name,
+      outcome: "deny",
+      surface: ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      errorCode: "unknown_capability",
+    });
     throw new CapabilityError(name, "unknown_capability", `Unknown capability "${name}"`);
   }
 
   if (opts.surface && !getSurfaces(cap).includes(opts.surface)) {
+    emitSecurityEvent({
+      capability: name,
+      outcome: "deny",
+      surface: opts.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      errorCode: "surface_denied",
+    });
     throw new CapabilityError(
       name,
       "surface_denied",
@@ -108,6 +198,16 @@ export async function invoke(
 
   const inputResult = cap.input.safeParse(rawInput);
   if (!inputResult.success) {
+    emitSecurityEvent({
+      capability: name,
+      outcome: "error",
+      surface: ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      errorCode: "invalid_input",
+    });
     throw new CapabilityError(
       name,
       "invalid_input",
@@ -115,17 +215,58 @@ export async function invoke(
     );
   }
 
-  const handler = await resolveHandler(name);
-  const output = await handler(inputResult.data, ctx);
+  let output: unknown;
+  try {
+    const handler = await resolveHandler(name);
+    output = await handler(inputResult.data, ctx);
+  } catch (err) {
+    // Distinguish CapabilityError (handler not found → deny) from a
+    // handler runtime throw (→ error).
+    const isCapErr = err instanceof CapabilityError;
+    emitSecurityEvent({
+      capability: name,
+      outcome: isCapErr && err.code === "no_handler" ? "deny" : "error",
+      surface: ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      errorCode: isCapErr ? err.code : null,
+    });
+    throw err;
+  }
 
   const outputResult = cap.output.safeParse(output);
   if (!outputResult.success) {
+    emitSecurityEvent({
+      capability: name,
+      outcome: "error",
+      surface: ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      errorCode: "invalid_output",
+    });
     throw new CapabilityError(
       name,
       "invalid_output",
       `Output validation failed for "${name}": ${outputResult.error.message}`,
     );
   }
+
+  // Successful invocation.
+  emitSecurityEvent({
+    capability: name,
+    outcome: "allow",
+    surface: ctx.surface,
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    actorUserId: ctx.userId,
+    requestId: ctx.requestId,
+    errorCode: null,
+  });
+
   return outputResult.data;
 }
 

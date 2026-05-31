@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { CapabilityContext } from "./types.js";
 import { clearRegistryForTests, registerCapability } from "./registry.js";
@@ -7,9 +7,11 @@ import {
   assertHandlersComplete,
   capabilitiesForSurface,
   clearHandlersForTests,
+  clearSecurityEventEmitter,
   hasHandler,
   invoke,
   registerHandler,
+  setSecurityEventEmitter,
 } from "./kernel.js";
 
 const ctx: CapabilityContext = {
@@ -38,6 +40,7 @@ describe("capability kernel", () => {
   afterEach(() => {
     clearRegistryForTests();
     clearHandlersForTests();
+    clearSecurityEventEmitter();
   });
 
   it("validates input, runs the handler, and validates output", async () => {
@@ -111,5 +114,132 @@ describe("capability kernel", () => {
     expect(hasHandler("test.echo")).toBe(false);
     registerHandler("test.echo", async () => async (i) => i);
     expect(hasHandler("test.echo")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Security event emitter — kernel integration
+// ---------------------------------------------------------------------------
+
+describe("kernel security event emitter", () => {
+  afterEach(() => {
+    clearRegistryForTests();
+    clearHandlersForTests();
+    clearSecurityEventEmitter();
+  });
+
+  it("emits an 'allow' event on successful invocation", async () => {
+    const emitter = vi.fn();
+    setSecurityEventEmitter(emitter);
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+
+    await invoke("test.echo", { value: "hi" }, ctx);
+
+    expect(emitter).toHaveBeenCalledOnce();
+    expect(emitter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability: "test.echo",
+        outcome: "allow",
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        actorUserId: ctx.userId,
+        requestId: ctx.requestId,
+        errorCode: null,
+      }),
+    );
+  });
+
+  it("emits a 'deny' event when the capability is unknown", async () => {
+    const emitter = vi.fn();
+    setSecurityEventEmitter(emitter);
+
+    await expect(invoke("test.missing", {}, ctx)).rejects.toMatchObject({
+      code: "unknown_capability",
+    });
+
+    expect(emitter).toHaveBeenCalledOnce();
+    expect(emitter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability: "test.missing",
+        outcome: "deny",
+        errorCode: "unknown_capability",
+      }),
+    );
+  });
+
+  it("emits a 'deny' event when the surface is not allowed", async () => {
+    const emitter = vi.fn();
+    setSecurityEventEmitter(emitter);
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+
+    await expect(
+      invoke("test.echo", { value: "x" }, ctx, { surface: "agent" }),
+    ).rejects.toMatchObject({ code: "surface_denied" });
+
+    expect(emitter).toHaveBeenCalledOnce();
+    expect(emitter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability: "test.echo",
+        outcome: "deny",
+        errorCode: "surface_denied",
+      }),
+    );
+  });
+
+  it("emits an 'error' event when input validation fails", async () => {
+    const emitter = vi.fn();
+    setSecurityEventEmitter(emitter);
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+
+    await expect(invoke("test.echo", { value: 42 }, ctx)).rejects.toMatchObject({
+      code: "invalid_input",
+    });
+
+    expect(emitter).toHaveBeenCalledOnce();
+    expect(emitter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "error",
+        errorCode: "invalid_input",
+      }),
+    );
+  });
+
+  it("emits a 'deny' event when no handler is registered", async () => {
+    const emitter = vi.fn();
+    setSecurityEventEmitter(emitter);
+    echoCap();
+
+    await expect(invoke("test.echo", { value: "x" }, ctx)).rejects.toMatchObject({
+      code: "no_handler",
+    });
+
+    expect(emitter).toHaveBeenCalledOnce();
+    expect(emitter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "deny",
+        errorCode: "no_handler",
+      }),
+    );
+  });
+
+  it("does not call the emitter when no emitter is registered", async () => {
+    // No setSecurityEventEmitter call — should not throw.
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+    await expect(invoke("test.echo", { value: "hi" }, ctx)).resolves.toEqual({ value: "hi" });
+  });
+
+  it("does not crash when the emitter throws synchronously", async () => {
+    setSecurityEventEmitter(() => {
+      throw new Error("emitter exploded");
+    });
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+
+    // The capability should still succeed even though the emitter threw.
+    await expect(invoke("test.echo", { value: "hi" }, ctx)).resolves.toEqual({ value: "hi" });
   });
 });

@@ -23,6 +23,7 @@ export default defineConfig({
     "graph",
     "evaluation",
     "billing",
+    "security",
   ],
   verbose: true,
   strict: true,

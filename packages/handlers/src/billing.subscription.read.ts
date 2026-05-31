@@ -3,11 +3,23 @@ import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscr
 import { db, schema } from "@oxagen/database";
 import { sumTokenUsage } from "@oxagen/telemetry";
 import { and, eq, inArray } from "drizzle-orm";
+import { logger } from "./logger.js";
 
 const ACTIVE_STATUSES = ["trialing", "active", "past_due", "paused"];
 
 export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSubscriptionRead> =
   async (_input, ctx) => {
+    // Authorization guard: a resolved principal (user or API key) is required.
+    // API-key calls always carry a non-empty orgId; session calls that lack
+    // org scope are rejected here rather than at the transport layer so the
+    // check is surface-agnostic (API, MCP, agent — same code path).
+    if (!ctx.userId && !ctx.apiKeyId) {
+      throw new Error("Unauthorized: no authenticated principal");
+    }
+    if (!ctx.orgId) {
+      throw new Error("Forbidden: orgId is required to read billing data");
+    }
+
     const d = db();
 
     // Single round trip per panel render: subscription + plan + credit
@@ -68,8 +80,12 @@ export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSub
           costMicros: Number(get("executions")?.costMicros ?? 0n),
           executions: get("executions")?.quantity ?? 0,
         };
-      } catch {
-        /* CH failure should not break the billing panel */
+      } catch (err) {
+        // CH failure must not break the billing panel, but must not be silent.
+        logger.warn(
+          { err, orgId: ctx.orgId },
+          "billing.subscription.read: ClickHouse sumTokenUsage failed — periodUsage will be null",
+        );
       }
     }
 

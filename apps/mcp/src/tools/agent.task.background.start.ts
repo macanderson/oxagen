@@ -24,7 +24,7 @@ export const metadata: ToolMetadata = {
 export default async function agentTaskBackgroundStartTool(
   args: InferSchema<typeof schema>,
 ) {
-  const ctx = buildContext(headers());
+  const ctx = await buildContext(headers());
   const output = await agentTaskBackgroundStartHandler(args, ctx);
   return agentTaskBackgroundStart.output.parse(output);
 }

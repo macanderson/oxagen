@@ -42,7 +42,7 @@ export const metadata: ToolMetadata = {
 export default async function chatMessageSendTool(
   args: InferSchema<typeof schema>,
 ) {
-  const ctx = buildContext(headers());
+  const ctx = await buildContext(headers());
   const output = await chatMessageSendHandler(args, ctx);
   return chatMessageSend.output.parse(output);
 }

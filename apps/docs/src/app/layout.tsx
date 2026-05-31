@@ -6,6 +6,7 @@ import { RootProvider } from "fumadocs-ui/provider/next";
 export const metadata: Metadata = {
   title: "Oxagen Docs",
   description: "Documentation for the Oxagen agent platform.",
+  icons: { icon: "/icon.svg" },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
