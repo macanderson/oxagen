@@ -40,23 +40,15 @@ export const imageGenerate = registerCapability({
      */
     alt: z.string().optional(),
     /**
-     * Image size to request. Defaults to "1024x1024".
+     * Image size to request.
      * Only supported sizes for DALL-E 3 are: 1024x1024, 1792x1024, 1024x1792.
      */
-    size: z
-      .enum(["1024x1024", "1792x1024", "1024x1792"])
-      .optional()
-      .default("1024x1024"),
+    size: z.enum(["1024x1024", "1792x1024", "1024x1792"]).optional(),
   }),
   output: z.object({
     /**
-     * Public URL of the generated image. Present when image generation
-     * succeeded and the provider returned a URL.
-     */
-    url: z.string().url().optional(),
-    /**
-     * Base-64 data URI of the generated image. Present when the provider
-     * returns raw bytes instead of a URL (or as a fallback).
+     * Base-64 data URI (data:image/png;base64,...) of the generated image.
+     * Present when generation succeeded.
      */
     dataUri: z.string().optional(),
     /** Accessible alt text for the image. */

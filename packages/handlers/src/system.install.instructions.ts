@@ -1,0 +1,192 @@
+import type { CapabilityHandler } from "@oxagen/oxagen";
+import {
+  systemInstallInstructions,
+  type InstallClient,
+  type InstallStep,
+} from "@oxagen/oxagen/contracts/system.install.instructions";
+
+// ── Production URLs (from CLAUDE.md) ─────────────────────────────────────────
+
+const PROD_API_URL = "https://oxagen-v2-api.vercel.app";
+const PROD_APP_URL = "https://oxagen-v2-app.vercel.app";
+
+// ── Step builders ─────────────────────────────────────────────────────────────
+
+function stepsForClaudeCode(wsSlug: string | undefined): InstallStep[] {
+  const ws = wsSlug ?? "<your-workspace-slug>";
+  const mcpUrl = `${PROD_API_URL}/v1/<your-org-slug>/${ws}/mcp`;
+  return [
+    {
+      label: "Install the Oxagen CLI (requires Node 20+)",
+      command: "npm install -g @oxagen/cli",
+    },
+    {
+      label: "Authenticate and link your workspace",
+      command: `oxagen auth login && oxagen workspace use ${ws}`,
+    },
+    {
+      label: "Add the Oxagen MCP server to Claude Code",
+      command: `claude mcp add oxagen --transport http --url "${mcpUrl}"`,
+    },
+    {
+      label: "Verify the server appears in the tool list",
+      command: "claude mcp list",
+    },
+    {
+      label: "Start a session — Oxagen tools are now available to the agent",
+    },
+  ];
+}
+
+function stepsForCursor(wsSlug: string | undefined): InstallStep[] {
+  const ws = wsSlug ?? "<your-workspace-slug>";
+  const mcpUrl = `${PROD_API_URL}/v1/<your-org-slug>/${ws}/mcp`;
+  return [
+    {
+      label: "Open Cursor Settings → MCP Servers",
+    },
+    {
+      label: "Click 'Add new server' and enter the Oxagen endpoint",
+      command: mcpUrl,
+    },
+    {
+      label: "Set transport to HTTP and save",
+    },
+    {
+      label: "Generate an API key at the Oxagen dashboard",
+      command: `${PROD_APP_URL}/settings/api-keys`,
+    },
+    {
+      label: "Paste the API key into the Authorization header field in Cursor",
+    },
+    {
+      label: "Reload Cursor — the Oxagen tools appear in the agent tool list",
+    },
+  ];
+}
+
+function stepsForClaudeDesktop(wsSlug: string | undefined): InstallStep[] {
+  const ws = wsSlug ?? "<your-workspace-slug>";
+  const mcpUrl = `${PROD_API_URL}/v1/<your-org-slug>/${ws}/mcp`;
+  const configEntry = JSON.stringify(
+    {
+      mcpServers: {
+        oxagen: {
+          url: mcpUrl,
+          transport: "http",
+        },
+      },
+    },
+    null,
+    2,
+  );
+  return [
+    {
+      label: "Generate an API key",
+      command: `${PROD_APP_URL}/settings/api-keys`,
+    },
+    {
+      label: "Open your Claude Desktop config file",
+      command: "open ~/Library/Application\\ Support/Claude/claude_desktop_config.json",
+    },
+    {
+      label: "Add the Oxagen server entry (merge into existing config)",
+      command: configEntry,
+    },
+    {
+      label: "Add your API key as the Authorization header value in the config",
+    },
+    {
+      label: "Restart Claude Desktop — Oxagen tools are now listed in the agent panel",
+    },
+  ];
+}
+
+function stepsForCodex(wsSlug: string | undefined): InstallStep[] {
+  const ws = wsSlug ?? "<your-workspace-slug>";
+  const mcpUrl = `${PROD_API_URL}/v1/<your-org-slug>/${ws}/mcp`;
+  return [
+    {
+      label: "Generate an API key",
+      command: `${PROD_APP_URL}/settings/api-keys`,
+    },
+    {
+      label: "Add the Oxagen MCP server to your codex.yaml",
+      command: [
+        "mcp_servers:",
+        "  oxagen:",
+        `    url: "${mcpUrl}"`,
+        "    transport: http",
+        "    headers:",
+        '      Authorization: "Bearer <your-api-key>"',
+      ].join("\n"),
+    },
+    {
+      label: "Run codex to confirm the tools are registered",
+      command: "codex tools list",
+    },
+  ];
+}
+
+function stepsForVscode(wsSlug: string | undefined): InstallStep[] {
+  const ws = wsSlug ?? "<your-workspace-slug>";
+  const mcpUrl = `${PROD_API_URL}/v1/<your-org-slug>/${ws}/mcp`;
+  const settingsEntry = JSON.stringify(
+    {
+      "mcp.servers": {
+        oxagen: {
+          url: mcpUrl,
+          transport: "http",
+        },
+      },
+    },
+    null,
+    2,
+  );
+  return [
+    {
+      label: "Install the MCP extension for VS Code (if not already present)",
+      command: "code --install-extension anthropic.claude-code",
+    },
+    {
+      label: "Generate an API key",
+      command: `${PROD_APP_URL}/settings/api-keys`,
+    },
+    {
+      label: "Add the Oxagen server to your VS Code settings.json",
+      command: settingsEntry,
+    },
+    {
+      label: "Add your API key under the Authorization header in the settings entry",
+    },
+    {
+      label: "Reload the VS Code window — Oxagen tools are available in the Copilot/MCP panel",
+    },
+  ];
+}
+
+const STEP_BUILDERS: Record<InstallClient, (ws: string | undefined) => InstallStep[]> = {
+  "claude-code": stepsForClaudeCode,
+  cursor: stepsForCursor,
+  "claude-desktop": stepsForClaudeDesktop,
+  codex: stepsForCodex,
+  vscode: stepsForVscode,
+};
+
+// ── Handler ───────────────────────────────────────────────────────────────────
+
+export const systemInstallInstructionsHandler: CapabilityHandler<
+  typeof systemInstallInstructions
+> = async (input, _ctx) => {
+  const builder = STEP_BUILDERS[input.client];
+  const steps = builder(input.workspaceSlug);
+
+  return {
+    client: input.client,
+    steps,
+    render: {
+      componentId: "install-instructions",
+      props: { client: input.client, steps },
+    },
+  };
+};

@@ -403,6 +403,24 @@
       }
     },
     {
+      "name": "image.generate",
+      "file": "image.generate.ts",
+      "domain": "image",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "organization.create",
       "file": "organization.create.ts",
       "domain": "organization",
@@ -418,6 +436,60 @@
         "mcp": true,
         "unit": true,
         "e2e": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "svg.generate",
+      "file": "svg.generate.ts",
+      "domain": "svg",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "system.install.instructions",
+      "file": "system.install.instructions.ts",
+      "domain": "system",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "video.generate",
+      "file": "video.generate.ts",
+      "domain": "video",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
         "docs": true
       }
     },
