@@ -2,26 +2,28 @@
   "name": "@oxagen/mcp",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
+  "main": "src/index.ts",
   "scripts": {
-    "dev": "xmcp dev",
-    "build": "xmcp build",
-    "start": "node dist/http.js",
-    "start:stdio": "node dist/stdio.js",
+    "dev": "tsx watch --env-file=.env.local src/index.ts",
+    "start": "tsx --env-file=.env.local src/index.ts",
+    "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0"
   },
   "dependencies": {
+    "@hono/node-server": "1.19.14",
     "@oxagen/agent": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/handlers": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
-    "xmcp": "0.6.10",
+    "hono": "4.12.23",
     "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
-    "swc-loader": "0.2.6",
+    "tsx": "4.22.3",
     "typescript": "6.0.3"
   }
 }
