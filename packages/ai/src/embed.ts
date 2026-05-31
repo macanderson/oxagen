@@ -2,6 +2,7 @@ import { embed } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { requireEnv } from "@oxagen/config/env";
 import { insertTokenUsage, providerFromModelId, hashPrompt, type Surface } from "@oxagen/telemetry";
+import { providerCostUsdMicros } from "@oxagen/billing";
 
 // Match the 1536-dim AgentMemory vector index. Swapping models requires a
 // re-index, so we pin here and treat the index name as the contract.
@@ -42,6 +43,9 @@ export async function embedText(text: string, opts: EmbedTextOpts = {}): Promise
   if (opts.telemetry) {
     const { orgId, workspaceId, surface, executionStepId } = opts.telemetry;
     const durationMs = Date.now() - startedAt;
+    const inputTokens = usage?.tokens ?? 0;
+    // Embeddings are input-only; the rate card prices them per the same meter.
+    const costUsdMicros = providerCostUsdMicros({ model: MODEL, inputTokens, outputTokens: 0 });
     try {
       const promptHash = await hashPrompt(text);
       await insertTokenUsage([
@@ -51,10 +55,10 @@ export async function embedText(text: string, opts: EmbedTextOpts = {}): Promise
           workspace_id: workspaceId,
           model: MODEL,
           provider: providerFromModelId(`openai:${MODEL}`),
-          input_tokens: usage?.tokens ?? 0,
+          input_tokens: inputTokens,
           output_tokens: 0,
           cached_tokens: 0,
-          cost_usd_micros: 0,
+          cost_usd_micros: costUsdMicros,
           duration_ms: durationMs,
           surface,
           prompt_hash: promptHash,

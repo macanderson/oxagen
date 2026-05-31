@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { stripeClient } from "./client.js";
 import { syncSubscriptionFromStripe } from "./subscriptions.js";
 import { syncInvoiceFromStripe } from "./invoices.js";
+import { grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } from "./grants.js";
 import { requireEnv } from "@oxagen/config/env";
 
 export function verifyStripeSignature(rawBody: string, signature: string): Stripe.Event {
@@ -12,16 +13,20 @@ export function verifyStripeSignature(rawBody: string, signature: string): Strip
 }
 
 /**
- * Idempotent processor. Two-phase contract:
+ * Idempotent processor. Three-phase contract:
  *
  * 1. INSERT the raw event into billing.stripe_events with ON CONFLICT DO
- *    NOTHING. A retried webhook yields zero rows → early return "duplicate".
- *    The stripe_events row is never UPDATEd after this point (immutable
- *    append-only anchor — SOC2 audit requirement).
+ *    NOTHING — the immutable append-only audit anchor (never UPDATEd; SOC2).
  *
- * 2. Dispatch business logic, then INSERT (or upsert) a row in
- *    billing.stripe_event_processing to record the outcome. Processing state
- *    lives in a separate mutable table so the event log stays immutable.
+ * 2. Decide whether to dispatch. We are a TRUE duplicate (skip) only if the
+ *    event was already processed *successfully* — i.e. a stripe_event_processing
+ *    row exists with processed_at set. If a prior attempt failed (no processing
+ *    row, or one with only an error), we RE-DISPATCH so a Stripe retry
+ *    self-heals instead of silently dropping the event. Every dispatch handler
+ *    is idempotent (sync* upsert, grants key on a stable reference id), so
+ *    re-dispatch never double-applies.
+ *
+ * 3. Dispatch, then upsert the processing row to record the outcome.
  */
 export async function processStripeEvent(event: Stripe.Event): Promise<{ status: "applied" | "duplicate" }> {
   const d = db();
@@ -36,14 +41,30 @@ export async function processStripeEvent(event: Stripe.Event): Promise<{ status:
     .onConflictDoNothing({ target: schema.stripeEvents.stripeEventId })
     .returning({ id: schema.stripeEvents.id });
 
-  if (inserted.length === 0) return { status: "duplicate" };
-
-  const stripeEventRowId = inserted[0]!.id;
+  let stripeEventRowId: string;
+  if (inserted.length > 0) {
+    stripeEventRowId = inserted[0]!.id;
+  } else {
+    // Already logged. Resolve its id and check whether a prior dispatch
+    // succeeded; only then is this a real duplicate.
+    const existing = await d.query.stripeEvents.findFirst({
+      where: eq(schema.stripeEvents.stripeEventId, event.id),
+      columns: { id: true },
+    });
+    if (!existing) return { status: "duplicate" };
+    stripeEventRowId = existing.id;
+    const processed = await d.query.stripeEventProcessing.findFirst({
+      where: eq(schema.stripeEventProcessing.stripeEventId, stripeEventRowId),
+      columns: { processedAt: true },
+    });
+    if (processed?.processedAt) return { status: "duplicate" };
+    // No successful processing yet — fall through and (re-)dispatch.
+  }
 
   try {
     await dispatch(event);
     // Record successful processing — upsert in case a prior attempt recorded
-    // an error and the operator is re-running the event manually.
+    // an error before we retried.
     await d
       .insert(schema.stripeEventProcessing)
       .values({ stripeEventId: stripeEventRowId, processedAt: new Date() })
@@ -80,6 +101,16 @@ async function dispatch(event: Stripe.Event): Promise<void> {
     case "invoice.payment_failed": {
       const inv = event.data.object as Stripe.Invoice;
       await syncInvoiceFromStripe(inv.id);
+      // Deposit the plan's included credits on the first invoice and every
+      // renewal. Idempotent per Stripe event id (processStripeEvent dedup).
+      if (event.type === "invoice.paid") await grantPlanCreditsForInvoicePaid(inv);
+      return;
+    }
+    case "checkout.session.completed": {
+      // One-time credit-pack purchases deposit their credits here. Subscription
+      // checkouts (mode=subscription) deliver credits via invoice.paid instead.
+      const session = event.data.object as Stripe.Checkout.Session;
+      await grantCreditPackForCheckout(session);
       return;
     }
     case "payment_method.attached":

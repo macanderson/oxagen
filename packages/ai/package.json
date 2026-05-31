@@ -19,7 +19,8 @@
     "@ai-sdk/openai": "1.3.24",
     "@oxagen/config": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
-    "zod": "3.25.76"
+    "zod": "3.25.76",
+    "@oxagen/billing": "workspace:*"
   },
   "devDependencies": {
     "typescript": "6.0.3",

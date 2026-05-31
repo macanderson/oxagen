@@ -65,6 +65,16 @@ export const baseEnvSchema = z.object({
   // doesn't require live AWS credentials.  The crypto package enforces
   // presence at call-time when a real KMS client is provided.
   AUTH_TOKEN_KMS_KEY_ID: z.string().min(1).optional(),
+
+  // ── Billing / usage-meter tuning (see @oxagen/billing pricing.ts) ──
+  // Target *blended* gross margin across all products, in (0,1). When set,
+  // it overrides DEFAULT_TARGET_MARGIN and re-derives the meter markup.
+  OXAGEN_TARGET_MARGIN: z.coerce.number().gt(0).lt(1).optional(),
+  // Operators pin the exact solved meter markup here so the runtime gate
+  // never recomputes the blended-margin solve. `pnpm billing:stripe-sync`
+  // prints the value to set. Must be >= 1 (a markup below 1 would sell
+  // credits below provider cost).
+  OXAGEN_METER_MARKUP: z.coerce.number().gte(1).optional(),
 });
 
 // The exact set of keys this schema validates. `normalizeEnv` only ever

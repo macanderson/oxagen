@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
+    "@oxagen/database": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "execa": "9.6.1",
