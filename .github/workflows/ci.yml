@@ -159,6 +159,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so the Linear release step can diff commit ranges
+          # (git rev-parse HEAD^ and git log PREV_SHA..GITHUB_SHA). The default
+          # shallow clone (fetch-depth: 1) would break both and silently shrink
+          # the release to whatever is in the single HEAD commit.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -175,3 +181,33 @@ jobs:
       # the full test suite. Add steps here as needed.
       - name: Deploy confirmation
         run: echo "Merge to main detected. Vercel deploy triggered by GitHub integration."
+
+      # ── Linear Release ────────────────────────────────────────────────────
+      # Creates a Linear Release in the oxagen-v2 pipeline and associates
+      # every OXA-#### issue referenced in commits since the last deploy.
+      # Soft-fail: an error here logs loudly but does not abort the deploy.
+      # Requires: LINEAR_ACCESS_KEY secret set in repo/org settings.
+      - name: Resolve previous deploy SHA
+        id: prev_sha
+        run: |
+          # The previous commit on main is the parent of GITHUB_SHA.
+          # Falls back to the empty tree SHA if this is the very first push,
+          # which causes git log to return all history (harmless for issue extraction).
+          PREV=$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || echo "4b825dc642cb6eb9a060e54bf8d69288fbee4904")
+          echo "sha=${PREV}" >> "$GITHUB_OUTPUT"
+
+      - name: Create Linear Release
+        # No if-guard on the secret: secrets in if: conditions are always
+        # redacted to empty string by GHA and the comparison never works.
+        # Instead the script calls requireEnv("LINEAR_ACCESS_KEY") and exits 1
+        # on a hard missing-key failure, which is a clear signal to add the
+        # secret. If LINEAR_ACCESS_KEY is present but Linear is unreachable the
+        # script exits 0 (soft-fail) so the deploy is never blocked.
+        #
+        # github.run_number and github.sha are GHA system values — not
+        # user-controlled input — so they are safe to interpolate here.
+        env:
+          LINEAR_ACCESS_KEY: ${{ secrets.LINEAR_ACCESS_KEY }}
+          PREV_SHA: ${{ steps.prev_sha.outputs.sha }}
+          RELEASE_NAME: "${{ github.run_number }} — ${{ github.sha }}"
+        run: node .github/scripts/linear-release.mjs

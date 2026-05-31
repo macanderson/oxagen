@@ -35,7 +35,7 @@ function envArray(env: Record<string, string> | undefined): string[] {
   return Object.entries(env).map(([k, v]) => `${k}=${v}`);
 }
 
-function hostConfigFor(req: SandboxRequest, spec: ImageSpec): Dockerode.HostConfig {
+export function hostConfigFor(req: SandboxRequest, spec: ImageSpec): Dockerode.HostConfig {
   return {
     AutoRemove: true,
     Memory: req.memoryMb * 1024 * 1024,
