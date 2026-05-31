@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { db, schema } from "@oxagen/database";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { stripeClient } from "./client.js";
 
 const ALLOWED_STATUSES = new Set([
@@ -106,6 +106,42 @@ export async function cancelSubscription(stripeSubId: string, atPeriodEnd = true
 export async function reactivateSubscription(stripeSubId: string): Promise<void> {
   await stripeClient().subscriptions.update(stripeSubId, { cancel_at_period_end: false });
   await syncSubscriptionFromStripe(stripeSubId);
+}
+
+/**
+ * Cancel the active subscription for an organisation at period end.
+ * Looks up the Stripe subscription id from our DB and delegates to
+ * {@link cancelSubscription}. Raises if no active subscription is found.
+ */
+export async function cancelOrgSubscription(orgId: string): Promise<void> {
+  const d = db();
+  const row = await d.query.subscriptions.findFirst({
+    where: and(
+      eq(schema.subscriptions.orgId, orgId),
+      sql`${schema.subscriptions.status} in ('active','trialing')`,
+    ),
+    columns: { stripeSubscriptionId: true },
+  });
+  if (!row) throw new Error(`No active subscription found for org ${orgId}`);
+  await cancelSubscription(row.stripeSubscriptionId, true);
+}
+
+/**
+ * Undo a scheduled cancellation for the active subscription of an organisation.
+ * Looks up the Stripe subscription id from our DB and delegates to
+ * {@link reactivateSubscription}.
+ */
+export async function reactivateOrgSubscription(orgId: string): Promise<void> {
+  const d = db();
+  const row = await d.query.subscriptions.findFirst({
+    where: and(
+      eq(schema.subscriptions.orgId, orgId),
+      sql`${schema.subscriptions.status} in ('active','trialing','past_due')`,
+    ),
+    columns: { stripeSubscriptionId: true },
+  });
+  if (!row) throw new Error(`No cancellable subscription found for org ${orgId}`);
+  await reactivateSubscription(row.stripeSubscriptionId);
 }
 
 export async function upgradeSubscription(
