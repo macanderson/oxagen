@@ -6,11 +6,11 @@ export default function ExecutionsStubPage() {
       <Card>
         <CardHeader>
           <CardTitle>Executions</CardTitle>
-          <CardDescription>The execution monitoring UI ships in a later epic.</CardDescription>
+          <CardDescription>Execution monitoring is coming soon.</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Execution tables exist; observability surfaces follow once the runner and telemetry pipeline land.
+            You can query executions via the API today. A full monitoring dashboard is on the way.
           </p>
         </CardContent>
       </Card>
