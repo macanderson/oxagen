@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { streamAgentReply, defaultModel } from "@oxagen/ai";
-import { materializeTools } from "@oxagen/agent";
+import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
 import { randomUUID } from "node:crypto";
 import type { CoreMessage } from "ai";
 import type { StreamEvent } from "@/components/chat/stream-event-types";
@@ -69,7 +69,18 @@ export async function POST(request: NextRequest): Promise<Response> {
   // The full conversation history is managed by the server action
   // (`sendMessageAction`) which owns the Postgres write; here we just
   // need enough context for the streaming model call.
-  const coreMessages: CoreMessage[] = [{ role: "user", content }];
+  //
+  // Knowledge-graph context injection: readWorkspaceContext is a no-op
+  // seam today (returns []) when KNOWLEDGE_GRAPH_ENABLED is not set or
+  // Neo4j is not configured. injectContext prepends a system message
+  // from blocks only when blocks is non-empty — also a no-op today.
+  // Both functions exist so the wiring is in place for the next phase.
+  const blocks = await readWorkspaceContext({
+    orgId: tenant.id,
+    workspaceId: workspace.id,
+    userId: session.user.id,
+  });
+  const coreMessages: CoreMessage[] = injectContext([{ role: "user", content }], blocks);
 
   const requestId = randomUUID();
   const agentTools = await materializeTools({

@@ -1,6 +1,7 @@
 export * from "./runtime/materialize-tools.js";
 export * from "./runtime/approval.js";
 export * from "./runtime/stream-events.js";
+export * from "./runtime/knowledge-graph.js";
 export * from "./dispatch/subagent.js";
 export * from "./dispatch/mcp-client.js";
 export * from "./memory/neo4j.js";

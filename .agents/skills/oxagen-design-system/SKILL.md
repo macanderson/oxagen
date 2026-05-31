@@ -1,3 +1,8 @@
+---
+name: oxagen-design-system
+description: Oxagen's brand and visual identity — the cool teal/cyan/indigo/violet palette and signature indigo→green gradient ring, the Aeonik (sans / Fono display / mono) type scale, motion & easing tokens, glass vs card treatment, radii, iconography (Lucide + bespoke connector logos, never emoji), layout rules, and brand voice & casing. Use when building or restyling any user-facing UI in apps/app or apps/website, designing marketing or app surfaces, choosing colors/spacing/typography/motion, or writing product copy, so the output matches the Oxagen brand. For generic web-platform techniques use the frontend-patterns skill; for the binding engineering rules use oxagen-engineering-policy.
+---
+
 # Oxagen Design System
 
 A design system for **Oxagen** — the context layer for AI agents.
@@ -33,19 +38,22 @@ The `oxagen-platform` monorepo covers multiple surfaces; this system focuses on 
 
 Supporting surfaces (admin dashboard, API, docs) share the same theme but are out of scope here.
 
-## Index
+## How to use this skill
 
-Root folder manifest:
+This skill is the **brand-identity reference**: voice, color, type, motion, and
+the rules that make a surface read as Oxagen. The canonical, machine-readable
+tokens live in the codebase, not here — treat those as source of truth and this
+file as the intent behind them:
 
-- `README.md` — this file
-- `SKILL.md` — agent-SKILL-compatible entrypoint for Claude Code users
-- `colors_and_type.css` — canonical CSS variables (brand + semantic, light + dark)
-- `assets/` — logo + icon pack (gradient, adaptive, mono)
-- `fonts/` — Aeonik variable fonts (sans, fono, mono)
-- `preview/` — small HTML cards that populate the Design System tab
-- `ui_kits/` — high-fidelity recreations of Oxagen surfaces
-  - `ui_kits/website/` — marketing site components + index
-  - `ui_kits/app/` — platform app components + index
+- **Theme tokens:** `packages/ui/src/styles/globals.css` (Tailwind v4 `@theme`) — brand + semantic CSS variables, light + dark.
+- **Fonts:** `packages/ui/src/styles/fonts/` — Aeonik variable fonts (sans, Fono display, mono).
+- **Components:** `packages/ui/src/components/` — shadcn-based component library.
+- **Brand marks & connector logos:** `packages/ui/src/components/connector-icons.tsx` and the Oxagen logo/icon SVG set.
+
+For generic, cross-brand web-platform techniques (CSS, animation, forms,
+performance, a11y) use the **frontend-patterns** skill. For the binding
+engineering rules (mobile-first, accessibility non-negotiables) use
+**oxagen-engineering-policy**.
 
 ---
 

@@ -23,7 +23,7 @@ The check name must match the GitHub Actions job name exactly.
 
 ## Rationale
 
-Per `docs/agents/policies/12-ci-cd.md`:
+Per the `oxagen-engineering-policy` skill (`.agents/skills/oxagen-engineering-policy/policies/12-ci-cd.md`):
 
 - The `gate` job is the canonical quality signal. It runs on every PR open and update.
 - The `deploy` job runs on merge to `main` and does **not** re-run the test suite; it trusts the PR gate result.

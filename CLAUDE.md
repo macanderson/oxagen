@@ -36,6 +36,38 @@ Examples of independence:
 - "Fix X, document Y, ask about Z" — three agents, send in one message
 - "Update the spec and create the tickets" — sequential (tickets reference the spec)
 
+## Project skills
+
+This repo ships its own Claude skills under `.agents/skills/`, auto-registered
+via symlinks in `.claude/skills/`. They are the canonical, agent-facing layer —
+there is no separate `docs/agents/` copy. Reach for them by name (the Skill tool
+or fully-qualified `oxagen-engineering-policy` etc.); dispatched subagents inherit
+them too, so name the relevant skill in an agent's prompt.
+
+- **`oxagen-engineering-policy`** — **binding law.** The non-negotiables, prime
+  directives, four-store data model, SQL conventions, bloat/vendor/naming rules,
+  observability, PR discipline. **Consult it BEFORE writing or changing code,
+  picking/pinning a dep, designing a schema or migration, writing tests, opening
+  a PR, or touching CI.** When a request conflicts with it, halt and surface the
+  conflict — do not weaken the rule. This supersedes nothing below; it is the
+  floor everything else sits on.
+- **`oxagen-design-system`** — Oxagen's brand & visual identity (palette, the
+  indigo→green gradient ring, Aeonik type, motion tokens, glass/card treatment,
+  iconography, voice & casing). Use for any user-facing UI or product copy in
+  `apps/app` / `apps/website` so output reads as Oxagen.
+- **`frontend-patterns`** — a 136-entry library of web-platform technique guides
+  (CSS, a11y, Core Web Vitals, forms/autofill, passkeys, view transitions,
+  scroll animation, privacy, security). Use when building/reviewing frontend:
+  open the one or two matching technique files, don't read the whole library.
+- **`vendor-better-auth`** — documentation map (llms.txt index) for Better Auth.
+  Use to jump to the right official doc; pair with the `*-best-practices` auth
+  skills for hands-on setup.
+
+Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first. Building UI →
+`oxagen-design-system` (identity) + `frontend-patterns` (technique). Auth →
+`vendor-better-auth` + the Better Auth `*-best-practices` skills. See
+`.agents/skills/README.md` for the full local-skill manifest.
+
 ## Production URLs (interim)
 
 Until oxagen.ai is launched, production deploys use Vercel-managed domains:

@@ -29,7 +29,8 @@
     "release:patch": "changeset version --type patch && pnpm install && git add -A && git commit -m 'chore: release patch' && pnpm changeset tag",
     "release:minor": "changeset version --type minor && pnpm install && git add -A && git commit -m 'chore: release minor' && pnpm changeset tag",
     "release:major": "changeset version --type major && pnpm install && git add -A && git commit -m 'chore: release major' && pnpm changeset tag",
-    "billing:stripe-sync": "tsx --env-file-if-exists=.env.local tools/scripts/stripe-sync.ts"
+    "billing:stripe-sync": "tsx --env-file-if-exists=.env.local tools/scripts/stripe-sync.ts",
+    "db:seed-skills": "tsx --env-file-if-exists=.env.local tools/scripts/seed-skills.ts"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.0",

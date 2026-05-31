@@ -490,7 +490,7 @@ Location: `apps/app/src/app/[orgSlug]/settings/billing/page.tsx`
 
 ## 10. Policy Application Plan
 
-This section maps each policy in `docs/agents/policies/` to the billing codebase and specifies what must be enforced.
+This section maps each policy in the `oxagen-engineering-policy` skill (`.agents/skills/oxagen-engineering-policy/policies/`) to the billing codebase and specifies what must be enforced.
 
 ### Policy 0 (Prime Directives) — applies to ALL billing files
 

@@ -4,3 +4,5 @@ export { streamAgentReply } from "./stream.js";
 export type { StreamAgentReplyArgs } from "./stream.js";
 export { embedText } from "./embed.js";
 export type { EmbedTextOpts } from "./embed.js";
+export { generateObjectFor } from "./generate-object.js";
+export type { GenerateObjectArgs, GenerateObjectUsage, GenerateObjectResult } from "./generate-object.js";

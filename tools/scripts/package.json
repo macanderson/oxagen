@@ -9,6 +9,7 @@
     "@oxagen/database": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
+    "@oxagen/skills": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "execa": "9.6.1",
     "kleur": "4.1.5",

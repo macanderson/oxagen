@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   embedTextMock: vi.fn(),
   recallMemoriesMock: vi.fn(),
+  isKnowledgeGraphEnabledMock: vi.fn(),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- vitest mock; Array.fill() returns any[], shape is correct for the vector dimension.
@@ -19,9 +20,14 @@ mocks.recallMemoriesMock.mockImplementation(async () => [
     createdAt: "2026-05-28T00:00:00Z",
   },
 ]);
+// Default: KG enabled so existing tests are unaffected.
+mocks.isKnowledgeGraphEnabledMock.mockReturnValue(true);
 
 vi.mock("../memory/embed.js", () => ({ embedText: mocks.embedTextMock }));
 vi.mock("../memory/neo4j.js", () => ({ recallMemories: mocks.recallMemoriesMock }));
+vi.mock("../runtime/knowledge-graph.js", () => ({
+  isKnowledgeGraphEnabled: mocks.isKnowledgeGraphEnabledMock,
+}));
 
 import { agentMemoryRecallHandler } from "./agent.memory.recall.js";
 
@@ -37,6 +43,9 @@ describe("agent.memory.recall handler", () => {
   beforeEach(() => {
     mocks.embedTextMock.mockClear();
     mocks.recallMemoriesMock.mockClear();
+    mocks.isKnowledgeGraphEnabledMock.mockClear();
+    // Default back to enabled for each test.
+    mocks.isKnowledgeGraphEnabledMock.mockReturnValue(true);
   });
 
   it("embeds the query and forwards filters to recallMemories", async () => {
@@ -54,5 +63,20 @@ describe("agent.memory.recall handler", () => {
     expect(Array.isArray(arg.embedding)).toBe(true);
     expect(res.memories).toHaveLength(1);
     expect(res.memories[0]!.id).toBe("m_1");
+  });
+
+  it("returns { memories: [] } immediately when knowledge graph is disabled", async () => {
+    mocks.isKnowledgeGraphEnabledMock.mockReturnValue(false);
+
+    const res = await agentMemoryRecallHandler(
+      { query: "anything", minWeight: "low", limit: 10 },
+      CTX,
+    );
+
+    // Valid typed output — empty memories array.
+    expect(res).toEqual({ memories: [] });
+    // Neither Neo4j nor the embedding model is called.
+    expect(mocks.embedTextMock).not.toHaveBeenCalled();
+    expect(mocks.recallMemoriesMock).not.toHaveBeenCalled();
   });
 });
