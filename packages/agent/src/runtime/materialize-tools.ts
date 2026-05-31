@@ -2,7 +2,7 @@ import { tool, type Tool, type ToolSet } from "ai";
 import { insertToolInvocation } from "@oxagen/telemetry";
 import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityContext } from "../types.js";
-import { invokeCapability } from "../handlers/index.js";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { beforeTool, afterTool, onError } from "../hooks/runtime.js";
 import { createApprovalRequest, waitForApproval } from "./approval.js";
 
@@ -105,7 +105,7 @@ export async function materializeTools(
               throw new Error(`approval ${resolution.resolution} for ${cap.name}`);
             }
           }
-          const result = await invokeCapability(cap.name, input, ctx);
+          const result = await invoke(cap.name, input, ctx, { surface: "agent" });
           await afterTool({ capability: cap.name, ctx, output: result });
           // OXA-1351: every tool invocation lands one row in ClickHouse
           // `tool_invocations` with surface + provider. Failure-isolated.

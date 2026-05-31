@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { z } from "zod";
 
 // Fixed capability fixture: one non-agent (excluded), one low-risk agent,
-// one high-risk agent.
+// one high-risk agent, one non-agent.* agent-surface capability (form.fill).
 const FIXTURE = [
   {
     name: "organization.create",
@@ -24,6 +24,14 @@ const FIXTURE = [
     agent: { riskLevel: "high" as const },
     input: z.object({ y: z.number() }),
   },
+  {
+    // Non-agent.* name but surfaced on agent — this is the gap-1 scenario.
+    name: "form.fill",
+    description: "fill a form with AI-proposed values",
+    surfaces: ["agent"] as const,
+    agent: { riskLevel: "low" as const },
+    input: z.object({ formId: z.string(), values: z.record(z.unknown()) }),
+  },
 ];
 
 vi.mock("@oxagen/oxagen", () => ({
@@ -31,8 +39,8 @@ vi.mock("@oxagen/oxagen", () => ({
   getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
 }));
 
-vi.mock("../handlers/index.js", () => ({
-  invokeCapability: vi.fn(async () => ({ ok: true })),
+vi.mock("@oxagen/oxagen/kernel", () => ({
+  invoke: vi.fn(async () => ({ ok: true })),
 }));
 
 const mocks = vi.hoisted(() => ({
@@ -61,7 +69,7 @@ vi.mock("./approval.js", () => ({
 }));
 
 import { materializeTools } from "./materialize-tools.js";
-import { invokeCapability } from "../handlers/index.js";
+import { invoke } from "@oxagen/oxagen/kernel";
 
 const CTX = {
   orgId: "ten_1",
@@ -73,12 +81,12 @@ const CTX = {
 
 describe("materializeTools", () => {
   beforeEach(() => {
-    vi.mocked(invokeCapability).mockClear();
+    vi.mocked(invoke).mockClear();
   });
 
   it("returns only agent-surfaced capabilities", async () => {
     const tools = await materializeTools(CTX);
-    expect(Object.keys(tools).sort()).toEqual(["capA", "capB"]);
+    expect(Object.keys(tools).sort()).toEqual(["capA", "capB", "form.fill"]);
     expect(tools["organization.create"]).toBeUndefined();
   });
 
@@ -105,7 +113,7 @@ describe("materializeTools", () => {
     expect(t.parameters).toBeDefined();
     expect(typeof t.execute).toBe("function");
     await t.execute!({ x: "hello" });
-    expect(invokeCapability).toHaveBeenCalledWith("capA", { x: "hello" }, CTX);
+    expect(invoke).toHaveBeenCalledWith("capA", { x: "hello" }, CTX, { surface: "agent" });
   });
 
   it("fires before/after hooks around a successful invocation", async () => {
@@ -123,7 +131,7 @@ describe("materializeTools", () => {
     mocks.beforeTool.mockClear();
     mocks.afterTool.mockClear();
     mocks.onError.mockClear();
-    vi.mocked(invokeCapability).mockRejectedValueOnce(new Error("boom"));
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("boom"));
     const tools = await materializeTools(CTX);
     await expect(
       (tools.capA as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ x: "hi" }),
@@ -159,7 +167,7 @@ describe("materializeTools", () => {
       resolution: "denied",
       note: null,
     });
-    vi.mocked(invokeCapability).mockClear();
+    vi.mocked(invoke).mockClear();
     const fixtureGated = [
       { ...FIXTURE[2], agent: { riskLevel: "high" as const, requiresApproval: true } },
     ];
@@ -173,7 +181,63 @@ describe("materializeTools", () => {
     await expect(
       (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 }),
     ).rejects.toThrow(/approval denied/);
-    expect(invokeCapability).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("form.fill (non-agent.* name) dispatches through kernel invoke without 'No handler registered'", async () => {
+    // This is the gap-1 regression test. Prior to the fix, the tool execute
+    // used invokeCapability (agent-internal, only covers agent.*) instead of
+    // the shared kernel invoke. This test asserts that a non-agent.* capability
+    // that is surfaced on agent resolves end-to-end through kernel invoke.
+    vi.mocked(invoke).mockClear();
+    vi.mocked(invoke).mockResolvedValueOnce({ filled: true });
+    const tools = await materializeTools(CTX);
+    const formFillTool = tools["form.fill"] as { execute?: (i: unknown) => Promise<unknown> };
+    expect(formFillTool).toBeDefined();
+    const result = await formFillTool.execute!({ formId: "workspace-general", values: { name: "Prod" } });
+    // Kernel invoke must have been called — not the agent-internal loader
+    expect(invoke).toHaveBeenCalledWith(
+      "form.fill",
+      { formId: "workspace-general", values: { name: "Prod" } },
+      CTX,
+      { surface: "agent" },
+    );
+    expect(result).toEqual({ filled: true });
+  });
+
+  it("svg.generate (non-agent.* name) dispatches through kernel invoke without 'No handler registered'", async () => {
+    // Second non-agent.* capability from the gap-1 list to confirm pattern.
+    // We use the FIXTURE as-is (svg.generate is not in FIXTURE); instead we
+    // use the already-present form.fill fixture entry and verify kernel
+    // invoke is the dispatch path for any non-agent.* agent-surface capability.
+    vi.mocked(invoke).mockClear();
+    vi.mocked(invoke).mockResolvedValueOnce({ svg: "<svg/>" });
+    const customFixture = [
+      {
+        name: "svg.generate",
+        description: "generate an svg",
+        surfaces: ["agent"] as const,
+        agent: { riskLevel: "low" as const },
+        input: z.object({ prompt: z.string() }),
+      },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => customFixture,
+      getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+    }));
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools.js");
+    const tools = await mt(CTX);
+    const svgTool = tools["svg.generate"] as { execute?: (i: unknown) => Promise<unknown> };
+    expect(svgTool).toBeDefined();
+    const result = await svgTool.execute!({ prompt: "a red circle" });
+    expect(invoke).toHaveBeenCalledWith(
+      "svg.generate",
+      { prompt: "a red circle" },
+      CTX,
+      { surface: "agent" },
+    );
+    expect(result).toEqual({ svg: "<svg/>" });
   });
 
   it("no messageId → no approval request (direct MCP/API path)", async () => {
