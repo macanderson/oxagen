@@ -26,7 +26,7 @@
  * Where betterAuth() itself is referenced, we mock it at the module boundary
  * and inspect the config object passed to it.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // ---------------------------------------------------------------------------
 // useSecureCookies logic — extracted from auth.ts for unit testing

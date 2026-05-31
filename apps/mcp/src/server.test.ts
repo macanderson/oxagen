@@ -58,6 +58,31 @@ vi.mock("@oxagen/oxagen", () => ({
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
 
+// Mock the auth context resolver so dispatch tests can exercise the kernel
+// routing logic without needing a real token/DB. The mock returns a valid
+// CapabilityContext that satisfies the auth guard in server.ts.
+// NOTE: this does NOT weaken auth — the real resolveMcpContext is tested
+// exhaustively in context.test.ts (OXA-1419). Here we verify dispatch/routing.
+const { mockResolveMcpContext } = vi.hoisted(() => ({
+  mockResolveMcpContext: vi.fn(),
+}));
+vi.mock("./context.js", () => ({
+  resolveMcpContext: mockResolveMcpContext,
+}));
+
+const MOCK_AUTH_OK = {
+  ok: true as const,
+  ctx: {
+    orgId: "org_test",
+    workspaceId: "wrk_test",
+    userId: null,
+    apiKeyId: "aky_test",
+    requestId: "req_test",
+    surface: "mcp" as const,
+    messageId: null,
+  },
+};
+
 // Import buildServer after mocks are set up.
 import { buildServer } from "./server.js";
 
@@ -76,6 +101,13 @@ function makeRequest(method: string, path: string, body?: unknown): Request {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 }
+
+// Seed auth mock before every test so vi.clearAllMocks() in per-describe
+// beforeEach doesn't leave resolveMcpContext without an implementation.
+// Auth-failure behaviour is tested in context.test.ts (OXA-1419).
+beforeEach(() => {
+  mockResolveMcpContext.mockResolvedValue(MOCK_AUTH_OK);
+});
 
 // ---------------------------------------------------------------------------
 // /healthz
@@ -96,7 +128,7 @@ describe("GET /healthz", () => {
 // ---------------------------------------------------------------------------
 
 describe("GET /mcp/tools", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); mockResolveMcpContext.mockResolvedValue(MOCK_AUTH_OK); });
 
   it("returns the capabilities exposed on the mcp surface", async () => {
     mockCapabilitiesForSurface.mockReturnValue([
@@ -149,7 +181,7 @@ describe("GET /mcp/tools", () => {
 // ---------------------------------------------------------------------------
 
 describe("POST /mcp/tools/:name — successful dispatch", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); mockResolveMcpContext.mockResolvedValue(MOCK_AUTH_OK); });
 
   it("returns 200 with result wrapped in { result }", async () => {
     mockInvoke.mockResolvedValueOnce({ items: ["a", "b"] });
@@ -191,7 +223,7 @@ describe("POST /mcp/tools/:name — successful dispatch", () => {
 // ---------------------------------------------------------------------------
 
 describe("POST /mcp/tools/:name — CapabilityError mapping", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); mockResolveMcpContext.mockResolvedValue(MOCK_AUTH_OK); });
 
   it("maps unknown_capability to 404", async () => {
     mockInvoke.mockRejectedValueOnce(
@@ -264,7 +296,7 @@ describe("POST /mcp/tools/:name — CapabilityError mapping", () => {
 // ---------------------------------------------------------------------------
 
 describe("POST /mcp/tools/:name — unexpected errors", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); mockResolveMcpContext.mockResolvedValue(MOCK_AUTH_OK); });
 
   it("returns 500 for an unexpected Error thrown by invoke", async () => {
     mockInvoke.mockRejectedValueOnce(new Error("database exploded"));
@@ -290,7 +322,7 @@ describe("POST /mcp/tools/:name — unexpected errors", () => {
 // ---------------------------------------------------------------------------
 
 describe("POST /mcp/tools/:name — malformed JSON body", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); mockResolveMcpContext.mockResolvedValue(MOCK_AUTH_OK); });
 
   it("falls back to an empty object when the body is not valid JSON", async () => {
     mockInvoke.mockResolvedValueOnce({});

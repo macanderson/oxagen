@@ -118,7 +118,7 @@ export default async function BillingPage({ params }: { params: Promise<{ orgSlu
         <CreditBalance
           balanceCents={Number(creditBalance?.balanceCents ?? 0)}
           ledger={ledgerRows.map((e) => ({
-            publicId: e.publicId,
+            id: e.id,
             deltaCents: Number(e.deltaCents),
             reason: e.reason,
             createdAt: e.createdAt.toISOString(),

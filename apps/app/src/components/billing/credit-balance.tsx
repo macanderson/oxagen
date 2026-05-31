@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatCents, formatDate } from "@/lib/utils";
 
 export interface CreditLedgerEntry {
-  publicId: string;
+  id: string;
   deltaCents: number;
   reason: string;
   createdAt: string;
@@ -39,7 +39,7 @@ export function CreditBalance({ balanceCents, ledger }: CreditBalanceProps) {
               <li className="py-2 text-muted-foreground">No ledger entries.</li>
             ) : (
               ledger.map((e) => (
-                <li key={e.publicId} className="flex items-center justify-between py-2">
+                <li key={e.id} className="flex items-center justify-between py-2">
                   <div>
                     <div className="font-medium">{e.reason}</div>
                     <div className="text-xs text-muted-foreground">{formatDate(e.createdAt)}</div>

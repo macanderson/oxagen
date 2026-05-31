@@ -32,9 +32,9 @@ function makeTx(balanceRow: { balanceCents: bigint } = { balanceCents: 500n }) {
     values: vi.fn().mockResolvedValue(undefined),
   };
   const balanceChain = makeInsertChain([balanceRow]);
-  const insertMock = vi.fn((table: unknown) => {
-    // Distinguish by reference via the mock argument; we just always return
-    // ledgerChain for the first call and balanceChain for the second.
+  const insertMock = vi.fn((_table: unknown) => {
+    // Distinguish by call count; we always return ledgerChain for the first
+    // call and balanceChain for the second.
     const callCount = (insertMock.mock.calls.length);
     if (callCount === 1) return { values: vi.fn().mockReturnValue(undefined) };
     return { values: vi.fn().mockReturnValue(balanceChain) };
@@ -49,7 +49,6 @@ function makeTx(balanceRow: { balanceCents: bigint } = { balanceCents: 500n }) {
 
 // Build a realistic transaction mock that captures the callback and executes it.
 function makeDb(balanceRow: { balanceCents: bigint } = { balanceCents: 500n }) {
-  const tx = makeTx(balanceRow);
 
   // The creditLedger insert: values() resolves immediately (no .returning)
   // The creditBalances insert: values() → onConflictDoUpdate() → returning()

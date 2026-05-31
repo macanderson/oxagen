@@ -30,10 +30,10 @@ mocks.txInsertWsUsers.mockReturnValue({ values: vi.fn(async () => undefined) });
 mocks.txFn.mockImplementation(async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
   let insertCount = 0;
   const tx = {
-    insert: (table: unknown) => {
+    insert: (_table: unknown): unknown => {
       insertCount++;
-      if (insertCount === 1) return mocks.txInsertWs(table);
-      return mocks.txInsertWsUsers(table);
+      if (insertCount === 1) return mocks.txInsertWs(_table) as unknown;
+      return mocks.txInsertWsUsers(_table) as unknown;
     },
   };
   return cb(tx as unknown as Parameters<typeof cb>[0]);

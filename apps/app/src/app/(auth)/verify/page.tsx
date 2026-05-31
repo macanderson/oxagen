@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function VerifyPage({ searchParams }: { searchParams: Promise<{ email?: string }> }) {
+export default function VerifyPage(_props: { searchParams: Promise<{ email?: string }> }) {
   return (
     <div className="grid min-h-dvh place-items-center p-4">
       <Card className="w-full max-w-md">

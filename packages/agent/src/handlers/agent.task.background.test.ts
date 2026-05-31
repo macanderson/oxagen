@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // SELECT chain
-mocks.selectLimit.mockImplementation(async () => mocks.selectResult());
+mocks.selectLimit.mockImplementation(async (): Promise<unknown> => mocks.selectResult() as unknown);
 mocks.selectWhere.mockReturnValue({ limit: mocks.selectLimit });
 mocks.selectFrom.mockReturnValue({ where: mocks.selectWhere });
 mocks.selectSpy.mockReturnValue({ from: mocks.selectFrom });

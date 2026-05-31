@@ -123,7 +123,7 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
 
     // invokeCapability called with the capability name from payload
     expect(mocks.invokeCapability).toHaveBeenCalledTimes(1);
-    const [capName, capInput, capCtx] = mocks.invokeCapability.mock.calls[0] as [
+    const [capName, _capInput, capCtx] = mocks.invokeCapability.mock.calls[0] as [
       string,
       unknown,
       Record<string, unknown>,

@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 
 // Build the fluent query chain: select().from().innerJoin().where().limit()
 // The last call (limitSpy) resolves to either a row array or empty array.
-mocks.limitSpy.mockImplementation(async () => mocks.skillRow());
+mocks.limitSpy.mockImplementation(async (): Promise<unknown> => mocks.skillRow() as unknown);
 mocks.whereSpy.mockReturnValue({ limit: mocks.limitSpy });
 mocks.innerJoinSpy.mockReturnValue({ where: mocks.whereSpy });
 mocks.fromSpy.mockReturnValue({ innerJoin: mocks.innerJoinSpy });

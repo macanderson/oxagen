@@ -32,10 +32,10 @@ mocks.txFn.mockImplementation(async (cb: (tx: Record<string, unknown>) => Promis
   // Use a plain counter outside the tx object to avoid self-referential casts.
   let insertCount = 0;
   const tx = {
-    insert: (table: unknown) => {
+    insert: (_table: unknown): unknown => {
       insertCount++;
-      if (insertCount === 1) return mocks.txInsertOrg(table);
-      return mocks.txInsertOrgUsers(table);
+      if (insertCount === 1) return mocks.txInsertOrg(_table) as unknown;
+      return mocks.txInsertOrgUsers(_table) as unknown;
     },
   };
   return cb(tx as unknown as Parameters<typeof cb>[0]);
