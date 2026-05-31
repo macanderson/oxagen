@@ -5,6 +5,7 @@ import {
   providerFromModelId,
   type Surface,
 } from "@oxagen/telemetry";
+import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
 import { defaultModel } from "./models.js";
 
 export interface StreamAgentReplyArgs {
@@ -33,13 +34,6 @@ export interface StreamAgentReplyArgs {
   }) => Promise<void> | void;
 }
 
-// Cost estimation is intentionally provider-agnostic here: each provider
-// surfaces input/output token costs through its model metadata, but the AI
-// SDK doesn't expose them uniformly. Until we wire a per-model price table
-// (separate ticket), token_usage.cost_usd_micros stays 0 and we compute
-// cost downstream in the billing rollup function.
-const COST_USD_MICROS_PLACEHOLDER = 0;
-
 export function streamAgentReply(args: StreamAgentReplyArgs) {
   const model = args.model ?? defaultModel();
   const provider = providerFromModelId(model.modelId);
@@ -63,6 +57,22 @@ export function streamAgentReply(args: StreamAgentReplyArgs) {
     temperature: args.temperature ?? 0.7,
     onFinish: async (event) => {
       const durationMs = Date.now() - startedAt;
+      const inputTokens = event.usage.promptTokens ?? 0;
+      const outputTokens = event.usage.completionTokens ?? 0;
+      // The cost meter (provider rate card) turns tokens-in/out-by-model into
+      // the USD a provider invoices us. This is the input to both the telemetry
+      // cost column and the credit charge below.
+      //
+      // cachedTokens is omitted (defaults to 0) because this gate does not yet
+      // enable prompt caching — there are no cache-control markers on the
+      // messages/system, so the provider reports zero cached reads. If caching
+      // is turned on, forward the provider's cache-read count here (e.g.
+      // event.providerMetadata.anthropic.cacheReadInputTokens) so the meter
+      // prices those tokens at the cheaper cached rate; otherwise the customer
+      // is over-charged on the cached portion.
+      const usage = { model: model.modelId, inputTokens, outputTokens };
+      const costUsdMicros = providerCostUsdMicros(usage);
+
       // Telemetry write is best-effort; if ClickHouse is unreachable, the
       // chat still completes and the message persists in Postgres.
       try {
@@ -74,10 +84,10 @@ export function streamAgentReply(args: StreamAgentReplyArgs) {
             workspace_id: args.telemetry.workspaceId,
             model: model.modelId,
             provider,
-            input_tokens: event.usage.promptTokens ?? 0,
-            output_tokens: event.usage.completionTokens ?? 0,
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
             cached_tokens: 0,
-            cost_usd_micros: COST_USD_MICROS_PLACEHOLDER,
+            cost_usd_micros: costUsdMicros,
             duration_ms: durationMs,
             surface: args.telemetry.surface,
             prompt_hash: promptHash,
@@ -86,6 +96,21 @@ export function streamAgentReply(args: StreamAgentReplyArgs) {
         ]);
       } catch {
         // Swallow — telemetry must never fail the chat turn.
+      }
+
+      // The gate: debit the org's credits for what this call cost us, marked
+      // up to the target margin. Best-effort and post-call — a metering
+      // failure must never fail the user's turn. Admission control (refusing a
+      // turn when the balance is empty) is the caller's pre-turn guard via
+      // billing.hasCreditBalance.
+      try {
+        await chargeUsageCredits({
+          orgId: args.telemetry.orgId,
+          referenceId: args.telemetry.messageId,
+          ...usage,
+        });
+      } catch {
+        // Swallow — credit metering must never fail the chat turn.
       }
       await args.onFinish?.({
         text: event.text,

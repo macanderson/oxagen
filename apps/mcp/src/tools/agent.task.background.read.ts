@@ -1,0 +1,28 @@
+import { z } from "zod";
+import { type InferSchema, type ToolMetadata } from "xmcp";
+import { headers } from "xmcp/headers";
+import { agentTaskBackgroundRead } from "@oxagen/oxagen/contracts/agent.task.background.read";
+import { agentTaskBackgroundReadHandler } from "@oxagen/agent/handlers/agent.task.background.read";
+import { buildContext } from "../context.js";
+
+export const schema = {
+  taskId: z.string().describe("ID of the background task"),
+};
+
+export const metadata: ToolMetadata = {
+  name: agentTaskBackgroundRead.name,
+  description: agentTaskBackgroundRead.description,
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+  },
+};
+
+export default async function agentTaskBackgroundReadTool(
+  args: InferSchema<typeof schema>,
+) {
+  const ctx = await buildContext(headers());
+  const output = await agentTaskBackgroundReadHandler(args, ctx);
+  return agentTaskBackgroundRead.output.parse(output);
+}

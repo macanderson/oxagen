@@ -1,0 +1,31 @@
+import { z } from "zod";
+import { type InferSchema, type ToolMetadata } from "xmcp";
+import { headers } from "xmcp/headers";
+import { agentToolList } from "@oxagen/oxagen/contracts/agent.tool.list";
+import { agentToolListHandler } from "@oxagen/agent/handlers/agent.tool.list";
+import { buildContext } from "../context.js";
+
+export const schema = {
+  includeExternal: z
+    .boolean()
+    .default(true)
+    .describe("Include externally-registered tools"),
+};
+
+export const metadata: ToolMetadata = {
+  name: agentToolList.name,
+  description: agentToolList.description,
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+  },
+};
+
+export default async function agentToolListTool(
+  args: InferSchema<typeof schema>,
+) {
+  const ctx = await buildContext(headers());
+  const output = await agentToolListHandler(args, ctx);
+  return agentToolList.output.parse(output);
+}

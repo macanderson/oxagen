@@ -28,7 +28,8 @@
     "gate": "turbo run lint typecheck test build --filter=...[origin/main] && pnpm check:manifest && pnpm check:contracts && pnpm test:e2e",
     "release:patch": "changeset version --type patch && pnpm install && git add -A && git commit -m 'chore: release patch' && pnpm changeset tag",
     "release:minor": "changeset version --type minor && pnpm install && git add -A && git commit -m 'chore: release minor' && pnpm changeset tag",
-    "release:major": "changeset version --type major && pnpm install && git add -A && git commit -m 'chore: release major' && pnpm changeset tag"
+    "release:major": "changeset version --type major && pnpm install && git add -A && git commit -m 'chore: release major' && pnpm changeset tag",
+    "billing:stripe-sync": "tsx --env-file-if-exists=.env.local tools/scripts/stripe-sync.ts"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.0",

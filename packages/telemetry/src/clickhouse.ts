@@ -228,10 +228,28 @@ export async function hashPrompt(text: string): Promise<string> {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Map an AI SDK model id like `anthropic:claude-…` to its provider. */
+/**
+ * Map an AI SDK model id to its provider. Handles both the prefixed form
+ * (`anthropic:claude-…`) and the bare ids the AI SDK actually hands back from
+ * `model.modelId` (`claude-sonnet-4-6`, `gpt-4o`, `text-embedding-3-small`),
+ * so token_usage.provider is never blank for a real call.
+ */
 export function providerFromModelId(modelId: string): Provider {
   const head = modelId.split(":")[0] ?? "";
   if (head === "anthropic" || head === "openai") return head;
+  const id = modelId.toLowerCase();
+  if (id.startsWith("claude")) return "anthropic";
+  if (
+    id.startsWith("gpt") ||
+    id.startsWith("o1") ||
+    id.startsWith("o3") ||
+    id.startsWith("o4") ||
+    id.startsWith("chatgpt") ||
+    id.startsWith("davinci") ||
+    id.startsWith("text-embedding")
+  ) {
+    return "openai";
+  }
   return "";
 }
 

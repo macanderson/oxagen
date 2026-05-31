@@ -6,3 +6,6 @@ export * from "./invoices.js";
 export * from "./usage.js";
 export * from "./webhooks.js";
 export * from "./credits.js";
+export * from "./grants.js";
+export * from "./pricing.js";
+export * from "./metering.js";

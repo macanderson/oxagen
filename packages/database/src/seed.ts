@@ -14,6 +14,12 @@ import {
 // by ON CONFLICT DO NOTHING against a stable unique column, and lookup
 // fallbacks fetch existing rows if the conflict fires.
 
+// Only the free tier is seeded statically — it has no paid Stripe price, so a
+// placeholder product id is honest here. Paid plans (Pro, Scale, …) and their
+// real Stripe product/price ids are created from the single source of truth
+// (packages/billing/src/pricing.ts) by `pnpm billing:stripe-sync --apply`.
+// Seed must NOT hardcode paid-plan Stripe ids — that's what drifted before, and
+// seed can't import @oxagen/billing without a database↔billing dependency cycle.
 const PLAN_SEEDS = [
   {
     name: "Free",
@@ -27,34 +33,6 @@ const PLAN_SEEDS = [
     includedCreditCents: 0,
     includedSeats: 1,
     features: { tools: "basic", agents: 1 },
-    isPublic: true,
-  },
-  {
-    name: "Pro",
-    slug: "pro",
-    tier: "pro",
-    stripeProductId: "prod_pro_placeholder",
-    stripePriceIdMonthly: "price_pro_monthly_placeholder",
-    stripePriceIdAnnual: "price_pro_annual_placeholder",
-    monthlyCents: 2000,
-    annualCents: 20000,
-    includedCreditCents: 500_000,
-    includedSeats: 5,
-    features: { tools: "all", agents: 25, support: "email" },
-    isPublic: true,
-  },
-  {
-    name: "Enterprise",
-    slug: "enterprise",
-    tier: "enterprise",
-    stripeProductId: "prod_enterprise_placeholder",
-    stripePriceIdMonthly: "price_enterprise_monthly_placeholder",
-    stripePriceIdAnnual: "price_enterprise_annual_placeholder",
-    monthlyCents: 10000,
-    annualCents: 100000,
-    includedCreditCents: 5_000_000,
-    includedSeats: 25,
-    features: { tools: "all", agents: "unlimited", support: "dedicated", sso: true },
     isPublic: true,
   },
 ];

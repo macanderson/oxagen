@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   hashPrompt: vi.fn(),
   providerFromModelId: vi.fn(),
   defaultModel: vi.fn(),
+  providerCostUsdMicros: vi.fn(),
+  chargeUsageCredits: vi.fn(),
 }));
 
 // "streamText" returns an object that has the stream shape; tests call
@@ -18,12 +20,24 @@ mocks.insertTokenUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("aabbccdd");
 mocks.providerFromModelId.mockReturnValue("anthropic");
 mocks.defaultModel.mockReturnValue({ modelId: "claude-sonnet-4-6" });
+// 10 input @ $3/1M + 20 output @ $15/1M = 330 micro-USD for USAGE_EVENT.
+mocks.providerCostUsdMicros.mockReturnValue(330);
+mocks.chargeUsageCredits.mockResolvedValue({
+  costUsdMicros: 330,
+  creditsMetered: 1n,
+  creditsCharged: 1n,
+  shortfallCredits: 0n,
+});
 
 vi.mock("ai", () => ({ streamText: mocks.streamText }));
 vi.mock("@oxagen/telemetry", () => ({
   hashPrompt: mocks.hashPrompt,
   insertTokenUsage: mocks.insertTokenUsage,
   providerFromModelId: mocks.providerFromModelId,
+}));
+vi.mock("@oxagen/billing", () => ({
+  providerCostUsdMicros: mocks.providerCostUsdMicros,
+  chargeUsageCredits: mocks.chargeUsageCredits,
 }));
 vi.mock("./models.js", () => ({ defaultModel: mocks.defaultModel }));
 
@@ -61,10 +75,19 @@ beforeEach(() => {
   mocks.insertTokenUsage.mockClear();
   mocks.hashPrompt.mockClear();
   mocks.providerFromModelId.mockClear();
+  mocks.providerCostUsdMicros.mockClear();
+  mocks.chargeUsageCredits.mockClear();
   // restore defaults
   mocks.insertTokenUsage.mockResolvedValue(undefined);
   mocks.hashPrompt.mockResolvedValue("aabbccdd");
   mocks.providerFromModelId.mockReturnValue("anthropic");
+  mocks.providerCostUsdMicros.mockReturnValue(330);
+  mocks.chargeUsageCredits.mockResolvedValue({
+    costUsdMicros: 330,
+    creditsMetered: 1n,
+    creditsCharged: 1n,
+    shortfallCredits: 0n,
+  });
 });
 
 describe("streamAgentReply telemetry (@oxagen/ai)", () => {
@@ -109,8 +132,37 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     expect(row.execution_step_id).toBe("msg_abc");
     expect(row.input_tokens).toBe(10);
     expect(row.output_tokens).toBe(20);
-    expect(row.cost_usd_micros).toBe(0);
+    // The gate now prices the call through the cost meter rather than writing 0.
+    expect(row.cost_usd_micros).toBe(330);
     expect(typeof row.duration_ms).toBe("number");
+  });
+
+  it("onFinish charges the org's credits through the gate meter", async () => {
+    const result = streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY }) as StreamResult;
+    await result._onFinish(USAGE_EVENT);
+
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledWith({
+      orgId: "org_1",
+      referenceId: "msg_abc",
+      model: "claude-sonnet-4-6",
+      inputTokens: 10,
+      outputTokens: 20,
+    });
+  });
+
+  it("swallows a credit-charge error and still calls onFinish", async () => {
+    mocks.chargeUsageCredits.mockRejectedValueOnce(new Error("billing down"));
+    let calledOnFinish = false;
+    const result = streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+      onFinish: async () => {
+        calledOnFinish = true;
+      },
+    }) as StreamResult;
+    await result._onFinish(USAGE_EVENT);
+    expect(calledOnFinish).toBe(true);
   });
 
   it("onFinish hashes the last user message content", async () => {
