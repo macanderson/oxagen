@@ -567,6 +567,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       better-auth:
         specifier: 1.6.11
         version: 1.6.11(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9))(next@16.2.6(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@2.1.9(@types/node@25.9.1)(lightningcss@1.32.0))
@@ -628,6 +631,9 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
     devDependencies:
+      '@oxagen/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       '@types/pg':
         specifier: 8.20.0
         version: 8.20.0
@@ -803,6 +809,9 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^2.1.2
+        version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)
 
   packages/ui:
     dependencies:

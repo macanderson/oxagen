@@ -19,6 +19,7 @@
     "better-auth": "1.6.11",
     "@oxagen/database": "workspace:*",
     "@oxagen/config": "workspace:*",
+    "@oxagen/telemetry": "workspace:*",
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {

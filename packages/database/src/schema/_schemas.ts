@@ -17,3 +17,4 @@ export const contentSchema = pgSchema("content");
 export const graphSchema = pgSchema("graph");
 export const evaluationSchema = pgSchema("evaluation");
 export const billingSchema = pgSchema("billing");
+export const securitySchema = pgSchema("security");
