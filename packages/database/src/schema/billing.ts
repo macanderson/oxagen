@@ -1,7 +1,19 @@
-import { bigint, boolean, index, integer, jsonb, numeric, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, index, integer, jsonb, numeric, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { billingSchema } from "./_schemas.js";
-import { auditMixin, citext, idMixin, softDeleteMixin } from "./_mixins.js";
+import { auditMixin, citext, idMixin } from "./_mixins.js";
+import { organizations } from "./org.js";
+
+// ── Append-only audit mixin (no updated_* columns) ──────────────────────────
+// Used on immutable/append-only tables (usage_records, credit_ledger) where
+// UPDATE is prohibited. Drizzle will not generate updated_* columns so a
+// fresh `drizzle-kit generate` cannot produce an ALTER TABLE to add them.
+const appendOnlyAuditMixin = () => ({
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .defaultNow(),
+  createdByUserId: uuid("created_by_user_id"),
+});
 
 export const plans = billingSchema.table(
   "plans",
@@ -10,6 +22,7 @@ export const plans = billingSchema.table(
     ...auditMixin(),
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
+    // CHECK: tier IN ('free','pro','enterprise') — confirmed from seed.ts
     tier: text("tier").notNull(),
     stripeProductId: text("stripe_product_id").notNull(),
     stripePriceIdMonthly: text("stripe_price_id_monthly"),
@@ -23,6 +36,7 @@ export const plans = billingSchema.table(
   },
   (t) => ({
     slugIdx: uniqueIndex("plans_slug_idx").on(t.slug),
+    tierCheck: check("plans_tier_check", sql`${t.tier} IN ('free','pro','enterprise')`),
   }),
 );
 
@@ -31,11 +45,19 @@ export const subscriptions = billingSchema.table(
   {
     ...idMixin("sub"),
     ...auditMixin(),
-    orgId: uuid("org_id").notNull(),
-    planId: uuid("plan_id").notNull(),
+    // FK → org.organizations.id — declared here so drizzle-kit generates the
+    // constraint and a fresh `generate` is a no-op against the real DDL.
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    // FK → billing.plans.id
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => plans.id),
     stripeSubscriptionId: text("stripe_subscription_id").notNull(),
     stripeCustomerId: text("stripe_customer_id").notNull(),
     status: text("status").notNull(),
+    // CHECK: billing_interval IN ('month','year') — Stripe only emits these two
     billingInterval: text("billing_interval").notNull(),
     currentPeriodStart: timestamp("current_period_start", { withTimezone: true, mode: "date" }).notNull(),
     currentPeriodEnd: timestamp("current_period_end", { withTimezone: true, mode: "date" }).notNull(),
@@ -46,9 +68,19 @@ export const subscriptions = billingSchema.table(
   },
   (t) => ({
     stripeSubIdx: uniqueIndex("subscriptions_stripe_sub_idx").on(t.stripeSubscriptionId),
-    // Spec §6.13: index targets the "active subscription for tenant" hot path
-    // — composite over (org_id, status) avoids a tenant-id-only scan.
+    // Spec §6.13: composite index over (org_id, status) targets the
+    // "active subscription for org" hot path.
     tenantStatusIdx: index("subscriptions_org_status_idx").on(t.orgId, t.status),
+    billingIntervalCheck: check(
+      "subscriptions_billing_interval_check",
+      sql`${t.billingInterval} IN ('month','year')`,
+    ),
+    // Partial unique: one 'active' subscription per org.
+    // Allows multiple non-active subscriptions (past_due, canceled, etc.)
+    // without blocking legitimate Stripe lifecycle events.
+    activeSubscriptionIdx: uniqueIndex("subscriptions_org_active_idx")
+      .on(t.orgId)
+      .where(sql`${t.status} = 'active'`),
   }),
 );
 
@@ -57,8 +89,12 @@ export const paymentMethods = billingSchema.table(
   {
     ...idMixin("pm"),
     ...auditMixin(),
-    ...softDeleteMixin(),
-    orgId: uuid("org_id").notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
+    deletedByUserId: uuid("deleted_by_user_id"),
+    // FK → org.organizations.id
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
     stripeCustomerId: text("stripe_customer_id").notNull(),
     stripePaymentMethodId: text("stripe_payment_method_id").notNull(),
     type: text("type").notNull(),
@@ -79,8 +115,12 @@ export const invoices = billingSchema.table(
   {
     ...idMixin("inv"),
     ...auditMixin(),
-    orgId: uuid("org_id").notNull(),
-    subscriptionId: uuid("subscription_id"),
+    // FK → org.organizations.id
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    // FK → billing.subscriptions.id (nullable — one-off invoices have no sub)
+    subscriptionId: uuid("subscription_id").references(() => subscriptions.id),
     stripeInvoiceId: text("stripe_invoice_id").notNull(),
     number: text("number"),
     status: text("status").notNull(),
@@ -101,11 +141,23 @@ export const invoices = billingSchema.table(
   }),
 );
 
+// invoice_line_items is an append-only join/detail table. No public_id —
+// the only lookup path is by invoice_id. Dropping public_id removes the
+// superfluous unique index and .$defaultFn() overhead on every insert.
 export const invoiceLineItems = billingSchema.table(
   "invoice_line_items",
   {
-    ...idMixin("ili"),
-    invoiceId: uuid("invoice_id").notNull(),
+    id: uuid("id").primaryKey().default(sql`COALESCE(
+  CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
+    THEN uuid_generate_v7()
+    ELSE uuid_generate_v4()
+  END,
+  uuid_generate_v4()
+)`),
+    // FK → billing.invoices.id
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
     description: text("description").notNull(),
     quantity: numeric("quantity", { precision: 18, scale: 4 }).notNull(),
     unitAmountCents: integer("unit_amount_cents").notNull(),
@@ -118,13 +170,23 @@ export const invoiceLineItems = billingSchema.table(
   }),
 );
 
+// usage_records is append-only: metered consumption events written once by the
+// billing engine. Dropping updated_at / updated_by_user_id enforces immutability
+// at the schema level — Drizzle will never generate a SET updated_at = ... for
+// this table.
 export const usageRecords = billingSchema.table(
   "usage_records",
   {
     ...idMixin("usg"),
-    ...auditMixin(),
-    orgId: uuid("org_id").notNull(),
-    subscriptionId: uuid("subscription_id").notNull(),
+    ...appendOnlyAuditMixin(),
+    // FK → org.organizations.id
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    // FK → billing.subscriptions.id
+    subscriptionId: uuid("subscription_id")
+      .notNull()
+      .references(() => subscriptions.id),
     metric: text("metric").notNull(),
     quantity: numeric("quantity", { precision: 20, scale: 6 }).notNull(),
     unitCostMicros: bigint("unit_cost_micros", { mode: "bigint" }).notNull(),
@@ -149,20 +211,47 @@ export const creditBalances = billingSchema.table(
   {
     ...idMixin("cbl"),
     ...auditMixin(),
-    orgId: uuid("org_id").notNull(),
-    balanceCents: bigint("balance_cents", { mode: "bigint" }).notNull().default(0n),
+    // FK → org.organizations.id
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    // CHECK: balance_cents >= 0 — hard floor at 0 (locked credit model: 1
+    // credit = 1 cent, NO overdraft). Catches any code path that would write
+    // a negative balance without going through grantCredits.
+    // Note: default uses sql`0` not BigInt 0n to avoid a drizzle-kit
+    // snapshot-serialization bug (BigInt in JSON.stringify) affecting
+    // drizzle-kit ≤0.31. sql`0` is DB-level 0; the column type is bigint.
+    balanceCents: bigint("balance_cents", { mode: "bigint" }).notNull().default(sql`0`),
     lastEventAt: timestamp("last_event_at", { withTimezone: true, mode: "date" }),
   },
   (t) => ({
     orgIdx: uniqueIndex("credit_balances_org_idx").on(t.orgId),
+    balanceNonNegativeCheck: check(
+      "credit_balances_balance_non_negative",
+      sql`${t.balanceCents} >= 0`,
+    ),
   }),
 );
 
+// credit_ledger is the immutable audit trail for all balance mutations.
+// No public_id (internal-only, no API surface). No updated_* columns
+// (append-only invariant: rows are never modified after insert).
 export const creditLedger = billingSchema.table(
   "credit_ledger",
   {
-    ...idMixin("cld"),
-    orgId: uuid("org_id").notNull(),
+    id: uuid("id").primaryKey().default(sql`COALESCE(
+  CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
+    THEN uuid_generate_v7()
+    ELSE uuid_generate_v4()
+  END,
+  uuid_generate_v4()
+)`),
+    // FK → org.organizations.id
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    // CHECK: delta_cents <> 0 — a zero-delta entry is a logic error; it
+    // pollutes the audit trail without changing the balance.
     deltaCents: bigint("delta_cents", { mode: "bigint" }).notNull(),
     reason: text("reason").notNull(),
     referenceType: text("reference_type"),
@@ -172,25 +261,63 @@ export const creditLedger = billingSchema.table(
   },
   (t) => ({
     organizationCreatedIdx: index("credit_ledger_org_created_idx").on(t.orgId, t.createdAt),
+    deltaNonZeroCheck: check(
+      "credit_ledger_delta_non_zero",
+      sql`${t.deltaCents} <> 0`,
+    ),
   }),
 );
 
+// stripe_events: immutable raw-event store. Mutable processing state
+// (processed_at, processing_error) was split into stripe_event_processing
+// so this row is never UPDATEd after insert — the idempotency anchor is
+// always a true INSERT. No public_id (internal audit table).
 export const stripeEvents = billingSchema.table(
   "stripe_events",
   {
-    ...idMixin("sev"),
+    id: uuid("id").primaryKey().default(sql`COALESCE(
+  CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
+    THEN uuid_generate_v7()
+    ELSE uuid_generate_v4()
+  END,
+  uuid_generate_v4()
+)`),
     stripeEventId: text("stripe_event_id").notNull(),
     eventType: text("event_type").notNull(),
     apiVersion: text("api_version"),
     payload: jsonb("payload").notNull(),
     receivedAt: timestamp("received_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    processedAt: timestamp("processed_at", { withTimezone: true, mode: "date" }),
-    processingError: text("processing_error"),
   },
   (t) => ({
     // Idempotency: ON CONFLICT (stripe_event_id) DO NOTHING in the webhook
     // path collapses retries to a no-op.
     stripeEventIdx: uniqueIndex("stripe_events_stripe_event_idx").on(t.stripeEventId),
     typeIdx: index("stripe_events_type_idx").on(t.eventType),
+  }),
+);
+
+// stripe_event_processing: mutable sibling of stripe_events. One row per
+// event; written after the event is processed (or on failure). Keeping
+// processing state here means stripe_events is never updated — SOC2
+// append-only audit requirement.
+export const stripeEventProcessing = billingSchema.table(
+  "stripe_event_processing",
+  {
+    id: uuid("id").primaryKey().default(sql`COALESCE(
+  CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
+    THEN uuid_generate_v7()
+    ELSE uuid_generate_v4()
+  END,
+  uuid_generate_v4()
+)`),
+    // FK → billing.stripe_events.id
+    stripeEventId: uuid("stripe_event_id")
+      .notNull()
+      .references(() => stripeEvents.id, { onDelete: "cascade" }),
+    processedAt: timestamp("processed_at", { withTimezone: true, mode: "date" }),
+    processingError: text("processing_error"),
+  },
+  (t) => ({
+    eventIdx: uniqueIndex("stripe_event_processing_event_idx").on(t.stripeEventId),
   }),
 );

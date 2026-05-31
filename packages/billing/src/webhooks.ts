@@ -12,11 +12,16 @@ export function verifyStripeSignature(rawBody: string, signature: string): Strip
 }
 
 /**
- * Idempotent processor. The contract is two-phase: insert the raw event
- * into billing.stripe_events with ON CONFLICT DO NOTHING so a retried
- * webhook is recognised before any state mutation, then dispatch. If the
- * insert produced zero rows, an earlier delivery already processed this
- * event and we exit fast.
+ * Idempotent processor. Two-phase contract:
+ *
+ * 1. INSERT the raw event into billing.stripe_events with ON CONFLICT DO
+ *    NOTHING. A retried webhook yields zero rows → early return "duplicate".
+ *    The stripe_events row is never UPDATEd after this point (immutable
+ *    append-only anchor — SOC2 audit requirement).
+ *
+ * 2. Dispatch business logic, then INSERT (or upsert) a row in
+ *    billing.stripe_event_processing to record the outcome. Processing state
+ *    lives in a separate mutable table so the event log stays immutable.
  */
 export async function processStripeEvent(event: Stripe.Event): Promise<{ status: "applied" | "duplicate" }> {
   const d = db();
@@ -33,18 +38,28 @@ export async function processStripeEvent(event: Stripe.Event): Promise<{ status:
 
   if (inserted.length === 0) return { status: "duplicate" };
 
+  const stripeEventRowId = inserted[0]!.id;
+
   try {
     await dispatch(event);
+    // Record successful processing — upsert in case a prior attempt recorded
+    // an error and the operator is re-running the event manually.
     await d
-      .update(schema.stripeEvents)
-      .set({ processedAt: new Date() })
-      .where(eq(schema.stripeEvents.stripeEventId, event.id));
+      .insert(schema.stripeEventProcessing)
+      .values({ stripeEventId: stripeEventRowId, processedAt: new Date() })
+      .onConflictDoUpdate({
+        target: schema.stripeEventProcessing.stripeEventId,
+        set: { processedAt: new Date(), processingError: null },
+      });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await d
-      .update(schema.stripeEvents)
-      .set({ processingError: message })
-      .where(eq(schema.stripeEvents.stripeEventId, event.id));
+      .insert(schema.stripeEventProcessing)
+      .values({ stripeEventId: stripeEventRowId, processingError: message })
+      .onConflictDoUpdate({
+        target: schema.stripeEventProcessing.stripeEventId,
+        set: { processingError: message },
+      });
     throw err;
   }
 
@@ -74,7 +89,7 @@ async function dispatch(event: Stripe.Event): Promise<void> {
     }
     default:
       // Unhandled event types are intentionally retained in
-      // billing.stripe_events with processed_at left null so the audit
+      // billing.stripe_events with no processing row so the audit
       // trail surfaces gaps without crashing the webhook.
       return;
   }
@@ -86,8 +101,8 @@ async function upsertPaymentMethod(event: Stripe.Event): Promise<void> {
   if (!customerRef) return;
   const customerId = typeof customerRef === "string" ? customerRef : customerRef.id;
 
-  // Tenant resolution: locate any subscription tied to this customer to get
-  // the tenant id. New customers may not have a subscription yet; in that
+  // Org resolution: locate any subscription tied to this customer to get
+  // the org id. New customers may not have a subscription yet; in that
   // case skip — the subsequent subscription.created event will backfill.
   const d = db();
   const sub = await d.query.subscriptions.findFirst({

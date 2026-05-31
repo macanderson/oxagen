@@ -1,0 +1,8 @@
+# drizzle-kit generate produces a full-snapshot migration and meta/ directory
+# when run against a hand-written SQL migration folder. These are artefacts
+# of the generate run used to verify the schema is correct; they are not
+# part of the migration history and must not be committed.
+meta/
+# Generated snapshot migrations (named by drizzle-kit, not following our
+# 000N_<description>.sql convention) are also excluded.
+0000_special_unus.sql
