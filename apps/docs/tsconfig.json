@@ -10,6 +10,8 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
     "incremental": true,
     "plugins": [
       {
@@ -20,8 +22,8 @@
       "@/*": [
         "./src/*"
       ],
-      "@/.source": [
-        "./.source/index.ts"
+      "@/.source/*": [
+        "./.source/*"
       ]
     },
     "allowJs": true
