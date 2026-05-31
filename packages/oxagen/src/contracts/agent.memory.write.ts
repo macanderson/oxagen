@@ -10,6 +10,12 @@ export const agentMemoryWrite = registerCapability({
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
+  sensitivity: "medium",
+  defaultEffect: "deny",
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow" },
+  },
   input: z.object({
     nodeRef: z.string(),
     weight: z.enum(["low", "high", "critical"]),

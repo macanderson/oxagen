@@ -20,3 +20,4 @@ with a new ADR if the call changes.
 - [ADR-008](./ADR-008-skills-filesystem-first.md) — Skills as filesystem-first with DB augmentation
 - [ADR-009](./ADR-009-unified-capability-tool-model.md) — Unified capability/tool model via `surfaces`
 - [ADR-010](./ADR-010-subagent-fanout-via-inngest.md) — Subagent fanout via Inngest invoke
+- [ADR-011](./ADR-011-vercel-sandbox-driver.md) — Vercel Sandbox driver for Vercel Functions

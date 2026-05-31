@@ -10,6 +10,12 @@ export const agentApprovalResolve = registerCapability({
   layers: ["schema", "api", "unit", "e2e", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "approval" },
+  sensitivity: "medium",
+  defaultEffect: "deny",
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow" },
+  },
   input: z.object({
     approvalId: z.string(),
     decision: z.enum(["approved", "denied"]),

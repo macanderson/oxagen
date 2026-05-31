@@ -10,6 +10,12 @@ export const agentSubagentAggregate = registerCapability({
   layers: ["schema", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "dispatch" },
+  sensitivity: "low",
+  defaultEffect: "deny",
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow" },
+  },
   input: z.object({
     fanoutId: z.string(),
     waitForCompletion: z.boolean().default(true),

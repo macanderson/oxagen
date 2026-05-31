@@ -10,7 +10,10 @@
     "./contracts/*": "./src/contracts/*.ts",
     "./registry": "./src/registry.ts",
     "./kernel": "./src/kernel.ts",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./define-contract": "./src/define-contract.ts",
+    "./iam": "./src/iam/index.ts",
+    "./contracts": "./src/contracts/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

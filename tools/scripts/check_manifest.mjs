@@ -40,12 +40,31 @@ function writeContractBarrel(files) {
   writeFileSync(BARREL, body);
 }
 
-function layerSatisfied(layer, capName) {
+/**
+ * Returns true when the given layer is satisfied for a capability.
+ *
+ * The "mcp" layer is special: the MCP server dispatches ALL mcp-surface
+ * capabilities dynamically via `capabilitiesForSurface("mcp") + invoke()`.
+ * There are no per-tool files under apps/mcp/src/tools/ — they were deleted
+ * in commit d401d73 because they were zombie stubs using the now-dead
+ * placeholderContext(). The correct gate for the "mcp" layer is therefore:
+ * does the capability's surfaces[] include "mcp"? If yes, the dynamic server
+ * will dispatch it — that IS the mcp layer artifact.
+ *
+ * @param {string} layer - the layer name from the contract's layers[]
+ * @param {string} capName - the capability name (e.g. "org.create")
+ * @param {string[]} capSurfaces - the capability's surfaces[] array
+ */
+function layerSatisfied(layer, capName, capSurfaces) {
   const slug = slugify(capName);
+  // The mcp layer is satisfied by dynamic dispatch: if the capability
+  // declares "mcp" in its surfaces[], the server will serve it.
+  if (layer === "mcp") {
+    return capSurfaces.includes("mcp");
+  }
   const candidates = {
     schema: [join(ROOT, "packages/database/src/schema")],
     api: [join(ROOT, `apps/api/src/routes/v1/${capName}.ts`)],
-    mcp: [join(ROOT, `apps/mcp/src/tools/${capName}.ts`)],
     unit: [join(CAP_DIR, `${capName}.test.ts`)],
     e2e: [join(ROOT, `apps/app/e2e/${slug}.spec.ts`)],
     docs: [join(ROOT, `docs/capabilities/${capName}.md`)],
@@ -110,7 +129,7 @@ function main() {
   for (const cap of caps) {
     const layerStatus = {};
     for (const layer of cap.layers) {
-      const ok = layerSatisfied(layer, cap.name);
+      const ok = layerSatisfied(layer, cap.name, cap.surfaces);
       layerStatus[layer] = ok;
       if (!ok) gaps.push(`${cap.name}: missing "${layer}"`);
     }

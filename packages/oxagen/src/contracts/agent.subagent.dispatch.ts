@@ -10,6 +10,12 @@ export const agentSubagentDispatch = registerCapability({
   layers: ["schema", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "dispatch" },
+  sensitivity: "medium",
+  defaultEffect: "deny",
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow" },
+  },
   input: z.object({
     parentMessageId: z.string(),
     fanout: z

@@ -86,18 +86,29 @@ async function migrate(): Promise<void> {
 
 async function turbo(): Promise<void> {
   console.log(kleur.cyan("[dev] starting turbo dev"));
-  // @oxagen/cli is an Ink commander that exits 1 without a subcommand; excluded
-  // from the long-running dev set. Invoke it ad-hoc via `pnpm cli <command>`.
-  // Turbo 2 runs `persistent: true` tasks (see turbo.json) in parallel by
-  // default — no --parallel flag needed.
+  // @oxagen/cli is an Ink commander that exits 1 without a subcommand, and
+  // @oxagen/env-manager is an on-demand local tool (`pnpm env:manager`); both
+  // are excluded from the long-running dev set. Invoke the cli ad-hoc via
+  // `pnpm cli <command>`. Turbo 2 runs `persistent: true` tasks (see turbo.json)
+  // in parallel by default — no --parallel flag needed.
   await execa(
     "pnpm",
-    ["turbo", "dev", "--filter=!@oxagen/cli"],
+    ["turbo", "dev", "--filter=!@oxagen/cli", "--filter=!@oxagen/env-manager"],
     { stdio: "inherit" },
   );
 }
 
 async function main(): Promise<void> {
+  // The shell (or a Vercel-pulled .env) may export over-quoted values — e.g.
+  // NODE_ENV='"development"' — which every spawned dev server (Next, api, mcp)
+  // inherits, producing Next's "non-standard NODE_ENV" warning and @oxagen/config
+  // normalizeEnv-stripped warnings on boot. Strip one surrounding double-quote
+  // pair from every value here so the children see clean env.
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === "string" && value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+      process.env[key] = value.slice(1, -1);
+    }
+  }
   await ensureEnvFile();
   await checkDocker();
   await up();

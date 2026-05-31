@@ -15,6 +15,13 @@ import type {
   usageRecords,
   conversations,
   messages,
+  principals,
+  roles,
+  roleGrants,
+  grants,
+  policies,
+  accessRequests,
+  iamSessions,
 } from "./schema/index.js";
 
 // ── Billing row types ────────────────────────────────────────────────────────
@@ -57,3 +64,26 @@ export type ConversationRow = InferSelectModel<typeof conversations>;
 
 /** Row type for `chat.messages` — used by the active-branch walker. */
 export type DbMessageRow = InferSelectModel<typeof messages>;
+
+// ── IAM row types ────────────────────────────────────────────────────────────
+
+/** Row type for `org.principals`. */
+export type IamPrincipalRow = InferSelectModel<typeof principals>;
+
+/** Row type for `org.roles`. */
+export type IamRoleRow = InferSelectModel<typeof roles>;
+
+/** Row type for `org.role_grants`. */
+export type IamRoleGrantRow = InferSelectModel<typeof roleGrants>;
+
+/** Row type for `org.grants`. */
+export type IamGrantRow = InferSelectModel<typeof grants>;
+
+/** Row type for `org.policies`. */
+export type IamPolicyRow = InferSelectModel<typeof policies>;
+
+/** Row type for `org.access_requests`. */
+export type IamAccessRequestRow = InferSelectModel<typeof accessRequests>;
+
+/** Row type for `org.iam_sessions`. */
+export type IamSessionRow = InferSelectModel<typeof iamSessions>;

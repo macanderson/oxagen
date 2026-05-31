@@ -1,7 +1,7 @@
 # ADR-007 — Docker as vendor-neutral code sandbox
 
 **Date:** 2026-05-28
-**Status:** Accepted
+**Status:** Accepted (see also [ADR-011](./ADR-011-vercel-sandbox-driver.md) which adds a Vercel-native driver)
 **Epic:** Agent Runtime
 
 ## Context

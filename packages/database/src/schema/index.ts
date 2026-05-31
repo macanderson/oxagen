@@ -17,3 +17,4 @@ export * from "./graph.js";
 export * from "./evaluation.js";
 export * from "./billing.js";
 export * from "./security.js";
+export * from "./iam.js";

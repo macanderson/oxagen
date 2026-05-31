@@ -14,6 +14,12 @@ export const billingSubscriptionRead = registerCapability({
     riskLevel: "low",
     category: "billing",
   },
+  sensitivity: "low",
+  defaultEffect: "deny",
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow", Billing: "allow" },
+    workspace: {},
+  },
   input: z.object({}),
   output: z.object({
     subscription: z

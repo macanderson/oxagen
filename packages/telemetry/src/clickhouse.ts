@@ -255,3 +255,75 @@ export function providerFromModelId(modelId: string): Provider {
 
 export const insertToolInvocations = (rows: readonly ToolInvocationRow[]) =>
   insertRows("tool_invocations", rows);
+
+// ── IAM audit events (OXA-1390, Phase 3) ─────────────────────────────────────
+//
+// One row per capability invocation. Written fire-and-forget from inside
+// defineContract().invoke(). The hash_chain links each event to the previous
+// one for the same (org_id, capability) pair; tamper-evidence is best-effort
+// because concurrent calls may read the same prev_hash (documented in
+// plan.md Phase 3 §Risks).
+
+export interface AuditEventRow {
+  occurred_at: string;
+  event_id: string;
+  org_id: string;
+  workspace_id: string | null;
+  capability: string;
+  scope_kind: "org" | "workspace";
+  scope_id: string;
+  acting_principal_id: string;
+  acting_principal_kind: "human" | "agent" | "service";
+  human_principal_id: string | null;
+  outcome: "allow" | "deny" | "pending_approval";
+  decision_reason: string;
+  target_kind: string | null;
+  target_id: string | null;
+  payload_hash: string;
+  chain_hash: string;
+  ip: string | null;
+  ua: string | null;
+  request_id: string;
+  correlation_id: string | null;
+  trace_jsonb: string;
+}
+
+/**
+ * Insert a single IAM audit event. Caller is responsible for fire-and-forget
+ * semantics (not awaiting unless auditing is in the critical path).
+ */
+export const insertAuditEvent = (row: AuditEventRow): Promise<void> =>
+  insertRows("audit_events", [row]);
+
+/**
+ * Read the most recent chain_hash for a given (org_id, capability) pair so the
+ * next event can chain off it. Returns an empty string when no prior events
+ * exist. Uses FINAL to ensure ReplacingMergeTree deduplication is applied
+ * before we read.
+ *
+ * Race note: two concurrent invocations for the same (org_id, capability) may
+ * read the same prev_hash and produce a forked chain. This is intentional —
+ * chain hash provides best-effort tamper-evidence at the range level, not
+ * strict per-event ordering. See plan.md Phase 3 §Risks.
+ */
+export async function latestAuditChainHash(args: {
+  orgId: string;
+  capability: string;
+}): Promise<string> {
+  const ch = clickhouse();
+  const result = await ch.query({
+    query: `
+      SELECT chain_hash
+      FROM audit_events FINAL
+      WHERE org_id = {orgId:UUID}
+        AND capability = {capability:String}
+      ORDER BY occurred_at DESC
+      LIMIT 1
+    `,
+    query_params: { orgId: args.orgId, capability: args.capability },
+    format: "JSONEachRow",
+  });
+  type Row = { chain_hash: string };
+  const rows = (await result.json()) as Row[];
+  return rows[0]?.chain_hash ?? "";
+}

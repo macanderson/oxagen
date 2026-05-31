@@ -13,6 +13,9 @@ const makeCap = (name: string) => ({
   description: "test capability",
   mode: "sync" as const,
   layers: ["unit"] as const,
+  sensitivity: "low" as const,
+  defaultEffect: "deny" as const,
+  defaultRoles: { org: {}, workspace: {} },
   input: z.object({}),
   output: z.object({}),
 });
