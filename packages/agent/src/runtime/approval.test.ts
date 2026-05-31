@@ -96,12 +96,61 @@ describe("approval runtime", () => {
   it("notifyResolution issues pg_notify on the approval channel", async () => {
     await notifyResolution({ approvalId: "appr_1", resolution: "approved", note: null });
     expect(executeSpy).toHaveBeenCalledTimes(1);
-    const calls = executeSpy.mock.calls as unknown as Array<[unknown]>;
-    const sql = String(calls[0]?.[0] ?? "");
-    expect(sql).toContain("pg_notify");
-    expect(sql).toContain("agent_approval_resolved");
-    expect(sql).toContain("appr_1");
-    expect(sql).toContain("approved");
+    const calls = executeSpy.mock.calls as unknown as Array<[{ queryChunks: unknown[] }]>;
+    const sqlObj = calls[0]?.[0];
+    // The drizzle sql tagged-template produces an object with queryChunks, not a raw string.
+    expect(sqlObj).toBeTruthy();
+    expect(sqlObj).toHaveProperty("queryChunks");
+    // Drizzle sql chunk shape: literal text chunks are { value: string[] },
+    // bound parameter chunks are plain strings.
+    const chunks = sqlObj!.queryChunks as Array<{ value?: string[] } | string>;
+    // Static SQL text (from literal parts) must contain pg_notify.
+    const staticText = chunks
+      .flatMap((c) => (typeof c === "object" && Array.isArray(c.value) ? c.value : []))
+      .join("");
+    expect(staticText).toContain("pg_notify");
+    // Bound params are plain strings — channel name must appear as a param.
+    const boundParams = chunks.filter((c): c is string => typeof c === "string");
+    expect(boundParams).toContain("agent_approval_resolved");
+    // Payload param must contain the approval id and round-trip as JSON.
+    const payloadParam = boundParams.find((v) => v.includes("appr_1"));
+    expect(payloadParam).toBeTruthy();
+    const parsed = JSON.parse(payloadParam!) as { approvalId: string; resolution: string };
+    expect(parsed.approvalId).toBe("appr_1");
+    expect(parsed.resolution).toBe("approved");
+  });
+
+  it("notifyResolution: hostile note with SQL metacharacters does not corrupt query or payload", async () => {
+    const hostileNote = "it's a test; -- ') DROP TABLE approvals; --";
+    await notifyResolution({
+      approvalId: "appr_hostile",
+      resolution: "denied",
+      note: hostileNote,
+    });
+    expect(executeSpy).toHaveBeenCalledTimes(1);
+    const calls = executeSpy.mock.calls as unknown as Array<[{ queryChunks: unknown[] }]>;
+    const sqlObj = calls[0]?.[0];
+    expect(sqlObj).toHaveProperty("queryChunks");
+    const chunks = sqlObj!.queryChunks as Array<{ value?: string[] } | string>;
+    // Static SQL text (literal parts) must NOT contain any hostile content.
+    const staticText = chunks
+      .flatMap((c) => (typeof c === "object" && Array.isArray(c.value) ? c.value : []))
+      .join("");
+    expect(staticText).not.toContain(hostileNote);
+    expect(staticText).not.toContain("DROP TABLE");
+    // Payload is a plain-string bound parameter — find it and verify it round-trips.
+    const boundParams = chunks.filter((c): c is string => typeof c === "string");
+    const payloadParam = boundParams.find((v) => v.includes("appr_hostile"));
+    expect(payloadParam).toBeTruthy();
+    const parsed = JSON.parse(payloadParam!) as {
+      approvalId: string;
+      resolution: string;
+      note: string;
+    };
+    expect(parsed.approvalId).toBe("appr_hostile");
+    expect(parsed.resolution).toBe("denied");
+    // note is preserved exactly — including every hostile character — without escaping or truncation.
+    expect(parsed.note).toBe(hostileNote);
   });
 
   it("waitForApproval resolves on NOTIFY for the matching id", async () => {
