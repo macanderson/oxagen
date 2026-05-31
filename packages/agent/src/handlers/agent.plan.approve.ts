@@ -1,5 +1,5 @@
 import { db, schema } from "@oxagen/database";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { CapabilityContext } from "../types.js";
 import type { AgentPlanApproveInput, AgentPlanApproveOutput } from "@oxagen/oxagen/contracts/agent.plan.approve";
 
@@ -24,8 +24,9 @@ export async function agentPlanApproveHandler(
       and(eq(schema.planSteps.id, input.planId), eq(schema.planSteps.orgId, ctx.orgId)),
     );
   // PG NOTIFY so a paused stream listening for this plan can resume.
-  await db().execute(
-    /* sql */ `SELECT pg_notify('agent_plan_resolved', '${JSON.stringify({ planId: input.planId, status }).replace(/'/g, "''")}')`,
-  );
+  // Use drizzle sql tagged-template so planId/status are bound parameters —
+  // no user-controlled string is ever concatenated into SQL.
+  const payload = JSON.stringify({ planId: input.planId, status });
+  await db().execute(sql`select pg_notify(${"agent_plan_resolved"}, ${payload})`);
   return { planId: input.planId, status };
 }

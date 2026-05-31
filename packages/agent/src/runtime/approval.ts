@@ -1,5 +1,5 @@
 import { db, schema } from "@oxagen/database";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import postgres from "postgres";
 
@@ -98,10 +98,10 @@ export async function waitForApproval(
 
 // Called from the agent.approval.resolve handler after it updates the DB.
 export async function notifyResolution(r: ApprovalResolution): Promise<void> {
-  await db().execute(
-    // pg_notify is the SQL form of NOTIFY; safer with parameterized payloads.
-    /* sql */ `SELECT pg_notify('${NOTIFY_CHANNEL}', '${JSON.stringify(r).replace(/'/g, "''")}')`,
-  );
+  const payload = JSON.stringify(r);
+  // Use drizzle sql tagged-template so channel and payload are passed as bound
+  // parameters — no user-controlled string is ever concatenated into SQL.
+  await db().execute(sql`select pg_notify(${NOTIFY_CHANNEL}, ${payload})`);
 }
 
 // Used by handlers that need a tenant-scoped lookup before update.
