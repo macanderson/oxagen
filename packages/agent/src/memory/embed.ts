@@ -1,14 +1,15 @@
-import { embed } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
-import { requireEnv } from "@oxagen/config/env";
+import { embedText as embedTextAI, type EmbedTextOpts } from "@oxagen/ai";
 
-// Match the 1536-dim AgentMemory vector index. Swap models requires a
-// re-index, so we pin here and treat the index name as the contract.
-const MODEL = "text-embedding-3-small";
+export type { EmbedTextOpts };
 
-export async function embedText(text: string): Promise<number[]> {
-  const env = requireEnv(["OPENAI_API_KEY"] as const);
-  const provider = env.OPENAI_API_KEY ? createOpenAI({ apiKey: env.OPENAI_API_KEY }) : createOpenAI();
-  const { embedding } = await embed({ model: provider.embedding(MODEL), value: text });
-  return embedding;
+/**
+ * Embed `text` using the shared @oxagen/ai embedText wrapper which
+ * records token usage + surface origin in ClickHouse (OXA-1425).
+ *
+ * The optional `opts.telemetry` context should be forwarded from the
+ * caller's CapabilityContext when available so every embedding call is
+ * metered.
+ */
+export async function embedText(text: string, opts: EmbedTextOpts = {}): Promise<number[]> {
+  return embedTextAI(text, opts);
 }

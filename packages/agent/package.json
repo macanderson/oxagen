@@ -21,7 +21,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^1.0.0",
     "@modelcontextprotocol/sdk": "^1.0.4",
     "@oxagen/ai": "workspace:*",
     "@oxagen/config": "workspace:*",
