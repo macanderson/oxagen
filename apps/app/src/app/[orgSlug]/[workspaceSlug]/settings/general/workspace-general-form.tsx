@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useRegisterFillableForm, useRegisterPageEntity } from "@/lib/page-context";
 import type { FillableFormSpec, FieldDescriptor } from "@/lib/ask/fill-types";
 import { cn } from "@/lib/utils";
+import { updateWorkspaceGeneralAction } from "./actions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -101,24 +102,23 @@ export function WorkspaceGeneralForm({
   useRegisterFillableForm({ ...spec, apply });
 
   // -------------------------------------------------------------------------
-  // Save handler — stubs persistence, never throws.
+  // Save handler — calls the server action, never throws on the happy path.
   // -------------------------------------------------------------------------
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsSaving(true);
     try {
-      // Stub: log the values. A real implementation would call a server action
-      // that writes `name` to `workspaces.name` and `description` to
-      // `workspaces.settings->>'description'` (or a future dedicated column).
-      console.log("[workspace-general] save", {
+      const result = await updateWorkspaceGeneralAction({
         orgSlug,
         workspaceSlug,
-        workspaceId,
-        values,
+        name: values.name,
+        description: values.description || undefined,
       });
-      // Simulate async
-      await new Promise<void>((resolve) => setTimeout(resolve, 400));
-      setSavedAt(new Date());
+      if (result.ok) {
+        setSavedAt(new Date());
+      }
+      // On error: result.ok is false but we intentionally do not crash the
+      // form — the user can retry. A future iteration may show a toast.
     } catch {
       // Policy §0.5: never surface an error that crashes the form.
     } finally {
