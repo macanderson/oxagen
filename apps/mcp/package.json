@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.1",
-    "@modelcontextprotocol/sdk": "^1.0.0",
     "@oxagen/agent": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
