@@ -1,23 +1,8 @@
 import type { CapabilityContext } from "../types.js";
 import { readFanout } from "../dispatch/subagent.js";
+import type { AgentSubagentAggregateInput, AgentSubagentAggregateOutput } from "@oxagen/oxagen/contracts/agent.subagent.aggregate";
 
-export interface AgentSubagentAggregateInput {
-  fanoutId: string;
-  waitForCompletion: boolean;
-  timeoutMs: number;
-}
-
-export interface AgentSubagentAggregateOutput {
-  fanoutId: string;
-  status: "pending" | "completed" | "partial" | "timed_out";
-  results: Array<{
-    childMessageId: string;
-    capability: string;
-    status: "completed" | "failed" | "pending";
-    output: unknown;
-    error: string | null;
-  }>;
-}
+export type { AgentSubagentAggregateInput, AgentSubagentAggregateOutput };
 
 const POLL_MS = 500;
 

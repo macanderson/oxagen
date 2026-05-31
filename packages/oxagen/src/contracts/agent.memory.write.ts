@@ -29,5 +29,5 @@ export const agentMemoryWrite = registerCapability({
   }),
 });
 
-export type AgentMemoryWriteInput = z.infer<typeof agentMemoryWrite.input>;
-export type AgentMemoryWriteOutput = z.infer<typeof agentMemoryWrite.output>;
+export type AgentMemoryWriteInput = z.output<typeof agentMemoryWrite.input>;
+export type AgentMemoryWriteOutput = z.output<typeof agentMemoryWrite.output>;

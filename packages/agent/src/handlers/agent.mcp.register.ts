@@ -1,20 +1,9 @@
 import { db, schema } from "@oxagen/database";
 import type { CapabilityContext } from "../types.js";
 import { healthcheck } from "../dispatch/mcp-client.js";
+import type { AgentMcpRegisterInput, AgentMcpRegisterOutput } from "@oxagen/oxagen/contracts/agent.mcp.register";
 
-export interface AgentMcpRegisterInput {
-  name: string;
-  transportType: "streamable-http" | "stdio";
-  endpointUrl: string;
-  authStrategy: "none" | "bearer" | "header";
-  authConfig?: Record<string, string>;
-}
-
-export interface AgentMcpRegisterOutput {
-  mcpServerId: string;
-  healthStatus: "healthy" | "degraded" | "unreachable";
-  discoveredTools: string[];
-}
+export type { AgentMcpRegisterInput, AgentMcpRegisterOutput };
 
 export async function agentMcpRegisterHandler(
   input: AgentMcpRegisterInput,

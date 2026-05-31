@@ -27,5 +27,5 @@ export const organizationCreate = registerCapability({
   }),
 });
 
-export type OrganizationCreateInput = z.infer<typeof organizationCreate.input>;
-export type OrganizationCreateOutput = z.infer<typeof organizationCreate.output>;
+export type OrganizationCreateInput = z.output<typeof organizationCreate.input>;
+export type OrganizationCreateOutput = z.output<typeof organizationCreate.output>;

@@ -26,5 +26,5 @@ export const agentSkillList = registerCapability({
   }),
 });
 
-export type AgentSkillListInput = z.infer<typeof agentSkillList.input>;
-export type AgentSkillListOutput = z.infer<typeof agentSkillList.output>;
+export type AgentSkillListInput = z.output<typeof agentSkillList.input>;
+export type AgentSkillListOutput = z.output<typeof agentSkillList.output>;

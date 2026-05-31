@@ -58,16 +58,18 @@ export const billingRollupUsage = inngest.createFunction(
           orderBy: (subscriptions, { asc }) => [asc(subscriptions.id)],
           limit: batchSize,
         });
-        // Map to SubRow explicitly: ensures required fields are present and
-        // converts Date fields to ISO strings before Inngest serializes them.
-        // This makes JsonifyObject<SubRow> structurally identical to SubRow,
-        // which resolves the emit-mode TS2322 caused by Drizzle inferring
-        // default-valued columns (e.g. `id`) as optional in select results.
-        return rows.map((row) => ({
-          id: row.id ?? "",
-          orgId: row.orgId,
-          currentPeriodStart: row.currentPeriodStart.toISOString(),
-          currentPeriodEnd: row.currentPeriodEnd.toISOString(),
+        // Map to SubRow explicitly so JsonifyObject<SubRow> is structurally
+        // identical to SubRow (all required strings) and the assignment holds
+        // under declaration emit (Vercel's builder), which infers Drizzle
+        // select columns as optional more aggressively than `tsc --noEmit`.
+        // The columns are all NOT NULL in the schema (billing.ts:34-41), so the
+        // non-null assertions are invariant-safe and only bridge that stricter
+        // inference; the explicit `(row): SubRow` return pins each element.
+        return rows.map((row): SubRow => ({
+          id: row.id!,
+          orgId: row.orgId!,
+          currentPeriodStart: row.currentPeriodStart!.toISOString(),
+          currentPeriodEnd: row.currentPeriodEnd!.toISOString(),
         }));
       });
 

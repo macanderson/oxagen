@@ -1,25 +1,9 @@
 import { db, schema } from "@oxagen/database";
 import type { CapabilityContext } from "../types.js";
 import { createApprovalRequest } from "../runtime/approval.js";
+import type { AgentPlanCreateInput, AgentPlanCreateOutput } from "@oxagen/oxagen/contracts/agent.plan.create";
 
-export interface AgentPlanCreateInput {
-  parentMessageId: string;
-  title: string;
-  steps: Array<{
-    id: string;
-    summary: string;
-    intent: string;
-    capability: string | null;
-    inputPreview: unknown;
-    dependsOn: string[];
-  }>;
-  rationale?: string;
-}
-
-export interface AgentPlanCreateOutput {
-  planId: string;
-  status: "pending_approval";
-}
+export type { AgentPlanCreateInput, AgentPlanCreateOutput };
 
 export async function agentPlanCreateHandler(
   input: AgentPlanCreateInput,

@@ -1,22 +1,9 @@
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import type { CapabilityContext } from "../types.js";
+import type { AgentTaskBackgroundReadInput, AgentTaskBackgroundReadOutput } from "@oxagen/oxagen/contracts/agent.task.background.read";
 
-export interface AgentTaskBackgroundReadInput {
-  taskId: string;
-}
-
-export interface AgentTaskBackgroundReadOutput {
-  taskId: string;
-  kind: string;
-  status: "pending" | "running" | "completed" | "failed" | "cancelled";
-  label: string | null;
-  resultPayload: unknown;
-  failureReason: string | null;
-  createdAt: string;
-  startedAt: string | null;
-  completedAt: string | null;
-}
+export type { AgentTaskBackgroundReadInput, AgentTaskBackgroundReadOutput };
 
 export async function agentTaskBackgroundReadHandler(
   input: AgentTaskBackgroundReadInput,

@@ -2,25 +2,9 @@ import { getSandbox, applyPolicy, DEFAULT_POLICY } from "@oxagen/sandbox";
 import { insertToolInvocation } from "@oxagen/telemetry";
 import { randomUUID } from "node:crypto";
 import type { CapabilityContext } from "../types.js";
+import type { AgentCodeExecuteInput, AgentCodeExecuteOutput } from "@oxagen/oxagen/contracts/agent.code.execute";
 
-export interface AgentCodeExecuteInput {
-  language: "node" | "python" | "shell";
-  code: string;
-  stdin?: string;
-  env?: Record<string, string>;
-  timeoutMs: number;
-  memoryMb: number;
-  network: "allow" | "deny";
-}
-
-export interface AgentCodeExecuteOutput {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-  durationMs: number;
-  timedOut: boolean;
-  oomKilled: boolean;
-}
+export type { AgentCodeExecuteInput, AgentCodeExecuteOutput };
 
 export async function agentCodeExecuteHandler(
   input: AgentCodeExecuteInput,

@@ -29,5 +29,5 @@ export const billingSubscriptionUpgradeStart = registerCapability({
   }),
 });
 
-export type BillingSubscriptionUpgradeStartInput = z.infer<typeof billingSubscriptionUpgradeStart.input>;
-export type BillingSubscriptionUpgradeStartOutput = z.infer<typeof billingSubscriptionUpgradeStart.output>;
+export type BillingSubscriptionUpgradeStartInput = z.output<typeof billingSubscriptionUpgradeStart.input>;
+export type BillingSubscriptionUpgradeStartOutput = z.output<typeof billingSubscriptionUpgradeStart.output>;

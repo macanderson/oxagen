@@ -26,5 +26,5 @@ export const agentTaskBackgroundRead = registerCapability({
   }),
 });
 
-export type AgentTaskBackgroundReadInput = z.infer<typeof agentTaskBackgroundRead.input>;
-export type AgentTaskBackgroundReadOutput = z.infer<typeof agentTaskBackgroundRead.output>;
+export type AgentTaskBackgroundReadInput = z.output<typeof agentTaskBackgroundRead.input>;
+export type AgentTaskBackgroundReadOutput = z.output<typeof agentTaskBackgroundRead.output>;

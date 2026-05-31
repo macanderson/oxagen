@@ -12,7 +12,7 @@ const inngest = new Inngest({ id: "oxagen-runner", eventKey: env.INNGEST_EVENT_K
 
 export interface FanoutChild {
   capability: string;
-  input: unknown;
+  input?: unknown;
   label?: string;
 }
 
