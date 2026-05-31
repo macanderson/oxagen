@@ -16,6 +16,7 @@
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/handlers": "workspace:*",
+    "@oxagen/iam": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "xmcp": "^0.6.10",
     "zod": "^3.25.76"

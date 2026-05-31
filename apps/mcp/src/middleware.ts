@@ -1,5 +1,12 @@
 import { apiKeyAuthMiddleware, type Middleware } from "xmcp";
+import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { extractBearerToken } from "./context.js";
+
+// Wire the real IAM enforcement runtime at MCP surface startup.
+// xmcp has no lifecycle hook — this module-level call runs once when the
+// middleware bundle is loaded, before any tool invocation can occur.
+// Idempotent: safe if the module is re-evaluated in dev hot-reload.
+bootstrapIAMRuntime();
 
 /**
  * MCP transport-layer auth gate.

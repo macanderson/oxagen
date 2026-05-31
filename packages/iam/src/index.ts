@@ -18,3 +18,5 @@ export type { CheckIAMArgs, CheckIAMResult } from "./check-iam.js";
 
 export { createAccessRequest } from "./access-request.js";
 export type { CreateAccessRequestArgs } from "./access-request.js";
+
+export { bootstrapIAMRuntime } from "./bootstrap.js";
