@@ -1,5 +1,7 @@
 # Oxagen
 
+[![CI](https://github.com/oxagenai/oxagen-monorepo/actions/workflows/ci.yml/badge.svg)](https://github.com/oxagenai/oxagen-monorepo/actions/workflows/ci.yml)
+
 > **Oxagen turns your business's data into a live, queryable knowledge
 > graph and gives a fleet of AI agents permission to act on it —
 > autonomously, auditably, and on your own infrastructure when you
