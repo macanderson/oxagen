@@ -1,9 +1,7 @@
 "use server";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { eq, and, sql, desc } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { cancelOrgSubscription, reactivateOrgSubscription } from "@oxagen/billing";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
 
@@ -41,19 +39,11 @@ export async function cancelSubscriptionAction(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   await getSessionOrRedirect();
   const tenant = await resolveOrg(input.orgSlug);
-  const tables = schema as unknown as Record<string, any>;
-  if (!tables.subscriptions) return { ok: false, error: "Billing not configured" };
-
-  await db()
-    .update(tables.subscriptions)
-    .set({ cancelAtPeriodEnd: true, canceledAt: new Date() })
-    .where(
-      and(
-        eq(tables.subscriptions.orgId, tenant.id),
-        sql`${tables.subscriptions.status} in ('active','trialing')`,
-      ),
-    );
-
+  try {
+    await cancelOrgSubscription(tenant.id);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Cancel failed" };
+  }
   revalidatePath(`/${input.orgSlug}/settings/billing`);
   return { ok: true };
 }
@@ -63,19 +53,11 @@ export async function reactivateSubscriptionAction(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   await getSessionOrRedirect();
   const tenant = await resolveOrg(input.orgSlug);
-  const tables = schema as unknown as Record<string, any>;
-  if (!tables.subscriptions) return { ok: false, error: "Billing not configured" };
-
-  await db()
-    .update(tables.subscriptions)
-    .set({ cancelAtPeriodEnd: false, canceledAt: null })
-    .where(
-      and(
-        eq(tables.subscriptions.orgId, tenant.id),
-        sql`${tables.subscriptions.status} in ('active','trialing','past_due')`,
-      ),
-    );
-
+  try {
+    await reactivateOrgSubscription(tenant.id);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Reactivate failed" };
+  }
   revalidatePath(`/${input.orgSlug}/settings/billing`);
   return { ok: true };
 }

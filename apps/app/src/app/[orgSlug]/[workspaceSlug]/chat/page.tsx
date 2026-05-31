@@ -1,10 +1,11 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { db, schema } from "@oxagen/database";
+import type { ConversationRow, DbMessageRow } from "@oxagen/database";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { ChatShell, type ChatMessage } from "@/components/chat/chat-shell";
 import type { AgentCapability } from "@/components/chat/plan-card";
+import type { AssistantContentBlock } from "@/components/chat/stream-event-types";
 import { listCapabilities, getSurfaces } from "@oxagen/oxagen";
 import {
   cancelBackgroundTaskAction,
@@ -31,53 +32,51 @@ export default async function ChatPage({
   const tenant = await resolveOrg(orgSlug);
   const workspace = await resolveWorkspace(tenant.id, workspaceSlug);
 
-  const tables = schema as unknown as Record<string, any>;
   let conversationId: string | null = null;
   let activeLeafMessageId: string | null = null;
 
-  if (tables.conversations) {
-    const conv = conversationPublicId
-      ? (
-          await db()
-            .select()
-            .from(tables.conversations)
-            .where(
-              and(
-                eq(tables.conversations.publicId, conversationPublicId),
-                eq(tables.conversations.orgId, tenant.id),
-                eq(tables.conversations.workspaceId, workspace.id),
-              ),
-            )
-            .limit(1)
-        )[0]
-      : (
-          await db()
-            .select()
-            .from(tables.conversations)
-            .where(
-              and(
-                eq(tables.conversations.userId, session.user.id),
-                eq(tables.conversations.workspaceId, workspace.id),
-              ),
-            )
-            .orderBy(desc(tables.conversations.createdAt))
-            .limit(1)
-        )[0];
-    if (conv) {
-      conversationId = conv.id;
-      activeLeafMessageId = conv.activeLeafMessageId ?? null;
-    }
+  const conv: ConversationRow | undefined = conversationPublicId
+    ? (
+        await db()
+          .select()
+          .from(schema.conversations)
+          .where(
+            and(
+              eq(schema.conversations.publicId, conversationPublicId),
+              eq(schema.conversations.orgId, tenant.id),
+              eq(schema.conversations.workspaceId, workspace.id),
+            ),
+          )
+          .limit(1)
+      )[0]
+    : (
+        await db()
+          .select()
+          .from(schema.conversations)
+          .where(
+            and(
+              eq(schema.conversations.userId, session.user.id),
+              eq(schema.conversations.workspaceId, workspace.id),
+            ),
+          )
+          .orderBy(desc(schema.conversations.createdAt))
+          .limit(1)
+      )[0];
+
+  if (conv) {
+    conversationId = conv.id;
+    activeLeafMessageId = conv.activeLeafMessageId ?? null;
   }
 
   // Promise lifts the message query into the RSC stream — the composer
   // renders eagerly while the active-branch walk resolves.
   const messagesPromise = (async (): Promise<ChatMessage[]> => {
-    if (!conversationId || !tables.messages) return [];
-    const rows = await db()
+    if (!conversationId) return [];
+    const rows: DbMessageRow[] = await db()
       .select()
-      .from(tables.messages)
-      .where(eq(tables.messages.conversationId, conversationId))
-      .orderBy(desc(tables.messages.createdAt));
+      .from(schema.messages)
+      .where(eq(schema.messages.conversationId, conversationId))
+      .orderBy(desc(schema.messages.createdAt));
     return walkActiveBranch(rows, activeLeafMessageId);
   })();
 
@@ -127,25 +126,27 @@ export default async function ChatPage({
 
 // Walk parents from the active leaf to reconstruct the visible branch.
 // Falls back to the most-recent root path when no leaf is set.
-function walkActiveBranch(rows: any[], leafId: string | null): ChatMessage[] {
+function walkActiveBranch(rows: DbMessageRow[], leafId: string | null): ChatMessage[] {
   if (rows.length === 0) return [];
   const byId = new Map(rows.map((r) => [r.id, r]));
   const childCount = new Map<string, number>();
   for (const r of rows) {
     if (r.parentMessageId) childCount.set(r.parentMessageId, (childCount.get(r.parentMessageId) ?? 0) + 1);
   }
-  const path: any[] = [];
-  let cursor = leafId ? byId.get(leafId) : rows.find((r) => r.parentMessageId === null);
+  const path: DbMessageRow[] = [];
+  let cursor: DbMessageRow | undefined = leafId
+    ? byId.get(leafId)
+    : rows.find((r) => r.parentMessageId === null);
   while (cursor) {
     path.unshift(cursor);
-    cursor = cursor.parentMessageId ? byId.get(cursor.parentMessageId) : null;
+    cursor = cursor.parentMessageId ? byId.get(cursor.parentMessageId) : undefined;
   }
   return path.map((r) => ({
     publicId: r.publicId,
-    role: r.role,
+    role: r.role as "user" | "assistant" | "system" | "tool",
     content: r.content,
     branchReason: r.branchReason,
     siblingCount: r.parentMessageId ? (childCount.get(r.parentMessageId) ?? 1) : 1,
-    contentBlocks: Array.isArray(r.contentBlocks) ? r.contentBlocks : undefined,
+    contentBlocks: Array.isArray(r.contentBlocks) ? (r.contentBlocks as AssistantContentBlock[]) : undefined,
   }));
 }

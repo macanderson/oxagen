@@ -2,8 +2,8 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { db, schema } from "@oxagen/database";
+import type { DbMessageRow, ConversationRow } from "@oxagen/database";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
 import { agentPlanApprove } from "@oxagen/oxagen/contracts/agent.plan.approve";
@@ -57,41 +57,38 @@ export async function sendMessageAction(
   });
   if (!capabilityInput.success) return { ok: false, error: capabilityInput.error.issues[0]?.message ?? "Invalid" };
 
-  const tables = schema as unknown as Record<string, any>;
-  if (!tables.conversations || !tables.messages) {
-    return { ok: false, error: "Chat tables not migrated yet" };
-  }
-
   try {
     const { conversationId, userMessageId, priorMessages } = await db().transaction(async (tx) => {
-      let convId = capabilityInput.data.conversationId;
-      if (!convId) {
-        const [conv] = await tx
-          .insert(tables.conversations)
-          .values({
-            orgId: ctx.orgId,
-            workspaceId: ctx.workspaceId,
-            userId: session.user.id,
-            status: "active",
-            createdByUserId: session.user.id,
-            updatedByUserId: session.user.id,
-          })
-          .returning();
-        if (!conv) throw new Error("Conversation insert failed");
-        convId = conv.id;
-      }
+      // Resolve or create the conversation, yielding a non-null string id.
+      const convId: string = capabilityInput.data.conversationId
+        ? capabilityInput.data.conversationId
+        : await (async () => {
+            const [conv] = await tx
+              .insert(schema.conversations)
+              .values({
+                orgId: ctx.orgId,
+                workspaceId: ctx.workspaceId,
+                userId: session.user.id,
+                status: "active",
+                createdByUserId: session.user.id,
+                updatedByUserId: session.user.id,
+              })
+              .returning();
+            if (!conv) throw new Error("Conversation insert failed");
+            return (conv as ConversationRow).id;
+          })();
 
       const [userMsg] = await tx
-        .insert(tables.messages)
+        .insert(schema.messages)
         .values({
           orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
           conversationId: convId,
-          parentMessageId: capabilityInput.data.parentMessageId,
+          parentMessageId: capabilityInput.data.parentMessageId ?? undefined,
           role: "user",
           content: capabilityInput.data.content,
           contentBlocks: capabilityInput.data.contentBlocks,
-          branchReason: capabilityInput.data.branchReason,
+          branchReason: capabilityInput.data.branchReason ?? undefined,
           isActiveInBranch: true,
           metadata: {},
           createdByUserId: session.user.id,
@@ -99,23 +96,25 @@ export async function sendMessageAction(
         })
         .returning();
       if (!userMsg) throw new Error("Message insert failed");
+      const typedMsg = userMsg as DbMessageRow;
 
       await tx
-        .update(tables.conversations)
-        .set({ activeLeafMessageId: userMsg.id, updatedAt: new Date() })
-        .where(eq(tables.conversations.id, convId));
+        .update(schema.conversations)
+        .set({ activeLeafMessageId: typedMsg.id, updatedAt: new Date() })
+        .where(eq(schema.conversations.id, convId));
 
       const prior = await tx
-        .select({ role: tables.messages.role, content: tables.messages.content })
-        .from(tables.messages)
-        .where(eq(tables.messages.conversationId, convId));
+        .select({ role: schema.messages.role, content: schema.messages.content })
+        .from(schema.messages)
+        .where(eq(schema.messages.conversationId, convId));
 
-      return { conversationId: convId, userMessageId: userMsg.id, priorMessages: prior };
+      return { conversationId: convId, userMessageId: typedMsg.id, priorMessages: prior };
     });
 
+    const VALID_ROLES = new Set(["user", "assistant", "system"]);
     const coreMessages: CoreMessage[] = priorMessages
-      .filter((m: any) => m.role === "user" || m.role === "assistant" || m.role === "system")
-      .map((m: any) => ({ role: m.role, content: m.content }));
+      .filter((m) => VALID_ROLES.has(m.role))
+      .map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
 
     // Stream the reply; buffer into `fullText` while writing the final
     // row on stream end. We do not push tokens to ClickHouse from here —
@@ -146,7 +145,7 @@ export async function sendMessageAction(
       onFinish: async (event) => {
         fullText = event.text;
         const [assistantMsg] = await db()
-          .insert(tables.messages)
+          .insert(schema.messages)
           .values({
             orgId: ctx.orgId,
             workspaceId: ctx.workspaceId,
@@ -163,10 +162,11 @@ export async function sendMessageAction(
           })
           .returning();
         if (assistantMsg) {
+          const typedAssistant = assistantMsg as DbMessageRow;
           await db()
-            .update(tables.conversations)
-            .set({ activeLeafMessageId: assistantMsg.id, updatedAt: new Date() })
-            .where(eq(tables.conversations.id, conversationId));
+            .update(schema.conversations)
+            .set({ activeLeafMessageId: typedAssistant.id, updatedAt: new Date() })
+            .where(eq(schema.conversations.id, conversationId));
         }
       },
     });

@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import Stripe from "stripe";
-import { eq, and, sql } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { createCheckoutSession } from "@oxagen/billing";
 import { loadEnv } from "@oxagen/config/env";
 import { getSession } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
@@ -14,6 +11,7 @@ const BodySchema = z.object({
   interval: z.enum(["month", "year"]),
 });
 
+// Thin delegate — all Stripe logic lives in @oxagen/billing.
 // Always returns JSON `{ url }`. The browser is then redirected client-
 // side. Stripe webhook → apps/api keeps subscription state in sync; we
 // do not write subscriptions.* here.
@@ -26,44 +24,19 @@ export async function POST(req: Request) {
   if (!body.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
   const tenant = await resolveOrg(body.data.orgSlug);
-  const tables = schema as unknown as Record<string, any>;
-  if (!tables.plans) return NextResponse.json({ error: "Billing not configured" }, { status: 503 });
 
-  const [plan] = await db().select().from(tables.plans).where(eq(tables.plans.slug, body.data.planSlug)).limit(1);
-  if (!plan) return NextResponse.json({ error: "Plan not found" }, { status: 404 });
-
-  const priceId = body.data.interval === "month" ? plan.stripePriceIdMonthly : plan.stripePriceIdAnnual;
-  if (!priceId) return NextResponse.json({ error: "Price unavailable" }, { status: 400 });
-
-  const stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: "2024-09-30.acacia" as Stripe.LatestApiVersion });
-
-  const existingSub = tables.subscriptions
-    ? (
-        await db()
-          .select()
-          .from(tables.subscriptions)
-          .where(
-            and(
-              eq(tables.subscriptions.orgId, tenant.id),
-              sql`${tables.subscriptions.status} in ('active','trialing','past_due')`,
-            ),
-          )
-          .limit(1)
-      )[0]
-    : null;
-
-  const stripeSession = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    line_items: [{ price: priceId, quantity: 1 }],
-    customer: existingSub?.stripeCustomerId,
-    customer_email: existingSub ? undefined : session.user.email,
-    success_url: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/settings/billing?status=success`,
-    cancel_url: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/settings/billing?status=canceled`,
-    client_reference_id: tenant.id,
-    metadata: { orgId: tenant.id, planId: plan.id, interval: body.data.interval },
-    subscription_data: { metadata: { orgId: tenant.id, planId: plan.id } },
-  });
-
-  if (!stripeSession.url) return NextResponse.json({ error: "No checkout URL" }, { status: 500 });
-  return NextResponse.json({ url: stripeSession.url });
+  try {
+    const { url } = await createCheckoutSession({
+      orgId: tenant.id,
+      planSlug: body.data.planSlug,
+      interval: body.data.interval,
+      successUrl: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/settings/billing?status=success`,
+      cancelUrl: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/settings/billing?status=canceled`,
+    });
+    return NextResponse.json({ url });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Checkout failed";
+    const status = message.includes("not found") ? 404 : message.includes("no") ? 400 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
 }
