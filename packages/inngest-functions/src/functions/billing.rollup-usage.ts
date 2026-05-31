@@ -35,7 +35,7 @@ export const billingRollupUsage = inngest.createFunction(
 
     // Drizzle keyset pagination on subscriptions.id (UUIDv7 ⇒ sortable).
     while (true) {
-      const batch: SubRow[] = await step.run(`load-batch-${cursor ?? "first"}`, async (): Promise<SubRow[]> => {
+      const batchRaw = await step.run(`load-batch-${cursor ?? "first"}`, async () => {
         const d = db();
         const rows = await d.query.subscriptions.findMany({
           where: cursor
@@ -58,20 +58,25 @@ export const billingRollupUsage = inngest.createFunction(
           orderBy: (subscriptions, { asc }) => [asc(subscriptions.id)],
           limit: batchSize,
         });
-        // Map to SubRow explicitly so JsonifyObject<SubRow> is structurally
-        // identical to SubRow (all required strings) and the assignment holds
-        // under declaration emit (Vercel's builder), which infers Drizzle
-        // select columns as optional more aggressively than `tsc --noEmit`.
-        // The columns are all NOT NULL in the schema (billing.ts:34-41), so the
-        // non-null assertions are invariant-safe and only bridge that stricter
-        // inference; the explicit `(row): SubRow` return pins each element.
-        return rows.map((row): SubRow => ({
-          id: row.id!,
-          orgId: row.orgId!,
-          currentPeriodStart: row.currentPeriodStart!.toISOString(),
-          currentPeriodEnd: row.currentPeriodEnd!.toISOString(),
+        // Columns are NOT NULL in the schema (billing.ts:34-41); the ?? guards
+        // only bridge Drizzle's select-result optionality.
+        return rows.map((row) => ({
+          id: row.id ?? "",
+          orgId: row.orgId ?? "",
+          currentPeriodStart: row.currentPeriodStart?.toISOString() ?? "",
+          currentPeriodEnd: row.currentPeriodEnd?.toISOString() ?? "",
         }));
       });
+      // step.run wraps its result in Inngest's JsonifyObject, which Vercel's
+      // declaration-emit tsc infers with all properties optional (local tsc keeps
+      // them required). Re-pin to SubRow OUTSIDE step.run — no wrapper here — so
+      // `batch: SubRow[]` holds unconditionally.
+      const batch: SubRow[] = batchRaw.map((r) => ({
+        id: r.id ?? "",
+        orgId: r.orgId ?? "",
+        currentPeriodStart: r.currentPeriodStart ?? "",
+        currentPeriodEnd: r.currentPeriodEnd ?? "",
+      }));
 
       if (batch.length === 0) break;
 
