@@ -3,6 +3,7 @@
  * File owned by the M agent; this stub is the R-agent placeholder.
  * Remove when the M agent delivers the real implementation.
  */
+import type React from "react";
 export interface InstallInstructionsProps {
   /** The package manager command(s) to display */
   command: string;

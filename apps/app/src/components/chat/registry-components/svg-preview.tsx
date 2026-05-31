@@ -3,6 +3,7 @@
  * File owned by the M agent; this stub is the R-agent placeholder.
  * Remove when the M agent delivers the real implementation.
  */
+import type React from "react";
 export interface SvgPreviewProps {
   /** Raw SVG markup string or a data-URL (data:image/svg+xml;...) */
   svg: string;
