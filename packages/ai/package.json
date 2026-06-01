@@ -11,7 +11,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
-    "test": "vitest run"
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "ai": "4.3.19",

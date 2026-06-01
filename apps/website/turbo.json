@@ -1,0 +1,15 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      // Marketing site — depends only on @oxagen/ui and never calls loadEnv().
+      // Only public, build-time-inlined vars affect the bundle, so a Postgres /
+      // Stripe / AI key rotation must NOT invalidate this build. This is the
+      // payoff of per-service env scoping.
+      "env": ["NEXT_PUBLIC_APP_URL", "NEXT_PUBLIC_WEBSITE_URL"],
+      "passThroughEnv": ["VERCEL", "VERCEL_URL", "VERCEL_ENV"]
+    }
+  }
+}

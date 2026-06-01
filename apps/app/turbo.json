@@ -1,0 +1,68 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      // The interactive agent app. `next build` runs loadEnv() while collecting
+      // page data for server routes (e.g. /api/auth/[...all]), so the FULL env
+      // contract must be present at build time, not just public vars.
+      "env": [
+        // Public — inlined into the client bundle
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_API_URL",
+        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+        // Postgres
+        "DATABASE_URL",
+        // ClickHouse (telemetry)
+        "CLICKHOUSE_URL",
+        "CLICKHOUSE_USERNAME",
+        "CLICKHOUSE_PASSWORD",
+        "CLICKHOUSE_DATABASE",
+        // Neo4j (ontology / agent memory)
+        "NEO4J_URI",
+        "NEO4J_USERNAME",
+        "NEO4J_PASSWORD",
+        "NEO4J_DATABASE",
+        // Better Auth + OAuth + token-at-rest encryption
+        "BETTER_AUTH_SECRET",
+        "BETTER_AUTH_URL",
+        "BETTER_AUTH_TRUSTED_ORIGINS",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "AUTH_TOKEN_KMS_KEY_ID",
+        // Stripe billing + usage meter
+        "STRIPE_SECRET_KEY",
+        "STRIPE_PUBLISHABLE_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "OXAGEN_TARGET_MARGIN",
+        "OXAGEN_METER_MARKUP",
+        // Inngest (schema requires these under NODE_ENV=production, which
+        // `next build` sets)
+        "INNGEST_EVENT_KEY",
+        "INNGEST_SIGNING_KEY",
+        // AI — Vercel AI Gateway is the primary path; provider keys are the
+        // direct fallback (see .env.example).
+        "AI_GATEWAY_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "OXAGEN_LLM_FAST",
+        "OXAGEN_LLM_BALANCED",
+        "OXAGEN_LLM_PRECISE",
+        // Sandbox (code-execution drivers)
+        "SANDBOX_ENABLED",
+        "SANDBOX_DRIVER",
+        "MODAL_RUNNER_URL",
+        "MODAL_RUNNER_TOKEN",
+        "VERCEL_SANDBOX_TOKEN",
+        "VERCEL_SANDBOX_TEAM_ID",
+        "VERCEL_SANDBOX_PROJECT_ID",
+        // IAM enforcement
+        "IAM_ENFORCEMENT_ENABLED"
+      ],
+      "passThroughEnv": ["VERCEL", "VERCEL_URL", "VERCEL_ENV", "NEXT_PHASE"]
+    }
+  }
+}

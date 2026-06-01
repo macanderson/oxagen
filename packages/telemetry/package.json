@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
     "migrate": "tsx src/migrate.ts",
-    "test": "vitest run"
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@clickhouse/client": "1.19.0",
