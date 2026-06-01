@@ -291,8 +291,14 @@ export async function materializeTools(
             },
           });
         }
-        // Close the connection after materializing tools.
-        await client.close();
+        // Do NOT close the connection here. Every materialized tool's
+        // `execute` closure (via materializeMcpTools) calls `client.callTool`
+        // on THIS client, and those calls happen later, while the model
+        // streams. Closing now would terminate the transport before any MCP
+        // tool runs, so every MCP tool call would throw. The StreamableHTTP
+        // connection is request-scoped and is torn down when the streaming
+        // request/runtime context ends; keeping it open also preserves any
+        // MCP session state across multiple tool calls within the turn.
       } catch (err) {
         // Per-server failure is isolated — log and continue.
         console.error(
