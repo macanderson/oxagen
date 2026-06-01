@@ -146,10 +146,17 @@ export async function POST(request: NextRequest): Promise<Response> {
       .where(
         and(
           eq(schema.messages.conversationId, conversationId),
-          // Tenant isolation (IDOR guard): conversationId arrives in the request
-          // body, so scope the read to the resolved workspace. Without this a
-          // member of org A could pass a conversationId belonging to org B and
-          // read that org's full message history.
+          // Tenant isolation (IDOR guard): conversationId arrives in the
+          // request body, so scope the read to the resolved workspace — a
+          // member of org A must not be able to pass a conversationId from
+          // org B and read its history.
+          //
+          // INTERIM defense-in-depth. The durable, uniform tenant boundary is
+          // Postgres RLS (OXA-1515: ENABLE/FORCE ROW LEVEL SECURITY + policies
+          // keyed on current_setting('app.current_org_id'), applied via a
+          // withTenant() GUC wrapper). Once RLS lands this predicate is
+          // redundant rather than load-bearing; it is kept until then so this
+          // path is never conversationId-only in the meantime.
           eq(schema.messages.workspaceId, workspace.id),
         ),
       )
