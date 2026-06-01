@@ -1,84 +1,201 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+
+  // Global cache-busters. `.env.local` / `.env.example` redefine the env
+  // contract every workspace reads, so a change to either invalidates all
+  // task caches; the lockfile, base tsconfig and npmrc are global build inputs.
   "globalDependencies": [
+    ".env.example",
     ".env.local",
-    "tsconfig.base.json",
     "pnpm-lock.yaml",
+    "tsconfig.base.json",
     ".npmrc"
   ],
-  "globalEnv": [
-    "DATABASE_URL",
-    "CLICKHOUSE_URL",
-    "CLICKHOUSE_USERNAME",
-    "CLICKHOUSE_PASSWORD",
-    "NEO4J_URI",
-    "NEO4J_USERNAME",
-    "NEO4J_PASSWORD",
-    "BETTER_AUTH_SECRET",
-    "BETTER_AUTH_URL",
-    "GOOGLE_CLIENT_ID",
-    "GOOGLE_CLIENT_SECRET",
-    "GITHUB_CLIENT_ID",
-    "GITHUB_CLIENT_SECRET",
-    "STRIPE_SECRET_KEY",
-    "STRIPE_PUBLISHABLE_KEY",
-    "STRIPE_WEBHOOK_SECRET",
-    "INNGEST_EVENT_KEY",
-    "INNGEST_SIGNING_KEY",
-    "ANTHROPIC_API_KEY",
-    "OPENAI_API_KEY",
-    "AI_GATEWAY_API_KEY",
-    "OXAGEN_LLM_FAST",
-    "OXAGEN_LLM_BALANCED",
-    "OXAGEN_LLM_PRECISE",
-    "LINEAR_API_KEY",
-    "LINEAR_PROJECT_ID",
-    "CLICKHOUSE_DATABASE",
-    "NEO4J_DATABASE",
-    "NEXT_PUBLIC_APP_URL",
-    "NEXT_PUBLIC_API_URL",
-    "SANDBOX_ENABLED",
-    "SANDBOX_DRIVER",
-    "MODAL_RUNNER_URL",
-    "MODAL_RUNNER_TOKEN",
-    "PLATFORM_VERSION",
-    "NODE_ENV"
-  ],
+
+  // Process-global env: identical meaning for every task in every workspace.
+  // Per-service env is spelled out in each app's own turbo.json
+  // (apps/app, apps/api, apps/mcp, apps/website). Test env lives on `test:unit`.
+  "globalEnv": ["NODE_ENV", "VERCEL_ENV", "PLATFORM_VERSION"],
+
+  // Available to every task but NOT part of any cache key (auth/runtime only).
+  "globalPassThroughEnv": ["CI", "TURBO_TOKEN", "TURBO_TEAM", "VERCEL", "VERCEL_URL"],
+
+  "remoteCache": { "enabled": true },
+
   "tasks": {
+    // Only the apps build (packages are consumed as TS source). Each app
+    // declares its own build `env` in apps/<svc>/turbo.json so a service only
+    // rebuilds when ITS env changes — e.g. the marketing site never rebuilds
+    // on a Stripe/DB/AI key rotation, but the app does.
     "build": {
-      "dependsOn": [
-        "^build"
-      ],
-      "outputs": [
-        ".next/**",
-        "!.next/cache/**",
-        "dist/**"
-      ]
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", ".xmcp/**"],
+      "passThroughEnv": ["VERCEL", "VERCEL_URL", "NEXT_PHASE"]
     },
-    "dev": {
-      "cache": false,
-      "persistent": true
+
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": ["*.tsbuildinfo"]
     },
+
     "lint": {
       "outputs": []
     },
-    "typecheck": {
-      "dependsOn": [
-        "^build"
+
+    // Unit tests run against the local Postgres/ClickHouse/Neo4j service
+    // containers in CI, so they read the full backend env contract. This is
+    // the repo-wide set every package test may touch; per-app *build* env is
+    // scoped separately in the per-app configs.
+    "test:unit": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      "env": [
+        "DATABASE_URL",
+        "CLICKHOUSE_URL",
+        "CLICKHOUSE_USERNAME",
+        "CLICKHOUSE_PASSWORD",
+        "CLICKHOUSE_DATABASE",
+        "NEO4J_URI",
+        "NEO4J_USERNAME",
+        "NEO4J_PASSWORD",
+        "NEO4J_DATABASE",
+        "BETTER_AUTH_SECRET",
+        "BETTER_AUTH_URL",
+        "BETTER_AUTH_TRUSTED_ORIGINS",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "AUTH_TOKEN_KMS_KEY_ID",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_PUBLISHABLE_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "OXAGEN_TARGET_MARGIN",
+        "OXAGEN_METER_MARKUP",
+        "INNGEST_EVENT_KEY",
+        "INNGEST_SIGNING_KEY",
+        "AI_GATEWAY_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "OXAGEN_LLM_FAST",
+        "OXAGEN_LLM_BALANCED",
+        "OXAGEN_LLM_PRECISE",
+        "SANDBOX_ENABLED",
+        "SANDBOX_DRIVER",
+        "MODAL_RUNNER_URL",
+        "MODAL_RUNNER_TOKEN",
+        "VERCEL_SANDBOX_TOKEN",
+        "VERCEL_SANDBOX_TEAM_ID",
+        "VERCEL_SANDBOX_PROJECT_ID",
+        "IAM_ENFORCEMENT_ENABLED",
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_API_URL",
+        "LINEAR_API_KEY",
+        "LINEAR_PROJECT_ID"
       ],
-      "outputs": []
+      "passThroughEnv": ["CI"]
     },
-    "test": {
-      "dependsOn": [
-        "^build"
+
+    // API contract tests (OpenAPI conformance). Defined as a pipeline slot:
+    // no workspace ships a `test:contract` script yet, so this is a no-op
+    // until the first contract suite lands under `tests/contract/`.
+    "test:contract": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "tests/contract/**", "openapi.json", "openapi.yaml"],
+      "outputs": ["coverage/**"],
+      "env": ["DATABASE_URL", "NEXT_PUBLIC_API_URL"]
+    },
+
+    // Playwright e2e — depends on the app's own build (not ^build) so
+    // `next start` has a production build to serve. Only @oxagen/app ships it.
+    // Run locally / via the app's `test:e2e` script; not wired into the CI
+    // gate yet (needs a services + env block — tracked as a follow-up).
+    "test:e2e": {
+      "dependsOn": ["build"],
+      "inputs": ["$TURBO_DEFAULT$", "e2e/**", "playwright.config.*"],
+      "outputs": ["playwright-report/**", "test-results/**"],
+      "env": [
+        "DATABASE_URL",
+        "BETTER_AUTH_SECRET",
+        "BETTER_AUTH_URL",
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_API_URL",
+        "E2E_TEST"
       ],
-      "outputs": []
+      "passThroughEnv": ["CI"]
     },
+
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      // dev is uncached, so the full env is passed through (available but not
+      // hashed) to keep local `turbo run dev` working under strict env mode.
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "CLICKHOUSE_URL",
+        "CLICKHOUSE_USERNAME",
+        "CLICKHOUSE_PASSWORD",
+        "CLICKHOUSE_DATABASE",
+        "NEO4J_URI",
+        "NEO4J_USERNAME",
+        "NEO4J_PASSWORD",
+        "NEO4J_DATABASE",
+        "BETTER_AUTH_SECRET",
+        "BETTER_AUTH_URL",
+        "BETTER_AUTH_TRUSTED_ORIGINS",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "AUTH_TOKEN_KMS_KEY_ID",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_PUBLISHABLE_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "OXAGEN_TARGET_MARGIN",
+        "OXAGEN_METER_MARKUP",
+        "INNGEST_EVENT_KEY",
+        "INNGEST_SIGNING_KEY",
+        "AI_GATEWAY_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "OXAGEN_LLM_FAST",
+        "OXAGEN_LLM_BALANCED",
+        "OXAGEN_LLM_PRECISE",
+        "SANDBOX_ENABLED",
+        "SANDBOX_DRIVER",
+        "MODAL_RUNNER_URL",
+        "MODAL_RUNNER_TOKEN",
+        "VERCEL_SANDBOX_TOKEN",
+        "VERCEL_SANDBOX_TEAM_ID",
+        "VERCEL_SANDBOX_PROJECT_ID",
+        "IAM_ENFORCEMENT_ENABLED",
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_API_URL",
+        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
+      ]
+    },
+
+    // Drizzle codegen — uncached, reads the Postgres URL directly.
     "generate": {
-      "cache": false
+      "cache": false,
+      "passThroughEnv": ["DATABASE_URL"]
     },
+
+    // Schema migrations (Postgres / ClickHouse / Neo4j) — uncached, gated in CI.
     "migrate": {
-      "cache": false
+      "cache": false,
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "CLICKHOUSE_URL",
+        "CLICKHOUSE_USERNAME",
+        "CLICKHOUSE_PASSWORD",
+        "CLICKHOUSE_DATABASE",
+        "NEO4J_URI",
+        "NEO4J_USERNAME",
+        "NEO4J_PASSWORD",
+        "NEO4J_DATABASE"
+      ]
     }
   }
 }

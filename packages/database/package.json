@@ -17,7 +17,7 @@
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "studio": "drizzle-kit studio",
-    "test": "vitest run"
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
