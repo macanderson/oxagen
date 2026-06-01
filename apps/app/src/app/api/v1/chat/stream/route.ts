@@ -165,13 +165,20 @@ export async function POST(request: NextRequest): Promise<Response> {
       .reverse();
   }
 
-  // Append the current user message. The server action may persist it
-  // concurrently or just after, but we always include it here so the
-  // model has the turn it's replying to.
-  const messagesWithCurrent: CoreMessage[] = [
-    ...historyMessages,
-    { role: "user", content },
-  ];
+  // Append the current user message. sendMessageAction persists this same
+  // message concurrently, so depending on which commits first it may ALREADY
+  // be the trailing row in `historyMessages`. Only append it when it isn't
+  // already there, otherwise the model receives the current turn twice (once
+  // from history, once from the explicit append) in the same request.
+  const lastHistory = historyMessages[historyMessages.length - 1];
+  const currentAlreadyInHistory =
+    lastHistory !== undefined &&
+    lastHistory.role === "user" &&
+    lastHistory.content === content;
+
+  const messagesWithCurrent: CoreMessage[] = currentAlreadyInHistory
+    ? historyMessages
+    : [...historyMessages, { role: "user", content }];
 
   // Inject knowledge-graph context as a leading system message (no-op when
   // blocks is empty, which is the default until Neo4j is configured).
