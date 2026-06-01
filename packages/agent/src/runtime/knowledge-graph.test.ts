@@ -71,7 +71,7 @@ describe("readWorkspaceContext", () => {
     expect(blocks).toEqual([]);
   });
 
-  it("returns [] even when enabled (TODO stub — KG query not wired yet)", async () => {
+  it("returns [] when enabled but workspace-context query is not yet wired (OXA-1508)", async () => {
     process.env.NEO4J_URI = "bolt://localhost:7687";
     const blocks = await readWorkspaceContext(ctx);
     expect(blocks).toEqual([]);

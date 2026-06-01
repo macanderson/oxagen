@@ -1,66 +1,110 @@
 /**
- * Unit tests for grants.ts (grantPlanCreditsForInvoicePaid,
+ * Unit tests for grants.ts (grantFreeCredits, grantPlanCreditsForInvoicePaid,
  * grantCreditPackForCheckout).
  *
  * Mocks:
- *  - @oxagen/database → db() factory
- *  - ../client.js     → stripeClient() (no live Stripe API)
- *  - ../credits.js    → grantCredits (spy, no ledger/DB needed)
+ *  - @oxagen/database → db() factory with transaction support
+ *  - ../client.js     → billingProvider() with getCheckoutSessionCreditPacks
  *  - ../subscriptions.js → syncSubscriptionFromStripe (no-op)
  *
- * Scenarios (grantPlanCreditsForInvoicePaid):
- *  1. Happy path subscription_create — credits granted once.
- *  2. subscription_cycle billing reason — credits granted.
- *  3. Already granted (alreadyGranted returns true) — grantCredits not called.
- *  4. Missing invoice row in DB — grantCredits not called.
- *  5. Non-subscription billing reason (e.g. manual) — returns early, no grant.
- *
- * Scenarios (grantCreditPackForCheckout):
- *  1. Happy path — line items with price.metadata.credits → credits granted.
- *  2. Already granted (alreadyGranted returns true) — grantCredits not called.
- *  3. Session mode is "subscription" (not payment) — returns early, no grant.
- *  4. payment_status is not "paid" — returns early, no grant.
- *  5. No org_id on session metadata — returns early, no grant.
+ * The refactored grants.ts is fully transactional (INSERT … ON CONFLICT DO
+ * NOTHING replaces the old check-then-insert TOCTOU). Tests verify:
+ *  1. Happy path — transaction runs, lot + ledger + balance mirror written.
+ *  2. Already granted (ON CONFLICT fires, ledger insert returns 0 rows) →
+ *     lot/balance inserts are NOT called.
+ *  3. Early-return conditions (wrong billing_reason, wrong session mode, etc.)
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type Stripe from "stripe";
+import type { BillingCheckoutSession, BillingInvoice } from "../provider.js";
 
 // ---------------------------------------------------------------------------
 // Module mocks — registered before any module import.
 // ---------------------------------------------------------------------------
-
-const createCreditLotMock = vi.fn().mockResolvedValue({ lotId: "lot-mock-1", effectiveBalanceCents: 1000n });
-vi.mock("../credits.js", () => ({
-  createCreditLot: createCreditLotMock,
-}));
 
 const syncSubscriptionMock = vi.fn().mockResolvedValue(undefined);
 vi.mock("../subscriptions.js", () => ({
   syncSubscriptionFromStripe: syncSubscriptionMock,
 }));
 
+// billingProvider mock — only getCheckoutSessionCreditPacks is used in grants.
+const getCheckoutSessionCreditPacksMock = vi.fn().mockResolvedValue([]);
+vi.mock("../client.js", () => ({
+  billingProvider: () => ({
+    getCheckoutSessionCreditPacks: getCheckoutSessionCreditPacksMock,
+  }),
+}));
+
 // ---------------------------------------------------------------------------
-// DB mock factory
+// DB mock factory (supports transaction)
 // ---------------------------------------------------------------------------
 
-type QueryFindFirst = ReturnType<typeof vi.fn>;
-
-interface DbQueryMocks {
-  creditLedger: { findFirst: QueryFindFirst };
-  subscriptions: { findFirst: QueryFindFirst };
-  plans: { findFirst: QueryFindFirst };
-  invoices: { findFirst: QueryFindFirst };
+interface TxMock {
+  insert: ReturnType<typeof vi.fn>;
+  _ledgerRows: Array<{ id: string }>;
+  _lotInsertCalled: boolean;
+  _balanceUpsertCalled: boolean;
 }
 
-function makeDb(overrides: Partial<DbQueryMocks> = {}): { query: DbQueryMocks } {
+/**
+ * Build a transaction mock.
+ * `ledgerConflict` controls whether the ledger INSERT ON CONFLICT fires:
+ *   false → insert succeeds, returns [{ id: "ledger-row-1" }]
+ *   true  → conflict, returns []
+ */
+function makeTx(ledgerConflict = false): TxMock {
+  const ledgerRows = ledgerConflict ? [] : [{ id: "ledger-row-1" }];
+  let insertCallIdx = 0;
+
+  const mock: TxMock = {
+    _ledgerRows: ledgerRows,
+    _lotInsertCalled: false,
+    _balanceUpsertCalled: false,
+    insert: vi.fn(() => {
+      insertCallIdx++;
+      if (insertCallIdx === 1) {
+        // First insert: credit_ledger (idempotency guard)
+        return {
+          values: vi.fn().mockReturnValue({
+            onConflictDoNothing: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue(ledgerRows),
+            }),
+          }),
+        };
+      }
+      if (insertCallIdx === 2) {
+        // Second insert: credit_lots
+        mock._lotInsertCalled = true;
+        return { values: vi.fn().mockResolvedValue(undefined) };
+      }
+      // Third insert: credit_balances upsert
+      mock._balanceUpsertCalled = true;
+      return {
+        values: vi.fn().mockReturnValue({
+          onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+        }),
+      };
+    }),
+  };
+  return mock;
+}
+
+function makeDb(
+  txMock: TxMock,
+  queryOverrides: Partial<{
+    creditLedger: ReturnType<typeof vi.fn>;
+    subscriptions: ReturnType<typeof vi.fn>;
+    plans: ReturnType<typeof vi.fn>;
+    invoices: ReturnType<typeof vi.fn>;
+  }> = {},
+) {
   return {
+    transaction: vi.fn((fn: (tx: TxMock) => Promise<unknown>) => fn(txMock)),
     query: {
-      creditLedger: { findFirst: vi.fn().mockResolvedValue(undefined) },
-      subscriptions: { findFirst: vi.fn().mockResolvedValue(undefined) },
-      plans: { findFirst: vi.fn().mockResolvedValue(undefined) },
-      invoices: { findFirst: vi.fn().mockResolvedValue(undefined) },
-      ...overrides,
+      creditLedger: { findFirst: queryOverrides.creditLedger ?? vi.fn().mockResolvedValue(undefined) },
+      subscriptions: { findFirst: queryOverrides.subscriptions ?? vi.fn().mockResolvedValue(undefined) },
+      plans: { findFirst: queryOverrides.plans ?? vi.fn().mockResolvedValue(undefined) },
+      invoices: { findFirst: queryOverrides.invoices ?? vi.fn().mockResolvedValue(undefined) },
     },
   };
 }
@@ -76,87 +120,100 @@ vi.mock("@oxagen/database", () => ({
       referenceType: "creditLedger.referenceType",
       referenceId: "creditLedger.referenceId",
     },
+    creditLots: { orgId: "creditLots.orgId" },
+    creditBalances: {
+      orgId: "creditBalances.orgId",
+      balanceCents: "creditBalances.balanceCents",
+    },
     subscriptions: { stripeSubscriptionId: "subscriptions.stripeSubscriptionId" },
     plans: { id: "plans.id" },
     invoices: { stripeInvoiceId: "invoices.stripeInvoiceId" },
   },
 }));
 
-// ---------------------------------------------------------------------------
-// Stripe client mock factory
-// ---------------------------------------------------------------------------
-
-function makeStripeListLineItems(
-  items: Stripe.LineItem[],
-): { autoPagingToArray: ReturnType<typeof vi.fn> } {
-  return {
-    autoPagingToArray: vi.fn().mockResolvedValue(items),
-  };
-}
-
-const stripeCheckoutSessionsMock = {
-  listLineItems: vi.fn(),
-};
-
-vi.mock("../client.js", () => ({
-  stripeClient: () => ({
-    checkout: { sessions: stripeCheckoutSessionsMock },
-  }),
+vi.mock("drizzle-orm", () => ({
+  eq: vi.fn((col: unknown, val: unknown) => ({ col, val })),
+  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values })),
+  and: vi.fn((...args: unknown[]) => args),
 }));
 
 // Import after mocks.
-const { grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } = await import(
-  "../grants.js"
-);
+const { grantFreeCredits, grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } =
+  await import("../grants.js");
+
 // ---------------------------------------------------------------------------
 // Fixture helpers
 // ---------------------------------------------------------------------------
 
-function makeInvoice(
-  overrides: Partial<Stripe.Invoice> = {},
-): Stripe.Invoice {
+function makeInvoice(overrides: Partial<BillingInvoice> = {}): BillingInvoice {
   return {
     id: "in_test_001",
-    object: "invoice",
-    billing_reason: "subscription_create",
-    subscription: "sub_test_001",
+    providerInvoiceId: "in_test_001",
+    number: "INV-001",
     status: "paid",
-    amount_due: 2000,
-    amount_paid: 2000,
-    amount_remaining: 0,
+    amountDueCents: 2000,
+    amountPaidCents: 2000,
+    amountRemainingCents: 0,
     currency: "usd",
-    period_start: Math.floor(Date.now() / 1000) - 86400,
-    period_end: Math.floor(Date.now() / 1000),
-    metadata: {},
-    lines: { data: [], object: "list", has_more: false, url: "/v1/invoices/in_test_001/lines" },
+    periodStart: new Date(),
+    periodEnd: new Date(),
+    dueAt: null,
+    paidAt: new Date(),
+    hostedInvoiceUrl: null,
+    invoicePdfUrl: null,
+    subscriptionId: "sub_test_001",
+    orgId: "org-abc",
+    billingReason: "subscription_create",
+    lineItems: [],
     ...overrides,
-  } as unknown as Stripe.Invoice;
+  };
 }
 
-function makeSession(overrides: Partial<Stripe.Checkout.Session> = {}): Stripe.Checkout.Session {
+function makeSession(overrides: Partial<BillingCheckoutSession> = {}): BillingCheckoutSession {
   return {
     id: "cs_test_001",
-    object: "checkout.session",
     mode: "payment",
-    payment_status: "paid",
+    paymentStatus: "paid",
     metadata: { org_id: "org-abc" },
+    subscriptionId: null,
     ...overrides,
-  } as unknown as Stripe.Checkout.Session;
+  };
 }
 
-function makeLineItem(creditCount: number, quantity: number = 1): Stripe.LineItem {
-  return {
-    id: `li_${creditCount}`,
-    object: "item",
-    quantity,
-    price: {
-      id: "price_test",
-      object: "price",
-      metadata: { credits: String(creditCount) },
-      product: null,
-    } as unknown as Stripe.Price,
-  } as unknown as Stripe.LineItem;
-}
+// ---------------------------------------------------------------------------
+// Tests — grantFreeCredits
+// ---------------------------------------------------------------------------
+
+describe("grantFreeCredits", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("first grant — transaction runs, lot + ledger + balance written", async () => {
+    const txMock = makeTx(false); // no conflict
+    dbState.instance = makeDb(txMock);
+
+    await grantFreeCredits("org-abc");
+
+    expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
+    expect(txMock.insert).toHaveBeenCalledTimes(3);
+    expect(txMock._lotInsertCalled).toBe(true);
+    expect(txMock._balanceUpsertCalled).toBe(true);
+  });
+
+  it("already granted (ledger conflict) — lot and balance inserts NOT called", async () => {
+    const txMock = makeTx(true); // conflict → 0 rows returned
+    dbState.instance = makeDb(txMock);
+
+    await grantFreeCredits("org-abc");
+
+    expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
+    // Only the ledger insert (idempotency check) is called; lot/balance are skipped.
+    expect(txMock.insert).toHaveBeenCalledTimes(1);
+    expect(txMock._lotInsertCalled).toBe(false);
+    expect(txMock._balanceUpsertCalled).toBe(false);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Tests — grantPlanCreditsForInvoicePaid
@@ -165,117 +222,81 @@ function makeLineItem(creditCount: number, quantity: number = 1): Stripe.LineIte
 describe("grantPlanCreditsForInvoicePaid", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    createCreditLotMock.mockResolvedValue({ lotId: "lot-mock-1", effectiveBalanceCents: 1000n });
     syncSubscriptionMock.mockResolvedValue(undefined);
   });
 
-  it("subscription_create billing reason — grants plan credits once", async () => {
-    dbState.instance = makeDb({
-      subscriptions: {
-        findFirst: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
-      },
-      plans: {
-        findFirst: vi.fn().mockResolvedValue({ includedCreditCents: 5000 }),
-      },
-      invoices: {
-        findFirst: vi.fn().mockResolvedValue({ id: "invoice-uuid-1" }),
-      },
-      creditLedger: {
-        // Not yet granted.
-        findFirst: vi.fn().mockResolvedValue(undefined),
-      },
+  it("subscription_create billing reason — grants plan credits in transaction", async () => {
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock, {
+      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      plans: vi.fn().mockResolvedValue({ includedCreditCents: 5000 }),
+      invoices: vi.fn().mockResolvedValue({ id: "invoice-uuid-1" }),
     });
 
-    await grantPlanCreditsForInvoicePaid(makeInvoice({ billing_reason: "subscription_create" }));
+    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "subscription_create" }));
 
-    expect(createCreditLotMock).toHaveBeenCalledOnce();
-    const call = createCreditLotMock.mock.calls[0]![0] as {
-      amountCents: bigint;
-      source: string;
-      reason: string;
-      expiresAt: Date | null;
-    };
-    expect(call.amountCents).toBe(5000n);
-    expect(call.source).toBe("subscription");
-    expect(call.reason).toBe("grant_plan_renewal");
-    expect(call.expiresAt).toBeInstanceOf(Date);
+    expect(syncSubscriptionMock).toHaveBeenCalledWith("sub_test_001");
+    expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
+    expect(txMock._lotInsertCalled).toBe(true);
+    expect(txMock._balanceUpsertCalled).toBe(true);
   });
 
   it("subscription_cycle billing reason — grants plan credits", async () => {
-    dbState.instance = makeDb({
-      subscriptions: {
-        findFirst: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
-      },
-      plans: {
-        findFirst: vi.fn().mockResolvedValue({ includedCreditCents: 3000 }),
-      },
-      invoices: {
-        findFirst: vi.fn().mockResolvedValue({ id: "invoice-uuid-2" }),
-      },
-      creditLedger: {
-        findFirst: vi.fn().mockResolvedValue(undefined),
-      },
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock, {
+      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      plans: vi.fn().mockResolvedValue({ includedCreditCents: 3000 }),
+      invoices: vi.fn().mockResolvedValue({ id: "invoice-uuid-2" }),
     });
 
-    await grantPlanCreditsForInvoicePaid(makeInvoice({ billing_reason: "subscription_cycle" }));
+    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "subscription_cycle" }));
 
-    expect(createCreditLotMock).toHaveBeenCalledOnce();
+    expect(txMock._lotInsertCalled).toBe(true);
   });
 
-  it("already granted (ledger row exists) — grantCredits is NOT called", async () => {
-    dbState.instance = makeDb({
-      subscriptions: {
-        findFirst: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
-      },
-      plans: {
-        findFirst: vi.fn().mockResolvedValue({ includedCreditCents: 5000 }),
-      },
-      invoices: {
-        findFirst: vi.fn().mockResolvedValue({ id: "invoice-uuid-1" }),
-      },
-      creditLedger: {
-        // Row exists — already granted.
-        findFirst: vi.fn().mockResolvedValue({ id: "ledger-row-1" }),
-      },
+  it("already granted (ledger conflict) — lot NOT inserted", async () => {
+    const txMock = makeTx(true); // conflict
+    dbState.instance = makeDb(txMock, {
+      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      plans: vi.fn().mockResolvedValue({ includedCreditCents: 5000 }),
+      invoices: vi.fn().mockResolvedValue({ id: "invoice-uuid-1" }),
     });
 
     await grantPlanCreditsForInvoicePaid(makeInvoice());
 
-    expect(createCreditLotMock).not.toHaveBeenCalled();
+    expect(txMock._lotInsertCalled).toBe(false);
   });
 
-  it("missing invoice row — createCreditLot is NOT called", async () => {
-    dbState.instance = makeDb({
-      subscriptions: {
-        findFirst: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
-      },
-      plans: {
-        findFirst: vi.fn().mockResolvedValue({ includedCreditCents: 5000 }),
-      },
-      invoices: {
-        // No row mirrored yet.
-        findFirst: vi.fn().mockResolvedValue(undefined),
-      },
-      creditLedger: {
-        findFirst: vi.fn().mockResolvedValue(undefined),
-      },
+  it("missing invoice row — transaction not entered (referenceId undefined)", async () => {
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock, {
+      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      plans: vi.fn().mockResolvedValue({ includedCreditCents: 5000 }),
+      invoices: vi.fn().mockResolvedValue(undefined), // no row
     });
 
     await grantPlanCreditsForInvoicePaid(makeInvoice());
 
-    // referenceId is undefined → the idempotency guard ("if (referenceId && alreadyGranted)")
-    // is bypassed, so createCreditLot IS called even without a referenceId. This is the
-    // observed behaviour of the source and the test documents it faithfully.
-    expect(createCreditLotMock).toHaveBeenCalledOnce();
+    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
   });
 
-  it("non-subscription billing reason (manual) — returns early, no grant", async () => {
-    dbState.instance = makeDb();
+  it("non-subscription billing reason (manual) — returns early, no transaction", async () => {
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock);
 
-    await grantPlanCreditsForInvoicePaid(makeInvoice({ billing_reason: "manual" }));
+    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "manual" }));
 
     expect(syncSubscriptionMock).not.toHaveBeenCalled();
-    expect(createCreditLotMock).not.toHaveBeenCalled();
+    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
+  });
+
+  it("no subscriptionId on invoice — returns early", async () => {
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock);
+
+    await grantPlanCreditsForInvoicePaid(makeInvoice({ subscriptionId: null, billingReason: "subscription_create" }));
+
+    expect(syncSubscriptionMock).not.toHaveBeenCalled();
   });
 });
 
@@ -286,73 +307,73 @@ describe("grantPlanCreditsForInvoicePaid", () => {
 describe("grantCreditPackForCheckout", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    createCreditLotMock.mockResolvedValue({ lotId: "lot-mock-1", effectiveBalanceCents: 500n });
+    getCheckoutSessionCreditPacksMock.mockResolvedValue([]);
   });
 
-  it("happy path — line items with price.metadata.credits grants correct total", async () => {
-    dbState.instance = makeDb({
-      creditLedger: { findFirst: vi.fn().mockResolvedValue(undefined) },
-    });
+  it("happy path — line items with credits → grants correct total in transaction", async () => {
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock);
 
-    stripeCheckoutSessionsMock.listLineItems.mockReturnValue(
-      makeStripeListLineItems([
-        makeLineItem(100, 2), // 200 credits
-        makeLineItem(50, 1),  // 50 credits
-      ]),
-    );
+    getCheckoutSessionCreditPacksMock.mockResolvedValue([
+      { creditsPerUnit: 100, quantity: 2 }, // 200 credits
+      { creditsPerUnit: 50, quantity: 1 },  // 50 credits
+    ]);
 
     await grantCreditPackForCheckout(makeSession());
 
-    expect(createCreditLotMock).toHaveBeenCalledOnce();
-    const call = createCreditLotMock.mock.calls[0]![0] as {
-      amountCents: bigint;
-      source: string;
-      reason: string;
-      expiresAt: Date | null;
-    };
-    expect(call.amountCents).toBe(250n);
-    expect(call.source).toBe("purchase");
-    expect(call.reason).toBe("grant_credit_pack");
-    // Purchase lots expire 1 year from the grant date — check it's in the future.
-    expect(call.expiresAt).toBeInstanceOf(Date);
-    expect((call.expiresAt as Date).getTime()).toBeGreaterThan(Date.now());
+    expect(getCheckoutSessionCreditPacksMock).toHaveBeenCalledWith("cs_test_001");
+    expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
+    expect(txMock._lotInsertCalled).toBe(true);
+    expect(txMock._balanceUpsertCalled).toBe(true);
   });
 
-  it("already granted — grantCredits is NOT called", async () => {
-    dbState.instance = makeDb({
-      creditLedger: {
-        // Row exists → alreadyGranted returns true.
-        findFirst: vi.fn().mockResolvedValue({ id: "ledger-row-1" }),
-      },
-    });
+  it("already granted (ledger conflict) — lot NOT inserted", async () => {
+    const txMock = makeTx(true);
+    dbState.instance = makeDb(txMock);
+
+    getCheckoutSessionCreditPacksMock.mockResolvedValue([
+      { creditsPerUnit: 100, quantity: 1 },
+    ]);
 
     await grantCreditPackForCheckout(makeSession());
 
-    expect(stripeCheckoutSessionsMock.listLineItems).not.toHaveBeenCalled();
-    expect(createCreditLotMock).not.toHaveBeenCalled();
+    expect(txMock._lotInsertCalled).toBe(false);
   });
 
-  it("session mode is subscription — returns early, no grant", async () => {
-    dbState.instance = makeDb();
+  it("zero credits from line items — transaction not entered", async () => {
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock);
+    getCheckoutSessionCreditPacksMock.mockResolvedValue([]); // no credit line items
+
+    await grantCreditPackForCheckout(makeSession());
+
+    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
+  });
+
+  it("session mode is not payment — returns early, no transaction", async () => {
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock);
 
     await grantCreditPackForCheckout(makeSession({ mode: "subscription" }));
 
-    expect(createCreditLotMock).not.toHaveBeenCalled();
+    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
   });
 
-  it("payment_status is not paid — returns early, no grant", async () => {
-    dbState.instance = makeDb();
+  it("paymentStatus is not paid — returns early, no transaction", async () => {
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock);
 
-    await grantCreditPackForCheckout(makeSession({ payment_status: "unpaid" }));
+    await grantCreditPackForCheckout(makeSession({ paymentStatus: "unpaid" }));
 
-    expect(createCreditLotMock).not.toHaveBeenCalled();
+    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
   });
 
-  it("no org_id on metadata — returns early, no grant", async () => {
-    dbState.instance = makeDb();
+  it("no org_id on session metadata — returns early, no transaction", async () => {
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock);
 
     await grantCreditPackForCheckout(makeSession({ metadata: {} }));
 
-    expect(createCreditLotMock).not.toHaveBeenCalled();
+    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
   });
 });

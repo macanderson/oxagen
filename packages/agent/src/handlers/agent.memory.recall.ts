@@ -13,7 +13,14 @@ export async function agentMemoryRecallHandler(
   if (!isKnowledgeGraphEnabled()) {
     return { memories: [] };
   }
-  const embedding = await embedText(input.query);
+  const embedding = await embedText(input.query, {
+    telemetry: {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      surface: ctx.surface,
+      executionStepId: ctx.messageId ?? ctx.requestId,
+    },
+  });
   const memories = await recallMemories({
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,

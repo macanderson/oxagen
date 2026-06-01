@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireEnv: vi.fn(),
-  generateImage: vi.fn(),
+  generateImageFor: vi.fn(),
   createOpenAI: vi.fn(),
 }));
 
@@ -12,9 +12,9 @@ vi.mock("@oxagen/config/env", () => ({
   requireEnv: mocks.requireEnv,
 }));
 
-// The handler uses dynamic imports for "ai" and "@ai-sdk/openai".
-vi.mock("ai", () => ({
-  experimental_generateImage: mocks.generateImage,
+// The handler delegates all generation to generateImageFor in @oxagen/ai.
+vi.mock("@oxagen/ai", () => ({
+  generateImageFor: mocks.generateImageFor,
 }));
 
 vi.mock("@ai-sdk/openai", () => ({
@@ -77,8 +77,10 @@ describe("imageGenerateHandler", () => {
     const fakeModel = { type: "image-model" };
     const fakeClient = { image: vi.fn().mockReturnValue(fakeModel) };
     mocks.createOpenAI.mockReturnValueOnce(fakeClient);
-    mocks.generateImage.mockResolvedValueOnce({
-      images: [{ base64: "AAABBB", uint8Array: new Uint8Array() }],
+    mocks.generateImageFor.mockResolvedValueOnce({
+      images: ["AAABBB"],
+      imageCount: 1,
+      durationMs: 123,
     });
 
     const result = await imageGenerateHandler(
@@ -93,13 +95,36 @@ describe("imageGenerateHandler", () => {
     expect(result.render.props["dataUri"]).toBe("data:image/png;base64,AAABBB");
   });
 
-  it("returns placeholder when provider returns no base64", async () => {
+  it("passes ctx.surface directly to generateImageFor (no surface re-map)", async () => {
+    mocks.requireEnv.mockReturnValueOnce({ OPENAI_API_KEY: "sk-test-key" });
+
+    const fakeModel = { type: "image-model" };
+    const fakeClient = { image: vi.fn().mockReturnValue(fakeModel) };
+    mocks.createOpenAI.mockReturnValueOnce(fakeClient);
+    mocks.generateImageFor.mockResolvedValueOnce({
+      images: ["BASE64DATA"],
+      imageCount: 1,
+      durationMs: 50,
+    });
+
+    const appCtx: CapabilityContext = { ...CTX, surface: "app" };
+    await imageGenerateHandler({ prompt: "Test" }, appCtx);
+
+    const arg = mocks.generateImageFor.mock.calls[0]?.[0] as {
+      telemetry?: { surface?: string };
+    };
+    expect(arg?.telemetry?.surface).toBe("app");
+  });
+
+  it("returns placeholder when generateImageFor returns no base64", async () => {
     mocks.requireEnv.mockReturnValueOnce({ OPENAI_API_KEY: "sk-test-key" });
 
     const fakeClient = { image: vi.fn().mockReturnValue({}) };
     mocks.createOpenAI.mockReturnValueOnce(fakeClient);
-    mocks.generateImage.mockResolvedValueOnce({
-      images: [{ base64: undefined, uint8Array: new Uint8Array() }],
+    mocks.generateImageFor.mockResolvedValueOnce({
+      images: [undefined],
+      imageCount: 1,
+      durationMs: 80,
     });
 
     const result = await imageGenerateHandler({ prompt: "Abstract art" }, CTX);
@@ -110,12 +135,12 @@ describe("imageGenerateHandler", () => {
     expect(result.dataUri).toBeUndefined();
   });
 
-  it("returns a placeholder and does not throw when generation fails", async () => {
+  it("returns a placeholder and does not throw when generateImageFor throws", async () => {
     mocks.requireEnv.mockReturnValueOnce({ OPENAI_API_KEY: "sk-test-key" });
 
     const fakeClient = { image: vi.fn().mockReturnValue({}) };
     mocks.createOpenAI.mockReturnValueOnce(fakeClient);
-    mocks.generateImage.mockRejectedValueOnce(new Error("Rate limit exceeded"));
+    mocks.generateImageFor.mockRejectedValueOnce(new Error("Rate limit exceeded"));
 
     const result = await imageGenerateHandler({ prompt: "A city" }, CTX);
 

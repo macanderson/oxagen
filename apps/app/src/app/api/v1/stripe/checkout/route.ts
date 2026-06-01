@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createCheckoutSession } from "@oxagen/billing";
 import { loadEnv } from "@oxagen/config/env";
 import { getSession } from "@/lib/session";
-import { resolveOrg } from "@/lib/resolve-org";
+import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
 
 const BodySchema = z.object({
   orgSlug: z.string(),
@@ -24,6 +24,10 @@ export async function POST(req: Request) {
   if (!body.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
   const tenant = await resolveOrg(body.data.orgSlug);
+
+  // Membership gate: assert the session user is a member of this org before
+  // creating a Stripe checkout session on their behalf (IDOR guard).
+  await assertOrgMember(tenant.id, session.user.id);
 
   try {
     const { url } = await createCheckoutSession({

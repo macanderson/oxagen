@@ -2,9 +2,13 @@
  * fill-action.test.ts — unit tests for fillFormAction server action.
  *
  * Covers:
- *   (a) Happy path — handler returns diffs, action maps them to FormFillResult
- *   (b) Handler throws — action returns noopResult (regression for the silent-catch fix)
+ *   (a) Happy path — kernel.invoke returns diffs, action maps them to FormFillResult
+ *   (b) kernel.invoke throws — action returns noopResult (regression for the silent-catch fix)
  *   (c) Session failure — action returns noopResult
+ *
+ * Mock seam: `@oxagen/oxagen` → `invoke`. The action routes through
+ * kernel.invoke() (not formFillHandler directly) to enforce IAM + audit.
+ * Mocking the handler registry is unnecessary — we mock at the invoke() boundary.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -22,8 +26,9 @@ vi.mock("@/lib/resolve-org", () => ({
   resolveWorkspace: vi.fn(),
 }));
 
-vi.mock("@oxagen/handlers/form.fill", () => ({
-  formFillHandler: vi.fn(),
+// The action calls invoke() from @oxagen/oxagen — this is the correct seam.
+vi.mock("@oxagen/oxagen", () => ({
+  invoke: vi.fn(),
 }));
 
 vi.mock("@oxagen/handlers/logger", () => ({
@@ -33,7 +38,7 @@ vi.mock("@oxagen/handlers/logger", () => ({
 import { fillFormAction, type FillFormActionInput } from "./fill-action.js";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
-import { formFillHandler } from "@oxagen/handlers/form.fill";
+import { invoke } from "@oxagen/oxagen";
 import { logger } from "@oxagen/handlers/logger";
 
 // ---------------------------------------------------------------------------
@@ -69,18 +74,18 @@ describe("fillFormAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getSessionOrRedirect).mockResolvedValue(mockSession as never);
-    vi.mocked(resolveOrg).mockResolvedValue(mockOrg);
-    vi.mocked(resolveWorkspace).mockResolvedValue(mockWorkspace);
+    vi.mocked(resolveOrg).mockResolvedValue(mockOrg as never);
+    vi.mocked(resolveWorkspace).mockResolvedValue(mockWorkspace as never);
   });
 
   // (a) Happy path
   it("maps handler diffs to FormFillResult on success", async () => {
-    vi.mocked(formFillHandler).mockResolvedValue({
+    vi.mocked(invoke).mockResolvedValue({
       fields: [
         { name: "name", current: "old name", proposed: "My Project", changed: true, reason: "Instruction says so" },
         { name: "description", current: "", proposed: "", changed: false },
       ],
-    } as never);
+    });
 
     const result = await fillFormAction(baseInput);
 
@@ -100,22 +105,36 @@ describe("fillFormAction", () => {
     });
   });
 
-  it("passes the correct ctx to formFillHandler", async () => {
-    vi.mocked(formFillHandler).mockResolvedValue({ fields: [] } as never);
+  it("invokes the capability with the correct name, input, and ctx", async () => {
+    vi.mocked(invoke).mockResolvedValue({ fields: [] });
 
     await fillFormAction(baseInput);
 
-    const [handlerInput, ctx] = vi.mocked(formFillHandler).mock.calls[0]!;
+    expect(invoke).toHaveBeenCalledOnce();
+    const [capabilityName, capInput, ctx, opts] = vi.mocked(invoke).mock.calls[0]!;
+
+    // Capability name
+    expect(capabilityName).toBe("form.fill");
+
+    // Context carries correct tenant + surface info
     expect(ctx.orgId).toBe("org-abc");
     expect(ctx.workspaceId).toBe("ws-xyz");
     expect(ctx.userId).toBe("user-123");
     expect(ctx.surface).toBe("app");
-    expect(handlerInput.route).toBe("/acme/prod/knowledge");
-    expect(handlerInput.instruction).toBe(baseInput.instruction);
+    expect(ctx.apiKeyId).toBeNull();
+    expect(ctx.messageId).toBeNull();
+    expect(typeof ctx.requestId).toBe("string");
+
+    // Input carries the correct route and instruction
+    expect((capInput as { route: string }).route).toBe("/acme/prod/knowledge");
+    expect((capInput as { instruction: string }).instruction).toBe(baseInput.instruction);
+
+    // Options mark the dispatch as originating from the agent surface
+    expect(opts).toEqual({ surface: "agent" });
   });
 
   it("omits workspaceId when workspaceSlug is absent", async () => {
-    vi.mocked(formFillHandler).mockResolvedValue({ fields: [] } as never);
+    vi.mocked(invoke).mockResolvedValue({ fields: [] });
 
     const inputNoWs: FillFormActionInput = {
       ...baseInput,
@@ -124,14 +143,14 @@ describe("fillFormAction", () => {
 
     await fillFormAction(inputNoWs);
 
-    const [, ctx] = vi.mocked(formFillHandler).mock.calls[0]!;
+    const [, , ctx] = vi.mocked(invoke).mock.calls[0]!;
     expect(ctx.workspaceId).toBe("");
     expect(resolveWorkspace).not.toHaveBeenCalled();
   });
 
-  // (b) Handler throws — returns noopResult
-  it("returns noopResult when formFillHandler throws", async () => {
-    vi.mocked(formFillHandler).mockRejectedValue(new Error("handler panic"));
+  // (b) invoke throws — returns noopResult
+  it("returns noopResult when invoke throws", async () => {
+    vi.mocked(invoke).mockRejectedValue(new Error("handler panic"));
 
     const result = await fillFormAction(baseInput);
 
@@ -141,9 +160,9 @@ describe("fillFormAction", () => {
     expect(result.fields[1]).toEqual({ name: "description", current: "", proposed: "", changed: false });
   });
 
-  it("logs an error when the handler throws", async () => {
+  it("logs an error when invoke throws", async () => {
     const err = new Error("handler panic");
-    vi.mocked(formFillHandler).mockRejectedValue(err);
+    vi.mocked(invoke).mockRejectedValue(err);
 
     await fillFormAction(baseInput);
 

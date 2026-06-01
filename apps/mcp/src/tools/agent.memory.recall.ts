@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentMemoryRecall } from "@oxagen/oxagen/contracts/agent.memory.recall";
-import { agentMemoryRecallHandler } from "@oxagen/agent/handlers/agent.memory.recall";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context.js";
 
 export const schema = {
@@ -35,6 +35,6 @@ export default async function agentMemoryRecallTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await agentMemoryRecallHandler(args, ctx);
+  const output = await invoke(agentMemoryRecall.name, args, ctx, { surface: "mcp" });
   return agentMemoryRecall.output.parse(output);
 }

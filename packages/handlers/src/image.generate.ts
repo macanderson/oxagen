@@ -1,12 +1,16 @@
+import { createOpenAI } from "@ai-sdk/openai";
+import { generateImageFor } from "@oxagen/ai";
 import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { imageGenerate } from "@oxagen/oxagen/contracts/image.generate";
+import { logger } from "./logger.js";
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 //
-// Uses the Vercel AI SDK experimental_generateImage with @ai-sdk/openai when
-// OPENAI_API_KEY is present. The AI SDK GeneratedFile type provides base64 and
-// uint8Array — there is no url field. We encode the base64 bytes as a data URI.
+// Delegates image generation to generateImageFor() in @oxagen/ai, which is
+// the single AI chokepoint for all image generation. generateImageFor records
+// telemetry (duration_ms, surface, provider, model, image_count) and charges
+// credits via the billing gate.
 //
 // When OPENAI_API_KEY is absent this handler returns a typed placeholder —
 // it never throws (policy §0.5).
@@ -28,8 +32,9 @@ export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = asy
   }
 
   if (!openAiKey) {
-    console.log(
-      `[image.generate] OPENAI_API_KEY not configured — returning placeholder for prompt: "${input.prompt}"`,
+    logger.info(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId, prompt: input.prompt },
+      "image.generate: OPENAI_API_KEY not configured — returning placeholder",
     );
     return {
       alt,
@@ -42,31 +47,32 @@ export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = asy
   }
 
   try {
-    // Dynamically import so the OpenAI SDK is only pulled in when needed.
-    const { experimental_generateImage: generateImage } = await import("ai");
-    const { createOpenAI } = await import("@ai-sdk/openai");
-
     const client = createOpenAI({ apiKey: openAiKey });
     // DALL-E 3 is the only OpenAI model that supports experimental_generateImage.
     const imageModel = client.image("dall-e-3");
 
-    const startedAt = Date.now();
-    const result = await generateImage({
+    const { images, durationMs } = await generateImageFor({
       model: imageModel,
       prompt: input.prompt,
       size: input.size ?? "1024x1024",
       n: 1,
+      telemetry: {
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        surface: ctx.surface,
+        executionStepId: ctx.messageId ?? ctx.requestId,
+      },
     });
 
-    const durationMs = Date.now() - startedAt;
-    console.log(
-      `[image.generate] generated in ${durationMs}ms for org=${ctx.orgId} ws=${ctx.workspaceId}`,
+    logger.info(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId, durationMs },
+      "image.generate: generation complete",
     );
 
-    // GeneratedFile has base64 (string) and uint8Array. Encode as a data URI.
-    const img = result.images[0];
-    const dataUri: string | undefined = img?.base64
-      ? `data:image/png;base64,${img.base64}`
+    // generateImageFor returns base64 strings; encode as a data URI.
+    const base64 = images[0];
+    const dataUri: string | undefined = base64
+      ? `data:image/png;base64,${base64}`
       : undefined;
 
     return {
@@ -81,8 +87,9 @@ export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = asy
   } catch (err) {
     // Generation failed — return placeholder, never throw.
     const reason = err instanceof Error ? err.message : "unknown error";
-    console.log(
-      `[image.generate] generation failed (${reason}) — returning placeholder`,
+    logger.warn(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId, reason },
+      "image.generate: generation failed — returning placeholder",
     );
     return {
       alt,

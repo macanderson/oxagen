@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { formFill } from "@oxagen/oxagen/contracts/form.fill";
-import { formFillHandler } from "@oxagen/handlers/form.fill";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context.js";
 
 const fieldDescriptorSchema = z.object({
@@ -54,6 +54,6 @@ export const metadata: ToolMetadata = {
 
 export default async function formFillTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
-  const output = await formFillHandler(args, ctx);
+  const output = await invoke(formFill.name, args, ctx, { surface: "mcp" });
   return formFill.output.parse(output);
 }

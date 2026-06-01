@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
-import { workspaceCreateHandler } from "@oxagen/handlers/workspace.create";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context.js";
 
 export const schema = {
@@ -29,6 +29,6 @@ export default async function workspaceCreateTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await workspaceCreateHandler(args, ctx);
+  const output = await invoke(workspaceCreate.name, args, ctx, { surface: "mcp" });
   return workspaceCreate.output.parse(output);
 }

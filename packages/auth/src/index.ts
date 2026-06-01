@@ -6,7 +6,12 @@ export { authClient, signIn, signOut, signUp, useSession, getSession } from "./c
 // API, MCP, and CLI call these; HTTP/transport specifics live in each
 // surface's thin wrapper.
 export type { SessionResult } from "./resolvers/index.js";
-export { resolveSession, parseSessionCookie } from "./resolvers/index.js";
+export {
+  resolveSession,
+  parseSessionCookie,
+  stripCookieSignature,
+  SESSION_COOKIE_NAME,
+} from "./resolvers/index.js";
 
 export type {
   ApiKeyResult,

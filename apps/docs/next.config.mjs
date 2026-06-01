@@ -18,6 +18,13 @@ const nextConfig = {
     // (PackFileCacheStrategy/FileSystemInfo), which ignoreWarnings does not
     // cover — silence infrastructure logging below warning level.
     config.infrastructureLogging = { ...(config.infrastructureLogging ?? {}), level: "error" };
+    // Workspace packages (e.g. @oxagen/ui) consume source and use NodeNext-style
+    // `import "./foo.js"` from `.tsx` files; teach webpack to try .ts/.tsx.
+    config.resolve.extensionAlias = {
+      ...(config.resolve.extensionAlias ?? {}),
+      ".js": [".ts", ".tsx", ".js"],
+      ".mjs": [".mts", ".mjs"],
+    };
     return config;
   },
 };

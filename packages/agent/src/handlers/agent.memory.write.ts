@@ -16,7 +16,14 @@ export async function agentMemoryWriteHandler(
     // that callers can detect; the nodeRef echo is always safe to return).
     return { memoryId: "", nodeRef: input.nodeRef };
   }
-  const embedding = await embedText(input.lesson);
+  const embedding = await embedText(input.lesson, {
+    telemetry: {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      surface: ctx.surface,
+      executionStepId: ctx.messageId ?? ctx.requestId,
+    },
+  });
   const { memoryId } = await writeMemory({
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,

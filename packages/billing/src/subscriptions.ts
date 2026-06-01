@@ -1,24 +1,7 @@
-import type Stripe from "stripe";
 import { db, schema } from "@oxagen/database";
 import { eq, and, sql } from "drizzle-orm";
-import { stripeClient } from "./client.js";
-
-const ALLOWED_STATUSES = new Set([
-  "trialing",
-  "active",
-  "past_due",
-  "canceled",
-  "incomplete",
-  "incomplete_expired",
-  "unpaid",
-  "paused",
-]);
-
-function pickInterval(sub: Stripe.Subscription): "month" | "year" {
-  const item = sub.items.data[0];
-  const interval = item?.price?.recurring?.interval;
-  return interval === "year" ? "year" : "month";
-}
+import { billingProvider } from "./client.js";
+import { logger } from "./logger.js";
 
 async function resolvePlanId(stripeProductId: string | null): Promise<string | null> {
   if (!stripeProductId) return null;
@@ -31,47 +14,43 @@ async function resolvePlanId(stripeProductId: string | null): Promise<string | n
 }
 
 /**
- * Pulls the canonical subscription record from Stripe and upserts into
- * billing.subscriptions. Idempotent on stripe_subscription_id. The webhook
- * handler invokes this for every subscription.* event so our table mirrors
- * Stripe within one round trip.
+ * Pulls the canonical subscription record from the billing provider and
+ * upserts into billing.subscriptions. Idempotent on stripe_subscription_id.
+ * The webhook handler invokes this for every subscription.* event so our
+ * table mirrors the provider within one round trip.
  */
 export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<void> {
-  const sub = await stripeClient().subscriptions.retrieve(stripeSubId, {
-    expand: ["items.data.price.product"],
-  });
+  const start = Date.now();
+  const sub = await billingProvider().getSubscription(stripeSubId);
   const d = db();
 
-  const orgId = (sub.metadata?.org_id as string | undefined) ?? null;
+  const orgId = sub.metadata?.org_id ?? null;
   if (!orgId) {
     // No tenant metadata = subscription was created outside our flow.
     // Bail silently; later events may carry the tenant once attached.
+    logger.warn({ stripeSubId }, "billing: subscription has no org_id metadata, skipping sync");
     return;
   }
 
-  const productId =
-    typeof sub.items.data[0]?.price?.product === "string"
-      ? sub.items.data[0]?.price?.product
-      : (sub.items.data[0]?.price?.product as Stripe.Product | undefined)?.id ?? null;
-  const planId = await resolvePlanId(productId);
-  if (!planId) return; // Unknown plan; cannot upsert without referential integrity.
-
-  const status = ALLOWED_STATUSES.has(sub.status) ? sub.status : "incomplete";
-  const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+  const planId = await resolvePlanId(sub.productId);
+  if (!planId) {
+    logger.warn({ stripeSubId, productId: sub.productId }, "billing: unknown product id, cannot sync subscription");
+    return; // Unknown plan; cannot upsert without referential integrity.
+  }
 
   const row = {
     orgId,
     planId,
     stripeSubscriptionId: sub.id,
-    stripeCustomerId: customerId,
-    status,
-    billingInterval: pickInterval(sub),
-    currentPeriodStart: new Date(sub.current_period_start * 1000),
-    currentPeriodEnd: new Date(sub.current_period_end * 1000),
-    cancelAtPeriodEnd: sub.cancel_at_period_end,
-    canceledAt: sub.canceled_at ? new Date(sub.canceled_at * 1000) : null,
-    trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
-    seatCount: sub.items.data[0]?.quantity ?? 1,
+    stripeCustomerId: sub.customerId,
+    status: sub.status,
+    billingInterval: sub.billingInterval,
+    currentPeriodStart: sub.currentPeriodStart,
+    currentPeriodEnd: sub.currentPeriodEnd,
+    cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+    canceledAt: sub.canceledAt,
+    trialEnd: sub.trialEnd,
+    seatCount: sub.seatCount,
   };
 
   await d
@@ -91,26 +70,31 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
         updatedAt: new Date(),
       },
     });
+
+  logger.info(
+    { orgId, stripeSubId, status: sub.status, durationMs: Date.now() - start },
+    "billing: subscription synced",
+  );
 }
 
 export async function cancelSubscription(stripeSubId: string, atPeriodEnd = true): Promise<void> {
-  const stripe = stripeClient();
+  const provider = billingProvider();
   if (atPeriodEnd) {
-    await stripe.subscriptions.update(stripeSubId, { cancel_at_period_end: true });
+    await provider.updateSubscription(stripeSubId, { cancelAtPeriodEnd: true });
   } else {
-    await stripe.subscriptions.cancel(stripeSubId);
+    await provider.cancelSubscription(stripeSubId);
   }
   await syncSubscriptionFromStripe(stripeSubId);
 }
 
 export async function reactivateSubscription(stripeSubId: string): Promise<void> {
-  await stripeClient().subscriptions.update(stripeSubId, { cancel_at_period_end: false });
+  await billingProvider().updateSubscription(stripeSubId, { cancelAtPeriodEnd: false });
   await syncSubscriptionFromStripe(stripeSubId);
 }
 
 /**
  * Cancel the active subscription for an organisation at period end.
- * Looks up the Stripe subscription id from our DB and delegates to
+ * Looks up the provider subscription id from our DB and delegates to
  * {@link cancelSubscription}. Raises if no active subscription is found.
  */
 export async function cancelOrgSubscription(orgId: string): Promise<void> {
@@ -123,12 +107,13 @@ export async function cancelOrgSubscription(orgId: string): Promise<void> {
     columns: { stripeSubscriptionId: true },
   });
   if (!row) throw new Error(`No active subscription found for org ${orgId}`);
+  logger.info({ orgId, stripeSubId: row.stripeSubscriptionId }, "billing: cancelling org subscription at period end");
   await cancelSubscription(row.stripeSubscriptionId, true);
 }
 
 /**
  * Undo a scheduled cancellation for the active subscription of an organisation.
- * Looks up the Stripe subscription id from our DB and delegates to
+ * Looks up the provider subscription id from our DB and delegates to
  * {@link reactivateSubscription}.
  */
 export async function reactivateOrgSubscription(orgId: string): Promise<void> {
@@ -141,6 +126,7 @@ export async function reactivateOrgSubscription(orgId: string): Promise<void> {
     columns: { stripeSubscriptionId: true },
   });
   if (!row) throw new Error(`No cancellable subscription found for org ${orgId}`);
+  logger.info({ orgId, stripeSubId: row.stripeSubscriptionId }, "billing: reactivating org subscription");
   await reactivateSubscription(row.stripeSubscriptionId);
 }
 
@@ -148,15 +134,7 @@ export async function upgradeSubscription(
   stripeSubId: string,
   newPriceId: string,
 ): Promise<void> {
-  const stripe = stripeClient();
-  const sub = await stripe.subscriptions.retrieve(stripeSubId);
-  const item = sub.items.data[0];
-  if (!item) throw new Error("subscription has no items");
-  await stripe.subscriptions.update(stripeSubId, {
-    items: [{ id: item.id, price: newPriceId }],
-    // Proration billed immediately so the customer sees the change reflected
-    // in their next invoice — matches the invoicing expectation in §6.13.
-    proration_behavior: "always_invoice",
-  });
+  logger.info({ stripeSubId, newPriceId }, "billing: upgrading subscription price");
+  await billingProvider().upgradeSubscription(stripeSubId, { newPriceId });
   await syncSubscriptionFromStripe(stripeSubId);
 }

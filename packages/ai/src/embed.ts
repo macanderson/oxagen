@@ -10,11 +10,13 @@ const MODEL = "text-embedding-3-small";
 
 export interface EmbedTextOpts {
   /**
-   * Telemetry context forwarded from the caller's CapabilityContext.
-   * When omitted the token-usage row is skipped (e.g. in tests that
-   * mock at the seam rather than at the ClickHouse client).
+   * Required telemetry context forwarded from the caller's CapabilityContext.
+   * Every embedding call must be metered so the token_usage table is the
+   * complete billing record (OXA-1351 / OXA-1425). Tests that do not exercise
+   * the ClickHouse path should mock @oxagen/telemetry.insertTokenUsage rather
+   * than omitting this field.
    */
-  telemetry?: {
+  telemetry: {
     orgId: string;
     workspaceId: string;
     surface: Surface;
@@ -30,7 +32,7 @@ export interface EmbedTextOpts {
  * `opts.telemetry` so every embedding call is metered alongside
  * language-model calls (OXA-1351 / OXA-1425).
  */
-export async function embedText(text: string, opts: EmbedTextOpts = {}): Promise<number[]> {
+export async function embedText(text: string, opts: EmbedTextOpts): Promise<number[]> {
   const env = requireEnv(["OPENAI_API_KEY"] as const);
   const client = env.OPENAI_API_KEY
     ? createOpenAI({ apiKey: env.OPENAI_API_KEY })
@@ -40,34 +42,32 @@ export async function embedText(text: string, opts: EmbedTextOpts = {}): Promise
 
   const { embedding, usage } = await embed({ model, value: text });
 
-  if (opts.telemetry) {
-    const { orgId, workspaceId, surface, executionStepId } = opts.telemetry;
-    const durationMs = Date.now() - startedAt;
-    const inputTokens = usage?.tokens ?? 0;
-    // Embeddings are input-only; the rate card prices them per the same meter.
-    const costUsdMicros = providerCostUsdMicros({ model: MODEL, inputTokens, outputTokens: 0 });
-    try {
-      const promptHash = await hashPrompt(text);
-      await insertTokenUsage([
-        {
-          execution_step_id: executionStepId,
-          org_id: orgId,
-          workspace_id: workspaceId,
-          model: MODEL,
-          provider: providerFromModelId(`openai:${MODEL}`),
-          input_tokens: inputTokens,
-          output_tokens: 0,
-          cached_tokens: 0,
-          cost_usd_micros: costUsdMicros,
-          duration_ms: durationMs,
-          surface,
-          prompt_hash: promptHash,
-          created_at: new Date().toISOString(),
-        },
-      ]);
-    } catch {
-      // Telemetry is best-effort; never fail the caller.
-    }
+  const { orgId, workspaceId, surface, executionStepId } = opts.telemetry;
+  const durationMs = Date.now() - startedAt;
+  const inputTokens = usage?.tokens ?? 0;
+  // Embeddings are input-only; the rate card prices them per the same meter.
+  const costUsdMicros = providerCostUsdMicros({ model: MODEL, inputTokens, outputTokens: 0 });
+  try {
+    const promptHash = await hashPrompt(text);
+    await insertTokenUsage([
+      {
+        execution_step_id: executionStepId,
+        org_id: orgId,
+        workspace_id: workspaceId,
+        model: MODEL,
+        provider: providerFromModelId(`openai:${MODEL}`),
+        input_tokens: inputTokens,
+        output_tokens: 0,
+        cached_tokens: 0,
+        cost_usd_micros: costUsdMicros,
+        duration_ms: durationMs,
+        surface,
+        prompt_hash: promptHash,
+        created_at: new Date().toISOString(),
+      },
+    ]);
+  } catch {
+    // Telemetry is best-effort; never fail the caller.
   }
 
   return embedding;

@@ -70,6 +70,18 @@ export interface BackgroundTaskTrayProps {
 
 const TERMINAL: BackgroundTaskStatus[] = ["completed", "failed", "cancelled"];
 
+// Bounded backoff for polling active background tasks.
+//
+// When the tray is visible and at least one task is non-terminal, we poll
+// with an exponential backoff: starting at BASE_POLL_MS, doubling each tick
+// up to MAX_POLL_MS. This bounds the long-tail polling cost without losing
+// responsiveness on short-lived tasks.
+//
+// When the tray is collapsed (hidden) or all tasks are terminal the poll
+// loop stops entirely — no network work while the tray is out of view.
+const BASE_POLL_MS = 2_000;
+const MAX_POLL_MS = 30_000;
+
 export function BackgroundTaskTray({ initialTaskIds, fetchTask, cancelTask }: BackgroundTaskTrayProps) {
   // The tray reads from the shared context if one exists so any component
   // can `useTaskTray().push(taskId)` to register a new task without
@@ -85,15 +97,33 @@ export function BackgroundTaskTray({ initialTaskIds, fetchTask, cancelTask }: Ba
   const [snapshots, setSnapshots] = React.useState<Record<string, BackgroundTaskSnapshot>>({});
   const [collapsed, setCollapsed] = React.useState(false);
 
-  // Poll every 2s while any tracked task is non-terminal. When all tracked
-  // tasks are terminal the interval clears itself so the tray stops doing
-  // network work.
+  // Stable ref so the interval callback can read current snapshots without
+  // the timeout resetting on every snapshot update.
+  const snapshotsRef = React.useRef(snapshots);
+  React.useEffect(() => { snapshotsRef.current = snapshots; }, [snapshots]);
+
+  // Poll active tasks with bounded exponential backoff. Stops when:
+  //   1. The tray is collapsed (collapsed === true), or
+  //   2. All tracked tasks have reached a terminal state.
+  // Resets the backoff to BASE_POLL_MS whenever new taskIds arrive.
   React.useEffect(() => {
-    if (taskIds.length === 0) return;
+    if (collapsed || taskIds.length === 0) return;
+
     let cancelled = false;
+    let intervalMs = BASE_POLL_MS;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+
     const tick = async () => {
+      // Check whether any task is still non-terminal before hitting the network.
+      const hasActive = taskIds.some((id) => {
+        const snap = snapshotsRef.current[id];
+        return !snap || !TERMINAL.includes(snap.status);
+      });
+      if (!hasActive) return; // All terminal — stop without scheduling next tick.
+
       const results = await Promise.allSettled(taskIds.map((id) => fetchTask(id)));
       if (cancelled) return;
+
       setSnapshots((prev) => {
         const next = { ...prev };
         results.forEach((r, i) => {
@@ -101,28 +131,27 @@ export function BackgroundTaskTray({ initialTaskIds, fetchTask, cancelTask }: Ba
         });
         return next;
       });
+
+      // Check again after the fetch — if everything is now terminal, don't
+      // schedule the next tick.
+      const stillActive = results.some(
+        (r) => r.status === "fulfilled" && !TERMINAL.includes(r.value.status),
+      );
+      if (!stillActive || cancelled) return;
+
+      // Schedule next tick with bounded backoff.
+      intervalMs = Math.min(intervalMs * 2, MAX_POLL_MS);
+      timerId = setTimeout(() => { void tick(); }, intervalMs);
     };
-    tick();
-    const hasActive = () =>
-      taskIds.some((id) => {
-        const snap = snapshots[id];
-        return !snap || !TERMINAL.includes(snap.status);
-      });
-    if (!hasActive()) return;
-    const interval = setInterval(tick, 2000);
+
+    // Kick off immediately, then the recursive setTimeout chain takes over.
+    timerId = setTimeout(() => { void tick(); }, 0);
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      if (timerId !== null) clearTimeout(timerId);
     };
-    // `snapshots` is intentionally excluded: the tick updater always reads
-    // fresh state via `setSnapshots(prev => ...)`, so a stale closure is
-    // safe. Including `snapshots` would reset the interval on every poll,
-    // causing thrash. The `hasActive()` check on line above reads the
-    // in-scope `snapshots` from the render that set up this effect — a
-    // one-tick lag is acceptable because the interval self-clears on the
-    // next run once all tasks are terminal.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshots intentionally excluded; see comment above
-  }, [taskIds, fetchTask]);
+  }, [taskIds, fetchTask, collapsed]);
 
   if (taskIds.length === 0) return null;
 

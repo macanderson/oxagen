@@ -1,7 +1,7 @@
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentMcpList } from "@oxagen/oxagen/contracts/agent.mcp.list";
-import { agentMcpListHandler } from "@oxagen/agent/handlers/agent.mcp.list";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context.js";
 
 export const schema = {};
@@ -20,6 +20,6 @@ export default async function agentMcpListTool(
   _args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await agentMcpListHandler({}, ctx);
+  const output = await invoke(agentMcpList.name, {}, ctx, { surface: "mcp" });
   return agentMcpList.output.parse(output);
 }

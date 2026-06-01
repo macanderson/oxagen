@@ -1,9 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { asc, eq } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
+import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import { streamAgentReply, defaultModel } from "@oxagen/ai";
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
+import { db, schema } from "@oxagen/database";
 import { randomUUID } from "node:crypto";
 import type { CoreMessage } from "ai";
 import type { RenderDirective, StreamEvent } from "@/components/chat/stream-event-types";
@@ -40,7 +42,17 @@ const BodySchema = z.object({
   workspaceSlug: z.string().min(1),
 });
 
-// POST /api/chat/stream
+// Maximum number of prior messages to include in the context window.
+// Keeps prompt size bounded while preserving enough history for coherent
+// multi-turn conversations. The newest HISTORY_LIMIT messages are taken
+// (ORDER BY createdAt ASC applied after the window is sliced so the
+// model sees them chronologically).
+const HISTORY_LIMIT = 50;
+
+// Valid CoreMessage roles. Guards against malformed DB rows reaching the SDK.
+const VALID_ROLES = new Set(["user", "assistant", "system"]);
+
+// POST /api/v1/chat/stream
 //
 // Streams the agent reply as text/event-stream with StreamEvent payloads.
 // Each SSE line has the form:
@@ -52,8 +64,10 @@ const BodySchema = z.object({
 // this URL and returns a deterministic scripted response so no LLM call
 // is made during e2e runs.
 //
-// Persistence is handled separately by `sendMessageAction` (server
-// action). This route is responsible only for the real-time stream.
+// This route is the SINGLE LLM caller per turn (OXA-1509). The server
+// action (`sendMessageAction`) handles Postgres persistence only — it no
+// longer calls the model. History is loaded here directly from the
+// messages table, ordered deterministically by createdAt ASC.
 export async function POST(request: NextRequest): Promise<Response> {
   // Auth: reject unauthenticated requests before consuming the body.
   let session: Awaited<ReturnType<typeof getSessionOrRedirect>>;
@@ -78,21 +92,32 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
   }
 
-  const { content, parentMessageId, orgSlug, workspaceSlug } = parsed.data;
+  const { content, conversationId, parentMessageId, orgSlug, workspaceSlug } = parsed.data;
 
   let tenant: Awaited<ReturnType<typeof resolveOrg>>;
   let workspace: Awaited<ReturnType<typeof resolveWorkspace>>;
   try {
     tenant = await resolveOrg(orgSlug);
+    // Membership gate: any authenticated user can submit a request to any
+    // org slug — assert they are actually a member before we touch any
+    // org-scoped data (IDOR guard).
+    await assertOrgMember(tenant.id, session.user.id);
     workspace = await resolveWorkspace(tenant.id, workspaceSlug);
   } catch {
     return NextResponse.json({ error: "Org or workspace not found" }, { status: 404 });
   }
 
-  // Build a minimal message context from the current user message only.
-  // The full conversation history is managed by the server action
-  // (`sendMessageAction`) which owns the Postgres write; here we just
-  // need enough context for the streaming model call.
+  // Load full conversation history from Postgres so the model has context
+  // for every prior turn. Without this, the model has no memory of prior
+  // messages in the conversation (SSE amnesia, OXA-1509).
+  //
+  // Strategy:
+  //   1. If conversationId is provided, load the last HISTORY_LIMIT rows
+  //      ordered by createdAt ASC (deterministic). The current user message
+  //      may not yet be persisted (sendMessageAction runs concurrently),
+  //      so we always append it explicitly at the end.
+  //   2. If no conversationId yet (first message), skip the DB read — the
+  //      coreMessages array will contain only the current user message.
   //
   // Knowledge-graph context injection: readWorkspaceContext is a no-op
   // seam today (returns []) when KNOWLEDGE_GRAPH_ENABLED is not set or
@@ -104,7 +129,40 @@ export async function POST(request: NextRequest): Promise<Response> {
     workspaceId: workspace.id,
     userId: session.user.id,
   });
-  const coreMessages: CoreMessage[] = injectContext([{ role: "user", content }], blocks);
+
+  let historyMessages: CoreMessage[] = [];
+  if (conversationId) {
+    // Load messages ordered deterministically by createdAt ASC, bounded
+    // by HISTORY_LIMIT to keep the prompt size predictable.
+    // We use a subquery approach: fetch the last N rows by ordering DESC
+    // and then reverse, so we always have the most-recent HISTORY_LIMIT
+    // messages in chronological order.
+    const rows = await db()
+      .select({
+        role: schema.messages.role,
+        content: schema.messages.content,
+      })
+      .from(schema.messages)
+      .where(eq(schema.messages.conversationId, conversationId))
+      .orderBy(asc(schema.messages.createdAt))
+      .limit(HISTORY_LIMIT);
+
+    historyMessages = rows
+      .filter((r) => VALID_ROLES.has(r.role))
+      .map((r) => ({ role: r.role as "user" | "assistant" | "system", content: r.content }));
+  }
+
+  // Append the current user message. The server action may persist it
+  // concurrently or just after, but we always include it here so the
+  // model has the turn it's replying to.
+  const messagesWithCurrent: CoreMessage[] = [
+    ...historyMessages,
+    { role: "user", content },
+  ];
+
+  // Inject knowledge-graph context as a leading system message (no-op when
+  // blocks is empty, which is the default until Neo4j is configured).
+  const coreMessages: CoreMessage[] = injectContext(messagesWithCurrent, blocks);
 
   const requestId = randomUUID();
   const agentTools = await materializeTools({

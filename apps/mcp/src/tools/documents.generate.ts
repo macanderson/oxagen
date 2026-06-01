@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { documentsGenerate } from "@oxagen/oxagen/contracts/documents.generate";
-import { documentsGenerateHandler } from "@oxagen/handlers/documents.generate";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context.js";
 
 export const schema = {
@@ -33,6 +33,6 @@ export const metadata: ToolMetadata = {
 
 export default async function documentsGenerateTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
-  const output = await documentsGenerateHandler(args, ctx);
+  const output = await invoke(documentsGenerate.name, args, ctx, { surface: "mcp" });
   return documentsGenerate.output.parse(output);
 }

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   txInsertOrgReturning: vi.fn(),
   txInsertOrgUsers: vi.fn(),
   txFn: vi.fn(),
+  grantFreeCredits: vi.fn(),
 }));
 
 // Default: no existing slug
@@ -65,6 +66,14 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   return { eq: orig.eq };
 });
 
+// Stub the billing package so grantFreeCredits doesn't open a second
+// db().transaction() inside the handler test. Billing idempotency is
+// covered by @oxagen/billing's own test suite.
+mocks.grantFreeCredits.mockResolvedValue(undefined);
+vi.mock("@oxagen/billing", () => ({
+  grantFreeCredits: mocks.grantFreeCredits,
+}));
+
 import { organizationCreateHandler } from "./organization.create.js";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
@@ -87,6 +96,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     mocks.txInsertOrg.mockClear();
     mocks.txInsertOrgReturning.mockClear();
     mocks.txInsertOrgUsers.mockClear();
+    mocks.grantFreeCredits.mockClear();
     // Restore defaults
     mocks.orgFindFirst.mockResolvedValue(null);
     mocks.txInsertOrgReturning.mockResolvedValue([
@@ -98,6 +108,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
         id: "internal_org_id",
       },
     ]);
+    mocks.grantFreeCredits.mockResolvedValue(undefined);
   });
 
   // ── auth guard ───────────────────────────────────────────────────────────
@@ -156,8 +167,15 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     expect(result.createdAt).toBe("2026-05-01T00:00:00.000Z");
   });
 
-  it("runs the insert inside a transaction", async () => {
+  it("runs the org insert inside a transaction and then calls grantFreeCredits", async () => {
     await organizationCreateHandler({ name: "Tx Test", slug: "tx-test", planSlug: "free" }, CTX);
+    // The org creation (orgs + orgUsers) must happen inside exactly one db
+    // transaction so membership is never visible without the org row.
     expect(mocks.txFn).toHaveBeenCalledTimes(1);
+    // grantFreeCredits must be called after the org tx commits (billing runs
+    // in its own isolated transaction so a billing failure cannot roll back
+    // the org creation).
+    expect(mocks.grantFreeCredits).toHaveBeenCalledTimes(1);
+    expect(mocks.grantFreeCredits).toHaveBeenCalledWith("internal_org_id");
   });
 });

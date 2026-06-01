@@ -10,6 +10,6 @@ export type { EmbedTextOpts };
  * caller's CapabilityContext when available so every embedding call is
  * metered.
  */
-export async function embedText(text: string, opts: EmbedTextOpts = {}): Promise<number[]> {
+export async function embedText(text: string, opts: EmbedTextOpts): Promise<number[]> {
   return embedTextAI(text, opts);
 }

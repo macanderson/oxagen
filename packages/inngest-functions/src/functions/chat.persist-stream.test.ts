@@ -115,6 +115,9 @@ describe("chatPersistStream Inngest handler", () => {
           outputTokens: 200,
           cachedTokens: 10,
           costMicros: 500,
+          // surface propagates the originating surface from the payload; "app"
+          // is the correct value for a turn that came from the chat UI.
+          surface: "app" as const,
         },
       },
     };
@@ -134,7 +137,8 @@ describe("chatPersistStream Inngest handler", () => {
     expect(row.output_tokens).toBe(200);
     expect(row.cached_tokens).toBe(10);
     expect(row.cost_usd_micros).toBe(500);
-    expect(row.surface).toBe("runner");
+    // surface must reflect the originating surface from the event payload, not a constant.
+    expect(row.surface).toBe("app");
     // Sentinel values for fields unavailable at this callsite
     expect(row.provider).toBe("");
     expect(row.duration_ms).toBe(0);

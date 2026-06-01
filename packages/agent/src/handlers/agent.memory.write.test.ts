@@ -48,7 +48,14 @@ describe("agent.memory.write handler", () => {
       },
       CTX,
     );
-    expect(mocks.embedTextMock).toHaveBeenCalledWith("do not rerun migrations");
+    expect(mocks.embedTextMock).toHaveBeenCalledWith("do not rerun migrations", {
+      telemetry: {
+        orgId: "ten_1",
+        workspaceId: "ws_1",
+        surface: "runner",
+        executionStepId: "req_1",
+      },
+    });
     expect(mocks.writeMemoryMock).toHaveBeenCalledTimes(1);
     const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(arg.orgId).toBe("ten_1");

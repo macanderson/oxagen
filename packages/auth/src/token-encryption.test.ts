@@ -77,7 +77,10 @@ describe("encryptAccountTokens", () => {
     expect(mockEncrypt).not.toHaveBeenCalled();
   });
 
-  it("returns all three encrypted fields and preserves plaintext (EXPAND phase)", async () => {
+  it("returns all three encrypted fields WITHOUT plaintext (CONTRACT phase)", async () => {
+    // OXA-1504: migration 0012 dropped plaintext access_token/refresh_token
+    // columns. encryptAccountTokens must NOT return accessToken/refreshToken
+    // in the result object (they must not be written back to the DB).
     const encBuf = Buffer.from("encrypted");
     mockEncrypt.mockResolvedValue(encBuf);
 
@@ -95,10 +98,11 @@ describe("encryptAccountTokens", () => {
     expect(result.idTokenEnc).toBe(encBuf);
     // KMS key id recorded.
     expect(result.tokenKmsKeyId).toBe(KEY_ID);
-    // Plaintext columns preserved (EXPAND phase dual-write).
-    expect(result.accessToken).toBe("acc_token");
-    expect(result.refreshToken).toBe("ref_token");
-    expect(result.idToken).toBe("id_token");
+    // CONTRACT phase: plaintext must NOT be in the returned object.
+    expect(result.accessToken).toBeUndefined();
+    expect(result.refreshToken).toBeUndefined();
+    // idToken is not a DB column; it is not in the return value.
+    expect(result.idToken).toBeUndefined();
     // encrypt called once per non-null token.
     expect(mockEncrypt).toHaveBeenCalledTimes(3);
   });
@@ -113,28 +117,29 @@ describe("decryptAccountTokens", () => {
     vi.clearAllMocks();
   });
 
-  it("returns data unchanged when tokenKmsKeyId is absent (pre-migration rows)", async () => {
+  it("returns null token fields when tokenKmsKeyId is absent (pre-migration rows)", async () => {
+    // CONTRACT phase: plaintext columns are gone. Pre-OXA-1420 rows have no
+    // KMS key id and no encrypted columns — tokens are unavailable.
     const adapter = makeMockAdapter();
     const data = {
-      accessToken: "plain_acc",
-      refreshToken: "plain_ref",
-      idToken: "plain_id",
+      accessTokenEnc: null,
+      refreshTokenEnc: null,
+      idTokenEnc: null,
     };
     const result = await decryptAccountTokens(data, adapter);
 
-    expect(result).toBe(data); // Same reference — no copy.
+    expect(result.accessToken).toBeNull();
+    expect(result.refreshToken).toBeNull();
+    expect(result.idToken).toBeNull();
     expect(mockDecrypt).not.toHaveBeenCalled();
   });
 
-  it("prefers _enc columns over plaintext when both are present", async () => {
+  it("decrypts _enc columns when tokenKmsKeyId is present", async () => {
     const encBuf = Buffer.from("enc_data");
     mockDecrypt.mockResolvedValue(Buffer.from("decrypted_value"));
 
     const adapter = makeMockAdapter();
     const data = {
-      accessToken: "stale_plain_acc",
-      refreshToken: "stale_plain_ref",
-      idToken: "stale_plain_id",
       accessTokenEnc: encBuf,
       refreshTokenEnc: encBuf,
       idTokenEnc: encBuf,
@@ -142,7 +147,7 @@ describe("decryptAccountTokens", () => {
     };
     const result = await decryptAccountTokens(data, adapter);
 
-    // Decrypted values override plaintext.
+    // Decrypted values returned.
     expect(result.accessToken).toBe("decrypted_value");
     expect(result.refreshToken).toBe("decrypted_value");
     expect(result.idToken).toBe("decrypted_value");
@@ -150,12 +155,10 @@ describe("decryptAccountTokens", () => {
     expect(mockDecrypt).toHaveBeenCalledTimes(3);
   });
 
-  it("falls back to plaintext when _enc columns are null", async () => {
+  it("returns null tokens when _enc columns are null (partial row)", async () => {
+    // Rows where encryption was attempted but tokens were not present at write time.
     const adapter = makeMockAdapter();
     const data = {
-      accessToken: "plain_acc",
-      refreshToken: null,
-      idToken: null,
       accessTokenEnc: null,
       refreshTokenEnc: null,
       idTokenEnc: null,
@@ -163,7 +166,7 @@ describe("decryptAccountTokens", () => {
     };
     const result = await decryptAccountTokens(data, adapter);
 
-    expect(result.accessToken).toBe("plain_acc");
+    expect(result.accessToken).toBeNull();
     expect(result.refreshToken).toBeNull();
     expect(result.idToken).toBeNull();
     // No encrypted data to decrypt.
@@ -199,7 +202,9 @@ describe("buildAccountTokenHooks", () => {
     expect(typeof hooks.update.before).toBe("function");
   });
 
-  it("create.before encrypts token fields", async () => {
+  it("create.before encrypts token fields and strips plaintext columns", async () => {
+    // CONTRACT phase: access_token / refresh_token columns are dropped from DB.
+    // The hook must NOT return accessToken / refreshToken in the data object.
     mockRequireEnv.mockReturnValue({ AUTH_TOKEN_KMS_KEY_ID: KEY_ID });
     const encBuf = Buffer.from("enc");
     mockEncrypt.mockResolvedValue(encBuf);
@@ -212,12 +217,16 @@ describe("buildAccountTokenHooks", () => {
       idToken: "id",
     });
 
+    // Encrypted columns are present.
     expect(result.data).toMatchObject({
       accessTokenEnc: encBuf,
       refreshTokenEnc: encBuf,
       idTokenEnc: encBuf,
       tokenKmsKeyId: KEY_ID,
     });
+    // Plaintext columns are absent — they were dropped in migration 0012.
+    expect(result.data).not.toHaveProperty("accessToken");
+    expect(result.data).not.toHaveProperty("refreshToken");
   });
 
   it("update.before skips encryption when no token field is present", async () => {

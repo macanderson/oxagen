@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
-import { chatMessageSendHandler } from "@oxagen/handlers/chat.message.send";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 
@@ -12,6 +12,6 @@ export const chatMessageSendRoute = new Hono<AppEnv>();
 chatMessageSendRoute.post("/", async (c) => {
   const body = chatMessageSend.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await chatMessageSendHandler(body, ctx);
+  const out = await invoke(chatMessageSend.name, body, ctx, { surface: "api" });
   return c.json(out, 202);
 });

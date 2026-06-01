@@ -133,8 +133,8 @@ describe("recordSecurityEvent", () => {
     expect(onError).toHaveBeenCalledWith(insertErr);
   });
 
-  it("does not re-throw when no onError is provided — logs to console.error", async () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  it("does not re-throw when no onError is provided — writes to process.stderr", async () => {
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const insert = vi.fn(() => Promise.reject(new Error("disk full")));
 
     const event: SecurityEventInput = {
@@ -152,8 +152,12 @@ describe("recordSecurityEvent", () => {
     expect(() => recordSecurityEvent(insert as AuditInsertFn, event)).not.toThrow();
     await Promise.resolve();
 
-    expect(consoleSpy).toHaveBeenCalledOnce();
-    consoleSpy.mockRestore();
+    expect(stderrSpy).toHaveBeenCalledOnce();
+    // Confirm the structured output contains the event type and org id.
+    const written = stderrSpy.mock.calls[0]?.[0] as string;
+    expect(written).toContain("api_key.revoked");
+    expect(written).toContain("org-abc");
+    stderrSpy.mockRestore();
   });
 });
 

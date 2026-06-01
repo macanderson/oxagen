@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentTaskBackgroundStart } from "@oxagen/oxagen/contracts/agent.task.background.start";
-import { agentTaskBackgroundStartHandler } from "@oxagen/agent/handlers/agent.task.background.start";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context.js";
 
 export const schema = {
@@ -25,6 +25,6 @@ export default async function agentTaskBackgroundStartTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await agentTaskBackgroundStartHandler(args, ctx);
+  const output = await invoke(agentTaskBackgroundStart.name, args, ctx, { surface: "mcp" });
   return agentTaskBackgroundStart.output.parse(output);
 }

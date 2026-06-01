@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentMemoryWrite } from "@oxagen/oxagen/contracts/agent.memory.write";
-import { agentMemoryWriteHandler } from "@oxagen/agent/handlers/agent.memory.write";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context.js";
 
 export const schema = {
@@ -39,6 +39,6 @@ export default async function agentMemoryWriteTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await agentMemoryWriteHandler(args, ctx);
+  const output = await invoke(agentMemoryWrite.name, args, ctx, { surface: "mcp" });
   return agentMemoryWrite.output.parse(output);
 }

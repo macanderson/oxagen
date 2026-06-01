@@ -1,52 +1,40 @@
-import type Stripe from "stripe";
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
-import { stripeClient } from "./client.js";
+import { billingProvider } from "./client.js";
+import { logger } from "./logger.js";
+import type { BillingInvoice } from "./provider.js";
 
-const ALLOWED_STATUSES = new Set(["draft", "open", "paid", "void", "uncollectible"]);
-
-function resolveOrgIdFromMetadata(invoice: Stripe.Invoice): string | null {
-  return (invoice.metadata?.org_id as string | undefined) ?? null;
-}
-
-async function resolveOrgIdFromSubscription(invoice: Stripe.Invoice): Promise<string | null> {
-  const subRef = invoice.subscription;
-  if (!subRef) return null;
-  const subId = typeof subRef === "string" ? subRef : subRef.id;
+async function resolveOrgIdFromSubscription(invoice: BillingInvoice): Promise<string | null> {
+  if (!invoice.subscriptionId) return null;
   const d = db();
   const row = await d.query.subscriptions.findFirst({
-    where: eq(schema.subscriptions.stripeSubscriptionId, subId),
+    where: eq(schema.subscriptions.stripeSubscriptionId, invoice.subscriptionId),
     columns: { orgId: true, id: true },
   });
   return row?.orgId ?? null;
 }
 
 /**
- * Mirror a Stripe invoice into billing.invoices and its line items. Webhook
- * handler invokes this from invoice.* events; idempotent on
- * stripe_invoice_id.
+ * Mirror a provider invoice into billing.invoices and its line items. Webhook
+ * handler invokes this from invoice.* events; idempotent on stripe_invoice_id.
  */
 export async function syncInvoiceFromStripe(stripeInvoiceId: string): Promise<void> {
-  const stripe = stripeClient();
-  const invoice = await stripe.invoices.retrieve(stripeInvoiceId, {
-    expand: ["lines.data.price"],
-  });
+  const start = Date.now();
+  const invoice = await billingProvider().getInvoice(stripeInvoiceId);
 
-  const orgId =
-    resolveOrgIdFromMetadata(invoice) ?? (await resolveOrgIdFromSubscription(invoice));
-  if (!orgId) return; // Can't bind to a tenant yet; skip.
+  const orgId = invoice.orgId ?? (await resolveOrgIdFromSubscription(invoice));
+  if (!orgId) {
+    logger.warn({ stripeInvoiceId }, "billing: cannot resolve org_id for invoice, skipping");
+    return; // Can't bind to a tenant yet; skip.
+  }
 
-  const subRef = invoice.subscription;
-  const subId = subRef ? (typeof subRef === "string" ? subRef : subRef.id) : null;
   const d = db();
-  const sub = subId
+  const sub = invoice.subscriptionId
     ? await d.query.subscriptions.findFirst({
-        where: eq(schema.subscriptions.stripeSubscriptionId, subId),
+        where: eq(schema.subscriptions.stripeSubscriptionId, invoice.subscriptionId),
         columns: { id: true },
       })
     : null;
-
-  const status = ALLOWED_STATUSES.has(invoice.status ?? "") ? (invoice.status as string) : "draft";
 
   // Single row upsert + bulk line-item replace inside one transaction; the
   // line-item delete/insert pair is acceptable because invoices are mirrored
@@ -57,31 +45,29 @@ export async function syncInvoiceFromStripe(stripeInvoiceId: string): Promise<vo
       .values({
         orgId,
         subscriptionId: sub?.id ?? null,
-        stripeInvoiceId: invoice.id,
+        stripeInvoiceId: invoice.providerInvoiceId,
         number: invoice.number,
-        status,
-        amountDueCents: invoice.amount_due,
-        amountPaidCents: invoice.amount_paid,
-        amountRemainingCents: invoice.amount_remaining,
+        status: invoice.status,
+        amountDueCents: invoice.amountDueCents,
+        amountPaidCents: invoice.amountPaidCents,
+        amountRemainingCents: invoice.amountRemainingCents,
         currency: invoice.currency,
-        periodStart: new Date(invoice.period_start * 1000),
-        periodEnd: new Date(invoice.period_end * 1000),
-        dueAt: invoice.due_date ? new Date(invoice.due_date * 1000) : null,
-        paidAt: invoice.status_transitions?.paid_at
-          ? new Date(invoice.status_transitions.paid_at * 1000)
-          : null,
-        hostedInvoiceUrl: invoice.hosted_invoice_url,
-        invoicePdfUrl: invoice.invoice_pdf,
+        periodStart: invoice.periodStart,
+        periodEnd: invoice.periodEnd,
+        dueAt: invoice.dueAt,
+        paidAt: invoice.paidAt,
+        hostedInvoiceUrl: invoice.hostedInvoiceUrl,
+        invoicePdfUrl: invoice.invoicePdfUrl,
       })
       .onConflictDoUpdate({
         target: schema.invoices.stripeInvoiceId,
         set: {
-          status,
-          amountDueCents: invoice.amount_due,
-          amountPaidCents: invoice.amount_paid,
-          amountRemainingCents: invoice.amount_remaining,
-          hostedInvoiceUrl: invoice.hosted_invoice_url,
-          invoicePdfUrl: invoice.invoice_pdf,
+          status: invoice.status,
+          amountDueCents: invoice.amountDueCents,
+          amountPaidCents: invoice.amountPaidCents,
+          amountRemainingCents: invoice.amountRemainingCents,
+          hostedInvoiceUrl: invoice.hostedInvoiceUrl,
+          invoicePdfUrl: invoice.invoicePdfUrl,
           updatedAt: new Date(),
         },
       })
@@ -94,18 +80,23 @@ export async function syncInvoiceFromStripe(stripeInvoiceId: string): Promise<vo
       .delete(schema.invoiceLineItems)
       .where(eq(schema.invoiceLineItems.invoiceId, invoiceRowId));
 
-    if (invoice.lines.data.length > 0) {
+    if (invoice.lineItems.length > 0) {
       await tx.insert(schema.invoiceLineItems).values(
-        invoice.lines.data.map((line) => ({
+        invoice.lineItems.map((line) => ({
           invoiceId: invoiceRowId,
-          description: line.description ?? "",
-          quantity: String(line.quantity ?? 1),
-          unitAmountCents: line.price?.unit_amount ?? 0,
-          totalCents: line.amount,
-          metric: (line.metadata?.metric as string | undefined) ?? null,
-          metadata: line.metadata ?? {},
+          description: line.description,
+          quantity: String(line.quantity),
+          unitAmountCents: line.unitAmountCents,
+          totalCents: line.totalCents,
+          metric: line.metric,
+          metadata: line.metadata,
         })),
       );
     }
   });
+
+  logger.info(
+    { orgId, stripeInvoiceId, status: invoice.status, amountDueCents: invoice.amountDueCents, durationMs: Date.now() - start },
+    "billing: invoice synced",
+  );
 }

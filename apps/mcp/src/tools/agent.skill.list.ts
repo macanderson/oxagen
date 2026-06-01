@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentSkillList } from "@oxagen/oxagen/contracts/agent.skill.list";
-import { agentSkillListHandler } from "@oxagen/agent/handlers/agent.skill.list";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context.js";
 
 export const schema = {
@@ -23,6 +23,6 @@ export default async function agentSkillListTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await agentSkillListHandler(args, ctx);
+  const output = await invoke(agentSkillList.name, args, ctx, { surface: "mcp" });
   return agentSkillList.output.parse(output);
 }

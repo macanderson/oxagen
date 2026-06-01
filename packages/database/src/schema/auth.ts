@@ -104,18 +104,12 @@ export const accounts = authSchema.table(
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
 
-    // OXA-1420 EXPAND phase: plaintext columns kept for the dual-write /
-    // read-fallback transition period.  They will be dropped in the
-    // follow-up CONTRACT migration once all rows have been backfilled and
-    // the application no longer reads from them.
-    // DO NOT remove these columns in this PR.
-    accessToken: text("access_token"),
-    refreshToken: text("refresh_token"),
+    // OXA-1420 CONTRACT phase: access_token and refresh_token plaintext columns
+    // have been dropped (migration 0012). id_token plaintext is retained for now
+    // as it is not a bearer credential (read-only OIDC identity assertion).
     idToken: text("id_token"),
 
-    // OXA-1420 EXPAND phase: envelope-encrypted replacements for the
-    // plaintext token columns above.  Written by the better-auth account
-    // hook on every create/update; read with decrypt-then-fallback logic.
+    // OXA-1420: envelope-encrypted token columns — authoritative.
     accessTokenEnc: bytea("access_token_enc"),
     refreshTokenEnc: bytea("refresh_token_enc"),
     idTokenEnc: bytea("id_token_enc"),

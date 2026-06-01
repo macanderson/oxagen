@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { formFill } from "@oxagen/oxagen/contracts/form.fill";
-import { formFillHandler } from "@oxagen/handlers/form.fill";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 
@@ -12,6 +12,6 @@ export const formFillRoute = new Hono<AppEnv>();
 formFillRoute.post("/", async (c) => {
   const body = formFill.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await formFillHandler(body, ctx);
+  const out = await invoke(formFill.name, body, ctx, { surface: "api" });
   return c.json(out, 200);
 });

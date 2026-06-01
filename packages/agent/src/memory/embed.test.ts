@@ -22,16 +22,23 @@ describe("embedText (agent/memory wrapper)", () => {
     mocks.embedTextAI.mockClear();
   });
 
-  it("delegates to @oxagen/ai embedText and returns its vector", async () => {
-    const v = await embedText("hello world");
+  it("delegates text + telemetry opts to @oxagen/ai embedText and returns its vector", async () => {
+    const telemetry = {
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      surface: "runner" as const,
+      executionStepId: "req_1",
+    };
+    const v = await embedText("hello world", { telemetry });
     expect(v).toHaveLength(1536);
     expect(mocks.embedTextAI).toHaveBeenCalledTimes(1);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
     const calls: unknown[][] = (mocks.embedTextAI.mock.calls as any);
     const [text, opts] = calls[0]!;
     expect(text).toBe("hello world");
-    // Default call passes empty opts object.
-    expect(opts).toEqual({});
+    // Telemetry opts are forwarded verbatim — embeddings are always metered
+    // now that EmbedTextOpts.telemetry is required (OXA-1351 / OXA-1425).
+    expect(opts).toEqual({ telemetry });
   });
 
   it("forwards telemetry opts to @oxagen/ai embedText", async () => {

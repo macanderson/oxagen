@@ -1,4 +1,6 @@
+export * from "./provider.js";
 export * from "./client.js";
+export * from "./logger.js";
 export * from "./constants.js";
 export * from "./customers.js";
 export * from "./checkout.js";

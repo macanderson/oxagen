@@ -1,1 +1,34 @@
-{"version":"7","dialect":"postgresql","entries":[]}
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1780282147304,
+      "tag": "0000_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1780282200000,
+      "tag": "0011_iam_principal_role_assignments",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1780282260000,
+      "tag": "0012_auth_contract_drop_plaintext_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1780282320000,
+      "tag": "0013_iam_schema_corrections",
+      "breakpoints": true
+    }
+  ]
+}

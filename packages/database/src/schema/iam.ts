@@ -10,22 +10,23 @@
 // scope columns inline.
 //
 // Naming conventions (spec §4.3 public-id prefixes):
-//   principals   → prn_
-//   roles        → rol_
-//   role_grants  → rlg_
-//   grants       → grn_
-//   policies     → pol_
-//   access_requests → arq_
-//   sessions (IAM) → ses_   (distinct from auth.sessions, export as iamSessions)
+//   principals               → prn_
+//   roles                    → rol_
+//   role_grants              → rlg_
+//   grants                   → grn_
+//   policies                 → pol_
+//   access_requests          → arq_
+//   sessions (IAM)           → ses_   (distinct from auth.sessions, export as iamSessions)
+//   principal_role_assignments → pra_  (OXA-1498)
 //
 // Append-only rules:
 //   sessions — no updated_at/updated_by (sessions are append-leaning;
 //   revocation is tracked via revoked_at/revoked_by, never UPDATE).
 
-import { check, index, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { orgSchema } from "./_schemas.js";
-import { auditMixin, idMixin } from "./_mixins.js";
+import { auditMixin, idMixin, softDeleteMixin } from "./_mixins.js";
 
 // ---------------------------------------------------------------------------
 // principals — every human, agent, or service in the system
@@ -85,7 +86,7 @@ export const roles = orgSchema.table(
     name: text("name").notNull(),
     description: text("description"),
     // true for system-seeded roles (Owner, Admin, etc.) — not user-deletable.
-    isSystemDefault: text("is_system_default").notNull().default("false"),
+    isSystemDefault: boolean("is_system_default").notNull().default(false),
     version: text("version").notNull().default("1"),
     parentRoleId: uuid("parent_role_id"),
   },
@@ -186,7 +187,7 @@ export const policies = orgSchema.table(
     effect: text("effect").notNull(),
     // When true this policy is hard-enforced and cannot be overridden by a
     // lower-precedence grant. Analogous to an IAM "deny policy" in cloud IAM.
-    enforced: text("enforced").notNull().default("false"),
+    enforced: boolean("enforced").notNull().default(false),
     conditionsJsonb: jsonb("conditions_jsonb"),
     sensitivityTag: text("sensitivity_tag"),
   },
@@ -222,7 +223,7 @@ export const accessRequests = orgSchema.table(
     status: text("status").notNull().default("pending"),
     approverId: uuid("approver_id"),
     approvedAt: timestamp("approved_at", { withTimezone: true, mode: "date" }),
-    ttlSeconds: text("ttl_seconds"),
+    ttlSeconds: integer("ttl_seconds"),
     justification: text("justification"),
   },
   (t) => ({
@@ -278,6 +279,63 @@ export const iamSessions = orgSchema.table(
 );
 
 // ---------------------------------------------------------------------------
+// principal_role_assignments — maps a principal to a role within an org
+// (and optionally a workspace) scope. Replaces the prior "grant everyone
+// every role" shortcut. OXA-1498.
+//
+// Naming convention prefix: pra_
+//
+// Unique constraint: one (principal, role, org, workspace) tuple per row so
+// idempotent upserts are safe. workspace_id NULL means org-wide scope.
+// ---------------------------------------------------------------------------
+
+export const principalRoleAssignments = orgSchema.table(
+  "principal_role_assignments",
+  {
+    ...idMixin("pra"),
+    ...auditMixin(),
+    ...softDeleteMixin(),
+    // FK to org.principals — the subject being assigned a role.
+    principalId: uuid("principal_id").notNull(),
+    // FK to org.roles — the role being assigned.
+    roleId: uuid("role_id").notNull(),
+    // Org this assignment lives in.
+    orgId: uuid("org_id").notNull(),
+    // Optional workspace scope. NULL = org-wide assignment.
+    workspaceId: uuid("workspace_id"),
+    // Who performed the assignment (audit trail).
+    assignedBy: uuid("assigned_by"),
+    assignedAt: timestamp("assigned_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    // Optional expiry for time-bounded role assignments (e.g. JIT access).
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    // Partial unique index for workspace-scoped assignments (workspace_id NOT NULL).
+    principalRoleOrgWorkspaceUniq: uniqueIndex(
+      "pra_principal_role_org_workspace_idx",
+    )
+      .on(t.principalId, t.roleId, t.orgId, t.workspaceId)
+      .where(sql`${t.workspaceId} IS NOT NULL`),
+    // Partial unique index for org-wide assignments (workspace_id IS NULL).
+    // Standard UNIQUE treats NULLs as distinct; this closes the gap so two
+    // org-wide (principal, role, org) assignments are correctly rejected.
+    principalRoleOrgNullWorkspaceUniq: uniqueIndex(
+      "pra_principal_role_org_null_workspace_idx",
+    )
+      .on(t.principalId, t.roleId, t.orgId)
+      .where(sql`${t.workspaceId} IS NULL`),
+    // Index to find all roles assigned to a principal in an org.
+    principalOrgIdx: index("pra_principal_org_idx").on(t.principalId, t.orgId),
+    // Index to find all principals assigned to a role.
+    roleOrgIdx: index("pra_role_org_idx").on(t.roleId, t.orgId),
+    // Index to resolve workspace-scoped assignments quickly.
+    workspaceIdx: index("pra_workspace_idx").on(t.workspaceId),
+  }),
+);
+
+// ---------------------------------------------------------------------------
 // Inferred row types — re-exported so callers need only one import path.
 // ---------------------------------------------------------------------------
 
@@ -301,3 +359,6 @@ export type NewIamAccessRequest = typeof accessRequests.$inferInsert;
 
 export type IamSession = typeof iamSessions.$inferSelect;
 export type NewIamSession = typeof iamSessions.$inferInsert;
+
+export type IamPrincipalRoleAssignment = typeof principalRoleAssignments.$inferSelect;
+export type NewIamPrincipalRoleAssignment = typeof principalRoleAssignments.$inferInsert;

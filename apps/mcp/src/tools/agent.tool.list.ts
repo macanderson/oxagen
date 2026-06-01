@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentToolList } from "@oxagen/oxagen/contracts/agent.tool.list";
-import { agentToolListHandler } from "@oxagen/agent/handlers/agent.tool.list";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context.js";
 
 export const schema = {
@@ -26,6 +26,6 @@ export default async function agentToolListTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await agentToolListHandler(args, ctx);
+  const output = await invoke(agentToolList.name, args, ctx, { surface: "mcp" });
   return agentToolList.output.parse(output);
 }

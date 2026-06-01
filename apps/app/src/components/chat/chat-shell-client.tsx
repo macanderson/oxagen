@@ -131,7 +131,7 @@ export function ChatShellClient({
 
         void (async () => {
           try {
-            const res = await fetch("/api/chat/stream", {
+            const res = await fetch("/api/v1/chat/stream", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({

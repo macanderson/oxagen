@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
-import { chatMessageSendHandler } from "@oxagen/handlers/chat.message.send";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context.js";
 
 export const schema = {
@@ -43,6 +43,6 @@ export default async function chatMessageSendTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await chatMessageSendHandler(args, ctx);
+  const output = await invoke(chatMessageSend.name, args, ctx, { surface: "mcp" });
   return chatMessageSend.output.parse(output);
 }

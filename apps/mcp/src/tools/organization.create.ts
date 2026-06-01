@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
-import { organizationCreateHandler } from "@oxagen/handlers/organization.create";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context.js";
 
 export const schema = {
@@ -30,6 +30,6 @@ export default async function organizationCreateTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await organizationCreateHandler(args, ctx);
+  const output = await invoke(organizationCreate.name, args, ctx, { surface: "mcp" });
   return organizationCreate.output.parse(output);
 }

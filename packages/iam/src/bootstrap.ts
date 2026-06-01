@@ -18,8 +18,10 @@
 // hot-reload scenarios) is safe — setIAMRuntime() simply overwrites the refs.
 
 import { setIAMRuntime, type IAMCheckFn, type CreateAccessRequestFn } from "@oxagen/oxagen";
+import { setKernelIAMRuntime, type KernelIAMCheckFn } from "@oxagen/oxagen/kernel";
 import { checkIAM } from "./check-iam.js";
 import { createAccessRequest } from "./access-request.js";
+import { requireEnv } from "@oxagen/config/env";
 
 /**
  * Adapter: maps checkIAM's { result: ResolveResult, principal } return shape
@@ -42,7 +44,13 @@ const iamCheckAdapter: IAMCheckFn = async (args) => {
 const createAccessRequestAdapter: CreateAccessRequestFn = createAccessRequest;
 
 /**
- * Wire the real IAM enforcement runtime into defineContract().invoke().
+ * Wire the real IAM enforcement runtime into both dispatch paths:
+ *   1. defineContract().invoke() — the contract-level IAM boundary.
+ *   2. kernel.invoke() — the kernel-level IAM boundary (OXA-1498).
+ *
+ * kernel.invoke() reads IAM_ENFORCEMENT_ENABLED to decide whether to BLOCK
+ * on deny (true) or only LOG would-deny decisions (false, default). Both
+ * paths ALWAYS resolve authz and emit the ClickHouse audit event.
  *
  * Call once per process at surface bootstrap (apps/api/src/index.ts,
  * apps/mcp/src/middleware.ts) before any capability can be invoked.
@@ -53,4 +61,21 @@ export function bootstrapIAMRuntime(): void {
     checkIAM: iamCheckAdapter,
     createAccessRequest: createAccessRequestAdapter,
   });
+
+  // Wire the kernel IAM path. The kernel adapter mirrors the IAM check adapter
+  // (same underlying checkIAM call) but returns the flattened result shape that
+  // kernel.invoke() expects (KernelIAMCheckResult).
+  const kernelIAMAdapter: KernelIAMCheckFn = async (args) => {
+    const { result, principal } = await checkIAM(args);
+    const outcome = result.outcome;
+    const reason = "reason" in result ? (result as { reason?: string }).reason : undefined;
+    return { outcome, reason, principal };
+  };
+
+  // Read the enforcement flag at bootstrap time so we don't re-read env on
+  // every capability invocation. The flag is immutable for the process lifetime.
+  const enforced =
+    requireEnv(["IAM_ENFORCEMENT_ENABLED"] as const).IAM_ENFORCEMENT_ENABLED === true;
+
+  setKernelIAMRuntime(kernelIAMAdapter, enforced);
 }

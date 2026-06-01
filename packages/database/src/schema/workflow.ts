@@ -76,7 +76,7 @@ export const playbookSteps = workflowSchema.table(
 export const playbookStepAssignments = workflowSchema.table(
   "playbook_step_assignments",
   {
-    ...idMixin("pls"),
+    ...idMixin("psa"),
     playbookStepId: uuid("playbook_step_id").notNull(),
     agentVersionId: uuid("agent_version_id").notNull(),
     modelOverride: text("model_override"),

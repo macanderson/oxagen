@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- vitest mock; Array.fill() returns any[], shape is correct for the vector dimension.
-mocks.embedTextMock.mockImplementation(async (q: string) => new Array(1536).fill(q.length));
+mocks.embedTextMock.mockImplementation(async (q: string) => new Array(1536).fill(q.length) as number[]);
 mocks.recallMemoriesMock.mockImplementation(async () => [
   {
     id: "m_1",
@@ -53,7 +53,14 @@ describe("agent.memory.recall handler", () => {
       { query: "find me", minWeight: "high", limit: 5 },
       CTX,
     );
-    expect(mocks.embedTextMock).toHaveBeenCalledWith("find me");
+    expect(mocks.embedTextMock).toHaveBeenCalledWith("find me", {
+      telemetry: {
+        orgId: "ten_1",
+        workspaceId: "ws_1",
+        surface: "runner",
+        executionStepId: "req_1",
+      },
+    });
     expect(mocks.recallMemoriesMock).toHaveBeenCalledTimes(1);
     const arg = mocks.recallMemoriesMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(arg.orgId).toBe("ten_1");
