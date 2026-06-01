@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oxagen — Brand Guidelines</title>
+<link rel="stylesheet" href="css/oxagen-fonts.css">
+<style>
+/* Standalone token layer (mirrors oxagen-theme.css so this page works without a Tailwind build) */
+:root{
+  --brand-violet:#7182FF; --brand-green:#3CFF52; --brand-blend-1:#5B9BE6; --brand-blend-2:#45C49E;
+  --brand-ink:#0A0A0A; --brand-paper:#F7F8FA;
+  --brand-gradient:linear-gradient(135deg,#7182FF 0%,#3CFF52 100%);
+  --brand-gradient-h:linear-gradient(90deg,#7182FF 0%,#3CFF52 100%);
+  --radius:0.625rem;
+  --font-display:"Monaspace Argon",ui-monospace,monospace;
+  --font-heading:"Monaspace Argon",ui-monospace,monospace;
+  --font-sans:"Monaspace Neon",ui-sans-serif,system-ui,sans-serif;
+  --font-mono:"Monaspace Argon",ui-monospace,monospace;
+}
+:root{
+  --background:#FFFFFF; --foreground:#1A1726; --card:#FFFFFF; --card-foreground:#1A1726;
+  --muted:#F2F3F7; --muted-foreground:#6B6880; --primary:#5B5FE0; --primary-foreground:#FAFAFF;
+  --secondary:#EFF0F6; --secondary-foreground:#2A2740; --accent:#DDF3EE; --accent-foreground:#1E4D43;
+  --destructive:#D33B3B; --destructive-foreground:#FFF5F5; --success:#1E9E55; --success-foreground:#F2FFF7;
+  --warning:#C98A1E; --warning-foreground:#2A1E05; --border:#E6E7EF; --input:#E6E7EF; --ring:#5B5FE0;
+  --surface-2:#F7F8FA;
+}
+.dark{
+  --background:#0B1020; --foreground:#ECEDF5; --card:#151A2E; --card-foreground:#ECEDF5;
+  --muted:#1C2238; --muted-foreground:#9CA0B8; --primary:#8A93FF; --primary-foreground:#0B0F1E;
+  --secondary:#1C2238; --secondary-foreground:#ECEDF5; --accent:#1D4B47; --accent-foreground:#CFF5EC;
+  --destructive:#FF5C5C; --destructive-foreground:#1A0606; --success:#3DD27E; --success-foreground:#04130A;
+  --warning:#E9B44C; --warning-foreground:#1E1503; --border:rgba(255,255,255,.10); --input:rgba(255,255,255,.08); --ring:#8A93FF;
+  --surface-2:#0E1426;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--font-sans); background:var(--background); color:var(--foreground);
+  line-height:1.6; -webkit-font-smoothing:antialiased; transition:background .4s ease,color .4s ease;
+}
+h1,h2,h3,h4{font-family:var(--font-heading);font-weight:600;line-height:1.15;letter-spacing:-.01em}
+code,pre,.mono{font-family:var(--font-mono)}
+.display{font-family:var(--font-display)}
+a{color:var(--primary);text-decoration:none}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+section{padding:88px 0;border-bottom:1px solid var(--border)}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--primary);margin-bottom:14px}
+.sec-title{font-size:clamp(28px,4vw,40px);margin-bottom:12px}
+.sec-sub{color:var(--muted-foreground);max-width:60ch;margin-bottom:40px}
+
+/* nav */
+.nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);
+  background:color-mix(in srgb,var(--background) 72%,transparent);
+  border-bottom:1px solid var(--border);transition:background .4s}
+.nav-inner{max-width:1120px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:20px}
+.nav .logo{display:flex;align-items:center;gap:12px;font-family:var(--font-display);font-weight:600;font-size:20px;letter-spacing:-.02em}
+.nav .links{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.nav .links a{font-size:13px;font-family:var(--font-mono);color:var(--muted-foreground);padding:7px 12px;border-radius:8px;transition:.2s}
+.nav .links a:hover{color:var(--foreground);background:var(--muted)}
+
+/* reveal on scroll */
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+.reveal.in{opacity:1;transform:none}
+
+/* hero */
+.hero{position:relative;overflow:hidden;padding:120px 0 100px}
+.hero-bg{position:absolute;inset:0;z-index:0;opacity:.5;pointer-events:none}
+.hero h1{font-size:clamp(40px,7vw,84px);font-family:var(--font-display);font-weight:600;letter-spacing:-.03em;line-height:1.02}
+.grad-text{background:var(--brand-gradient-h);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{font-size:clamp(16px,2vw,21px);color:var(--muted-foreground);max-width:54ch;margin:24px 0 36px}
+.hero-mark{width:96px;height:96px;margin-bottom:28px}
+
+/* buttons */
+.btn{font-family:var(--font-sans);font-weight:500;font-size:14px;border:1px solid transparent;border-radius:var(--radius);
+  padding:10px 18px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:transform .18s cubic-bezier(.16,1,.3,1),box-shadow .2s,background .2s,filter .2s;position:relative;overflow:hidden}
+.btn:hover{transform:scale(1.045)}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:var(--primary);color:var(--primary-foreground)}
+.btn-primary:hover{box-shadow:0 8px 24px -8px var(--primary)}
+.btn-grad{background:var(--brand-gradient-h);color:#06140a;font-weight:600}
+.btn-grad::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);transform:translateX(-120%);transition:transform .6s}
+.btn-grad:hover::after{transform:translateX(120%)}
+.btn-secondary{background:var(--secondary);color:var(--secondary-foreground)}
+.btn-secondary:hover{background:var(--muted)}
+.btn-outline{background:transparent;border-color:var(--border);color:var(--foreground)}
+.btn-outline:hover{background:var(--muted)}
+.btn-ghost{background:transparent;color:var(--foreground)}
+.btn-ghost:hover{background:var(--muted)}
+.btn-destructive{background:var(--destructive);color:var(--destructive-foreground)}
+.btn-link{background:none;color:var(--primary);text-decoration:underline;padding:10px 4px}
+.btn-sm{padding:6px 12px;font-size:13px}.btn-lg{padding:13px 24px;font-size:15px}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+/* cards / grids */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;transition:transform .25s cubic-bezier(.16,1,.3,1),box-shadow .25s,border-color .25s}
+.card.hov:hover{transform:translateY(-4px) scale(1.01);box-shadow:0 18px 40px -20px rgba(0,0,0,.4);border-color:color-mix(in srgb,var(--primary) 40%,var(--border))}
+.grid{display:grid;gap:20px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+
+/* swatches */
+.swatch{border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
+.swatch .chip{height:96px}
+.swatch .meta{padding:12px 14px;background:var(--card)}
+.swatch .name{font-weight:600;font-size:14px}
+.swatch .hex{font-family:var(--font-mono);font-size:12px;color:var(--muted-foreground)}
+.gradbar{height:64px;border-radius:var(--radius);background:var(--brand-gradient-h);border:1px solid var(--border)}
+
+/* type specimens */
+.specimen{padding:22px 0;border-bottom:1px dashed var(--border)}
+.specimen:last-child{border:0}
+.specimen .role{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--primary);margin-bottom:8px}
+.specimen .meta{font-family:var(--font-mono);font-size:12px;color:var(--muted-foreground);margin-top:6px}
+
+/* component lab */
+.lab{display:grid;gap:14px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.label{font-size:13px;font-weight:500;display:block;margin-bottom:6px}
+.input,.textarea,.select{width:100%;background:var(--background);border:1px solid var(--input);border-radius:var(--radius);
+  padding:9px 12px;color:var(--foreground);font-family:var(--font-sans);font-size:14px;transition:border-color .2s,box-shadow .2s}
+.input:focus,.textarea:focus,.select:focus{outline:none;border-color:var(--ring);box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 30%,transparent)}
+.textarea{min-height:88px;resize:vertical;font-family:var(--font-mono)}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;font-family:var(--font-mono)}
+.badge-default{background:var(--primary);color:var(--primary-foreground)}
+.badge-secondary{background:var(--secondary);color:var(--secondary-foreground)}
+.badge-outline{border:1px solid var(--border);color:var(--foreground)}
+.badge-success{background:color-mix(in srgb,var(--success) 22%,transparent);color:var(--success)}
+.badge-destructive{background:var(--destructive);color:var(--destructive-foreground)}
+.alert{display:flex;gap:12px;padding:14px 16px;border-radius:var(--radius);border:1px solid var(--border);background:var(--card);align-items:flex-start}
+.alert .ico{flex:0 0 auto;width:18px;height:18px;margin-top:2px}
+.alert-title{font-weight:600;font-size:14px;margin-bottom:2px}
+.alert-desc{font-size:13px;color:var(--muted-foreground)}
+.alert.info{border-color:color-mix(in srgb,var(--primary) 40%,var(--border));background:color-mix(in srgb,var(--primary) 8%,var(--card))}
+.alert.success{border-color:color-mix(in srgb,var(--success) 45%,var(--border));background:color-mix(in srgb,var(--success) 8%,var(--card))}
+.alert.warning{border-color:color-mix(in srgb,var(--warning) 50%,var(--border));background:color-mix(in srgb,var(--warning) 10%,var(--card))}
+.alert.destructive{border-color:color-mix(in srgb,var(--destructive) 50%,var(--border));background:color-mix(in srgb,var(--destructive) 8%,var(--card))}
+
+/* switch / checkbox / radio */
+.switch{position:relative;width:42px;height:24px;border-radius:999px;background:var(--muted);cursor:pointer;transition:background .25s;border:1px solid var(--border)}
+.switch.on{background:var(--primary)}
+.switch .knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .25s cubic-bezier(.16,1,.3,1)}
+.switch.on .knob{transform:translateX(18px)}
+.check{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--border);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:.2s}
+.check.on{background:var(--primary);border-color:var(--primary)}
+.radio{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border);display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.radio.on{border-color:var(--primary)}
+.radio.on::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--primary)}
+
+/* progress / slider */
+.progress{height:8px;border-radius:999px;background:var(--muted);overflow:hidden}
+.progress .bar{height:100%;background:var(--brand-gradient-h);border-radius:999px;transition:width .4s}
+.slider{-webkit-appearance:none;width:100%;height:6px;border-radius:999px;background:var(--muted);outline:none}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--primary);cursor:pointer;border:2px solid var(--background);box-shadow:0 1px 4px rgba(0,0,0,.3)}
+
+/* tabs */
+.tabs{display:flex;gap:4px;background:var(--muted);padding:4px;border-radius:var(--radius);width:fit-content}
+.tab{padding:7px 16px;border-radius:calc(var(--radius) - 3px);font-size:13px;font-weight:500;cursor:pointer;color:var(--muted-foreground);transition:.2s;background:none;border:none;font-family:var(--font-sans)}
+.tab.on{background:var(--card);color:var(--foreground);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+
+/* accordion */
+.acc{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.acc-item{border-bottom:1px solid var(--border)}.acc-item:last-child{border:0}
+.acc-head{padding:14px 16px;font-weight:500;font-size:14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:var(--card)}
+.acc-head:hover{background:var(--muted)}
+.acc-body{max-height:0;overflow:hidden;transition:max-height .3s ease;color:var(--muted-foreground);font-size:14px}
+.acc-body div{padding:0 16px 14px}
+.acc-item.open .acc-body{max-height:200px}
+.acc-item.open .chev{transform:rotate(180deg)}
+.chev{transition:transform .3s}
+
+/* table */
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--border)}
+th{font-family:var(--font-mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted-foreground)}
+tbody tr{transition:background .15s}tbody tr:hover{background:var(--muted)}
+
+/* tooltip / avatar / skeleton */
+.tip{position:relative;display:inline-block}
+.tip .bubble{position:absolute;bottom:130%;left:50%;transform:translateX(-50%) translateY(4px);background:var(--foreground);color:var(--background);
+  font-size:12px;padding:5px 9px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;transition:.2s;font-family:var(--font-mono)}
+.tip:hover .bubble{opacity:1;transform:translateX(-50%)}
+.avatar{width:40px;height:40px;border-radius:50%;background:var(--brand-gradient);display:inline-flex;align-items:center;justify-content:center;color:#06140a;font-weight:700;font-family:var(--font-display);font-size:15px}
+.skeleton{background:linear-gradient(90deg,var(--muted) 25%,color-mix(in srgb,var(--muted) 50%,var(--card)) 50%,var(--muted) 75%);background-size:200% 100%;animation:sk 1.5s infinite;border-radius:6px}
+@keyframes sk{to{background-position:-200% 0}}
+
+/* toast */
+.toast{display:flex;gap:12px;align-items:center;padding:13px 16px;border-radius:var(--radius);background:var(--card);border:1px solid var(--border);box-shadow:0 12px 32px -12px rgba(0,0,0,.5);max-width:360px}
+
+/* code block */
+pre.code{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;overflow:auto;font-size:13px;line-height:1.7}
+pre.code .c{color:var(--muted-foreground)}
+pre.code .k{color:var(--primary)}
+pre.code .g{color:var(--brand-blend-2)}
+
+/* misc */
+.theme-toggle{cursor:pointer;border:1px solid var(--border);background:var(--card);border-radius:999px;padding:7px 14px;font-family:var(--font-mono);font-size:12px;color:var(--foreground);transition:.2s;display:flex;gap:7px;align-items:center}
+.theme-toggle:hover{background:var(--muted)}
+.foot{padding:48px 0;color:var(--muted-foreground);font-size:13px;font-family:var(--font-mono)}
+.pill{font-family:var(--font-mono);font-size:11px;padding:2px 8px;border-radius:999px;background:var(--muted);color:var(--muted-foreground)}
+.do{border-left:3px solid var(--success);padding-left:14px}
+.dont{border-left:3px solid var(--destructive);padding-left:14px}
+</style>
+</head>
+<body>
+<!-- ============ NAV ============ -->
+<nav class="nav">
+  <div class="nav-inner">
+    <span class="logo">
+      <svg width="30" height="30" viewBox="0 0 256 256" style="color:var(--foreground)" aria-label="Oxagen mark"><g>
+  <circle cx="138.37" cy="128.00" r="50.69" fill="none" stroke="currentColor" stroke-width="11.52"/>
+  <line x1="174.22" y1="92.15" x2="212.10" y2="54.26" stroke="currentColor" stroke-width="10.37" stroke-linecap="round"/>
+  <line x1="174.22" y1="163.85" x2="212.10" y2="201.74" stroke="currentColor" stroke-width="10.37" stroke-linecap="round"/>
+  <line x1="87.67" y1="128.00" x2="46.20" y2="128.00" stroke="currentColor" stroke-width="10.37" stroke-linecap="round"/>
+  <circle cx="138.37" cy="128.00" r="16.13" fill="currentColor"/>
+  <circle cx="221.33" cy="45.04" r="12.67" fill="currentColor"/>
+  <circle cx="221.33" cy="210.96" r="12.67" fill="currentColor"/>
+  <circle cx="34.67" cy="128.00" r="12.67" fill="currentColor"/>
+</g></svg>
+      oxagen
+    </span>
+    <div class="links">
+      <a href="#logo">Logo</a>
+      <a href="#color">Color</a>
+      <a href="#type">Type</a>
+      <a href="#buttons">Buttons</a>
+      <a href="#forms">Forms</a>
+      <a href="#feedback">Feedback</a>
+      <a href="#data">Data</a>
+      <a href="#tokens">Tokens</a>
+    </div>
+    <button class="theme-toggle" id="themeBtn"><span id="themeIco">◐</span> <span id="themeTxt">Dark</span></button>
+  </div>
+</nav>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <svg class="hero-bg" viewBox="0 0 1120 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7182FF"/><stop offset="1" stop-color="#3CFF52"/></linearGradient></defs>
+    <g stroke="url(#hg)" stroke-width="1.2" opacity="0.5" fill="none" id="constellation"></g>
+  </svg>
+  <div class="wrap" style="position:relative;z-index:1">
+    <svg class="hero-mark" viewBox="0 0 256 256" aria-label="Oxagen logomark">
+      <defs><linearGradient id="hmg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7182FF"/><stop offset="1" stop-color="#3CFF52"/></linearGradient></defs>
+      <g>
+  <circle cx="138.37" cy="128.00" r="50.69" fill="none" stroke="url(&quot;#hmg&quot;)" stroke-width="11.52"/>
+  <line x1="174.22" y1="92.15" x2="212.10" y2="54.26" stroke="url(&quot;#hmg&quot;)" stroke-width="10.37" stroke-linecap="round"/>
+  <line x1="174.22" y1="163.85" x2="212.10" y2="201.74" stroke="url(&quot;#hmg&quot;)" stroke-width="10.37" stroke-linecap="round"/>
+  <line x1="87.67" y1="128.00" x2="46.20" y2="128.00" stroke="url(&quot;#hmg&quot;)" stroke-width="10.37" stroke-linecap="round"/>
+  <circle cx="138.37" cy="128.00" r="16.13" fill="url(&quot;#hmg&quot;)"/>
+  <circle cx="221.33" cy="45.04" r="12.67" fill="url(&quot;#hmg&quot;)"/>
+  <circle cx="221.33" cy="210.96" r="12.67" fill="url(&quot;#hmg&quot;)"/>
+  <circle cx="34.67" cy="128.00" r="12.67" fill="url(&quot;#hmg&quot;)"/>
+</g>
+    </svg>
+    <div class="eyebrow">Brand Guidelines · v1.0</div>
+    <h1>The brain of the<br><span class="grad-text">agentic era.</span></h1>
+    <p>Oxagen is context infrastructure for enterprise AI agents — a managed ontology that agents query for memory, reasoning, and shared truth. This is the brand system: marks, color, type, and components.</p>
+    <div class="row">
+      <button class="btn btn-grad btn-lg">Get started →</button>
+      <button class="btn btn-outline btn-lg">Read the docs</button>
+    </div>
+  </div>
+</header>
+<!-- ============ LOGO ============ -->
+<section id="logo">
+  <div class="wrap">
+    <div class="eyebrow reveal">01 — Identity</div>
+    <h2 class="sec-title reveal">The mark &amp; logotype</h2>
+    <p class="sec-sub reveal">The cored node O reads as the letter O and a graph node at once: a ring, a filled center, three radiating edges. The logotype is set in Monaspace Krypton, lowercase. Both flip with the theme.</p>
+
+    <div class="grid g2 reveal">
+      <div class="card" style="display:flex;align-items:center;justify-content:center;min-height:200px">
+        <svg width="120" height="120" viewBox="0 0 256 256" style="color:var(--foreground)"><g>
+  <circle cx="138.37" cy="128.00" r="50.69" fill="none" stroke="currentColor" stroke-width="11.52"/>
+  <line x1="174.22" y1="92.15" x2="212.10" y2="54.26" stroke="currentColor" stroke-width="10.37" stroke-linecap="round"/>
+  <line x1="174.22" y1="163.85" x2="212.10" y2="201.74" stroke="currentColor" stroke-width="10.37" stroke-linecap="round"/>
+  <line x1="87.67" y1="128.00" x2="46.20" y2="128.00" stroke="currentColor" stroke-width="10.37" stroke-linecap="round"/>
+  <circle cx="138.37" cy="128.00" r="16.13" fill="currentColor"/>
+  <circle cx="221.33" cy="45.04" r="12.67" fill="currentColor"/>
+  <circle cx="221.33" cy="210.96" r="12.67" fill="currentColor"/>
+  <circle cx="34.67" cy="128.00" r="12.67" fill="currentColor"/>
+</g></svg>
+      </div>
+      <div class="card" style="display:flex;align-items:center;justify-content:center;min-height:200px;background:var(--brand-ink)">
+        <svg width="280" viewBox="0 0 580.58 161.92" ><g>
+  <circle cx="100.87" cy="62.72" r="30.00" fill="none" stroke="#FFFFFF" stroke-width="6.82"/>
+  <line x1="122.08" y1="41.51" x2="144.50" y2="19.08" stroke="#FFFFFF" stroke-width="6.14" stroke-linecap="round"/>
+  <line x1="122.08" y1="83.93" x2="144.50" y2="106.35" stroke="#FFFFFF" stroke-width="6.14" stroke-linecap="round"/>
+  <line x1="70.87" y1="62.72" x2="46.32" y2="62.72" stroke="#FFFFFF" stroke-width="6.14" stroke-linecap="round"/>
+  <circle cx="100.87" cy="62.72" r="9.55" fill="#FFFFFF"/>
+  <circle cx="149.96" cy="13.63" r="7.50" fill="#FFFFFF"/>
+  <circle cx="149.96" cy="111.81" r="7.50" fill="#FFFFFF"/>
+  <circle cx="39.50" cy="62.72" r="7.50" fill="#FFFFFF"/>
+</g><path d="M440 0H800L1120 356V699L806 1055H440L120 699V356ZM542 220 362 422V633L542 835H698L878 633V422L698 220Z" transform="translate(191.46 99.20) scale(0.04800 -0.04800)" fill="#FFFFFF"/>
+<path d="M815 0H1073V215L800 498L1073 840V1055H841V885L660 643L425 886V1055H167V840L440 556L167 215V0H399V170L580 411L815 168Z" transform="translate(250.98 99.20) scale(0.04800 -0.04800)" fill="#FFFFFF"/>
+<path d="M913 0H1102V823L882 1055H255L229 853H756L847 767V624H345L99 452V198L368 -22L869 113ZM332 297V386L445 464H847V258L464 168Z" transform="translate(310.50 99.20) scale(0.04800 -0.04800)" fill="#FFFFFF"/>
+<path d="M289 -400H829L1092 -91V1055H459L128 741V377L442 110L833 213V-19L693 -180H262ZM383 456V646L572 835H843V392L517 328Z" transform="translate(370.02 99.20) scale(0.04800 -0.04800)" fill="#FFFFFF"/>
+<path d="M463 0H1032L1058 200H585L385 404V470H983L1102 586V852L912 1055H447L143 699V356ZM385 629V638L562 868H821L890 803V696L825 629Z" transform="translate(429.54 99.20) scale(0.04800 -0.04800)" fill="#FFFFFF"/>
+<path d="M833 0H1092V798L814 1078L388 947L341 1055H148V0H406V789L719 851L833 739Z" transform="translate(489.06 99.20) scale(0.04800 -0.04800)" fill="#FFFFFF"/></svg>
+      </div>
+    </div>
+
+    <h3 style="margin:48px 0 8px;font-family:var(--font-heading)">Logotype flavors</h3>
+    <p class="sec-sub reveal">Four Monaspace cuts of the wordmark. <strong>Krypton</strong> is the default — its mechanical geometry rhymes with the mark.</p>
+    <div class="grid g2 reveal">
+      <div class="card hov"><div style="color:var(--foreground)"><svg style="width:100%;height:auto;display:block" preserveAspectRatio="xMinYMid meet" viewBox="0 0 498.40 174.40"><path d="M440 0H800L1120 356V699L806 1055H440L120 699V356ZM542 220 362 422V633L542 835H698L878 633V422L698 220Z" transform="translate(26.00 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M815 0H1073V215L800 498L1073 840V1055H841V885L660 643L425 886V1055H167V840L440 556L167 215V0H399V170L580 411L815 168Z" transform="translate(100.40 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M913 0H1102V823L882 1055H255L229 853H756L847 767V624H345L99 452V198L368 -22L869 113ZM332 297V386L445 464H847V258L464 168Z" transform="translate(174.80 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M289 -400H829L1092 -91V1055H459L128 741V377L442 110L833 213V-19L693 -180H262ZM383 456V646L572 835H843V392L517 328Z" transform="translate(249.20 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M463 0H1032L1058 200H585L385 404V470H983L1102 586V852L912 1055H447L143 699V356ZM385 629V638L562 868H821L890 803V696L825 629Z" transform="translate(323.60 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M833 0H1092V798L814 1078L388 947L341 1055H148V0H406V789L719 851L833 739Z" transform="translate(398.00 110.00) scale(0.06000 -0.06000)" fill="currentColor"/></svg></div><div class="meta" style="font-family:var(--font-mono);font-size:12px;color:var(--muted-foreground);margin-top:10px">Krypton · default · mechanical</div></div>
+      <div class="card hov"><div style="color:var(--foreground)"><svg style="width:100%;height:auto;display:block" preserveAspectRatio="xMinYMid meet" viewBox="0 0 498.40 174.40"><path d="M1141 523C1141 904 905 1079 620 1079C335 1079 99 904 99 523C99 143 335 -24 620 -24C905 -24 1141 143 1141 523ZM883 524C883 267 773 176 620 176C467 176 357 267 357 524C357 781 467 879 620 879C773 879 883 781 883 524Z" transform="translate(26.00 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M74 1055 472 537 58 0H348L605 363L884 0H1182L769 536L1166 1055H885L636 707L368 1055Z" transform="translate(100.40 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M586 1079C270 1079 149 951 149 770V718H377L378 759C379 864 457 904 571 904C684 904 762 867 762 735V592C459 595 114 555 114 259C114 83 235 -24 420 -24C569 -24 678 45 753 127H778C788 41 832 -22 972 -22C1019 -22 1070 -15 1126 0V184C1039 175 1017 193 1017 260V747C1017 991 852 1079 586 1079ZM379 293C379 406 492 458 690 458C715 458 739 457 762 454V235C698 190 627 160 546 160C442 160 379 209 379 293Z" transform="translate(174.80 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M99 584C99 294 242 95 494 95C644 95 748 166 815 251H828V33C828 -159 733 -221 596 -221C469 -221 399 -166 362 -66L131 -115C169 -276 287 -397 596 -397C920 -397 1083 -264 1083 61V1055H861L848 922H814C757 1007 653 1077 502 1077C247 1077 99 877 99 584ZM357 584C357 765 451 866 614 866C686 866 758 846 828 796V377C759 327 687 307 613 307C448 307 357 406 357 584Z" transform="translate(249.20 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M99 529C99 164 317 -24 631 -24C844 -24 1040 64 1115 283L868 319C824 220 739 176 631 176C461 176 366 287 358 498H1118V598C1118 920 943 1079 641 1079C320 1079 99 895 99 529ZM368 653C400 811 498 880 633 880C773 880 870 808 870 653Z" transform="translate(323.60 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M1083 0V769C1083 987 980 1078 796 1078C630 1078 523 1003 427 899H394L379 1055H157V0H412V752C485 826 571 874 673 874C761 874 828 838 828 702V0Z" transform="translate(398.00 110.00) scale(0.06000 -0.06000)" fill="currentColor"/></svg></div><div class="meta" style="font-family:var(--font-mono);font-size:12px;color:var(--muted-foreground);margin-top:10px">Neon · humanist · clean</div></div>
+      <div class="card hov"><div style="color:var(--foreground)"><svg style="width:100%;height:auto;display:block" preserveAspectRatio="xMinYMid meet" viewBox="0 0 498.40 174.40"><path d="M610 -24C864 -24 1134 126 1134 531C1134 889 921 1077 636 1077C381 1077 101 927 101 522C101 165 319 -24 610 -24ZM632 165C384 165 355 363 355 583C355 743 398 825 437 852C476 877 527 890 603 890C851 890 880 693 880 474C880 314 837 232 797 205C760 179 709 165 632 165Z" transform="translate(26.00 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M72 1053 468 539 58 0H343L598 370L883 0H1180L765 537L1174 1053H904L644 693L366 1053Z" transform="translate(100.40 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M1069 0V773C1069 985 934 1078 649 1078C485 1078 320 1046 185 1004L157 764C343 828 502 855 621 855C728 855 809 822 809 725V611C528 598 118 534 118 253C118 92 235 -23 436 -23C535 -23 668 7 790 88H809V0ZM381 299C381 357 407 396 485 418C580 444 718 442 809 439V224C728 185 637 160 561 160C453 160 381 211 381 299Z" transform="translate(174.80 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M533 377C799 377 1028 511 1028 726C1028 810 991 867 947 907L1187 922L1152 1090C1049 1084 939 1038 874 1005C799 1053 703 1079 589 1079C325 1079 102 936 102 713C102 571 203 452 363 402L336 338C315 288 283 226 283 175C283 145 297 117 323 94L198 17C93 -48 46 -115 46 -193C46 -364 266 -437 524 -437C868 -437 1171 -310 1171 -64C1171 115 1012 151 898 171L536 236C497 243 466 252 483 315L502 378ZM787 699C787 626 772 593 750 575C728 557 687 542 600 542C407 542 348 630 348 750C348 823 363 856 385 874C408 892 448 907 535 907C729 907 787 819 787 699ZM297 -141C297 -60 369 -6 437 35C455 29 475 24 496 20L771 -31C876 -51 935 -75 935 -128C935 -213 784 -271 573 -271C417 -271 297 -238 297 -141Z" transform="translate(249.20 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M479 847C509 871 558 893 641 893C792 893 869 823 869 671L868 646H387C397 762 443 819 479 847ZM131 497C131 154 326 -24 692 -24C846 -24 971 7 1058 38L1064 228C986 203 881 180 765 180C487 180 406 310 389 501H1108V634C1108 897 988 1077 695 1077C414 1077 131 909 131 497Z" transform="translate(323.60 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M1088 0 1084 797C1083 971 977 1076 788 1076C638 1076 495 1012 411 910H398V1053H152V0H412V784C488 837 575 874 670 874C766 874 825 837 825 725V0Z" transform="translate(398.00 110.00) scale(0.06000 -0.06000)" fill="currentColor"/></svg></div><div class="meta" style="font-family:var(--font-mono);font-size:12px;color:var(--muted-foreground);margin-top:10px">Argon · geometric · friendly</div></div>
+      <div class="card hov"><div style="color:var(--foreground)"><svg style="width:100%;height:auto;display:block" preserveAspectRatio="xMinYMid meet" viewBox="0 0 498.40 174.40"><path d="M620 -24C909 -24 1148 174 1148 535C1148 896 909 1094 620 1094C331 1094 92 896 92 535C92 174 331 -24 620 -24ZM620 154C477 154 358 247 358 539C358 829 477 923 620 923C762 923 882 829 882 539C882 247 762 154 620 154Z" transform="translate(26.00 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M698 0H1186V125L1058 182L751 551L1026 878L1176 945V1070H724V945L834 889L656 666L456 907L552 945V1070H64V945L186 890L486 528L200 191L54 125V0H506V125L395 181L585 409L790 162L698 125Z" transform="translate(100.40 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M802 -12H833L1186 83V223L1036 255V747C1036 1022 883 1094 628 1094C456 1094 322 1060 214 1020L172 767L314 736L337 785C389 892 469 932 577 933C693 934 787 894 787 746V629C391 598 108 538 108 266C108 70 258 -23 423 -23C566 -23 701 51 802 121ZM381 297C381 438 576 483 787 496V224C710 179 630 155 558 155C444 155 381 216 381 297Z" transform="translate(174.80 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M566 -423C894 -423 1157 -301 1157 -51C1157 111 1051 202 846 202H358L441 385C488 374 540 369 593 369C846 369 1053 489 1053 731C1053 802 1035 862 1004 912L1154 902L1200 1021L1148 1077L870 1033C793 1074 697 1094 593 1094C340 1094 132 974 132 731C132 594 199 496 303 437L94 21L121 -13H225L80 -283L98 -335C226 -384 380 -423 566 -423ZM591 515C476 515 388 587 388 731C388 877 476 949 591 949C706 949 797 877 797 731C797 587 706 515 591 515ZM343 -81 367 -13H730C857 -13 927 -47 927 -118C927 -230 752 -270 591 -270C405 -270 311 -215 343 -81Z" transform="translate(249.20 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M670 -24C804 -24 921 3 1038 53L1105 289L963 321L932 267C883 173 801 139 692 139C469 139 366 303 355 517H1122V595C1122 933 951 1093 665 1093C330 1093 91 875 91 515C91 172 298 -24 670 -24ZM361 653C388 838 495 921 638 921C796 921 870 817 874 653Z" transform="translate(323.60 110.00) scale(0.06000 -0.06000)" fill="currentColor"/>
+<path d="M724 0H1196V125L1085 173V799C1085 984 1020 1094 832 1094C712 1094 588 1044 454 965V1072L421 1085L68 990V850L219 817V174L108 125V0H580V125L469 173V841C546 877 627 901 697 901C772 901 835 855 835 740V174L724 125Z" transform="translate(398.00 110.00) scale(0.06000 -0.06000)" fill="currentColor"/></svg></div><div class="meta" style="font-family:var(--font-mono);font-size:12px;color:var(--muted-foreground);margin-top:10px">Xenon · slab serif · authority</div></div>
+    </div>
+
+    <div class="grid g2 reveal" style="margin-top:32px">
+      <div class="do"><strong>Do</strong><p class="sec-sub" style="margin:6px 0 0">Keep clear space equal to the core diameter. Use the gradient mark on ink for hero moments. Use adaptive monochrome everywhere else.</p></div>
+      <div class="dont"><strong>Don't</strong><p class="sec-sub" style="margin:6px 0 0">Recolor individual elements, rotate or stretch the mark, set the wordmark in a non-Monaspace font, or place black on dark.</p></div>
+    </div>
+  </div>
+</section>
+<!-- ============ COLOR ============ -->
+<section id="color">
+  <div class="wrap">
+    <div class="eyebrow reveal">02 — Color</div>
+    <h2 class="sec-title reveal">Palette</h2>
+    <p class="sec-sub reveal">A violet-to-green signature gradient, two blend stops, and the ink/paper neutrals. The gradient is expressive — reserve it for marks, hero, and key accents. Everything functional runs on the neutrals and a single violet primary.</p>
+
+    <div class="grid g4 reveal">
+      <div class="swatch"><div class="chip" style="background:#7182FF"></div><div class="meta"><div class="name">Violet</div><div class="hex">#7182FF</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#5B9BE6"></div><div class="meta"><div class="name">Blend 1</div><div class="hex">#5B9BE6</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#45C49E"></div><div class="meta"><div class="name">Blend 2</div><div class="hex">#45C49E</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#3CFF52"></div><div class="meta"><div class="name">Green</div><div class="hex">#3CFF52</div></div></div>
+    </div>
+    <div class="grid g4 reveal" style="margin-top:16px">
+      <div class="swatch"><div class="chip" style="background:#0A0A0A"></div><div class="meta"><div class="name">Ink</div><div class="hex">#0A0A0A</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#0B1020"></div><div class="meta"><div class="name">Surface (dark)</div><div class="hex">#0B1020</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#F7F8FA"></div><div class="meta"><div class="name">Paper</div><div class="hex">#F7F8FA</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#FFFFFF;border-bottom:1px solid var(--border)"></div><div class="meta"><div class="name">White</div><div class="hex">#FFFFFF</div></div></div>
+    </div>
+
+    <h3 style="margin:40px 0 12px;font-family:var(--font-heading)">Signature gradient</h3>
+    <div class="gradbar reveal"></div>
+    <p class="sec-sub reveal" style="margin-top:10px"><code>linear-gradient(135deg, #7182FF 0%, #3CFF52 100%)</code> — 135° for marks and fills, 90° for bars and text.</p>
+
+    <h3 style="margin:40px 0 12px;font-family:var(--font-heading)">Semantic states</h3>
+    <div class="grid g4 reveal">
+      <div class="swatch"><div class="chip" style="background:var(--primary)"></div><div class="meta"><div class="name">Primary</div><div class="hex">violet</div></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--success)"></div><div class="meta"><div class="name">Success</div><div class="hex">green</div></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--warning)"></div><div class="meta"><div class="name">Warning</div><div class="hex">amber</div></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--destructive)"></div><div class="meta"><div class="name">Destructive</div><div class="hex">red</div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TYPE ============ -->
+<section id="type">
+  <div class="wrap">
+    <div class="eyebrow reveal">03 — Typography</div>
+    <h2 class="sec-title reveal">The Monaspace system</h2>
+    <p class="sec-sub reveal">One superfamily, four roles. Every cut shares the same metrics, so they mix without friction — the whole identity reads as one engineered voice.</p>
+
+    <div class="reveal">
+      <div class="specimen">
+        <div class="role">Display · Monaspace Krypton</div>
+        <div class="display" style="font-size:clamp(32px,5vw,56px);font-weight:600;letter-spacing:-.02em">Context is the moat</div>
+        <div class="meta">Logotype, hero, big numerals, mechanical accents · weights 400–700</div>
+      </div>
+      <div class="specimen">
+        <div class="role">Heading · Monaspace Xenon</div>
+        <h3 style="font-family:var(--font-heading);font-size:clamp(24px,3.5vw,38px)">Agents query the ontology</h3>
+        <div class="meta">Section headings, editorial authority · the slab serifs add gravity · weights 400–700</div>
+      </div>
+      <div class="specimen">
+        <div class="role">Body · Monaspace Neon</div>
+        <p style="font-size:17px;max-width:62ch">Oxagen exposes a managed knowledge graph over MCP, so every agent in a system reasons against the same structured truth. Neon is the workhorse: clean, humanist, comfortable at paragraph length while still unmistakably part of the family.</p>
+        <div class="meta">Body copy, UI labels, paragraphs · weights 400–700</div>
+      </div>
+      <div class="specimen">
+        <div class="role">Mono · Monaspace Argon</div>
+        <pre class="code"><span class="c"># query the ontology over MCP</span>
+<span class="k">await</span> oxagen.<span class="g">retrieve</span>(scope=<span class="g">"workspace"</span>, query=<span class="g">"deploy policy"</span>)</pre>
+        <div class="meta">Code, data, terminal, tabular figures · weights 400–700</div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ============ BUTTONS ============ -->
+<section id="buttons">
+  <div class="wrap">
+    <div class="eyebrow reveal">04 — Components · Actions</div>
+    <h2 class="sec-title reveal">Buttons</h2>
+    <p class="sec-sub reveal">Every shadcn button variant, plus the brand gradient action. Buttons grow and lift on hover; the gradient button shimmers.</p>
+    <div class="card reveal"><div class="lab">
+      <div class="row">
+        <button class="btn btn-grad">Gradient</button>
+        <button class="btn btn-primary">Primary</button>
+        <button class="btn btn-secondary">Secondary</button>
+        <button class="btn btn-outline">Outline</button>
+        <button class="btn btn-ghost">Ghost</button>
+        <button class="btn btn-destructive">Destructive</button>
+        <button class="btn btn-link">Link</button>
+        <button class="btn btn-primary" disabled>Disabled</button>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary btn-sm">Small</button>
+        <button class="btn btn-primary">Default</button>
+        <button class="btn btn-primary btn-lg">Large</button>
+        <button class="btn btn-outline">⬡ With icon</button>
+        <button class="btn btn-primary"><span class="spin">◌</span> Loading</button>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============ FORMS ============ -->
+<section id="forms">
+  <div class="wrap">
+    <div class="eyebrow reveal">05 — Components · Forms</div>
+    <h2 class="sec-title reveal">Inputs &amp; controls</h2>
+    <p class="sec-sub reveal">Text fields, selects, checkboxes, radios, switches, sliders — every form primitive shadcn ships, themed on the tokens.</p>
+    <div class="grid g2 reveal">
+      <div class="card"><div class="lab">
+        <div><label class="label">Email</label><input class="input" placeholder="mac@oxagen.ai"></div>
+        <div><label class="label">Workspace</label>
+          <select class="select"><option>oxagen-prod</option><option>oxagen-staging</option><option>sandbox</option></select></div>
+        <div><label class="label">Query</label><textarea class="textarea" placeholder="retrieve(scope='workspace', ...)"></textarea></div>
+        <div><label class="label">Disabled</label><input class="input" value="read-only value" disabled></div>
+      </div></div>
+      <div class="card"><div class="lab">
+        <div class="row"><div class="check on" data-toggle="check"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5L20 6"/></svg></div><span>Enable self-authored memory</span></div>
+        <div class="row"><div class="check" data-toggle="check"></div><span>Require judge approval</span></div>
+        <div class="row"><div class="radio on" data-radio="g1"></div><span>Prompt-injected memory</span></div>
+        <div class="row"><div class="radio" data-radio="g1"></div><span>Deterministic gates</span></div>
+        <div class="row" style="justify-content:space-between"><span>Dark mode default</span><div class="switch on" data-toggle="switch"><div class="knob"></div></div></div>
+        <div class="row" style="justify-content:space-between"><span>Telemetry</span><div class="switch" data-toggle="switch"><div class="knob"></div></div></div>
+        <div><label class="label">Context window <span class="pill" id="slVal">65%</span></label><input class="slider" type="range" min="0" max="100" value="65" id="sl"></div>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEEDBACK ============ -->
+<section id="feedback">
+  <div class="wrap">
+    <div class="eyebrow reveal">06 — Components · Feedback</div>
+    <h2 class="sec-title reveal">Alerts, badges, toasts &amp; progress</h2>
+    <div class="grid g2 reveal">
+      <div class="card"><div class="lab">
+        <div class="alert info"><span class="ico">●</span><div><div class="alert-title">Heads up</div><div class="alert-desc">Your ontology sync completed in 1.2s across 3 workspaces.</div></div></div>
+        <div class="alert success"><span class="ico">✓</span><div><div class="alert-title">Deployed</div><div class="alert-desc">oxagen-prod is live on Vercel. Edge regions: us-west1.</div></div></div>
+        <div class="alert warning"><span class="ico">▲</span><div><div class="alert-title">Quota approaching</div><div class="alert-desc">You've used 82% of this month's retrieval budget.</div></div></div>
+        <div class="alert destructive"><span class="ico">✕</span><div><div class="alert-title">Retrieval failed</div><div class="alert-desc">Neo4j connection timed out. Retrying with backoff.</div></div></div>
+      </div></div>
+      <div class="card"><div class="lab">
+        <div><label class="label">Badges</label><div class="row">
+          <span class="badge badge-default">default</span>
+          <span class="badge badge-secondary">secondary</span>
+          <span class="badge badge-outline">outline</span>
+          <span class="badge badge-success">● live</span>
+          <span class="badge badge-destructive">error</span>
+        </div></div>
+        <div><label class="label">Progress</label><div class="progress"><div class="bar" style="width:72%"></div></div></div>
+        <div><label class="label">Toast</label><div class="toast"><span class="avatar" style="width:28px;height:28px;font-size:12px">O</span><div style="flex:1"><div style="font-weight:600;font-size:13px">Memory written</div><div style="font-size:12px;color:var(--muted-foreground)">Directive · weight 0.82</div></div><button class="btn btn-ghost btn-sm">Undo</button></div></div>
+        <div><label class="label">Skeleton</label><div class="lab" style="gap:8px"><div class="skeleton" style="height:12px;width:80%"></div><div class="skeleton" style="height:12px;width:60%"></div><div class="skeleton" style="height:12px;width:70%"></div></div></div>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DATA / NAV ============ -->
+<section id="data">
+  <div class="wrap">
+    <div class="eyebrow reveal">07 — Components · Data &amp; Navigation</div>
+    <h2 class="sec-title reveal">Tabs, accordion, table, avatars, tooltip</h2>
+    <div class="grid g2 reveal">
+      <div class="card"><div class="lab">
+        <div class="tabs" id="tabs">
+          <button class="tab on" data-tab="0">Overview</button>
+          <button class="tab" data-tab="1">Memory</button>
+          <button class="tab" data-tab="2">Graph</button>
+        </div>
+        <div id="tabpanel" style="font-size:14px;color:var(--muted-foreground);min-height:48px">Ontology-as-a-service for enterprise agents.</div>
+        <div class="acc" id="acc">
+          <div class="acc-item"><div class="acc-head">What is a Directive? <span class="chev">⌄</span></div><div class="acc-body"><div>A single memory primitive collapsing semantic, episodic, and procedural types into one trigger/scope object.</div></div></div>
+          <div class="acc-item"><div class="acc-head">How does retrieval work? <span class="chev">⌄</span></div><div class="acc-body"><div>Agents query scoped context over MCP; the ontology returns ranked, provenance-tagged memories.</div></div></div>
+          <div class="acc-item"><div class="acc-head">Where does it run? <span class="chev">⌄</span></div><div class="acc-body"><div>Next.js + FastAPI, AlloyDB for Postgres, native Neo4j for the graph, on Google Cloud us-west1.</div></div></div>
+        </div>
+      </div></div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Workspace</th><th>Memories</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>oxagen-prod</td><td class="mono">12,840</td><td><span class="badge badge-success">● live</span></td></tr>
+            <tr><td>oxagen-staging</td><td class="mono">3,210</td><td><span class="badge badge-secondary">idle</span></td></tr>
+            <tr><td>sandbox</td><td class="mono">142</td><td><span class="badge badge-outline">draft</span></td></tr>
+          </tbody>
+        </table>
+        <div class="row" style="margin-top:20px">
+          <span class="avatar">M</span><span class="avatar" style="background:var(--primary);color:var(--primary-foreground)">H</span><span class="avatar" style="background:var(--secondary);color:var(--secondary-foreground)">+5</span>
+          <div class="tip" style="margin-left:auto"><button class="btn btn-outline btn-sm">Hover me</button><span class="bubble">Tooltip · Argon mono</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ============ TOKENS ============ -->
+<section id="tokens">
+  <div class="wrap">
+    <div class="eyebrow reveal">08 — Implementation</div>
+    <h2 class="sec-title reveal">Copy-paste theme</h2>
+    <p class="sec-sub reveal">The full token set lives in <code>css/oxagen-theme.css</code> (Tailwind v4 + shadcn, OKLCH) and <code>css/oxagen-fonts.css</code>. Drop both into your app, import after Tailwind, and the whole system themes itself. Retune the brand by editing the <code>:root</code> and <code>.dark</code> blocks.</p>
+    <pre class="code reveal"><span class="c">/* app/globals.css */</span>
+<span class="k">@import</span> <span class="g">"tailwindcss"</span>;
+<span class="k">@import</span> <span class="g">"./css/oxagen-fonts.css"</span>;
+<span class="k">@import</span> <span class="g">"./css/oxagen-theme.css"</span>;
+
+<span class="c">/* fonts map to roles automatically: */</span>
+<span class="c">/*   font-display → Krypton  ·  font-heading → Xenon */</span>
+<span class="c">/*   font-sans    → Neon     ·  font-mono    → Argon */</span></pre>
+    <div class="grid g2 reveal" style="margin-top:24px">
+      <div class="card"><div class="role" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--primary);margin-bottom:10px">Tailwind utility</div><pre class="code"><span class="k">&lt;button</span> class=<span class="g">"bg-primary text-primary-foreground"</span><span class="k">&gt;</span>
+  Deploy
+<span class="k">&lt;/button&gt;</span></pre></div>
+      <div class="card"><div class="role" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--primary);margin-bottom:10px">Brand gradient</div><pre class="code"><span class="k">&lt;div</span> class=<span class="g">"bg-[image:var(--brand-gradient)]"</span><span class="k">/&gt;</span></pre></div>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="wrap row" style="justify-content:space-between">
+    <span>Oxagen · Context Infrastructure · Brand Guidelines v1.0</span>
+    <span>Type: Monaspace · oxagen.ai</span>
+  </div>
+</footer>
+
+<script>
+// theme toggle
+const root=document.documentElement, tb=document.getElementById('themeBtn'),
+  ti=document.getElementById('themeIco'), tt=document.getElementById('themeTxt');
+function setTheme(dark){root.classList.toggle('dark',dark);ti.textContent=dark?'◐':'◑';tt.textContent=dark?'Dark':'Light';}
+tb.onclick=()=>setTheme(!root.classList.contains('dark'));
+
+// reveal on scroll
+const io=new IntersectionObserver((es)=>es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in')}),{threshold:.12});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+// toggles (checkbox / switch)
+document.querySelectorAll('[data-toggle]').forEach(el=>el.onclick=()=>el.classList.toggle('on'));
+// radio groups
+document.querySelectorAll('[data-radio]').forEach(el=>el.onclick=()=>{
+  document.querySelectorAll(`[data-radio="${el.dataset.radio}"]`).forEach(r=>r.classList.remove('on'));el.classList.add('on');});
+// checkbox tick render
+document.querySelectorAll('.check').forEach(c=>{const t=c.innerHTML;c.addEventListener('click',()=>{
+  c.innerHTML=c.classList.contains('on')?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5L20 6"/></svg>':'';});});
+// slider
+const sl=document.getElementById('sl');sl&&sl.addEventListener('input',()=>document.getElementById('slVal').textContent=sl.value+'%');
+// tabs
+const panels=['Ontology-as-a-service for enterprise agents.','One memory primitive: Directive/Lesson, scoped by trigger and provenance.','A managed Neo4j knowledge graph, queryable over MCP.'];
+document.querySelectorAll('#tabs .tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('#tabs .tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
+  document.getElementById('tabpanel').textContent=panels[t.dataset.tab];});
+// accordion
+document.querySelectorAll('#acc .acc-head').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('open'));
+
+// hero constellation — animated node graph
+const C=document.getElementById('constellation');
+if(C){const W=1120,H=600,N=14,pts=[];
+  for(let i=0;i<N;i++)pts.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.25,vy:(Math.random()-.5)*.25});
+  function draw(){let s='';for(let i=0;i<N;i++){const p=pts[i];
+    p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>W)p.vx*=-1;if(p.y<0||p.y>H)p.vy*=-1;
+    for(let j=i+1;j<N;j++){const q=pts[j],d=Math.hypot(p.x-q.x,p.y-q.y);
+      if(d<170)s+=`<line x1="${p.x.toFixed(1)}" y1="${p.y.toFixed(1)}" x2="${q.x.toFixed(1)}" y2="${q.y.toFixed(1)}" opacity="${(1-d/170).toFixed(2)}"/>`;}
+    s+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="url(#hg)" stroke="none"/>`;}
+  C.innerHTML=s;requestAnimationFrame(draw);}
+  draw();}
+</script>
+</body>
+</html>
