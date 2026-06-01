@@ -344,11 +344,16 @@ function shouldThrowKmsGuard(
   vercelEnv: string | undefined,
   kmsKeyId: string | undefined,
   isBuildPhase = false,
+  e2eTest: string | undefined = undefined,
 ): boolean {
   const isLocal =
     nodeEnv === "development" ||
     nodeEnv === "test" ||
-    vercelEnv === "development";
+    vercelEnv === "development" ||
+    // E2E_TEST bypasses the guard: playwright runs `next start` with
+    // NODE_ENV=production but without KMS credentials (same exemption applied
+    // to useSecureCookies).
+    e2eTest === "true";
   // The guard is skipped during `next build` (NEXT_PHASE=phase-production-build)
   // because the KMS key is a runtime, not build-time, requirement (OXA-1504).
   return !kmsKeyId && !isLocal && !isBuildPhase;
@@ -381,6 +386,19 @@ describe("AUTH_TOKEN_KMS_KEY_ID startup guard", () => {
 
   it("does NOT throw during the Next.js build phase even when key id is absent", () => {
     expect(shouldThrowKmsGuard("production", undefined, undefined, true)).toBe(false);
+  });
+
+  it("does NOT throw in production when E2E_TEST=true (Playwright CI bypass)", () => {
+    // Playwright runs `next start` (NODE_ENV=production) over http without
+    // KMS credentials. E2E_TEST=true is the sentinel injected by playwright.config.ts
+    // webServer.env to exempt this legitimate scenario from the guard.
+    expect(shouldThrowKmsGuard("production", undefined, undefined, false, "true")).toBe(false);
+  });
+
+  it("E2E bypass only activates for the exact string 'true', not '1' or 'TRUE'", () => {
+    expect(shouldThrowKmsGuard("production", undefined, undefined, false, "1")).toBe(true);
+    expect(shouldThrowKmsGuard("production", undefined, undefined, false, "TRUE")).toBe(true);
+    expect(shouldThrowKmsGuard("production", undefined, undefined, false, "yes")).toBe(true);
   });
 });
 

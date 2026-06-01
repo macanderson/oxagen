@@ -35,7 +35,12 @@ const kmsKeyId = process.env.AUTH_TOKEN_KMS_KEY_ID;
 const isLocalEnv =
   env.NODE_ENV === "development" ||
   env.NODE_ENV === "test" ||
-  process.env.VERCEL_ENV === "development";
+  process.env.VERCEL_ENV === "development" ||
+  // E2E_TEST is injected by playwright.config.ts webServer.env when running
+  // `next start` in CI. Playwright drives a production build over http, so
+  // NODE_ENV is "production" even though KMS is unavailable — the same
+  // exemption already applied to useSecureCookies (line below).
+  process.env.E2E_TEST === "true";
 
 // The KMS key is a RUNTIME requirement, not a build-time one. Next.js evaluates
 // route modules during `next build` ("Collecting page data") with

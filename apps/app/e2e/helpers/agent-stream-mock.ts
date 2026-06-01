@@ -18,10 +18,7 @@ export async function interceptAgentStream(
   opts: InterceptOptions,
 ): Promise<void> {
   const delayMs = opts.delayMs ?? 80;
-  // The chat stream route is versioned under /api/v1 (OXA-1502), so the client
-  // POSTs to /api/v1/chat/stream. The glob must include the `v1` segment or it
-  // silently fails to intercept and the test reaches the real LLM call.
-  const urlGlob = opts.urlGlob ?? "**/api/v1/chat/**";
+  const urlGlob = opts.urlGlob ?? "**/api/v1/chat/stream";
 
   await page.route("**/api/anthropic/**", (route: Route) =>
     route.fulfill({
@@ -99,7 +96,11 @@ export function scriptedScenarioEvents(args: {
       riskLevel: "high",
       expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
     },
-    { type: "approval-resolved", approvalId: "apr_001", resolution: "approved" },
+    {
+      type: "approval-resolved",
+      approvalId: "apr_001",
+      resolution: "approved",
+    },
     { type: "plan-resolved", planId: "pln_001", decision: "approved" },
     {
       type: "tool-call-start",
@@ -133,9 +134,21 @@ export function scriptedScenarioEvents(args: {
       fanoutId: "fan_001",
       parentMessageId: m,
       children: [
-        { childMessageId: "msg_c1", capability: "agent.code.execute", label: "apps/app" },
-        { childMessageId: "msg_c2", capability: "agent.code.execute", label: "apps/mcp" },
-        { childMessageId: "msg_c3", capability: "agent.code.execute", label: "packages" },
+        {
+          childMessageId: "msg_c1",
+          capability: "agent.code.execute",
+          label: "apps/app",
+        },
+        {
+          childMessageId: "msg_c2",
+          capability: "agent.code.execute",
+          label: "apps/mcp",
+        },
+        {
+          childMessageId: "msg_c3",
+          capability: "agent.code.execute",
+          label: "packages",
+        },
       ],
     },
     {
@@ -198,7 +211,9 @@ export function scriptedScenarioEvents(args: {
       messageId: m,
       toolCallId: "tcl_write",
       capability: "agent.memory.write",
-      inputPreview: { lesson: "Workspace has 147 source files across 3 packages." },
+      inputPreview: {
+        lesson: "Workspace has 147 source files across 3 packages.",
+      },
       riskLevel: "low",
     },
     {
