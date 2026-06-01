@@ -55,6 +55,9 @@
       "sharp",
       "ssh2",
       "unrs-resolver"
+    ],
+    "ignoredBuiltDependencies": [
+      "@swc/core"
     ]
   }
 }
