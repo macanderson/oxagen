@@ -109,6 +109,8 @@
 
     // Playwright e2e — depends on the app's own build (not ^build) so
     // `next start` has a production build to serve. Only @oxagen/app ships it.
+    // Run locally / via the app's `test:e2e` script; not wired into the CI
+    // gate yet (needs a services + env block — tracked as a follow-up).
     "test:e2e": {
       "dependsOn": ["build"],
       "inputs": ["$TURBO_DEFAULT$", "e2e/**", "playwright.config.*"],
@@ -122,12 +124,6 @@
         "E2E_TEST"
       ],
       "passThroughEnv": ["CI"]
-    },
-
-    "coverage:merge": {
-      "dependsOn": ["test:unit", "test:contract"],
-      "inputs": ["coverage/**"],
-      "outputs": ["coverage/merged/**"]
     },
 
     "dev": {
