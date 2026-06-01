@@ -174,12 +174,20 @@ export async function materializeTools(
       },
     });
   }
-  // ── MCP tool integration (OXA-1498: no-drift enforcement) ───────────────────
+  // ── MCP tool integration (OXA-1498) ─────────────────────────────────────────
   // Load tools from healthy registered MCP servers for this workspace.
-  // Each MCP tool execution is metered via insertToolInvocation and uses a
-  // synthetic capability name `mcp.<serverId>.<toolName>` for IAM logging.
-  // Failures per-server are isolated — a degraded server never blocks the
-  // model from receiving other tools.
+  // Each MCP tool execution is METERED via insertToolInvocation under a
+  // synthetic capability name `mcp.<serverId>.<toolName>` (audit trail).
+  //
+  // NOTE: MCP tools are metered, NOT individually IAM-enforced. Unlike the
+  // capability-backed tools above (which route through invoke() and therefore
+  // the full IAM kernel), MCP tools call the server transport directly, so an
+  // IAM `deny` policy against a synthetic `mcp.*` capability is NOT applied
+  // here even when IAM_ENFORCEMENT_ENABLED=true. Per-tool MCP enforcement
+  // (routing each call through an IAM check against the synthetic capability)
+  // is tracked separately; wiring it requires registering MCP tools as
+  // first-class capabilities. Failures per-server are isolated — a degraded
+  // server never blocks the model from receiving other tools.
   if (ctx.workspaceId) {
     let mcpServerRows: (typeof schema.mcpServers.$inferSelect)[] = [];
     try {

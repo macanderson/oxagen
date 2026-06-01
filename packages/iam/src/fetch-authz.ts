@@ -75,11 +75,13 @@ export async function fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
 }
 
 async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
-  // workspaceId is intentionally not read here: this layer scopes by orgId
-  // (tenant isolation), and the pure resolver applies workspace-scope matching
-  // against scope.workspaceId (see resolve.ts). Fetching all org grants and
-  // filtering by scope in-memory keeps the query count flat.
-  const { userId, orgId, capability } = args;
+  // grants/roles/policies are scoped by orgId (tenant isolation); the pure
+  // resolver applies workspace-scope matching against scope.workspaceId for
+  // those (see resolve.ts), so fetching all org rows and filtering in-memory
+  // keeps the query count flat. Role *assignments*
+  // (principal_role_assignments) can THEMSELVES be workspace-scoped, however,
+  // so we must filter those by workspaceId here — see the PRA query below.
+  const { userId, orgId, workspaceId, capability } = args;
   const d = db();
 
   // Resolve the principal from the userId (human kind).
@@ -190,6 +192,15 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
           or(
             isNull(schema.principalRoleAssignments.expiresAt),
             gt(schema.principalRoleAssignments.expiresAt, sql`now()`),
+          ),
+          // Honour the assignment's workspace scope: include org-wide
+          // assignments (workspace_id IS NULL) and assignments scoped to the
+          // workspace this request targets. Without this predicate a
+          // workspace-scoped role would leak org-wide (granting role X in
+          // workspace B for an assignment made only in workspace A).
+          or(
+            isNull(schema.principalRoleAssignments.workspaceId),
+            eq(schema.principalRoleAssignments.workspaceId, workspaceId),
           ),
         ),
       ),

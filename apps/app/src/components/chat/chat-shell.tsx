@@ -28,7 +28,7 @@ export interface ChatShellProps {
   cancelBackgroundTask?: (taskId: string) => Promise<{ ok: boolean; error?: string }>;
   initialBackgroundTaskIds?: string[];
   agentCapabilities?: readonly import("./plan-card").AgentCapability[];
-  /** Slug values forwarded to ChatShellClient for /api/chat/stream requests. */
+  /** Slug values forwarded to ChatShellClient for /api/v1/chat/stream requests. */
   orgSlug: string;
   workspaceSlug: string;
 }

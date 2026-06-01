@@ -307,17 +307,42 @@ export async function invoke(
       (cap as { defaultEffect?: CapabilityEffect }).defaultEffect ?? "deny";
 
     // Fire-and-forget: checkFn internally emits the ClickHouse audit event.
+    let iamCheckThrew = false;
     const iamResult = await checkFn({
       capability: name,
       ctx,
       defaultEffect,
       rawInputJson,
     }).catch((err: unknown) => {
-      // IAM check failure is a critical incident but must never crash an
-      // invocation when enforcement is off. Log loudly and fall through.
+      // IAM check failure is a critical incident. When enforcement is OFF we
+      // must never crash an invocation (log loudly and fall through), but when
+      // enforcement is ON we MUST fail closed — a transient resolver error
+      // (DB timeout, network blip, misconfig) must not silently grant access.
+      // Flag the throw and decide based on _iamEnforced below.
+      iamCheckThrew = true;
       console.error(`[kernel] IAM check threw for "${name}":`, err);
       return null;
     });
+
+    // Fail closed on resolver error when enforcement is enabled.
+    if (iamCheckThrew && _iamEnforced) {
+      emitSecurityEvent({
+        capability: name,
+        outcome: "deny",
+        surface: ctx.surface,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        actorUserId: ctx.userId,
+        requestId: ctx.requestId,
+        errorCode: "authz_denied",
+        durationMs: Date.now() - startMs,
+      });
+      throw new CapabilityError(
+        name,
+        "authz_denied",
+        `IAM check errored for "${name}" and IAM_ENFORCEMENT_ENABLED=true — failing closed.`,
+      );
+    }
 
     if (iamResult !== null && iamResult.outcome !== "allow") {
       if (_iamEnforced) {

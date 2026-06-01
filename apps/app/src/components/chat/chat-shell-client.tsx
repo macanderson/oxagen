@@ -22,7 +22,7 @@ import type { StreamEvent } from "./stream-event-types";
 //  - blocks the composer while any approval-request block is still
 //    awaiting a decision (spec §7 — "disabled while an approval is
 //    pending"),
-//  - calls POST /api/chat/stream when a message is submitted, consumes
+//  - calls POST /api/v1/chat/stream when a message is submitted, consumes
 //    the SSE response via `useToolStream`, and renders live stream events
 //    (plans, approvals, tool calls, code executes, memory recalls, memory
 //    writes, fanouts) inline before the RSC revalidate completes,
@@ -114,7 +114,7 @@ export function ChatShellClient({
     [resolveApprovalAction],
   );
 
-  // Wrap the server action: fire the /api/chat/stream SSE fetch immediately
+  // Wrap the server action: fire the /api/v1/chat/stream SSE fetch immediately
   // (before the server action completes) so live events render as fast as
   // possible. The server action handles Postgres persistence independently.
   const wrappedSendAction = React.useCallback<ComposerAction>(

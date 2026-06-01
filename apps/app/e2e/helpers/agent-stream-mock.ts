@@ -18,7 +18,10 @@ export async function interceptAgentStream(
   opts: InterceptOptions,
 ): Promise<void> {
   const delayMs = opts.delayMs ?? 80;
-  const urlGlob = opts.urlGlob ?? "**/api/chat/**";
+  // The chat stream route is versioned under /api/v1 (OXA-1502), so the client
+  // POSTs to /api/v1/chat/stream. The glob must include the `v1` segment or it
+  // silently fails to intercept and the test reaches the real LLM call.
+  const urlGlob = opts.urlGlob ?? "**/api/v1/chat/**";
 
   await page.route("**/api/anthropic/**", (route: Route) =>
     route.fulfill({

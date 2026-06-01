@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { asc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import { streamAgentReply, defaultModel } from "@oxagen/ai";
@@ -45,8 +45,8 @@ const BodySchema = z.object({
 // Maximum number of prior messages to include in the context window.
 // Keeps prompt size bounded while preserving enough history for coherent
 // multi-turn conversations. The newest HISTORY_LIMIT messages are taken
-// (ORDER BY createdAt ASC applied after the window is sliced so the
-// model sees them chronologically).
+// (ORDER BY createdAt DESC + LIMIT, then reversed in JS so the model sees
+// them chronologically oldest→newest).
 const HISTORY_LIMIT = 50;
 
 // Valid CoreMessage roles. Guards against malformed DB rows reaching the SDK.
@@ -67,7 +67,8 @@ const VALID_ROLES = new Set(["user", "assistant", "system"]);
 // This route is the SINGLE LLM caller per turn (OXA-1509). The server
 // action (`sendMessageAction`) handles Postgres persistence only — it no
 // longer calls the model. History is loaded here directly from the
-// messages table, ordered deterministically by createdAt ASC.
+// messages table, scoped to the resolved workspace and ordered
+// deterministically by createdAt.
 export async function POST(request: NextRequest): Promise<Response> {
   // Auth: reject unauthenticated requests before consuming the body.
   let session: Awaited<ReturnType<typeof getSessionOrRedirect>>;
@@ -112,10 +113,11 @@ export async function POST(request: NextRequest): Promise<Response> {
   // messages in the conversation (SSE amnesia, OXA-1509).
   //
   // Strategy:
-  //   1. If conversationId is provided, load the last HISTORY_LIMIT rows
-  //      ordered by createdAt ASC (deterministic). The current user message
-  //      may not yet be persisted (sendMessageAction runs concurrently),
-  //      so we always append it explicitly at the end.
+  //   1. If conversationId is provided, load the most-recent HISTORY_LIMIT
+  //      rows (DESC + LIMIT) scoped to the resolved workspace, then reverse
+  //      to chronological order. The current user message may not yet be
+  //      persisted (sendMessageAction runs concurrently), so we always
+  //      append it explicitly at the end.
   //   2. If no conversationId yet (first message), skip the DB read — the
   //      coreMessages array will contain only the current user message.
   //
@@ -132,24 +134,35 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   let historyMessages: CoreMessage[] = [];
   if (conversationId) {
-    // Load messages ordered deterministically by createdAt ASC, bounded
-    // by HISTORY_LIMIT to keep the prompt size predictable.
-    // We use a subquery approach: fetch the last N rows by ordering DESC
-    // and then reverse, so we always have the most-recent HISTORY_LIMIT
-    // messages in chronological order.
+    // Fetch the most-recent HISTORY_LIMIT rows by ordering DESC + LIMIT,
+    // then reverse in JS so they end up chronological (oldest→newest). This
+    // keeps the prompt size predictable while always retaining recent context.
     const rows = await db()
       .select({
         role: schema.messages.role,
         content: schema.messages.content,
       })
       .from(schema.messages)
-      .where(eq(schema.messages.conversationId, conversationId))
-      .orderBy(asc(schema.messages.createdAt))
+      .where(
+        and(
+          eq(schema.messages.conversationId, conversationId),
+          // Tenant isolation (IDOR guard): conversationId arrives in the request
+          // body, so scope the read to the resolved workspace. Without this a
+          // member of org A could pass a conversationId belonging to org B and
+          // read that org's full message history.
+          eq(schema.messages.workspaceId, workspace.id),
+        ),
+      )
+      // Take the most-recent HISTORY_LIMIT rows (DESC + LIMIT), then reverse to
+      // chronological order so the model reads them oldest→newest. Ordering ASC
+      // with LIMIT would return the OLDEST N rows and drop all recent context.
+      .orderBy(desc(schema.messages.createdAt))
       .limit(HISTORY_LIMIT);
 
     historyMessages = rows
       .filter((r) => VALID_ROLES.has(r.role))
-      .map((r) => ({ role: r.role as "user" | "assistant" | "system", content: r.content }));
+      .map((r) => ({ role: r.role as "user" | "assistant" | "system", content: r.content }))
+      .reverse();
   }
 
   // Append the current user message. The server action may persist it
