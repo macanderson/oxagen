@@ -3,15 +3,16 @@
  *
  * Provides `databaseHooks` for the `account` model that:
  *   - WRITE: encrypt access_token, refresh_token, id_token into the *_enc
- *     bytea columns before create/update (dual-write — plaintext columns are
- *     also preserved during the EXPAND phase for backward compatibility).
- *   - READ: decrypt the *_enc columns on the way out; fall back to the
- *     plaintext columns if the encrypted columns are absent (transition period
- *     before the backfill job runs).
+ *     bytea columns before create/update.
+ *   - READ: decrypt the *_enc columns on the way out.
  *
- * EXPAND PHASE ONLY.  Once the CONTRACT migration drops the plaintext columns,
- * remove the plaintext fallbacks in `decryptAccountTokens` and the dual-write
- * of the plaintext columns in the hooks.
+ * CONTRACT PHASE: Migration 0012 has dropped the plaintext `access_token` and
+ * `refresh_token` columns from the `accounts` table. This module no longer
+ * dual-writes plaintext — only the *_enc columns are written.
+ *
+ * `idToken` (OIDC identity assertion) is still stored in the DB as `id_token`
+ * plaintext because it is read-only and not a bearer credential. It is also
+ * encrypted into `id_token_enc` for defense-in-depth (both values are written).
  *
  * NEVER log plaintext token values anywhere in this module.
  */
@@ -26,13 +27,19 @@ import { requireEnv } from "@oxagen/config/env";
 
 /**
  * The subset of an Account record that carries token fields.  Better-auth
- * passes the full account object; we only care about these six fields.
+ * passes the full account object; we only care about these fields.
+ *
+ * NOTE: `accessToken` and `refreshToken` plain-text fields are no longer
+ * persisted to the DB (dropped by migration 0012 / OXA-1504 CONTRACT phase).
+ * They may still be present on the incoming account object from Better Auth's
+ * in-memory representation during the OAuth callback — we read them for
+ * encryption purposes only and do NOT write them back.
  */
 interface TokenFields {
   accessToken?: string | null;
   refreshToken?: string | null;
   idToken?: string | null;
-  // Encrypted columns — present after EXPAND migration.
+  // Encrypted columns — written to the DB.
   accessTokenEnc?: Buffer | null;
   refreshTokenEnc?: Buffer | null;
   idTokenEnc?: Buffer | null;
@@ -77,14 +84,13 @@ async function decryptToken(
 /**
  * Encrypt the three token fields of an account record for database storage.
  *
+ * CONTRACT PHASE (migration 0012): the plaintext `access_token` and
+ * `refresh_token` columns have been dropped. This function returns ONLY the
+ * encrypted columns — it does NOT write back the plaintext values.
+ *
  * Returns a partial record with:
  *   - `accessTokenEnc`, `refreshTokenEnc`, `idTokenEnc`  — encrypted bytea
  *   - `tokenKmsKeyId`                                     — CMK used
- *   - `accessToken`, `refreshToken`, `idToken`            — KEPT (plaintext)
- *     because the columns still exist during the EXPAND phase.
- *
- * When the CONTRACT migration drops the plaintext columns, remove the three
- * plaintext fields from the return value here.
  */
 export async function encryptAccountTokens(
   data: TokenFields,
@@ -98,12 +104,8 @@ export async function encryptAccountTokens(
   ]);
 
   return {
-    // Dual-write: keep plaintext so existing read paths still work during
-    // the transition window.  DROP these three lines in the CONTRACT phase.
-    accessToken: data.accessToken,
-    refreshToken: data.refreshToken,
-    idToken: data.idToken,
-    // Encrypted columns:
+    // CONTRACT phase: no plaintext columns — return only the encrypted bytea
+    // columns and the KMS key reference.
     accessTokenEnc,
     refreshTokenEnc,
     idTokenEnc,
@@ -114,11 +116,10 @@ export async function encryptAccountTokens(
 /**
  * Decrypt the token fields of an account record loaded from the database.
  *
- * Prefers the encrypted columns; falls back to the plaintext columns if the
- * encrypted column is null (rows not yet backfilled, or created before
- * OXA-1420 went live).
- *
- * In the CONTRACT phase, remove the fallback branches.
+ * CONTRACT PHASE (migration 0012): plaintext `access_token` / `refresh_token`
+ * columns no longer exist in the DB. This function only reads the *_enc bytea
+ * columns. If `tokenKmsKeyId` is absent the row predates OXA-1420 and the
+ * tokens are unavailable — returns the record with null token fields.
  */
 export async function decryptAccountTokens(
   data: TokenFields,
@@ -126,20 +127,16 @@ export async function decryptAccountTokens(
 ): Promise<TokenFields> {
   const keyId = data.tokenKmsKeyId;
 
-  // If there is no KMS key id, the row pre-dates OXA-1420; return as-is with
-  // no decryption attempt (plaintext columns are still populated).
-  if (!keyId) return data;
+  // No KMS key id means the row predates OXA-1420 encryption. The plaintext
+  // columns have been dropped, so there is nothing to return.
+  if (!keyId) {
+    return { ...data, accessToken: null, refreshToken: null, idToken: null };
+  }
 
   const [accessToken, refreshToken, idToken] = await Promise.all([
-    data.accessTokenEnc != null
-      ? decryptToken(data.accessTokenEnc, keyId, adapter)
-      : (data.accessToken ?? null),
-    data.refreshTokenEnc != null
-      ? decryptToken(data.refreshTokenEnc, keyId, adapter)
-      : (data.refreshToken ?? null),
-    data.idTokenEnc != null
-      ? decryptToken(data.idTokenEnc, keyId, adapter)
-      : (data.idToken ?? null),
+    decryptToken(data.accessTokenEnc, keyId, adapter),
+    decryptToken(data.refreshTokenEnc, keyId, adapter),
+    decryptToken(data.idTokenEnc, keyId, adapter),
   ]);
 
   return {
@@ -182,11 +179,24 @@ export function buildAccountTokenHooks(adapter: KmsAdapter): {
     );
   }
 
+  /**
+   * Remove plaintext token fields from the account object before writing to
+   * the DB. Migration 0012 dropped `access_token` and `refresh_token` columns;
+   * passing them to the adapter would cause an "unknown column" error.
+   */
+  function stripPlaintextTokens(account: Record<string, unknown>): Record<string, unknown> {
+    const { accessToken: _at, refreshToken: _rt, ...rest } = account;
+    void _at;
+    void _rt;
+    return rest;
+  }
+
   return {
     create: {
       async before(account: Record<string, unknown>) {
         const encrypted = await encryptAccountTokens(account as TokenFields, keyId, adapter);
-        return { data: { ...account, ...encrypted } };
+        // Strip plaintext columns (dropped in migration 0012) and merge encrypted fields.
+        return { data: { ...stripPlaintextTokens(account), ...encrypted } };
       },
     },
     update: {
@@ -198,7 +208,8 @@ export function buildAccountTokenHooks(adapter: KmsAdapter): {
           "idToken" in account;
         if (!hasTokenField) return { data: account };
         const encrypted = await encryptAccountTokens(account as TokenFields, keyId, adapter);
-        return { data: { ...account, ...encrypted } };
+        // Strip plaintext columns and merge encrypted fields.
+        return { data: { ...stripPlaintextTokens(account), ...encrypted } };
       },
     },
   };

@@ -1,0 +1,179 @@
+/**
+ * Aeonik typeface — @font-face declarations
+ *
+ * LICENSED ASSETS REQUIRED
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Aeonik is a commercially-licensed typeface by CoType Foundry.
+ * The .woff2 binaries are NOT included in this repository.
+ *
+ * To activate the brand typeface, obtain a license at:
+ *   https://cotypefoundry.com/aeonik
+ *
+ * Then drop the following files into EACH app's `public/fonts/` directory
+ * (Next serves them at `/fonts/*.woff2`, which is exactly what the @font-face
+ * `src` URLs below resolve to). Keeping the `src` as an absolute `/fonts/...`
+ * URL — rather than a bundler-relative `./...` path — is deliberate: webpack
+ * does not try to resolve absolute URLs at build time, so the build stays green
+ * while the licensed binaries are absent and the system-font fallback applies.
+ * Reference list of the files to add (per app `public/fonts/`):
+ *
+ *   Aeonik-Thin.woff2          (weight 100)
+ *   Aeonik-Light.woff2         (weight 300)
+ *   Aeonik-Regular.woff2       (weight 400)
+ *   Aeonik-Medium.woff2        (weight 500)
+ *   Aeonik-Bold.woff2          (weight 700)
+ *   Aeonik-Black.woff2         (weight 900)
+ *   AeonikFono-Regular.woff2   (display, weight 400)
+ *   AeonikFono-Medium.woff2    (display, weight 500)
+ *   AeonikFono-Bold.woff2      (display, weight 700)
+ *   AeonikMono-Regular.woff2   (mono, weight 400)
+ *   AeonikMono-Medium.woff2    (mono, weight 500)
+ *
+ * If you have variable-font versions (VF), a single
+ * Aeonik-VF.woff2 / AeonikFono-VF.woff2 file can replace
+ * the individual weight files — see the README for details.
+ *
+ * Until the binaries are present the @font-face rules below are
+ * inert; the system-font fallback stack in globals.css keeps
+ * the build and runtime fully functional.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * When to switch to next/font/local:
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Once the .woff2 files are in place, migrate apps/app/src/app/layout.tsx
+ * from the current manual CSS approach to next/font/local for automatic
+ * font-display management, preloading, and self-hosting optimisation.
+ * Example (replace the manual @font-face import):
+ *
+ *   import localFont from "next/font/local";
+ *
+ *   const aeonik = localFont({
+ *     src: [
+ *       { path: "../../../../packages/ui/src/styles/fonts/Aeonik-Regular.woff2", weight: "400", style: "normal" },
+ *       { path: "../../../../packages/ui/src/styles/fonts/Aeonik-Medium.woff2",  weight: "500", style: "normal" },
+ *       { path: "../../../../packages/ui/src/styles/fonts/Aeonik-Bold.woff2",    weight: "700", style: "normal" },
+ *     ],
+ *     variable: "--font-sans",
+ *     display: "swap",
+ *   });
+ *
+ *   const aeonikFono = localFont({
+ *     src: [
+ *       { path: "../../../../packages/ui/src/styles/fonts/AeonikFono-Regular.woff2", weight: "400", style: "normal" },
+ *       { path: "../../../../packages/ui/src/styles/fonts/AeonikFono-Medium.woff2",  weight: "500", style: "normal" },
+ *       { path: "../../../../packages/ui/src/styles/fonts/AeonikFono-Bold.woff2",    weight: "700", style: "normal" },
+ *     ],
+ *     variable: "--font-display",
+ *     display: "swap",
+ *   });
+ *
+ *   const aeonikMono = localFont({
+ *     src: [
+ *       { path: "../../../../packages/ui/src/styles/fonts/AeonikMono-Regular.woff2", weight: "400", style: "normal" },
+ *       { path: "../../../../packages/ui/src/styles/fonts/AeonikMono-Medium.woff2",  weight: "500", style: "normal" },
+ *     ],
+ *     variable: "--font-mono",
+ *     display: "swap",
+ *   });
+ *
+ *   // In RootLayout body className:
+ *   // `${aeonik.variable} ${aeonikFono.variable} ${aeonikMono.variable} font-sans antialiased`
+ *
+ * Then remove the @import of this file from packages/ui/src/styles/globals.css
+ * and delete the duplicate @font-face block from that file.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/* ── Aeonik Sans (UI + body copy) ──────────────────────────────────────────── */
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("/fonts/Aeonik-Thin.woff2") format("woff2");
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("/fonts/Aeonik-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("/fonts/Aeonik-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("/fonts/Aeonik-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("/fonts/Aeonik-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("/fonts/Aeonik-Black.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Aeonik Fono (display / headings) ──────────────────────────────────────── */
+
+@font-face {
+  font-family: "Aeonik Fono";
+  src: url("/fonts/AeonikFono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik Fono";
+  src: url("/fonts/AeonikFono-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik Fono";
+  src: url("/fonts/AeonikFono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Aeonik Mono (code / eyebrows / metric labels) ─────────────────────────── */
+
+@font-face {
+  font-family: "Aeonik Mono";
+  src: url("/fonts/AeonikMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik Mono";
+  src: url("/fonts/AeonikMono-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { agentToolList } from "@oxagen/oxagen/contracts/agent.tool.list";
-import { agentToolListHandler } from "@oxagen/agent/handlers/agent.tool.list";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 
@@ -10,6 +10,6 @@ agentToolListRoute.post("/", async (c) => {
   const raw: unknown = await c.req.json().catch(() => null);
   const body = agentToolList.input.parse(raw ?? {});
   const ctx = capabilityContext(c);
-  const out = await agentToolListHandler(body, ctx);
+  const out = await invoke(agentToolList.name, body, ctx, { surface: "api" });
   return c.json(out);
 });

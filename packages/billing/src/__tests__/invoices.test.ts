@@ -3,7 +3,7 @@
  *
  * Mocks:
  *  - @oxagen/database → db() factory
- *  - ../client.js     → stripeClient() (no live Stripe API)
+ *  - ../client.js     → billingProvider() (neutral BillingProvider interface)
  *
  * Scenarios:
  *  1. Happy path with org_id in metadata — upserts invoice + replaces line items.
@@ -16,28 +16,25 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type Stripe from "stripe";
+import type { BillingInvoice } from "../provider.js";
 
 // ---------------------------------------------------------------------------
-// Stripe client mock
+// BillingProvider mock
 // ---------------------------------------------------------------------------
 
-const stripeInvoicesMock = { retrieve: vi.fn() };
+const getInvoiceMock = vi.fn();
 
 vi.mock("../client.js", () => ({
-  stripeClient: () => ({ invoices: stripeInvoicesMock }),
+  billingProvider: () => ({
+    getInvoice: getInvoiceMock,
+  }),
 }));
 
 // ---------------------------------------------------------------------------
 // DB mock factory
 // ---------------------------------------------------------------------------
 
-/**
- * Builds a db() mock that captures calls to tx.insert / tx.delete.
- * We track insertion call order so we can assert delete-before-insert.
- */
 function makeDb(opts: {
-  orgId?: string | null;
   subscriptionRow?: { orgId: string; id: string } | null;
   invoiceInsertedId?: string | null;
 } = {}) {
@@ -54,8 +51,6 @@ function makeDb(opts: {
   const txInsertLineItemsChain = {
     values: vi.fn().mockResolvedValue(undefined),
   };
-
-  // Track which insert call was for invoice vs line items.
   const txInsertInvoiceChain = {
     values: vi.fn().mockReturnValue({
       onConflictDoUpdate: vi.fn().mockReturnValue({
@@ -67,8 +62,8 @@ function makeDb(opts: {
   };
 
   const txCallLog: string[] = [];
-
   let txInsertCallIdx = 0;
+
   const txInsert = vi.fn(() => {
     txInsertCallIdx++;
     if (txInsertCallIdx === 1) {
@@ -86,7 +81,7 @@ function makeDb(opts: {
 
   const txProxy = { insert: txInsert, delete: txDelete };
 
-  const db = {
+  return {
     query: {
       subscriptions: {
         findFirst: vi.fn().mockResolvedValue(subscriptionRow ?? undefined),
@@ -96,12 +91,7 @@ function makeDb(opts: {
     _txInsert: txInsert,
     _txDelete: txDelete,
     _callLog: txCallLog,
-    _txInsertInvoiceChain: txInsertInvoiceChain,
-    _txInsertLineItemsChain: txInsertLineItemsChain,
-    _txDeleteChain: txDeleteChain,
   };
-
-  return db;
 }
 
 const dbState: { instance: ReturnType<typeof makeDb> | null } = { instance: null };
@@ -128,50 +118,37 @@ const { syncInvoiceFromStripe } = await import("../invoices.js");
 // Fixture helpers
 // ---------------------------------------------------------------------------
 
-function makeStripeInvoice(
-  overrides: {
-    metadata?: Record<string, string>;
-    subscription?: string | null;
-    status?: string;
-    lines?: Stripe.InvoiceLineItem[];
-  } = {},
-): Stripe.Invoice {
-  const lines = overrides.lines ?? [
-    {
-      id: "il_001",
-      object: "line_item",
-      amount: 1000,
-      quantity: 1,
-      description: "Pro plan",
-      price: { id: "price_001", object: "price", unit_amount: 1000 } as Stripe.Price,
-      metadata: {},
-    } as unknown as Stripe.InvoiceLineItem,
-  ];
-
+function makeInvoice(overrides: Partial<BillingInvoice> = {}): BillingInvoice {
   return {
     id: "in_test_001",
-    object: "invoice",
-    status: overrides.status ?? "paid",
-    metadata: overrides.metadata ?? { org_id: "org-abc" },
-    subscription: overrides.subscription !== undefined ? overrides.subscription : "sub_test_001",
+    providerInvoiceId: "in_test_001",
     number: "INV-001",
-    amount_due: 2000,
-    amount_paid: 2000,
-    amount_remaining: 0,
+    status: "paid",
+    amountDueCents: 2000,
+    amountPaidCents: 2000,
+    amountRemainingCents: 0,
     currency: "usd",
-    period_start: Math.floor(Date.now() / 1000) - 86400,
-    period_end: Math.floor(Date.now() / 1000),
-    due_date: null,
-    status_transitions: { paid_at: null },
-    hosted_invoice_url: "https://invoice.stripe.com/i/abc",
-    invoice_pdf: "https://invoice.stripe.com/i/abc/pdf",
-    lines: {
-      object: "list",
-      data: lines,
-      has_more: false,
-      url: "/v1/invoices/in_test_001/lines",
-    },
-  } as unknown as Stripe.Invoice;
+    periodStart: new Date(Date.now() - 86400 * 1000),
+    periodEnd: new Date(),
+    dueAt: null,
+    paidAt: new Date(),
+    hostedInvoiceUrl: "https://invoice.stripe.com/i/abc",
+    invoicePdfUrl: "https://invoice.stripe.com/i/abc/pdf",
+    subscriptionId: "sub_test_001",
+    orgId: "org-abc",
+    billingReason: "subscription_create",
+    lineItems: [
+      {
+        description: "Pro plan",
+        quantity: 1,
+        unitAmountCents: 1000,
+        totalCents: 1000,
+        metric: null,
+        metadata: {},
+      },
+    ],
+    ...overrides,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -185,36 +162,32 @@ describe("syncInvoiceFromStripe", () => {
 
   it("happy path — upserts invoice row and inserts line items inside transaction", async () => {
     dbState.instance = makeDb();
-    stripeInvoicesMock.retrieve.mockResolvedValue(makeStripeInvoice());
+    getInvoiceMock.mockResolvedValue(makeInvoice());
 
     await syncInvoiceFromStripe("in_test_001");
 
     expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
-    // Invoice upsert + line item insert both happened.
     expect(dbState.instance!._txInsert).toHaveBeenCalledTimes(2);
     expect(dbState.instance!._txDelete).toHaveBeenCalledOnce();
   });
 
   it("upsert idempotency — second call runs same upsert path without error", async () => {
     dbState.instance = makeDb();
-    stripeInvoicesMock.retrieve.mockResolvedValue(makeStripeInvoice());
+    getInvoiceMock.mockResolvedValue(makeInvoice());
 
     await syncInvoiceFromStripe("in_test_001");
-    // Reset call counts to simulate second invocation cleanly.
     dbState.instance = makeDb();
     await syncInvoiceFromStripe("in_test_001");
 
-    // Second call also commits a transaction with the same upsert shape.
     expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
     expect(dbState.instance!._txInsert).toHaveBeenCalledTimes(2);
   });
 
-  it("no org_id in metadata and no subscription row — returns early, no transaction", async () => {
-    dbState.instance = makeDb({ orgId: null, subscriptionRow: null });
-    stripeInvoicesMock.retrieve.mockResolvedValue(
-      makeStripeInvoice({ metadata: {}, subscription: "sub_orphan" }),
+  it("no org_id and no subscription row — returns early, no transaction", async () => {
+    dbState.instance = makeDb({ subscriptionRow: null });
+    getInvoiceMock.mockResolvedValue(
+      makeInvoice({ orgId: null, subscriptionId: "sub_orphan" }),
     );
-    // The subscription query returns null (no row for sub_orphan).
     dbState.instance.query.subscriptions.findFirst = vi.fn().mockResolvedValue(undefined);
 
     await syncInvoiceFromStripe("in_test_001");
@@ -224,25 +197,23 @@ describe("syncInvoiceFromStripe", () => {
 
   it("empty line items — delete runs but line-item insert is skipped", async () => {
     dbState.instance = makeDb();
-    stripeInvoicesMock.retrieve.mockResolvedValue(makeStripeInvoice({ lines: [] }));
+    getInvoiceMock.mockResolvedValue(makeInvoice({ lineItems: [] }));
 
     await syncInvoiceFromStripe("in_test_001");
 
     expect(dbState.instance!._txDelete).toHaveBeenCalledOnce();
-    // Only the invoice insert (call 1); the line-item insert (call 2) is skipped.
     expect(dbState.instance!._txInsert).toHaveBeenCalledTimes(1);
   });
 
   it("line items replace — delete is called before line-item insert", async () => {
     dbState.instance = makeDb();
-    stripeInvoicesMock.retrieve.mockResolvedValue(makeStripeInvoice());
+    getInvoiceMock.mockResolvedValue(makeInvoice());
 
     await syncInvoiceFromStripe("in_test_001");
 
     const log = dbState.instance!._callLog;
     const deleteIdx = log.indexOf("line-item-delete");
     const insertIdx = log.indexOf("line-item-insert");
-
     expect(deleteIdx).toBeGreaterThanOrEqual(0);
     expect(insertIdx).toBeGreaterThan(deleteIdx);
   });

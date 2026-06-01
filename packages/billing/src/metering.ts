@@ -7,6 +7,7 @@ import {
   type RateCard,
   type TokenUsageInput,
 } from "./pricing.js";
+import { logger } from "./logger.js";
 
 /**
  * The cost meter that lives inside the gate. Converts one metered LLM call
@@ -55,11 +56,19 @@ export interface ChargeUsageResult {
  * is the real admission gate. May throw on a DB failure — callers invoke it
  * best-effort (wrapped in try/catch in the gate) so metering never fails the
  * user's turn.
+ *
+ * Instrumentation: logs orgId, model, tokens, providerCostUsd, creditsMetered,
+ * creditsCharged, shortfall, and durationMs on every call.
  */
 export async function chargeUsageCredits(args: ChargeUsageArgs): Promise<ChargeUsageResult> {
+  const start = Date.now();
   const costUsdMicros = providerCostUsdMicros(args, args.rateCard);
   const creditsMetered = meterCreditsForUsage(args, { markup: args.markup, rateCard: args.rateCard });
   if (creditsMetered <= 0n) {
+    logger.debug(
+      { orgId: args.orgId, model: args.model, costUsdMicros, creditsMetered: 0, durationMs: Date.now() - start },
+      "billing: meter — zero cost call, no charge",
+    );
     return { costUsdMicros, creditsMetered: 0n, creditsCharged: 0n, shortfallCredits: 0n };
   }
 
@@ -71,12 +80,31 @@ export async function chargeUsageCredits(args: ChargeUsageArgs): Promise<ChargeU
     referenceId: args.referenceId,
   });
 
-  return {
+  const result: ChargeUsageResult = {
     costUsdMicros,
     creditsMetered,
     creditsCharged: chargedCents,
     shortfallCredits: shortfallCents,
   };
+
+  logger.info(
+    {
+      orgId: args.orgId,
+      model: args.model,
+      inputTokens: args.inputTokens,
+      outputTokens: args.outputTokens,
+      cachedTokens: args.cachedTokens ?? 0,
+      costUsdMicros,
+      creditsMetered: Number(creditsMetered),
+      creditsCharged: Number(chargedCents),
+      shortfallCredits: Number(shortfallCents),
+      referenceId: args.referenceId ?? null,
+      durationMs: Date.now() - start,
+    },
+    "billing: meter — usage charged",
+  );
+
+  return result;
 }
 
 /**

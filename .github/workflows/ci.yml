@@ -113,6 +113,24 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # ── Affected-app detection (for e2e scoping) ───────────────────────────
+      # Decide whether @oxagen/app (or anything it depends on) changed vs main,
+      # so the expensive Playwright e2e + browser install only run when the app
+      # is actually affected. This is dependency-aware via turbo's affected
+      # graph: a change in a shared package (e.g. @oxagen/auth) correctly marks
+      # the app affected — which a naive `apps/app/**` path filter would miss.
+      - name: Detect affected packages
+        id: affected
+        run: |
+          AFFECTED="$(pnpm exec turbo run build --filter='...[origin/main]' --dry=json \
+            | jq -r '(.packages // [ .tasks[].package ]) | unique | .[]')"
+          echo "Affected packages:"; echo "$AFFECTED"
+          if echo "$AFFECTED" | grep -qx '@oxagen/app'; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # ── Migration gate (schema/migration files changed only) ───────────────
       - name: Detect migration changes
         id: migration_changes
@@ -127,23 +145,36 @@ jobs:
         if: steps.migration_changes.outputs.changed == 'true'
         run: pnpm db:migrate
 
-      # Playwright e2e is part of the gate. Install the browser and build the
-      # app up front; the Playwright webServer serves the build via `next
-      # start` (see apps/app/playwright.config.ts).
+      # Playwright e2e only runs when @oxagen/app is affected. Install the
+      # browser up front (skipped otherwise); the gate step builds the app and
+      # the Playwright webServer serves the build via `next start` (see
+      # apps/app/playwright.config.ts).
       - name: Install Playwright browsers
+        if: steps.affected.outputs.app == 'true'
         run: pnpm --filter @oxagen/app exec playwright install --with-deps chromium
 
       # ── Affected-only quality gate ─────────────────────────────────────────
+      # lint/typecheck/test/build are scoped to affected packages via
+      # --filter=...[origin/main]; check:manifest/check:contracts are repo-wide
+      # invariant checks (sub-second) and always run.
       - name: Gate (affected packages)
         run: pnpm gate
 
+      # e2e is the app-scoped tail of the gate — run it only when the app (or a
+      # package it depends on) changed. The gate step above already built the
+      # affected app, so `next start` has a production build to serve.
+      - name: E2E (Playwright, only when @oxagen/app affected)
+        if: steps.affected.outputs.app == 'true'
+        run: pnpm test:e2e
+
       - name: Upload Playwright report
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.affected.outputs.app == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: apps/app/playwright-report/
           retention-days: 7
+          if-no-files-found: ignore
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Deploy — runs on merge to main, trusts PR gate, does NOT re-run test suite

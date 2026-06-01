@@ -1,15 +1,14 @@
-import type Stripe from "stripe";
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
-import { stripeClient } from "./client.js";
+import { billingProvider } from "./client.js";
 import { syncSubscriptionFromStripe } from "./subscriptions.js";
 import { syncInvoiceFromStripe } from "./invoices.js";
 import { grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } from "./grants.js";
-import { requireEnv } from "@oxagen/config/env";
+import { logger } from "./logger.js";
+import type { BillingWebhookEvent } from "./provider.js";
 
-export function verifyStripeSignature(rawBody: string, signature: string): Stripe.Event {
-  const env = requireEnv(["STRIPE_WEBHOOK_SECRET"] as const);
-  return stripeClient().webhooks.constructEvent(rawBody, signature, env.STRIPE_WEBHOOK_SECRET);
+export function verifyStripeSignature(rawBody: string, signature: string): BillingWebhookEvent {
+  return billingProvider().parseWebhookEvent(rawBody, signature);
 }
 
 /**
@@ -21,22 +20,25 @@ export function verifyStripeSignature(rawBody: string, signature: string): Strip
  * 2. Decide whether to dispatch. We are a TRUE duplicate (skip) only if the
  *    event was already processed *successfully* — i.e. a stripe_event_processing
  *    row exists with processed_at set. If a prior attempt failed (no processing
- *    row, or one with only an error), we RE-DISPATCH so a Stripe retry
+ *    row, or one with only an error), we RE-DISPATCH so a provider retry
  *    self-heals instead of silently dropping the event. Every dispatch handler
  *    is idempotent (sync* upsert, grants key on a stable reference id), so
  *    re-dispatch never double-applies.
  *
  * 3. Dispatch, then upsert the processing row to record the outcome.
  */
-export async function processStripeEvent(event: Stripe.Event): Promise<{ status: "applied" | "duplicate" }> {
+export async function processStripeEvent(
+  event: BillingWebhookEvent,
+): Promise<{ status: "applied" | "duplicate" }> {
+  const start = Date.now();
   const d = db();
   const inserted = await d
     .insert(schema.stripeEvents)
     .values({
-      stripeEventId: event.id,
+      stripeEventId: event.providerEventId,
       eventType: event.type,
-      apiVersion: event.api_version ?? null,
-      payload: event as unknown as Record<string, unknown>,
+      apiVersion: event.apiVersion ?? null,
+      payload: event.rawPayload,
     })
     .onConflictDoNothing({ target: schema.stripeEvents.stripeEventId })
     .returning({ id: schema.stripeEvents.id });
@@ -48,7 +50,7 @@ export async function processStripeEvent(event: Stripe.Event): Promise<{ status:
     // Already logged. Resolve its id and check whether a prior dispatch
     // succeeded; only then is this a real duplicate.
     const existing = await d.query.stripeEvents.findFirst({
-      where: eq(schema.stripeEvents.stripeEventId, event.id),
+      where: eq(schema.stripeEvents.stripeEventId, event.providerEventId),
       columns: { id: true },
     });
     if (!existing) return { status: "duplicate" };
@@ -72,6 +74,7 @@ export async function processStripeEvent(event: Stripe.Event): Promise<{ status:
         target: schema.stripeEventProcessing.stripeEventId,
         set: { processedAt: new Date(), processingError: null },
       });
+    logger.info({ eventId: event.providerEventId, type: event.type, durationMs: Date.now() - start }, "billing: webhook event applied");
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await d
@@ -81,41 +84,46 @@ export async function processStripeEvent(event: Stripe.Event): Promise<{ status:
         target: schema.stripeEventProcessing.stripeEventId,
         set: { processingError: message },
       });
+    logger.error({ eventId: event.providerEventId, type: event.type, err: message, durationMs: Date.now() - start }, "billing: webhook event dispatch failed");
     throw err;
   }
 
   return { status: "applied" };
 }
 
-async function dispatch(event: Stripe.Event): Promise<void> {
+async function dispatch(event: BillingWebhookEvent): Promise<void> {
   switch (event.type) {
-    case "customer.subscription.created":
-    case "customer.subscription.updated":
-    case "customer.subscription.deleted": {
-      const sub = event.data.object as Stripe.Subscription;
-      await syncSubscriptionFromStripe(sub.id);
+    case "subscription.created":
+    case "subscription.updated":
+    case "subscription.deleted": {
+      if (!event.subscriptionId) return;
+      await syncSubscriptionFromStripe(event.subscriptionId);
       return;
     }
     case "invoice.created":
     case "invoice.paid":
     case "invoice.payment_failed": {
-      const inv = event.data.object as Stripe.Invoice;
-      await syncInvoiceFromStripe(inv.id);
+      if (!event.invoice) return;
+      await syncInvoiceFromStripe(event.invoice.providerInvoiceId);
       // Deposit the plan's included credits on the first invoice and every
-      // renewal. Idempotent per Stripe event id (processStripeEvent dedup).
-      if (event.type === "invoice.paid") await grantPlanCreditsForInvoicePaid(inv);
+      // renewal. Idempotent per event (ledger unique key).
+      if (event.type === "invoice.paid") await grantPlanCreditsForInvoicePaid(event.invoice);
       return;
     }
     case "checkout.session.completed": {
       // One-time credit-pack purchases deposit their credits here. Subscription
       // checkouts (mode=subscription) deliver credits via invoice.paid instead.
-      const session = event.data.object as Stripe.Checkout.Session;
-      await grantCreditPackForCheckout(session);
+      if (!event.checkoutSession) return;
+      await grantCreditPackForCheckout(event.checkoutSession);
       return;
     }
     case "payment_method.attached":
     case "payment_method.detached": {
-      await upsertPaymentMethod(event);
+      if (!event.paymentMethod) return;
+      await upsertPaymentMethod(
+        event.type === "payment_method.detached" ? "detached" : "attached",
+        event.paymentMethod,
+      );
       return;
     }
     default:
@@ -126,27 +134,28 @@ async function dispatch(event: Stripe.Event): Promise<void> {
   }
 }
 
-async function upsertPaymentMethod(event: Stripe.Event): Promise<void> {
-  const pm = event.data.object as Stripe.PaymentMethod;
-  const customerRef = pm.customer;
-  if (!customerRef) return;
-  const customerId = typeof customerRef === "string" ? customerRef : customerRef.id;
+async function upsertPaymentMethod(
+  kind: "attached" | "detached",
+  pm: import("./provider.js").BillingPaymentMethod,
+): Promise<void> {
+  if (!pm.customerId) return;
 
   // Org resolution: locate any subscription tied to this customer to get
   // the org id. New customers may not have a subscription yet; in that
   // case skip — the subsequent subscription.created event will backfill.
   const d = db();
   const sub = await d.query.subscriptions.findFirst({
-    where: eq(schema.subscriptions.stripeCustomerId, customerId),
+    where: eq(schema.subscriptions.stripeCustomerId, pm.customerId),
     columns: { orgId: true },
   });
   if (!sub) return;
 
-  if (event.type === "payment_method.detached") {
+  if (kind === "detached") {
     await d
       .update(schema.paymentMethods)
       .set({ deletedAt: new Date() })
       .where(eq(schema.paymentMethods.stripePaymentMethodId, pm.id));
+    logger.info({ customerId: pm.customerId, paymentMethodId: pm.id }, "billing: payment method detached");
     return;
   }
 
@@ -154,23 +163,24 @@ async function upsertPaymentMethod(event: Stripe.Event): Promise<void> {
     .insert(schema.paymentMethods)
     .values({
       orgId: sub.orgId,
-      stripeCustomerId: customerId,
+      stripeCustomerId: pm.customerId,
       stripePaymentMethodId: pm.id,
       type: pm.type,
-      brand: pm.card?.brand ?? null,
-      last4: pm.card?.last4 ?? null,
-      expMonth: pm.card?.exp_month ?? null,
-      expYear: pm.card?.exp_year ?? null,
+      brand: pm.brand ?? null,
+      last4: pm.last4 ?? null,
+      expMonth: pm.expMonth ?? null,
+      expYear: pm.expYear ?? null,
       isDefault: false,
     })
     .onConflictDoUpdate({
       target: schema.paymentMethods.stripePaymentMethodId,
       set: {
-        brand: pm.card?.brand ?? null,
-        last4: pm.card?.last4 ?? null,
-        expMonth: pm.card?.exp_month ?? null,
-        expYear: pm.card?.exp_year ?? null,
+        brand: pm.brand ?? null,
+        last4: pm.last4 ?? null,
+        expMonth: pm.expMonth ?? null,
+        expYear: pm.expYear ?? null,
         updatedAt: new Date(),
       },
     });
+  logger.info({ orgId: sub.orgId, paymentMethodId: pm.id }, "billing: payment method upserted");
 }

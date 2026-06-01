@@ -21,6 +21,13 @@ export interface DispatchFanoutArgs {
   workspaceId: string;
   parentMessageId: string;
   children: FanoutChild[];
+  /**
+   * Current nesting depth of the dispatch (OXA-1498: infinite fanout guard).
+   * Default 0 (root dispatch). Incremented by the caller for each nested level.
+   * The Inngest executor rejects fanouts that exceed MAX_FANOUT_DEPTH (3).
+   * Carried in the event payload only — NOT a DB column.
+   */
+  depth?: number;
 }
 
 export interface DispatchedFanout {
@@ -57,12 +64,18 @@ export async function dispatchFanout(args: DispatchFanoutArgs): Promise<Dispatch
     return { fanoutId: fan.id };
   });
 
+  // Carry depth in the event payload so the executor can enforce the depth
+  // guard without a DB column (OXA-1498: infinite fanout protection).
+  const currentDepth = args.depth ?? 0;
   await inngest.send({
     name: "agent/subagent.dispatch",
     data: {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
       fanoutId,
+      // Child executions are at currentDepth + 1. The executor checks this
+      // and stops when depth > MAX_FANOUT_DEPTH (3).
+      depth: currentDepth + 1,
     },
   });
 

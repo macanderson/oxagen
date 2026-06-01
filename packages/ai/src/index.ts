@@ -6,3 +6,5 @@ export { embedText } from "./embed.js";
 export type { EmbedTextOpts } from "./embed.js";
 export { generateObjectFor } from "./generate-object.js";
 export type { GenerateObjectArgs, GenerateObjectUsage, GenerateObjectResult } from "./generate-object.js";
+export { generateImageFor } from "./generate-image.js";
+export type { GenerateImageForArgs, GenerateImageForResult } from "./generate-image.js";

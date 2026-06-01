@@ -2,6 +2,7 @@ import { z } from "zod";
 import { generateObjectFor } from "@oxagen/ai";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { svgGenerate } from "@oxagen/oxagen/contracts/svg.generate";
+import { logger } from "./logger.js";
 
 // ── SVG sanitisation ──────────────────────────────────────────────────────────
 // Strip <script> blocks and inline event-handler attributes before the markup
@@ -84,15 +85,18 @@ export const svgGenerateHandler: CapabilityHandler<typeof svgGenerate> = async (
       telemetry: {
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
-        surface: ctx.surface === "app" ? "api" : ctx.surface,
+        surface: ctx.surface,
         messageId,
       },
     });
     rawSvg = result.object.svg;
     title = result.object.title;
-  } catch {
+  } catch (err) {
     // Never throw — return a minimal placeholder SVG so the render path always works.
-    console.log(`[svg.generate] model error — returning placeholder SVG for prompt: "${input.prompt}"`);
+    logger.warn(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, prompt: input.prompt },
+      "svg.generate: model error — returning placeholder SVG",
+    );
     rawSvg = `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg"><rect width="${width}" height="${height}" fill="none" stroke="currentColor" stroke-width="2" rx="8"/><text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="currentColor" font-size="14">SVG generation failed</text></svg>`;
     title = input.title ?? "Generation failed";
   }

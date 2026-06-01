@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { billingSubscriptionUpgradeStart } from "@oxagen/oxagen/contracts/billing.subscription.upgrade.start";
-import { billingSubscriptionUpgradeStartHandler } from "@oxagen/handlers/billing.subscription.upgrade.start";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context.js";
 
 export const schema = {
@@ -26,6 +26,6 @@ export default async function billingSubscriptionUpgradeStartTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await billingSubscriptionUpgradeStartHandler(args, ctx);
+  const output = await invoke(billingSubscriptionUpgradeStart.name, args, ctx, { surface: "mcp" });
   return billingSubscriptionUpgradeStart.output.parse(output);
 }

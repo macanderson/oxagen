@@ -1,7 +1,8 @@
 import { inngest } from "../inngest.js";
 import { db, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
-import { invokeCapability } from "@oxagen/agent";
+import { invoke } from "@oxagen/oxagen/kernel";
+import { insertToolInvocation } from "@oxagen/telemetry";
 import "@oxagen/oxagen";
 
 /** Pure helper — exported for unit testing. */
@@ -16,16 +17,40 @@ export function deriveFanoutStatus(
 }
 
 /**
+ * Maximum subagent nesting depth (OXA-1498: infinite fanout guard).
+ * Depth is carried in the Inngest event payload, NOT a DB column,
+ * to avoid schema coupling. Default 0 (root dispatch), max 3 levels deep.
+ */
+const MAX_FANOUT_DEPTH = 3;
+
+/**
  * Subagent fanout executor. Triggered by agent.subagent.dispatch via the
  * runtime's dispatchFanout(). Each child runs in its own step.run so
  * Inngest checkpoints around it; we never bail the whole fanout on one
  * child failure — the parent message aggregates partials.
+ *
+ * OXA-1498:
+ *   - Dispatches through kernel.invoke() so IAM enforcement, audit, and
+ *     tool_invocations metering apply to every subagent capability call.
+ *   - Depth guard: rejects fanouts that exceed MAX_FANOUT_DEPTH.
  */
 export const agentExecuteSubagent = inngest.createFunction(
   { id: "agent.execute-subagent", retries: 0, concurrency: { limit: 8, key: "event.data.orgId" } },
   { event: "agent/subagent.dispatch" },
   async ({ event, step }) => {
     const { orgId, workspaceId, fanoutId } = event.data;
+    // Depth is optional for backwards-compatibility with events emitted before
+    // the guard was added. Treat absence as depth 0 (root).
+    const depth: number = typeof event.data.depth === "number" ? event.data.depth : 0;
+
+    // ── Depth guard ─────────────────────────────────────────────────────────
+    if (depth > MAX_FANOUT_DEPTH) {
+      console.warn(
+        `[agent.execute-subagent] Fanout depth ${depth} exceeds MAX_FANOUT_DEPTH=${MAX_FANOUT_DEPTH}. ` +
+          `fanoutId=${fanoutId} orgId=${orgId} — stopping to prevent infinite recursion.`,
+      );
+      return { fanoutId, completed: 0, status: "failed", depthExceeded: true };
+    }
 
     const runs = await step.run("load-children", async () =>
       db()
@@ -45,20 +70,51 @@ export const agentExecuteSubagent = inngest.createFunction(
     let anyFailed = false;
     for (const r of runs) {
       const childOk = await step.run(`child-${r.id}`, async () => {
+        const invocationId = crypto.randomUUID();
+        const startedAt = Date.now();
+        const ctx = {
+          orgId,
+          workspaceId,
+          userId: null,
+          apiKeyId: null,
+          requestId: r.childMessageId,
+          surface: "runner" as const,
+          messageId: r.childMessageId,
+        };
         try {
-          const output = await invokeCapability(r.capabilityName, r.inputPayload, {
-            orgId,
-            workspaceId,
-            userId: null,
-            apiKeyId: null,
-            requestId: r.childMessageId,
-            surface: "runner",
-            messageId: r.childMessageId,
-          });
+          // Route through kernel.invoke() for IAM enforcement, audit, and
+          // uniform metering (OXA-1498 — previously bypassed via invokeCapability).
+          const output = await invoke(r.capabilityName, r.inputPayload, ctx);
           await db()
             .update(schema.subagentRuns)
             .set({ status: "completed", outputPayload: (output ?? null) as object, completedAt: new Date() })
             .where(eq(schema.subagentRuns.id, r.id));
+          // Write tool_invocations row for metering (OXA-1498).
+          try {
+            await insertToolInvocation({
+              invocation_id: invocationId,
+              org_id: orgId,
+              workspace_id: workspaceId,
+              capability_name: r.capabilityName,
+              message_id: r.childMessageId,
+              parent_message_id: r.fanoutId, // fanoutId is the closest parent we have here
+              execution_step_id: null,
+              status: "completed",
+              input_size_bytes: 0,
+              output_size_bytes: 0,
+              latency_ms: Date.now() - startedAt,
+              error_class: null,
+              external_provider: "",
+              external_server_id: null,
+              risk_level: "low",
+              required_approval: 0,
+              surface: "runner",
+              provider: "",
+              created_at: new Date().toISOString(),
+            });
+          } catch {
+            /* telemetry must never fail the capability call */
+          }
           return true;
         } catch (err) {
           await db()
@@ -69,6 +125,32 @@ export const agentExecuteSubagent = inngest.createFunction(
               completedAt: new Date(),
             })
             .where(eq(schema.subagentRuns.id, r.id));
+          // Write failed tool_invocations row for metering.
+          try {
+            await insertToolInvocation({
+              invocation_id: invocationId,
+              org_id: orgId,
+              workspace_id: workspaceId,
+              capability_name: r.capabilityName,
+              message_id: r.childMessageId,
+              parent_message_id: r.fanoutId,
+              execution_step_id: null,
+              status: "failed",
+              input_size_bytes: 0,
+              output_size_bytes: 0,
+              latency_ms: Date.now() - startedAt,
+              error_class: err instanceof Error ? err.name : "UnknownError",
+              external_provider: "",
+              external_server_id: null,
+              risk_level: "low",
+              required_approval: 0,
+              surface: "runner",
+              provider: "",
+              created_at: new Date().toISOString(),
+            });
+          } catch {
+            /* swallow */
+          }
           return false;
         }
       });

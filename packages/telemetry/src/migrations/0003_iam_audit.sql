@@ -46,4 +46,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
 ) ENGINE = ReplacingMergeTree(occurred_at)
 PARTITION BY toYYYYMM(occurred_at)
 ORDER BY (org_id, occurred_at, event_id)
-TTL occurred_at + INTERVAL 7 YEAR;
+-- toDateTime(): ClickHouse TTL expressions must resolve to Date/DateTime, not
+-- DateTime64 — `occurred_at` is DateTime64(3), so cast it (same pattern as the
+-- other telemetry tables in schema.sql).
+TTL toDateTime(occurred_at) + INTERVAL 7 YEAR;

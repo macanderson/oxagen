@@ -38,6 +38,8 @@ vi.mock("@oxagen/database", () => ({
 import {
   resolveSession,
   parseSessionCookie,
+  stripCookieSignature,
+  SESSION_COOKIE_NAME,
   resolveApiKey,
   resolveOrgScope,
   resolveWorkspaceScope,
@@ -60,8 +62,60 @@ function sha256hex(input: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// SESSION_COOKIE_NAME
+// ---------------------------------------------------------------------------
+
+describe("SESSION_COOKIE_NAME", () => {
+  it("is oxagen.session_token (matches cookiePrefix in auth.ts)", () => {
+    // OXA-1497: was "better-auth.session_token" which never matched the real
+    // cookie because auth.ts sets advanced.cookiePrefix = "oxagen".
+    expect(SESSION_COOKIE_NAME).toBe("oxagen.session_token");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// stripCookieSignature
+// ---------------------------------------------------------------------------
+
+describe("stripCookieSignature", () => {
+  it("strips a 44-char base64 HMAC suffix from a signed value", () => {
+    // Better Auth signs as `${token}.${base64(HMAC-SHA256(secret, token))}`
+    // A base64 SHA-256 HMAC is exactly 44 characters (32 bytes * 4/3, padded).
+    const token = "abc123rawtoken";
+    const sig44 = "A".repeat(43) + "="; // 44-char base64-shaped suffix
+    expect(stripCookieSignature(`${token}.${sig44}`)).toBe(token);
+  });
+
+  it("returns the value unchanged when there is no dot", () => {
+    expect(stripCookieSignature("nodot")).toBe("nodot");
+  });
+
+  it("returns the full value when suffix length is not 44", () => {
+    // Non-HMAC dot-containing token (e.g. JWT components) must not be
+    // truncated — the unexpected suffix length is a signal to leave it alone.
+    const nonHmac = "header.payload.signature";
+    expect(stripCookieSignature(nonHmac)).toBe(nonHmac);
+  });
+
+  it("handles a token that itself contains dots", () => {
+    // Token may contain dots — only the LAST segment matching 44 chars is stripped.
+    const token = "tok.with.dots.inside";
+    const sig44 = "B".repeat(43) + "=";
+    expect(stripCookieSignature(`${token}.${sig44}`)).toBe(token);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // parseSessionCookie
 // ---------------------------------------------------------------------------
+
+// Construct a realistic signed cookie value the way Better Auth / E2E helpers do:
+// `${rawToken}.${base64HmacSignature}`
+function makeSignedCookieValue(rawToken: string): string {
+  // Use a predictable 44-char base64 signature for test purposes.
+  const fakeSig = "X".repeat(43) + "=";
+  return `${rawToken}.${fakeSig}`;
+}
 
 describe("parseSessionCookie", () => {
   it("returns null when header is undefined", () => {
@@ -72,21 +126,31 @@ describe("parseSessionCookie", () => {
     expect(parseSessionCookie("foo=bar; baz=qux")).toBeNull();
   });
 
-  it("returns the decoded token when present", () => {
-    const token = "abc123";
-    const header = `other=x; better-auth.session_token=${encodeURIComponent(token)}; more=y`;
-    expect(parseSessionCookie(header)).toBe(token);
+  it("returns the raw (unsigned) token when present with HMAC suffix", () => {
+    const rawToken = "abc123";
+    const signed = makeSignedCookieValue(rawToken);
+    const header = `other=x; oxagen.session_token=${encodeURIComponent(signed)}; more=y`;
+    expect(parseSessionCookie(header)).toBe(rawToken);
   });
 
   it("returns null for an empty token value", () => {
-    const header = "better-auth.session_token=";
+    const header = "oxagen.session_token=";
     expect(parseSessionCookie(header)).toBeNull();
   });
 
   it("handles a cookie header with no spaces around semicolons", () => {
-    const token = "tok_xyz";
-    const header = `a=1;better-auth.session_token=${token};b=2`;
-    expect(parseSessionCookie(header)).toBe(token);
+    const rawToken = "tok_xyz";
+    const signed = makeSignedCookieValue(rawToken);
+    const header = `a=1;oxagen.session_token=${signed};b=2`;
+    expect(parseSessionCookie(header)).toBe(rawToken);
+  });
+
+  it("does NOT match the old default 'better-auth.session_token' cookie name (OXA-1497 regression guard)", () => {
+    // If the cookie is named with the old default prefix it must not be found.
+    const rawToken = "abc123";
+    const signed = makeSignedCookieValue(rawToken);
+    const header = `better-auth.session_token=${signed}`;
+    expect(parseSessionCookie(header)).toBeNull();
   });
 });
 

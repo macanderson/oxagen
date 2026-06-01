@@ -25,7 +25,7 @@ stripeWebhook.post("/", async (c) => {
 
   const result = await processStripeEvent(event);
   logger.info(
-    { eventId: event.id, type: event.type, status: result.status },
+    { eventId: event.providerEventId, type: event.type, status: result.status },
     "stripe webhook processed",
   );
   return c.json({ received: true, status: result.status });

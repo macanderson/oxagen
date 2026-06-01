@@ -1,7 +1,8 @@
 import { inngest } from "../inngest.js";
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
-import { invokeCapability } from "@oxagen/agent";
+import { invoke } from "@oxagen/oxagen/kernel";
+import { insertToolInvocation } from "@oxagen/telemetry";
 import "@oxagen/oxagen";
 import { logger } from "../logger.js";
 
@@ -49,18 +50,25 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
         );
     });
 
+    const invocationId = crypto.randomUUID();
+    const startedAt = Date.now();
+    const capabilityName = p.capability;
+
     try {
       const output = await step.run("invoke", async () => {
-        if (!p.capability) throw new Error("background task payload missing 'capability'");
-        return invokeCapability(p.capability, p.input ?? p, {
+        if (!capabilityName) throw new Error("background task payload missing 'capability'");
+        const ctx = {
           orgId,
           workspaceId,
           userId: null,
           apiKeyId: null,
           requestId: taskId,
-          surface: "runner",
+          surface: "runner" as const,
           messageId: null,
-        });
+        };
+        // Route through kernel.invoke() for IAM enforcement, audit, and
+        // uniform metering (OXA-1498 — previously bypassed via invokeCapability).
+        return invoke(capabilityName, p.input ?? p, ctx);
       });
       await step.run("mark-completed", async () => {
         await db()
@@ -77,6 +85,32 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
             ),
           );
       });
+      // Write tool_invocations row for metering (OXA-1498).
+      try {
+        await insertToolInvocation({
+          invocation_id: invocationId,
+          org_id: orgId,
+          workspace_id: workspaceId,
+          capability_name: capabilityName ?? "unknown",
+          message_id: taskId,
+          parent_message_id: null,
+          execution_step_id: null,
+          status: "completed",
+          input_size_bytes: 0,
+          output_size_bytes: 0,
+          latency_ms: Date.now() - startedAt,
+          error_class: null,
+          external_provider: "",
+          external_server_id: null,
+          risk_level: "low",
+          required_approval: 0,
+          surface: "runner",
+          provider: "",
+          created_at: new Date().toISOString(),
+        });
+      } catch {
+        /* telemetry must never fail the capability call */
+      }
       logger.info({ taskId, orgId, workspaceId }, "agent.background-task.execute completed");
       return { taskId, status: "completed" };
     } catch (err) {
@@ -95,6 +129,32 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
             ),
           );
       });
+      // Write failed metering row.
+      try {
+        await insertToolInvocation({
+          invocation_id: invocationId,
+          org_id: orgId,
+          workspace_id: workspaceId,
+          capability_name: capabilityName ?? "unknown",
+          message_id: taskId,
+          parent_message_id: null,
+          execution_step_id: null,
+          status: "failed",
+          input_size_bytes: 0,
+          output_size_bytes: 0,
+          latency_ms: Date.now() - startedAt,
+          error_class: err instanceof Error ? err.name : "UnknownError",
+          external_provider: "",
+          external_server_id: null,
+          risk_level: "low",
+          required_approval: 0,
+          surface: "runner",
+          provider: "",
+          created_at: new Date().toISOString(),
+        });
+      } catch {
+        /* swallow */
+      }
       logger.error({ taskId, orgId, err }, "agent.background-task.execute failed");
       throw err;
     }

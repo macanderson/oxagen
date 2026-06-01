@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { documentsPdfCreate } from "@oxagen/oxagen/contracts/documents.pdf.create";
-import { documentsPdfCreateHandler } from "@oxagen/handlers/documents.pdf.create";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 
@@ -11,6 +11,6 @@ export const documentsPdfCreateRoute = new Hono<AppEnv>();
 documentsPdfCreateRoute.post("/", async (c) => {
   const body = documentsPdfCreate.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await documentsPdfCreateHandler(body, ctx);
+  const out = await invoke(documentsPdfCreate.name, body, ctx, { surface: "api" });
   return c.json(out, 200);
 });

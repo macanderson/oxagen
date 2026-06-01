@@ -33,23 +33,30 @@ export const chatPersistStream = inngest.createFunction(
 
     if (tokenUsage) {
       await step.run("insert-token-usage", async () => {
-        // provider, duration_ms, and prompt_hash are not available at this
-        // callsite; sentinel values are used. TODO(OXA): thread provider and
-        // duration through the chat/message.streamed event payload.
+        // OXA-1498: populate all required fields. provider, duration_ms, and
+        // prompt_hash are threaded through the event payload when the streaming
+        // layer provides them; sentinel values are used as fallbacks so the row
+        // is always written (missing telemetry is better than missing usage).
         await insertTokenUsage([
           {
             execution_step_id: assistantMessageId,
             org_id: orgId,
             workspace_id: workspaceId,
             model: tokenUsage.model,
-            provider: "",
+            // Thread provider from event payload when available; sentinel "" otherwise.
+            provider: (tokenUsage.provider as "" | "anthropic" | "openai") ?? "",
             input_tokens: tokenUsage.inputTokens,
             output_tokens: tokenUsage.outputTokens,
-            cached_tokens: tokenUsage.cachedTokens,
+            cached_tokens: tokenUsage.cachedTokens ?? 0,
             cost_usd_micros: tokenUsage.costMicros,
-            duration_ms: 0,
-            surface: "runner",
-            prompt_hash: "",
+            // Thread duration_ms from event payload when available; 0 sentinel otherwise.
+            duration_ms: tokenUsage.durationMs ?? 0,
+            // Propagate the originating surface from the event payload so
+            // ClickHouse attribution reflects where the turn actually came from
+            // (app, api, mcp). Defaults to "app" when omitted by older callers.
+            surface: tokenUsage.surface ?? "app",
+            // Thread prompt_hash from event payload when available; "" sentinel otherwise.
+            prompt_hash: tokenUsage.promptHash ?? "",
             created_at: new Date().toISOString(),
           },
         ]);

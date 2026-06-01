@@ -15,7 +15,11 @@ import { loadEnv } from "@oxagen/config/env";
 // `process.env.BETTER_AUTH_URL` directly — bypassing `normalizeEnv` — which
 // produces an "Invalid URL" error on every SSR render.
 function resolveBaseURL(): string | undefined {
-  if (typeof window !== "undefined") return window.location.origin;
+  // Use globalThis (not the bare `window` global) so this isomorphic module
+  // typechecks in server packages whose tsconfig omits the DOM lib, while still
+  // routing to the correct host in the browser.
+  const browser = (globalThis as { window?: { location?: { origin?: string } } }).window;
+  if (browser?.location?.origin) return browser.location.origin;
   try {
     return loadEnv().BETTER_AUTH_URL;
   } catch {

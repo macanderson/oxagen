@@ -1,7 +1,8 @@
 "use server";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
-import { formFillHandler } from "@oxagen/handlers/form.fill";
+import { invoke } from "@oxagen/oxagen";
+import type { FormFillOutput } from "@oxagen/oxagen/contracts/form.fill";
 import { logger } from "@oxagen/handlers/logger";
 import type { FillableFormSpec, FormFillResult } from "./fill-types";
 
@@ -18,8 +19,10 @@ export interface FillFormActionInput {
 
 /**
  * Server action: resolve tenant context from the session, then invoke the
- * form.fill handler to produce field-level diffs for the given spec and
- * instruction.
+ * form.fill capability through the enforced kernel.invoke() path (OXA-1498).
+ * Routing through kernel.invoke() ensures the full IAM check + ClickHouse
+ * audit write run on every call — matching the behaviour of the API and MCP
+ * surfaces (no-drift guarantee).
  *
  * Never throws — on any error returns all fields unchanged so the caller
  * can safely render the result.
@@ -55,7 +58,8 @@ export async function fillFormAction(input: FillFormActionInput): Promise<FormFi
       messageId: null as string | null,
     };
 
-    const result = await formFillHandler(
+    const result = await invoke(
+      "form.fill",
       {
         route: input.context.route,
         entitySummary: input.context.entitySummary,
@@ -70,7 +74,8 @@ export async function fillFormAction(input: FillFormActionInput): Promise<FormFi
         })),
       },
       ctx,
-    );
+      { surface: "agent" },
+    ) as FormFillOutput;
 
     // Explicitly map to FieldDiff to satisfy required `current` / `proposed`
     // (the Zod-inferred type treats z.unknown() as optional).

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { systemInstallInstructions } from "@oxagen/oxagen/contracts/system.install.instructions";
-import { systemInstallInstructionsHandler } from "@oxagen/handlers/system.install.instructions";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 
@@ -12,6 +12,6 @@ export const systemInstallInstructionsRoute = new Hono<AppEnv>();
 systemInstallInstructionsRoute.post("/", async (c) => {
   const body = systemInstallInstructions.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await systemInstallInstructionsHandler(body, ctx);
+  const out = await invoke(systemInstallInstructions.name, body, ctx, { surface: "api" });
   return c.json(out, 200);
 });

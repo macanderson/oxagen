@@ -1,11 +1,14 @@
 import { tool, type Tool, type ToolSet } from "ai";
-import type { ZodTypeAny } from "zod";
+import { z, type ZodTypeAny } from "zod";
 import { insertToolInvocation } from "@oxagen/telemetry";
 import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityContext } from "../types.js";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { beforeTool, afterTool, onError } from "../hooks/runtime.js";
 import { createApprovalRequest, waitForApproval } from "./approval.js";
+import { connectMcp, materializeMcpTools } from "../dispatch/mcp-client.js";
+import { db, schema } from "@oxagen/database";
+import { eq, and } from "drizzle-orm";
 
 function byteSize(v: unknown): number {
   try {
@@ -171,5 +174,141 @@ export async function materializeTools(
       },
     });
   }
+  // ── MCP tool integration (OXA-1498) ─────────────────────────────────────────
+  // Load tools from healthy registered MCP servers for this workspace.
+  // Each MCP tool execution is METERED via insertToolInvocation under a
+  // synthetic capability name `mcp.<serverId>.<toolName>` (audit trail).
+  //
+  // NOTE: MCP tools are metered, NOT individually IAM-enforced. Unlike the
+  // capability-backed tools above (which route through invoke() and therefore
+  // the full IAM kernel), MCP tools call the server transport directly, so an
+  // IAM `deny` policy against a synthetic `mcp.*` capability is NOT applied
+  // here even when IAM_ENFORCEMENT_ENABLED=true. Per-tool MCP enforcement
+  // (routing each call through an IAM check against the synthetic capability)
+  // is tracked separately; wiring it requires registering MCP tools as
+  // first-class capabilities. Failures per-server are isolated — a degraded
+  // server never blocks the model from receiving other tools.
+  if (ctx.workspaceId) {
+    let mcpServerRows: (typeof schema.mcpServers.$inferSelect)[] = [];
+    try {
+      mcpServerRows = await db()
+        .select()
+        .from(schema.mcpServers)
+        .where(
+          and(
+            eq(schema.mcpServers.orgId, ctx.orgId),
+            eq(schema.mcpServers.workspaceId, ctx.workspaceId),
+            eq(schema.mcpServers.healthStatus, "healthy"),
+          ),
+        );
+    } catch (err) {
+      // DB failure must never block the model from receiving built-in tools.
+      console.error("[materialize-tools] Failed to load MCP server rows:", err);
+    }
+
+    for (const server of mcpServerRows) {
+      try {
+        const authConfig = (server.authConfig ?? {}) as Record<string, string>;
+        const client = await connectMcp({
+          endpointUrl: server.endpointUrl,
+          authStrategy: server.authStrategy as "none" | "bearer" | "header",
+          authConfig,
+        });
+        const mcpTools = await materializeMcpTools(client, `mcp.${server.id}`);
+        for (const [rawKey, rawTool] of Object.entries(mcpTools)) {
+          // Wrap each MCP tool so every execution is metered with insertToolInvocation.
+          const capturedKey = rawKey;
+          const capturedExecute = rawTool.execute;
+          if (typeof capturedExecute !== "function") continue;
+          out[capturedKey] = tool({
+            description: rawTool.description,
+            parameters: z.record(z.string(), z.unknown()),
+            execute: async (input: unknown) => {
+              const invocationId = crypto.randomUUID();
+              const startedAt = Date.now();
+              try {
+                // capturedExecute is the AI SDK Tool execute fn (input: T, options) => Promise<R>.
+                // The MCP wrapper in mcp-client.ts returns a Tool whose execute takes one arg;
+                // cast to the compatible double-arg form so TypeScript is satisfied.
+                const result = await (capturedExecute as (
+                  i: unknown,
+                  o: { toolCallId: string; messages: unknown[] },
+                ) => Promise<unknown>)(input, { toolCallId: invocationId, messages: [] });
+                try {
+                  await insertToolInvocation({
+                    invocation_id: invocationId,
+                    org_id: ctx.orgId,
+                    workspace_id: ctx.workspaceId,
+                    capability_name: capturedKey,
+                    message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
+                    parent_message_id: null,
+                    execution_step_id: null,
+                    status: "completed",
+                    input_size_bytes: byteSize(input),
+                    output_size_bytes: byteSize(result),
+                    latency_ms: Date.now() - startedAt,
+                    error_class: null,
+                    external_provider: "",
+                    external_server_id: server.id,
+                    risk_level: "low",
+                    required_approval: 0,
+                    surface: ctx.surface,
+                    provider: "",
+                    created_at: new Date().toISOString(),
+                  });
+                } catch {
+                  /* telemetry must never fail the call */
+                }
+                return result;
+              } catch (err) {
+                try {
+                  await insertToolInvocation({
+                    invocation_id: invocationId,
+                    org_id: ctx.orgId,
+                    workspace_id: ctx.workspaceId,
+                    capability_name: capturedKey,
+                    message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
+                    parent_message_id: null,
+                    execution_step_id: null,
+                    status: "failed",
+                    input_size_bytes: byteSize(input),
+                    output_size_bytes: 0,
+                    latency_ms: Date.now() - startedAt,
+                    error_class: err instanceof Error ? err.name : "UnknownError",
+                    external_provider: "",
+                    external_server_id: server.id,
+                    risk_level: "low",
+                    required_approval: 0,
+                    surface: ctx.surface,
+                    provider: "",
+                    created_at: new Date().toISOString(),
+                  });
+                } catch {
+                  /* swallow */
+                }
+                throw err;
+              }
+            },
+          });
+        }
+        // Do NOT close the connection here. Every materialized tool's
+        // `execute` closure (via materializeMcpTools) calls `client.callTool`
+        // on THIS client, and those calls happen later, while the model
+        // streams. Closing now would terminate the transport before any MCP
+        // tool runs, so every MCP tool call would throw. The StreamableHTTP
+        // connection is request-scoped and is torn down when the streaming
+        // request/runtime context ends; keeping it open also preserves any
+        // MCP session state across multiple tool calls within the turn.
+      } catch (err) {
+        // Per-server failure is isolated — log and continue.
+        console.error(
+          `[materialize-tools] Failed to load MCP tools from server ${server.id} (${server.name}):`,
+          err,
+        );
+      }
+    }
+  }
+  // ── End MCP tools ─────────────────────────────────────────────────────────
+
   return out;
 }

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { billingSubscriptionUpgradeStart } from "@oxagen/oxagen/contracts/billing.subscription.upgrade.start";
-import { billingSubscriptionUpgradeStartHandler } from "@oxagen/handlers/billing.subscription.upgrade.start";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 
@@ -9,6 +9,6 @@ export const billingSubscriptionUpgradeStartRoute = new Hono<AppEnv>();
 billingSubscriptionUpgradeStartRoute.post("/", async (c) => {
   const body = billingSubscriptionUpgradeStart.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const result = await billingSubscriptionUpgradeStartHandler(body, ctx);
+  const result = await invoke(billingSubscriptionUpgradeStart.name, body, ctx, { surface: "api" });
   return c.json(result);
 });

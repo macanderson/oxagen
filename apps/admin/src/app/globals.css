@@ -1,10 +1,16 @@
 /**
  * Admin shell styles.
  *
- * The shared @oxagen/ui base provides Tailwind v4, design tokens, and the
- * cross-app primitives (glass utility, dark variant). The admin app inherits
- * those and overlays its own dark hero treatment so the surface feels
- * distinct from the app shell while still rendering the same components.
+ * The shared @oxagen/ui base provides Tailwind v4, design tokens, the Aeonik
+ * font chain, and the --hero-bg-dark / --hero-bg-light CSS variables that
+ * hold the single-source-of-truth gradient values for the Oxagen hero surface.
+ *
+ * Font strategy: Aeonik @font-face rules are loaded transitively via
+ * @oxagen/ui/styles/globals.css → fonts/aeonik.css. The CSS custom properties
+ * --font-sans / --font-display / --font-mono are set on :root by that file.
+ * While the licensed .woff2 binaries are absent the system-font fallback
+ * stacks embedded in those variables keep the surface fully functional.
+ * See packages/ui/src/styles/fonts/README.md (OXA-1508).
  *
  * Theme is controlled by next-themes (attribute="class"). The `.dark` class
  * is the default; `.light` overrides to a light-mode palette.
@@ -18,23 +24,16 @@
 /* ── Dark mode (default) ─────────────────────────────────────────────────── */
 html,
 body {
-  background:
-    radial-gradient(1200px 800px at 20% -10%, rgba(99, 102, 241, 0.25), transparent 60%),
-    radial-gradient(900px 700px at 110% 10%, rgba(236, 72, 153, 0.18), transparent 60%),
-    #0a0b10;
+  background: var(--hero-bg-dark);
   color: var(--color-ink);
   min-height: 100vh;
-  font-family:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  /* Aeonik → system-font fallback stack (binaries land via OXA-1508) */
+  font-family: var(--font-sans);
 }
 
 /* ── Light mode override ─────────────────────────────────────────────────── */
 html.light,
 html.light body {
-  background:
-    radial-gradient(1200px 800px at 20% -10%, rgba(99, 102, 241, 0.08), transparent 60%),
-    radial-gradient(900px 700px at 110% 10%, rgba(236, 72, 153, 0.06), transparent 60%),
-    #f8f9fc;
+  background: var(--hero-bg-light);
   color: #0a0a0a;
 }

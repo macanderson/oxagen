@@ -1,6 +1,64 @@
-import type { CapabilityContext, CapabilitySurface } from "./types.js";
+import type { CapabilityContext, CapabilitySurface, CapabilityEffect, ResolvedPrincipal } from "./types.js";
 import { getSurfaces } from "./types.js";
 import { getCapability, listCapabilities } from "./registry.js";
+
+// ── IAM runtime injection (mirrors define-contract.ts pattern) ────────────────
+//
+// The kernel accepts the same IAMCheckFn / audit-emitter injection as
+// defineContract so the single kernel.invoke() dispatch path can run the
+// full IAM resolution + ClickHouse audit write on EVERY capability call,
+// including those that bypass defineContract().
+//
+// ENFORCEMENT FLAG: the kernel always resolves authz and always emits the
+// audit event (SOC2 audit coverage from day 1). It only BLOCKS the call when
+// IAM_ENFORCEMENT_ENABLED=true, so the flag can be off during the initial
+// seeding period with zero lockout risk.
+
+export interface KernelIAMCheckResult {
+  outcome: "allow" | "deny" | "pending_approval";
+  reason?: string;
+  principal: ResolvedPrincipal | null;
+}
+
+export type KernelIAMCheckFn = (args: {
+  capability: string;
+  ctx: CapabilityContext;
+  defaultEffect: CapabilityEffect;
+  rawInputJson: string;
+}) => Promise<KernelIAMCheckResult>;
+
+export type KernelAuditEmitFn = (args: {
+  capability: string;
+  ctx: CapabilityContext;
+  outcome: "allow" | "deny" | "pending_approval";
+  reason?: string;
+}) => void;
+
+let _iamCheckFn: KernelIAMCheckFn | null = null;
+let _iamEnforced = false;
+
+/**
+ * Register the IAM check function and enforcement mode into the kernel.
+ * Called once at surface bootstrap (apps/api/src/index.ts, apps/mcp middleware).
+ * Safe to call multiple times — idempotent overwrite.
+ *
+ * @param checkFn  The full IAM resolver (fetches authz + runs resolve + emits audit).
+ * @param enforced When true, denied invocations are blocked and a CapabilityError is thrown.
+ *                 When false (default), denied decisions are logged but the call proceeds.
+ */
+export function setKernelIAMRuntime(
+  checkFn: KernelIAMCheckFn,
+  enforced: boolean,
+): void {
+  _iamCheckFn = checkFn;
+  _iamEnforced = enforced;
+}
+
+/** Remove the IAM runtime. Used in tests to reset state. */
+export function clearKernelIAMRuntime(): void {
+  _iamCheckFn = null;
+  _iamEnforced = false;
+}
 
 // The capability kernel: the single dispatch path every surface (api, mcp,
 // cli, in-app agent) calls. It binds a registered *contract* to its
@@ -27,6 +85,7 @@ export type CapabilityErrorCode =
   | "unknown_capability"
   | "no_handler"
   | "surface_denied"
+  | "authz_denied"
   | "invalid_input"
   | "invalid_output";
 
@@ -151,8 +210,18 @@ export interface InvokeOptions {
 
 /**
  * The one dispatch path. Resolves the contract, validates input against the
- * contract schema, runs the bound handler, and validates the output so a
- * drifting handler can never return a shape that violates the contract.
+ * contract schema, runs the IAM check (OXA-1498), runs the bound handler, and
+ * validates the output so a drifting handler can never return a shape that
+ * violates the contract.
+ *
+ * IAM behaviour (controlled by setKernelIAMRuntime):
+ *   - When an IAM check function is registered:
+ *       ALWAYS resolves authz and emits the ClickHouse audit event.
+ *       When enforcement=true (IAM_ENFORCEMENT_ENABLED=true):
+ *         returns DenialResponse | throws on deny/pending_approval.
+ *       When enforcement=false (default):
+ *         logs would-deny decisions and proceeds — zero lockout risk.
+ *   - When no IAM check function is registered: proceeds as before (no IAM).
  *
  * Emits a `KernelSecurityEvent` after every invocation attempt — allow,
  * deny (surface/input/unknown errors), or error (output validation / handler
@@ -220,6 +289,90 @@ export async function invoke(
       `Input validation failed for "${name}": ${inputResult.error.message}`,
     );
   }
+
+  // ── IAM check (OXA-1498) ───────────────────────────────────────────────────
+  // Run after input validation (we need the parsed input for the audit hash).
+  // ALWAYS runs when checkFn is registered. Only BLOCKS when _iamEnforced=true.
+  const checkFn = _iamCheckFn;
+  if (checkFn !== null) {
+    let rawInputJson = "{}";
+    try {
+      rawInputJson = JSON.stringify(inputResult.data);
+    } catch {
+      rawInputJson = "{}";
+    }
+    // defaultEffect is carried on the capability declaration; fall back to
+    // "deny" for capabilities without an explicit defaultEffect (safe default).
+    const defaultEffect: CapabilityEffect =
+      (cap as { defaultEffect?: CapabilityEffect }).defaultEffect ?? "deny";
+
+    // Fire-and-forget: checkFn internally emits the ClickHouse audit event.
+    let iamCheckThrew = false;
+    const iamResult = await checkFn({
+      capability: name,
+      ctx,
+      defaultEffect,
+      rawInputJson,
+    }).catch((err: unknown) => {
+      // IAM check failure is a critical incident. When enforcement is OFF we
+      // must never crash an invocation (log loudly and fall through), but when
+      // enforcement is ON we MUST fail closed — a transient resolver error
+      // (DB timeout, network blip, misconfig) must not silently grant access.
+      // Flag the throw and decide based on _iamEnforced below.
+      iamCheckThrew = true;
+      console.error(`[kernel] IAM check threw for "${name}":`, err);
+      return null;
+    });
+
+    // Fail closed on resolver error when enforcement is enabled.
+    if (iamCheckThrew && _iamEnforced) {
+      emitSecurityEvent({
+        capability: name,
+        outcome: "deny",
+        surface: ctx.surface,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        actorUserId: ctx.userId,
+        requestId: ctx.requestId,
+        errorCode: "authz_denied",
+        durationMs: Date.now() - startMs,
+      });
+      throw new CapabilityError(
+        name,
+        "authz_denied",
+        `IAM check errored for "${name}" and IAM_ENFORCEMENT_ENABLED=true — failing closed.`,
+      );
+    }
+
+    if (iamResult !== null && iamResult.outcome !== "allow") {
+      if (_iamEnforced) {
+        // Enforcement on: block the call.
+        emitSecurityEvent({
+          capability: name,
+          outcome: "deny",
+          surface: ctx.surface,
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          actorUserId: ctx.userId,
+          requestId: ctx.requestId,
+          errorCode: "authz_denied",
+          durationMs: Date.now() - startMs,
+        });
+        throw new CapabilityError(
+          name,
+          "authz_denied",
+          `IAM denied "${name}" for principal: ${iamResult.reason ?? iamResult.outcome}`,
+        );
+      } else {
+        // Enforcement off: log would-deny and continue.
+        console.warn(
+          `[kernel] IAM would-deny "${name}" (outcome=${iamResult.outcome}, ` +
+            `reason=${iamResult.reason ?? "none"}) — IAM_ENFORCEMENT_ENABLED=false, proceeding.`,
+        );
+      }
+    }
+  }
+  // ── End IAM check ─────────────────────────────────────────────────────────
 
   let output: unknown;
   try {

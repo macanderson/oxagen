@@ -22,7 +22,7 @@ import type { StreamEvent } from "./stream-event-types";
 //  - blocks the composer while any approval-request block is still
 //    awaiting a decision (spec §7 — "disabled while an approval is
 //    pending"),
-//  - calls POST /api/chat/stream when a message is submitted, consumes
+//  - calls POST /api/v1/chat/stream when a message is submitted, consumes
 //    the SSE response via `useToolStream`, and renders live stream events
 //    (plans, approvals, tool calls, code executes, memory recalls, memory
 //    writes, fanouts) inline before the RSC revalidate completes,
@@ -114,56 +114,63 @@ export function ChatShellClient({
     [resolveApprovalAction],
   );
 
-  // Wrap the server action: fire the /api/chat/stream SSE fetch immediately
-  // (before the server action completes) so live events render as fast as
-  // possible. The server action handles Postgres persistence independently.
+  // Wrap the server action: persist the turn (server action) FIRST to obtain
+  // the conversation id and the new user-message id, then start the
+  // /api/v1/chat/stream SSE fetch against them. The stream route is the single
+  // LLM caller and persists the assistant reply once the stream finishes.
+  // Persisting before streaming also gives us a conversation id on the very
+  // first turn (the composer has none yet) and removes the history-read race.
   const wrappedSendAction = React.useCallback<ComposerAction>(
     async (formData: FormData) => {
       const content = formData.get("content");
-      const convId = formData.get("conversationId");
-      const parentMsgId = formData.get("parentMessageId");
-
-      if (typeof content === "string" && content.length > 0) {
-        // Reset prior turn's live state and start the stream immediately —
-        // don't wait for the server action to complete.
-        resetRef.current();
-        setIsStreamingRef.current(true);
-
-        void (async () => {
-          try {
-            const res = await fetch("/api/chat/stream", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                content,
-                conversationId: typeof convId === "string" && convId ? convId : null,
-                parentMessageId: typeof parentMsgId === "string" && parentMsgId ? parentMsgId : null,
-                orgSlug: orgSlugRef.current,
-                workspaceSlug: workspaceSlugRef.current,
-              }),
-            });
-
-            if (!res.ok || !res.body) {
-              setIsStreamingRef.current(false);
-              return;
-            }
-
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-
-            await consumeRef.current(sseToEvents(reader, decoder));
-          } catch (err) {
-            // Swallow — the RSC revalidate will still show the persisted reply.
-            console.warn("[chat] stream fetch failed", err);
-          } finally {
-            setIsStreamingRef.current(false);
-          }
-        })();
+      if (typeof content !== "string" || content.length === 0) {
+        return sendAction(formData);
       }
 
-      // Server action handles Postgres persistence; its result drives the
-      // composer's error state.
-      return sendAction(formData);
+      // Reset prior turn's live state and show the streaming affordance.
+      resetRef.current();
+      setIsStreamingRef.current(true);
+
+      const result = await sendAction(formData);
+      if (!result.ok || !result.conversationId) {
+        // Persistence failed (or yielded no conversation): don't stream; the
+        // result drives the composer's error state.
+        setIsStreamingRef.current(false);
+        return result;
+      }
+
+      void (async () => {
+        try {
+          const res = await fetch("/api/v1/chat/stream", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              content,
+              conversationId: result.conversationId,
+              parentMessageId: result.userMessageId ?? null,
+              orgSlug: orgSlugRef.current,
+              workspaceSlug: workspaceSlugRef.current,
+            }),
+          });
+
+          if (!res.ok || !res.body) {
+            setIsStreamingRef.current(false);
+            return;
+          }
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+
+          await consumeRef.current(sseToEvents(reader, decoder));
+        } catch (err) {
+          // Swallow — the RSC revalidate will still show the persisted reply.
+          console.warn("[chat] stream fetch failed", err);
+        } finally {
+          setIsStreamingRef.current(false);
+        }
+      })();
+
+      return result;
     },
     [sendAction],
   );

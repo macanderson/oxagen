@@ -9,14 +9,7 @@ import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.re
 import { agentPlanApprove } from "@oxagen/oxagen/contracts/agent.plan.approve";
 import { agentTaskBackgroundCancel } from "@oxagen/oxagen/contracts/agent.task.background.cancel";
 import { agentTaskBackgroundRead } from "@oxagen/oxagen/contracts/agent.task.background.read";
-import { agentApprovalResolveHandler } from "@oxagen/agent/handlers/agent.approval.resolve";
-import { agentPlanApproveHandler } from "@oxagen/agent/handlers/agent.plan.approve";
-import { agentTaskBackgroundCancelHandler } from "@oxagen/agent/handlers/agent.task.background.cancel";
-import { agentTaskBackgroundReadHandler } from "@oxagen/agent/handlers/agent.task.background.read";
-import { streamAgentReply, defaultModel } from "@oxagen/ai";
-import { materializeTools } from "@oxagen/agent";
-import { randomUUID } from "node:crypto";
-import type { CoreMessage } from "ai";
+import { invoke } from "@oxagen/oxagen";
 import type { PlanStep } from "@/components/chat/stream-event-types";
 import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
 import { getSessionOrRedirect } from "@/lib/session";
@@ -28,15 +21,24 @@ const FormSchema = z.object({
   branchReason: z.enum(["edit", "regenerate", "tool_retry", "manual_fork"]).nullable().default(null),
 });
 
-// Implements the spec §6.9 DAG: append the user message under the active
-// leaf, stream an assistant reply, persist it as the next node, and shift
-// the conversation's active_leaf forward. Token usage is recorded by
-// ClickHouse from apps/api once the runner observes the row — the app
-// does not write ClickHouse directly (§3 boundary).
+// Implements the spec §6.9 DAG: persist the user message under the active
+// leaf and shift the conversation's active_leaf forward. The LLM call and
+// streaming live in the stream route (POST /api/v1/chat/stream), which is
+// the SINGLE LLM caller per turn (OXA-1509) and persists the matching
+// assistant reply itself once the stream finishes. This action returns the
+// conversation id and the new user-message id so the client can start the
+// stream against them (the stream route threads the assistant reply under
+// the user message and into the same conversation).
+//
+// Token usage is recorded by ClickHouse from @oxagen/ai's streamAgentReply
+// onFinish — the app does not write ClickHouse directly (§3 boundary).
 export async function sendMessageAction(
   ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
   formData: FormData,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; conversationId: string; userMessageId: string }
+  | { ok: false; error: string }
+> {
   const session = await getSessionOrRedirect();
   const raw = Object.fromEntries(formData);
   const parsed = FormSchema.safeParse({
@@ -58,7 +60,7 @@ export async function sendMessageAction(
   if (!capabilityInput.success) return { ok: false, error: capabilityInput.error.issues[0]?.message ?? "Invalid" };
 
   try {
-    const { conversationId, userMessageId, priorMessages } = await db().transaction(async (tx) => {
+    const { conversationId, userMessageId } = await db().transaction(async (tx) => {
       // Resolve or create the conversation, yielding a non-null string id.
       const convId: string = capabilityInput.data.conversationId
         ? capabilityInput.data.conversationId
@@ -103,105 +105,42 @@ export async function sendMessageAction(
         .set({ activeLeafMessageId: typedMsg.id, updatedAt: new Date() })
         .where(eq(schema.conversations.id, convId));
 
-      const prior = await tx
-        .select({ role: schema.messages.role, content: schema.messages.content })
-        .from(schema.messages)
-        .where(eq(schema.messages.conversationId, convId));
-
-      return { conversationId: convId, userMessageId: typedMsg.id, priorMessages: prior };
+      return { conversationId: convId, userMessageId: typedMsg.id };
     });
-
-    const VALID_ROLES = new Set(["user", "assistant", "system"]);
-    const coreMessages: CoreMessage[] = priorMessages
-      .filter((m) => VALID_ROLES.has(m.role))
-      .map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
-
-    // Stream the reply; buffer into `fullText` while writing the final
-    // row on stream end. We do not push tokens to ClickHouse from here —
-    // apps/api owns that write per §3.
-    let fullText = "";
-    // Materialize agent-surface capabilities as AI SDK tools for this
-    // turn. Workspace scope flows through the CapabilityContext so each
-    // handler enforces its own tenant guard.
-    const agentTools = await materializeTools({
-      orgId: ctx.orgId,
-      workspaceId: ctx.workspaceId,
-      userId: session.user.id,
-      apiKeyId: null,
-      requestId: userMessageId ?? randomUUID(),
-      surface: "app",
-      messageId: userMessageId,
-    });
-    const result = streamAgentReply({
-      messages: coreMessages,
-      model: defaultModel(),
-      tools: agentTools,
-      telemetry: {
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        surface: "app",
-        messageId: userMessageId,
-      },
-      onFinish: async (event) => {
-        fullText = event.text;
-        const [assistantMsg] = await db()
-          .insert(schema.messages)
-          .values({
-            orgId: ctx.orgId,
-            workspaceId: ctx.workspaceId,
-            conversationId,
-            parentMessageId: userMessageId,
-            role: "assistant",
-            content: fullText,
-            contentBlocks: [{ type: "text", text: fullText }],
-            branchReason: null,
-            isActiveInBranch: true,
-            metadata: { finishReason: event.finishReason, usage: event.usage },
-            createdByUserId: session.user.id,
-            updatedByUserId: session.user.id,
-          })
-          .returning();
-        if (assistantMsg) {
-          const typedAssistant = assistantMsg as DbMessageRow;
-          await db()
-            .update(schema.conversations)
-            .set({ activeLeafMessageId: typedAssistant.id, updatedAt: new Date() })
-            .where(eq(schema.conversations.id, conversationId));
-        }
-      },
-    });
-
-    // Drain the stream so the model call actually completes inside the
-    // action. The RSC revalidate below picks up the persisted reply.
-    for await (const _chunk of result.textStream) {
-      // intentionally ignored — onFinish handles persistence
-    }
 
     revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/chat`);
-    return { ok: true };
+    return { ok: true, conversationId, userMessageId };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to send message";
     return { ok: false, error: message };
   }
 }
 
-// Capability-dispatch helpers for the chat UI. Each one validates input
-// via the capability's Zod schema, then calls its handler. The shared
-// context shape is unified per the spec — workspace + tenant + user.
+// Capability-dispatch helpers for the chat UI. All capability calls go
+// through kernel.invoke() per the enforced path (OXA-1498).
 function capabilityContext(ctx: {
   orgId: string;
   workspaceId: string;
   userId: string;
+  surface?: "app";
 }) {
   // The chat UI runs server actions inside the user session, so apiKeyId
   // is always null and we mint a per-call requestId for trace correlation.
+  // ctx.surface records the request *origin* ("app" — these run as Next
+  // server actions); the capability *exposure* surface ("agent") is passed
+  // separately to invoke()'s opts and is enforced against the contract's
+  // `surfaces` allowlist. The two are intentionally different axes
+  // (CapabilityContext.surface vs CapabilitySurface) — see packages/oxagen
+  // types.ts — so "agent" is deliberately not a valid origin here.
   return {
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
     userId: ctx.userId,
-    apiKeyId: null,
+    apiKeyId: null as string | null,
     requestId: crypto.randomUUID(),
-  } as Parameters<typeof agentApprovalResolveHandler>[1];
+    surface: (ctx.surface ?? "app") as "app",
+    messageId: null as string | null,
+  };
 }
 
 export async function resolveApprovalAction(
@@ -213,9 +152,11 @@ export async function resolveApprovalAction(
   const parsed = agentApprovalResolve.input.safeParse({ approvalId, decision });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
-    await agentApprovalResolveHandler(
+    await invoke(
+      "agent.approval.resolve",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
+      { surface: "agent" },
     );
     revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/chat`);
     return { ok: true };
@@ -252,9 +193,11 @@ export async function resolvePlanAction(
   });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
-    await agentPlanApproveHandler(
+    await invoke(
+      "agent.plan.approve",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
+      { surface: "agent" },
     );
     revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/chat`);
     return { ok: true };
@@ -272,9 +215,11 @@ export async function cancelBackgroundTaskAction(
   const parsed = agentTaskBackgroundCancel.input.safeParse({ taskId, reason });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
-    await agentTaskBackgroundCancelHandler(
+    await invoke(
+      "agent.task.background.cancel",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
+      { surface: "agent" },
     );
     revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/chat`);
     return { ok: true };
@@ -289,10 +234,12 @@ export async function readBackgroundTaskAction(
 ): Promise<BackgroundTaskSnapshot> {
   const session = await getSessionOrRedirect();
   const parsed = agentTaskBackgroundRead.input.parse({ taskId });
-  const out = await agentTaskBackgroundReadHandler(
+  const out = await invoke(
+    "agent.task.background.read",
     parsed,
     capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
-  );
+    { surface: "agent" },
+  ) as import("@oxagen/oxagen/contracts/agent.task.background.read").AgentTaskBackgroundReadOutput;
   return {
     taskId: out.taskId,
     kind: out.kind,

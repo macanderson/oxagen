@@ -1,5 +1,10 @@
 export type { SessionResult } from "./session.js";
-export { resolveSession, parseSessionCookie } from "./session.js";
+export {
+  resolveSession,
+  parseSessionCookie,
+  stripCookieSignature,
+  SESSION_COOKIE_NAME,
+} from "./session.js";
 
 export type {
   ApiKeyResult,

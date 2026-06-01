@@ -25,10 +25,41 @@ const env = requireEnv([
   "GITHUB_CLIENT_SECRET",
 ] as const);
 
+// ---------------------------------------------------------------------------
+// OXA-1504: Startup guard — AUTH_TOKEN_KMS_KEY_ID must be set in non-local
+// environments so that OAuth token encryption is NEVER silently skipped in
+// production.  In local/development the key is optional so engineers can boot
+// without AWS credentials.
+// ---------------------------------------------------------------------------
+const kmsKeyId = process.env.AUTH_TOKEN_KMS_KEY_ID;
+const isLocalEnv =
+  env.NODE_ENV === "development" ||
+  env.NODE_ENV === "test" ||
+  process.env.VERCEL_ENV === "development" ||
+  // E2E_TEST is injected by playwright.config.ts webServer.env when running
+  // `next start` in CI. Playwright drives a production build over http, so
+  // NODE_ENV is "production" even though KMS is unavailable — the same
+  // exemption already applied to useSecureCookies (line below).
+  process.env.E2E_TEST === "true";
+
+// The KMS key is a RUNTIME requirement, not a build-time one. Next.js evaluates
+// route modules during `next build` ("Collecting page data") with
+// NEXT_PHASE=phase-production-build set, and the build environment legitimately
+// lacks the runtime secret — failing the build here is wrong. The guard still
+// fires at server boot / request time (NEXT_PHASE unset), so production can
+// still never boot without OAuth token encryption configured (OXA-1504).
+const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+
+if (!kmsKeyId && !isLocalEnv && !isBuildPhase) {
+  throw new Error(
+    "[auth] AUTH_TOKEN_KMS_KEY_ID is required in non-local environments. " +
+      "Production cannot boot without OAuth token encryption configured (OXA-1504).",
+  );
+}
+
 // OXA-1420: KMS adapter for OAuth token envelope encryption.
 // Only created when AUTH_TOKEN_KMS_KEY_ID is present so that development /
 // local builds without AWS credentials can still boot.
-const kmsKeyId = process.env.AUTH_TOKEN_KMS_KEY_ID;
 const kmsAdapter =
   kmsKeyId
     ? createAwsKmsAdapter(new KMSClient({ region: "us-east-2" }))
@@ -75,6 +106,44 @@ async function resolveFirstOrgId(userId: string): Promise<string | null> {
 // can be disambiguated in compliance queries via `actor_user_id`.
 const NO_ORG_SENTINEL = "00000000-0000-0000-0000-000000000000";
 
+// ---------------------------------------------------------------------------
+// OXA-1504: Trusted origins — built from env vars so switching from the
+// interim Vercel domains to oxagen.ai is a one-line env change, not a
+// code change.
+//
+// BETTER_AUTH_TRUSTED_ORIGINS may be a comma-separated list of origins.
+// The production Vercel domains are unconditionally included; local dev
+// origins are added when NODE_ENV is not "production".
+// ---------------------------------------------------------------------------
+const envTrustedOrigins: string[] = process.env.BETTER_AUTH_TRUSTED_ORIGINS
+  ? process.env.BETTER_AUTH_TRUSTED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+  : [];
+
+// Production Vercel app domains (per CLAUDE.md interim production URLs).
+const PROD_ORIGINS = [
+  "https://oxagen-v2-app.vercel.app",
+  "https://oxagen-v2-website.vercel.app",
+  "https://oxagen-v2-api.vercel.app",
+  "https://oxagen-v2-admin.vercel.app",
+];
+
+// Local dev origins — only included in non-production so they cannot
+// accidentally appear in a prod config if the guard above is ever removed.
+const DEV_ORIGINS =
+  env.NODE_ENV !== "production"
+    ? [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:8787",
+      ]
+    : [];
+
+const trustedOrigins: string[] = [
+  ...PROD_ORIGINS,
+  ...DEV_ORIGINS,
+  ...envTrustedOrigins,
+];
+
 export const auth = betterAuth({
   database: drizzleAdapter(db(), {
     provider: "pg",
@@ -90,6 +159,10 @@ export const auth = betterAuth({
   }),
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
+  // OXA-1504: CSRF / redirect validation. The baseURL origin is automatically
+  // trusted by Better Auth; these additional origins cover the app surfaces and
+  // dev localhost. See PROD_ORIGINS / DEV_ORIGINS constants above.
+  trustedOrigins,
   user: {
     fields: {
       name: "displayName",
@@ -156,8 +229,9 @@ export const auth = betterAuth({
   //
   // OXA-1420: account.create.before / account.update.before
   //   Encrypt OAuth access_token, refresh_token, id_token into *_enc bytea
-  //   columns before any account row is written.  Dual-write (EXPAND phase) —
-  //   plaintext columns are preserved until the backfill + CONTRACT migration.
+  //   columns before any account row is written.  CONTRACT PHASE — migration
+  //   0012 has dropped the plaintext access_token and refresh_token columns;
+  //   the hooks now write ONLY to the *_enc columns.
   //
   // OXA-1422: session.create.after / session.delete.after
   //   Emit auth.sign_in / auth.sign_out into security.security_events for
@@ -175,7 +249,8 @@ export const auth = betterAuth({
   databaseHooks: {
     // Account token encryption is only active when AUTH_TOKEN_KMS_KEY_ID is
     // set. In dev/CI without AWS credentials the hooks are omitted so the
-    // process boots without throwing on the missing key.
+    // process boots without throwing on the missing key. In production,
+    // AUTH_TOKEN_KMS_KEY_ID is required (enforced by the startup guard above).
     ...(kmsAdapter ? { account: buildAccountTokenHooks(kmsAdapter) } : {}),
     session: {
       create: {

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { agentTaskBackgroundRead } from "@oxagen/oxagen/contracts/agent.task.background.read";
-import { agentTaskBackgroundReadHandler } from "@oxagen/agent/handlers/agent.task.background.read";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 
@@ -11,6 +11,6 @@ agentTaskBackgroundReadRoute.get("/:taskId", async (c) => {
     taskId: c.req.param("taskId"),
   });
   const ctx = capabilityContext(c);
-  const out = await agentTaskBackgroundReadHandler(input, ctx);
+  const out = await invoke(agentTaskBackgroundRead.name, input, ctx, { surface: "api" });
   return c.json(out);
 });

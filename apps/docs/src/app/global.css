@@ -1,10 +1,14 @@
 /**
  * Docs site styles.
  *
- * The shared @oxagen/ui base provides Tailwind v4 and the Oxagen design
- * tokens; fumadocs-ui layers its own docs theme on top. The `.home-hero`
- * utility reproduces the marketing surface so the temporary landing page
- * (copied from apps/website) renders identically here.
+ * The shared @oxagen/ui base provides Tailwind v4, the Oxagen design tokens,
+ * the Aeonik font chain, and the --hero-bg-dark CSS variable that holds the
+ * single-source-of-truth gradient for the Oxagen hero surface.
+ * fumadocs-ui layers its own docs theme on top.
+ *
+ * The `.home-hero` utility reproduces the marketing surface for the temporary
+ * landing page in apps/docs/(home) without leaking the background into the
+ * /docs routes served by fumadocs.
  */
 @import "@oxagen/ui/styles/globals.css";
 @import "fumadocs-ui/css/neutral.css";
@@ -15,11 +19,6 @@
 .home-hero {
   min-height: 100vh;
   color: #f6f7f9;
-  background:
-    radial-gradient(1200px 800px at 20% -10%, rgba(99, 102, 241, 0.25), transparent 60%),
-    radial-gradient(900px 700px at 110% 10%, rgba(236, 72, 153, 0.18), transparent 60%),
-    #0a0b10;
-  font-family:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  background: var(--hero-bg-dark);
+  font-family: var(--font-sans);
 }

@@ -272,6 +272,137 @@ describe("social provider guard", () => {
 });
 
 // ---------------------------------------------------------------------------
+// trustedOrigins logic — extracted from auth.ts for unit testing (OXA-1504)
+// ---------------------------------------------------------------------------
+
+// Mirror the prod origins from auth.ts.
+const PROD_ORIGINS = [
+  "https://oxagen-v2-app.vercel.app",
+  "https://oxagen-v2-website.vercel.app",
+  "https://oxagen-v2-api.vercel.app",
+  "https://oxagen-v2-admin.vercel.app",
+];
+
+const DEV_ORIGINS_LOCAL = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:8787",
+];
+
+function buildTrustedOrigins(
+  nodeEnv: string,
+  betterAuthTrustedOriginsEnv: string | undefined,
+): string[] {
+  const envOrigins: string[] = betterAuthTrustedOriginsEnv
+    ? betterAuthTrustedOriginsEnv.split(",").map((o) => o.trim()).filter(Boolean)
+    : [];
+  const devOrigins = nodeEnv !== "production" ? DEV_ORIGINS_LOCAL : [];
+  return [...PROD_ORIGINS, ...devOrigins, ...envOrigins];
+}
+
+describe("trustedOrigins", () => {
+  it("always includes all four Vercel prod app domains", () => {
+    const origins = buildTrustedOrigins("production", undefined);
+    for (const o of PROD_ORIGINS) {
+      expect(origins).toContain(o);
+    }
+  });
+
+  it("includes localhost dev origins in non-production", () => {
+    const devOrigins = buildTrustedOrigins("development", undefined);
+    expect(devOrigins).toContain("http://localhost:3000");
+  });
+
+  it("excludes localhost dev origins in production", () => {
+    const prodOrigins = buildTrustedOrigins("production", undefined);
+    for (const devOrigin of DEV_ORIGINS_LOCAL) {
+      expect(prodOrigins).not.toContain(devOrigin);
+    }
+  });
+
+  it("includes additional origins from BETTER_AUTH_TRUSTED_ORIGINS env var", () => {
+    const origins = buildTrustedOrigins(
+      "production",
+      "https://my-custom.domain.com, https://another.domain.com",
+    );
+    expect(origins).toContain("https://my-custom.domain.com");
+    expect(origins).toContain("https://another.domain.com");
+  });
+
+  it("is not empty — an empty trustedOrigins would block all cross-origin requests", () => {
+    const origins = buildTrustedOrigins("production", undefined);
+    expect(origins.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Startup KMS guard logic — derived from auth.ts (OXA-1504)
+// ---------------------------------------------------------------------------
+
+function shouldThrowKmsGuard(
+  nodeEnv: string,
+  vercelEnv: string | undefined,
+  kmsKeyId: string | undefined,
+  isBuildPhase = false,
+  e2eTest: string | undefined = undefined,
+): boolean {
+  const isLocal =
+    nodeEnv === "development" ||
+    nodeEnv === "test" ||
+    vercelEnv === "development" ||
+    // E2E_TEST bypasses the guard: playwright runs `next start` with
+    // NODE_ENV=production but without KMS credentials (same exemption applied
+    // to useSecureCookies).
+    e2eTest === "true";
+  // The guard is skipped during `next build` (NEXT_PHASE=phase-production-build)
+  // because the KMS key is a runtime, not build-time, requirement (OXA-1504).
+  return !kmsKeyId && !isLocal && !isBuildPhase;
+}
+
+describe("AUTH_TOKEN_KMS_KEY_ID startup guard", () => {
+  it("throws in production when key id is absent", () => {
+    expect(shouldThrowKmsGuard("production", undefined, undefined)).toBe(true);
+  });
+
+  it("throws in production when key id is empty string", () => {
+    expect(shouldThrowKmsGuard("production", undefined, "")).toBe(true);
+  });
+
+  it("does NOT throw in development when key id is absent", () => {
+    expect(shouldThrowKmsGuard("development", undefined, undefined)).toBe(false);
+  });
+
+  it("does NOT throw in test environment when key id is absent", () => {
+    expect(shouldThrowKmsGuard("test", undefined, undefined)).toBe(false);
+  });
+
+  it("does NOT throw on Vercel preview (VERCEL_ENV=development) when key id absent", () => {
+    expect(shouldThrowKmsGuard("production", "development", undefined)).toBe(false);
+  });
+
+  it("does NOT throw in production when key id is present", () => {
+    expect(shouldThrowKmsGuard("production", undefined, "arn:aws:kms:us-east-2:123:key/abc")).toBe(false);
+  });
+
+  it("does NOT throw during the Next.js build phase even when key id is absent", () => {
+    expect(shouldThrowKmsGuard("production", undefined, undefined, true)).toBe(false);
+  });
+
+  it("does NOT throw in production when E2E_TEST=true (Playwright CI bypass)", () => {
+    // Playwright runs `next start` (NODE_ENV=production) over http without
+    // KMS credentials. E2E_TEST=true is the sentinel injected by playwright.config.ts
+    // webServer.env to exempt this legitimate scenario from the guard.
+    expect(shouldThrowKmsGuard("production", undefined, undefined, false, "true")).toBe(false);
+  });
+
+  it("E2E bypass only activates for the exact string 'true', not '1' or 'TRUE'", () => {
+    expect(shouldThrowKmsGuard("production", undefined, undefined, false, "1")).toBe(true);
+    expect(shouldThrowKmsGuard("production", undefined, undefined, false, "TRUE")).toBe(true);
+    expect(shouldThrowKmsGuard("production", undefined, undefined, false, "yes")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Sentinel value used when a user has no org membership yet
 // ---------------------------------------------------------------------------
 

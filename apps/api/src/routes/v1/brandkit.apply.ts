@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { brandkitApply } from "@oxagen/oxagen/contracts/brandkit.apply";
-import { brandkitApplyHandler } from "@oxagen/handlers/brandkit.apply";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 
@@ -12,6 +12,6 @@ export const brandkitApplyRoute = new Hono<AppEnv>();
 brandkitApplyRoute.post("/", async (c) => {
   const body = brandkitApply.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await brandkitApplyHandler(body, ctx);
+  const out = await invoke(brandkitApply.name, body, ctx, { surface: "api" });
   return c.json(out, 200);
 });

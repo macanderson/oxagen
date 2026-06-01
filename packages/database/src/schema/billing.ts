@@ -22,8 +22,8 @@ export const plans = billingSchema.table(
     ...auditMixin(),
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
-    // CHECK: tier IN ('free','pro','enterprise'). Pro is self-serve;
-    // Enterprise is sales-led (ACLs/SSO/SCIM/audit live here).
+    // CHECK: tier IN ('free','build','scale','enterprise'). Build is self-serve;
+    // Scale is growth; Enterprise is sales-led (ACLs/SSO/SCIM/audit live here).
     tier: text("tier").notNull(),
     stripeProductId: text("stripe_product_id").notNull(),
     stripePriceIdMonthly: text("stripe_price_id_monthly"),
@@ -266,6 +266,14 @@ export const creditLedger = billingSchema.table(
       "credit_ledger_delta_non_zero",
       sql`${t.deltaCents} <> 0`,
     ),
+    // Atomic grant idempotency (OXA-1509). grants.ts inserts with
+    // INSERT … ON CONFLICT DO NOTHING; this partial unique index is the
+    // arbiter. Partial because only grant rows carry (reference_type,
+    // reference_id) — spend/usage rows leave them NULL and must stay
+    // unconstrained (multiple NULLs would otherwise collide).
+    grantIdempotencyIdx: uniqueIndex("credit_ledger_grant_idempotency_idx")
+      .on(t.orgId, t.reason, t.referenceType, t.referenceId)
+      .where(sql`${t.referenceType} IS NOT NULL AND ${t.referenceId} IS NOT NULL`),
   }),
 );
 

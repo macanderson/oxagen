@@ -1,10 +1,11 @@
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
-import { stripeClient } from "./client.js";
+import { billingProvider } from "./client.js";
 import { ensureStripeCustomer } from "./customers.js";
 import { resolveOrgTier } from "./tier.js";
 import { canBuyCredits, TierDeniedError } from "./entitlements.js";
+import { logger } from "./logger.js";
 
 export interface CreateCheckoutSessionInput {
   orgId: string;
@@ -37,27 +38,22 @@ export async function createCheckoutSession(
 
   const customerId = await ensureStripeCustomer(input.orgId);
 
-  const session = await stripeClient().checkout.sessions.create({
-    mode: "subscription",
-    customer: customerId,
-    line_items: [{ price: priceId, quantity: 1 }],
-    // Carry tenant on the session — the resulting subscription metadata
-    // inherits this and lets webhook handlers route without a DB lookup.
-    subscription_data: {
-      metadata: { org_id: input.orgId, plan_id: plan.id },
-    },
-    success_url:
+  const result = await billingProvider().createSubscriptionCheckout({
+    customerId,
+    priceId,
+    subscriptionMetadata: { org_id: input.orgId, plan_id: plan.id },
+    successUrl:
       input.successUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: input.cancelUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/plans`,
-    allow_promotion_codes: true,
+    cancelUrl: input.cancelUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/plans`,
   });
-  if (!session.url) throw new Error("Stripe did not return a checkout URL");
-  return { url: session.url, sessionId: session.id };
+
+  logger.info({ orgId: input.orgId, planSlug: input.planSlug, sessionId: result.sessionId }, "billing: created subscription checkout session");
+  return result;
 }
 
 export interface CreateCreditPackCheckoutInput {
   orgId: string;
-  /** Stripe one-time price id for the credit pack (from billing.stripe-sync). */
+  /** Provider price id for the credit pack (from billing.stripe-sync). */
   priceId: string;
   quantity?: number;
   successUrl?: string;
@@ -85,16 +81,16 @@ export async function createCreditPackCheckoutSession(
   const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
   const customerId = await ensureStripeCustomer(input.orgId);
 
-  const session = await stripeClient().checkout.sessions.create({
-    mode: "payment",
-    customer: customerId,
-    line_items: [{ price: input.priceId, quantity: input.quantity ?? 1 }],
+  const result = await billingProvider().createPaymentCheckout({
+    customerId,
+    priceId: input.priceId,
+    quantity: input.quantity ?? 1,
     metadata: { org_id: input.orgId },
-    success_url:
+    successUrl:
       input.successUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: input.cancelUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/credits`,
-    allow_promotion_codes: true,
+    cancelUrl: input.cancelUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/credits`,
   });
-  if (!session.url) throw new Error("Stripe did not return a checkout URL");
-  return { url: session.url, sessionId: session.id };
+
+  logger.info({ orgId: input.orgId, priceId: input.priceId, sessionId: result.sessionId }, "billing: created credit-pack checkout session");
+  return result;
 }

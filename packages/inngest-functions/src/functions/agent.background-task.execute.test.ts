@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   dbUpdateWhere: vi.fn(),
   dbUpdate: vi.fn(),
   dbInsert: vi.fn(),
-  invokeCapability: vi.fn(),
+  /** Mock for kernel.invoke — replaces the old @oxagen/agent invokeCapability mock. */
+  kernelInvoke: vi.fn(),
   inngestCreateFunction: vi.fn(),
   inngestClient: {} as Record<string, unknown>,
 }));
@@ -36,8 +37,15 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   return { and: orig.and, eq: orig.eq };
 });
 
-vi.mock("@oxagen/agent", () => ({
-  invokeCapability: mocks.invokeCapability,
+// Mock @oxagen/oxagen/kernel's invoke function (OXA-1498: capability calls now
+// route through kernel.invoke instead of @oxagen/agent's invokeCapability).
+vi.mock("@oxagen/oxagen/kernel", () => ({
+  invoke: mocks.kernelInvoke,
+}));
+
+// Stub @oxagen/telemetry so insertToolInvocation doesn't need ClickHouse.
+vi.mock("@oxagen/telemetry", () => ({
+  insertToolInvocation: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Stub @oxagen/oxagen to a no-op (just the side-effect import)
@@ -103,7 +111,7 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
     mocks.dbUpdate.mockClear();
     mocks.dbUpdateSet.mockClear();
     mocks.dbUpdateWhere.mockClear();
-    mocks.invokeCapability.mockClear();
+    mocks.kernelInvoke.mockClear();
     // Restore DB chain defaults
     mocks.dbUpdateWhere.mockResolvedValue(undefined);
     mocks.dbUpdateSet.mockReturnValue({ where: mocks.dbUpdateWhere });
@@ -111,7 +119,7 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
   });
 
   it("marks the task running, invokes the capability, then marks completed", async () => {
-    mocks.invokeCapability.mockResolvedValueOnce({ ok: true });
+    mocks.kernelInvoke.mockResolvedValueOnce({ ok: true });
 
     const result = await capturedHandler!({
       event: BASE_EVENT,
@@ -121,9 +129,9 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
     // db().update should have been called at least twice: mark-running + mark-completed
     expect(mocks.dbUpdate.mock.calls.length).toBeGreaterThanOrEqual(2);
 
-    // invokeCapability called with the capability name from payload
-    expect(mocks.invokeCapability).toHaveBeenCalledTimes(1);
-    const [capName, _capInput, capCtx] = mocks.invokeCapability.mock.calls[0] as [
+    // kernel.invoke called with the capability name from payload (OXA-1498)
+    expect(mocks.kernelInvoke).toHaveBeenCalledTimes(1);
+    const [capName, _capInput, capCtx] = mocks.kernelInvoke.mock.calls[0] as [
       string,
       unknown,
       Record<string, unknown>,
@@ -139,7 +147,7 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
   });
 
   it("marks the task failed and rethrows when the capability throws", async () => {
-    mocks.invokeCapability.mockRejectedValueOnce(new Error("capability error"));
+    mocks.kernelInvoke.mockRejectedValueOnce(new Error("capability error"));
 
     await expect(
       capturedHandler!({
@@ -178,11 +186,11 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
   });
 
   it("uses taskId as requestId in the capability context", async () => {
-    mocks.invokeCapability.mockResolvedValueOnce(null);
+    mocks.kernelInvoke.mockResolvedValueOnce(null);
 
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
 
-    const [, , capCtx] = mocks.invokeCapability.mock.calls[0] as [
+    const [, , capCtx] = mocks.kernelInvoke.mock.calls[0] as [
       string,
       unknown,
       Record<string, unknown>,
@@ -192,7 +200,7 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
 
   it("captures non-Error thrown values as string failureReason", async () => {
     // Some code throws strings or numbers; the handler must handle those
-    mocks.invokeCapability.mockRejectedValueOnce("plain string error");
+    mocks.kernelInvoke.mockRejectedValueOnce("plain string error");
 
     await expect(
       capturedHandler!({ event: BASE_EVENT, step: makeStep() }),

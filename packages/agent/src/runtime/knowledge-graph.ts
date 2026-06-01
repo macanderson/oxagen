@@ -28,9 +28,10 @@ export function isKnowledgeGraphEnabled(): boolean {
  * When the knowledge graph is disabled (default), returns [] immediately
  * without touching Neo4j or performing any I/O.
  *
- * When enabled — TODO(knowledge-graph): wire real KG context query here.
- * The seam exists so callers in the chat path don't need to change when
- * we implement the full read (OXA-next).
+ * When enabled but the workspace-context query is not yet wired (OXA-1508),
+ * logs once at warn level and returns []. This is intentionally honest about
+ * the unimplemented state — callers should not rely on non-empty results until
+ * the real Cypher query ships.
  */
 export async function readWorkspaceContext(
   ctx: Pick<CapabilityContext, "orgId" | "workspaceId"> & { userId: string | null },
@@ -38,12 +39,15 @@ export async function readWorkspaceContext(
   if (!isKnowledgeGraphEnabled()) {
     return [];
   }
-  // TODO(knowledge-graph): query Neo4j for workspace-level context nodes
-  // relevant to this org/workspace and prepend them to the conversation.
-  // Return [] for now even when enabled; this stub lets the feature-flag
-  // infrastructure and injection path be exercised before the graph query
-  // is implemented.
-  void ctx; // suppress unused-variable lint until the TODO is wired
+  // Knowledge-graph is enabled (NEO4J_URI is set) but the workspace-context
+  // Cypher query is not yet implemented (OXA-1508). Log clearly so operators
+  // know the graph is reachable but context injection is dormant, then return
+  // an empty set — no silent fake data, no crash.
+  console.warn(
+    `[knowledge-graph] readWorkspaceContext — KG enabled but workspace-context query not yet wired (OXA-1508). ` +
+      `orgId=${ctx.orgId} workspaceId=${ctx.workspaceId} userId=${ctx.userId ?? "null"}. ` +
+      `Returning [] until OXA-1508 is resolved.`,
+  );
   return [];
 }
 

@@ -3,20 +3,20 @@
  * createCreditPackCheckoutSession).
  *
  * Mocks:
- *  - @oxagen/database  → db() factory (plan look-ups)
- *  - ../client.js      → stripeClient() (no live Stripe API)
- *  - ../customers.js   → ensureStripeCustomer (returns a canned customer id)
+ *  - @oxagen/database   → db() factory (plan look-ups)
+ *  - ../client.js       → billingProvider() (neutral BillingProvider interface)
+ *  - ../customers.js    → ensureStripeCustomer (returns a canned customer id)
  *  - @oxagen/config/env → requireEnv (returns test URL)
  *
  * Scenarios (createCheckoutSession):
  *  1. Plan not found — throws with plan slug in message.
  *  2. Monthly price id missing on plan — throws.
  *  3. Annual price id missing on plan — throws.
- *  4. Stripe returns no URL — throws.
+ *  4. Provider returns no URL — throws.
  *  5. Happy path — returns { url, sessionId }.
  *
  * Scenarios (createCreditPackCheckoutSession):
- *  1. Stripe returns no URL — throws.
+ *  1. Provider returns no URL — throws.
  *  2. Happy path — returns { url, sessionId }.
  */
 
@@ -35,13 +35,6 @@ vi.mock("@oxagen/config/env", () => ({
   requireEnv: vi.fn(() => ({ NEXT_PUBLIC_APP_URL: "https://app.example.com" })),
 }));
 
-// ---------------------------------------------------------------------------
-// Tier mock — resolveOrgTier is the only call into tier.ts from checkout.ts.
-// Default to "build" so canBuyCredits() returns true and tests can proceed
-// to the Stripe layer.  Individual tests that exercise the tier-denied path
-// can override resolveOrgTierMock.mockResolvedValueOnce("free").
-// ---------------------------------------------------------------------------
-
 import type { PlanTier } from "@oxagen/oxagen/types";
 
 const resolveOrgTierMock = vi.fn<() => Promise<PlanTier>>().mockResolvedValue("build");
@@ -50,23 +43,21 @@ vi.mock("../tier.js", () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Stripe client mock
+// BillingProvider mock
 // ---------------------------------------------------------------------------
 
-const stripeSessionCreateMock = vi.fn();
+const createSubscriptionCheckoutMock = vi.fn();
+const createPaymentCheckoutMock = vi.fn();
+
 vi.mock("../client.js", () => ({
-  stripeClient: () => ({
-    checkout: {
-      sessions: { create: stripeSessionCreateMock },
-    },
+  billingProvider: () => ({
+    createSubscriptionCheckout: createSubscriptionCheckoutMock,
+    createPaymentCheckout: createPaymentCheckoutMock,
   }),
 }));
 
 // ---------------------------------------------------------------------------
 // DB mock — only createCheckoutSession uses db().query.plans.findFirst.
-// createCreditPackCheckoutSession delegates its DB access to resolveOrgTier
-// (mocked above) and ensureStripeCustomer (mocked above), so no chainable
-// select() is needed here.
 // ---------------------------------------------------------------------------
 
 const dbPlansFindFirst = vi.fn();
@@ -115,7 +106,7 @@ describe("createCheckoutSession", () => {
       createCheckoutSession({ orgId: "org-abc", planSlug: "missing-plan", interval: "month" }),
     ).rejects.toThrow("missing-plan");
 
-    expect(stripeSessionCreateMock).not.toHaveBeenCalled();
+    expect(createSubscriptionCheckoutMock).not.toHaveBeenCalled();
   });
 
   it("monthly price id missing on plan — throws", async () => {
@@ -128,7 +119,7 @@ describe("createCheckoutSession", () => {
       createCheckoutSession({ orgId: "org-abc", planSlug: "pro", interval: "month" }),
     ).rejects.toThrow("month");
 
-    expect(stripeSessionCreateMock).not.toHaveBeenCalled();
+    expect(createSubscriptionCheckoutMock).not.toHaveBeenCalled();
   });
 
   it("annual price id missing on plan — throws", async () => {
@@ -141,12 +132,14 @@ describe("createCheckoutSession", () => {
       createCheckoutSession({ orgId: "org-abc", planSlug: "pro", interval: "year" }),
     ).rejects.toThrow("year");
 
-    expect(stripeSessionCreateMock).not.toHaveBeenCalled();
+    expect(createSubscriptionCheckoutMock).not.toHaveBeenCalled();
   });
 
-  it("Stripe returns no URL — throws", async () => {
+  it("provider returns no URL — throws", async () => {
     dbPlansFindFirst.mockResolvedValue(FULL_PLAN);
-    stripeSessionCreateMock.mockResolvedValue({ url: null, id: "cs_no_url" });
+    createSubscriptionCheckoutMock.mockRejectedValue(
+      new Error("Stripe did not return a checkout URL"),
+    );
 
     await expect(
       createCheckoutSession({ orgId: "org-abc", planSlug: "pro", interval: "month" }),
@@ -155,9 +148,9 @@ describe("createCheckoutSession", () => {
 
   it("happy path (monthly) — returns url and sessionId", async () => {
     dbPlansFindFirst.mockResolvedValue(FULL_PLAN);
-    stripeSessionCreateMock.mockResolvedValue({
+    createSubscriptionCheckoutMock.mockResolvedValue({
       url: "https://checkout.stripe.com/pay/cs_test",
-      id: "cs_test_001",
+      sessionId: "cs_test_001",
     });
 
     const result = await createCheckoutSession({
@@ -168,20 +161,19 @@ describe("createCheckoutSession", () => {
 
     expect(result.url).toBe("https://checkout.stripe.com/pay/cs_test");
     expect(result.sessionId).toBe("cs_test_001");
-    expect(stripeSessionCreateMock).toHaveBeenCalledOnce();
+    expect(createSubscriptionCheckoutMock).toHaveBeenCalledOnce();
 
-    // Verify the monthly price id was used, not the annual one.
-    const createArgs = stripeSessionCreateMock.mock.calls[0]![0] as {
-      line_items: Array<{ price: string }>;
+    const createArgs = createSubscriptionCheckoutMock.mock.calls[0]![0] as {
+      priceId: string;
     };
-    expect(createArgs.line_items[0]?.price).toBe("price_monthly_001");
+    expect(createArgs.priceId).toBe("price_monthly_001");
   });
 
   it("happy path (annual) — uses annual price id", async () => {
     dbPlansFindFirst.mockResolvedValue(FULL_PLAN);
-    stripeSessionCreateMock.mockResolvedValue({
+    createSubscriptionCheckoutMock.mockResolvedValue({
       url: "https://checkout.stripe.com/pay/cs_annual",
-      id: "cs_annual_001",
+      sessionId: "cs_annual_001",
     });
 
     const result = await createCheckoutSession({
@@ -191,10 +183,10 @@ describe("createCheckoutSession", () => {
     });
 
     expect(result.sessionId).toBe("cs_annual_001");
-    const createArgs = stripeSessionCreateMock.mock.calls[0]![0] as {
-      line_items: Array<{ price: string }>;
+    const createArgs = createSubscriptionCheckoutMock.mock.calls[0]![0] as {
+      priceId: string;
     };
-    expect(createArgs.line_items[0]?.price).toBe("price_annual_001");
+    expect(createArgs.priceId).toBe("price_annual_001");
   });
 });
 
@@ -206,12 +198,13 @@ describe("createCreditPackCheckoutSession", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ensureStripeCustomerMock.mockResolvedValue("cus_test_001");
-    // Restore tier default after vi.clearAllMocks() wipes mock implementations.
     resolveOrgTierMock.mockResolvedValue("build");
   });
 
-  it("Stripe returns no URL — throws", async () => {
-    stripeSessionCreateMock.mockResolvedValue({ url: null, id: "cs_no_url" });
+  it("provider returns no URL — throws", async () => {
+    createPaymentCheckoutMock.mockRejectedValue(
+      new Error("Stripe did not return a checkout URL"),
+    );
 
     await expect(
       createCreditPackCheckoutSession({ orgId: "org-abc", priceId: "price_pack_001" }),
@@ -219,9 +212,9 @@ describe("createCreditPackCheckoutSession", () => {
   });
 
   it("happy path — returns url and sessionId", async () => {
-    stripeSessionCreateMock.mockResolvedValue({
+    createPaymentCheckoutMock.mockResolvedValue({
       url: "https://checkout.stripe.com/pay/cs_pack",
-      id: "cs_pack_001",
+      sessionId: "cs_pack_001",
     });
 
     const result = await createCreditPackCheckoutSession({
@@ -232,16 +225,15 @@ describe("createCreditPackCheckoutSession", () => {
 
     expect(result.url).toBe("https://checkout.stripe.com/pay/cs_pack");
     expect(result.sessionId).toBe("cs_pack_001");
-    expect(stripeSessionCreateMock).toHaveBeenCalledOnce();
+    expect(createPaymentCheckoutMock).toHaveBeenCalledOnce();
 
-    const createArgs = stripeSessionCreateMock.mock.calls[0]![0] as {
-      mode: string;
-      line_items: Array<{ price: string; quantity: number }>;
+    const createArgs = createPaymentCheckoutMock.mock.calls[0]![0] as {
+      priceId: string;
+      quantity: number;
       metadata: { org_id: string };
     };
-    expect(createArgs.mode).toBe("payment");
-    expect(createArgs.line_items[0]?.price).toBe("price_pack_001");
-    expect(createArgs.line_items[0]?.quantity).toBe(3);
+    expect(createArgs.priceId).toBe("price_pack_001");
+    expect(createArgs.quantity).toBe(3);
     expect(createArgs.metadata.org_id).toBe("org-abc");
   });
 });

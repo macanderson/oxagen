@@ -5,7 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
 export interface ComposerAction {
-  (formData: FormData): Promise<{ ok: boolean; error?: string }>;
+  (formData: FormData): Promise<{
+    ok: boolean;
+    error?: string;
+    // sendMessageAction returns these on success so the caller can start the
+    // chat stream with the persisted conversation id and the just-created
+    // user-message id. Optional because other composer actions (e.g. the
+    // org-shell quick-send) don't produce them.
+    conversationId?: string;
+    userMessageId?: string;
+  }>;
 }
 
 export function MessageComposer({

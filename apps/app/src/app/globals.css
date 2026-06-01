@@ -1,1 +1,16 @@
+/**
+ * App shell styles.
+ *
+ * Pulls in the shared @oxagen/ui base which provides:
+ *   - Tailwind v4 + design tokens (tokens.css)
+ *   - Aeonik @font-face declarations (fonts/aeonik.css) — inert until
+ *     licensed .woff2 binaries are placed in packages/ui/src/styles/fonts/
+ *   - CSS custom properties: --font-sans / --font-display / --font-mono
+ *   - Tailwind @theme font-family tokens: font-sans / font-display / font-mono
+ *   - Base heading styles (Aeonik Fono, wt 500, tracking -0.025em)
+ *   - Glass utility, aurora background, dark variant
+ *
+ * See packages/ui/src/styles/fonts/README.md for the binary asset checklist
+ * and the next/font/local migration guide (OXA-1508).
+ */
 @import "@oxagen/ui/styles/globals.css";

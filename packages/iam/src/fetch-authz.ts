@@ -10,7 +10,7 @@
 // has not been run. Remove this fallback after `pnpm db:migrate` is standard.
 
 import { db } from "@oxagen/database";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, isNull, or, gt, sql } from "drizzle-orm";
 import { schema } from "@oxagen/database";
 import type { Grant, Role, RoleGrant, Policy } from "@oxagen/oxagen/iam";
 import type { ResolvedPrincipal } from "@oxagen/oxagen";
@@ -75,11 +75,13 @@ export async function fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
 }
 
 async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
-  // workspaceId is intentionally not read here: this layer scopes by orgId
-  // (tenant isolation), and the pure resolver applies workspace-scope matching
-  // against scope.workspaceId (see resolve.ts). Fetching all org grants and
-  // filtering by scope in-memory keeps the query count flat.
-  const { userId, orgId, capability } = args;
+  // grants/roles/policies are scoped by orgId (tenant isolation); the pure
+  // resolver applies workspace-scope matching against scope.workspaceId for
+  // those (see resolve.ts), so fetching all org rows and filtering in-memory
+  // keeps the query count flat. Role *assignments*
+  // (principal_role_assignments) can THEMSELVES be workspace-scoped, however,
+  // so we must filter those by workspaceId here — see the PRA query below.
+  const { userId, orgId, workspaceId, capability } = args;
   const d = db();
 
   // Resolve the principal from the userId (human kind).
@@ -155,48 +157,69 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   }));
 
   // Batch 2: roleGrants depends on roleIds from the roles query above.
+  // Also load principal_role_assignments for this principal to determine
+  // which roles they are actually a member of (OXA-1498 — replaces the
+  // prior "all principals in this org are members of all roles" shortcut).
   const roleIds = roleRows.map((r) => r.id);
 
-  // Query 4 — role_grants for these roles and this capability.
-  let roleGrantRows: (typeof schema.roleGrants.$inferSelect)[] = [];
-  if (roleIds.length > 0) {
-    roleGrantRows = await d
-      .select()
-      .from(schema.roleGrants)
+  // Query 4a — role_grants for these roles and this capability.
+  // Query 4b — role assignments for this principal in this org/workspace.
+  //   Include org-wide (workspaceId IS NULL) and workspace-scoped
+  //   (workspaceId = ctx workspaceId) assignments. Non-deleted only.
+  const [roleGrantRows, praRows] = await Promise.all([
+    roleIds.length > 0
+      ? d
+          .select()
+          .from(schema.roleGrants)
+          .where(
+            and(
+              inArray(schema.roleGrants.roleId, roleIds),
+              eq(schema.roleGrants.capabilityId, capability),
+            ),
+          )
+      : Promise.resolve([] as (typeof schema.roleGrants.$inferSelect)[]),
+    d
+      .select({ roleId: schema.principalRoleAssignments.roleId })
+      .from(schema.principalRoleAssignments)
       .where(
         and(
-          inArray(schema.roleGrants.roleId, roleIds),
-          eq(schema.roleGrants.capabilityId, capability),
+          eq(schema.principalRoleAssignments.principalId, principalRow.id),
+          eq(schema.principalRoleAssignments.orgId, orgId),
+          // Include assignments that are not soft-deleted.
+          isNull(schema.principalRoleAssignments.deletedAt),
+          // Exclude expired JIT assignments (expires_at in the past). A NULL
+          // expires_at means a permanent (non-JIT) assignment.
+          or(
+            isNull(schema.principalRoleAssignments.expiresAt),
+            gt(schema.principalRoleAssignments.expiresAt, sql`now()`),
+          ),
+          // Honour the assignment's workspace scope: include org-wide
+          // assignments (workspace_id IS NULL) and assignments scoped to the
+          // workspace this request targets. Without this predicate a
+          // workspace-scoped role would leak org-wide (granting role X in
+          // workspace B for an assignment made only in workspace A).
+          or(
+            isNull(schema.principalRoleAssignments.workspaceId),
+            eq(schema.principalRoleAssignments.workspaceId, workspaceId),
+          ),
         ),
-      );
-  }
+      ),
+  ]);
 
-  // For the principal-to-role membership, we use grants where scopeKind='role'
-  // is not a pattern here. Instead the roles table carries a membership concept
-  // via role_grants: the seed migration assigns role_grants rows per capability.
-  // However, we need principal → role membership. In the current schema this
-  // is implicit via the role seeding: every org principal of kind 'human' is
-  // assigned the org 'Owner' role. For Phase 3 we carry principalIds as a
-  // synthetic computed property by loading all role_grants that match the
-  // principal's grants.
-  //
-  // Simpler approach that works with current schema: a principal is "in a role"
-  // if there is a role_grant that grants this capability via a role the org
-  // has. We materialise this by returning roles with principalIds = [principalRow.id]
-  // for all roles the org has, letting the resolver match by role_id from role_grants.
-  //
-  // This is intentionally simplified for Phase 3. Wave 5 will add a proper
-  // principal_role_assignments join table.
+  // Build the set of role IDs this principal is actually a member of.
+  // If the principal_role_assignments table has no rows for this principal
+  // (e.g. before the seed migration runs), the set is empty — the resolver
+  // will fall through to defaultEffect (deny-by-default once enforcement is on).
+  const principalRoleIdSet = new Set(praRows.map((r) => r.roleId));
 
   const roles: Role[] = roleRows.map((r) => ({
     id: r.id,
     name: r.name,
     scopeKind: r.scopeKind as "org" | "workspace",
     orgId: r.orgId,
-    // For now: all principals in this org are members of all org roles.
-    // This is a temporary simplification; the Wave 5 access UI will introduce
-    // a principal_role_assignments table with explicit memberships.
-    principalIds: [principalRow.id],
+    // Only include the principal if they have an explicit assignment to this
+    // role in the principal_role_assignments table (OXA-1498).
+    principalIds: principalRoleIdSet.has(r.id) ? [principalRow.id] : [],
   }));
 
   const roleGrants: RoleGrant[] = roleGrantRows.map((rg) => ({
@@ -210,7 +233,7 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
     scopeKind: p.scopeKind as "org" | "workspace",
     scopeId: p.scopeId,
     effect: p.effect as "allow" | "deny" | "require_approval",
-    enforced: p.enforced === "true",
+    enforced: p.enforced === true,
     conditionsJsonb: p.conditionsJsonb,
   }));
 

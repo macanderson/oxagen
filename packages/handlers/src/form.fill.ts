@@ -155,7 +155,7 @@ export const formFillHandler: CapabilityHandler<typeof formFill> = async (input,
       telemetry: {
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
-        surface: ctx.surface === "app" ? "api" : ctx.surface,
+        surface: ctx.surface,
         messageId,
       },
     });

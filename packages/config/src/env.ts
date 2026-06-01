@@ -75,6 +75,17 @@ export const baseEnvSchema = z.object({
   // presence at call-time when a real KMS client is provided.
   AUTH_TOKEN_KMS_KEY_ID: z.string().min(1).optional(),
 
+  // OXA-1498: IAM enforcement gate.
+  // When false (default): the kernel resolves authz + emits audit on every
+  // capability call, but NEVER blocks the call — would-deny decisions are
+  // logged for visibility without risk of accidental lockout.
+  // When true: denied invocations are blocked and a DenialResponse is returned.
+  // Flip to true only after verifying principal_role_assignments are seeded.
+  IAM_ENFORCEMENT_ENABLED: z
+    .union([z.literal("true"), z.literal("false")])
+    .optional()
+    .transform((v) => v === "true"),
+
   // ── Billing / usage-meter tuning (see @oxagen/billing pricing.ts) ──
   // Target *blended* gross margin across all products, in (0,1). When set,
   // it overrides DEFAULT_TARGET_MARGIN and re-derives the meter markup.

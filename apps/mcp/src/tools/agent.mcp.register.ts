@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentMcpRegister } from "@oxagen/oxagen/contracts/agent.mcp.register";
-import { agentMcpRegisterHandler } from "@oxagen/agent/handlers/agent.mcp.register";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context.js";
 
 export const schema = {
@@ -33,6 +33,6 @@ export default async function agentMcpRegisterTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await agentMcpRegisterHandler(args, ctx);
+  const output = await invoke(agentMcpRegister.name, args, ctx, { surface: "mcp" });
   return agentMcpRegister.output.parse(output);
 }

@@ -97,8 +97,9 @@ export interface AuditInsertFn {
  *                  via `makeSecurityEventInserter(db)` from @oxagen/database;
  *                  pass a mock in tests.
  * @param event   - The event to record.
- * @param onError - Optional error handler. Defaults to a console.error emit
- *                  that includes no PII from the event (only eventType + orgId).
+ * @param onError - Optional error handler. Defaults to a structured JSON write
+ *                  to process.stderr that includes no PII from the event
+ *                  (only eventType + orgId).
  */
 export function recordSecurityEvent(
   insert: AuditInsertFn,
@@ -110,12 +111,18 @@ export function recordSecurityEvent(
       onError(err);
     } else {
       // Default: log enough to triage without emitting PII. Do NOT expand
-      // `event` here — it may contain ip / user_agent.
-      console.error(
-        "[security-audit] failed to write event",
-        event.eventType,
-        event.orgId,
-        err,
+      // `event` here — it may contain ip / user_agent. Uses structured JSON
+      // to stderr to match the rest of the telemetry package (no pino dep
+      // in @oxagen/telemetry; process.stderr.write keeps the output
+      // machine-readable without adding a dependency).
+      process.stderr.write(
+        JSON.stringify({
+          level: "error",
+          msg: "security-audit: failed to write event",
+          eventType: event.eventType,
+          orgId: event.orgId,
+          err: err instanceof Error ? err.message : String(err),
+        }) + "\n",
       );
     }
   });

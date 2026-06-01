@@ -37,6 +37,13 @@ vi.mock("@oxagen/telemetry", () => ({
 
 import { embedText } from "./embed.js";
 
+const BASE_TELEMETRY = {
+  orgId: "org_1",
+  workspaceId: "ws_1",
+  surface: "runner" as const,
+  executionStepId: "req_abc",
+};
+
 describe("embedText (@oxagen/ai)", () => {
   beforeEach(() => {
     mocks.embed.mockClear();
@@ -45,7 +52,7 @@ describe("embedText (@oxagen/ai)", () => {
   });
 
   it("calls the OpenAI embedding model with the correct model id and returns a 1536-d vector", async () => {
-    const v = await embedText("hello");
+    const v = await embedText("hello", { telemetry: BASE_TELEMETRY });
     expect(v).toHaveLength(1536);
     expect(mocks.embeddingModel).toHaveBeenCalledWith("text-embedding-3-small");
     expect(mocks.embed).toHaveBeenCalledTimes(1);
@@ -53,12 +60,12 @@ describe("embedText (@oxagen/ai)", () => {
     expect(args.value).toBe("hello");
   });
 
-  it("does NOT write a token_usage row when telemetry opts are omitted", async () => {
-    await embedText("no-telemetry");
-    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+  it("always writes a token_usage row — telemetry is required for metering", async () => {
+    await embedText("meter me", { telemetry: BASE_TELEMETRY });
+    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
   });
 
-  it("writes exactly ONE token_usage row when telemetry opts are provided", async () => {
+  it("writes exactly ONE token_usage row with the correct fields", async () => {
     await embedText("meter me", {
       telemetry: {
         orgId: "org_1",

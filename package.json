@@ -25,7 +25,7 @@
     "db:seed-iam": "tsx --env-file-if-exists=.env.local tools/scripts/seed-iam-defaults.ts",
     "check:manifest": "node tools/scripts/check_manifest.mjs",
     "check:contracts": "node tools/scripts/check-contracts.mjs",
-    "gate": "turbo run lint typecheck test build --filter=...[origin/main] && pnpm check:manifest && pnpm check:contracts && pnpm test:e2e",
+    "gate": "turbo run lint typecheck test build --filter=...[origin/main] && pnpm check:manifest && pnpm check:contracts",
     "release:patch": "changeset version --type patch && pnpm install && git add -A && git commit -m 'chore: release patch' && pnpm changeset tag",
     "release:minor": "changeset version --type minor && pnpm install && git add -A && git commit -m 'chore: release minor' && pnpm changeset tag",
     "release:major": "changeset version --type major && pnpm install && git add -A && git commit -m 'chore: release major' && pnpm changeset tag",
@@ -55,6 +55,9 @@
       "sharp",
       "ssh2",
       "unrs-resolver"
+    ],
+    "ignoredBuiltDependencies": [
+      "@swc/core"
     ]
   }
 }

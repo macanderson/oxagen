@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { svgGenerate } from "@oxagen/oxagen/contracts/svg.generate";
-import { svgGenerateHandler } from "@oxagen/handlers/svg.generate";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context.js";
 import type { AppEnv } from "../../app.js";
 
@@ -12,6 +12,6 @@ export const svgGenerateRoute = new Hono<AppEnv>();
 svgGenerateRoute.post("/", async (c) => {
   const body = svgGenerate.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await svgGenerateHandler(body, ctx);
+  const out = await invoke(svgGenerate.name, body, ctx, { surface: "api" });
   return c.json(out, 200);
 });

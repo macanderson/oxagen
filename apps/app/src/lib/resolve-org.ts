@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { notFound } from "next/navigation";
+import { notFound, forbidden } from "next/navigation";
 import { eq, and } from "drizzle-orm";
 import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
@@ -54,5 +54,37 @@ export const resolveWorkspace = cache(
       name: row.name,
       slug: row.slug,
     };
+  },
+);
+
+/**
+ * Assert that the given user is a member of the given org.
+ *
+ * Queries the org_users table for an (orgId, userId) row. If the user is
+ * not a member, calls `forbidden()` which throws a Next.js 403 response —
+ * identical semantics to `notFound()` for 404s.
+ *
+ * Use AFTER resolveOrg() in any server-side path where an authenticated user
+ * reads org-scoped data. Without this gate, any authenticated user can read
+ * any org's data by guessing the slug (IDOR vulnerability).
+ *
+ * Per-request memoized: multiple calls with the same (orgId, userId) pair
+ * within a single React render tree incur only one DB query.
+ */
+export const assertOrgMember = cache(
+  async (orgId: string, userId: string): Promise<void> => {
+    const rows = await db()
+      .select({ id: schema.orgUsers.id })
+      .from(schema.orgUsers)
+      .where(
+        and(
+          eq(schema.orgUsers.orgId, orgId),
+          eq(schema.orgUsers.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (rows.length === 0) {
+      forbidden();
+    }
   },
 );

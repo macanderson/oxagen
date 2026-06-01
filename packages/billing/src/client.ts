@@ -1,18 +1,36 @@
-import Stripe from "stripe";
-import { requireEnv } from "@oxagen/config/env";
+import type { BillingProvider } from "./provider.js";
+import { StripeProvider } from "./stripe-provider.js";
 
-// One Stripe client per process. API version is pinned to match the
-// webhook payload shape the verifier expects; bumping requires a payload
-// re-test against billing.stripe_events fixtures.
-let _stripe: Stripe | null = null;
+/**
+ * client.ts — Billing provider singleton.
+ *
+ * All billing business logic obtains the active BillingProvider through
+ * `billingProvider()`. The default implementation is StripeProvider; it can
+ * be replaced via `setBillingProvider` in tests or to swap vendors.
+ *
+ * The Stripe SDK itself is only referenced in stripe-provider.ts — nothing
+ * else in the billing package imports `stripe` directly.
+ */
 
-export function stripeClient(): Stripe {
-  if (_stripe) return _stripe;
-  const env = requireEnv(["STRIPE_SECRET_KEY"] as const);
-  _stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-    apiVersion: "2025-02-24.acacia",
-    typescript: true,
-    appInfo: { name: "oxagen", version: "0.1.0" },
-  });
-  return _stripe;
+let _provider: BillingProvider | null = null;
+
+export function billingProvider(): BillingProvider {
+  if (_provider) return _provider;
+  _provider = new StripeProvider();
+  return _provider;
+}
+
+/**
+ * Override the billing provider. Intended for tests and future vendor-swap;
+ * production code always calls `billingProvider()`.
+ */
+export function setBillingProvider(provider: BillingProvider): void {
+  _provider = provider;
+}
+
+/**
+ * Reset to the default StripeProvider. For use in test teardowns.
+ */
+export function resetBillingProvider(): void {
+  _provider = null;
 }
