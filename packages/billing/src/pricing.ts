@@ -68,6 +68,13 @@ export const PROVIDER_RATE_CARD: RateCard = {
   "claude-haiku-4": { provider: "anthropic", inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 },
   "gpt-4o": { provider: "openai", inputPer1M: 2.5, outputPer1M: 10.0, cachedInputPer1M: 1.25 },
   "gpt-4o-mini": { provider: "openai", inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 },
+  // DALL·E 3 (OpenAI) is an IMAGE model billed PER IMAGE, not per token, so the
+  // per-1M-token fields here cannot express its real cost. PLACEHOLDER — values
+  // are 0 (charges $0) pending real pricing. For reference, OpenAI lists ~$0.04
+  // per standard 1024×1024 image and ~$0.08 for HD/wide. TODO(billing): set the
+  // real DALL·E 3 cost — ideally via a dedicated per-image rate path — before
+  // metering image generation against this entry.
+  "dall-e-3": { provider: "openai", inputPer1M: 0, outputPer1M: 0, cachedInputPer1M: 0 },
   "text-embedding-3-small": { provider: "openai", inputPer1M: 0.02, outputPer1M: 0.0, cachedInputPer1M: 0.02 },
   "text-embedding-3-large": { provider: "openai", inputPer1M: 0.13, outputPer1M: 0.0, cachedInputPer1M: 0.13 },
 };
