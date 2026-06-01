@@ -126,6 +126,10 @@
       "Bash(git worktree *)",
       "Bash(git -C .worktrees/mcp-merge symbolic-ref --short HEAD)",
       "Bash(git -C .worktrees/mcp-merge ls-files apps/mcp/src)",
+      "Bash(git -C .worktrees/api-fix log --oneline -1)",
+      "mcp__plugin_github_github__create_or_update_file",
+      "mcp__plugin_github_github__get_file_contents",
+      "mcp__claude_ai_Linear__get_milestone",
       "mcp__claude_ai_Linear__save_milestone",
       "mcp__claude_ai_Linear__save_status_update",
       "mcp__claude_ai_Linear__save_issue",
@@ -133,13 +137,9 @@
       "mcp__claude_ai_Linear__list_issue_labels",
       "mcp__claude_ai_Linear__list_projects",
       "mcp__claude_ai_Linear__list_teams",
-      "Bash(git -C .worktrees/api-fix log --oneline -1)",
-      "mcp__plugin_github_github__create_or_update_file",
-      "mcp__claude_ai_Linear__get_milestone",
       "mcp__claude_ai_Vercel__get_deployment_build_logs",
       "mcp__claude_ai_Linear__get_issue",
       "mcp__claude_ai_Linear__save_comment",
-      "mcp__plugin_github_github__get_file_contents",
       "Bash(docker exec -i oxchtest clickhouse-client --password pw -q ' *)",
       "Bash(docker exec *)"
     ],
@@ -389,7 +389,6 @@
     ]
   },
   "alwaysThinkingEnabled": true,
-  "effortLevel": "medium",
   "companyAnnouncements": [
     "Oxagen Beta Go-Live",
     "Start Don't Stop and Finish Strong"

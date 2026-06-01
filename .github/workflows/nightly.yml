@@ -1,0 +1,46 @@
+name: ci-nightly
+on:
+  schedule: [{ cron: "0 8 * * *" }]
+  push: { branches: [main] }
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+jobs:
+  full:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [lint, typecheck, test:unit, test:contract, build]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - uses: astral-sh/setup-uv@v5
+        with: { enable-cache: true }
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --frozen
+      - name: Full ${{ matrix.task }} (no affected filter)
+        run: pnpm turbo run ${{ matrix.task }}
+
+  e2e-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
+      - name: Full e2e ${{ matrix.browser }} ${{ matrix.shard }}/4
+        run: >
+          pnpm turbo run test:e2e --
+          --project=${{ matrix.browser }} --shard=${{ matrix.shard }}/4
