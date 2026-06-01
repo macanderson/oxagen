@@ -209,7 +209,7 @@ After Phase 0 completes, dispatch these audits **in parallel in a single turn** 
 - `compliance-tenancy-auditor` → Phase 2
 - `grep-auditor` → checks 2, 6 (secret scan), 8
 - `test-build-auditor` → Phases 4–5
-- `parity-docs-author` → check 12, Phase 6
+- `parity-docs-auditor` → check 12, Phase 6
 - `pr-hygiene-auditor` → Phase 7
 
 Wait for all to return, then synthesize their tables into the unified report.

@@ -1,5 +1,5 @@
 ---
-name: parity-docs-author
+name: parity-docs-auditor
 description: Headless UI↔MCP parity and stale/missing doc detection. Read-only.
 tools: Bash, Read, Grep, Glob
 model: sonnet
