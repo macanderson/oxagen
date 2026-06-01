@@ -121,6 +121,12 @@ function capabilityContext(ctx: {
 }) {
   // The chat UI runs server actions inside the user session, so apiKeyId
   // is always null and we mint a per-call requestId for trace correlation.
+  // ctx.surface records the request *origin* ("app" — these run as Next
+  // server actions); the capability *exposure* surface ("agent") is passed
+  // separately to invoke()'s opts and is enforced against the contract's
+  // `surfaces` allowlist. The two are intentionally different axes
+  // (CapabilityContext.surface vs CapabilitySurface) — see packages/oxagen
+  // types.ts — so "agent" is deliberately not a valid origin here.
   return {
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
