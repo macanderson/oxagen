@@ -22,18 +22,23 @@ const FormSchema = z.object({
 });
 
 // Implements the spec §6.9 DAG: persist the user message under the active
-// leaf and shift the conversation's active_leaf forward. The LLM call
-// and streaming live in the stream route (POST /api/v1/chat/stream), which
-// runs concurrently and is the SINGLE LLM caller per turn (OXA-1509).
-// The assistant reply is persisted by the stream route's onFinish callback
-// (handled by sendMessageAction's assistant-message write path).
+// leaf and shift the conversation's active_leaf forward. The LLM call and
+// streaming live in the stream route (POST /api/v1/chat/stream), which is
+// the SINGLE LLM caller per turn (OXA-1509) and persists the matching
+// assistant reply itself once the stream finishes. This action returns the
+// conversation id and the new user-message id so the client can start the
+// stream against them (the stream route threads the assistant reply under
+// the user message and into the same conversation).
 //
-// Token usage is recorded by ClickHouse from apps/api once the runner
-// observes the row — the app does not write ClickHouse directly (§3 boundary).
+// Token usage is recorded by ClickHouse from @oxagen/ai's streamAgentReply
+// onFinish — the app does not write ClickHouse directly (§3 boundary).
 export async function sendMessageAction(
   ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
   formData: FormData,
-): Promise<{ ok: true; conversationId: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; conversationId: string; userMessageId: string }
+  | { ok: false; error: string }
+> {
   const session = await getSessionOrRedirect();
   const raw = Object.fromEntries(formData);
   const parsed = FormSchema.safeParse({
@@ -55,7 +60,7 @@ export async function sendMessageAction(
   if (!capabilityInput.success) return { ok: false, error: capabilityInput.error.issues[0]?.message ?? "Invalid" };
 
   try {
-    const { conversationId } = await db().transaction(async (tx) => {
+    const { conversationId, userMessageId } = await db().transaction(async (tx) => {
       // Resolve or create the conversation, yielding a non-null string id.
       const convId: string = capabilityInput.data.conversationId
         ? capabilityInput.data.conversationId
@@ -104,7 +109,7 @@ export async function sendMessageAction(
     });
 
     revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/chat`);
-    return { ok: true, conversationId };
+    return { ok: true, conversationId, userMessageId };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to send message";
     return { ok: false, error: message };

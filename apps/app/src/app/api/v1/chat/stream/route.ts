@@ -227,11 +227,15 @@ export async function POST(request: NextRequest): Promise<Response> {
         // concrete discriminated union when TOOLS is the wide ToolSet alias —
         // the tool-result arm becomes an unresolvable intersection.
         const toolStartedAt: Record<string, number> = {};
+        // Accumulate the assistant's text so we can persist the full reply
+        // once the stream finishes (see the INSERT after the loop).
+        let assistantText = "";
 
         for await (const raw of result.fullStream as AsyncIterable<unknown>) {
           const pType = partType(raw);
           if (pType === "text-delta") {
             const part = raw as TextDeltaPart;
+            assistantText += part.textDelta;
             emit({ type: "text", messageId: requestId, text: part.textDelta });
           } else if (pType === "tool-call") {
             const part = raw as ToolCallPart;
@@ -293,6 +297,44 @@ export async function POST(request: NextRequest): Promise<Response> {
           }
           // step-start, step-finish, tool-call-streaming-start, tool-call-delta,
           // error, reasoning, source — intentionally not forwarded to the client.
+        }
+
+        // Persist the assistant reply so it survives a page refresh and is
+        // included in the next turn's history (OXA-1509). sendMessageAction
+        // already wrote the user message and resolved the conversation; this
+        // is the matching assistant row, threaded under the user message.
+        // Token usage is metered separately by streamAgentReply.onFinish.
+        // Best-effort: a DB failure here must NOT corrupt the SSE response the
+        // client already consumed, so it is isolated and only logged.
+        if (conversationId && assistantText.length > 0) {
+          try {
+            const [assistantMsg] = await db()
+              .insert(schema.messages)
+              .values({
+                orgId: tenant.id,
+                workspaceId: workspace.id,
+                conversationId,
+                parentMessageId: parentMessageId ?? undefined,
+                role: "assistant",
+                content: assistantText,
+                contentBlocks: [],
+                isActiveInBranch: true,
+                metadata: { status: "complete" },
+                createdByUserId: session.user.id,
+                updatedByUserId: session.user.id,
+              })
+              .returning({ id: schema.messages.id });
+            if (assistantMsg) {
+              // Advance the conversation's active leaf to the assistant reply
+              // so the next turn threads from here.
+              await db()
+                .update(schema.conversations)
+                .set({ activeLeafMessageId: assistantMsg.id, updatedAt: new Date() })
+                .where(eq(schema.conversations.id, conversationId));
+            }
+          } catch (persistErr) {
+            console.error("[chat/stream] failed to persist assistant reply:", persistErr);
+          }
         }
       } catch (err) {
         // Surface stream errors as a text event so the client can show them.
