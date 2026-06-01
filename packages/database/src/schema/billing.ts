@@ -266,6 +266,14 @@ export const creditLedger = billingSchema.table(
       "credit_ledger_delta_non_zero",
       sql`${t.deltaCents} <> 0`,
     ),
+    // Atomic grant idempotency (OXA-1509). grants.ts inserts with
+    // INSERT … ON CONFLICT DO NOTHING; this partial unique index is the
+    // arbiter. Partial because only grant rows carry (reference_type,
+    // reference_id) — spend/usage rows leave them NULL and must stay
+    // unconstrained (multiple NULLs would otherwise collide).
+    grantIdempotencyIdx: uniqueIndex("credit_ledger_grant_idempotency_idx")
+      .on(t.orgId, t.reason, t.referenceType, t.referenceId)
+      .where(sql`${t.referenceType} IS NOT NULL AND ${t.referenceId} IS NOT NULL`),
   }),
 );
 

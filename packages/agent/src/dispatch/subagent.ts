@@ -66,16 +66,16 @@ export async function dispatchFanout(args: DispatchFanoutArgs): Promise<Dispatch
 
   // Carry depth in the event payload so the executor can enforce the depth
   // guard without a DB column (OXA-1498: infinite fanout protection).
-  const depth = args.depth ?? 0;
+  const currentDepth = args.depth ?? 0;
   await inngest.send({
     name: "agent/subagent.dispatch",
     data: {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
       fanoutId,
-      // Child executions are at depth + 1. The executor checks this and
-      // stops when depth > MAX_FANOUT_DEPTH (3).
-      depth,
+      // Child executions are at currentDepth + 1. The executor checks this
+      // and stops when depth > MAX_FANOUT_DEPTH (3).
+      depth: currentDepth + 1,
     },
   });
 

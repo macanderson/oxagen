@@ -50,10 +50,13 @@ type DbTx = Parameters<Parameters<ReturnType<typeof db>["transaction"]>[0]>[0];
  * it conflicted (already granted). A conflict means another request already
  * landed the same (org_id, reason, reference_type, reference_id) combination.
  *
- * IMPORTANT: requires a UNIQUE constraint on
- *   credit_ledger(org_id, reason, reference_type, reference_id)
- * where reference_type IS NOT NULL AND reference_id IS NOT NULL.
- * The schema agent must add this if absent — flag noted in agent summary.
+ * Atomicity depends on the partial UNIQUE index
+ *   credit_ledger_grant_idempotency_idx
+ *   ON credit_ledger(org_id, reason, reference_type, reference_id)
+ *   WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL
+ * declared in the Drizzle schema (schema/billing.ts) and created by migration
+ * 0014_billing_credit_ledger_idempotency. ON CONFLICT DO NOTHING uses it as
+ * the arbiter; without it every insert would succeed and duplicate-grant.
  */
 async function tryInsertGrantLedger(
   tx: DbTx,

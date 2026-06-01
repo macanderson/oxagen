@@ -10,7 +10,7 @@
 // has not been run. Remove this fallback after `pnpm db:migrate` is standard.
 
 import { db } from "@oxagen/database";
-import { eq, and, inArray, isNull } from "drizzle-orm";
+import { eq, and, inArray, isNull, or, gt, sql } from "drizzle-orm";
 import { schema } from "@oxagen/database";
 import type { Grant, Role, RoleGrant, Policy } from "@oxagen/oxagen/iam";
 import type { ResolvedPrincipal } from "@oxagen/oxagen";
@@ -185,6 +185,12 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
           eq(schema.principalRoleAssignments.orgId, orgId),
           // Include assignments that are not soft-deleted.
           isNull(schema.principalRoleAssignments.deletedAt),
+          // Exclude expired JIT assignments (expires_at in the past). A NULL
+          // expires_at means a permanent (non-JIT) assignment.
+          or(
+            isNull(schema.principalRoleAssignments.expiresAt),
+            gt(schema.principalRoleAssignments.expiresAt, sql`now()`),
+          ),
         ),
       ),
   ]);

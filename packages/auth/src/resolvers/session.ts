@@ -32,6 +32,22 @@ export interface SessionResult {
 export const SESSION_COOKIE_NAME = "oxagen.session_token" as const;
 
 /**
+ * Expected length of Better Auth's session-cookie HMAC signature suffix.
+ *
+ * better-call signs cookies as `${token}.${signature}`, where the signature is
+ * the standard-base64 encoding of an HMAC-SHA256 digest. A SHA-256 digest is
+ * 32 bytes, and base64 of 32 bytes is ceil(32 / 3) * 4 = 44 characters
+ * (the final char is "=" padding).
+ *
+ * This is a documented assumption, not a guarantee: if a Better Auth upgrade
+ * changes the signature encoding (e.g. base64url without padding, or a
+ * different digest), this length will no longer match and stripCookieSignature
+ * will fall through to returning the full value — see the note there. Update
+ * this constant if that happens.
+ */
+export const SESSION_HMAC_SUFFIX_LEN = 44 as const;
+
+/**
  * Strips the HMAC signature appended by Better Auth's cookie signing.
  *
  * Better Auth (via better-call) signs session cookies as:
@@ -51,9 +67,10 @@ export const SESSION_COOKIE_NAME = "oxagen.session_token" as const;
 export function stripCookieSignature(signedValue: string): string {
   const lastDot = signedValue.lastIndexOf(".");
   if (lastDot < 0) return signedValue;
-  // Better Auth base64 signatures are exactly 44 characters.
+  // Better Auth base64 signatures are exactly SESSION_HMAC_SUFFIX_LEN chars
+  // (base64 of a 32-byte SHA-256 digest); see the constant for the derivation.
   const suffix = signedValue.slice(lastDot + 1);
-  if (suffix.length === 44) {
+  if (suffix.length === SESSION_HMAC_SUFFIX_LEN) {
     return signedValue.slice(0, lastDot);
   }
   // Unexpected suffix length — return the full value and let the DB lookup fail
