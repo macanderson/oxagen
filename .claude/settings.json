@@ -6,22 +6,27 @@
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY": "64",
     "CLAUDE_AUTO_BACKGROUND_TASKS": "1",
-    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "80",
+    "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
+    "CLAUDE_CODE_FORK_SUBAGENT": "1",
+    "CLAUDE_CODE_MAX_RETRIES": "2",
     "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
     "BASH_DEFAULT_TIMEOUT_MS": "120000",
     "BASH_MAX_TIMEOUT_MS": "600000",
-    "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1",
-    "DISABLE_TELEMETRY": "1",
+    "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "0",
+    "DISABLE_TELEMETRY": "0",
     "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "true",
     "DO_NOT_TRACK": "1",
-    "CLAUDE_CODE_ENABLE_TASKS": "1"
-
+    "CLAUDE_CODE_ENABLE_TASKS": "1",
+    "CLAUDE_CODE_DISABLE_FAST_MODE": "1",
+    "ANTHROPIC_MODEL": "claude-haiku",
+    "CLAUDE_CODE_EFFORT_LEVEL": "auto",
+    "OTEL_METRICS_EXPORTER": "posthog",
+    "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING": "1",
+    "CLAUDE_CODE_TMUX_TRUECOLOR": "1",
+    "CLAUDE_CODE_SHELL_PREFIX": "OXAGEN",
+    "CLAUDE_CODE_EXTRA_BODY": "ALWAYS INCLUDE USD COST OF EACH TURN PLEASE"
   },
-  "attribution": {
-    "commit": "\n\n------------------------------------------------\n\nAuthored By: Mac Anderson <mac@oxagen.ai>",
-    "pr": "\n\n------------------------------------------------\n\nAuthored By: Mac Anderson <mac@oxagen.ai>"
-  },
-  "includeGitInstructions": true,
+  "includeGitInstructions": false,
   "permissions": {
     "allow": [
       "Bash",
@@ -118,7 +123,26 @@
       "Bash(git fetch *)",
       "mcp__claude_ai_Linear__list_issue_statuses",
       "mcp__claude_ai_Linear__list_milestones",
-      "mcp__claude_ai_Linear__list_issues"
+      "mcp__claude_ai_Linear__list_issues",
+      "Bash(git worktree *)",
+      "Bash(git -C .worktrees/mcp-merge symbolic-ref --short HEAD)",
+      "Bash(git -C .worktrees/mcp-merge ls-files apps/mcp/src)",
+      "mcp__claude_ai_Linear__save_milestone",
+      "mcp__claude_ai_Linear__save_status_update",
+      "mcp__claude_ai_Linear__save_issue",
+      "mcp__claude_ai_Linear__search_documentation",
+      "mcp__claude_ai_Linear__list_issue_labels",
+      "mcp__claude_ai_Linear__list_projects",
+      "mcp__claude_ai_Linear__list_teams",
+      "Bash(git -C .worktrees/api-fix log --oneline -1)",
+      "mcp__plugin_github_github__create_or_update_file",
+      "mcp__claude_ai_Linear__get_milestone",
+      "mcp__claude_ai_Vercel__get_deployment_build_logs",
+      "mcp__claude_ai_Linear__get_issue",
+      "mcp__claude_ai_Linear__save_comment",
+      "mcp__plugin_github_github__get_file_contents",
+      "Bash(docker exec -i oxchtest clickhouse-client --password pw -q ' *)",
+      "Bash(docker exec *)"
     ],
     "deny": [
       "Read(./secrets/**)",
@@ -351,7 +375,7 @@
   },
   "spinnerTipsEnabled": true,
   "spinnerVerbs": {
-    "mode": "replace",
+    "mode": "append",
     "verbs": [
       "oxagenating",
       "everyday I'm hustling",
@@ -366,7 +390,7 @@
     ]
   },
   "alwaysThinkingEnabled": true,
-  "effortLevel": "xhigh",
+  "effortLevel": "medium",
   "companyAnnouncements": [
     "Oxagen Beta Go-Live",
     "Start Don't Stop and Finish Strong"
@@ -384,5 +408,19 @@
     ".venv",
     "target",
     "dist"
-  ]
+  ],
+  "worktree.cleanupAfterDays": 7,
+  "worktree.directory": ".worktrees",
+  "worktree.autoPrune": true,
+  "worktree.pruneOnStartup": true,
+  "worktree.pruneOnShutdown": true,
+  "worktree.maxConcurrentWorktrees": 5,
+  "worktree.defaultBranch": "main",
+  "worktree.defaultRemote": "origin",
+  "worktree.gitCheckoutOptions": ["--recurse-submodules"],
+  "worktree.allowlist": [],
+  "worktree.denylist": ["*"],
+  "worktree.cleanupMode": "prune",
+  "worktree.pruneMode": "aggressive"
+
 }
