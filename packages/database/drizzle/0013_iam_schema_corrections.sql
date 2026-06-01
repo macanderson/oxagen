@@ -38,6 +38,12 @@ BEGIN
       AND column_name  = 'is_system_default'
       AND data_type    = 'text'
   ) THEN
+    -- Drop the existing text DEFAULT ('false') first: Postgres tries to cast
+    -- the column default to the new type during ALTER … TYPE, and 'false'::text
+    -- cannot be cast automatically to boolean. Re-add a boolean default after.
+    ALTER TABLE org.roles
+      ALTER COLUMN is_system_default DROP DEFAULT;
+
     ALTER TABLE org.roles
       ALTER COLUMN is_system_default TYPE boolean
         USING (
@@ -66,6 +72,11 @@ BEGIN
       AND column_name  = 'enforced'
       AND data_type    = 'text'
   ) THEN
+    -- Drop the existing text DEFAULT ('false') before the type change — see the
+    -- is_system_default block above for why the implicit default cast fails.
+    ALTER TABLE org.policies
+      ALTER COLUMN enforced DROP DEFAULT;
+
     ALTER TABLE org.policies
       ALTER COLUMN enforced TYPE boolean
         USING (

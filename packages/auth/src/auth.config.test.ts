@@ -339,12 +339,19 @@ describe("trustedOrigins", () => {
 // Startup KMS guard logic — derived from auth.ts (OXA-1504)
 // ---------------------------------------------------------------------------
 
-function shouldThrowKmsGuard(nodeEnv: string, vercelEnv: string | undefined, kmsKeyId: string | undefined): boolean {
+function shouldThrowKmsGuard(
+  nodeEnv: string,
+  vercelEnv: string | undefined,
+  kmsKeyId: string | undefined,
+  isBuildPhase = false,
+): boolean {
   const isLocal =
     nodeEnv === "development" ||
     nodeEnv === "test" ||
     vercelEnv === "development";
-  return !kmsKeyId && !isLocal;
+  // The guard is skipped during `next build` (NEXT_PHASE=phase-production-build)
+  // because the KMS key is a runtime, not build-time, requirement (OXA-1504).
+  return !kmsKeyId && !isLocal && !isBuildPhase;
 }
 
 describe("AUTH_TOKEN_KMS_KEY_ID startup guard", () => {
@@ -370,6 +377,10 @@ describe("AUTH_TOKEN_KMS_KEY_ID startup guard", () => {
 
   it("does NOT throw in production when key id is present", () => {
     expect(shouldThrowKmsGuard("production", undefined, "arn:aws:kms:us-east-2:123:key/abc")).toBe(false);
+  });
+
+  it("does NOT throw during the Next.js build phase even when key id is absent", () => {
+    expect(shouldThrowKmsGuard("production", undefined, undefined, true)).toBe(false);
   });
 });
 

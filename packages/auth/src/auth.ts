@@ -37,7 +37,15 @@ const isLocalEnv =
   env.NODE_ENV === "test" ||
   process.env.VERCEL_ENV === "development";
 
-if (!kmsKeyId && !isLocalEnv) {
+// The KMS key is a RUNTIME requirement, not a build-time one. Next.js evaluates
+// route modules during `next build` ("Collecting page data") with
+// NEXT_PHASE=phase-production-build set, and the build environment legitimately
+// lacks the runtime secret — failing the build here is wrong. The guard still
+// fires at server boot / request time (NEXT_PHASE unset), so production can
+// still never boot without OAuth token encryption configured (OXA-1504).
+const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+
+if (!kmsKeyId && !isLocalEnv && !isBuildPhase) {
   throw new Error(
     "[auth] AUTH_TOKEN_KMS_KEY_ID is required in non-local environments. " +
       "Production cannot boot without OAuth token encryption configured (OXA-1504).",
