@@ -1,0 +1,1 @@
+../../.agents/agents/parity-docs-author.md
