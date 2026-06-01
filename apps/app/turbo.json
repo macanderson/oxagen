@@ -62,7 +62,7 @@
         // IAM enforcement
         "IAM_ENFORCEMENT_ENABLED"
       ],
-      "passThroughEnv": ["VERCEL", "VERCEL_URL", "VERCEL_ENV", "NEXT_PHASE"]
+      "passThroughEnv": ["VERCEL", "VERCEL_URL", "NEXT_PHASE"]
     }
   }
 }

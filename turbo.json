@@ -31,7 +31,7 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**", ".xmcp/**"],
-      "passThroughEnv": ["VERCEL", "VERCEL_URL", "VERCEL_ENV", "NEXT_PHASE"]
+      "passThroughEnv": ["VERCEL", "VERCEL_URL", "NEXT_PHASE"]
     },
 
     "typecheck": {
@@ -90,7 +90,9 @@
         "VERCEL_SANDBOX_PROJECT_ID",
         "IAM_ENFORCEMENT_ENABLED",
         "NEXT_PUBLIC_APP_URL",
-        "NEXT_PUBLIC_API_URL"
+        "NEXT_PUBLIC_API_URL",
+        "LINEAR_API_KEY",
+        "LINEAR_PROJECT_ID"
       ],
       "passThroughEnv": ["CI"]
     },
