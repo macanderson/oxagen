@@ -141,21 +141,19 @@ test.describe("billing.subscription.read — authenticated, seeded state", () =>
 
       // Seed two ledger entries.
       await sql`
-        INSERT INTO billing.credit_ledger (id, public_id, org_id, delta_cents, reason)
+        INSERT INTO billing.credit_ledger (id, org_id, delta_cents, reason)
         VALUES
           (
             ${IDS.ledger1}::uuid,
-            'cle_e2e_001',
             ${billingFixture.orgId},
             500,
-            'Subscription credit grant'
+            'grant_manual'
           ),
           (
             ${IDS.ledger2}::uuid,
-            'cle_e2e_002',
             ${billingFixture.orgId},
             -50,
-            'Agent run usage'
+            'consume_execution'
           )
         ON CONFLICT (id) DO NOTHING
       `;
@@ -230,9 +228,11 @@ test.describe("billing.subscription.read — authenticated, seeded state", () =>
     // Open the ledger drawer.
     await page.getByRole("button", { name: /recent ledger entries/i }).click();
 
-    // Both seeded reason strings must be visible.
-    await expect(page.getByText("Subscription credit grant")).toBeVisible();
-    await expect(page.getByText("Agent run usage")).toBeVisible();
+    // Both seeded ledger reasons must be visible. credit-balance.tsx renders
+    // the raw `reason` value (a CHECK-constrained enum), so assert the enum
+    // strings the page actually displays.
+    await expect(page.getByText("grant_manual")).toBeVisible();
+    await expect(page.getByText("consume_execution")).toBeVisible();
   });
 
   test("plans grid renders at least one plan card", async ({
