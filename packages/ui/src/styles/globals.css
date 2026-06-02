@@ -1,56 +1,70 @@
 /**
- * @oxagen/ui — shared Tailwind v4 entrypoint (stock shadcn baseline).
+ * @oxagen/ui — shared Tailwind v4 entrypoint.
  *
  * Apps consume styles by importing this file at the top of their own
  * globals.css (or any CSS that Next.js loads from `app/layout`):
  *
  *   @import "@oxagen/ui/styles/globals.css";
  *
- * The file pulls Tailwind in, registers the shadcn design tokens as CSS
- * variables (tokens.css), maps those tokens to `@theme` utilities, declares the
- * `dark` variant, and sets the base body styles. This is the unmodified shadcn
- * neutral theme — no brand layer. Restyle via tokens.css, not here.
+ * The file pulls Tailwind in, registers the Oxagen design tokens as CSS
+ * variables (tokens.css), maps those tokens to `@theme` color/radius/font
+ * utilities, declares the `dark` variant, sets the base body styles, and
+ * defines the brand utility layer (gradient ring, glass surfaces, ambient
+ * mesh, motion helpers). Tokens are full oklch color values, so the @theme
+ * mappings reference `var(--token)` directly. Restyle via tokens.css.
  */
 @import "tailwindcss";
 @import "./tokens.css";
 
 @theme inline {
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
 
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
 
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
 
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
 
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
 
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
 
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
 
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
 
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
 
-  --color-sidebar: hsl(var(--sidebar));
-  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
-  --color-sidebar-primary: hsl(var(--sidebar-primary));
-  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
-  --color-sidebar-accent: hsl(var(--sidebar-accent));
-  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
-  --color-sidebar-border: hsl(var(--sidebar-border));
-  --color-sidebar-ring: hsl(var(--sidebar-ring));
+  --color-accent2: var(--accent2);
+  --color-accent2-foreground: var(--accent2-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -69,14 +83,176 @@
 
 @layer base {
   * {
-    border-color: hsl(var(--border));
+    border-color: var(--border);
   }
 
   body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
+    background-color: var(--background);
+    color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+  }
+}
+
+/*
+ * Brand utility layer.
+ *
+ * Glass surfaces, the indigo → green gradient family, the ambient mesh
+ * backdrop, and a few motion helpers. These compose over the tokens above and
+ * are the building blocks for the Oxagen app shell. The color-mix() calls
+ * require Chrome 111+ / Safari 16.2+.
+ */
+@layer utilities {
+  /* Glassmorphism surfaces. */
+  .glass {
+    background-color: color-mix(in oklch, var(--card) 72%, transparent);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border-color: color-mix(in oklch, var(--foreground) 6%, transparent);
+    box-shadow:
+      0 0 0 1px color-mix(in oklch, var(--foreground) 4%, transparent),
+      0 1px 2px color-mix(in oklch, var(--foreground) 3%, transparent);
+  }
+  .glass-strong {
+    background-color: color-mix(in oklch, var(--card) 85%, transparent);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border-color: color-mix(in oklch, var(--foreground) 8%, transparent);
+    box-shadow:
+      0 0 0 1px color-mix(in oklch, var(--foreground) 5%, transparent),
+      0 2px 8px color-mix(in oklch, var(--foreground) 4%, transparent);
+  }
+  .glass-subtle {
+    background-color: color-mix(in oklch, var(--card) 50%, transparent);
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+  }
+
+  /* Solid brand gradient for fills (logo tiles, primary chips, indicators). */
+  .brand-gradient {
+    background-image: linear-gradient(
+      135deg,
+      var(--grad-from),
+      var(--grad-via) 50%,
+      var(--grad-to)
+    );
+  }
+
+  /* Gradient text for the brand wordmark / headline accents. */
+  .gradient-text {
+    background-image: linear-gradient(
+      100deg,
+      var(--grad-from),
+      var(--grad-via) 48%,
+      var(--grad-to)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Hairline gradient ring used to wrap glass surfaces (the broken-ring mark). */
+  .gradient-ring {
+    position: relative;
+  }
+  .gradient-ring::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      color-mix(in oklch, var(--grad-from) 50%, transparent),
+      transparent 35%,
+      color-mix(in oklch, var(--grad-to) 45%, transparent)
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Ambient mesh background — fixed behind content, adapts via --mesh-opacity. */
+  .app-bg::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(
+        ellipse 70% 50% at 5% -5%,
+        color-mix(in oklch, var(--grad-from) calc(var(--mesh-opacity) * 100%), transparent),
+        transparent 55%
+      ),
+      radial-gradient(
+        ellipse 60% 45% at 98% 2%,
+        color-mix(in oklch, var(--grad-to) calc(var(--mesh-opacity) * 90%), transparent),
+        transparent 50%
+      ),
+      radial-gradient(
+        ellipse 80% 60% at 50% 105%,
+        color-mix(in oklch, var(--grad-via) calc(var(--mesh-opacity) * 75%), transparent),
+        transparent 55%
+      );
+  }
+
+  /* Motion helpers (the brand "rise on hover"). */
+  .hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px color-mix(in oklch, var(--foreground) 8%, transparent);
+  }
+  .hover-glow {
+    transition: box-shadow 0.2s ease;
+  }
+  .hover-glow:hover {
+    box-shadow:
+      0 0 0 1px color-mix(in oklch, var(--brand) 30%, transparent),
+      0 0 20px color-mix(in oklch, var(--brand) 15%, transparent);
+  }
+
+  /* Horizontal tab strip helpers. */
+  .tabs-edge-fade {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 16px,
+      black calc(100% - 16px),
+      transparent
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 16px,
+      black calc(100% - 16px),
+      transparent
+    );
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .animate-in {
+    animation: fade-in 0.2s ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

@@ -83,7 +83,7 @@ export function UserSwitcher({ user, className }: UserSwitcherProps) {
             className,
           )}
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-xs font-semibold text-muted-foreground">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand text-xs font-semibold text-brand-foreground">
             {user.image ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={user.image} alt={displayName} className="h-full w-full object-cover" />

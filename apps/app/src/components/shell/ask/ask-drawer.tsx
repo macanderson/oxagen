@@ -77,7 +77,9 @@ export function AskDrawer({
         {/* Header */}
         <SheetHeader className="flex flex-row items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-foreground" aria-hidden="true" />
+            <span className="gradient-ring glass-strong inline-flex size-7 items-center justify-center rounded-lg" aria-hidden="true">
+              <Sparkles className="h-4 w-4 text-brand" aria-hidden="true" />
+            </span>
             <SheetTitle className="text-sm font-medium">Ask Oxagen</SheetTitle>
           </div>
           <div className="flex items-center gap-1 pr-6">

@@ -14,6 +14,7 @@
  */
 
 import Link from "next/link";
+import { BrandMark, OxagenWordmark } from "@/components/ui/brand";
 import { MobileNav } from "./mobile-nav";
 import { AskBar } from "@/components/shell/ask/ask-bar";
 import { NotificationsBell } from "./notifications-bell";
@@ -49,7 +50,7 @@ export function Topbar({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b bg-background px-4">
+    <header className="glass sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
       {/* Left: hamburger (mobile) + wordmark + org switcher */}
       <div className="flex min-w-0 items-center gap-2">
         <MobileNav
@@ -64,9 +65,10 @@ export function Topbar({
         <Link
           href={homeHref}
           aria-label="Oxagen home"
-          className="hidden shrink-0 items-center text-sm font-semibold tracking-tight md:flex"
+          className="flex shrink-0 items-center gap-2"
         >
-          Oxagen
+          <BrandMark />
+          <OxagenWordmark className="hidden h-3.5 w-auto text-foreground md:block" />
         </Link>
 
         <OrgSwitcher current={org} organizations={availableOrgs} />

@@ -70,18 +70,18 @@ export function SidebarItem({
         "transition-colors",
         // Focus ring
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        // Inactive state
+        // Inactive state — subtle hover lift toward the brand
         !active &&
-          "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-        // Active state
-        active && "bg-sidebar-accent text-sidebar-accent-foreground",
+          "text-sidebar-foreground/80 hover:translate-x-0.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        // Active state — brand tint
+        active && "bg-brand/10 text-foreground",
         className,
       )}
     >
-      {/* 2px left accent bar — active only */}
+      {/* 3px gradient left accent bar — active only (the broken-ring brand mark) */}
       {active && (
         <span
-          className="absolute inset-y-1.5 left-0 w-[2px] rounded-full bg-sidebar-primary"
+          className="brand-gradient absolute inset-y-1.5 left-0 w-[3px] rounded-full"
           aria-hidden="true"
         />
       )}
@@ -98,7 +98,7 @@ export function SidebarItem({
       <Icon
         className={cn(
           "h-4 w-4 shrink-0",
-          active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground",
+          active ? "text-brand" : "text-muted-foreground group-hover:text-foreground",
           "transition-colors duration-[160ms]",
         )}
         aria-hidden="true"
@@ -113,7 +113,7 @@ export function SidebarItem({
           className={cn(
             "inline-flex h-4.5 min-w-[1.125rem] items-center justify-center rounded-full px-1",
             "text-[10px] font-semibold leading-none",
-            active ? "bg-sidebar-primary text-sidebar-primary-foreground" : "bg-muted text-muted-foreground",
+            active ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground",
           )}
           aria-label={`${badge} items`}
         >

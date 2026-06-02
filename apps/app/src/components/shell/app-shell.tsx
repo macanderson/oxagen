@@ -40,7 +40,7 @@ export function AppShell({
   const ctx = { orgSlug: org.slug, workspaceSlug: workspace?.slug };
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden">
+    <div className="app-bg flex h-dvh w-full overflow-hidden">
       {/* Desktop sidebar — hidden on mobile */}
       <Sidebar ctx={ctx} user={user} />
 

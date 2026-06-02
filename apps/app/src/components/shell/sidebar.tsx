@@ -57,7 +57,7 @@ export function Sidebar({ ctx, user }: SidebarProps) {
   return (
     <aside
       aria-label="Primary navigation"
-      className="hidden h-full w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex"
+      className="hidden h-full w-64 flex-col border-r border-sidebar-border bg-sidebar/60 text-sidebar-foreground backdrop-blur-xl md:flex"
     >
       {/* Primary group */}
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2" aria-label="Workspace navigation">
@@ -101,7 +101,7 @@ export function MobileBottomBar({ ctx }: { ctx: ScopeContext }) {
   return (
     <nav
       aria-label="Mobile navigation"
-      className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+      className="glass fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       {primary.map((item) => {
         const href = item.href(ctx);
@@ -115,7 +115,7 @@ export function MobileBottomBar({ ctx }: { ctx: ScopeContext }) {
             aria-current={isActive ? "page" : undefined}
             className={cn(
               "flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-2 transition-colors active:scale-95",
-              isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+              isActive ? "text-brand" : "text-muted-foreground hover:text-foreground",
             )}
           >
             <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />

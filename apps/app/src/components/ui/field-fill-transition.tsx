@@ -38,6 +38,18 @@ export function FieldFillTransition({
   return (
     <div
       data-fill-active={active ? "true" : undefined}
+      // Resting box-shadow lives in an inline style (raw CSS) so the brand
+      // color-mix() expression isn't run through Tailwind's arbitrary-value
+      // parser. While motion is allowed, the keyframe animation's `forwards`
+      // fill overrides this; for reduced-motion users this is the steady glow.
+      style={
+        active
+          ? {
+              boxShadow:
+                "0 0 0 2px color-mix(in oklch, var(--brand) 40%, transparent), 0 0 16px 4px color-mix(in oklch, var(--brand) 15%, transparent)",
+            }
+          : undefined
+      }
       className={cn(
         // Base: relative so the glow pseudo-element can be positioned
         "relative rounded-xl transition-[background-color,box-shadow]",
@@ -50,10 +62,9 @@ export function FieldFillTransition({
         "duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
         // Inactive state
         !active && "bg-transparent shadow-none",
-        // Active state: subtle accent tint + outer glow ring
+        // Active state: subtle brand tint + outer glow ring
         active && [
-          "bg-accent/5",
-          "shadow-[0_0_0_2px_hsl(var(--accent)/0.4),0_0_16px_4px_hsl(var(--accent)/0.15)]",
+          "bg-brand/5",
           // Glow pulse animation — disabled under prefers-reduced-motion
           "motion-safe:animate-[field-fill-glow_600ms_cubic-bezier(0.22,1,0.36,1)_forwards]",
         ],
@@ -75,9 +86,9 @@ export function FieldFillTransition({
       {active && (
         <style>{`
           @keyframes field-fill-glow {
-            0%   { box-shadow: 0 0 0 2px hsl(var(--accent) / 0), 0 0 0px 0px hsl(var(--accent) / 0); }
-            40%  { box-shadow: 0 0 0 3px hsl(var(--accent) / 0.55), 0 0 24px 8px hsl(var(--accent) / 0.25); }
-            100% { box-shadow: 0 0 0 2px hsl(var(--accent) / 0.4), 0 0 16px 4px hsl(var(--accent) / 0.15); }
+            0%   { box-shadow: 0 0 0 2px color-mix(in oklch, var(--brand) 0%, transparent), 0 0 0px 0px color-mix(in oklch, var(--brand) 0%, transparent); }
+            40%  { box-shadow: 0 0 0 3px color-mix(in oklch, var(--brand) 55%, transparent), 0 0 24px 8px color-mix(in oklch, var(--brand) 25%, transparent); }
+            100% { box-shadow: 0 0 0 2px color-mix(in oklch, var(--brand) 40%, transparent), 0 0 16px 4px color-mix(in oklch, var(--brand) 15%, transparent); }
           }
         `}</style>
       )}

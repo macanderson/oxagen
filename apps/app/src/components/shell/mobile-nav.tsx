@@ -113,11 +113,17 @@ export function MobileNav({
                         "flex min-h-[2.75rem] items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                         isActive
-                          ? "bg-accent text-accent-foreground"
+                          ? "bg-brand/10 text-foreground"
                           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                       )}
                     >
-                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <Icon
+                        className={cn(
+                          "h-4 w-4 shrink-0",
+                          isActive ? "text-brand" : undefined,
+                        )}
+                        aria-hidden="true"
+                      />
                       <span className="flex-1 truncate">{item.label}</span>
                     </Link>
                   }
