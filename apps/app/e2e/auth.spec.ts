@@ -1,6 +1,14 @@
 import { test, expect } from "@playwright/test";
+import { loginAs } from "./helpers/auth";
+import {
+  setupAgentRuntimeFixture,
+  teardownFixture,
+  type AgentRuntimeFixture,
+} from "./helpers/agent-runtime-fixture";
 
-test.describe("auth", () => {
+// ─── Auth-guard smoke tests (no session required) ───────────────────────────
+
+test.describe("auth — unauthenticated guard", () => {
   test("login page renders email + OAuth options", async ({ page }) => {
     await page.goto("/login");
     await expect(page.getByRole("heading", { name: /welcome back/i })).toBeVisible();
@@ -20,5 +28,91 @@ test.describe("auth", () => {
   test("unauthenticated root redirects to login", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveURL(/\/login$/);
+  });
+});
+
+// ─── Real sign-in journey ────────────────────────────────────────────────────
+//
+// Seeds a user + session via the fixture (same pattern as agent-runtime-flow),
+// injects the signed session cookie via `loginAs`, and asserts that:
+//   1. The authed user lands on an org/workspace page (not /login).
+//   2. The session persists across a same-tab navigation.
+//   3. The user's name / org appears somewhere in the authenticated shell.
+//
+// We use the cookie-injection auth path (not form submission) because the
+// test environment may not have a live SMTP / Better Auth server; the cookie
+// approach matches what the fixture infrastructure already supports and is
+// how all other authed specs work.
+
+const AUTH_ORG_SLUG = "e2e-auth";
+const AUTH_WS_SLUG = "main";
+const AUTH_USER_EMAIL = "e2e+auth@oxagen.ai";
+
+let authFixture: AgentRuntimeFixture;
+
+test.describe("auth — successful sign-in journey", () => {
+  test.beforeAll(async () => {
+    authFixture = await setupAgentRuntimeFixture({
+      orgSlug: AUTH_ORG_SLUG,
+      workspaceSlug: AUTH_WS_SLUG,
+      userEmail: AUTH_USER_EMAIL,
+    });
+  });
+
+  test.afterAll(async () => {
+    await teardownFixture({ orgSlug: AUTH_ORG_SLUG });
+  });
+
+  test("session cookie lands user on authed page, not /login", async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    await loginAs(context, authFixture.sessionToken, baseURL);
+
+    // Navigate to the org root — auth gate should pass.
+    await page.goto(`/${AUTH_ORG_SLUG}`);
+
+    // Must NOT redirect to /login.
+    await expect(page).not.toHaveURL(/\/login/);
+
+    // The URL must contain the org slug — confirming we're in the authed shell.
+    await expect(page).toHaveURL(new RegExp(AUTH_ORG_SLUG));
+  });
+
+  test("session persists across navigation to workspace chat", async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    await loginAs(context, authFixture.sessionToken, baseURL);
+
+    // Start at org root.
+    await page.goto(`/${AUTH_ORG_SLUG}`);
+    await expect(page).not.toHaveURL(/\/login/);
+
+    // Navigate to the workspace chat — session must carry across the navigation.
+    await page.goto(`/${AUTH_ORG_SLUG}/${AUTH_WS_SLUG}/chat`);
+    await expect(page).not.toHaveURL(/\/login/);
+
+    // The URL must still contain both slugs.
+    await expect(page).toHaveURL(new RegExp(`${AUTH_ORG_SLUG}/${AUTH_WS_SLUG}`));
+  });
+
+  test("org slug appears in the authed page body or nav", async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    await loginAs(context, authFixture.sessionToken, baseURL);
+    await page.goto(`/${AUTH_ORG_SLUG}/${AUTH_WS_SLUG}/chat`);
+    await expect(page).not.toHaveURL(/\/login/);
+
+    // The org or workspace slug must be visible somewhere in the rendered DOM
+    // (sidebar, breadcrumb, or page title). Case-insensitive to accommodate
+    // display-name capitalisation.
+    await expect(
+      page.locator("body").getByText(new RegExp(AUTH_ORG_SLUG, "i")),
+    ).toBeVisible();
   });
 });
