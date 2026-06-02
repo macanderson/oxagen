@@ -201,7 +201,7 @@ export async function setupAgentRuntimeFixture(
       ON CONFLICT (id) DO NOTHING
     `;
     await sql`
-      INSERT INTO agent.tool_versions (id, public_id, tool_id, version_number, is_latest, input_schema, output_schema, runtime_config, execution_handler, execution_mode, timeout_seconds)
+      INSERT INTO agent.tool_versions (id, public_id, tool_id, version_number, is_latest, input_schema, output_schema, runtime_config, execution_handler, execution_mode, timeout_seconds, org_id, workspace_id)
       VALUES (
         ${cap.tvId}::uuid,
         'tvr_e2e_' || ${cap.slug},
@@ -213,7 +213,9 @@ export async function setupAgentRuntimeFixture(
         '{}'::jsonb,
         'e2e-stub',
         'inline',
-        30
+        30,
+        ${orgId},
+        ${workspaceId}
       )
       ON CONFLICT (id) DO NOTHING
     `;
@@ -245,7 +247,7 @@ export async function setupAgentRuntimeFixture(
 
   for (const step of steps) {
     await sql`
-      INSERT INTO execution.execution_steps (id, public_id, status, execution_id, playbook_step_id, agent_version_id, attempt_number, input_payload)
+      INSERT INTO execution.execution_steps (id, public_id, status, execution_id, playbook_step_id, agent_version_id, attempt_number, input_payload, org_id, workspace_id)
       VALUES (
         ${step.id}::uuid,
         'est_e2e_' || ${step.id.slice(-8)},
@@ -254,7 +256,9 @@ export async function setupAgentRuntimeFixture(
         gen_random_uuid(),  -- playbook_step_id: no FK, any UUID works
         gen_random_uuid(),  -- agent_version_id: no FK, any UUID works
         1,
-        '{}'::jsonb
+        '{}'::jsonb,
+        ${orgId},
+        ${workspaceId}
       )
       ON CONFLICT (id) DO NOTHING
     `;
@@ -271,14 +275,16 @@ export async function setupAgentRuntimeFixture(
 
   for (const tc of toolCallRows) {
     await sql`
-      INSERT INTO execution.tool_calls (id, public_id, execution_step_id, tool_version_id, request_payload, status)
+      INSERT INTO execution.tool_calls (id, public_id, execution_step_id, tool_version_id, request_payload, status, org_id, workspace_id)
       VALUES (
         ${tc.id}::uuid,
         'tcl_e2e_' || ${tc.id.slice(-8)},
         ${tc.stepId}::uuid,
         ${tc.tvId}::uuid,
         '{}'::jsonb,
-        'completed'
+        'completed',
+        ${orgId},
+        ${workspaceId}
       )
       ON CONFLICT (id) DO NOTHING
     `;
@@ -348,7 +354,7 @@ export async function setupAgentRuntimeFixture(
       await sql`
         INSERT INTO agent.subagent_runs (
           id, public_id, fanout_id, child_message_id, capability_name,
-          input_payload, status
+          input_payload, status, org_id, workspace_id
         )
         VALUES (
           gen_random_uuid(),
@@ -357,7 +363,9 @@ export async function setupAgentRuntimeFixture(
           ${run.childMessageUuid}::uuid,
           ${run.capability},
           '{}'::jsonb,
-          'completed'
+          'completed',
+          ${orgId},
+          ${workspaceId}
         )
         ON CONFLICT (public_id) DO NOTHING
       `;
