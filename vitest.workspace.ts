@@ -4,4 +4,5 @@
 export default [
   "packages/*/vitest.config.ts",
   "apps/app/vitest.config.ts",
+  "tools/scripts/vitest.config.ts",
 ];

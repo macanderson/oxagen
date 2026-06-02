@@ -1,5 +1,5 @@
-import type { ServiceName } from "./types";
-import { SERVICE_NAMES } from "./types";
+import { SERVICE_NAMES } from "@oxagen/config";
+import type { ServiceName } from "@oxagen/config";
 
 // Defaults discovered from the Vercel team. Override any of these with
 // VERCEL_PROJECT_<SERVICE> env vars (e.g. VERCEL_PROJECT_ADMIN=prj_...).

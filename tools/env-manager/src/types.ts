@@ -1,35 +1,31 @@
 // Shared types for the env-manager tool.
-
-export type EnvName = "development" | "preview" | "production";
-export type ServiceName = "api" | "app" | "mcp" | "website" | "admin" | "docs";
-
-export const ENV_NAMES: readonly EnvName[] = ["development", "preview", "production"];
-export const SERVICE_NAMES: readonly ServiceName[] = ["api", "app", "mcp", "website", "admin", "docs"];
+// ServiceName, EnvName and their constant arrays are the canonical versions
+// from @oxagen/config — re-exported here so the rest of the tool keeps a
+// single local import path.
+export type { EnvName, ServiceName } from "@oxagen/config";
+export { ENV_NAMES, SERVICE_NAMES } from "@oxagen/config";
 
 // Where a value comes from, for a given environment.
-//  - gsm:      gcloud secret manager (`gcloud secrets versions access`)
-//  - neon:     neonctl connection-string for a Neon project
-//  - generate: a fresh random hex secret (consistent across services within one env+key)
-//  - static:   a literal value baked into the catalog
-//  - manual:   the human sets it elsewhere (e.g. an Inngest dashboard key) — the tool
-//              will not auto-resolve it, only show whether it's present on Vercel.
+//  - static:   a literal baked into the registry (derived from @oxagen/config)
+//  - generate: a fresh random hex secret, consistent across services within
+//              one env+key (e.g. api and app share the same BETTER_AUTH_SECRET)
+//  - manual:   the operator supplies the value via the paste-and-fan-out UI;
+//              the tool will not auto-resolve it, only show whether it's present
 export type Source =
-  | { type: "gsm"; secret: string }
-  | { type: "neon"; project: string; role?: string; database?: string }
-  | { type: "generate"; bytes?: number }
   | { type: "static"; value: string }
+  | { type: "generate"; bytes?: number }
   | { type: "manual" };
 
 export interface CatalogEntry {
   key: string;
   group: string;
   description: string;
-  /** Secret values are stored as Vercel "encrypted"; non-secrets as "plain" (readable in the dashboard). */
+  /** Secret values are stored as Vercel "encrypted"; non-secrets as "plain". */
   secret: boolean;
   /** Which Vercel projects need this var. */
-  services: ServiceName[];
-  /** Per-environment value source. Omit an environment to skip the var there entirely. */
-  sources: Partial<Record<EnvName, Source>>;
+  services: import("@oxagen/config").ServiceName[];
+  /** Per-environment value source. Omit an environment to skip the var there. */
+  sources: Partial<Record<import("@oxagen/config").EnvName, Source>>;
 }
 
 /** One env var as it currently exists on a Vercel project. */
@@ -41,7 +37,7 @@ export interface VercelEnvVar {
   type: string;
 }
 
-/** Result of resolving a Source to a concrete value (value itself is never sent to the browser). */
+/** Result of resolving a Source to a concrete value (never sent to browser). */
 export interface ResolveResult {
   value?: string;
   manual?: boolean;
@@ -51,8 +47,8 @@ export interface ResolveResult {
 /** One deploy operation outcome (no secret values — safe to surface to the UI). */
 export interface DeployResult {
   key: string;
-  env: EnvName;
-  service: ServiceName;
+  env: import("@oxagen/config").EnvName;
+  service: import("@oxagen/config").ServiceName;
   status: "ok" | "skipped" | "manual" | "error";
   detail?: string;
 }

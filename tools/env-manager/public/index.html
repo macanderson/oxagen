@@ -15,6 +15,7 @@
       button { font:inherit; background:var(--panel); color:#e6edf3; border:1px solid var(--line); border-radius:8px; padding:7px 12px; cursor:pointer; }
       button:hover { border-color:#3a4150; }
       button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+      button.warn { background:#a16207; border-color:#a16207; color:#fff; }
       button:disabled { opacity:.5; cursor:not-allowed; }
       main { padding:16px 20px 80px; }
       table { width:100%; border-collapse:collapse; }
@@ -29,8 +30,12 @@
       .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
       .dot.on { background:var(--ok); } .dot.off { background:#3a4150; }
       .badge-secret { color:var(--warn); border-color:var(--warn); }
+      .paste-row { display:flex; gap:6px; align-items:center; margin-top:5px; }
+      .paste-row input { font:12px ui-monospace,monospace; background:#0d1117; border:1px solid var(--line); border-radius:6px; color:#e6edf3; padding:4px 8px; flex:1; min-width:0; }
+      .paste-row input:focus { outline:none; border-color:var(--acc); }
+      .paste-row button { font-size:11px; padding:4px 10px; white-space:nowrap; }
       #log { position:fixed; right:0; bottom:0; left:0; max-height:38vh; overflow:auto; background:#0d1117; border-top:1px solid var(--line); padding:10px 20px; font-family:ui-monospace,monospace; font-size:12px; display:none; }
-      #log .ok{color:var(--ok)} #log .error{color:var(--err)} #log .manual{color:var(--warn)} #log .skipped{color:var(--muted)}
+      #log .ok{color:var(--ok)} #log .error{color:var(--err)} #log .manual{color:var(--warn)} #log .skipped{color:var(--muted)} #log .missing{color:var(--err)} #log .extra{color:var(--warn)}
       .note { background:#1c2128; border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:14px; color:var(--muted); font-size:12px; }
     </style>
   </head>
@@ -39,6 +44,9 @@
       <div><h1>Oxagen env-manager</h1><div class="sub" id="tokstatus">loading…</div></div>
       <div class="spacer"></div>
       <button onclick="refresh()">↻ Refresh state</button>
+      <button class="warn" onclick="checkGaps('development')">Gaps dev</button>
+      <button class="warn" onclick="checkGaps('preview')">Gaps preview</button>
+      <button class="warn" onclick="checkGaps('production')">Gaps production</button>
       <button class="primary" onclick="deploy('development')">Deploy development</button>
       <button class="primary" onclick="deploy('preview')">Deploy preview</button>
       <button class="primary" onclick="deploy('production')">Deploy production</button>
@@ -54,7 +62,7 @@
 
     <script>
       let DATA = null, STATE = {};
-      const srcLabel = (s) => !s ? "—" : s.type === "gsm" ? "gsm:" + s.secret.replace("oxagen-", "") : s.type === "static" ? "static" : s.type;
+      const srcLabel = (s) => !s ? "—" : s.type === "static" ? "static" : s.type;
 
       async function load() {
         DATA = await (await fetch("/api/catalog")).json();
@@ -62,11 +70,15 @@
           (DATA.hasToken ? "VERCEL_TOKEN set · " : "⚠ VERCEL_TOKEN missing · ") +
           Object.keys(DATA.projects).length + " projects";
         document.getElementById("note").innerHTML =
-          "Each row deploys to the projects in its <b>services</b>. <b>Deploy &lt;env&gt;</b> resolves every value from its source " +
-          "(GSM / generated / static) and pushes to the right Vercel project + target. <b>manual</b> rows (Inngest, LLM keys) you set yourself. " +
+          "Each row deploys to the projects in its <b>services</b>. " +
+          "<b>Deploy &lt;env&gt;</b> pushes <b>static</b> and <b>generate</b> vars automatically. " +
+          "<b>manual</b> vars (secrets, API keys) use the paste input — type or paste the value, " +
+          "then click <b>Push →</b> to fan it out to every dependent project in one shot. " +
+          "<b>Gaps &lt;env&gt;</b> diffs required vars against live Vercel state. " +
           "Env changes take effect on the next deployment.";
         await refresh();
       }
+
       async function refresh() {
         try {
           const r = await fetch("/api/state");
@@ -75,12 +87,26 @@
         } catch (e) { STATE = {}; }
         render();
       }
+
       function svcDots(entry, env) {
         return entry.services.map((svc) => {
           const set = (STATE[svc]?.[entry.key] || []).includes(env);
           return `<span class="svc" title="${svc}"><span class="dot ${set ? "on" : "off"}"></span>${svc}</span>`;
         }).join("");
       }
+
+      function pasteInput(entry, env) {
+        const src = entry.sources[env];
+        if (!src || src.type !== "manual") return "";
+        const isSecret = entry.secret;
+        const svcList = entry.services.join(", ");
+        const inputId = `inp_${entry.key}_${env}`;
+        return `<div class="paste-row">
+          <input id="${inputId}" type="${isSecret ? "password" : "text"}" placeholder="paste value…" autocomplete="off" />
+          <button onclick="pushValue('${entry.key}','${env}','${inputId}')" title="Push to: ${svcList}">Push → ${entry.services.length}</button>
+        </div>`;
+      }
+
       function render() {
         const rows = document.getElementById("rows");
         rows.innerHTML = "";
@@ -95,14 +121,64 @@
             <td><div class="key">${e.key}</div>${secret}<div class="desc">${e.description}</div>
                 <div>${e.services.map(s=>`<span class="chip">${s}</span>`).join("")}</div></td>
             <td class="src">${srcLabel(e.sources.development)}<br/>${srcLabel(e.sources.preview)}<br/>${srcLabel(e.sources.production)}</td>
-            <td class="cell">${e.sources.development ? svcDots(e,"development") : '<span class="src">—</span>'}</td>
-            <td class="cell">${e.sources.preview ? svcDots(e,"preview") : '<span class="src">—</span>'}</td>
-            <td class="cell">${e.sources.production ? svcDots(e,"production") : '<span class="src">—</span>'}</td>
+            <td class="cell">${e.sources.development ? svcDots(e,"development") + pasteInput(e,"development") : '<span class="src">—</span>'}</td>
+            <td class="cell">${e.sources.preview ? svcDots(e,"preview") + pasteInput(e,"preview") : '<span class="src">—</span>'}</td>
+            <td class="cell">${e.sources.production ? svcDots(e,"production") + pasteInput(e,"production") : '<span class="src">—</span>'}</td>
           </tr>`);
         }
       }
+
+      async function pushValue(key, env, inputId) {
+        const input = document.getElementById(inputId);
+        const value = input?.value?.trim();
+        if (!value) { alert("Enter a value first."); return; }
+        const log = document.getElementById("log");
+        log.style.display = "block";
+        log.innerHTML = `<div>pushing ${key} → ${env}…</div>`;
+        try {
+          const r = await fetch("/api/set", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ key, env, value })
+          });
+          const j = await r.json();
+          if (j.error) { log.innerHTML = `<div class="error">${j.error}</div>`; return; }
+          const lines = j.results.map((x) =>
+            `<div class="${x.status}">[${x.status}] ${x.key} → ${x.service}/${x.env}${x.detail ? "  — " + x.detail : ""}</div>`
+          );
+          const ok = j.results.filter((x) => x.status === "ok").length;
+          log.innerHTML = `<div><b>${key}/${env}: ${ok}/${j.results.length} ok</b> — re-deploy the affected projects to apply.</div>` + lines.join("");
+          // Clear input after push — never display the value back
+          if (input) input.value = "";
+          await refresh();
+        } catch (e) { log.innerHTML = `<div class="error">${e}</div>`; }
+      }
+
+      async function checkGaps(env) {
+        const log = document.getElementById("log");
+        log.style.display = "block";
+        log.innerHTML = `<div>checking gaps for ${env}…</div>`;
+        try {
+          const r = await fetch(`/api/gaps?env=${env}`);
+          const j = await r.json();
+          if (j.error) { log.innerHTML = `<div class="error">${j.error}</div>`; return; }
+          const missing = j.missing || [];
+          const extra = j.extra || [];
+          if (missing.length === 0 && extra.length === 0) {
+            log.innerHTML = `<div class="ok">✓ No gaps found for ${env}.</div>`;
+            return;
+          }
+          const lines = [
+            `<div><b>Gaps for ${env}: ${missing.length} missing, ${extra.length} unregistered</b></div>`,
+            ...missing.map(({service, key}) => `<div class="missing">✗ MISSING ${key} on ${service}</div>`),
+            ...extra.map(({service, key}) => `<div class="extra">? UNREGISTERED ${key} on ${service} (not in registry)</div>`),
+          ];
+          log.innerHTML = lines.join("");
+        } catch (e) { log.innerHTML = `<div class="error">${e}</div>`; }
+      }
+
       async function deploy(env) {
-        if (!confirm(`Deploy ${env.toUpperCase()} env vars to Vercel (all services)?`)) return;
+        if (!confirm(`Deploy ${env.toUpperCase()} env vars to Vercel (static + generated only)?`)) return;
         const log = document.getElementById("log");
         log.style.display = "block";
         log.innerHTML = `<div>deploying ${env}…</div>`;

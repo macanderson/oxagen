@@ -1,5 +1,6 @@
+import type { EnvName } from "@oxagen/config";
 import type { Config } from "./config";
-import type { EnvName, VercelEnvVar } from "./types";
+import type { VercelEnvVar } from "./types";
 
 const BASE = "https://api.vercel.com";
 
