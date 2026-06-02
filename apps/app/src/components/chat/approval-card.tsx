@@ -52,7 +52,7 @@ export function ApprovalCard({
 
   return (
     <div
-      className="glass-panel my-2 space-y-3 border-l-4 border-l-amber-500/70 p-4 animate-in"
+      className="rounded-xl border bg-card text-card-foreground shadow my-2 space-y-3 border-l-4 border-l-amber-500/70 p-4 animate-in"
       data-component="approval-card"
       data-approval-status={settled ? optimistic : expired ? "expired" : "pending"}
     >

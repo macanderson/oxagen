@@ -8,7 +8,7 @@
  *   - CSS custom properties: --font-sans / --font-display / --font-mono
  *   - Tailwind @theme font-family tokens: font-sans / font-display / font-mono
  *   - Base heading styles (Aeonik Fono, wt 500, tracking -0.025em)
- *   - Glass utility, aurora background, dark variant
+ *   - Stock shadcn neutral tokens (glass/aurora utilities removed)
  *
  * See packages/ui/src/styles/fonts/README.md for the binary asset checklist
  * and the next/font/local migration guide (OXA-1508).

@@ -18,7 +18,7 @@ import type { ReactNode } from "react";
 import { Sidebar, MobileBottomBar } from "./sidebar";
 import { Topbar } from "./topbar";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
-import type { SessionUser } from "./avatar-menu";
+import type { SessionUser } from "./user-switcher";
 
 export interface AppShellProps {
   org: ResolvedOrg;
@@ -42,7 +42,7 @@ export function AppShell({
   return (
     <div className="flex h-dvh w-full overflow-hidden">
       {/* Desktop sidebar — hidden on mobile */}
-      <Sidebar ctx={ctx} />
+      <Sidebar ctx={ctx} user={user} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar

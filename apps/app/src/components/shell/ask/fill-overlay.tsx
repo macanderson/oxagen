@@ -147,16 +147,14 @@ function FillOverlayPanel({
         // Fixed panel — right-aligned, above other content
         "fixed bottom-6 right-6 z-50",
         "w-full max-w-sm",
-        // Glass surface
-        "glass-panel overflow-hidden",
-        // Entry animation
-        "animate-in",
+        // Stock card surface
+        "overflow-hidden rounded-xl border bg-card text-card-foreground shadow-lg",
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
+      <div className="flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-accent" aria-hidden="true" />
+          <Sparkles className="h-4 w-4 text-foreground" aria-hidden="true" />
           <span className="text-sm font-medium text-foreground">
             {isFilling ? "Filling form…" : `${changedFields.length} suggestion${changedFields.length !== 1 ? "s" : ""}`}
           </span>
@@ -168,9 +166,9 @@ function FillOverlayPanel({
               onClick={handleApplyAll}
               aria-label="Apply all suggestions"
               className={cn(
-                "inline-flex items-center gap-1 rounded-lg px-2 py-1",
-                "text-xs font-medium text-accent",
-                "transition-colors hover:bg-accent/10",
+                "inline-flex items-center gap-1 rounded-md px-2 py-1",
+                "text-xs font-medium text-foreground",
+                "transition-colors hover:bg-accent",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               )}
             >
@@ -235,8 +233,8 @@ function FillOverlayPanel({
                           aria-label={`Accept suggestion for ${diff.name}`}
                           className={cn(
                             "flex h-5 w-5 items-center justify-center rounded-full",
-                            "bg-accent/10 text-accent",
-                            "transition-colors hover:bg-accent/20",
+                            "bg-primary text-primary-foreground",
+                            "transition-colors hover:bg-primary/90",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                           )}
                         >
@@ -259,7 +257,7 @@ function FillOverlayPanel({
                     )}
                     {/* Accepted / rejected badge */}
                     {isAccepted && (
-                      <span className="text-[10px] font-medium text-accent">Applied</span>
+                      <span className="text-[10px] font-medium text-foreground">Applied</span>
                     )}
                     {isRejected && (
                       <span className="text-[10px] font-medium text-muted-foreground">Skipped</span>
@@ -284,7 +282,7 @@ function FillOverlayPanel({
                     {/* Proposed value */}
                     {isPending && (
                       <div className="flex items-start gap-1.5">
-                        <span className="mt-0.5 shrink-0 text-[9px] font-semibold uppercase tracking-wider text-accent/70 w-14">
+                        <span className="mt-0.5 w-14 shrink-0 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
                           Proposed
                         </span>
                         <span className="break-words font-medium text-foreground">

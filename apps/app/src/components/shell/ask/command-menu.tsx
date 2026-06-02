@@ -263,7 +263,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
                 <CommandItemRow
                   id={`cmd-item-${globalIdx}`}
                   label={query.trim() ? `Ask: "${query.trim()}"` : "Ask Oxagen anything…"}
-                  icon={<Sparkles className="h-4 w-4 text-accent" aria-hidden="true" />}
+                  icon={<Sparkles className="h-4 w-4 text-foreground" aria-hidden="true" />}
                   active={clampedActiveIndex === globalIdx}
                   onMouseEnter={() => setClampedActiveIndex(globalIdx)}
                   onSelect={() =>
@@ -337,13 +337,13 @@ function CommandItemRow({
         "flex cursor-pointer items-center gap-3 px-3 py-2 text-sm transition-colors",
         "outline-none",
         active
-          ? "bg-accent/8 text-foreground"
-          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+          ? "bg-accent text-accent-foreground"
+          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
       )}
       onMouseEnter={onMouseEnter}
       onClick={onSelect}
     >
-      <span className={cn("shrink-0", active ? "text-accent" : "text-muted-foreground/60")}>
+      <span className={cn("shrink-0", active ? "text-accent-foreground" : "text-muted-foreground/60")}>
         {icon}
       </span>
       <span className="flex-1 truncate">{label}</span>

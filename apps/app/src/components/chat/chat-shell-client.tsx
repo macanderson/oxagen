@@ -342,7 +342,7 @@ export function ChatShellClient({
                       fallback={
                         <div
                           className={cn(
-                            "glass rounded-xl px-4 py-3",
+                            "rounded-xl border bg-card px-4 py-3",
                             "animate-pulse space-y-2",
                           )}
                           aria-busy="true"

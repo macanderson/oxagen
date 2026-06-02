@@ -2,8 +2,7 @@
 /**
  * Shared ThemeProvider for all Oxagen Next.js apps.
  *
- * Wraps `next-themes` with Oxagen defaults: class-based attribute, dark as the
- * default theme, and system preference detection enabled.
+ * Wraps `next-themes` with class-based theming and system-preference detection.
  *
  * Usage (app layout.tsx):
  *   import { ThemeProvider } from "@oxagen/ui";
@@ -20,7 +19,7 @@ export function ThemeProvider({
   return (
     <NextThemesProvider
       attribute="class"
-      defaultTheme="dark"
+      defaultTheme="system"
       enableSystem
       disableTransitionOnChange
       {...props}

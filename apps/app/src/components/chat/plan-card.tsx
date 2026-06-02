@@ -171,12 +171,12 @@ export function PlanCard({
 
   return (
     <div
-      className="glass-panel my-2 space-y-3 p-4 animate-in"
+      className="rounded-xl border bg-card text-card-foreground shadow my-2 space-y-3 p-4 animate-in"
       data-component="plan-card"
       data-plan-status={settled ? optimistic : amending ? "amending" : "pending"}
     >
       <div className="flex items-center gap-2">
-        <ListChecks className="h-4 w-4 text-accent" />
+        <ListChecks className="h-4 w-4 text-muted-foreground" />
         <h4 className="text-sm font-semibold">{title}</h4>
         <Badge variant="muted" className="ml-auto">
           {settled ? optimistic : amending ? "amending" : "awaiting approval"}
@@ -218,7 +218,7 @@ export function PlanCard({
         <ol className="space-y-2">
           {steps.map((step, idx) => (
             <li key={step.id} className="flex items-start gap-2 text-sm">
-              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[10px] font-semibold text-accent tabular-nums">
+              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground tabular-nums">
                 {idx + 1}
               </span>
               <div className="min-w-0 flex-1">
@@ -379,8 +379,8 @@ function SortableStepRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "glass rounded-xl border border-border/40 p-3 text-sm",
-        isDragging && "ring-2 ring-accent/40",
+        "rounded-xl border bg-card p-3 text-sm",
+        isDragging && "ring-2 ring-ring",
       )}
     >
       <div className="flex items-start gap-2">
@@ -419,8 +419,8 @@ function SortableStepRow({
               </label>
               <Select
                 value={selectedCapability}
-                onValueChange={(v) =>
-                  onChange(step.id, { capability: v === "__none__" ? null : v })
+                onValueChange={(v: string | null) =>
+                  onChange(step.id, { capability: v === "__none__" || v === null ? null : v })
                 }
               >
                 <SelectTrigger id={`${step.id}-capability`} className="h-9 text-xs">
@@ -476,13 +476,13 @@ function SortableStepRow({
                           type="button"
                           key={sib.id}
                           onClick={() => toggleDependsOn(sib.id)}
-                          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs outline-none hover:bg-accent/15"
+                          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs outline-none hover:bg-muted"
                         >
                           <input
                             type="checkbox"
                             checked={checked}
                             readOnly
-                            className="h-3 w-3 accent-accent"
+                            className="h-3 w-3"
                           />
                           <span className="font-mono">{sib.id}</span>
                           <span className="truncate text-muted-foreground">{sib.summary}</span>

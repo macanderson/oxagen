@@ -1,120 +1,71 @@
 /**
- * @oxagen/ui — shared Tailwind v4 entrypoint.
+ * @oxagen/ui — shared Tailwind v4 entrypoint (stock shadcn baseline).
  *
  * Apps consume styles by importing this file at the top of their own
  * globals.css (or any CSS that Next.js loads from `app/layout`):
  *
  *   @import "@oxagen/ui/styles/globals.css";
  *
- * The file pulls Tailwind in, registers our design tokens as CSS variables,
- * maps those tokens to `@theme` utilities, declares the `.dark` variant, and
- * exposes the shared base/component/utility layers (glass surfaces, aurora
- * background, animations) so every Oxagen frontend renders identically.
- *
- * FONT NOTE: The @font-face declarations for Aeonik reference licensed .woff2
- * binaries that are NOT committed to this repo. When the binaries are absent
- * the declarations are inert and the system-font fallback stacks apply.
- * See packages/ui/src/styles/fonts/README.md for how to activate the typeface.
+ * The file pulls Tailwind in, registers the shadcn design tokens as CSS
+ * variables (tokens.css), maps those tokens to `@theme` utilities, declares the
+ * `dark` variant, and sets the base body styles. This is the unmodified shadcn
+ * neutral theme — no brand layer. Restyle via tokens.css, not here.
  */
 @import "tailwindcss";
 @import "./tokens.css";
-@import "./fonts/aeonik.css";
-
-/*
- * Font CSS variables — resolved at document root. These are CSS custom
- * properties (not @theme tokens) so they cascade to all elements without
- * Tailwind's JIT scan. The @theme block below maps them to Tailwind utilities.
- *
- * --font-sans    : Aeonik (body copy, UI labels). Falls back through the
- *                 system-UI geometric sans stack so the app renders correctly
- *                 before / without the licensed .woff2 binaries.
- * --font-display : Aeonik Fono (all h1–h6, display text). Falls back to the
- *                 same geometric stack — visually close enough for development.
- * --font-mono    : Aeonik Mono (code, eyebrows, metric labels). Falls back
- *                 through the standard mono stack.
- */
-:root {
-  --font-sans:
-    "Aeonik",
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    "Helvetica Neue",
-    Arial,
-    sans-serif;
-
-  --font-display:
-    "Aeonik Fono",
-    "Aeonik",
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    "Helvetica Neue",
-    Arial,
-    sans-serif;
-
-  --font-mono:
-    "Aeonik Mono",
-    ui-monospace,
-    "Cascadia Code",
-    "Source Code Pro",
-    Menlo,
-    Consolas,
-    "DejaVu Sans Mono",
-    monospace;
-
-  /*
-   * Hero background gradients — single source of truth for the indigo/pink
-   * radial gradient used on marketing surfaces (apps/website, apps/docs
-   * landing, apps/admin full-bleed shell).
-   *
-   * --hero-bg-dark  : dark-mode gradient (charcoal base).
-   * --hero-bg-light : light-mode gradient (near-white base, attenuated stops).
-   *
-   * Consumed via:
-   *   background: var(--hero-bg-dark);          (plain CSS)
-   *   @apply hero-bg;                           (Tailwind utility class)
-   */
-  --hero-bg-dark:
-    radial-gradient(1200px 800px at 20% -10%, rgba(99, 102, 241, 0.25), transparent 60%),
-    radial-gradient(900px 700px at 110% 10%, rgba(236, 72, 153, 0.18), transparent 60%),
-    #0a0b10;
-
-  --hero-bg-light:
-    radial-gradient(1200px 800px at 20% -10%, rgba(99, 102, 241, 0.08), transparent 60%),
-    radial-gradient(900px 700px at 110% 10%, rgba(236, 72, 153, 0.06), transparent 60%),
-    #f8f9fc;
-}
 
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
+
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
 
-  /* ── Typeface tokens → Tailwind utilities (font-sans / font-display / font-mono) */
-  --font-family-sans: var(--font-sans);
-  --font-family-display: var(--font-display);
-  --font-family-mono: var(--font-mono);
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas,
+    "DejaVu Sans Mono", monospace;
 }
 
-@variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *));
 
 @layer base {
   * {
@@ -122,75 +73,19 @@
   }
 
   body {
-    background: hsl(var(--background));
+    background-color: hsl(var(--background));
     color: hsl(var(--foreground));
-    background-image: var(--gradient-aurora);
-    background-attachment: fixed;
     font-family: var(--font-sans);
-    font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
   }
-
-  /* Aeonik Fono is the display cut — use it for every heading level.
-   * Weight 500, tight tracking, and a condensed line-height give headings
-   * the characteristic Oxagen typographic texture. */
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-display);
-    font-weight: 500;
-    line-height: 1.1;
-    letter-spacing: -0.025em;
-  }
-
-  /* Aeonik Mono for inline code, kbd, and samp. */
-  code, kbd, samp, pre {
-    font-family: var(--font-mono);
-  }
 }
 
-@layer components {
-  .glass,
-  .glass-panel {
-    background: var(--glass-bg);
-    backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
-  }
-
-  .glass {
-    border-radius: var(--radius);
-  }
-
-  .glass-panel {
-    border-radius: var(--radius-panel, 1rem);
-  }
-}
-
-@layer utilities {
-  .animate-in {
-    animation: fade-in 0.35s ease-out both;
-  }
-
-  /*
-   * Shared hero background gradient — used by marketing and docs landing
-   * surfaces.  Apply this class to the element that should carry the full-
-   * bleed dark radial gradient (e.g. `html,body` for full-page heroes or a
-   * wrapping `<div>` for scoped landing sections).
-   *
-   * Light-mode variant: .hero-bg-light applies the attenuated version of the
-   * same gradients over a near-white base for html.light / .light overrides.
-   */
-  .hero-bg {
-    background: var(--hero-bg-dark);
-    color: #f6f7f9;
-  }
-
-  .hero-bg-light {
-    background: var(--hero-bg-light);
-    color: #0a0a0a;
-  }
-}
-
+/*
+ * Base UI exposes `data-starting-style` / `data-ending-style` on popups for
+ * enter/exit transitions, and `data-open` / `data-closed` for steady state.
+ * Components opt in with `transition-*` utilities; these keyframes back the
+ * few places that prefer a keyframed animation.
+ */
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }

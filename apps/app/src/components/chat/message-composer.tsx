@@ -52,7 +52,7 @@ export function MessageComposer({
   };
 
   return (
-    <form ref={formRef} onSubmit={onSubmit} className="glass-panel flex flex-col gap-2 p-3">
+    <form ref={formRef} onSubmit={onSubmit} className="rounded-xl border bg-card text-card-foreground shadow flex flex-col gap-2 p-3">
       <Textarea
         name="content"
         required

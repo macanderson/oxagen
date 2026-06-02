@@ -1,10 +1,9 @@
 import type { ReactNode } from "react";
 
 /**
- * Landing-group layout. Wraps the temporary marketing page (copied from
- * apps/website) in the dark hero surface so it renders identically without
- * leaking that background onto the fumadocs `/docs` routes.
+ * Landing-group layout. Wraps the home marketing page without leaking
+ * any background styling onto the fumadocs /docs routes.
  */
 export default function HomeLayout({ children }: { children: ReactNode }) {
-  return <div className="home-hero">{children}</div>;
+  return <div className="min-h-screen bg-background">{children}</div>;
 }

@@ -29,12 +29,12 @@ export function SubagentFanout({
 
   return (
     <div
-      className="glass-panel my-2 space-y-3 p-4 animate-in"
+      className="rounded-xl border bg-card text-card-foreground shadow my-2 space-y-3 p-4 animate-in"
       data-component="subagent-fanout"
       data-fanout-status={status}
     >
       <div className="flex items-center gap-2">
-        <Users className="h-4 w-4 text-accent" />
+        <Users className="h-4 w-4 text-muted-foreground" />
         <Badge variant="muted">{subagents.length} subagents</Badge>
         <FanoutStatus status={status} />
       </div>
@@ -81,7 +81,7 @@ function ChildCard({
       data-role="child"
       data-child-status={status}
       className={cn(
-        "glass min-w-[10rem] flex-1 rounded-xl border border-[color:var(--glass-border)] p-2 text-left text-xs transition-all hover:translate-y-[-1px]",
+        "min-w-[10rem] flex-1 rounded-xl border bg-card p-2 text-left text-xs transition-all hover:translate-y-[-1px] hover:shadow-sm",
       )}
     >
       <div className="flex items-center gap-2">
@@ -123,7 +123,7 @@ function FanoutStatus({ status }: { status: SubagentStatus }) {
 }
 
 function ChildStatusIcon({ status }: { status: SubagentStatus }) {
-  if (status === "running") return <Loader2 className="h-3 w-3 animate-spin text-accent" />;
+  if (status === "running") return <Loader2 className="h-3 w-3 animate-spin text-foreground" />;
   if (status === "completed") return <Check className="h-3 w-3 text-emerald-500" />;
   return <X className="h-3 w-3 text-destructive" />;
 }

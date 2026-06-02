@@ -43,7 +43,7 @@ export function CodeExecuteCard({
 
   return (
     <div
-      className="glass-panel my-2 space-y-3 p-3 text-sm animate-in"
+      className="rounded-xl border bg-card text-card-foreground shadow my-2 space-y-3 p-3 text-sm animate-in"
       data-component="code-execute-card"
       data-status={status}
     >

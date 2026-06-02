@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Check, Plus } from "lucide-react";
+import { ChevronsUpDown, Check, Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -30,9 +30,9 @@ export function WorkspaceSwitcher({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="glass" size="sm" className="gap-2">
-          <span>{current.name}</span>
-          <ChevronDown className="h-3 w-3 opacity-70" />
+        <Button variant="outline" size="sm" className="gap-2">
+          <span className="truncate">{current.name}</span>
+          <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">

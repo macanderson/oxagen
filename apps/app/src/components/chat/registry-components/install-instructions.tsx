@@ -49,7 +49,7 @@ function CopyButton({ text, label }: CopyButtonProps) {
       className="flex-shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {copied ? (
-        <Check className="size-3.5 text-accent" aria-hidden="true" />
+        <Check className="size-3.5 text-foreground" aria-hidden="true" />
       ) : (
         <Copy className="size-3.5" aria-hidden="true" />
       )}
@@ -76,8 +76,8 @@ export default function InstallInstructions({
     >
       {/* Header */}
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border bg-muted/40 dark:bg-muted/20">
-        <div className="rounded-md bg-accent/10 p-1.5">
-          <Terminal className="size-4 text-accent" aria-hidden="true" />
+        <div className="rounded-md bg-muted p-1.5">
+          <Terminal className="size-4 text-muted-foreground" aria-hidden="true" />
         </div>
         <div>
           <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
@@ -96,7 +96,7 @@ export default function InstallInstructions({
             {/* Step number + label */}
             <div className="flex items-start gap-2.5 mb-2">
               <span
-                className="flex-shrink-0 flex items-center justify-center size-5 rounded-full bg-accent/15 text-accent text-xs font-semibold mt-0.5"
+                className="flex-shrink-0 flex items-center justify-center size-5 rounded-full bg-muted text-muted-foreground text-xs font-semibold mt-0.5"
                 aria-hidden="true"
               >
                 {index + 1}

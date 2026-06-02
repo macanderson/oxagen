@@ -46,7 +46,7 @@ export function ToolCallCard(props: ToolCallCardProps) {
 
   return (
     <div
-      className="glass-panel my-2 overflow-hidden p-0 text-sm animate-in"
+      className="rounded-xl border bg-card text-card-foreground shadow my-2 overflow-hidden p-0 text-sm animate-in"
       data-component="tool-call-card"
       data-capability={capability}
       data-status={status}
@@ -69,7 +69,7 @@ export function ToolCallCard(props: ToolCallCardProps) {
         ) : null}
       </button>
       {open ? (
-        <div className="space-y-3 border-t border-[color:var(--glass-border)] px-3 py-3">
+        <div className="space-y-3 border-t px-3 py-3">
           <Section label="Input">
             <pre className="overflow-x-auto rounded-lg bg-muted/40 p-2 font-mono text-xs">
               {safeJson(inputPreview)}

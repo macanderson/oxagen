@@ -20,7 +20,7 @@
 import * as React from "react";
 import { Suspense } from "react";
 import Link from "next/link";
-import { ArrowUpRight, X, Sparkles } from "lucide-react";
+import { ArrowUpRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePageContext } from "@/lib/page-context";
 import type { ScopeContext } from "@/lib/scope";
@@ -58,7 +58,12 @@ export function AskDrawer({
       : `/${ctx.orgSlug}`;
 
   return (
-    <Sheet open={isAskOpen} onOpenChange={(open) => !open && closeAsk()}>
+    <Sheet
+      open={isAskOpen}
+      onOpenChange={(open) => !open && closeAsk()}
+      // Keep the drawer open on outside clicks — closed only via the buttons.
+      disablePointerDismissal
+    >
       <SheetContent
         side="right"
         className={cn(
@@ -68,17 +73,15 @@ export function AskDrawer({
           // Override default sm:max-w-sm from sheet variants
           "[&]:sm:max-w-[480px]",
         )}
-        // Prevent the default close button from Sheet — we render our own.
-        onInteractOutside={(e) => e.preventDefault()}
       >
         {/* Header */}
-        <SheetHeader className="flex flex-row items-center justify-between border-b border-border/40 px-4 py-3">
+        <SheetHeader className="flex flex-row items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-accent" aria-hidden="true" />
+            <Sparkles className="h-4 w-4 text-foreground" aria-hidden="true" />
             <SheetTitle className="text-sm font-medium">Ask Oxagen</SheetTitle>
           </div>
-          <div className="flex items-center gap-1">
-            {/* Pop out to full chat */}
+          <div className="flex items-center gap-1 pr-6">
+            {/* Pop out to full chat — the Sheet's built-in close handles dismissal. */}
             <Button
               variant="ghost"
               size="icon"
@@ -89,16 +92,6 @@ export function AskDrawer({
               <Link href={chatHref} onClick={closeAsk}>
                 <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
               </Link>
-            </Button>
-            {/* Close */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={closeAsk}
-              className="h-7 w-7 text-muted-foreground hover:text-foreground"
-              aria-label="Close ask drawer"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
         </SheetHeader>
@@ -144,7 +137,7 @@ function AskDrawerChatShell({
     <Suspense
       fallback={
         <div className="flex flex-1 items-center justify-center">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" aria-label="Loading" />
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-foreground" aria-label="Loading" />
         </div>
       }
     >

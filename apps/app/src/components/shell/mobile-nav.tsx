@@ -27,7 +27,7 @@ import { getSidebarConfig, resolveSidebarMode } from "@/lib/sidebar";
 import { cn } from "@/lib/utils";
 import type { ScopeContext } from "@/lib/scope";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
-import type { SessionUser } from "./avatar-menu";
+import type { SessionUser } from "./user-switcher";
 
 export interface MobileNavProps {
   ctx: ScopeContext;
@@ -62,7 +62,7 @@ export function MobileNav({
         aria-label="Open navigation menu"
         aria-haspopup="dialog"
         onClick={() => setOpen(true)}
-        className="flex items-center justify-center rounded-xl p-2 text-muted-foreground transition-colors hover:bg-accent/8 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+        className="flex items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
       >
         <Menu className="h-5 w-5" aria-hidden="true" />
       </button>
@@ -70,12 +70,12 @@ export function MobileNav({
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="left" className="flex w-72 max-w-[85vw] flex-col p-0">
           {/* Drawer header — switchers on mobile */}
-          <SheetHeader className="flex-col items-start gap-2 border-b border-border/40 px-4 py-3">
+          <SheetHeader className="flex-col items-start gap-2 border-b px-4 py-3">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
 
             {/* User display */}
             <div className="flex w-full items-center justify-between">
-              <span className="text-xs text-muted-foreground truncate">
+              <span className="truncate text-xs text-muted-foreground">
                 {user.name ?? user.email}
               </span>
             </div>
@@ -103,23 +103,25 @@ export function MobileNav({
               const isActive = pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
               const Icon = item.icon;
               return (
-                <SheetClose asChild key={item.id}>
-                  <Link
-                    href={href}
-                    aria-current={isActive ? "page" : undefined}
-                    className={cn(
-                      "flex min-h-[2.75rem] items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium",
-                      "transition-colors duration-[160ms]",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      isActive
-                        ? "bg-muted/60 text-foreground"
-                        : "text-muted-foreground hover:bg-accent/8 hover:text-foreground",
-                    )}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    <span className="flex-1 truncate">{item.label}</span>
-                  </Link>
-                </SheetClose>
+                <SheetClose
+                  key={item.id}
+                  render={
+                    <Link
+                      href={href}
+                      aria-current={isActive ? "page" : undefined}
+                      className={cn(
+                        "flex min-h-[2.75rem] items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        isActive
+                          ? "bg-accent text-accent-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="flex-1 truncate">{item.label}</span>
+                    </Link>
+                  }
+                />
               );
             })}
           </nav>

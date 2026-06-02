@@ -9,10 +9,10 @@ export function OAuthButtons({ callbackURL = "/" }: { callbackURL?: string }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <Button type="button" variant="glass" size="lg" onClick={handle("google")}>
+      <Button type="button" variant="outline" size="lg" onClick={handle("google")}>
         <GoogleIcon /> Continue with Google
       </Button>
-      <Button type="button" variant="glass" size="lg" onClick={handle("github")}>
+      <Button type="button" variant="outline" size="lg" onClick={handle("github")}>
         <Github className="h-4 w-4" /> Continue with GitHub
       </Button>
     </div>

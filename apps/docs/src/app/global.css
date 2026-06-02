@@ -1,24 +1,11 @@
 /**
  * Docs site styles.
  *
- * The shared @oxagen/ui base provides Tailwind v4, the Oxagen design tokens,
- * the Aeonik font chain, and the --hero-bg-dark CSS variable that holds the
- * single-source-of-truth gradient for the Oxagen hero surface.
+ * @oxagen/ui provides the Tailwind v4 base and shadcn neutral design tokens.
  * fumadocs-ui layers its own docs theme on top.
- *
- * The `.home-hero` utility reproduces the marketing surface for the temporary
- * landing page in apps/docs/(home) without leaking the background into the
- * /docs routes served by fumadocs.
  */
 @import "@oxagen/ui/styles/globals.css";
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
 
 @source "../../../../node_modules/fumadocs-ui/dist/**/*.js";
-
-.home-hero {
-  min-height: 100vh;
-  color: #f6f7f9;
-  background: var(--hero-bg-dark);
-  font-family: var(--font-sans);
-}

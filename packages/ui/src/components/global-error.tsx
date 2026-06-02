@@ -29,8 +29,8 @@ export function GlobalErrorPage({
           alignItems: "center",
           justifyContent: "center",
           padding: "1.5rem",
-          background: "#0a0a0f",
-          color: "#ffffff",
+          background: "#ffffff",
+          color: "#0a0a0a",
           fontFamily:
             "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
         }}
@@ -39,11 +39,12 @@ export function GlobalErrorPage({
           style={{
             width: "100%",
             maxWidth: "28rem",
-            borderRadius: "1.5rem",
-            border: "1px solid rgba(255,255,255,0.1)",
-            background: "rgba(255,255,255,0.05)",
+            borderRadius: "0.75rem",
+            border: "1px solid #e5e5e5",
+            background: "#ffffff",
             padding: "2.5rem",
             textAlign: "center",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
           }}
         >
           <h1 style={{ fontSize: "1.25rem", fontWeight: 600, margin: 0 }}>
@@ -53,7 +54,7 @@ export function GlobalErrorPage({
             style={{
               marginTop: "0.5rem",
               fontSize: "0.875rem",
-              color: "rgba(255,255,255,0.6)",
+              color: "#737373",
             }}
           >
             An unexpected error occurred. You can try again, and if it keeps
@@ -64,7 +65,7 @@ export function GlobalErrorPage({
               style={{
                 marginTop: "0.75rem",
                 fontSize: "0.75rem",
-                color: "rgba(255,255,255,0.35)",
+                color: "#a3a3a3",
                 fontFamily: "ui-monospace, SFMono-Regular, monospace",
               }}
             >
@@ -76,11 +77,11 @@ export function GlobalErrorPage({
             onClick={() => reset()}
             style={{
               marginTop: "2rem",
-              height: "2.5rem",
+              height: "2.25rem",
               padding: "0 1.25rem",
-              borderRadius: "0.75rem",
+              borderRadius: "0.5rem",
               border: "none",
-              background: "rgba(255,255,255,0.1)",
+              background: "#171717",
               color: "#ffffff",
               fontSize: "0.875rem",
               fontWeight: 500,

@@ -162,14 +162,14 @@ export function BackgroundTaskTray({ initialTaskIds, fetchTask, cancelTask }: Ba
 
   return (
     <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] right-4 z-50 w-80 max-w-[calc(100vw-2rem)] md:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
-      <div className="glass-panel overflow-hidden p-0">
+      <div className="rounded-xl border bg-card text-card-foreground shadow overflow-hidden p-0">
         <button
           type="button"
           onClick={() => setCollapsed((v) => !v)}
           className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
         >
           <Loader2
-            className={cn("h-3.5 w-3.5", activeCount > 0 ? "animate-spin text-accent" : "text-muted-foreground")}
+            className={cn("h-3.5 w-3.5", activeCount > 0 ? "animate-spin text-foreground" : "text-muted-foreground")}
           />
           <span className="font-semibold">Background tasks</span>
           <Badge variant="muted" className="ml-auto">
@@ -178,7 +178,7 @@ export function BackgroundTaskTray({ initialTaskIds, fetchTask, cancelTask }: Ba
           {collapsed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
         {!collapsed ? (
-          <div className="max-h-96 space-y-2 overflow-y-auto border-t border-[color:var(--glass-border)] px-3 py-3">
+          <div className="max-h-96 space-y-2 overflow-y-auto border-t px-3 py-3">
             {taskIds.map((id) => (
               <TaskRow
                 key={id}
@@ -219,7 +219,7 @@ function TaskRow({
   };
 
   return (
-    <div className="rounded-xl bg-background/40 p-2 text-xs">
+    <div className="rounded-xl bg-muted p-2 text-xs">
       <div className="flex items-center gap-2">
         <span className="font-semibold">{snapshot?.label ?? snapshot?.kind ?? taskId}</span>
         <Badge
@@ -242,7 +242,7 @@ function TaskRow({
       {typeof snapshot?.progress === "number" ? (
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
           <div
-            className="h-full bg-accent transition-all"
+            className="h-full bg-primary transition-all"
             style={{ width: `${Math.min(100, Math.max(0, snapshot.progress * 100))}%` }}
           />
         </div>

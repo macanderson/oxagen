@@ -1,8 +1,6 @@
 "use client";
-import * as React from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { ChevronDown, Plus, Check } from "lucide-react";
+import { ChevronsUpDown, Plus, Check } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -24,24 +22,22 @@ export function OrgSwitcher({ current, organizations }: { current: OrgOption; or
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="glass" size="sm" className="gap-2">
-          <span className="font-semibold">{current.name}</span>
-          <ChevronDown className="h-3 w-3 opacity-70" />
+        <Button variant="outline" size="sm" className="gap-2">
+          <span className="truncate font-medium">{current.name}</span>
+          <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
         <DropdownMenuLabel>Organizations</DropdownMenuLabel>
         {organizations.map((t) => (
           <DropdownMenuItem key={t.publicId} onSelect={() => router.push(`/${t.slug}`)}>
-            <span className="flex-1">{t.name}</span>
+            <span className="flex-1 truncate">{t.name}</span>
             {t.publicId === current.publicId ? <Check className="h-3.5 w-3.5" /> : null}
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/new-organization" className="flex items-center gap-2">
-            <Plus className="h-3.5 w-3.5" /> New organization
-          </Link>
+        <DropdownMenuItem onSelect={() => router.push("/new-organization")}>
+          <Plus className="h-3.5 w-3.5" /> New organization
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

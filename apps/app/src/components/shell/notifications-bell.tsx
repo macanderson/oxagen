@@ -28,10 +28,10 @@ export function NotificationsBell() {
         aria-haspopup="dialog"
         onClick={() => setOpen(true)}
         className={cn(
-          "relative flex h-8 w-8 items-center justify-center rounded-xl",
-          "text-muted-foreground transition-colors duration-[160ms]",
-          "hover:bg-accent/8 hover:text-foreground",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+          "relative flex h-9 w-9 items-center justify-center rounded-md",
+          "text-muted-foreground transition-colors",
+          "hover:bg-accent hover:text-accent-foreground",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         )}
       >
         <Bell className="h-4 w-4" aria-hidden="true" />

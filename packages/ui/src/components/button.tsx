@@ -1,29 +1,29 @@
+"use client";
 import * as React from "react";
-import { Slot } from "@radix-ui/react-slot";
+import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default:
-          "bg-accent text-accent-foreground shadow-lg shadow-accent/20 hover:translate-y-[-1px] hover:shadow-accent/40",
-        outline:
-          "border border-border bg-background/40 backdrop-blur hover:bg-accent/10 hover:border-accent/40",
-        ghost: "hover:bg-muted hover:text-foreground",
-        glass:
-          "glass text-foreground hover:bg-white/20 dark:hover:bg-white/10",
+        default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        link: "text-accent underline-offset-4 hover:underline",
+          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+        outline:
+          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
+        secondary:
+          "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
+        ghost: "hover:bg-accent hover:text-accent-foreground",
+        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-8 rounded-lg px-3 text-xs",
-        lg: "h-12 rounded-2xl px-6 text-base",
-        icon: "h-10 w-10",
+        default: "h-9 px-4 py-2",
+        sm: "h-8 rounded-md px-3 text-xs",
+        lg: "h-10 rounded-md px-8",
+        icon: "size-9",
       },
     },
     defaultVariants: { variant: "default", size: "default" },
@@ -33,13 +33,35 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
+  /**
+   * Replace the rendered `<button>` with another element while keeping the
+   * button styling and behaviour. Pass a `ReactElement` (Base UI `render`).
+   */
+  render?: React.ReactElement;
+  /**
+   * Legacy shadcn/Radix composition flag. When set, the single child element
+   * is used as the rendered element (equivalent to Base UI's `render` prop).
+   */
   asChild?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
-    return <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />;
+  ({ className, variant, size, render, asChild = false, children, type, ...props }, ref) => {
+    const childElement =
+      asChild && React.isValidElement(children) ? (children as React.ReactElement) : undefined;
+    const renderElement = render ?? childElement;
+
+    return useRender({
+      render: renderElement ?? <button type={type ?? "button"} />,
+      ref,
+      props: {
+        className: cn(buttonVariants({ variant, size }), className),
+        ...props,
+        // When composing onto a child element, that element supplies its own
+        // content; only pass children when rendering the default <button>.
+        ...(renderElement ? {} : { children }),
+      },
+    });
   },
 );
 Button.displayName = "Button";

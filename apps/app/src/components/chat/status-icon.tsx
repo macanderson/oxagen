@@ -10,7 +10,7 @@ import type { ToolCallStatus } from "./stream-event-types";
  */
 export function StatusIcon({ status }: { status: ToolCallStatus }) {
   if (status === "running") {
-    return <Loader2 className={cn("h-3.5 w-3.5 animate-spin text-accent")} aria-label="Running" />;
+    return <Loader2 className={cn("h-3.5 w-3.5 animate-spin text-foreground")} aria-label="Running" />;
   }
   if (status === "completed") {
     return <Check className="h-3.5 w-3.5 text-emerald-500" aria-label="Completed" />;

@@ -1,39 +1,14 @@
 /**
  * Marketing site styles.
  *
- * The shared @oxagen/ui base provides Tailwind v4, design tokens, the Aeonik
- * font chain, and the --hero-bg-dark / --hero-bg-light CSS variables that
- * hold the single-source-of-truth gradient values for the Oxagen hero surface.
- *
- * Font strategy: Aeonik @font-face rules are loaded transitively via
- * @oxagen/ui/styles/globals.css → fonts/aeonik.css. The CSS custom properties
- * --font-sans / --font-display / --font-mono are set on :root by that file.
- * While the licensed .woff2 binaries are absent the system-font fallback
- * stacks embedded in those variables keep the surface fully functional.
- * See packages/ui/src/styles/fonts/README.md (OXA-1508).
- *
- * Theme is controlled by next-themes (attribute="class"). The `.dark` class
- * is the default; `.light` overrides to a light-mode palette.
+ * @oxagen/ui provides the Tailwind v4 base, shadcn neutral design tokens,
+ * and --font-sans / --font-mono CSS custom properties via its globals.css.
+ * Theme is controlled by next-themes (attribute="class").
  */
 @import "@oxagen/ui/styles/globals.css";
 
-@theme {
-  --color-ink: #f6f7f9;
-}
-
-/* ── Dark mode (default) ─────────────────────────────────────────────────── */
 html,
 body {
-  background: var(--hero-bg-dark);
-  color: var(--color-ink);
   min-height: 100vh;
-  /* Aeonik → system-font fallback stack (binaries land via OXA-1508) */
   font-family: var(--font-sans);
-}
-
-/* ── Light mode override ─────────────────────────────────────────────────── */
-html.light,
-html.light body {
-  background: var(--hero-bg-light);
-  color: #0a0a0a;
 }

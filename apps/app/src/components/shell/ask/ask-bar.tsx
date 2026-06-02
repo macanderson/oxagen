@@ -205,12 +205,12 @@ export function AskBar({ ctx, className }: AskBarProps) {
         placeholder="Ask anything… Press / to focus"
         disabled={isLoading}
         className={cn(
-          "h-full w-full rounded-xl",
+          "h-full w-full rounded-md",
           "pl-8 pr-[4.5rem] text-sm",
-          "border border-border/60 bg-background/40 backdrop-blur",
-          "text-foreground placeholder:text-muted-foreground/60",
-          "outline-none transition-all",
-          "focus:border-accent/50 focus:bg-background/60 focus:ring-2 focus:ring-ring/40",
+          "border border-input bg-background shadow-sm",
+          "text-foreground placeholder:text-muted-foreground",
+          "outline-none transition-colors",
+          "focus:ring-1 focus:ring-ring",
           "disabled:cursor-wait disabled:opacity-60",
         )}
       />

@@ -64,23 +64,24 @@ export function SidebarItem({
       aria-current={active ? "page" : undefined}
       className={cn(
         // Layout: flex row, icon + label + badge, full-width, mobile tap target
-        "group relative flex min-h-[2.75rem] w-full items-center gap-2.5 rounded-xl",
+        "group relative flex min-h-[2.75rem] w-full items-center gap-2.5 rounded-md",
         "px-3 py-2.5 text-sm font-medium",
         // Transition
-        "transition-colors duration-[160ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+        "transition-colors",
         // Focus ring
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         // Inactive state
-        !active && "text-muted-foreground hover:bg-accent/8 hover:text-foreground",
-        // Active state: muted bg, foreground text
-        active && "bg-muted/60 text-foreground",
+        !active &&
+          "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        // Active state
+        active && "bg-sidebar-accent text-sidebar-accent-foreground",
         className,
       )}
     >
-      {/* 3px left accent bar — active only */}
+      {/* 2px left accent bar — active only */}
       {active && (
         <span
-          className="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-accent"
+          className="absolute inset-y-1.5 left-0 w-[2px] rounded-full bg-sidebar-primary"
           aria-hidden="true"
         />
       )}
@@ -112,7 +113,7 @@ export function SidebarItem({
           className={cn(
             "inline-flex h-4.5 min-w-[1.125rem] items-center justify-center rounded-full px-1",
             "text-[10px] font-semibold leading-none",
-            active ? "bg-accent/15 text-accent" : "bg-muted text-muted-foreground",
+            active ? "bg-sidebar-primary text-sidebar-primary-foreground" : "bg-muted text-muted-foreground",
           )}
           aria-label={`${badge} items`}
         >

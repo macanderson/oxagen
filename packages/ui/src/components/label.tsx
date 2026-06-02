@@ -1,18 +1,23 @@
-"use client";
 import * as React from "react";
-import * as LabelPrimitive from "@radix-ui/react-label";
 import { cn } from "../lib/utils";
 
-const Label = React.forwardRef<
-  React.ElementRef<typeof LabelPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root>
->(({ className, ...props }, ref) => (
-  <LabelPrimitive.Root
-    ref={ref}
-    className={cn("text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70", className)}
-    {...props}
-  />
-));
-Label.displayName = LabelPrimitive.Root.displayName;
+/**
+ * Label — a styled native `<label>`. Base UI has no standalone label primitive
+ * (it exposes `Field.Label` inside a `Field.Root`); for the common standalone
+ * case a native element with `htmlFor` is the stock, fully-accessible choice.
+ */
+const Label = React.forwardRef<HTMLLabelElement, React.LabelHTMLAttributes<HTMLLabelElement>>(
+  ({ className, ...props }, ref) => (
+    <label
+      ref={ref}
+      className={cn(
+        "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
+        className,
+      )}
+      {...props}
+    />
+  ),
+);
+Label.displayName = "Label";
 
 export { Label };

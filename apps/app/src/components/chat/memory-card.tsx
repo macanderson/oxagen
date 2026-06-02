@@ -21,11 +21,11 @@ export function MemoryCard({ memories, topN = 5 }: MemoryCardProps) {
   if (top.length === 0) return null;
   return (
     <div
-      className="glass-panel my-2 space-y-2 p-3 text-sm animate-in"
+      className="rounded-xl border bg-card text-card-foreground shadow my-2 space-y-2 p-3 text-sm animate-in"
       data-component="memory-card"
     >
       <div className="flex items-center gap-2">
-        <Brain className="h-4 w-4 text-accent" />
+        <Brain className="h-4 w-4 text-muted-foreground" />
         <span className="font-semibold">Recalled memories</span>
         <Badge variant="muted" className="ml-auto tabular-nums">
           {memories.length}
@@ -33,7 +33,7 @@ export function MemoryCard({ memories, topN = 5 }: MemoryCardProps) {
       </div>
       <ul className="space-y-2">
         {top.map((m) => (
-          <li key={m.id} className="rounded-xl bg-background/40 p-2 text-xs">
+          <li key={m.id} className="rounded-xl bg-muted p-2 text-xs">
             <div className="mb-1 flex items-center gap-2">
               <Badge variant={WEIGHT_VARIANT[m.weight] ?? "default"} className="uppercase">
                 {m.weight}
@@ -44,7 +44,7 @@ export function MemoryCard({ memories, topN = 5 }: MemoryCardProps) {
               {m.nodeRef ? (
                 <a
                   href={`#${m.nodeRef}`}
-                  className="ml-auto truncate font-mono text-[10px] text-accent hover:underline"
+                  className="ml-auto truncate font-mono text-[10px] text-foreground hover:underline"
                 >
                   {m.nodeRef}
                 </a>

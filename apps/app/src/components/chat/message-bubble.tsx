@@ -55,7 +55,7 @@ export function MessageBubble({
       <div
         className={cn(
           "max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-sm",
-          isUser ? "bg-accent text-accent-foreground" : "glass",
+          isUser ? "bg-accent text-accent-foreground" : "rounded-lg border bg-card",
         )}
       >
         <div className="mb-1 flex items-center gap-2 text-xs opacity-80">
@@ -178,7 +178,7 @@ function renderBlock(
             // style, two shimmer lines to suggest loading content.
             <div
               className={cn(
-                "glass rounded-xl px-4 py-3",
+                "rounded-xl border bg-card px-4 py-3",
                 "animate-pulse space-y-2",
               )}
               aria-busy="true"

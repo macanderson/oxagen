@@ -105,7 +105,7 @@ export default function MakeVideoForm({
     return (
       <div
         className={cn(
-          "rounded-2xl border border-border bg-card/80 p-5 backdrop-blur-sm",
+          "rounded-2xl border border-border bg-card p-5",
           "space-y-3",
         )}
         role="status"
@@ -140,14 +140,14 @@ export default function MakeVideoForm({
       onSubmit={handleSubmit}
       aria-label="Generate video"
       className={cn(
-        "rounded-2xl border border-border bg-card/80 p-5 backdrop-blur-sm",
+        "rounded-2xl border border-border bg-card p-5",
         "space-y-5",
       )}
     >
       {/* Header row */}
       <div className="flex items-center gap-2.5">
         <Film
-          className="h-4 w-4 shrink-0 text-accent"
+          className="h-4 w-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
         <span className="text-sm font-semibold text-foreground">Generate video</span>
@@ -207,7 +207,7 @@ export default function MakeVideoForm({
           </Label>
           <Select
             value={aspectRatio}
-            onValueChange={setAspectRatio}
+            onValueChange={(v) => { if (v !== null) setAspectRatio(v); }}
             disabled={isSubmitting}
             name="aspectRatio"
           >
