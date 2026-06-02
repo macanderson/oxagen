@@ -81,6 +81,7 @@ test.describe("billing.subscription.read — authenticated, seeded state", () =>
       await sql`
         INSERT INTO billing.plans (
           id, public_id, name, slug, tier,
+          stripe_product_id,
           monthly_cents, annual_cents,
           included_credit_cents, included_seats,
           is_public, features
@@ -91,6 +92,7 @@ test.describe("billing.subscription.read — authenticated, seeded state", () =>
           ${PLAN_NAME},
           ${PLAN_SLUG},
           'build',
+          'prod_e2e_build',
           2000, 20000,
           500, 3,
           true,

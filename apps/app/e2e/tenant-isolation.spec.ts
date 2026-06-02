@@ -138,47 +138,55 @@ test.describe("tenant isolation — cross-org access denial", () => {
 
   // ── 2. User is denied access to a foreign org's routes ──────────────────────
 
-  test("user A is denied Org B root — redirected to /login", async ({
+  // The org layout gates membership via assertOrgMember() → notFound() for a
+  // non-member, so Org B routes render the 404 boundary (HTTP 404, URL
+  // unchanged) — NOT a /login redirect. 404 is deliberate: it does not even
+  // confirm Org B exists to a non-member.
+  const EXPECT_DENIED = async (page: import("@playwright/test").Page, path: string) => {
+    const resp = await page.goto(path);
+    // Initial document must be a 404 (notFound() from the org layout).
+    expect(resp?.status()).toBe(404);
+    // And the not-found surface — not an authed org shell — is what renders.
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page.getByText(/page not found|404/i).first()).toBeVisible();
+  };
+
+  test("user A is denied Org B root — 404, not the org", async ({
     page,
     context,
     baseURL,
   }) => {
     await loginAs(context, fixtureA.sessionToken, baseURL);
-    await page.goto(`/${ORG_B_SLUG}`);
-    // The application must redirect to /login (no membership in Org B).
-    await expect(page).toHaveURL(/\/login/);
+    await EXPECT_DENIED(page, `/${ORG_B_SLUG}`);
   });
 
-  test("user A is denied Org B billing page — redirected to /login", async ({
+  test("user A is denied Org B billing page — 404", async ({
     page,
     context,
     baseURL,
   }) => {
     await loginAs(context, fixtureA.sessionToken, baseURL);
-    await page.goto(`/${ORG_B_SLUG}/billing/subscription`);
-    await expect(page).toHaveURL(/\/login/);
+    await EXPECT_DENIED(page, `/${ORG_B_SLUG}/billing/subscription`);
   });
 
-  test("user A is denied Org B workspace chat — redirected to /login", async ({
+  test("user A is denied Org B workspace chat — 404 (org guard fires first)", async ({
     page,
     context,
     baseURL,
   }) => {
     await loginAs(context, fixtureA.sessionToken, baseURL);
-    // Use Org B slug with Org A's workspace slug — the workspace doesn't exist
-    // under Org B but the guard fires at the org boundary first.
-    await page.goto(`/${ORG_B_SLUG}/${WS_SLUG}/chat`);
-    await expect(page).toHaveURL(/\/login/);
+    // Org B slug with Org A's workspace slug — the org-boundary guard fires
+    // before workspace resolution.
+    await EXPECT_DENIED(page, `/${ORG_B_SLUG}/${WS_SLUG}/chat`);
   });
 
-  test("user A is denied Org B members page — redirected to /login", async ({
+  test("user A is denied Org B members page — 404", async ({
     page,
     context,
     baseURL,
   }) => {
     await loginAs(context, fixtureA.sessionToken, baseURL);
-    await page.goto(`/${ORG_B_SLUG}/members`);
-    await expect(page).toHaveURL(/\/login/);
+    await EXPECT_DENIED(page, `/${ORG_B_SLUG}/members`);
   });
 
   // ── 3. Org A data is NOT visible when loading Org B routes ──────────────────
@@ -192,11 +200,12 @@ test.describe("tenant isolation — cross-org access denial", () => {
     baseURL,
   }) => {
     await loginAs(context, fixtureA.sessionToken, baseURL);
-    await page.goto(`/${ORG_B_SLUG}/billing/subscription`);
+    const resp = await page.goto(`/${ORG_B_SLUG}/billing/subscription`);
 
-    // We should be at /login — Org A's name must not appear there.
-    await expect(page).toHaveURL(/\/login/);
-    // Login page must not contain any Org A slug or display name in its body.
+    // Denied via notFound() → 404 boundary, never Org B content.
+    expect(resp?.status()).toBe(404);
+    await expect(page.getByText(/page not found|404/i).first()).toBeVisible();
+    // The 404 surface must not leak Org A's name/slug either.
     const bodyText = await page.locator("body").textContent();
     expect(bodyText).not.toContain("E2E " + ORG_A_SLUG);
   });

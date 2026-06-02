@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg } from "@/lib/resolve-org";
+import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageContextProvider } from "@/lib/page-context";
 import { AskDrawer } from "@/components/shell/ask/ask-drawer";
@@ -24,6 +24,11 @@ export default async function OrgLayout({
   const session = await getSessionOrRedirect();
   const { orgSlug } = await params;
   const org = await resolveOrg(orgSlug);
+  // Tenant isolation: gate EVERY org-scoped page on membership. Without this
+  // an authenticated user could read any org's data by guessing the slug
+  // (IDOR). Non-members get a 404 via notFound() — indistinguishable from an
+  // unknown org. This is the single enforcement point for all [orgSlug] routes.
+  await assertOrgMember(org.id, session.user.id);
 
   const [orgsRows, workspacesRows] = await Promise.all([
     db()

@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { notFound, forbidden } from "next/navigation";
+import { notFound } from "next/navigation";
 import { eq, and } from "drizzle-orm";
 import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
@@ -61,8 +61,12 @@ export const resolveWorkspace = cache(
  * Assert that the given user is a member of the given org.
  *
  * Queries the org_users table for an (orgId, userId) row. If the user is
- * not a member, calls `forbidden()` which throws a Next.js 403 response —
- * identical semantics to `notFound()` for 404s.
+ * not a member, calls `notFound()` (HTTP 404, rendered by not-found.tsx).
+ * 404 (rather than 403) is deliberate: a non-member should not even be able
+ * to confirm the org exists — it is indistinguishable from an unknown slug,
+ * which resolveOrg() also answers with notFound(). (`forbidden()`/403 would
+ * require Next's experimental `authInterrupts` flag, which this app does not
+ * enable.)
  *
  * Use AFTER resolveOrg() in any server-side path where an authenticated user
  * reads org-scoped data. Without this gate, any authenticated user can read
@@ -84,7 +88,7 @@ export const assertOrgMember = cache(
       )
       .limit(1);
     if (rows.length === 0) {
-      forbidden();
+      notFound();
     }
   },
 );
