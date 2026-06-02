@@ -105,6 +105,7 @@ test.describe("billing.subscription.read — authenticated, seeded state", () =>
       await sql`
         INSERT INTO billing.subscriptions (
           id, public_id, org_id, plan_id,
+          stripe_subscription_id,
           status, billing_interval, seat_count,
           current_period_start, current_period_end,
           cancel_at_period_end
@@ -114,6 +115,7 @@ test.describe("billing.subscription.read — authenticated, seeded state", () =>
           'sub_e2e_build',
           ${billingFixture.orgId},
           ${IDS.plan}::uuid,
+          'sub_stripe_e2e_build',
           'active',
           'month',
           2,
