@@ -1,12 +1,11 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { eq } from "drizzle-orm";
-import { KMSClient } from "@aws-sdk/client-kms";
 import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { requireEnv } from "@oxagen/config/env";
-import { createAwsKmsAdapter } from "@oxagen/crypto/kms";
+import { createLocalKmsAdapter, loadMasterKey } from "@oxagen/crypto/kms";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 import { buildAccountTokenHooks } from "./token-encryption";
 
@@ -19,51 +18,59 @@ const env = requireEnv([
   "BETTER_AUTH_SECRET",
   "BETTER_AUTH_URL",
   "NODE_ENV",
-  "GOOGLE_CLIENT_ID",
-  "GOOGLE_CLIENT_SECRET",
+  // LOGIN client — social sign-in. The DATA client (GOOGLE_DATA_CLIENT_ID/
+  // SECRET) is reserved for the future google-workspace data connection and is
+  // intentionally NOT wired into social login.
+  "GOOGLE_LOGIN_CLIENT_ID",
+  "GOOGLE_LOGIN_CLIENT_SECRET",
   "GITHUB_CLIENT_ID",
   "GITHUB_CLIENT_SECRET",
 ] as const);
 
 // ---------------------------------------------------------------------------
-// OXA-1504: Startup guard — AUTH_TOKEN_KMS_KEY_ID must be set in non-local
+// OXA-1504: Startup guard — AUTH_TOKEN_ENCRYPTION_KEY must be set in non-local
 // environments so that OAuth token encryption is NEVER silently skipped in
 // production.  In local/development the key is optional so engineers can boot
-// without AWS credentials.
+// without it.  This is a Vercel-native master key (KEK) held in encrypted env
+// storage — no cloud KMS / AWS dependency.
 // ---------------------------------------------------------------------------
-const kmsKeyId = process.env.AUTH_TOKEN_KMS_KEY_ID;
+const tokenEncryptionKey = process.env.AUTH_TOKEN_ENCRYPTION_KEY;
+
+// Logical key-version label, stored per-row in `tokenKmsKeyId` so a future key
+// rotation can identify which master key wrapped each row. Bump on rotation.
+const TOKEN_KEY_ID = "vercel-native-v1";
+
 const isLocalEnv =
   env.NODE_ENV === "development" ||
   env.NODE_ENV === "test" ||
   process.env.VERCEL_ENV === "development" ||
   // E2E_TEST is injected by playwright.config.ts webServer.env when running
   // `next start` in CI. Playwright drives a production build over http, so
-  // NODE_ENV is "production" even though KMS is unavailable — the same
+  // NODE_ENV is "production" even though the key is unavailable — the same
   // exemption already applied to useSecureCookies (line below).
   process.env.E2E_TEST === "true";
 
-// The KMS key is a RUNTIME requirement, not a build-time one. Next.js evaluates
-// route modules during `next build` ("Collecting page data") with
+// The master key is a RUNTIME requirement, not a build-time one. Next.js
+// evaluates route modules during `next build` ("Collecting page data") with
 // NEXT_PHASE=phase-production-build set, and the build environment legitimately
 // lacks the runtime secret — failing the build here is wrong. The guard still
 // fires at server boot / request time (NEXT_PHASE unset), so production can
 // still never boot without OAuth token encryption configured (OXA-1504).
 const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
 
-if (!kmsKeyId && !isLocalEnv && !isBuildPhase) {
+if (!tokenEncryptionKey && !isLocalEnv && !isBuildPhase) {
   throw new Error(
-    "[auth] AUTH_TOKEN_KMS_KEY_ID is required in non-local environments. " +
+    "[auth] AUTH_TOKEN_ENCRYPTION_KEY is required in non-local environments. " +
       "Production cannot boot without OAuth token encryption configured (OXA-1504).",
   );
 }
 
-// OXA-1420: KMS adapter for OAuth token envelope encryption.
-// Only created when AUTH_TOKEN_KMS_KEY_ID is present so that development /
-// local builds without AWS credentials can still boot.
-const kmsAdapter =
-  kmsKeyId
-    ? createAwsKmsAdapter(new KMSClient({ region: "us-east-2" }))
-    : null;
+// OXA-1420: native envelope-encryption adapter for OAuth tokens.
+// Only created when AUTH_TOKEN_ENCRYPTION_KEY is present so that development /
+// local builds without the key can still boot.
+const kmsAdapter = tokenEncryptionKey
+  ? createLocalKmsAdapter(loadMasterKey(tokenEncryptionKey))
+  : null;
 
 // ---------------------------------------------------------------------------
 // Security audit setup
@@ -119,12 +126,26 @@ const envTrustedOrigins: string[] = process.env.BETTER_AUTH_TRUSTED_ORIGINS
   ? process.env.BETTER_AUTH_TRUSTED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
   : [];
 
-// Production Vercel app domains (per CLAUDE.md interim production URLs).
+// Production app origins trusted for CSRF / OAuth redirect validation.
+// Interim Vercel-managed domains AND the branded oxagen.ai domains are both
+// listed so the brand-domain cutover needs no auth code change. Additional
+// per-environment origins can still be appended via BETTER_AUTH_TRUSTED_ORIGINS.
 const PROD_ORIGINS = [
+  // Interim Vercel-managed domains.
   "https://oxagen-v2-app.vercel.app",
   "https://oxagen-v2-website.vercel.app",
   "https://oxagen-v2-api.vercel.app",
   "https://oxagen-v2-admin.vercel.app",
+  // Branded oxagen.ai domains.
+  "https://app.oxagen.ai",
+  // Stable preview alias — a Vercel branch-tracking domain that always serves
+  // the latest preview deployment, so Google OAuth (which forbids wildcard
+  // redirect URIs) works on previews via this one fixed hostname.
+  "https://preview-app.oxagen.ai",
+  "https://oxagen.ai",
+  "https://www.oxagen.ai",
+  "https://api.oxagen.ai",
+  "https://admin.oxagen.ai",
 ];
 
 // Local dev origins — only included in non-production so they cannot
@@ -183,10 +204,10 @@ export const auth = betterAuth({
   },
   socialProviders: {
     google:
-      env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+      env.GOOGLE_LOGIN_CLIENT_ID && env.GOOGLE_LOGIN_CLIENT_SECRET
         ? {
-            clientId: env.GOOGLE_CLIENT_ID,
-            clientSecret: env.GOOGLE_CLIENT_SECRET,
+            clientId: env.GOOGLE_LOGIN_CLIENT_ID,
+            clientSecret: env.GOOGLE_LOGIN_CLIENT_SECRET,
             // Explicit minimal scopes — prevents Google Cloud Console pre-authorized
             // scopes from silently expanding the consent screen.
             scope: ["openid", "profile", "email"],
@@ -247,11 +268,11 @@ export const auth = betterAuth({
   //       from the API/MCP sign-in route handler instead.
   // ---------------------------------------------------------------------------
   databaseHooks: {
-    // Account token encryption is only active when AUTH_TOKEN_KMS_KEY_ID is
-    // set. In dev/CI without AWS credentials the hooks are omitted so the
-    // process boots without throwing on the missing key. In production,
-    // AUTH_TOKEN_KMS_KEY_ID is required (enforced by the startup guard above).
-    ...(kmsAdapter ? { account: buildAccountTokenHooks(kmsAdapter) } : {}),
+    // Account token encryption is only active when AUTH_TOKEN_ENCRYPTION_KEY is
+    // set. In dev/CI without the key the hooks are omitted so the process boots
+    // without throwing on the missing key. In production, the key is required
+    // (enforced by the startup guard above).
+    ...(kmsAdapter ? { account: buildAccountTokenHooks(kmsAdapter, TOKEN_KEY_ID) } : {}),
     session: {
       create: {
         after: async (session) => {

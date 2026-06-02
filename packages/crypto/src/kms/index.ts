@@ -1,1 +1,1 @@
-export { createAwsKmsAdapter } from "./aws";
+export { createLocalKmsAdapter, loadMasterKey } from "./local";

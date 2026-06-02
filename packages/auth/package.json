@@ -17,7 +17,6 @@
   },
   "dependencies": {
     "better-auth": "1.6.11",
-    "@aws-sdk/client-kms": "3.620.0",
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/config": "workspace:*",

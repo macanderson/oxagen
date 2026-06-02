@@ -336,13 +336,13 @@ describe("trustedOrigins", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Startup KMS guard logic — derived from auth.ts (OXA-1504)
+// Startup token-encryption guard logic — derived from auth.ts (OXA-1504)
 // ---------------------------------------------------------------------------
 
-function shouldThrowKmsGuard(
+function shouldThrowEncryptionGuard(
   nodeEnv: string,
   vercelEnv: string | undefined,
-  kmsKeyId: string | undefined,
+  encryptionKey: string | undefined,
   isBuildPhase = false,
   e2eTest: string | undefined = undefined,
 ): boolean {
@@ -351,54 +351,54 @@ function shouldThrowKmsGuard(
     nodeEnv === "test" ||
     vercelEnv === "development" ||
     // E2E_TEST bypasses the guard: playwright runs `next start` with
-    // NODE_ENV=production but without KMS credentials (same exemption applied
-    // to useSecureCookies).
+    // NODE_ENV=production but without the encryption key (same exemption
+    // applied to useSecureCookies).
     e2eTest === "true";
   // The guard is skipped during `next build` (NEXT_PHASE=phase-production-build)
-  // because the KMS key is a runtime, not build-time, requirement (OXA-1504).
-  return !kmsKeyId && !isLocal && !isBuildPhase;
+  // because the master key is a runtime, not build-time, requirement (OXA-1504).
+  return !encryptionKey && !isLocal && !isBuildPhase;
 }
 
-describe("AUTH_TOKEN_KMS_KEY_ID startup guard", () => {
-  it("throws in production when key id is absent", () => {
-    expect(shouldThrowKmsGuard("production", undefined, undefined)).toBe(true);
+describe("AUTH_TOKEN_ENCRYPTION_KEY startup guard", () => {
+  it("throws in production when the key is absent", () => {
+    expect(shouldThrowEncryptionGuard("production", undefined, undefined)).toBe(true);
   });
 
-  it("throws in production when key id is empty string", () => {
-    expect(shouldThrowKmsGuard("production", undefined, "")).toBe(true);
+  it("throws in production when the key is empty string", () => {
+    expect(shouldThrowEncryptionGuard("production", undefined, "")).toBe(true);
   });
 
-  it("does NOT throw in development when key id is absent", () => {
-    expect(shouldThrowKmsGuard("development", undefined, undefined)).toBe(false);
+  it("does NOT throw in development when the key is absent", () => {
+    expect(shouldThrowEncryptionGuard("development", undefined, undefined)).toBe(false);
   });
 
-  it("does NOT throw in test environment when key id is absent", () => {
-    expect(shouldThrowKmsGuard("test", undefined, undefined)).toBe(false);
+  it("does NOT throw in test environment when the key is absent", () => {
+    expect(shouldThrowEncryptionGuard("test", undefined, undefined)).toBe(false);
   });
 
-  it("does NOT throw on Vercel preview (VERCEL_ENV=development) when key id absent", () => {
-    expect(shouldThrowKmsGuard("production", "development", undefined)).toBe(false);
+  it("does NOT throw on Vercel preview (VERCEL_ENV=development) when the key is absent", () => {
+    expect(shouldThrowEncryptionGuard("production", "development", undefined)).toBe(false);
   });
 
-  it("does NOT throw in production when key id is present", () => {
-    expect(shouldThrowKmsGuard("production", undefined, "arn:aws:kms:us-east-2:123:key/abc")).toBe(false);
+  it("does NOT throw in production when the key is present", () => {
+    expect(shouldThrowEncryptionGuard("production", undefined, "Zm9vYmFyYmF6cXV4")).toBe(false);
   });
 
-  it("does NOT throw during the Next.js build phase even when key id is absent", () => {
-    expect(shouldThrowKmsGuard("production", undefined, undefined, true)).toBe(false);
+  it("does NOT throw during the Next.js build phase even when the key is absent", () => {
+    expect(shouldThrowEncryptionGuard("production", undefined, undefined, true)).toBe(false);
   });
 
   it("does NOT throw in production when E2E_TEST=true (Playwright CI bypass)", () => {
-    // Playwright runs `next start` (NODE_ENV=production) over http without
-    // KMS credentials. E2E_TEST=true is the sentinel injected by playwright.config.ts
+    // Playwright runs `next start` (NODE_ENV=production) over http without the
+    // encryption key. E2E_TEST=true is the sentinel injected by playwright.config.ts
     // webServer.env to exempt this legitimate scenario from the guard.
-    expect(shouldThrowKmsGuard("production", undefined, undefined, false, "true")).toBe(false);
+    expect(shouldThrowEncryptionGuard("production", undefined, undefined, false, "true")).toBe(false);
   });
 
   it("E2E bypass only activates for the exact string 'true', not '1' or 'TRUE'", () => {
-    expect(shouldThrowKmsGuard("production", undefined, undefined, false, "1")).toBe(true);
-    expect(shouldThrowKmsGuard("production", undefined, undefined, false, "TRUE")).toBe(true);
-    expect(shouldThrowKmsGuard("production", undefined, undefined, false, "yes")).toBe(true);
+    expect(shouldThrowEncryptionGuard("production", undefined, undefined, false, "1")).toBe(true);
+    expect(shouldThrowEncryptionGuard("production", undefined, undefined, false, "TRUE")).toBe(true);
+    expect(shouldThrowEncryptionGuard("production", undefined, undefined, false, "yes")).toBe(true);
   });
 });
 

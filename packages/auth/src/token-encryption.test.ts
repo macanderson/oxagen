@@ -1,8 +1,8 @@
 /**
  * Unit tests for token-encryption.ts.
  *
- * The @oxagen/crypto and @oxagen/config/env modules are mocked so that tests
- * run without AWS credentials or real KMS access.
+ * The @oxagen/crypto module is mocked so that tests run without real key
+ * material — the encrypt/decrypt seam is exercised in crypto's own suite.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -18,12 +18,6 @@ vi.mock("@oxagen/crypto", () => ({
   decrypt: (...args: unknown[]) => mockDecrypt(...args) as unknown,
 }));
 
-const mockRequireEnv = vi.fn();
-
-vi.mock("@oxagen/config/env", () => ({
-  requireEnv: (...args: unknown[]) => mockRequireEnv(...args) as unknown,
-}));
-
 import {
   encryptAccountTokens,
   decryptAccountTokens,
@@ -34,7 +28,7 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const KEY_ID = "arn:aws:kms:us-east-2:123456789012:key/test-key-id";
+const KEY_ID = "vercel-native-v1";
 
 function makeMockAdapter() {
   return {} as Parameters<typeof encryptAccountTokens>[2];
@@ -183,18 +177,16 @@ describe("buildAccountTokenHooks", () => {
     vi.clearAllMocks();
   });
 
-  it("throws when AUTH_TOKEN_KMS_KEY_ID is absent", () => {
-    mockRequireEnv.mockReturnValue({ AUTH_TOKEN_KMS_KEY_ID: "" });
+  it("throws when the key-version label is empty", () => {
     const adapter = makeMockAdapter();
-    expect(() => buildAccountTokenHooks(adapter)).toThrow(
-      /AUTH_TOKEN_KMS_KEY_ID is required/,
+    expect(() => buildAccountTokenHooks(adapter, "")).toThrow(
+      /key-version label is required/,
     );
   });
 
-  it("returns create and update hooks when key id is present", () => {
-    mockRequireEnv.mockReturnValue({ AUTH_TOKEN_KMS_KEY_ID: KEY_ID });
+  it("returns create and update hooks when a key id is provided", () => {
     const adapter = makeMockAdapter();
-    const hooks = buildAccountTokenHooks(adapter);
+    const hooks = buildAccountTokenHooks(adapter, KEY_ID);
 
     expect(hooks).toHaveProperty("create.before");
     expect(hooks).toHaveProperty("update.before");
@@ -205,12 +197,11 @@ describe("buildAccountTokenHooks", () => {
   it("create.before encrypts token fields and strips plaintext columns", async () => {
     // CONTRACT phase: access_token / refresh_token columns are dropped from DB.
     // The hook must NOT return accessToken / refreshToken in the data object.
-    mockRequireEnv.mockReturnValue({ AUTH_TOKEN_KMS_KEY_ID: KEY_ID });
     const encBuf = Buffer.from("enc");
     mockEncrypt.mockResolvedValue(encBuf);
 
     const adapter = makeMockAdapter();
-    const hooks = buildAccountTokenHooks(adapter);
+    const hooks = buildAccountTokenHooks(adapter, KEY_ID);
     const result = await hooks.create.before({
       accessToken: "acc",
       refreshToken: "ref",
@@ -230,10 +221,8 @@ describe("buildAccountTokenHooks", () => {
   });
 
   it("update.before skips encryption when no token field is present", async () => {
-    mockRequireEnv.mockReturnValue({ AUTH_TOKEN_KMS_KEY_ID: KEY_ID });
-
     const adapter = makeMockAdapter();
-    const hooks = buildAccountTokenHooks(adapter);
+    const hooks = buildAccountTokenHooks(adapter, KEY_ID);
     const account = { someOtherField: "value" };
     const result = await hooks.update.before(account);
 

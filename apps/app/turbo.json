@@ -32,7 +32,7 @@
         "GOOGLE_CLIENT_SECRET",
         "GITHUB_CLIENT_ID",
         "GITHUB_CLIENT_SECRET",
-        "AUTH_TOKEN_KMS_KEY_ID",
+        "AUTH_TOKEN_ENCRYPTION_KEY",
         // Stripe billing + usage meter
         "STRIPE_SECRET_KEY",
         "STRIPE_PUBLISHABLE_KEY",

@@ -8,8 +8,8 @@
  *   KmsAdapter (interface)                   (implement to swap KMS providers)
  *   EncryptOptions / DecryptOptions
  *
- * AWS KMS adapter:
- *   import { createAwsKmsAdapter } from "@oxagen/crypto/kms";
+ * Local KEK adapter (Vercel-native, no cloud KMS):
+ *   import { createLocalKmsAdapter, loadMasterKey } from "@oxagen/crypto/kms";
  *
  * Drizzle column helper:
  *   import { encryptedBytea } from "@oxagen/crypto/drizzle";

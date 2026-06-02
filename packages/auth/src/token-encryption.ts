@@ -19,7 +19,6 @@
 
 import { encrypt, decrypt } from "@oxagen/crypto";
 import type { KmsAdapter } from "@oxagen/crypto";
-import { requireEnv } from "@oxagen/config/env";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -162,7 +161,7 @@ export async function decryptAccountTokens(
  *     account: buildAccountTokenHooks(kmsAdapter),
  *   },
  */
-export function buildAccountTokenHooks(adapter: KmsAdapter): {
+export function buildAccountTokenHooks(adapter: KmsAdapter, keyId: string): {
   create: {
     before: (account: Record<string, unknown>) => Promise<{ data: Record<string, unknown> }>;
   };
@@ -170,12 +169,9 @@ export function buildAccountTokenHooks(adapter: KmsAdapter): {
     before: (account: Record<string, unknown>) => Promise<{ data: Record<string, unknown> }>;
   };
 } {
-  const env = requireEnv(["AUTH_TOKEN_KMS_KEY_ID"] as const);
-  const keyId = env.AUTH_TOKEN_KMS_KEY_ID;
-
   if (!keyId) {
     throw new Error(
-      "[auth/token-encryption] AUTH_TOKEN_KMS_KEY_ID is required when token encryption is enabled.",
+      "[auth/token-encryption] a key-version label is required when token encryption is enabled.",
     );
   }
 

@@ -21,8 +21,15 @@ export const baseEnvSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
 
-  GOOGLE_CLIENT_ID: z.string().optional(),
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  // Google OAuth is split into two distinct clients (same Google Cloud
+  // project) so the broad data-scope client never gates plain login:
+  //  - LOGIN: minimal openid/profile/email — social sign-in (in use).
+  //  - DATA:  Workspace data-source scopes (Drive/Sheets/Gmail/…) — reserved
+  //           for the genericOAuth `google-workspace` connection (future).
+  GOOGLE_LOGIN_CLIENT_ID: z.string().optional(),
+  GOOGLE_LOGIN_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_DATA_CLIENT_ID: z.string().optional(),
+  GOOGLE_DATA_CLIENT_SECRET: z.string().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
 
@@ -69,11 +76,12 @@ export const baseEnvSchema = z.object({
   VERCEL_SANDBOX_TEAM_ID: z.string().min(1).optional(),
   VERCEL_SANDBOX_PROJECT_ID: z.string().min(1).optional(),
 
-  // OXA-1420: KMS CMK used to wrap OAuth token data encryption keys.
-  // Required in production; optional in development/test so local dev
-  // doesn't require live AWS credentials.  The crypto package enforces
-  // presence at call-time when a real KMS client is provided.
-  AUTH_TOKEN_KMS_KEY_ID: z.string().min(1).optional(),
+  // OXA-1420: Vercel-native master key (KEK) used to wrap OAuth token data
+  // encryption keys. Base64-encoded 256-bit (32-byte) key. Required in
+  // production (enforced by the auth startup guard); optional in
+  // development/test so local dev can boot without it. Generate with
+  // `openssl rand -base64 32`.
+  AUTH_TOKEN_ENCRYPTION_KEY: z.string().min(1).optional(),
 
   // OXA-1498: IAM enforcement gate. Secure by default: enforcement is ON
   // unless explicitly disabled. The kernel always resolves authz and emits
