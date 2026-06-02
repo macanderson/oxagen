@@ -3,5 +3,5 @@
   "buildCommand": "cd ../.. && pnpm turbo run build --filter=@oxagen/api",
   "installCommand": "pnpm install --frozen-lockfile",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
-  "functions": { "api/index.mjs": { "maxDuration": 60 } }
+  "functions": { "api/index.cjs": { "maxDuration": 60 } }
 }
