@@ -1,0 +1,706 @@
+import { baseEnvSchema } from "./env";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canonical environment-variable registry — the single source of truth for
+// "what every variable is, which deployable surfaces need it, where its value
+// comes from, and how it's documented."
+//
+// Everything else derives from this:
+//   - `.env.example`            → `renderEnvExample()` (generated, never hand-edited)
+//   - env-manager deploy catalog → `tools/env-manager/src/catalog.ts`
+//   - the static CI checker      → `tools/scripts/env-check.ts`
+//
+// The Zod `baseEnvSchema` (env.ts) remains the *runtime validator*; this registry
+// is a documentation/deployment superset of it. A variable is "schema-validated"
+// iff it appears in `baseEnvSchema` — computed by `isValidated()`, never a
+// hand-maintained flag, so the two can't silently diverge. `registry.test.ts`
+// asserts every schema key has a registry entry.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A deployable Vercel project surface. */
+export type ServiceName = "api" | "app" | "mcp" | "website" | "admin" | "docs";
+
+/** A deployment environment (matches Vercel's three targets). */
+export type EnvName = "development" | "preview" | "production";
+
+export const SERVICE_NAMES: readonly ServiceName[] = [
+  "api",
+  "app",
+  "mcp",
+  "website",
+  "admin",
+  "docs",
+];
+export const ENV_NAMES: readonly EnvName[] = ["development", "preview", "production"];
+
+/**
+ * Where a variable's value originates when the env-manager deploys it.
+ *  - `static`:   a literal baked into this registry (`staticValue` per env or shared).
+ *  - `generate`: a fresh random secret minted by the env-manager (kept consistent
+ *                across an env+key so e.g. api and app share one auth secret).
+ *  - `manual`:   the operator supplies the value (paste-a-secret in the UI, or set
+ *                it on a provider dashboard). The env-manager never invents it.
+ */
+export type ValueOrigin = "static" | "generate" | "manual";
+
+export interface EnvVarMeta {
+  /** Section heading, used to group `.env.example` and the env-manager UI. */
+  group: string;
+  /** One-line human description. Becomes the comment above the var in `.env.example`. */
+  description: string;
+  /** Stored on Vercel as `encrypted` (true) vs `plain`/readable (false). */
+  secret: boolean;
+  /** Inlined into a client bundle (the `NEXT_PUBLIC_` convention). */
+  clientExposed: boolean;
+  /** Which Vercel projects need this var to function. Empty = operator/tooling-only. */
+  services: ServiceName[];
+  /** Environments where a value MUST be present (drives the gap detector). */
+  requiredIn: EnvName[];
+  /** Where the value comes from when deployed. */
+  valueOrigin: ValueOrigin;
+  /**
+   * Per-env static values (only for `valueOrigin: "static"`). Use the `"*"` key
+   * for a value shared across every environment.
+   */
+  staticValue?: Partial<Record<EnvName | "*", string>>;
+  /** Optional example/placeholder shown in `.env.example` for non-static vars. */
+  placeholder?: string;
+}
+
+const ALL: EnvName[] = ["development", "preview", "production"];
+const DEPLOYED: EnvName[] = ["preview", "production"];
+
+const APP_PROD_URL = "https://oxagen-v2-app.vercel.app";
+const API_PROD_URL = "https://oxagen-v2-api.vercel.app";
+
+/**
+ * The registry. Ordered for `.env.example` layout. `services`/`requiredIn`
+ * reflect real consumers (derived from the source-reference audit); preserve
+ * the env-manager catalog's historical routing where it was already tuned.
+ */
+export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
+  // ── Node ──────────────────────────────────────────────────────────────────
+  NODE_ENV: {
+    group: "Node",
+    description: "Runtime mode. Vercel/Next set this automatically per deploy.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "development", preview: "production", production: "production" },
+  },
+
+  // ── Postgres (Neon in prod, Docker locally) ─────────────────────────────────
+  DATABASE_URL: {
+    group: "Postgres",
+    description: "Neon Postgres connection string. Prod = live branch; preview/dev = dev branch.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp", "admin"],
+    requiredIn: ALL,
+    valueOrigin: "manual",
+    placeholder: "postgres://oxagen:oxagen@localhost:5433/oxagen",
+  },
+
+  // ── ClickHouse (append-only telemetry store) ────────────────────────────────
+  CLICKHOUSE_URL: {
+    group: "ClickHouse",
+    description: "ClickHouse HTTPS endpoint.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: ALL,
+    valueOrigin: "manual",
+    placeholder: "http://localhost:8123",
+  },
+  CLICKHOUSE_USERNAME: {
+    group: "ClickHouse",
+    description: "ClickHouse user.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: ALL,
+    valueOrigin: "manual",
+    placeholder: "default",
+  },
+  CLICKHOUSE_PASSWORD: {
+    group: "ClickHouse",
+    description: "ClickHouse password (empty for local Docker).",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  CLICKHOUSE_DATABASE: {
+    group: "ClickHouse",
+    description: "ClickHouse database name.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "oxagen" },
+  },
+
+  // ── Neo4j (portable knowledge graph) ────────────────────────────────────────
+  NEO4J_URI: {
+    group: "Neo4j",
+    description: "Neo4j bolt(+s) URI.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: ALL,
+    valueOrigin: "manual",
+    placeholder: "bolt://localhost:7687",
+  },
+  NEO4J_USERNAME: {
+    group: "Neo4j",
+    description: "Neo4j user.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: ALL,
+    valueOrigin: "manual",
+    placeholder: "neo4j",
+  },
+  NEO4J_PASSWORD: {
+    group: "Neo4j",
+    description: "Neo4j password.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: ALL,
+    valueOrigin: "manual",
+  },
+  NEO4J_DATABASE: {
+    group: "Neo4j",
+    description: "Neo4j database.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "neo4j" },
+  },
+
+  // ── Better Auth ─────────────────────────────────────────────────────────────
+  BETTER_AUTH_SECRET: {
+    group: "Better Auth",
+    description:
+      "Session/cookie signing secret (≥32 chars). Minted once per env and applied " +
+      "identically to api + app so sessions validate across both.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: ALL,
+    valueOrigin: "generate",
+  },
+  BETTER_AUTH_URL: {
+    group: "Better Auth",
+    description: "Auth base URL (the app origin).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: ALL,
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:3000", production: APP_PROD_URL },
+  },
+  BETTER_AUTH_TRUSTED_ORIGINS: {
+    group: "Better Auth",
+    description:
+      "Space-separated origins allowed cross-origin access to the auth API. " +
+      "NOTE: read via raw process.env in @oxagen/auth — not yet in baseEnvSchema (tracked).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:3000", production: APP_PROD_URL },
+  },
+  AUTH_TOKEN_ENCRYPTION_KEY: {
+    group: "Better Auth",
+    description:
+      "Base64 256-bit KEK that wraps OAuth token encryption keys. Required in " +
+      "preview+production (enforced by the auth startup guard); blank locally disables it. " +
+      "Generate with `openssl rand -base64 32`.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: DEPLOYED,
+    valueOrigin: "manual",
+  },
+
+  // ── OAuth providers ─────────────────────────────────────────────────────────
+  // Google OAuth is split into a LOGIN client (minimal openid/profile/email,
+  // in use for social sign-in) and a DATA client (Workspace data scopes,
+  // reserved for the future google-workspace connection).
+  GOOGLE_LOGIN_CLIENT_ID: {
+    group: "OAuth providers",
+    description: "Google LOGIN OAuth client id (social sign-in; minimal scopes).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  GOOGLE_LOGIN_CLIENT_SECRET: {
+    group: "OAuth providers",
+    description: "Google LOGIN OAuth client secret.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  GOOGLE_DATA_CLIENT_ID: {
+    group: "OAuth providers",
+    description: "Google DATA OAuth client id (Workspace data scopes; future connection).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  GOOGLE_DATA_CLIENT_SECRET: {
+    group: "OAuth providers",
+    description: "Google DATA OAuth client secret.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  GITHUB_CLIENT_ID: {
+    group: "OAuth providers",
+    description: "GitHub OAuth client id.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  GITHUB_CLIENT_SECRET: {
+    group: "OAuth providers",
+    description: "GitHub OAuth client secret.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
+  // ── Stripe ──────────────────────────────────────────────────────────────────
+  STRIPE_SECRET_KEY: {
+    group: "Stripe",
+    description: "Stripe secret key (sk_live in prod, sk_test in preview/dev).",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: ALL,
+    valueOrigin: "manual",
+    placeholder: "sk_test_replace_me",
+  },
+  STRIPE_PUBLISHABLE_KEY: {
+    group: "Stripe",
+    description: "Stripe publishable key (pk_live in prod, pk_test in preview/dev).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: ALL,
+    valueOrigin: "manual",
+    placeholder: "pk_test_replace_me",
+  },
+  STRIPE_WEBHOOK_SECRET: {
+    group: "Stripe",
+    description: "Stripe webhook signing secret (whsec_).",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: ALL,
+    valueOrigin: "manual",
+    placeholder: "whsec_replace_me",
+  },
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: {
+    group: "Stripe",
+    description: "Browser-exposed Stripe publishable key for Stripe.js init.",
+    secret: false,
+    clientExposed: true,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "pk_test_replace_me",
+  },
+
+  // ── Billing / usage meter ────────────────────────────────────────────────────
+  OXAGEN_TARGET_MARGIN: {
+    group: "Billing",
+    description:
+      "Target blended gross margin in (0,1). Drives the usage-meter markup; keep in " +
+      "sync with Stripe via `pnpm billing:stripe-sync --apply`.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: ALL,
+    valueOrigin: "static",
+    staticValue: { "*": "0.65" },
+  },
+  OXAGEN_METER_MARKUP: {
+    group: "Billing",
+    description:
+      "Optional pinned solved meter markup (≥1). Leave unset to derive from " +
+      "OXAGEN_TARGET_MARGIN + the code config.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
+  // ── Inngest (set on app.inngest.com → Keys) ─────────────────────────────────
+  INNGEST_EVENT_KEY: {
+    group: "Inngest",
+    description: "Inngest event key. Required in preview+production.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: DEPLOYED,
+    valueOrigin: "manual",
+  },
+  INNGEST_SIGNING_KEY: {
+    group: "Inngest",
+    description: "Inngest signing key. Required in preview+production.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: DEPLOYED,
+    valueOrigin: "manual",
+  },
+
+  // ── AI providers ──────────────────────────────────────────────────────────────
+  ANTHROPIC_API_KEY: {
+    group: "AI providers",
+    description: "Anthropic API key (direct-provider fallback; primary path is the gateway).",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OPENAI_API_KEY: {
+    group: "AI providers",
+    description: "OpenAI API key (embeddings + image generation).",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  AI_GATEWAY_API_KEY: {
+    group: "AI providers",
+    description:
+      "Vercel AI Gateway token (intended primary AI auth). NOTE: referenced in no " +
+      "source file yet — wire it into @oxagen/ai or retire it (tracked).",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_LLM_FAST: {
+    group: "AI providers",
+    description: "Fast-tier model id. NOTE: referenced in no source file yet (tracked).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "anthropic/claude-haiku-4.5" },
+  },
+  OXAGEN_LLM_BALANCED: {
+    group: "AI providers",
+    description: "Balanced-tier model id. NOTE: referenced in no source file yet (tracked).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "anthropic/claude-sonnet-4.6" },
+  },
+  OXAGEN_LLM_PRECISE: {
+    group: "AI providers",
+    description: "Precise-tier model id. NOTE: referenced in no source file yet (tracked).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "anthropic/claude-opus-4.8" },
+  },
+
+  // ── Linear (capability provenance) ───────────────────────────────────────────
+  LINEAR_API_KEY: {
+    group: "Linear",
+    description: "Linear API key (tooling/provenance; not read by deployed apps).",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  LINEAR_PROJECT_ID: {
+    group: "Linear",
+    description: "Linear project id for the oxagen-v2 project (tooling-only).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "oxagen-v2-355ea6b2a3f7" },
+  },
+
+  // ── Public URLs ───────────────────────────────────────────────────────────────
+  NEXT_PUBLIC_APP_URL: {
+    group: "Public URLs",
+    description: "Public app origin (browser-exposed).",
+    secret: false,
+    clientExposed: true,
+    services: ["app", "website"],
+    requiredIn: ALL,
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:3000", production: APP_PROD_URL },
+  },
+  NEXT_PUBLIC_API_URL: {
+    group: "Public URLs",
+    description: "Public api origin (browser-exposed).",
+    secret: false,
+    clientExposed: true,
+    services: ["app", "website"],
+    requiredIn: ALL,
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:4000", production: API_PROD_URL },
+  },
+
+  // ── IAM enforcement ─────────────────────────────────────────────────────────
+  IAM_ENFORCEMENT_ENABLED: {
+    group: "IAM",
+    description:
+      "Master switch for capability-level IAM checks. Default true (secure). " +
+      "Set false only for break-glass; revert before the end of the incident.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "true" },
+  },
+
+  // ── Sandbox runtime ───────────────────────────────────────────────────────────
+  SANDBOX_ENABLED: {
+    group: "Sandbox",
+    description: "Whether to execute tool calls in an isolated sandbox.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "false", preview: "true", production: "true" },
+  },
+  SANDBOX_DRIVER: {
+    group: "Sandbox",
+    description: "Sandbox backend: modal | docker | vercel.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "docker", preview: "vercel", production: "vercel" },
+  },
+  MODAL_RUNNER_URL: {
+    group: "Sandbox",
+    description: "Modal sandboxed runner URL (SANDBOX_DRIVER=modal).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  MODAL_RUNNER_TOKEN: {
+    group: "Sandbox",
+    description: "Modal sandboxed runner token (SANDBOX_DRIVER=modal).",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  VERCEL_SANDBOX_TOKEN: {
+    group: "Sandbox",
+    description: "Vercel Sandbox token (SANDBOX_DRIVER=vercel; OIDC auto-resolves on Vercel).",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  VERCEL_SANDBOX_TEAM_ID: {
+    group: "Sandbox",
+    description: "Vercel Sandbox team id (SANDBOX_DRIVER=vercel).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  VERCEL_SANDBOX_PROJECT_ID: {
+    group: "Sandbox",
+    description: "Vercel Sandbox project id (SANDBOX_DRIVER=vercel).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
+  // ── Observability / feature flags (read raw via process.env — not yet in baseEnvSchema) ──
+  LOG_LEVEL: {
+    group: "Observability",
+    description:
+      "Pino log level for service loggers. NOTE: read via raw process.env in 5 packages — " +
+      "not yet in baseEnvSchema (tracked).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "debug", preview: "info", production: "info" },
+  },
+  KNOWLEDGE_GRAPH_ENABLED: {
+    group: "Observability",
+    description:
+      'Feature flag — set "false" to disable the Neo4j knowledge-graph writes. ' +
+      "NOTE: read via raw process.env in @oxagen/agent — not yet in baseEnvSchema (tracked).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "true" },
+  },
+  MCP_PORT: {
+    group: "Observability",
+    description:
+      "HTTP port for the xmcp server. NOTE: read via raw process.env in apps/mcp — " +
+      "not yet in baseEnvSchema (tracked).",
+    secret: false,
+    clientExposed: false,
+    services: ["mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
+  // ── env-manager tooling (operator/local-only; never pushed to app projects) ──
+  VERCEL_TOKEN: {
+    group: "env-manager tooling",
+    description: "Vercel API token (admin) the env-manager uses to read/write project env vars.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  VERCEL_TEAM_ID: {
+    group: "env-manager tooling",
+    description: "Vercel team id (defaults to the oxagen team).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  ENV_MANAGER_PORT: {
+    group: "env-manager tooling",
+    description: "Local port for the env-manager web UI.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "7799" },
+  },
+};
+
+// ─── Derivations (the single place every surface reads from) ─────────────────
+
+const SCHEMA_KEYS: ReadonlySet<string> = new Set(Object.keys(baseEnvSchema.shape));
+
+/** True iff the variable is enforced by the Zod `baseEnvSchema` runtime validator. */
+export function isValidated(key: string): boolean {
+  return SCHEMA_KEYS.has(key);
+}
+
+/** Every variable name the registry knows about. */
+export function registryKeys(): string[] {
+  return Object.keys(ENV_REGISTRY);
+}
+
+/** Keys a given service needs present in a given environment (the gap-detector contract). */
+export function requiredKeysFor(service: ServiceName, env: EnvName): string[] {
+  return Object.entries(ENV_REGISTRY)
+    .filter(([, m]) => m.services.includes(service) && m.requiredIn.includes(env))
+    .map(([k]) => k);
+}
+
+/** All client-exposed (`NEXT_PUBLIC_`) keys. */
+export function clientKeys(): string[] {
+  return Object.entries(ENV_REGISTRY)
+    .filter(([, m]) => m.clientExposed)
+    .map(([k]) => k);
+}
+
+/** All keys stored encrypted on Vercel. */
+export function secretKeys(): string[] {
+  return Object.entries(ENV_REGISTRY)
+    .filter(([, m]) => m.secret)
+    .map(([k]) => k);
+}
+
+/** The static value for a key in an env, if one is defined (`"*"` = shared). */
+export function staticValueFor(key: string, env: EnvName): string | undefined {
+  const sv = ENV_REGISTRY[key]?.staticValue;
+  if (!sv) return undefined;
+  return sv[env] ?? sv["*"];
+}
+
+/**
+ * Render the canonical `.env.example` from the registry. Deterministic (stable
+ * group + insertion order) so CI can assert the committed file matches via diff.
+ */
+export function renderEnvExample(): string {
+  const lines: string[] = [
+    "# Oxagen environment contract — GENERATED from packages/config/src/registry.ts.",
+    "# Do not edit by hand: run `pnpm env:check --write` to regenerate.",
+    "# Copy to .env.local (gitignored) and fill values. NOTE markers flag vars not",
+    "# yet validated by baseEnvSchema (tracked in Linear).",
+    "",
+  ];
+  let group: string | null = null;
+  for (const [key, meta] of Object.entries(ENV_REGISTRY)) {
+    if (meta.group !== group) {
+      group = meta.group;
+      const bar = "─".repeat(Math.max(1, 74 - group.length));
+      lines.push(`# ── ${group} ${bar}`);
+    }
+    const flags: string[] = [];
+    if (!isValidated(key)) flags.push("not-in-schema");
+    if (meta.secret) flags.push("secret");
+    if (meta.requiredIn.length > 0) flags.push(`required:${meta.requiredIn.join("/")}`);
+    else flags.push("optional");
+    lines.push(`# ${meta.description}${flags.length ? `  [${flags.join(", ")}]` : ""}`);
+    const value = staticValueFor(key, "development") ?? meta.placeholder ?? "";
+    lines.push(`${key}=${value}`);
+    lines.push("");
+  }
+  return lines.join("\n").replace(/\n+$/, "\n");
+}

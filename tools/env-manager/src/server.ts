@@ -3,11 +3,12 @@ import { Hono } from "hono";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { ENV_NAMES, ENV_REGISTRY, requiredKeysFor } from "@oxagen/config";
 import { loadConfig } from "./config";
 import { CATALOG } from "./catalog";
 import { listEnv, upsertEnv } from "./vercel";
 import { resolveSource } from "./sources";
-import { ENV_NAMES, SERVICE_NAMES } from "./types";
+import { SERVICE_NAMES } from "./types";
 import type { DeployResult, EnvName, ServiceName } from "./types";
 
 const cfg = loadConfig();
@@ -50,8 +51,8 @@ app.get("/api/state", async (c) => {
 });
 
 // Resolve every catalog entry's source for `env` and push to each of its
-// services' projects (target = env). `generate` is resolved once per key so the
-// same secret lands on api + app.
+// services' projects. `generate` is resolved once per key so the same secret
+// lands on api + app. `manual` entries are skipped here — use POST /api/set.
 app.post("/api/deploy", async (c) => {
   if (!cfg.vercelToken) return c.json({ error: "VERCEL_TOKEN not set" }, 400);
   const body = (await c.req.json().catch(() => ({}))) as {
@@ -94,7 +95,7 @@ app.post("/api/deploy", async (c) => {
     for (const svc of entry.services) {
       if (onlyServices && !onlyServices.has(svc)) continue;
       if (manual) {
-        results.push({ key: entry.key, env, service: svc, status: "manual", detail: "set manually (Inngest/LLM dashboard)" });
+        results.push({ key: entry.key, env, service: svc, status: "manual", detail: "set manually via /api/set or the paste UI" });
         continue;
       }
       if (error) {
@@ -114,6 +115,85 @@ app.post("/api/deploy", async (c) => {
     }
   }
   return c.json({ results });
+});
+
+// Paste-and-fan-out: the operator provides a value and it's pushed to every
+// project that needs this key for the given environment. The value is never
+// returned to the browser or logged.
+app.post("/api/set", async (c) => {
+  if (!cfg.vercelToken) return c.json({ error: "VERCEL_TOKEN not set" }, 400);
+  const body = (await c.req.json().catch(() => ({}))) as {
+    key?: string;
+    env?: EnvName;
+    value?: string;
+    services?: ServiceName[];
+  };
+
+  const { key, env, value } = body;
+  if (!key) return c.json({ error: "key is required" }, 400);
+  const meta = ENV_REGISTRY[key];
+  if (!meta) return c.json({ error: `unknown key: ${key}` }, 400);
+  if (!env || !ENV_NAMES.includes(env)) return c.json({ error: "bad or missing env" }, 400);
+  if (!value || value.trim().length === 0) return c.json({ error: "value is required" }, 400);
+
+  const targetServices = body.services?.length
+    ? meta.services.filter((s) => (body.services as ServiceName[]).includes(s))
+    : meta.services;
+
+  const results: DeployResult[] = [];
+  for (const svc of targetServices) {
+    try {
+      await upsertEnv(cfg, cfg.projects[svc], key, value, env, meta.secret);
+      results.push({ key, env, service: svc, status: "ok" });
+    } catch (e) {
+      results.push({ key, env, service: svc, status: "error", detail: (e as Error).message.slice(0, 140) });
+    }
+  }
+  // value is intentionally not included in the response
+  return c.json({ results });
+});
+
+// Online gap detector: diff required keys (from registry) against live Vercel
+// state per service, for a given environment target.
+app.get("/api/gaps", async (c) => {
+  if (!cfg.vercelToken) return c.json({ error: "VERCEL_TOKEN not set" }, 400);
+  const env = c.req.query("env") as EnvName | undefined;
+  if (!env || !ENV_NAMES.includes(env)) return c.json({ error: "bad or missing env query param" }, 400);
+
+  // Fetch live state for all services in parallel.
+  const liveState: Record<ServiceName, Set<string>> = {} as Record<ServiceName, Set<string>>;
+  const allRegistryKeys = new Set(Object.keys(ENV_REGISTRY));
+
+  await Promise.all(
+    SERVICE_NAMES.map(async (svc) => {
+      const present = new Set<string>();
+      try {
+        for (const v of await listEnv(cfg, cfg.projects[svc])) {
+          if (v.target.includes(env)) present.add(v.key);
+        }
+      } catch {
+        // Leave the set empty; gap detector will report everything as missing.
+      }
+      liveState[svc] = present;
+    }),
+  );
+
+  const missing: { service: ServiceName; key: string }[] = [];
+  const extra: { service: ServiceName; key: string }[] = [];
+
+  for (const svc of SERVICE_NAMES) {
+    const required = new Set(requiredKeysFor(svc, env));
+    const present = liveState[svc];
+
+    for (const key of required) {
+      if (!present.has(key)) missing.push({ service: svc, key });
+    }
+    for (const key of present) {
+      if (!allRegistryKeys.has(key)) extra.push({ service: svc, key });
+    }
+  }
+
+  return c.json({ env, missing, extra });
 });
 
 serve({ fetch: app.fetch, hostname: "127.0.0.1", port: cfg.port }, (info) => {
