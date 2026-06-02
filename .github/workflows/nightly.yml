@@ -98,5 +98,11 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      # Apply committed Drizzle migrations on top of the init baseline.
+      # Unconditional (unlike ci.yml's diff-gated step): the service
+      # containers start fresh every run, so the full schema must always
+      # be brought current or test:contract/build legs fail on main.
+      - name: Migrate
+        run: pnpm db:migrate
       - name: Full ${{ matrix.task }} (no affected filter)
         run: pnpm turbo run ${{ matrix.task }}
