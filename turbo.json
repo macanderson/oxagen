@@ -17,7 +17,7 @@
 
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**", ".xmcp/**"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", ".xmcp/**", ".vercel/output/**"],
       "passThroughEnv": ["VERCEL", "VERCEL_URL", "NEXT_PHASE"],
       "env": [
         "DATABASE_URL",
