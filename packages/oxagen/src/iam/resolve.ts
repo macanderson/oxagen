@@ -14,7 +14,7 @@
 //   Rule 7: Role-inherited grant      → inherit role grant
 //   Rule 8: Default effect (contract) → use contract.defaultEffect
 
-import type { CapabilityEffect, ResolvedPrincipal } from "../types.js";
+import type { CapabilityEffect, ResolvedPrincipal } from "../types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

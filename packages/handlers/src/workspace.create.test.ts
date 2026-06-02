@@ -66,7 +66,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   return { and: orig.and, eq: orig.eq };
 });
 
-import { workspaceCreateHandler } from "./workspace.create.js";
+import { workspaceCreateHandler } from "./workspace.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────

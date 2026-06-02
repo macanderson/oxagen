@@ -3,4 +3,4 @@
 // Only pure, dep-free code lives here. The impure IAM runtime (DB reads,
 // ClickHouse writes, access-request creation) lives in packages/iam.
 
-export * from "./resolve.js";
+export * from "./resolve";

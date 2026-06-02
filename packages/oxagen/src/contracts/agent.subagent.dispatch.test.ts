@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agentSubagentDispatch } from "./agent.subagent.dispatch.js";
-import { getCapability } from "../registry.js";
+import { agentSubagentDispatch } from "./agent.subagent.dispatch";
+import { getCapability } from "../registry";
 
 describe("agent.subagent.dispatch capability", () => {
   it("parses a valid input", () => {

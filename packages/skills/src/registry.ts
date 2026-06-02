@@ -1,5 +1,5 @@
-import { scanSkillsDir } from "./filesystem.js";
-import type { Skill, SkillDbAdapter } from "./types.js";
+import { scanSkillsDir } from "./filesystem";
+import type { Skill, SkillDbAdapter } from "./types";
 
 export interface SkillRegistry {
   list(filter?: string): Promise<Skill[]>;

@@ -1,10 +1,10 @@
-import { inngest } from "../inngest.js";
+import { inngest } from "../inngest";
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { insertToolInvocation } from "@oxagen/telemetry";
 import "@oxagen/oxagen";
-import { logger } from "../logger.js";
+import { logger } from "../logger";
 
 /**
  * Background task executor. The payload's `capability` field names the

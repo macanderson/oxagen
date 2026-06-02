@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { registerCapability } from "../registry.js";
+import { registerCapability } from "../registry";
 
 // Begin a Stripe Checkout flow for a plan change. The capability does not
 // complete the upgrade itself — Stripe Checkout is hosted, and the

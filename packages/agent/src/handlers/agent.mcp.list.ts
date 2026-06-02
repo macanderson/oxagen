@@ -1,6 +1,6 @@
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
-import type { CapabilityContext } from "../types.js";
+import type { CapabilityContext } from "../types";
 import type { AgentMcpListInput, AgentMcpListOutput } from "@oxagen/oxagen/contracts/agent.mcp.list";
 
 export type { AgentMcpListInput, AgentMcpListOutput };

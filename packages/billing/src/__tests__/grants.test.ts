@@ -16,20 +16,20 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { BillingCheckoutSession, BillingInvoice } from "../provider.js";
+import type { BillingCheckoutSession, BillingInvoice } from "../provider";
 
 // ---------------------------------------------------------------------------
 // Module mocks — registered before any module import.
 // ---------------------------------------------------------------------------
 
 const syncSubscriptionMock = vi.fn().mockResolvedValue(undefined);
-vi.mock("../subscriptions.js", () => ({
+vi.mock("../subscriptions", () => ({
   syncSubscriptionFromStripe: syncSubscriptionMock,
 }));
 
 // billingProvider mock — only getCheckoutSessionCreditPacks is used in grants.
 const getCheckoutSessionCreditPacksMock = vi.fn().mockResolvedValue([]);
-vi.mock("../client.js", () => ({
+vi.mock("../client", () => ({
   billingProvider: () => ({
     getCheckoutSessionCreditPacks: getCheckoutSessionCreditPacksMock,
   }),
@@ -139,7 +139,7 @@ vi.mock("drizzle-orm", () => ({
 
 // Import after mocks.
 const { grantFreeCredits, grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } =
-  await import("../grants.js");
+  await import("../grants");
 
 // ---------------------------------------------------------------------------
 // Fixture helpers

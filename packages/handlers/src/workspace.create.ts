@@ -2,7 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
-import { logger } from "./logger.js";
+import { logger } from "./logger";
 
 // Postgres unique_violation. Two concurrent creates with the same (orgId, slug)
 // can both pass the pre-check before either insert lands; the loser hits the

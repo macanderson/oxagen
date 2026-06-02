@@ -1,4 +1,4 @@
-import type { CatalogEntry } from "./types.js";
+import type { CatalogEntry } from "./types";
 
 // Production URLs (interim Vercel-managed domains; see CLAUDE.md).
 const APP_PROD_URL = "https://oxagen-v2-app.vercel.app";

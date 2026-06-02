@@ -12,13 +12,13 @@ mocks.writeMemoryMock.mockImplementation(async () => ({ memoryId: "m_new" }));
 // Default: KG enabled so existing tests are unaffected.
 mocks.isKnowledgeGraphEnabledMock.mockReturnValue(true);
 
-vi.mock("../memory/embed.js", () => ({ embedText: mocks.embedTextMock }));
-vi.mock("../memory/neo4j.js", () => ({ writeMemory: mocks.writeMemoryMock }));
-vi.mock("../runtime/knowledge-graph.js", () => ({
+vi.mock("../memory/embed", () => ({ embedText: mocks.embedTextMock }));
+vi.mock("../memory/neo4j", () => ({ writeMemory: mocks.writeMemoryMock }));
+vi.mock("../runtime/knowledge-graph", () => ({
   isKnowledgeGraphEnabled: mocks.isKnowledgeGraphEnabledMock,
 }));
 
-import { agentMemoryWriteHandler } from "./agent.memory.write.js";
+import { agentMemoryWriteHandler } from "./agent.memory.write";
 
 const CTX = {
   orgId: "ten_1",

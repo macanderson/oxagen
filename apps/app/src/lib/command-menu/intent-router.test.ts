@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { classifyIntent } from "./intent-router.js";
+import { classifyIntent } from "./intent-router";
 
 // ---------------------------------------------------------------------------
 // Mock enumerateNavTargets so tests don't need a real ScopeContext or DB.

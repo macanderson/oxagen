@@ -118,7 +118,7 @@ vi.mock("@oxagen/database", () => ({
   schema: SCHEMA,
 }));
 
-const { consumeCredits } = await import("../credits.js");
+const { consumeCredits } = await import("../credits");
 
 // ---------------------------------------------------------------------------
 // Helpers

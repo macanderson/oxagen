@@ -14,8 +14,8 @@ import {
   getSidebarConfig,
   enumerateNavTargets,
   type SidebarMode,
-} from "./sidebar.js";
-import type { ScopeContext } from "./scope.js";
+} from "./sidebar";
+import type { ScopeContext } from "./scope";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -75,7 +75,7 @@ describe("resolveSidebarMode", () => {
 // Spec (application-shell spec §4):
 //   workspace: 6 items (Chat, Knowledge, Automation, Activity, Studio, Settings)
 //   org:       6 items (Workspaces, Members, Access, Security, Billing, Developer)
-//   account:   6 items (Back to app + Profile, Security, Cases, Notifications, Privacy)
+//   account:   2 items (Back to app, Profile)
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
@@ -91,10 +91,10 @@ describe("getSidebarConfig item counts", () => {
     expect(config.items).toHaveLength(6);
   });
 
-  it("account config has exactly 6 items (5 personal + 1 back link)", () => {
+  it("account config has exactly 2 items (profile + back link)", () => {
     const config = getSidebarConfig("account");
     expect(config.mode).toBe("account");
-    expect(config.items).toHaveLength(6);
+    expect(config.items).toHaveLength(2);
   });
 
   it("account config contains exactly one isReturn item", () => {
@@ -204,21 +204,6 @@ describe("href builders produce correct paths", () => {
       expect(findItem("profile").href(wsCtx)).toBe("/account/profile");
     });
 
-    it("account-security -> /account/security", () => {
-      expect(findItem("account-security").href(wsCtx)).toBe("/account/security");
-    });
-
-    it("cases -> /account/cases", () => {
-      expect(findItem("cases").href(wsCtx)).toBe("/account/cases");
-    });
-
-    it("notifications -> /account/notifications", () => {
-      expect(findItem("notifications").href(wsCtx)).toBe("/account/notifications");
-    });
-
-    it("privacy -> /account/privacy", () => {
-      expect(findItem("privacy").href(wsCtx)).toBe("/account/privacy");
-    });
   });
 });
 
@@ -246,7 +231,7 @@ describe("enumerateNavTargets", () => {
       const hrefs = targets.map((t) => t.href);
       expect(hrefs).toContain("/acme/access");
       expect(hrefs).toContain("/acme/access/grants");
-      expect(hrefs).toContain("/acme/security/sso");
+      expect(hrefs).toContain("/acme/security/audit");
       expect(hrefs).toContain("/acme/billing/subscription");
       expect(hrefs).toContain("/acme/developer/mcp");
     }
@@ -257,10 +242,6 @@ describe("enumerateNavTargets", () => {
     const hrefs = targets.map((t) => t.href);
 
     expect(hrefs).toContain("/account/profile");
-    expect(hrefs).toContain("/account/security");
-    expect(hrefs).toContain("/account/cases");
-    expect(hrefs).toContain("/account/notifications");
-    expect(hrefs).toContain("/account/privacy");
   });
 
   it("does NOT include workspace paths when workspaceSlug is absent", () => {

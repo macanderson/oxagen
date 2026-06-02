@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formFill } from "./form.fill.js";
+import { formFill } from "./form.fill";
 
 describe("form.fill capability", () => {
   it("parses a valid input with a single text field", () => {

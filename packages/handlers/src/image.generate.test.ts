@@ -23,7 +23,7 @@ vi.mock("@ai-sdk/openai", () => ({
 
 // ── import under test ─────────────────────────────────────────────────────────
 
-import { imageGenerateHandler } from "./image.generate.js";
+import { imageGenerateHandler } from "./image.generate";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────

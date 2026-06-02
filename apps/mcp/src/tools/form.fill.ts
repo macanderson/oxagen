@@ -3,7 +3,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { formFill } from "@oxagen/oxagen/contracts/form.fill";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 const fieldDescriptorSchema = z.object({
   name: z.string().min(1).describe("Field identifier"),

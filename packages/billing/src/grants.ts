@@ -1,15 +1,15 @@
 import { createHash } from "node:crypto";
 import { db, schema } from "@oxagen/database";
 import { eq, sql } from "drizzle-orm";
-import { billingProvider } from "./client.js";
-import { syncSubscriptionFromStripe } from "./subscriptions.js";
-import { CREDIT_REASONS } from "./constants.js";
-import { logger } from "./logger.js";
-import type { BillingCheckoutSession, BillingInvoice } from "./provider.js";
+import { billingProvider } from "./client";
+import { syncSubscriptionFromStripe } from "./subscriptions";
+import { CREDIT_REASONS } from "./constants";
+import { logger } from "./logger";
+import type { BillingCheckoutSession, BillingInvoice } from "./provider";
 
 /**
  * The grant half of the credit loop: payments deposit credits into lots, the
- * gate ({@link import("./metering.js").chargeUsageCredits}) spends them.
+ * gate ({@link import("./metering").chargeUsageCredits}) spends them.
  * All grants go through a single transaction that:
  *  1. INSERT INTO credit_ledger … ON CONFLICT DO NOTHING  ← atomic idempotency
  *  2. INSERT INTO credit_lots

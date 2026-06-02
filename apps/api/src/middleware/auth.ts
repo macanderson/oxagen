@@ -6,7 +6,7 @@ import {
   resolveApiKey,
 } from "@oxagen/auth";
 import type { ApiKeyResolutionError } from "@oxagen/auth";
-import type { AppEnv } from "../app.js";
+import type { AppEnv } from "../app";
 
 /**
  * Thin HTTP adapter — §7.3. Extracts the bearer token or session cookie

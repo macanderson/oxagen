@@ -1,8 +1,8 @@
-import { inngest } from "../inngest.js";
+import { inngest } from "../inngest";
 import { db, schema } from "@oxagen/database";
 import { and, gt, inArray } from "drizzle-orm";
 import { sumTokenUsage } from "@oxagen/telemetry";
-import { logger } from "../logger.js";
+import { logger } from "../logger";
 
 const ACTIVE_STATUSES = ["trialing", "active", "past_due"];
 

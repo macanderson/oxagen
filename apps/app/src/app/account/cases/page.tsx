@@ -1,17 +1,6 @@
-import { Inbox } from "lucide-react";
+import { redirect } from "next/navigation";
+import { account } from "@/lib/routes";
 
 export default function AccountCasesPage() {
-  return (
-    <div className="flex max-w-lg flex-col items-center justify-center gap-4 rounded-2xl border border-border/60 bg-muted/30 px-6 py-16 text-center">
-      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Inbox className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
-      </span>
-      <div className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-foreground">Cases</p>
-        <p className="text-xs text-muted-foreground">
-          Account events, security alerts, and support tickets will appear here. Coming soon.
-        </p>
-      </div>
-    </div>
-  );
+  redirect(account.profile());
 }

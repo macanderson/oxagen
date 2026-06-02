@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agentMcpRegister } from "./agent.mcp.register.js";
-import { getCapability } from "../registry.js";
+import { agentMcpRegister } from "./agent.mcp.register";
+import { getCapability } from "../registry";
 
 describe("agent.mcp.register capability", () => {
   it("parses a valid input with defaults", () => {

@@ -20,8 +20,8 @@ import {
   SandboxPolicyError,
   DEFAULT_POLICY,
   type SandboxPolicy,
-} from "./policy.js";
-import type { SandboxRequest } from "./types.js";
+} from "./policy";
+import type { SandboxRequest } from "./types";
 
 // ---------------------------------------------------------------------------
 // Fixtures

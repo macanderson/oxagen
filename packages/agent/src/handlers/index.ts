@@ -1,4 +1,4 @@
-import type { CapabilityContext } from "../types.js";
+import type { CapabilityContext } from "../types";
 
 // Lazy handler resolution. Each capability ships a `${name}.handler.ts`
 // next to its declaration; we dynamic-import on first use so the runtime
@@ -14,22 +14,22 @@ type LoaderEntry = () => Promise<{ default?: CapabilityHandlerFn } & Record<stri
 
 // Single source of truth mapping capability name → handler module.
 const LOADERS: Record<string, LoaderEntry> = {
-  "agent.tool.list": () => import("./agent.tool.list.js"),
-  "agent.code.execute": () => import("./agent.code.execute.js"),
-  "agent.mcp.register": () => import("./agent.mcp.register.js"),
-  "agent.mcp.list": () => import("./agent.mcp.list.js"),
-  "agent.subagent.dispatch": () => import("./agent.subagent.dispatch.js"),
-  "agent.subagent.aggregate": () => import("./agent.subagent.aggregate.js"),
-  "agent.plan.create": () => import("./agent.plan.create.js"),
-  "agent.plan.approve": () => import("./agent.plan.approve.js"),
-  "agent.task.background.start": () => import("./agent.task.background.start.js"),
-  "agent.task.background.read": () => import("./agent.task.background.read.js"),
-  "agent.task.background.cancel": () => import("./agent.task.background.cancel.js"),
-  "agent.memory.recall": () => import("./agent.memory.recall.js"),
-  "agent.memory.write": () => import("./agent.memory.write.js"),
-  "agent.approval.resolve": () => import("./agent.approval.resolve.js"),
-  "agent.skill.list": () => import("./agent.skill.list.js"),
-  "agent.skill.load": () => import("./agent.skill.load.js"),
+  "agent.tool.list": () => import("./agent.tool.list"),
+  "agent.code.execute": () => import("./agent.code.execute"),
+  "agent.mcp.register": () => import("./agent.mcp.register"),
+  "agent.mcp.list": () => import("./agent.mcp.list"),
+  "agent.subagent.dispatch": () => import("./agent.subagent.dispatch"),
+  "agent.subagent.aggregate": () => import("./agent.subagent.aggregate"),
+  "agent.plan.create": () => import("./agent.plan.create"),
+  "agent.plan.approve": () => import("./agent.plan.approve"),
+  "agent.task.background.start": () => import("./agent.task.background.start"),
+  "agent.task.background.read": () => import("./agent.task.background.read"),
+  "agent.task.background.cancel": () => import("./agent.task.background.cancel"),
+  "agent.memory.recall": () => import("./agent.memory.recall"),
+  "agent.memory.write": () => import("./agent.memory.write"),
+  "agent.approval.resolve": () => import("./agent.approval.resolve"),
+  "agent.skill.list": () => import("./agent.skill.list"),
+  "agent.skill.load": () => import("./agent.skill.load"),
 };
 
 /** Capability names this package supplies handlers for. Consumed by

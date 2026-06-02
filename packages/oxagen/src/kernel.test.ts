@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import type { CapabilityContext } from "./types.js";
-import { clearRegistryForTests, registerCapability } from "./registry.js";
+import type { CapabilityContext } from "./types";
+import { clearRegistryForTests, registerCapability } from "./registry";
 import {
   CapabilityError,
   assertHandlersComplete,
@@ -12,7 +12,7 @@ import {
   invoke,
   registerHandler,
   setSecurityEventEmitter,
-} from "./kernel.js";
+} from "./kernel";
 
 const ctx: CapabilityContext = {
   orgId: "t",

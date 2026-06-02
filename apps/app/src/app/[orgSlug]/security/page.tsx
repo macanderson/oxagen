@@ -7,5 +7,5 @@ export default async function SecurityRoot({
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
-  redirect(org.security.sso({ orgSlug }));
+  redirect(org.security.audit({ orgSlug }));
 }

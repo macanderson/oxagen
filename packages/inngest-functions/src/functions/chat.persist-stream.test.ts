@@ -30,11 +30,11 @@ vi.mock("@oxagen/telemetry", () => ({
   insertTokenUsage: mocks.insertTokenUsage,
 }));
 
-vi.mock("../logger.js", () => ({
+vi.mock("../logger", () => ({
   logger: { info: mocks.loggerInfo, error: vi.fn() },
 }));
 
-vi.mock("../inngest.js", () => ({
+vi.mock("../inngest", () => ({
   inngest: { createFunction: mocks.inngestCreateFunction },
 }));
 
@@ -56,7 +56,7 @@ mocks.inngestCreateFunction.mockImplementation(
   },
 );
 
-await import("./chat.persist-stream.js");
+await import("./chat.persist-stream");
 
 function makeStep() {
   return {

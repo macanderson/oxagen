@@ -3,7 +3,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { brandkitApply } from "@oxagen/oxagen/contracts/brandkit.apply";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 export const schema = {
   workspaceId: z.string().min(1).describe("The workspace the brand kit belongs to"),

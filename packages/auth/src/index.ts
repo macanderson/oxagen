@@ -1,31 +1,31 @@
-export { auth } from "./auth.js";
-export type { Auth, Session } from "./auth.js";
-export { authClient, signIn, signOut, signUp, useSession, getSession } from "./client.js";
+export { auth } from "./auth";
+export type { Auth, Session } from "./auth";
+export { authClient, signIn, signOut, signUp, useSession, getSession } from "./client";
 
 // Transport-agnostic identity resolvers — §7.3 thin-wrapper surface.
 // API, MCP, and CLI call these; HTTP/transport specifics live in each
 // surface's thin wrapper.
-export type { SessionResult } from "./resolvers/index.js";
+export type { SessionResult } from "./resolvers/index";
 export {
   resolveSession,
   parseSessionCookie,
   stripCookieSignature,
   SESSION_COOKIE_NAME,
-} from "./resolvers/index.js";
+} from "./resolvers/index";
 
 export type {
   ApiKeyResult,
   ApiKeyResolutionError,
   ApiKeyResolution,
-} from "./resolvers/index.js";
-export { resolveApiKey } from "./resolvers/index.js";
+} from "./resolvers/index";
+export { resolveApiKey } from "./resolvers/index";
 
 export type {
   OrgScopeResult,
   OrgScopeResolutionError,
   OrgScopeResolution,
-} from "./resolvers/index.js";
-export { resolveOrgScope } from "./resolvers/index.js";
+} from "./resolvers/index";
+export { resolveOrgScope } from "./resolvers/index";
 
-export type { WorkspaceScopeResult, WorkspaceScopeResolution } from "./resolvers/index.js";
-export { resolveWorkspaceScope } from "./resolvers/index.js";
+export type { WorkspaceScopeResult, WorkspaceScopeResolution } from "./resolvers/index";
+export { resolveWorkspaceScope } from "./resolvers/index";

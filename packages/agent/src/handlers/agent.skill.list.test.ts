@@ -39,7 +39,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   return { and: orig.and, eq: orig.eq, ilike: orig.ilike };
 });
 
-import { agentSkillListHandler } from "./agent.skill.list.js";
+import { agentSkillListHandler } from "./agent.skill.list";
 
 const CTX = {
   orgId: "org_1",

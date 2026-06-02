@@ -35,7 +35,7 @@ vi.mock("@oxagen/telemetry", () => ({
   },
 }));
 
-import { embedText } from "./embed.js";
+import { embedText } from "./embed";
 
 const BASE_TELEMETRY = {
   orgId: "org_1",

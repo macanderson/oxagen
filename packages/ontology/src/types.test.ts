@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NodeLabels, EdgeTypes, VectorIndexes } from "./types.js";
+import { NodeLabels, EdgeTypes, VectorIndexes } from "./types";
 
 // These tests guard the ontology type registry against accidental drift.
 // VectorIndexes is consumed at runtime by the Neo4j client; structural regressions

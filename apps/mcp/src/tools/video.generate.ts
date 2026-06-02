@@ -3,7 +3,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { videoGenerate } from "@oxagen/oxagen/contracts/video.generate";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 // Stub video generation tool. Dispatches through kernel.invoke() so IAM
 // enforcement, ClickHouse audit, and tool_invocations metering apply uniformly.

@@ -1,1 +1,1 @@
-export { createAwsKmsAdapter } from "./aws.js";
+export { createAwsKmsAdapter } from "./aws";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { workspaceCreate } from "./workspace.create.js";
+import { workspaceCreate } from "./workspace.create";
 
 describe("workspace.create capability", () => {
   it("parses a valid input", () => {

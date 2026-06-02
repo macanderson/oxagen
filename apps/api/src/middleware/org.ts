@@ -2,7 +2,7 @@ import type { MiddlewareHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { resolveOrgScope } from "@oxagen/auth";
 import type { OrgScopeResolutionError } from "@oxagen/auth";
-import type { AppEnv } from "../app.js";
+import type { AppEnv } from "../app";
 
 /**
  * Thin HTTP adapter — §7.3. Delegates org scope resolution to the

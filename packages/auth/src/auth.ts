@@ -8,7 +8,7 @@ import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { requireEnv } from "@oxagen/config/env";
 import { createAwsKmsAdapter } from "@oxagen/crypto/kms";
 import { recordSecurityEvent } from "@oxagen/telemetry";
-import { buildAccountTokenHooks } from "./token-encryption.js";
+import { buildAccountTokenHooks } from "./token-encryption";
 
 // Better Auth binds to the canonical auth.users row, not a parallel table.
 // The Drizzle adapter looks up columns via JS property lookup

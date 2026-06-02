@@ -1,4 +1,4 @@
-import type { CapabilityContext } from "../types.js";
+import type { CapabilityContext } from "../types";
 import type { AgentToolListInput, AgentToolListOutput } from "@oxagen/oxagen/contracts/agent.tool.list";
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";

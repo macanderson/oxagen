@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agentSkillList } from "./agent.skill.list.js";
-import { getCapability } from "../registry.js";
+import { agentSkillList } from "./agent.skill.list";
+import { getCapability } from "../registry";
 
 describe("agent.skill.list capability", () => {
   it("parses an empty input", () => {

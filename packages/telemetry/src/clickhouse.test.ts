@@ -6,7 +6,7 @@
 // relying on consumer mocks.
 
 import { describe, expect, it } from "vitest";
-import { hashPrompt, providerFromModelId } from "./clickhouse.js";
+import { hashPrompt, providerFromModelId } from "./clickhouse";
 
 // ---------------------------------------------------------------------------
 // hashPrompt

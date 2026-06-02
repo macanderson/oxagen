@@ -111,7 +111,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   return { and: orig.and, eq: orig.eq };
 });
 
-import { chatMessageSendHandler } from "./chat.message.send.js";
+import { chatMessageSendHandler } from "./chat.message.send";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────

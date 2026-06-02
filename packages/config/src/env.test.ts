@@ -9,7 +9,7 @@ import {
   loadEnv,
   requireEnv,
   __resetEnvCacheForTests,
-} from "./env.js";
+} from "./env";
 
 // ── Shared minimal env that satisfies baseEnvSchema ───────────────────────────
 

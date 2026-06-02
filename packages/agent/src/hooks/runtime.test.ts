@@ -10,7 +10,7 @@ vi.mock("@oxagen/telemetry", () => ({
   insertExecutionLogs: mocks.insertExecutionLogsMock,
 }));
 
-import { beforeTool, afterTool, onError } from "./runtime.js";
+import { beforeTool, afterTool, onError } from "./runtime";
 
 const CTX = {
   orgId: "ten_1",

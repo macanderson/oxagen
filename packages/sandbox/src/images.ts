@@ -1,4 +1,4 @@
-import type { SandboxLanguage } from "./types.js";
+import type { SandboxLanguage } from "./types";
 
 // Images are digest-pinned to prevent silent tag mutation.  A mutable tag
 // (e.g. node:20-alpine) may be silently replaced by a new layer at any time,

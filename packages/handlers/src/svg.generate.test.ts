@@ -12,7 +12,7 @@ vi.mock("@oxagen/ai", () => ({
 
 // ── import under test ─────────────────────────────────────────────────────────
 
-import { svgGenerateHandler } from "./svg.generate.js";
+import { svgGenerateHandler } from "./svg.generate";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────

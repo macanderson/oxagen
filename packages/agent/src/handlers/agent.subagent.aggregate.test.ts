@@ -5,12 +5,12 @@ const mocks = vi.hoisted(() => ({
   readFanout: vi.fn(),
 }));
 
-vi.mock("../dispatch/subagent.js", () => ({
+vi.mock("../dispatch/subagent", () => ({
   readFanout: mocks.readFanout,
 }));
 
-import { agentSubagentAggregateHandler } from "./agent.subagent.aggregate.js";
-import type { FanoutSnapshot } from "../dispatch/subagent.js";
+import { agentSubagentAggregateHandler } from "./agent.subagent.aggregate";
+import type { FanoutSnapshot } from "../dispatch/subagent";
 
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -1,11 +1,11 @@
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
-import { billingProvider } from "./client.js";
-import { ensureStripeCustomer } from "./customers.js";
-import { resolveOrgTier } from "./tier.js";
-import { canBuyCredits, TierDeniedError } from "./entitlements.js";
-import { logger } from "./logger.js";
+import { billingProvider } from "./client";
+import { ensureStripeCustomer } from "./customers";
+import { resolveOrgTier } from "./tier";
+import { canBuyCredits, TierDeniedError } from "./entitlements";
+import { logger } from "./logger";
 
 export interface CreateCheckoutSessionInput {
   orgId: string;
@@ -63,7 +63,7 @@ export interface CreateCreditPackCheckoutInput {
 /**
  * One-time Checkout for a credit pack. `org_id` rides on the session metadata
  * so the `checkout.session.completed` webhook can deposit the pack's credits
- * via {@link import("./grants.js").grantCreditPackForCheckout}.
+ * via {@link import("./grants").grantCreditPackForCheckout}.
  *
  * Plan-tier gate: Free orgs cannot purchase credit packs — they must subscribe
  * to Build or above first. Throws {@link TierDeniedError} when the gate fails

@@ -1,5 +1,5 @@
 import { registerHandler } from "@oxagen/oxagen/kernel";
-import { agentHandlerNames, resolveHandler } from "./handlers/index.js";
+import { agentHandlerNames, resolveHandler } from "./handlers/index";
 
 // Side-effect module: binds every agent-runtime handler into the shared
 // kernel. Reuses this package's existing lazy `resolveHandler` (which dynamic-

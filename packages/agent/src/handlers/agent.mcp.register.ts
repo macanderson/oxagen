@@ -1,6 +1,6 @@
 import { db, schema } from "@oxagen/database";
-import type { CapabilityContext } from "../types.js";
-import { healthcheck } from "../dispatch/mcp-client.js";
+import type { CapabilityContext } from "../types";
+import { healthcheck } from "../dispatch/mcp-client";
 import type { AgentMcpRegisterInput, AgentMcpRegisterOutput } from "@oxagen/oxagen/contracts/agent.mcp.register";
 
 export type { AgentMcpRegisterInput, AgentMcpRegisterOutput };

@@ -1,5 +1,5 @@
 import type { CoreMessage } from "ai";
-import type { CapabilityContext } from "../types.js";
+import type { CapabilityContext } from "../types";
 
 /**
  * A single context block surfaced from the knowledge graph to be injected

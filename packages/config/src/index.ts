@@ -1,4 +1,4 @@
-export * from "./env.js";
+export * from "./env";
 
 export const PORTS = {
   app: 3000,

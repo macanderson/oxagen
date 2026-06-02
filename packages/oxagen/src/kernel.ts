@@ -1,6 +1,6 @@
-import type { CapabilityContext, CapabilitySurface, CapabilityEffect, ResolvedPrincipal } from "./types.js";
-import { getSurfaces } from "./types.js";
-import { getCapability, listCapabilities } from "./registry.js";
+import type { CapabilityContext, CapabilitySurface, CapabilityEffect, ResolvedPrincipal } from "./types";
+import { getSurfaces } from "./types";
+import { getCapability, listCapabilities } from "./registry";
 
 // ── IAM runtime injection (mirrors define-contract.ts pattern) ────────────────
 //

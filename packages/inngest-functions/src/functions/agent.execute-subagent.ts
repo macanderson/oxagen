@@ -1,4 +1,4 @@
-import { inngest } from "../inngest.js";
+import { inngest } from "../inngest";
 import { db, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
@@ -56,7 +56,9 @@ export const agentExecuteSubagent = inngest.createFunction(
       db()
         .select()
         .from(schema.subagentRuns)
-        .where(eq(schema.subagentRuns.fanoutId, fanoutId)),
+        .where(
+          and(eq(schema.subagentRuns.fanoutId, fanoutId), eq(schema.subagentRuns.orgId, orgId)),
+        ),
     );
 
     await step.run("mark-running", async () => {

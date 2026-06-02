@@ -45,11 +45,11 @@ vi.mock("@oxagen/telemetry", () => ({
   sumTokenUsage: mocks.sumTokenUsage,
 }));
 
-vi.mock("../logger.js", () => ({
+vi.mock("../logger", () => ({
   logger: { info: mocks.loggerInfo, error: vi.fn() },
 }));
 
-vi.mock("../inngest.js", () => ({
+vi.mock("../inngest", () => ({
   inngest: { createFunction: mocks.inngestCreateFunction },
 }));
 
@@ -68,7 +68,7 @@ mocks.inngestCreateFunction.mockImplementation(
   },
 );
 
-await import("./billing.rollup-usage.js");
+await import("./billing.rollup-usage");
 
 // step.run that executes fn immediately
 function makeStep() {

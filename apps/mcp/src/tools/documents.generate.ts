@@ -3,7 +3,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { documentsGenerate } from "@oxagen/oxagen/contracts/documents.generate";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 export const schema = {
   provider: z.enum(["google", "microsoft"]).describe("Cloud provider to create the document in"),

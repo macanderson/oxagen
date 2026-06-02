@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { videoGenerate } from "./video.generate.js";
+import { videoGenerate } from "./video.generate";
 
 describe("video.generate capability", () => {
   // ── input validation ────────────────────────────────────────────────────────

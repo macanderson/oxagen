@@ -1,6 +1,6 @@
 import { boolean, index, integer, jsonb, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { workflowSchema } from "./_schemas.js";
+import { workflowSchema } from "./_schemas";
 import {
   auditMixin,
   citext,
@@ -9,7 +9,7 @@ import {
   softDeleteMixin,
   orgScopeMixin,
   versionMixin,
-} from "./_mixins.js";
+} from "./_mixins";
 
 export const playbooks = workflowSchema.table(
   "playbooks",
@@ -62,7 +62,6 @@ export const playbookSteps = workflowSchema.table(
     playbookVersionId: uuid("playbook_version_id").notNull(),
     stepKey: text("step_key").notNull(),
     stepType: text("step_type").notNull(),
-    promptTemplateId: uuid("prompt_template_id"),
     executionOrder: integer("execution_order"),
     retryPolicy: jsonb("retry_policy").notNull().default(sql`'{}'::jsonb`),
     timeoutPolicy: jsonb("timeout_policy").notNull().default(sql`'{}'::jsonb`),
@@ -77,6 +76,7 @@ export const playbookStepAssignments = workflowSchema.table(
   "playbook_step_assignments",
   {
     ...idMixin("psa"),
+    ...orgScopeMixin(),
     playbookStepId: uuid("playbook_step_id").notNull(),
     agentVersionId: uuid("agent_version_id").notNull(),
     modelOverride: text("model_override"),
@@ -86,43 +86,7 @@ export const playbookStepAssignments = workflowSchema.table(
   (t) => ({
     stepIdx: index("playbook_step_assignments_step_idx").on(t.playbookStepId),
     agentVersionIdx: index("playbook_step_assignments_agent_version_idx").on(t.agentVersionId),
+    orgIdx: index("playbook_step_assignments_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 
-export const promptTemplates = workflowSchema.table(
-  "prompt_templates",
-  {
-    ...idMixin("tpl"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    name: text("name").notNull(),
-    slug: citext("slug").notNull(),
-  },
-  (t) => ({
-    orgSlugIdx: uniqueIndex("prompt_templates_org_slug_idx").on(t.orgId, t.slug),
-    orgIdx: index("prompt_templates_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
-export const promptTemplateVersions = workflowSchema.table(
-  "prompt_template_versions",
-  {
-    ...idMixin("ptv"),
-    ...auditMixin(),
-    ...versionMixin(),
-    promptTemplateId: uuid("prompt_template_id").notNull(),
-    systemPrompt: text("system_prompt").notNull(),
-    userPrompt: text("user_prompt").notNull(),
-    templateVariables: jsonb("template_variables").notNull(),
-  },
-  (t) => ({
-    templateIdx: index("prompt_template_versions_template_idx").on(t.promptTemplateId),
-    templateLatestIdx: uniqueIndex("prompt_template_versions_template_latest_idx")
-      .on(t.promptTemplateId)
-      .where(sql`is_latest = true`),
-    templateVersionIdx: uniqueIndex("prompt_template_versions_template_version_idx").on(
-      t.promptTemplateId,
-      t.versionNumber,
-    ),
-  }),
-);

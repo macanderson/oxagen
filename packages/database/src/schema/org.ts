@@ -1,7 +1,7 @@
-import { boolean, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { orgSchema } from "./_schemas.js";
-import { auditMixin, citext, idMixin } from "./_mixins.js";
+import { orgSchema } from "./_schemas";
+import { auditMixin, citext, idMixin } from "./_mixins";
 
 export const organizations = orgSchema.table(
   "organizations",
@@ -37,18 +37,3 @@ export const orgUsers = orgSchema.table(
   }),
 );
 
-export const orgSlugHistory = orgSchema.table(
-  "org_slug_history",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: uuid("org_id").notNull(),
-    oldSlug: citext("old_slug").notNull(),
-    newSlug: citext("new_slug").notNull(),
-    changedAt: timestamp("changed_at", { withTimezone: true, mode: "date" }).notNull(),
-    redirectEnabled: boolean("redirect_enabled").notNull().default(true),
-  },
-  (t) => ({
-    oldSlugIdx: index("org_slug_history_old_slug_idx").on(t.oldSlug),
-    orgIdx: index("org_slug_history_org_idx").on(t.orgId),
-  }),
-);

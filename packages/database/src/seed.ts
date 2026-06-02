@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { db, closeDatabase } from "./client.js";
+import { db, closeDatabase } from "./client";
 import {
   plans,
   organizations,
@@ -7,7 +7,7 @@ import {
   users,
   workspaces,
   workspaceUsers,
-} from "./schema/index.js";
+} from "./schema/index";
 
 // Seed runs idempotently. Re-running won't duplicate plans, the dev
 // org, the dev user, or their memberships — every insert is guarded

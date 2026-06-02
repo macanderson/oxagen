@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brandkitApply } from "./brandkit.apply.js";
+import { brandkitApply } from "./brandkit.apply";
 
 describe("brandkit.apply capability", () => {
   it("parses a valid input", () => {

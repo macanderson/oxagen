@@ -35,14 +35,14 @@ vi.mock("@oxagen/telemetry", () => ({
   sumTokenUsage: vi.fn(),
 }));
 
-vi.mock("./logger.js", () => ({
+vi.mock("./logger", () => ({
   logger: { warn: vi.fn() },
 }));
 
 // ── imports after mocks ───────────────────────────────────────────────────────
 import { sumTokenUsage } from "@oxagen/telemetry";
-import { logger } from "./logger.js";
-import { billingSubscriptionReadHandler } from "./billing.subscription.read.js";
+import { logger } from "./logger";
+import { billingSubscriptionReadHandler } from "./billing.subscription.read";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────

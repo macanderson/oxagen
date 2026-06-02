@@ -1,6 +1,6 @@
 import { db, schema } from "@oxagen/database";
-import type { CapabilityContext } from "../types.js";
-import { createApprovalRequest } from "../runtime/approval.js";
+import type { CapabilityContext } from "../types";
+import { createApprovalRequest } from "../runtime/approval";
 import type { AgentPlanCreateInput, AgentPlanCreateOutput } from "@oxagen/oxagen/contracts/agent.plan.create";
 
 export type { AgentPlanCreateInput, AgentPlanCreateOutput };

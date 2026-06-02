@@ -24,7 +24,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const findCustomerByOrgIdMock = vi.fn();
 const createCustomerMock = vi.fn();
 
-vi.mock("../client.js", () => ({
+vi.mock("../client", () => ({
   billingProvider: () => ({
     findCustomerByOrgId: findCustomerByOrgIdMock,
     createCustomer: createCustomerMock,
@@ -51,7 +51,7 @@ vi.mock("@oxagen/database", () => ({
 }));
 
 // Import after mocks.
-const { ensureStripeCustomer } = await import("../customers.js");
+const { ensureStripeCustomer } = await import("../customers");
 
 // ---------------------------------------------------------------------------
 // Fixtures

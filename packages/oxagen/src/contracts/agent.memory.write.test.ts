@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agentMemoryWrite } from "./agent.memory.write.js";
-import { getCapability } from "../registry.js";
+import { agentMemoryWrite } from "./agent.memory.write";
+import { getCapability } from "../registry";
 
 describe("agent.memory.write capability", () => {
   it("parses a valid input", () => {

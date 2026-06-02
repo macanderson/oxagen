@@ -1,13 +1,13 @@
 import { Sandbox } from "@vercel/sandbox";
 import type { NetworkPolicy, CommandFinished } from "@vercel/sandbox";
-import { IMAGES } from "./images.js";
+import { IMAGES } from "./images";
 import type {
   SandboxDriver,
   SandboxLanguage,
   SandboxRequest,
   SandboxResult,
   SandboxStreamChunk,
-} from "./types.js";
+} from "./types";
 
 // @vercel/sandbox supports node24 and python3.13 runtimes only (see ADR-011).
 // Shell scripts are executed via /bin/sh on the node24 runtime.

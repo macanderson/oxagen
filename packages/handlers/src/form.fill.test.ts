@@ -12,7 +12,7 @@ vi.mock("@oxagen/ai", () => ({
 
 // ── import under test ─────────────────────────────────────────────────────────
 
-import { formFillHandler } from "./form.fill.js";
+import { formFillHandler } from "./form.fill";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────

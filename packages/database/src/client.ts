@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { requireEnv } from "@oxagen/config/env";
-import * as schema from "./schema/index.js";
+import * as schema from "./schema/index";
 
 // One pool per process. Neon's pooled URL handles concurrency upstream
 // for production; locally we cap small to keep Docker happy.

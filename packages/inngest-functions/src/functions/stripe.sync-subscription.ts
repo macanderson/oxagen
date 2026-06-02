@@ -1,6 +1,6 @@
-import { inngest } from "../inngest.js";
+import { inngest } from "../inngest";
 import { syncSubscriptionFromStripe } from "@oxagen/billing";
-import { logger } from "../logger.js";
+import { logger } from "../logger";
 
 // Event-driven mirror: API webhook emits the event after persisting the
 // raw payload, runner re-syncs the canonical record. Decoupling keeps the

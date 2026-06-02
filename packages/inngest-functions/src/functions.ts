@@ -1,9 +1,9 @@
-import { billingRollupUsage } from "./functions/billing.rollup-usage.js";
-import { stripeSyncSubscription } from "./functions/stripe.sync-subscription.js";
-import { stripeSyncInvoice } from "./functions/stripe.sync-invoice.js";
-import { chatPersistStream } from "./functions/chat.persist-stream.js";
-import { agentExecuteSubagent } from "./functions/agent.execute-subagent.js";
-import { agentBackgroundTaskExecute } from "./functions/agent.background-task.execute.js";
+import { billingRollupUsage } from "./functions/billing.rollup-usage";
+import { stripeSyncSubscription } from "./functions/stripe.sync-subscription";
+import { stripeSyncInvoice } from "./functions/stripe.sync-invoice";
+import { chatPersistStream } from "./functions/chat.persist-stream";
+import { agentExecuteSubagent } from "./functions/agent.execute-subagent";
+import { agentBackgroundTaskExecute } from "./functions/agent.background-task.execute";
 
 export const functions = [
   billingRollupUsage,

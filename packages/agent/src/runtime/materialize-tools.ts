@@ -2,11 +2,11 @@ import { tool, type Tool, type ToolSet } from "ai";
 import { z, type ZodTypeAny } from "zod";
 import { insertToolInvocation } from "@oxagen/telemetry";
 import { requireEnv } from "@oxagen/config/env";
-import type { CapabilityContext } from "../types.js";
+import type { CapabilityContext } from "../types";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { beforeTool, afterTool, onError } from "../hooks/runtime.js";
-import { createApprovalRequest, waitForApproval } from "./approval.js";
-import { connectMcp, materializeMcpTools } from "../dispatch/mcp-client.js";
+import { beforeTool, afterTool, onError } from "../hooks/runtime";
+import { createApprovalRequest, waitForApproval } from "./approval";
+import { connectMcp, materializeMcpTools } from "../dispatch/mcp-client";
 import { db, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 

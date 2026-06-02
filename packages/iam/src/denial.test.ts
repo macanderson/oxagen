@@ -2,7 +2,7 @@
 // OXA-1390, Phase 3.
 
 import { describe, expect, it } from "vitest";
-import { denial, isDenial } from "./denial.js";
+import { denial, isDenial } from "./denial";
 
 describe("denial()", () => {
   it("returns a DenialResponse with __capabilityDenied true", () => {

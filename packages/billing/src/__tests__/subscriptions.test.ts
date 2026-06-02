@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { BillingSubscription } from "../provider.js";
+import type { BillingSubscription } from "../provider";
 
 // ---------------------------------------------------------------------------
 // BillingProvider mock
@@ -23,7 +23,7 @@ import type { BillingSubscription } from "../provider.js";
 
 const getSubscriptionMock = vi.fn();
 
-vi.mock("../client.js", () => ({
+vi.mock("../client", () => ({
   billingProvider: () => ({
     getSubscription: getSubscriptionMock,
     updateSubscription: vi.fn().mockResolvedValue(undefined),
@@ -57,7 +57,7 @@ vi.mock("@oxagen/database", () => ({
 }));
 
 // Import after mocks.
-const { syncSubscriptionFromStripe } = await import("../subscriptions.js");
+const { syncSubscriptionFromStripe } = await import("../subscriptions");
 
 // ---------------------------------------------------------------------------
 // Fixture helpers

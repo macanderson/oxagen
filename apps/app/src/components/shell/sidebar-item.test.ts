@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { sidebarItemAffordance, type SidebarItemAffordance } from "../../lib/sidebar-item-affordance.js";
+import { sidebarItemAffordance, type SidebarItemAffordance } from "../../lib/sidebar-item-affordance";
 
 describe("sidebarItemAffordance", () => {
   it("returns 'none' when no flags are set", () => {

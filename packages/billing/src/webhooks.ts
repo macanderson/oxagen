@@ -1,11 +1,11 @@
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
-import { billingProvider } from "./client.js";
-import { syncSubscriptionFromStripe } from "./subscriptions.js";
-import { syncInvoiceFromStripe } from "./invoices.js";
-import { grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } from "./grants.js";
-import { logger } from "./logger.js";
-import type { BillingWebhookEvent } from "./provider.js";
+import { billingProvider } from "./client";
+import { syncSubscriptionFromStripe } from "./subscriptions";
+import { syncInvoiceFromStripe } from "./invoices";
+import { grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } from "./grants";
+import { logger } from "./logger";
+import type { BillingWebhookEvent } from "./provider";
 
 export function verifyStripeSignature(rawBody: string, signature: string): BillingWebhookEvent {
   return billingProvider().parseWebhookEvent(rawBody, signature);
@@ -136,7 +136,7 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
 
 async function upsertPaymentMethod(
   kind: "attached" | "detached",
-  pm: import("./provider.js").BillingPaymentMethod,
+  pm: import("./provider").BillingPaymentMethod,
 ): Promise<void> {
   if (!pm.customerId) return;
 

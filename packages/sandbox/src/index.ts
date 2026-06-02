@@ -1,14 +1,14 @@
-export * from "./types.js";
-export * from "./images.js";
-export * from "./policy.js";
-export { createDockerSandbox } from "./docker.js";
-export { createModalSandbox } from "./modal.js";
-export { createVercelSandbox } from "./vercel.js";
+export * from "./types";
+export * from "./images";
+export * from "./policy";
+export { createDockerSandbox } from "./docker";
+export { createModalSandbox } from "./modal";
+export { createVercelSandbox } from "./vercel";
 
-import type { SandboxDriver } from "./types.js";
-import { createDockerSandbox } from "./docker.js";
-import { createModalSandbox } from "./modal.js";
-import { createVercelSandbox } from "./vercel.js";
+import type { SandboxDriver } from "./types";
+import { createDockerSandbox } from "./docker";
+import { createModalSandbox } from "./modal";
+import { createVercelSandbox } from "./vercel";
 
 let _instance: SandboxDriver | null = null;
 

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { closeDriver, session } from "./client.js";
+import { closeDriver, session } from "./client";
 
 // Each Cypher statement runs in its own transaction so a single bad DDL
 // doesn't roll back the whole schema.

@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { registerCapability } from "../registry.js";
+import { registerCapability } from "../registry";
 
 export const agentApprovalResolve = registerCapability({
   name: "agent.approval.resolve",
   domain: "agent",
   description: "Approve or deny a pending tool-call approval request; resolution resumes the paused agent stream",
   mode: "sync",
-  surfaces: ["api", "agent"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "unit", "e2e", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "approval" },

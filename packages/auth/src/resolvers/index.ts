@@ -1,24 +1,24 @@
-export type { SessionResult } from "./session.js";
+export type { SessionResult } from "./session";
 export {
   resolveSession,
   parseSessionCookie,
   stripCookieSignature,
   SESSION_COOKIE_NAME,
-} from "./session.js";
+} from "./session";
 
 export type {
   ApiKeyResult,
   ApiKeyResolutionError,
   ApiKeyResolution,
-} from "./api-key.js";
-export { resolveApiKey } from "./api-key.js";
+} from "./api-key";
+export { resolveApiKey } from "./api-key";
 
 export type {
   OrgScopeResult,
   OrgScopeResolutionError,
   OrgScopeResolution,
-} from "./org.js";
-export { resolveOrgScope } from "./org.js";
+} from "./org";
+export { resolveOrgScope } from "./org";
 
-export type { WorkspaceScopeResult, WorkspaceScopeResolution } from "./workspace.js";
-export { resolveWorkspaceScope } from "./workspace.js";
+export type { WorkspaceScopeResult, WorkspaceScopeResolution } from "./workspace";
+export { resolveWorkspaceScope } from "./workspace";

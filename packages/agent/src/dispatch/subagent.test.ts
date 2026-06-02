@@ -56,7 +56,7 @@ vi.mock("@oxagen/config/env", () => ({
   requireEnv: () => ({ INNGEST_EVENT_KEY: "test" }),
 }));
 
-import { dispatchFanout, readFanout } from "./subagent.js";
+import { dispatchFanout, readFanout } from "./subagent";
 
 describe("subagent dispatch", () => {
   beforeEach(() => {

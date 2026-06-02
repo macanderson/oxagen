@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chatMessageSend } from "./chat.message.send.js";
+import { chatMessageSend } from "./chat.message.send";
 
 describe("chat.message.send capability", () => {
   it("parses a valid input starting a new conversation", () => {

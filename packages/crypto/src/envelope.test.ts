@@ -13,8 +13,8 @@
 
 import { describe, it, expect } from "vitest";
 import { randomBytes } from "node:crypto";
-import { encrypt, decrypt } from "./envelope.js";
-import type { KmsAdapter } from "./types.js";
+import { encrypt, decrypt } from "./envelope";
+import type { KmsAdapter } from "./types";
 
 // ---------------------------------------------------------------------------
 // Mock KMS adapter — wraps the DEK with a trivial XOR of a fixed wrapping key

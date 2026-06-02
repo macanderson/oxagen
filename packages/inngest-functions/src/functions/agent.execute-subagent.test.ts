@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveFanoutStatus } from "./agent.execute-subagent.js";
+import { deriveFanoutStatus } from "./agent.execute-subagent";
 
 describe("deriveFanoutStatus", () => {
   it("returns 'completed' when all children succeed", () => {

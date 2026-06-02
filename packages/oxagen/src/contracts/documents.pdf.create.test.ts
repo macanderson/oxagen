@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { documentsPdfCreate } from "./documents.pdf.create.js";
+import { documentsPdfCreate } from "./documents.pdf.create";
 
 describe("documents.pdf.create capability", () => {
   it("parses a minimal valid input (title only)", () => {

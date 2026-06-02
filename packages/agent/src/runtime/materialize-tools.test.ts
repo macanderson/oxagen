@@ -57,18 +57,18 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
-vi.mock("../hooks/runtime.js", () => ({
+vi.mock("../hooks/runtime", () => ({
   beforeTool: mocks.beforeTool,
   afterTool: mocks.afterTool,
   onError: mocks.onError,
 }));
 
-vi.mock("./approval.js", () => ({
+vi.mock("./approval", () => ({
   createApprovalRequest: mocks.createApprovalRequest,
   waitForApproval: mocks.waitForApproval,
 }));
 
-import { materializeTools } from "./materialize-tools.js";
+import { materializeTools } from "./materialize-tools";
 import { invoke } from "@oxagen/oxagen/kernel";
 
 const CTX = {
@@ -152,7 +152,7 @@ describe("materializeTools", () => {
       getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
     }));
     vi.resetModules();
-    const { materializeTools: mt } = await import("./materialize-tools.js");
+    const { materializeTools: mt } = await import("./materialize-tools");
     const tools = await mt({ ...CTX, messageId: "msg_42" });
     await (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 });
     expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
@@ -176,7 +176,7 @@ describe("materializeTools", () => {
       getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
     }));
     vi.resetModules();
-    const { materializeTools: mt } = await import("./materialize-tools.js");
+    const { materializeTools: mt } = await import("./materialize-tools");
     const tools = await mt({ ...CTX, messageId: "msg_42" });
     await expect(
       (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 }),
@@ -226,7 +226,7 @@ describe("materializeTools", () => {
       getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
     }));
     vi.resetModules();
-    const { materializeTools: mt } = await import("./materialize-tools.js");
+    const { materializeTools: mt } = await import("./materialize-tools");
     const tools = await mt(CTX);
     const svgTool = tools["svg.generate"] as { execute?: (i: unknown) => Promise<unknown> };
     expect(svgTool).toBeDefined();
@@ -250,7 +250,7 @@ describe("materializeTools", () => {
       getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
     }));
     vi.resetModules();
-    const { materializeTools: mt } = await import("./materialize-tools.js");
+    const { materializeTools: mt } = await import("./materialize-tools");
     const tools = await mt({ ...CTX, messageId: null });
     await (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 });
     expect(mocks.createApprovalRequest).not.toHaveBeenCalled();

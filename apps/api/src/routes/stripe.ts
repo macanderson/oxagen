@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { processStripeEvent, verifyStripeSignature } from "@oxagen/billing";
-import { logger } from "../middleware/logger.js";
-import type { AppEnv } from "../app.js";
+import { logger } from "../middleware/logger";
+import type { AppEnv } from "../app";
 
 export const stripeWebhook = new Hono<AppEnv>();
 

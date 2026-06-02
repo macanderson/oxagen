@@ -28,7 +28,7 @@ vi.mock("@oxagen/telemetry", () => ({
   insertToolInvocation: mocks.insertToolInvocationMock,
 }));
 
-import { agentCodeExecuteHandler } from "./agent.code.execute.js";
+import { agentCodeExecuteHandler } from "./agent.code.execute";
 
 const CTX = {
   orgId: "ten_1",

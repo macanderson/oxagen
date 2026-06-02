@@ -1,5 +1,5 @@
-import type { Config } from "./config.js";
-import type { EnvName, VercelEnvVar } from "./types.js";
+import type { Config } from "./config";
+import type { EnvName, VercelEnvVar } from "./types";
 
 const BASE = "https://api.vercel.com";
 

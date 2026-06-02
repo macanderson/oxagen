@@ -33,7 +33,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   return { and: orig.and, eq: orig.eq };
 });
 
-import { agentMcpListHandler } from "./agent.mcp.list.js";
+import { agentMcpListHandler } from "./agent.mcp.list";
 
 const CTX = {
   orgId: "org_1",

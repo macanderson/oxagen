@@ -1,5 +1,5 @@
-import { createSkillRegistry } from "./registry.js";
-import type { Skill } from "./types.js";
+import { createSkillRegistry } from "./registry";
+import type { Skill } from "./types";
 
 // Sentinel UUIDs for builtin skills. Builtin rows are not owned by any real
 // org/workspace — they are platform-global defaults. The nil UUID makes them

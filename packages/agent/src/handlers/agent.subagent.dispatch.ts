@@ -1,5 +1,5 @@
-import type { CapabilityContext } from "../types.js";
-import { dispatchFanout } from "../dispatch/subagent.js";
+import type { CapabilityContext } from "../types";
+import { dispatchFanout } from "../dispatch/subagent";
 import type { AgentSubagentDispatchInput, AgentSubagentDispatchOutput } from "@oxagen/oxagen/contracts/agent.subagent.dispatch";
 
 export type { AgentSubagentDispatchInput, AgentSubagentDispatchOutput };

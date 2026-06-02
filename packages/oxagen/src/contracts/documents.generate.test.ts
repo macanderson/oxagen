@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { documentsGenerate } from "./documents.generate.js";
+import { documentsGenerate } from "./documents.generate";
 
 describe("documents.generate capability", () => {
   it("parses a minimal valid input", () => {

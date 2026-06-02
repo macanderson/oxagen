@@ -1,5 +1,5 @@
-import type { BillingProvider } from "./provider.js";
-import { StripeProvider } from "./stripe-provider.js";
+import type { BillingProvider } from "./provider";
+import { StripeProvider } from "./stripe-provider";
 
 /**
  * client.ts — Billing provider singleton.

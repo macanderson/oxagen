@@ -1,7 +1,7 @@
 import { bigint, index, integer, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { executionSchema } from "./_schemas.js";
-import { auditMixin, executionStatusMixin, idMixin, orgScopeMixin } from "./_mixins.js";
+import { executionSchema } from "./_schemas";
+import { auditMixin, executionStatusMixin, idMixin, orgScopeMixin } from "./_mixins";
 
 export const executions = executionSchema.table(
   "executions",
@@ -35,6 +35,7 @@ export const executionSteps = executionSchema.table(
   {
     ...idMixin("exs"),
     ...executionStatusMixin(),
+    ...orgScopeMixin(),
     executionId: uuid("execution_id").notNull(),
     playbookStepId: uuid("playbook_step_id").notNull(),
     agentVersionId: uuid("agent_version_id").notNull(),
@@ -50,6 +51,7 @@ export const executionSteps = executionSchema.table(
     statusIdx: index("execution_steps_status_idx").on(t.status),
     startedAtIdx: index("execution_steps_started_at_idx").on(t.startedAt),
     stepIdx: index("execution_steps_step_idx").on(t.playbookStepId),
+    orgIdx: index("execution_steps_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 
@@ -57,6 +59,7 @@ export const toolCalls = executionSchema.table(
   "tool_calls",
   {
     ...idMixin("tcl"),
+    ...orgScopeMixin(),
     executionStepId: uuid("execution_step_id").notNull(),
     toolVersionId: uuid("tool_version_id").notNull(),
     requestPayload: jsonb("request_payload").notNull(),
@@ -72,6 +75,7 @@ export const toolCalls = executionSchema.table(
     stepIdx: index("tool_calls_step_idx").on(t.executionStepId),
     toolVersionIdx: index("tool_calls_tool_version_idx").on(t.toolVersionId),
     statusIdx: index("tool_calls_status_idx").on(t.status),
+    orgIdx: index("tool_calls_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 

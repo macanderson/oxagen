@@ -5,7 +5,7 @@ import {
   getCapability,
   listCapabilities,
   registerCapability,
-} from "./registry.js";
+} from "./registry";
 
 const makeCap = (name: string) => ({
   name,

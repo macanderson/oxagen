@@ -12,8 +12,8 @@ import {
   runtimeFor,
   networkPolicyFor,
   VercelSandboxUnsupportedError,
-} from "./vercel.js";
-import { getSandbox, setSandboxForTests } from "./index.js";
+} from "./vercel";
+import { getSandbox, setSandboxForTests } from "./index";
 
 // ---------------------------------------------------------------------------
 // Driver construction

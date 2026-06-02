@@ -10,8 +10,8 @@
 // locatable.
 
 import type { AuditInsertFn, SecurityEventInput } from "@oxagen/telemetry";
-import type { Database } from "./client.js";
-import { schema } from "./index.js";
+import type { Database } from "./client";
+import { schema } from "./index";
 
 /**
  * Returns an AuditInsertFn bound to the given Drizzle database instance.

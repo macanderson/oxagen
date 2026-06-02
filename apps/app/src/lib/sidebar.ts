@@ -23,15 +23,11 @@ import {
   Code2,
   ChevronLeft,
   User,
-  Bell,
-  Lock,
-  FileText,
-  Eye,
   type LucideIcon,
 } from "lucide-react";
 
-import type { ScopeContext } from "./scope.js";
-import { account, org, workspace } from "./routes.js";
+import type { ScopeContext } from "./scope";
+import { account, org, workspace } from "./routes";
 
 // ---------------------------------------------------------------------------
 // Core types (verbatim from application-shell spec §14)
@@ -219,34 +215,6 @@ const accountConfig: SidebarConfig = {
       href: () => account.profile(),
       group: "primary",
     },
-    {
-      id: "account-security",
-      label: "Security",
-      icon: Lock,
-      href: () => account.security(),
-      group: "primary",
-    },
-    {
-      id: "cases",
-      label: "Cases",
-      icon: FileText,
-      href: () => account.cases(),
-      group: "primary",
-    },
-    {
-      id: "notifications",
-      label: "Notifications",
-      icon: Bell,
-      href: () => account.notifications(),
-      group: "primary",
-    },
-    {
-      id: "privacy",
-      label: "Privacy",
-      icon: Eye,
-      href: () => account.privacy(),
-      group: "primary",
-    },
   ],
 };
 
@@ -398,12 +366,7 @@ export function enumerateNavTargets(
   targets.push({ label: "Access · Identities", href: org.access.identities(ctx), parent: "access" });
 
   // Security tabs
-  targets.push({ label: "Security · SSO", href: org.security.sso(ctx), parent: "security" });
-  targets.push({ label: "Security · SCIM", href: org.security.scim(ctx), parent: "security" });
-  targets.push({ label: "Security · MFA", href: org.security.mfa(ctx), parent: "security" });
   targets.push({ label: "Security · Audit", href: org.security.audit(ctx), parent: "security" });
-  targets.push({ label: "Security · Compliance", href: org.security.compliance(ctx), parent: "security" });
-  targets.push({ label: "Security · Incidents", href: org.security.incidents(ctx), parent: "security" });
 
   // Billing tabs
   targets.push({ label: "Billing · Subscription", href: org.billing.subscription(ctx), parent: "billing" });
@@ -413,16 +376,10 @@ export function enumerateNavTargets(
 
   // Developer tabs
   targets.push({ label: "Developer · MCP", href: org.developer.mcp(ctx), parent: "developer" });
-  targets.push({ label: "Developer · Webhooks", href: org.developer.webhooks(ctx), parent: "developer" });
-  targets.push({ label: "Developer · Docs", href: org.developer.docs(ctx), parent: "developer" });
   targets.push({ label: "Developer · Tokens", href: org.developer.tokens(ctx), parent: "developer" });
 
   // -- Account mode --
   targets.push({ label: "Profile", href: account.profile(), parent: "profile" });
-  targets.push({ label: "Account Security", href: account.security(), parent: "account-security" });
-  targets.push({ label: "Cases", href: account.cases(), parent: "cases" });
-  targets.push({ label: "Notifications", href: account.notifications(), parent: "notifications" });
-  targets.push({ label: "Privacy", href: account.privacy(), parent: "privacy" });
 
   return targets;
 }

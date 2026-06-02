@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { writeFile, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { parseSkill, loadSkillFile } from "./loader.js";
+import { parseSkill, loadSkillFile } from "./loader";
 
 // ---------------------------------------------------------------------------
 // parseSkill

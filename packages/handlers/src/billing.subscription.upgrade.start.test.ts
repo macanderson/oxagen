@@ -18,7 +18,7 @@ vi.mock("@oxagen/billing", () => ({
 }));
 
 // ── imports after mocks ───────────────────────────────────────────────────────
-import { billingSubscriptionUpgradeStartHandler } from "./billing.subscription.upgrade.start.js";
+import { billingSubscriptionUpgradeStartHandler } from "./billing.subscription.upgrade.start";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────

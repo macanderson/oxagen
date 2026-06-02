@@ -2,7 +2,7 @@ import { z } from "zod";
 import { generateObjectFor } from "@oxagen/ai";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { svgGenerate } from "@oxagen/oxagen/contracts/svg.generate";
-import { logger } from "./logger.js";
+import { logger } from "./logger";
 
 // ── SVG sanitisation ──────────────────────────────────────────────────────────
 // Strip <script> blocks and inline event-handler attributes before the markup

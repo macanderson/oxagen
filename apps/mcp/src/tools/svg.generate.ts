@@ -3,7 +3,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { svgGenerate } from "@oxagen/oxagen/contracts/svg.generate";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 // Generate clean, sanitized inline SVG from a natural-language prompt.
 // Script tags and inline event handlers are stripped before output is returned.

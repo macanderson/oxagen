@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { CapabilityContext } from "@oxagen/oxagen";
-import type { AppEnv } from "../app.js";
+import type { AppEnv } from "../app";
 
 export function capabilityContext(
   c: Context<AppEnv>,

@@ -15,7 +15,7 @@ vi.mock("@oxagen/ai", () => ({
   embedText: mocks.embedTextAI,
 }));
 
-import { embedText } from "./embed.js";
+import { embedText } from "./embed";
 
 describe("embedText (agent/memory wrapper)", () => {
   beforeEach(() => {

@@ -17,7 +17,7 @@ import {
   providerCostUsdMicros,
   solveMeterMarkup,
   derivePricing,
-} from "../pricing.js";
+} from "../pricing";
 
 describe("resolveRate", () => {
   it("returns the exact rate for a known model id", () => {

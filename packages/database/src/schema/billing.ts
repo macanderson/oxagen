@@ -1,8 +1,8 @@
 import { bigint, boolean, check, index, integer, jsonb, numeric, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { billingSchema } from "./_schemas.js";
-import { auditMixin, citext, idMixin } from "./_mixins.js";
-import { organizations } from "./org.js";
+import { billingSchema } from "./_schemas";
+import { auditMixin, citext, idMixin } from "./_mixins";
+import { organizations } from "./org";
 
 // ── Append-only audit mixin (no updated_* columns) ──────────────────────────
 // Used on immutable/append-only tables (usage_records, credit_ledger) where
@@ -71,7 +71,7 @@ export const subscriptions = billingSchema.table(
     stripeSubIdx: uniqueIndex("subscriptions_stripe_sub_idx").on(t.stripeSubscriptionId),
     // Spec §6.13: composite index over (org_id, status) targets the
     // "active subscription for org" hot path.
-    tenantStatusIdx: index("subscriptions_org_status_idx").on(t.orgId, t.status),
+    orgStatusIdx: index("subscriptions_org_status_idx").on(t.orgId, t.status),
     billingIntervalCheck: check(
       "subscriptions_billing_interval_check",
       sql`${t.billingInterval} IN ('month','year')`,
@@ -155,6 +155,10 @@ export const invoiceLineItems = billingSchema.table(
   END,
   uuid_generate_v4()
 )`),
+    // FK → org.organizations.id — denormalized for tenant isolation.
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
     // FK → billing.invoices.id
     invoiceId: uuid("invoice_id")
       .notNull()
@@ -168,6 +172,7 @@ export const invoiceLineItems = billingSchema.table(
   },
   (t) => ({
     invoiceIdx: index("invoice_line_items_invoice_idx").on(t.invoiceId),
+    orgIdx: index("invoice_line_items_org_idx").on(t.orgId),
   }),
 );
 

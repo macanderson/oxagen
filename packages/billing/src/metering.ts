@@ -1,4 +1,4 @@
-import { consumeCredits, effectiveBalance } from "./credits.js";
+import { consumeCredits, effectiveBalance } from "./credits";
 import {
   providerCostUsd,
   providerCostUsdMicros,
@@ -6,8 +6,8 @@ import {
   CREDIT_VALUE_USD,
   type RateCard,
   type TokenUsageInput,
-} from "./pricing.js";
-import { logger } from "./logger.js";
+} from "./pricing";
+import { logger } from "./logger";
 
 /**
  * The cost meter that lives inside the gate. Converts one metered LLM call

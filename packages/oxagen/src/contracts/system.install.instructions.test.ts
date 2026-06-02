@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { systemInstallInstructions } from "./system.install.instructions.js";
+import { systemInstallInstructions } from "./system.install.instructions";
 
 describe("system.install.instructions capability", () => {
   it("parses a minimal valid input for claude-code", () => {

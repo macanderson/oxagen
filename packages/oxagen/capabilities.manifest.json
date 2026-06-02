@@ -7,11 +7,13 @@
       "mode": "sync",
       "surfaces": [
         "api",
+        "mcp",
         "agent"
       ],
       "layers": {
         "schema": true,
         "api": true,
+        "mcp": true,
         "unit": true,
         "e2e": true,
         "docs": true
@@ -113,11 +115,13 @@
       "mode": "sync",
       "surfaces": [
         "api",
+        "mcp",
         "agent"
       ],
       "layers": {
         "schema": true,
         "api": true,
+        "mcp": true,
         "unit": true,
         "e2e": true,
         "docs": true

@@ -12,7 +12,7 @@
  *             docs/architecture/application-shell/spec.md §5
  */
 
-import type { ScopeContext } from "./scope.js";
+import type { ScopeContext } from "./scope";
 
 // ---------------------------------------------------------------------------
 // Account scope — /account/...
@@ -72,8 +72,6 @@ export const org = {
   developer: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer`,
     mcp: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/mcp`,
-    webhooks: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/webhooks`,
-    docs: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/docs`,
     tokens: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/tokens`,
   },
 } as const;
@@ -158,7 +156,7 @@ export const defaultTab: Record<string, string> = {
 
   // Org-scope parents
   access: "grants",
-  security: "sso",
+  security: "audit",
   billing: "subscription",
   developer: "mcp",
 

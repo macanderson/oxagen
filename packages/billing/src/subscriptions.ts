@@ -1,7 +1,7 @@
 import { db, schema } from "@oxagen/database";
 import { eq, and, sql } from "drizzle-orm";
-import { billingProvider } from "./client.js";
-import { logger } from "./logger.js";
+import { billingProvider } from "./client";
+import { logger } from "./logger";
 
 async function resolvePlanId(stripeProductId: string | null): Promise<string | null> {
   if (!stripeProductId) return null;

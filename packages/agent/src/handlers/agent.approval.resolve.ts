@@ -1,7 +1,7 @@
 import { db, schema } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
-import type { CapabilityContext } from "../types.js";
-import { notifyResolution } from "../runtime/approval.js";
+import type { CapabilityContext } from "../types";
+import { notifyResolution } from "../runtime/approval";
 import type { AgentApprovalResolveInput, AgentApprovalResolveOutput } from "@oxagen/oxagen/contracts/agent.approval.resolve";
 
 export type { AgentApprovalResolveInput, AgentApprovalResolveOutput };

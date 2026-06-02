@@ -36,7 +36,7 @@ vi.mock("@oxagen/oxagen", () => ({
   getSurfaces: mocks.getSurfaces,
 }));
 
-import { agentToolListHandler } from "./agent.tool.list.js";
+import { agentToolListHandler } from "./agent.tool.list";
 
 const CTX = {
   orgId: "org_1",

@@ -15,7 +15,7 @@ import {
   canAccessSCIM,
   canAccessAuditLog,
   canBuyCredits,
-} from "../entitlements.js";
+} from "../entitlements";
 import type { PlanTier } from "@oxagen/oxagen/types";
 
 // ── meetsMinimumTier ──────────────────────────────────────────────────────────

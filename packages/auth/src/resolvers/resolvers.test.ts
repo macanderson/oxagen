@@ -43,7 +43,7 @@ import {
   resolveApiKey,
   resolveOrgScope,
   resolveWorkspaceScope,
-} from "./index.js";
+} from "./index";
 
 // ---------------------------------------------------------------------------
 // Helpers

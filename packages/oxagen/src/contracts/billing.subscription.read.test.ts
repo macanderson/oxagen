@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { billingSubscriptionRead } from "./billing.subscription.read.js";
+import { billingSubscriptionRead } from "./billing.subscription.read";
 
 describe("billing.subscription.read capability", () => {
   it("parses an empty input object", () => {

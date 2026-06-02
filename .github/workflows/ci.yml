@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
 
+# Cancel superseded PR runs so a rapid push sequence doesn't queue redundant
+# gates (formerly provided by the now-removed pr.yml). Main pushes use the SHA
+# so deploy runs are never cancelled by a follow-up commit.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # ────────────────────────────────────────────────────────────────────────
 # PR gate — lint, typecheck, test, build (affected packages only)
 # Runs on every PR open/sync. This is the canonical quality signal.

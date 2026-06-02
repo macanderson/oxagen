@@ -80,6 +80,7 @@ Until oxagen.ai is launched, production deploys use Vercel-managed domains:
 - Website: `https://oxagen-v2-website.vercel.app`
 - API: `https://oxagen-v2-api.vercel.app`
 - Admin: `https://oxagen-v2-admin.vercel.app`
+- Docs: `https://oxagen-v2-docs.vercel.app`
 
 When generating OAuth callback URLs, env values, allowedOrigins, or any
 docs/spec content that references prod URLs, use the vercel.app domains.
@@ -195,27 +196,32 @@ Do **not** parallelize when:
 - **Next.js App Router** with **React Server Components** and streaming.
 - The interactive agent is built on the **Vercel AI SDK Core** (`ai`
   package — `streamText` / `generateText` / `streamObject` /
-  `generateObject`) on the server and **AI SDK UI** (`@ai-sdk/react` —
-  `useChat` / `useCompletion`) on the client. **Do NOT use AI SDK RSC**
+  `generateObject`) on the server. **Do NOT use AI SDK RSC**
   (`ai/rsc`, `streamUI`, `createStreamableUI`, `createAI`) — it is
   flagged experimental and not recommended for production. No experimental
-  or unstable SDKs ship in this product.
+  or unstable SDKs ship in this product. **Do NOT reach for `@ai-sdk/react`
+  (`useChat` / `useCompletion`) either** — the client does not use the AI
+  SDK UI layer; it consumes the `POST /api/v1/chat/stream` SSE endpoint
+  through the hand-rolled `use-tool-stream.ts` hook
+  (`apps/app/src/components/chat/use-tool-stream.ts`).
 - Generative UI ("generate UI components from a prompt") is done **without
   RSC**: the model returns structured tool-call / `generateObject` output
   and the client maps it to React components via the chat component
   registry. The model streams *data*, not server-rendered React trees.
 - Tool calls, generative UI, and message branching all flow through the
-  AI SDK Core/UI streaming primitives (`streamText` + `useChat` data
-  parts / tool invocations) — do not roll a parallel transport, and do
-  not reach for `ai/rsc` to get there.
+  SSE stream consumed by `use-tool-stream.ts` — do not roll a second
+  transport, and do not reach for `ai/rsc` or `@ai-sdk/react` to get there.
 - Server actions handle mutations; client components subscribe to
   streamed responses.
 - Auth lives in server components; client never sees session tokens.
 - **Request interception uses `proxy.ts`, not `middleware.ts`.** Next.js 16
   (this repo runs 16.2.x) deprecated and renamed the `middleware` file
-  convention to `proxy` — the file lives at `apps/app/src/proxy.ts`, exports
-  a `proxy` function, and runs on the Node.js runtime. `middleware.ts` is no
-  longer recognized; do not create one.
+  convention to `proxy` — the file lives at `apps/app/src/proxy.ts` and
+  exports a `proxy` function. The file runs on the **Edge runtime** (no
+  `export const runtime` override; default is edge for this convention).
+  Keep `proxy.ts` edge-safe: cookie inspection, URL rewrites, and redirects
+  only — no Node.js built-ins, no DB calls, no secrets. `middleware.ts` is
+  no longer recognized; do not create one.
 
 ### `apps/website`
 
@@ -226,6 +232,16 @@ Do **not** parallelize when:
 
 - Node services. No UI. Surface platform capabilities defined in
   `/packages` once and exposed identically through API and MCP.
+
+### `apps/admin`
+
+- Next.js. Internal operator dashboard. Tenant management, billing
+  overrides, feature-flag controls. Auth-gated; never exposed to customers.
+
+### `apps/docs`
+
+- Fumadocs/MDX documentation site. Statically generated; deployed as
+  `oxagen-v2-docs.vercel.app`. No interactive runtime features.
 
 ## Infrastructure boundaries
 
