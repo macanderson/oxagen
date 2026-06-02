@@ -56,10 +56,12 @@ export const baseEnvSchema = z.object({
   // OXA-1348: when true (default off in prod), agent.code.execute is
   // materialized as an agent tool. Set true on Vercel once the Modal
   // runner is deployed (see ops/modal/README.md).
+  // Accept "true"/"false" and "1"/"0" — a value pasted as 1/0 (a natural way
+  // to express a boolean) still validates instead of failing env validation.
   SANDBOX_ENABLED: z
-    .union([z.literal("true"), z.literal("false")])
+    .enum(["true", "false", "1", "0"])
     .optional()
-    .transform((v) => v === "true"),
+    .transform((v) => v === "true" || v === "1"),
   // Driver selection for @oxagen/sandbox. `modal` routes through the
   // hosted Firecracker runner; `docker` runs Dockerode locally; `vercel`
   // runs Firecracker microVMs via @vercel/sandbox (first-party, no extra
