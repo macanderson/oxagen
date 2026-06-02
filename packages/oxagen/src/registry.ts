@@ -1,4 +1,4 @@
-import type { CapabilityDeclaration } from "./types.js";
+import type { CapabilityDeclaration } from "./types";
 
 // Single source of truth: every capability appears here exactly once.
 // API routes, MCP tools, and tests import declarations by name; the

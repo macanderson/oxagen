@@ -15,6 +15,6 @@
  *   import { encryptedBytea } from "@oxagen/crypto/drizzle";
  */
 
-export { encrypt, decrypt } from "./envelope.js";
-export { ENVELOPE_VERSION } from "./types.js";
-export type { KmsAdapter, EncryptOptions, DecryptOptions } from "./types.js";
+export { encrypt, decrypt } from "./envelope";
+export { ENVELOPE_VERSION } from "./types";
+export type { KmsAdapter, EncryptOptions, DecryptOptions } from "./types";

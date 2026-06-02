@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { isKnowledgeGraphEnabled, readWorkspaceContext, injectContext } from "./knowledge-graph.js";
-import type { ContextBlock } from "./knowledge-graph.js";
+import { isKnowledgeGraphEnabled, readWorkspaceContext, injectContext } from "./knowledge-graph";
+import type { ContextBlock } from "./knowledge-graph";
 import type { CoreMessage } from "ai";
 
 // Store original env vars so we can restore them after each test.

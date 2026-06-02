@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agentMcpList } from "./agent.mcp.list.js";
-import { getCapability } from "../registry.js";
+import { agentMcpList } from "./agent.mcp.list";
+import { getCapability } from "../registry";
 
 describe("agent.mcp.list capability", () => {
   it("parses an empty input", () => {

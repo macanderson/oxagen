@@ -22,13 +22,13 @@ mocks.recallMemoriesMock.mockImplementation(async () => [
 // Default: KG enabled so existing tests are unaffected.
 mocks.isKnowledgeGraphEnabledMock.mockReturnValue(true);
 
-vi.mock("../memory/embed.js", () => ({ embedText: mocks.embedTextMock }));
-vi.mock("../memory/neo4j.js", () => ({ recallMemories: mocks.recallMemoriesMock }));
-vi.mock("../runtime/knowledge-graph.js", () => ({
+vi.mock("../memory/embed", () => ({ embedText: mocks.embedTextMock }));
+vi.mock("../memory/neo4j", () => ({ recallMemories: mocks.recallMemoriesMock }));
+vi.mock("../runtime/knowledge-graph", () => ({
   isKnowledgeGraphEnabled: mocks.isKnowledgeGraphEnabledMock,
 }));
 
-import { agentMemoryRecallHandler } from "./agent.memory.recall.js";
+import { agentMemoryRecallHandler } from "./agent.memory.recall";
 
 const CTX = {
   orgId: "ten_1",

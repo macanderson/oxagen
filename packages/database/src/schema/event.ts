@@ -1,6 +1,6 @@
 import { boolean, index, jsonb, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { eventSchema } from "./_schemas.js";
-import { auditMixin, idMixin, orgScopeMixin } from "./_mixins.js";
+import { eventSchema } from "./_schemas";
+import { auditMixin, idMixin, orgScopeMixin } from "./_mixins";
 
 export const triggers = eventSchema.table(
   "triggers",
@@ -23,6 +23,7 @@ export const workflowTriggers = eventSchema.table(
   "workflow_triggers",
   {
     ...idMixin("wtr"),
+    ...orgScopeMixin(),
     triggerId: uuid("trigger_id").notNull(),
     playbookVersionId: uuid("playbook_version_id").notNull(),
   },
@@ -30,5 +31,6 @@ export const workflowTriggers = eventSchema.table(
     triggerIdx: index("workflow_triggers_trigger_idx").on(t.triggerId),
     playbookVersionIdx: index("workflow_triggers_playbook_version_idx").on(t.playbookVersionId),
     pairIdx: uniqueIndex("workflow_triggers_pair_idx").on(t.triggerId, t.playbookVersionId),
+    orgIdx: index("workflow_triggers_org_idx").on(t.orgId, t.workspaceId),
   }),
 );

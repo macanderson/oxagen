@@ -53,7 +53,7 @@ vi.mock("@oxagen/oxagen", () => ({}));
 
 // We don't mock the inngest module itself — the function under test
 // uses the inngest singleton exported from ../inngest.js which we stub below.
-vi.mock("../inngest.js", () => ({
+vi.mock("../inngest", () => ({
   inngest: {
     createFunction: mocks.inngestCreateFunction,
   },
@@ -85,7 +85,7 @@ mocks.inngestCreateFunction.mockImplementation(
 );
 
 // Import triggers createFunction() which populates capturedHandler
-await import("./agent.background-task.execute.js");
+await import("./agent.background-task.execute");
 
 // ─────────────────────────────────────────────────────────────────────────────
 

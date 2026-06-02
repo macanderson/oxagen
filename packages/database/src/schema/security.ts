@@ -13,7 +13,7 @@
 
 import { check, index, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { securitySchema } from "./_schemas.js";
+import { securitySchema } from "./_schemas";
 
 // ---------------------------------------------------------------------------
 // SecurityEventType — typed const-union. Add values here as new event kinds

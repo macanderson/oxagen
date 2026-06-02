@@ -1,6 +1,6 @@
-import { inngest } from "../inngest.js";
+import { inngest } from "../inngest";
 import { syncInvoiceFromStripe } from "@oxagen/billing";
-import { logger } from "../logger.js";
+import { logger } from "../logger";
 
 export const stripeSyncInvoice = inngest.createFunction(
   { id: "stripe.sync-invoice", retries: 5 },

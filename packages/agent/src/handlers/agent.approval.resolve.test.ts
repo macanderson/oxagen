@@ -39,11 +39,11 @@ vi.mock("drizzle-orm", () => ({
   },
 }));
 
-vi.mock("../runtime/approval.js", () => ({
+vi.mock("../runtime/approval", () => ({
   notifyResolution: mocks.notifyResolutionMock,
 }));
 
-import { agentApprovalResolveHandler } from "./agent.approval.resolve.js";
+import { agentApprovalResolveHandler } from "./agent.approval.resolve";
 
 const CTX = {
   orgId: "ten_1",

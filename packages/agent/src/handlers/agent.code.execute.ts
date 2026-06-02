@@ -1,5 +1,5 @@
 import { getSandbox, applyPolicy, DEFAULT_POLICY } from "@oxagen/sandbox";
-import type { CapabilityContext } from "../types.js";
+import type { CapabilityContext } from "../types";
 import type { AgentCodeExecuteInput, AgentCodeExecuteOutput } from "@oxagen/oxagen/contracts/agent.code.execute";
 
 export type { AgentCodeExecuteInput, AgentCodeExecuteOutput };

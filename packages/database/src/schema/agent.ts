@@ -1,6 +1,6 @@
 import { boolean, index, integer, jsonb, numeric, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { agentSchema } from "./_schemas.js";
+import { agentSchema } from "./_schemas";
 import {
   auditMixin,
   citext,
@@ -9,7 +9,7 @@ import {
   softDeleteMixin,
   orgScopeMixin,
   versionMixin,
-} from "./_mixins.js";
+} from "./_mixins";
 
 export const agents = agentSchema.table(
   "agents",
@@ -84,6 +84,7 @@ export const toolVersions = agentSchema.table(
   {
     ...idMixin("tav"),
     ...auditMixin(),
+    ...orgScopeMixin(),
     ...versionMixin(),
     toolId: uuid("tool_id").notNull(),
     inputSchema: jsonb("input_schema").notNull(),
@@ -99,6 +100,7 @@ export const toolVersions = agentSchema.table(
       .on(t.toolId)
       .where(sql`is_latest = true`),
     toolVersionIdx: uniqueIndex("tool_versions_tool_version_idx").on(t.toolId, t.versionNumber),
+    orgIdx: index("tool_versions_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 
@@ -106,6 +108,7 @@ export const toolAssignments = agentSchema.table(
   "tool_assignments",
   {
     ...idMixin("tas"),
+    ...orgScopeMixin(),
     agentVersionId: uuid("agent_version_id").notNull(),
     toolVersionId: uuid("tool_version_id").notNull(),
     policyConfig: jsonb("policy_config").notNull(),
@@ -115,6 +118,7 @@ export const toolAssignments = agentSchema.table(
     agentVersionIdx: index("tool_assignments_agent_version_idx").on(t.agentVersionId),
     toolVersionIdx: index("tool_assignments_tool_version_idx").on(t.toolVersionId),
     pairIdx: uniqueIndex("tool_assignments_pair_idx").on(t.agentVersionId, t.toolVersionId),
+    orgIdx: index("tool_assignments_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 
@@ -181,7 +185,7 @@ export const backgroundTasks = agentSchema.table(
     createdByUserId: uuid("created_by_user_id"),
   },
   (t) => ({
-    tenantStatusIdx: index("background_tasks_org_status_idx").on(
+    orgStatusIdx: index("background_tasks_org_status_idx").on(
       t.orgId,
       t.workspaceId,
       t.status,
@@ -213,7 +217,7 @@ export const approvalRequests = agentSchema.table(
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
   },
   (t) => ({
-    tenantResolutionIdx: index("approval_requests_org_resolution_idx").on(
+    orgResolutionIdx: index("approval_requests_org_resolution_idx").on(
       t.orgId,
       t.workspaceId,
       t.resolution,
@@ -248,6 +252,7 @@ export const subagentRuns = agentSchema.table(
   {
     ...idMixin("sar"),
     ...auditMixin(),
+    ...orgScopeMixin(),
     fanoutId: uuid("fanout_id").notNull(),
     childMessageId: uuid("child_message_id").notNull(),
     capabilityName: text("capability_name").notNull(),
@@ -262,6 +267,7 @@ export const subagentRuns = agentSchema.table(
   (t) => ({
     fanoutIdx: index("subagent_runs_fanout_idx").on(t.fanoutId),
     statusIdx: index("subagent_runs_status_idx").on(t.status),
+    orgIdx: index("subagent_runs_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 
@@ -286,7 +292,7 @@ export const planSteps = agentSchema.table(
   (t) => ({
     orgIdx: index("plan_steps_org_idx").on(t.orgId, t.workspaceId),
     executionStepIdx: index("plan_steps_execution_step_idx").on(t.executionStepId),
-    tenantStatusIdx: index("plan_steps_org_status_idx").on(
+    orgStatusIdx: index("plan_steps_org_status_idx").on(
       t.orgId,
       t.workspaceId,
       t.status,

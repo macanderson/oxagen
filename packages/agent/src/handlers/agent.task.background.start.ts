@@ -1,6 +1,6 @@
 import { db, schema } from "@oxagen/database";
-import type { CapabilityContext } from "../types.js";
-import { getInngestClient } from "../dispatch/inngest-client.js";
+import type { CapabilityContext } from "../types";
+import { getInngestClient } from "../dispatch/inngest-client";
 import type { AgentTaskBackgroundStartInput, AgentTaskBackgroundStartOutput } from "@oxagen/oxagen/contracts/agent.task.background.start";
 
 export type { AgentTaskBackgroundStartInput, AgentTaskBackgroundStartOutput };

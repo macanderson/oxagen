@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 // Stub the tool.list handler module so resolveHandler returns a known fn.
-vi.mock("./agent.tool.list.js", () => ({
+vi.mock("./agent.tool.list", () => ({
   agentToolListHandler: vi.fn(async () => ({ tools: [] })),
 }));
 
-import { resolveHandler, invokeCapability } from "./index.js";
+import { resolveHandler, invokeCapability } from "./index";
 
 const CTX = {
   orgId: "ten_1",

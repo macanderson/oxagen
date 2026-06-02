@@ -18,7 +18,7 @@ import {
   recordSecurityEventAsync,
   type AuditInsertFn,
   type SecurityEventInput,
-} from "./security.js";
+} from "./security";
 
 // ---------------------------------------------------------------------------
 // 1. Append-only schema assertion

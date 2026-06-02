@@ -14,11 +14,44 @@
   "remoteCache": { "enabled": true },
 
   "tasks": {
-    
+
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**", ".xmcp/**"],
-      "passThroughEnv": ["VERCEL", "VERCEL_URL", "NEXT_PHASE"]
+      "passThroughEnv": ["VERCEL", "VERCEL_URL", "NEXT_PHASE"],
+      "env": [
+        "DATABASE_URL",
+        "BETTER_AUTH_SECRET",
+        "BETTER_AUTH_URL",
+        "BETTER_AUTH_TRUSTED_ORIGINS",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "AUTH_TOKEN_KMS_KEY_ID",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_PUBLISHABLE_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "INNGEST_EVENT_KEY",
+        "INNGEST_SIGNING_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "SANDBOX_ENABLED",
+        "SANDBOX_DRIVER",
+        "MODAL_RUNNER_URL",
+        "MODAL_RUNNER_TOKEN",
+        "VERCEL_SANDBOX_TOKEN",
+        "VERCEL_SANDBOX_TEAM_ID",
+        "VERCEL_SANDBOX_PROJECT_ID",
+        "IAM_ENFORCEMENT_ENABLED",
+        "OXAGEN_TARGET_MARGIN",
+        "OXAGEN_METER_MARKUP",
+        "KNOWLEDGE_GRAPH_ENABLED",
+        "LOG_LEVEL",
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_API_URL",
+        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
+      ]
     },
 
     "typecheck": {
@@ -32,6 +65,7 @@
 
     "test:unit": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "src/**", "test/**", "tests/**", "vitest.config.*"],
       "outputs": ["coverage/**"],
       "env": [
         "DATABASE_URL",
@@ -78,13 +112,6 @@
         "LINEAR_PROJECT_ID"
       ],
       "passThroughEnv": ["CI"]
-    },
-
-    "test:contract": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "tests/contract/**", "openapi.json", "openapi.yaml"],
-      "outputs": ["coverage/**"],
-      "env": ["DATABASE_URL", "NEXT_PUBLIC_API_URL"]
     },
 
     "test:e2e": {

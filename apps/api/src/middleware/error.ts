@@ -1,8 +1,8 @@
 import type { ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
-import { logger } from "./logger.js";
-import type { AppEnv } from "../app.js";
+import { logger } from "./logger";
+import type { AppEnv } from "../app";
 
 export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
   const requestId = c.get("requestId") ?? "unknown";

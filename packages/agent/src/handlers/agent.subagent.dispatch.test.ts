@@ -9,11 +9,11 @@ mocks.dispatchFanoutMock.mockImplementation(async () => ({
   childMessageIds: ["c1", "c2"],
 }));
 
-vi.mock("../dispatch/subagent.js", () => ({
+vi.mock("../dispatch/subagent", () => ({
   dispatchFanout: mocks.dispatchFanoutMock,
 }));
 
-import { agentSubagentDispatchHandler } from "./agent.subagent.dispatch.js";
+import { agentSubagentDispatchHandler } from "./agent.subagent.dispatch";
 
 const CTX = {
   orgId: "ten_1",

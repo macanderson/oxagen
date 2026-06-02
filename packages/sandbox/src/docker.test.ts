@@ -20,9 +20,9 @@
  * hostConfigFor is a pure function (no I/O); tests run without Docker.
  */
 import { describe, it, expect } from "vitest";
-import { hostConfigFor } from "./docker.js";
-import type { SandboxRequest } from "./types.js";
-import type { ImageSpec } from "./images.js";
+import { hostConfigFor } from "./docker";
+import type { SandboxRequest } from "./types";
+import type { ImageSpec } from "./images";
 
 // ---------------------------------------------------------------------------
 // Fixtures

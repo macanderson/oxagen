@@ -75,16 +75,18 @@ export const baseEnvSchema = z.object({
   // presence at call-time when a real KMS client is provided.
   AUTH_TOKEN_KMS_KEY_ID: z.string().min(1).optional(),
 
-  // OXA-1498: IAM enforcement gate.
-  // When false (default): the kernel resolves authz + emits audit on every
-  // capability call, but NEVER blocks the call — would-deny decisions are
-  // logged for visibility without risk of accidental lockout.
-  // When true: denied invocations are blocked and a DenialResponse is returned.
-  // Flip to true only after verifying principal_role_assignments are seeded.
+  // OXA-1498: IAM enforcement gate. Secure by default: enforcement is ON
+  // unless explicitly disabled. The kernel always resolves authz and emits
+  // the ClickHouse + Postgres audit events on every capability call.
+  // When true (default): denied invocations are blocked and a CapabilityError
+  // is thrown — fail-closed behaviour required for SOC2 CC6/CC7.
+  // Set IAM_ENFORCEMENT_ENABLED=false ONLY as a break-glass measure (e.g.
+  // during an incident where IAM tables are unavailable or roles are
+  // mis-seeded). Re-enable immediately after remediation.
   IAM_ENFORCEMENT_ENABLED: z
     .union([z.literal("true"), z.literal("false")])
     .optional()
-    .transform((v) => v === "true"),
+    .transform((v) => v !== "false"),
 
   // ── Billing / usage-meter tuning (see @oxagen/billing pricing.ts) ──
   // Target *blended* gross margin across all products, in (0,1). When set,

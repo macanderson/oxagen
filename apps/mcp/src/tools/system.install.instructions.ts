@@ -3,7 +3,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { systemInstallInstructions, installClientSchema } from "@oxagen/oxagen/contracts/system.install.instructions";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 // Returns step-by-step MCP/CLI install instructions for a given AI client.
 // Pure computation — no model call. Renders inline via the install-instructions

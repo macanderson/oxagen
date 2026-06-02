@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { organizationCreate } from "./organization.create.js";
+import { organizationCreate } from "./organization.create";
 
 describe("organization.create capability", () => {
   it("parses a valid input", () => {

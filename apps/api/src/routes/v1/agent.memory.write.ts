@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { agentMemoryWrite } from "@oxagen/oxagen/contracts/agent.memory.write";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { capabilityContext } from "../../lib/context.js";
-import type { AppEnv } from "../../app.js";
+import { capabilityContext } from "../../lib/context";
+import type { AppEnv } from "../../app";
 
 export const agentMemoryWriteRoute = new Hono<AppEnv>();
 

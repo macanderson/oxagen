@@ -19,8 +19,8 @@
 
 import type { CapabilityContext, CapabilityEffect, ResolvedPrincipal } from "@oxagen/oxagen";
 import { resolve, type ResolveResult } from "@oxagen/oxagen/iam";
-import { fetchAuthz } from "./fetch-authz.js";
-import { emitAudit } from "./emit-audit.js";
+import { fetchAuthz } from "./fetch-authz";
+import { emitAudit } from "./emit-audit";
 import { resolveOrgTier, canAccessACL } from "@oxagen/billing";
 
 /**

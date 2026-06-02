@@ -11,11 +11,11 @@ vi.mock("@oxagen/billing", () => ({
   syncInvoiceFromStripe: mocks.syncInvoiceFromStripe,
 }));
 
-vi.mock("../logger.js", () => ({
+vi.mock("../logger", () => ({
   logger: { info: mocks.loggerInfo, error: vi.fn() },
 }));
 
-vi.mock("../inngest.js", () => ({
+vi.mock("../inngest", () => ({
   inngest: { createFunction: mocks.inngestCreateFunction },
 }));
 
@@ -37,7 +37,7 @@ mocks.inngestCreateFunction.mockImplementation(
   },
 );
 
-await import("./stripe.sync-invoice.js");
+await import("./stripe.sync-invoice");
 
 function makeStep() {
   return {

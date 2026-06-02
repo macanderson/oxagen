@@ -1,9 +1,8 @@
-import { createOpenAI } from "@ai-sdk/openai";
-import { generateImageFor } from "@oxagen/ai";
+import { generateImageFor, selectImageModel } from "@oxagen/ai";
 import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { imageGenerate } from "@oxagen/oxagen/contracts/image.generate";
-import { logger } from "./logger.js";
+import { logger } from "./logger";
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 //
@@ -47,9 +46,10 @@ export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = asy
   }
 
   try {
-    const client = createOpenAI({ apiKey: openAiKey });
-    // DALL-E 3 is the only OpenAI model that supports experimental_generateImage.
-    const imageModel = client.image("dall-e-3");
+    // selectImageModel() is the single chokepoint for image model construction —
+    // it wraps @ai-sdk/openai internally so this handler never imports the
+    // provider SDK directly. DALL-E 3 remains the backing model.
+    const imageModel = selectImageModel();
 
     const { images, durationMs } = await generateImageFor({
       model: imageModel,

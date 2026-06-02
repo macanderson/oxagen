@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { loadSkillFile } from "./loader.js";
-import type { Skill } from "./types.js";
+import { loadSkillFile } from "./loader";
+import type { Skill } from "./types";
 
 // Recursive scan for `*.skill.md` so authors can organise built-in skills
 // into category subdirectories without touching the loader. The depth is

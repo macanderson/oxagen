@@ -1,20 +1,18 @@
 // Re-exports for every schema domain. Drizzle picks tables up from this
 // barrel for migration generation and type inference.
-export * from "./_mixins.js";
-export * from "./_schemas.js";
+export * from "./_mixins";
+export * from "./_schemas";
 
-export * from "./org.js";
-export * from "./auth.js";
-export * from "./workspace.js";
-export * from "./integration.js";
-export * from "./agent.js";
-export * from "./workflow.js";
-export * from "./event.js";
-export * from "./execution.js";
-export * from "./chat.js";
-export * from "./content.js";
-export * from "./graph.js";
-export * from "./evaluation.js";
-export * from "./billing.js";
-export * from "./security.js";
-export * from "./iam.js";
+export * from "./org";
+export * from "./auth";
+export * from "./workspace";
+export * from "./integration";
+export * from "./agent";
+export * from "./workflow";
+export * from "./event";
+export * from "./execution";
+export * from "./chat";
+export * from "./content";
+export * from "./billing";
+export * from "./security";
+export * from "./iam";

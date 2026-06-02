@@ -3,7 +3,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentTaskBackgroundStart } from "@oxagen/oxagen/contracts/agent.task.background.start";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 export const schema = {
   kind: z.string().describe("Task kind identifier (e.g. 'agent.run', 'data.export')"),

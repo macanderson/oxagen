@@ -13,9 +13,9 @@ import {
   isDenial,
   type IAMCheckFn,
   type CreateAccessRequestFn,
-} from "./define-contract.js";
-import { clearRegistryForTests } from "./registry.js";
-import { clearHandlersForTests } from "./kernel.js";
+} from "./define-contract";
+import { clearRegistryForTests } from "./registry";
+import { clearHandlersForTests } from "./kernel";
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
 
@@ -99,7 +99,7 @@ describe("defineContract — structure", () => {
   });
 
   it("registerCapability is called during defineContract construction (getCapability returns metadata)", async () => {
-    const { getCapability } = await import("./registry.js");
+    const { getCapability } = await import("./registry");
     const spec = makeSpec();
     defineContract(spec);
     const cap = getCapability(spec.id);

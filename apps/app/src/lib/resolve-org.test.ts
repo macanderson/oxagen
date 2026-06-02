@@ -67,7 +67,7 @@ vi.mock("react", async (importOriginal) => {
   return { ...actual, cache: (fn: unknown) => fn };
 });
 
-import { resolveOrg, resolveWorkspace } from "./resolve-org.js";
+import { resolveOrg, resolveWorkspace } from "./resolve-org";
 
 // ---------------------------------------------------------------------------
 // Helpers

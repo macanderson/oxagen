@@ -9,19 +9,10 @@ const nextConfig = {
     serverActions: { allowedOrigins: ["localhost:3000"] },
   },
   // Workspace packages use NodeNext-style `import "./foo.js"` from `.ts`
-  // source. Both Turbopack (Next 16 default) and webpack need to know to
-  // try .ts/.tsx when a `.js` import is resolved against package source.
-  turbopack: {
-    resolveExtensions: [".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx", ".json"],
-  },
-  webpack: (config) => {
-    config.resolve.extensionAlias = {
-      ...(config.resolve.extensionAlias ?? {}),
-      ".js": [".ts", ".tsx", ".js"],
-      ".mjs": [".mts", ".mjs"],
-    };
-    return config;
-  },
+  // source. Turbopack (Next 16 default) maps `.js` import specifiers to the
+  // `.ts`/`.tsx` source natively for TypeScript projects — no custom
+  // resolveExtensions override (which only *appends* extensions for
+  // extensionless imports and suppresses the built-in `.js`→`.ts` remap).
 };
 
 export default nextConfig;

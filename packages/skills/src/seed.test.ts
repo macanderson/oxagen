@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { seedSkillsFromFilesystem, BUILTIN_ORG_ID, BUILTIN_WORKSPACE_ID } from "./seed.js";
-import type { SkillSeedAdapter } from "./seed.js";
+import { seedSkillsFromFilesystem, BUILTIN_ORG_ID, BUILTIN_WORKSPACE_ID } from "./seed";
+import type { SkillSeedAdapter } from "./seed";
 
 // ---------------------------------------------------------------------------
 // Fake filesystem root that scanSkillsDir will find and load real .skill.md

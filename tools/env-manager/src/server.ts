@@ -3,12 +3,12 @@ import { Hono } from "hono";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { loadConfig } from "./config.js";
-import { CATALOG } from "./catalog.js";
-import { listEnv, upsertEnv } from "./vercel.js";
-import { resolveSource } from "./sources.js";
-import { ENV_NAMES, SERVICE_NAMES } from "./types.js";
-import type { DeployResult, EnvName, ServiceName } from "./types.js";
+import { loadConfig } from "./config";
+import { CATALOG } from "./catalog";
+import { listEnv, upsertEnv } from "./vercel";
+import { resolveSource } from "./sources";
+import { ENV_NAMES, SERVICE_NAMES } from "./types";
+import type { DeployResult, EnvName, ServiceName } from "./types";
 
 const cfg = loadConfig();
 const here = dirname(fileURLToPath(import.meta.url));

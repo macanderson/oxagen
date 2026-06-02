@@ -9,7 +9,7 @@
  */
 
 import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
-import { ENVELOPE_VERSION, type EncryptOptions, type DecryptOptions } from "./types.js";
+import { ENVELOPE_VERSION, type EncryptOptions, type DecryptOptions } from "./types";
 
 const AES_GCM_IV_BYTES = 12; // 96-bit IV — NIST recommended for AES-GCM
 const AES_GCM_TAG_BYTES = 16;

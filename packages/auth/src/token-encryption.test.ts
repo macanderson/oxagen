@@ -28,7 +28,7 @@ import {
   encryptAccountTokens,
   decryptAccountTokens,
   buildAccountTokenHooks,
-} from "./token-encryption.js";
+} from "./token-encryption";
 
 // ---------------------------------------------------------------------------
 // Helpers

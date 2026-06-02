@@ -7,7 +7,7 @@ vi.mock("@oxagen/ontology", () => ({
   session: () => ({ run: sessionRun, close: sessionClose }),
 }));
 
-import { recallMemories, writeMemory } from "./neo4j.js";
+import { recallMemories, writeMemory } from "./neo4j";
 
 function fakeRecord(map: Record<string, unknown>) {
   return { get: (k: string) => map[k] };

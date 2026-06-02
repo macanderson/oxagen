@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { videoGenerateHandler } from "./video.generate.js";
+import { videoGenerateHandler } from "./video.generate";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 const CTX: CapabilityContext = {

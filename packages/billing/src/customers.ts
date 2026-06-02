@@ -1,7 +1,7 @@
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
-import { billingProvider } from "./client.js";
-import { logger } from "./logger.js";
+import { billingProvider } from "./client";
+import { logger } from "./logger";
 
 /**
  * Idempotent. Returns an existing stripe_customer_id from the most recent

@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { billingSubscriptionUpgradeStart } from "@oxagen/oxagen/contracts/billing.subscription.upgrade.start";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { capabilityContext } from "../../lib/context.js";
-import type { AppEnv } from "../../app.js";
+import { capabilityContext } from "../../lib/context";
+import type { AppEnv } from "../../app";
 
 export const billingSubscriptionUpgradeStartRoute = new Hono<AppEnv>();
 

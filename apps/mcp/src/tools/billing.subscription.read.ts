@@ -2,7 +2,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 export const schema = {};
 

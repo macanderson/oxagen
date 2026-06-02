@@ -6,7 +6,7 @@
 // — tracked separately.
 
 import { describe, expect, it } from "vitest";
-import { buttonVariants } from "./button.js";
+import { buttonVariants } from "./button";
 
 describe("buttonVariants", () => {
   it("includes the base classes for the default variant", () => {

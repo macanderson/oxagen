@@ -3,7 +3,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { documentsPdfCreate } from "@oxagen/oxagen/contracts/documents.pdf.create";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 export const schema = {
   title: z.string().min(1).describe("Title / filename of the output PDF"),

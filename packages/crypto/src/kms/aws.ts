@@ -10,7 +10,7 @@
  */
 
 import { type KMSClient, GenerateDataKeyCommand, DecryptCommand } from "@aws-sdk/client-kms";
-import type { KmsAdapter } from "../types.js";
+import type { KmsAdapter } from "../types";
 
 export function createAwsKmsAdapter(client: KMSClient): KmsAdapter {
   return {

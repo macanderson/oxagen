@@ -39,9 +39,9 @@ vi.mock("@oxagen/billing", () => ({
   providerCostUsdMicros: mocks.providerCostUsdMicros,
   chargeUsageCredits: mocks.chargeUsageCredits,
 }));
-vi.mock("./models.js", () => ({ defaultModel: mocks.defaultModel }));
+vi.mock("./models", () => ({ defaultModel: mocks.defaultModel }));
 
-import { streamAgentReply } from "./stream.js";
+import { streamAgentReply } from "./stream";
 
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -54,6 +54,8 @@ export async function dispatchFanout(args: DispatchFanoutArgs): Promise<Dispatch
     // Single batch insert; never per-child loop (N+1 violation).
     await tx.insert(schema.subagentRuns).values(
       args.children.map((c, i) => ({
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
         fanoutId: fan.id,
         childMessageId: childMessageIds[i]!,
         capabilityName: c.capability,
@@ -109,7 +111,9 @@ export async function readFanout(
   const runs = await db()
     .select()
     .from(schema.subagentRuns)
-    .where(eq(schema.subagentRuns.fanoutId, fanoutId));
+    .where(
+      and(eq(schema.subagentRuns.fanoutId, fanoutId), eq(schema.subagentRuns.orgId, orgId)),
+    );
   return {
     fanoutId,
     status: (fan.status as FanoutSnapshot["status"]) ?? "pending",

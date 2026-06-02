@@ -21,9 +21,9 @@ const consumeCredits = vi.fn(async () => ({ ...consumeState, balanceCents: 0n })
 const effectiveBalanceState: { value: bigint } = { value: 0n };
 const effectiveBalance = vi.fn(async (_orgId: string) => effectiveBalanceState.value);
 
-vi.mock("../credits.js", () => ({ consumeCredits, effectiveBalance }));
+vi.mock("../credits", () => ({ consumeCredits, effectiveBalance }));
 
-const { chargeUsageCredits, hasCreditBalance, meterCreditsForUsage } = await import("../metering.js");
+const { chargeUsageCredits, hasCreditBalance, meterCreditsForUsage } = await import("../metering");
 
 // Markup solved for the default 65% target — passed explicitly so these tests
 // don't depend on env. ($0.06 cost × 3.319 / $0.01 = 19.9 → ceil 20 credits.)

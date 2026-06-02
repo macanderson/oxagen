@@ -1,6 +1,6 @@
 import { boolean, customType, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { authSchema } from "./_schemas.js";
-import { auditMixin, citext, idMixin, softDeleteMixin, orgScopeMixin } from "./_mixins.js";
+import { authSchema } from "./_schemas";
+import { auditMixin, citext, idMixin, softDeleteMixin, orgScopeMixin } from "./_mixins";
 
 // bytea for encrypted columns — Drizzle has no first-class bytea helper, so
 // we declare it inline. KMS unwraps the payload at the service boundary; the

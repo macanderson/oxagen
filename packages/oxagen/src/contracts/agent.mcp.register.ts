@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { registerCapability } from "../registry.js";
+import { registerCapability } from "../registry";
 
 export const agentMcpRegister = registerCapability({
   name: "agent.mcp.register",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAgentStreamEvent, type AgentStreamEvent } from "./stream-events.js";
+import { isAgentStreamEvent, type AgentStreamEvent } from "./stream-events";
 
 // Exhaustive narrowing: if a variant is missing a required discriminant or
 // field, the type-checker / runtime will flag it in this switch.

@@ -35,7 +35,7 @@ vi.mock("@oxagen/config/env", () => ({
   requireEnv: () => envValues,
 }));
 
-import { selectModel } from "./models.js";
+import { selectModel } from "./models";
 
 // ─────────────────────────────────────────────────────────────────────────────
 

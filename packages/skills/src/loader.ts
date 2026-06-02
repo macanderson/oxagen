@@ -5,7 +5,7 @@ import {
   skillFrontmatterSchema,
   type Skill,
   type SkillReference,
-} from "./types.js";
+} from "./types";
 
 // Frontmatter delimiter is the conventional triple-dash on its own line.
 // Allow leading whitespace so authors can format the file freely.

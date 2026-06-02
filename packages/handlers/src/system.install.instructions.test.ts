@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { systemInstallInstructionsHandler } from "./system.install.instructions.js";
+import { systemInstallInstructionsHandler } from "./system.install.instructions";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { InstallClient } from "@oxagen/oxagen/contracts/system.install.instructions";
 

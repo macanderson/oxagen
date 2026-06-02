@@ -26,7 +26,6 @@ Enterprise agent platform. Monorepo. Built around three primitives:
 ```
 /apps      customer-facing applications
 /packages  shared platform libraries (single source of truth for platform code)
-/plugins   3rd-party marketplace integrations (Claude Code, Cursor, etc.)
 /tools     internal dev tooling and CLIs
 ```
 
@@ -37,6 +36,8 @@ Enterprise agent platform. Monorepo. Built around three primitives:
 - `app` — web app; hosts the interactive QA agent
 - `website` — marketing site
 - `cli` — first-class CLI product (streaming, keyboard-driven, composable commands)
+- `admin` — internal operator dashboard (Next.js); tenant management, billing overrides, feature flags
+- `docs` — Fumadocs/MDX documentation site; statically generated, deployed as `oxagen-v2-docs`
 
 ## When adding a capability
 

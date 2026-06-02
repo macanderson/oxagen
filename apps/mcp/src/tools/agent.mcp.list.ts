@@ -2,7 +2,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentMcpList } from "@oxagen/oxagen/contracts/agent.mcp.list";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 export const schema = {};
 

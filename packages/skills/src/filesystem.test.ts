@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { writeFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { scanSkillsDir } from "./filesystem.js";
+import { scanSkillsDir } from "./filesystem";
 
 const SKILL_CONTENT = (name: string) => `---
 name: ${name}

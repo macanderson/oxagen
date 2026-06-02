@@ -21,11 +21,11 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("../runtime/approval.js", () => ({
+vi.mock("../runtime/approval", () => ({
   createApprovalRequest: mocks.createApprovalRequestMock,
 }));
 
-import { agentPlanCreateHandler } from "./agent.plan.create.js";
+import { agentPlanCreateHandler } from "./agent.plan.create";
 
 const CTX = {
   orgId: "org_1",

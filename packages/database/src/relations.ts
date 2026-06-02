@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { organizations, orgUsers } from "./schema/org.js";
+import { organizations, orgUsers } from "./schema/org";
 import {
   principals,
   roles,
@@ -7,10 +7,10 @@ import {
   grants,
   accessRequests,
   iamSessions,
-} from "./schema/iam.js";
-import { users, sessions, accounts, apiKeys, credentials } from "./schema/auth.js";
-import { workspaces, workspaceUsers, folders } from "./schema/workspace.js";
-import { connections, connectionSyncJobs } from "./schema/integration.js";
+} from "./schema/iam";
+import { users, sessions, accounts, apiKeys, credentials } from "./schema/auth";
+import { workspaces, workspaceUsers, folders } from "./schema/workspace";
+import { connections } from "./schema/integration";
 import {
   agents,
   agentVersions,
@@ -25,21 +25,17 @@ import {
   subagentFanouts,
   subagentRuns,
   planSteps,
-} from "./schema/agent.js";
+} from "./schema/agent";
 import {
   playbooks,
   playbookVersions,
   playbookSteps,
   playbookStepAssignments,
-  promptTemplates,
-  promptTemplateVersions,
-} from "./schema/workflow.js";
-import { triggers, workflowTriggers } from "./schema/event.js";
-import { executions, executionSteps, toolCalls, executionArtifacts } from "./schema/execution.js";
-import { conversations, messages } from "./schema/chat.js";
-import { files, documents, contentGenerations } from "./schema/content.js";
-import { graphProviders, routingRules } from "./schema/graph.js";
-import { evals, evalRuns } from "./schema/evaluation.js";
+} from "./schema/workflow";
+import { triggers, workflowTriggers } from "./schema/event";
+import { executions, executionSteps, toolCalls, executionArtifacts } from "./schema/execution";
+import { conversations, messages } from "./schema/chat";
+import { files, documents } from "./schema/content";
 import {
   plans,
   subscriptions,
@@ -51,7 +47,7 @@ import {
   creditLedger,
   stripeEvents,
   stripeEventProcessing,
-} from "./schema/billing.js";
+} from "./schema/billing";
 
 // Cross-domain relations are declared here, not as Drizzle FK constraints,
 // so that schema modules remain independent of one another. The actual FK
@@ -109,18 +105,10 @@ export const foldersRelations = relations(folders, ({ one, many }) => ({
   documents: many(documents),
 }));
 
-export const connectionsRelations = relations(connections, ({ one, many }) => ({
+export const connectionsRelations = relations(connections, ({ one }) => ({
   credential: one(credentials, {
     fields: [connections.credentialId],
     references: [credentials.id],
-  }),
-  syncJobs: many(connectionSyncJobs),
-}));
-
-export const connectionSyncJobsRelations = relations(connectionSyncJobs, ({ one }) => ({
-  connection: one(connections, {
-    fields: [connectionSyncJobs.connectionId],
-    references: [connections.id],
   }),
 }));
 
@@ -230,10 +218,6 @@ export const playbookStepsRelations = relations(playbookSteps, ({ one, many }) =
     fields: [playbookSteps.playbookVersionId],
     references: [playbookVersions.id],
   }),
-  promptTemplate: one(promptTemplates, {
-    fields: [playbookSteps.promptTemplateId],
-    references: [promptTemplates.id],
-  }),
   assignments: many(playbookStepAssignments),
 }));
 
@@ -245,17 +229,6 @@ export const playbookStepAssignmentsRelations = relations(playbookStepAssignment
   agentVersion: one(agentVersions, {
     fields: [playbookStepAssignments.agentVersionId],
     references: [agentVersions.id],
-  }),
-}));
-
-export const promptTemplatesRelations = relations(promptTemplates, ({ many }) => ({
-  versions: many(promptTemplateVersions),
-}));
-
-export const promptTemplateVersionsRelations = relations(promptTemplateVersions, ({ one }) => ({
-  template: one(promptTemplates, {
-    fields: [promptTemplateVersions.promptTemplateId],
-    references: [promptTemplates.id],
   }),
 }));
 
@@ -353,43 +326,6 @@ export const filesRelations = relations(files, ({ many }) => ({
 export const documentsRelations = relations(documents, ({ one }) => ({
   file: one(files, { fields: [documents.fileId], references: [files.id] }),
   folder: one(folders, { fields: [documents.folderId], references: [folders.id] }),
-}));
-
-export const contentGenerationsRelations = relations(contentGenerations, ({ one }) => ({
-  step: one(executionSteps, {
-    fields: [contentGenerations.executionStepId],
-    references: [executionSteps.id],
-  }),
-  outputDocument: one(documents, {
-    fields: [contentGenerations.outputDocumentId],
-    references: [documents.id],
-  }),
-}));
-
-export const graphProvidersRelations = relations(graphProviders, ({ one }) => ({
-  connection: one(connections, {
-    fields: [graphProviders.connectionId],
-    references: [connections.id],
-  }),
-}));
-
-export const routingRulesRelations = relations(routingRules, ({ one }) => ({
-  targetGraph: one(graphProviders, {
-    fields: [routingRules.targetGraphId],
-    references: [graphProviders.id],
-  }),
-}));
-
-export const evalsRelations = relations(evals, ({ many }) => ({
-  runs: many(evalRuns),
-}));
-
-export const evalRunsRelations = relations(evalRuns, ({ one }) => ({
-  eval: one(evals, { fields: [evalRuns.evalId], references: [evals.id] }),
-  agentVersion: one(agentVersions, {
-    fields: [evalRuns.agentVersionId],
-    references: [agentVersions.id],
-  }),
 }));
 
 export const plansRelations = relations(plans, ({ many }) => ({

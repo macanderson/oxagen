@@ -1,4 +1,4 @@
-export * from "./client.js";
-export * as schema from "./schema/index.js";
-export * as relations from "./relations.js";
-export * from "./types.js";
+export * from "./client";
+export * as schema from "./schema/index";
+export * as relations from "./relations";
+export * from "./types";

@@ -1,4 +1,4 @@
-import type { SandboxLanguage, SandboxRequest } from "./types.js";
+import type { SandboxLanguage, SandboxRequest } from "./types";
 
 export interface SandboxPolicy {
   allowedLanguages: readonly SandboxLanguage[];

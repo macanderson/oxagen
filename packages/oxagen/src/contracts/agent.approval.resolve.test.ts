@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agentApprovalResolve } from "./agent.approval.resolve.js";
-import { getCapability } from "../registry.js";
+import { agentApprovalResolve } from "./agent.approval.resolve";
+import { getCapability } from "../registry";
 
 describe("agent.approval.resolve capability", () => {
   it("parses a valid approved decision", () => {

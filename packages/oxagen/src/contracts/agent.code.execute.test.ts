@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agentCodeExecute } from "./agent.code.execute.js";
-import { getCapability } from "../registry.js";
+import { agentCodeExecute } from "./agent.code.execute";
+import { getCapability } from "../registry";
 
 describe("agent.code.execute capability", () => {
   it("parses a valid input with defaults", () => {

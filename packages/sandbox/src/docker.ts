@@ -2,14 +2,14 @@ import Dockerode from "dockerode";
 import { PassThrough } from "node:stream";
 import { Buffer } from "node:buffer";
 import * as tar from "tar-stream";
-import { IMAGES, type ImageSpec } from "./images.js";
+import { IMAGES, type ImageSpec } from "./images";
 import type {
   SandboxDriver,
   SandboxLanguage,
   SandboxRequest,
   SandboxResult,
   SandboxStreamChunk,
-} from "./types.js";
+} from "./types";
 
 // 0.5 CPU equivalent in NanoCPUs (1e9 = 1 full CPU).
 const NANOCPUS = 500_000_000;

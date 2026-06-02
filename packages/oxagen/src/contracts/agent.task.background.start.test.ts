@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agentTaskBackgroundStart } from "./agent.task.background.start.js";
-import { getCapability } from "../registry.js";
+import { agentTaskBackgroundStart } from "./agent.task.background.start";
+import { getCapability } from "../registry";
 
 describe("agent.task.background.start capability", () => {
   it("parses a valid input", () => {

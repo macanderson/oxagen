@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { BillingWebhookEvent } from "../provider.js";
+import type { BillingWebhookEvent } from "../provider";
 
 // ---------------------------------------------------------------------------
 // Module mocks — hoisted before any import of the module under test.
@@ -23,17 +23,17 @@ import type { BillingWebhookEvent } from "../provider.js";
 const syncSubscriptionMock = vi.fn().mockResolvedValue(undefined);
 const syncInvoiceMock = vi.fn().mockResolvedValue(undefined);
 
-vi.mock("../subscriptions.js", () => ({
+vi.mock("../subscriptions", () => ({
   syncSubscriptionFromStripe: syncSubscriptionMock,
 }));
 
-vi.mock("../invoices.js", () => ({
+vi.mock("../invoices", () => ({
   syncInvoiceFromStripe: syncInvoiceMock,
 }));
 
 // billingProvider is only used by verifyStripeSignature in webhooks.ts (not
 // by processStripeEvent itself), so a minimal mock suffices.
-vi.mock("../client.js", () => ({
+vi.mock("../client", () => ({
   billingProvider: vi.fn(() => ({
     parseWebhookEvent: vi.fn(),
   })),
@@ -41,7 +41,7 @@ vi.mock("../client.js", () => ({
 
 // Mock grants so their internal syncSubscriptionFromStripe calls don't leak
 // into webhook dispatch assertions. Grant correctness is tested in grants.test.ts.
-vi.mock("../grants.js", () => ({
+vi.mock("../grants", () => ({
   grantPlanCreditsForInvoicePaid: vi.fn().mockResolvedValue(undefined),
   grantCreditPackForCheckout: vi.fn().mockResolvedValue(undefined),
   grantFreeCredits: vi.fn().mockResolvedValue(undefined),
@@ -125,7 +125,7 @@ vi.mock("@oxagen/database", () => ({
 }));
 
 // Import after mocks.
-const { processStripeEvent } = await import("../webhooks.js");
+const { processStripeEvent } = await import("../webhooks");
 
 // ---------------------------------------------------------------------------
 // Fixture helpers

@@ -25,6 +25,39 @@ export async function register(): Promise<void> {
   // which uses `pg` — a Node.js-only module.
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { bootstrapIAMRuntime } = await import("@oxagen/iam");
+    const { setSecurityEventEmitter } = await import("@oxagen/oxagen/kernel");
+    const { recordSecurityEvent } = await import("@oxagen/telemetry");
+    const { makeSecurityEventInserter } = await import("@oxagen/database/security");
+    const { db } = await import("@oxagen/database/client");
+
     bootstrapIAMRuntime();
+
+    // Wire the Postgres security event emitter (SOC2 CC6/CC7 audit trail).
+    // Registered once per server process, immediately after bootstrapIAMRuntime()
+    // so the kernel runtime is initialised before any capability can be invoked.
+    const insert = makeSecurityEventInserter(db());
+    setSecurityEventEmitter((kernelEvent) => {
+      recordSecurityEvent(insert, {
+        eventType:
+          kernelEvent.outcome === "allow"
+            ? "capability.invoke_allowed"
+            : kernelEvent.outcome === "deny"
+              ? "capability.invoke_denied"
+              : "capability.invoke_error",
+        actorUserId: kernelEvent.actorUserId,
+        orgId: kernelEvent.orgId,
+        workspaceId: kernelEvent.workspaceId,
+        capability: kernelEvent.capability,
+        outcome:
+          kernelEvent.outcome === "allow"
+            ? "allow"
+            : kernelEvent.outcome === "deny"
+              ? "deny"
+              : "error",
+        ip: null, // not available at kernel level — enrich at surface layer
+        userAgent: null,
+        requestId: kernelEvent.requestId,
+      });
+    });
   }
 }

@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { clickhouse, closeClickhouse } from "./clickhouse.js";
+import { clickhouse, closeClickhouse } from "./clickhouse";
 
 function splitStatements(sql: string): string[] {
   // Strip leading comment lines per chunk so a statement preceded by

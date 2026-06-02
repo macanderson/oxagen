@@ -22,7 +22,7 @@ import type {
   policies,
   accessRequests,
   iamSessions,
-} from "./schema/index.js";
+} from "./schema/index";
 
 // ── Billing row types ────────────────────────────────────────────────────────
 

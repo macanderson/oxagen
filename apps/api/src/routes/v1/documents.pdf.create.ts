@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { documentsPdfCreate } from "@oxagen/oxagen/contracts/documents.pdf.create";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { capabilityContext } from "../../lib/context.js";
-import type { AppEnv } from "../../app.js";
+import { capabilityContext } from "../../lib/context";
+import type { AppEnv } from "../../app";
 
 export const documentsPdfCreateRoute = new Hono<AppEnv>();
 

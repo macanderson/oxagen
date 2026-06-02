@@ -35,7 +35,7 @@ vi.mock("@oxagen/handlers/logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
 
-import { fillFormAction, type FillFormActionInput } from "./fill-action.js";
+import { fillFormAction, type FillFormActionInput } from "./fill-action";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen";

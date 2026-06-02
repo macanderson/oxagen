@@ -1,7 +1,7 @@
 import { boolean, index, jsonb, text, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { chatSchema } from "./_schemas.js";
-import { auditMixin, idMixin, orgScopeMixin } from "./_mixins.js";
+import { chatSchema } from "./_schemas";
+import { auditMixin, idMixin, orgScopeMixin } from "./_mixins";
 
 export const conversations = chatSchema.table(
   "conversations",

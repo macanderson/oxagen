@@ -1,5 +1,5 @@
 import { insertExecutionLogs } from "@oxagen/telemetry";
-import type { CapabilityContext } from "../types.js";
+import type { CapabilityContext } from "../types";
 import pino from "pino";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.hooks" } });

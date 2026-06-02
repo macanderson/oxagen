@@ -1,13 +1,13 @@
-export * from "./types.js";
-export { parseSkill, loadSkillFile } from "./loader.js";
-export type { ParseSkillOptions } from "./loader.js";
-export { scanSkillsDir } from "./filesystem.js";
-export { createSkillRegistry } from "./registry.js";
-export type { SkillRegistry, CreateSkillRegistryOptions } from "./registry.js";
-export { seedSkillsFromFilesystem, BUILTIN_ORG_ID, BUILTIN_WORKSPACE_ID } from "./seed.js";
+export * from "./types";
+export { parseSkill, loadSkillFile } from "./loader";
+export type { ParseSkillOptions } from "./loader";
+export { scanSkillsDir } from "./filesystem";
+export { createSkillRegistry } from "./registry";
+export type { SkillRegistry, CreateSkillRegistryOptions } from "./registry";
+export { seedSkillsFromFilesystem, BUILTIN_ORG_ID, BUILTIN_WORKSPACE_ID } from "./seed";
 export type {
   SkillSeedAdapter,
   SeedSkillsOptions,
   SeedSkillsResult,
   SkillRow,
-} from "./seed.js";
+} from "./seed";

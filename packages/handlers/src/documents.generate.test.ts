@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { documentsGenerateHandler } from "./documents.generate.js";
+import { documentsGenerateHandler } from "./documents.generate";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 const CTX: CapabilityContext = {

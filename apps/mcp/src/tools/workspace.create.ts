@@ -3,7 +3,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 export const schema = {
   name: z.string().min(1).max(120).describe("Display name for the workspace"),

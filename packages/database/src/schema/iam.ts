@@ -25,8 +25,8 @@
 
 import { boolean, check, index, integer, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { orgSchema } from "./_schemas.js";
-import { auditMixin, idMixin, softDeleteMixin } from "./_mixins.js";
+import { orgSchema } from "./_schemas";
+import { auditMixin, idMixin, softDeleteMixin } from "./_mixins";
 
 // ---------------------------------------------------------------------------
 // principals — every human, agent, or service in the system

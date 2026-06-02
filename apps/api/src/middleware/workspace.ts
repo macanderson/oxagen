@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { resolveWorkspaceScope } from "@oxagen/auth";
-import type { AppEnv } from "../app.js";
+import type { AppEnv } from "../app";
 
 /**
  * Thin HTTP adapter — §7.3. Delegates workspace scope resolution to the

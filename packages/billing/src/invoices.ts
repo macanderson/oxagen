@@ -1,8 +1,8 @@
 import { db, schema } from "@oxagen/database";
-import { eq } from "drizzle-orm";
-import { billingProvider } from "./client.js";
-import { logger } from "./logger.js";
-import type { BillingInvoice } from "./provider.js";
+import { and, eq } from "drizzle-orm";
+import { billingProvider } from "./client";
+import { logger } from "./logger";
+import type { BillingInvoice } from "./provider";
 
 async function resolveOrgIdFromSubscription(invoice: BillingInvoice): Promise<string | null> {
   if (!invoice.subscriptionId) return null;
@@ -78,11 +78,17 @@ export async function syncInvoiceFromStripe(stripeInvoiceId: string): Promise<vo
 
     await tx
       .delete(schema.invoiceLineItems)
-      .where(eq(schema.invoiceLineItems.invoiceId, invoiceRowId));
+      .where(
+        and(
+          eq(schema.invoiceLineItems.invoiceId, invoiceRowId),
+          eq(schema.invoiceLineItems.orgId, orgId),
+        ),
+      );
 
     if (invoice.lineItems.length > 0) {
       await tx.insert(schema.invoiceLineItems).values(
         invoice.lineItems.map((line) => ({
+          orgId,
           invoiceId: invoiceRowId,
           description: line.description,
           quantity: String(line.quantity),

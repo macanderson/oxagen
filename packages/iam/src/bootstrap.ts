@@ -19,8 +19,8 @@
 
 import { setIAMRuntime, type IAMCheckFn, type CreateAccessRequestFn } from "@oxagen/oxagen";
 import { setKernelIAMRuntime, type KernelIAMCheckFn } from "@oxagen/oxagen/kernel";
-import { checkIAM } from "./check-iam.js";
-import { createAccessRequest } from "./access-request.js";
+import { checkIAM } from "./check-iam";
+import { createAccessRequest } from "./access-request";
 import { requireEnv } from "@oxagen/config/env";
 
 /**

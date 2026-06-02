@@ -37,7 +37,7 @@ import {
   listMcpTools,
   materializeMcpTools,
   healthcheck,
-} from "./mcp-client.js";
+} from "./mcp-client";
 
 describe("mcp-client", () => {
   beforeEach(() => {

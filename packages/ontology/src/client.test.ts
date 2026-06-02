@@ -43,7 +43,7 @@ vi.mock("@oxagen/config/env", () => ({
 }));
 
 // Import AFTER mocks so the module under test picks up stubbed deps.
-import { driver, session, closeDriver } from "./client.js";
+import { driver, session, closeDriver } from "./client";
 
 // Helper: reset all mock call counts and ensure the singleton is closed
 async function resetSingleton() {

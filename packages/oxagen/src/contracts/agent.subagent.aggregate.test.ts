@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agentSubagentAggregate } from "./agent.subagent.aggregate.js";
-import { getCapability } from "../registry.js";
+import { agentSubagentAggregate } from "./agent.subagent.aggregate";
+import { getCapability } from "../registry";
 
 describe("agent.subagent.aggregate capability", () => {
   it("parses a valid input", () => {

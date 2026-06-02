@@ -52,7 +52,7 @@ import {
   notifyResolution,
   waitForApproval,
   readApproval,
-} from "./approval.js";
+} from "./approval";
 
 describe("approval runtime", () => {
   beforeEach(() => {

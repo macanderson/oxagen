@@ -74,7 +74,7 @@ vi.mock("@oxagen/billing", () => ({
   grantFreeCredits: mocks.grantFreeCredits,
 }));
 
-import { organizationCreateHandler } from "./organization.create.js";
+import { organizationCreateHandler } from "./organization.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────

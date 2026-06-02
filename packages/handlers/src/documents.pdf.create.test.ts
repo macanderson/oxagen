@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { documentsPdfCreateHandler } from "./documents.pdf.create.js";
+import { documentsPdfCreateHandler } from "./documents.pdf.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 const CTX: CapabilityContext = {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { registerCapability } from "../registry.js";
+import { registerCapability } from "../registry";
 
 export const brandkitApply = registerCapability({
   name: "brandkit.apply",

@@ -36,7 +36,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   return { and: original.and, eq: original.eq };
 });
 
-import { agentSkillLoadHandler } from "./agent.skill.load.js";
+import { agentSkillLoadHandler } from "./agent.skill.load";
 
 // ─────────────────────────────────────────────────────────────────────────────
 

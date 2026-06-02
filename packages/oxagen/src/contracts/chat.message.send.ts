@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { registerCapability } from "../registry.js";
+import { registerCapability } from "../registry";
 
 // Streaming response is delivered via the AI SDK; the capability's output
 // schema describes the *terminal* message persisted after the stream

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { generateObjectFor } from "@oxagen/ai";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { formFill, type FormFillInput } from "@oxagen/oxagen/contracts/form.fill";
-import { logger } from "./logger.js";
+import { logger } from "./logger";
 
 // Derive the field shape from the contract input so this file never drifts.
 type FieldSpec = FormFillInput["fields"][number];

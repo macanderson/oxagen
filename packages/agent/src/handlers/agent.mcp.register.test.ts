@@ -22,11 +22,11 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("../dispatch/mcp-client.js", () => ({
+vi.mock("../dispatch/mcp-client", () => ({
   healthcheck: mocks.healthcheckMock,
 }));
 
-import { agentMcpRegisterHandler } from "./agent.mcp.register.js";
+import { agentMcpRegisterHandler } from "./agent.mcp.register";
 
 const CTX = {
   orgId: "org_1",

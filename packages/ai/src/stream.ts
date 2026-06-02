@@ -6,7 +6,7 @@ import {
   type Surface,
 } from "@oxagen/telemetry";
 import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
-import { defaultModel } from "./models.js";
+import { defaultModel } from "./models";
 
 export interface StreamAgentReplyArgs {
   messages: CoreMessage[];

@@ -1,6 +1,6 @@
-import { bigint, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { contentSchema } from "./_schemas.js";
-import { auditMixin, idMixin, orgScopeMixin } from "./_mixins.js";
+import { bigint, index, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { contentSchema } from "./_schemas";
+import { auditMixin, idMixin, orgScopeMixin } from "./_mixins";
 
 export const files = contentSchema.table(
   "files",
@@ -43,20 +43,3 @@ export const documents = contentSchema.table(
   }),
 );
 
-export const contentGenerations = contentSchema.table(
-  "content_generations",
-  {
-    ...idMixin("cgn"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    executionStepId: uuid("execution_step_id").notNull(),
-    generationType: text("generation_type").notNull(),
-    sourceDocumentIds: uuid("source_document_ids").array(),
-    outputDocumentId: uuid("output_document_id"),
-    recipeConfig: jsonb("recipe_config").notNull(),
-  },
-  (t) => ({
-    orgIdx: index("content_generations_org_idx").on(t.orgId, t.workspaceId),
-    stepIdx: index("content_generations_step_idx").on(t.executionStepId),
-  }),
-);

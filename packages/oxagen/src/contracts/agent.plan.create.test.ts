@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agentPlanCreate } from "./agent.plan.create.js";
-import { getCapability } from "../registry.js";
+import { agentPlanCreate } from "./agent.plan.create";
+import { getCapability } from "../registry";
 
 describe("agent.plan.create capability", () => {
   it("parses a valid input", () => {

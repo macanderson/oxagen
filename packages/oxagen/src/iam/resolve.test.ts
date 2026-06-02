@@ -4,7 +4,7 @@
 // Target: >95% line coverage on resolve.ts.
 
 import { describe, expect, it } from "vitest";
-import { resolve } from "./resolve.js";
+import { resolve } from "./resolve";
 import type {
   ResolveInput,
   Grant,
@@ -12,8 +12,8 @@ import type {
   RoleGrant,
   Policy,
   ResolveScope,
-} from "./resolve.js";
-import type { ResolvedPrincipal } from "../types.js";
+} from "./resolve";
+import type { ResolvedPrincipal } from "../types";
 
 type TestPrincipal = ResolvedPrincipal;
 

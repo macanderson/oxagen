@@ -32,7 +32,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   };
 });
 
-import { agentPlanApproveHandler } from "./agent.plan.approve.js";
+import { agentPlanApproveHandler } from "./agent.plan.approve";
 
 const CTX = {
   orgId: "ten_1",

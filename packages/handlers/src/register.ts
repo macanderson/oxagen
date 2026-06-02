@@ -7,68 +7,68 @@ import { registerHandler, type CapabilityHandlerFn } from "@oxagen/oxagen/kernel
 
 registerHandler(
   "organization.create",
-  async () => (await import("./organization.create.js")).organizationCreateHandler as CapabilityHandlerFn,
+  async () => (await import("./organization.create")).organizationCreateHandler as CapabilityHandlerFn,
 );
 registerHandler(
   "workspace.create",
   async () =>
-    (await import("./workspace.create.js")).workspaceCreateHandler as CapabilityHandlerFn,
+    (await import("./workspace.create")).workspaceCreateHandler as CapabilityHandlerFn,
 );
 registerHandler(
   "billing.subscription.read",
   async () =>
-    (await import("./billing.subscription.read.js"))
+    (await import("./billing.subscription.read"))
       .billingSubscriptionReadHandler as CapabilityHandlerFn,
 );
 registerHandler(
   "billing.subscription.upgrade.start",
   async () =>
-    (await import("./billing.subscription.upgrade.start.js"))
+    (await import("./billing.subscription.upgrade.start"))
       .billingSubscriptionUpgradeStartHandler as CapabilityHandlerFn,
 );
 registerHandler(
   "chat.message.send",
   async () =>
-    (await import("./chat.message.send.js")).chatMessageSendHandler as CapabilityHandlerFn,
+    (await import("./chat.message.send")).chatMessageSendHandler as CapabilityHandlerFn,
 );
 registerHandler(
   "form.fill",
   async () =>
-    (await import("./form.fill.js")).formFillHandler as CapabilityHandlerFn,
+    (await import("./form.fill")).formFillHandler as CapabilityHandlerFn,
 );
 registerHandler(
   "documents.generate",
   async () =>
-    (await import("./documents.generate.js")).documentsGenerateHandler as CapabilityHandlerFn,
+    (await import("./documents.generate")).documentsGenerateHandler as CapabilityHandlerFn,
 );
 registerHandler(
   "documents.pdf.create",
   async () =>
-    (await import("./documents.pdf.create.js")).documentsPdfCreateHandler as CapabilityHandlerFn,
+    (await import("./documents.pdf.create")).documentsPdfCreateHandler as CapabilityHandlerFn,
 );
 registerHandler(
   "brandkit.apply",
   async () =>
-    (await import("./brandkit.apply.js")).brandkitApplyHandler as CapabilityHandlerFn,
+    (await import("./brandkit.apply")).brandkitApplyHandler as CapabilityHandlerFn,
 );
 registerHandler(
   "video.generate",
   async () =>
-    (await import("./video.generate.js")).videoGenerateHandler as CapabilityHandlerFn,
+    (await import("./video.generate")).videoGenerateHandler as CapabilityHandlerFn,
 );
 registerHandler(
   "svg.generate",
   async () =>
-    (await import("./svg.generate.js")).svgGenerateHandler as CapabilityHandlerFn,
+    (await import("./svg.generate")).svgGenerateHandler as CapabilityHandlerFn,
 );
 registerHandler(
   "image.generate",
   async () =>
-    (await import("./image.generate.js")).imageGenerateHandler as CapabilityHandlerFn,
+    (await import("./image.generate")).imageGenerateHandler as CapabilityHandlerFn,
 );
 registerHandler(
   "system.install.instructions",
   async () =>
-    (await import("./system.install.instructions.js"))
+    (await import("./system.install.instructions"))
       .systemInstallInstructionsHandler as CapabilityHandlerFn,
 );

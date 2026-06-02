@@ -14,9 +14,9 @@
  *     or MODAL_RUNNER_TOKEN is missing
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { createModalSandbox } from "./modal.js";
-import { getSandbox, setSandboxForTests } from "./index.js";
-import type { SandboxRequest } from "./types.js";
+import { createModalSandbox } from "./modal";
+import { getSandbox, setSandboxForTests } from "./index";
+import type { SandboxRequest } from "./types";
 
 // ---------------------------------------------------------------------------
 // Fixtures

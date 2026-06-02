@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createSkillRegistry } from "./registry.js";
-import type { Skill } from "./types.js";
+import { createSkillRegistry } from "./registry";
+import type { Skill } from "./types";
 
 const skill = (slug: string, over: Partial<Skill> = {}): Skill => ({
   slug,

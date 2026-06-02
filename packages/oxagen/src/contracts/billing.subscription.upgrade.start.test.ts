@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { billingSubscriptionUpgradeStart } from "./billing.subscription.upgrade.start.js";
-import { getCapability } from "../registry.js";
+import { billingSubscriptionUpgradeStart } from "./billing.subscription.upgrade.start";
+import { getCapability } from "../registry";
 
 describe("billing.subscription.upgrade.start capability", () => {
   it("is registered", () => {

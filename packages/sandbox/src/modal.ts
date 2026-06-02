@@ -1,10 +1,10 @@
-import { IMAGES } from "./images.js";
+import { IMAGES } from "./images";
 import type {
   SandboxDriver,
   SandboxRequest,
   SandboxResult,
   SandboxStreamChunk,
-} from "./types.js";
+} from "./types";
 
 /**
  * Modal sandbox driver. Talks to Modal's Sandbox HTTP API via a thin

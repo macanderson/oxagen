@@ -3,7 +3,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentMcpRegister } from "@oxagen/oxagen/contracts/agent.mcp.register";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 export const schema = {
   name: z.string().min(1).max(120).describe("Human-readable name for the MCP server"),

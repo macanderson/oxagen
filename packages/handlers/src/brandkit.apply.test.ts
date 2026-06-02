@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { brandkitApplyHandler } from "./brandkit.apply.js";
+import { brandkitApplyHandler } from "./brandkit.apply";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 const CTX: CapabilityContext = {

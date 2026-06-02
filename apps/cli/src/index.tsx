@@ -2,7 +2,7 @@
 import { Command } from "commander";
 import { render } from "ink";
 import React from "react";
-import { DevStatus } from "./components/DevStatus.js";
+import { DevStatus } from "./components/DevStatus";
 
 const program = new Command();
 

@@ -1,4 +1,4 @@
-export { inngest } from "./inngest.js";
-export type { InngestClient } from "./inngest.js";
-export { functions } from "./functions.js";
-export { logger } from "./logger.js";
+export { inngest } from "./inngest";
+export type { InngestClient } from "./inngest";
+export { functions } from "./functions";
+export { logger } from "./logger";

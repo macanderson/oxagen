@@ -3,7 +3,7 @@ import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { grantFreeCredits } from "@oxagen/billing";
-import { logger } from "./logger.js";
+import { logger } from "./logger";
 
 // Postgres unique_violation. Two concurrent creates with the same slug can
 // both pass the pre-check before either insert lands; the loser hits the

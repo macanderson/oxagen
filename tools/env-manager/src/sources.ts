@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomBytes } from "node:crypto";
-import type { ResolveResult, Source } from "./types.js";
+import type { ResolveResult, Source } from "./types";
 
 const run = promisify(execFile);
 const MAX = 1024 * 1024;

@@ -156,7 +156,7 @@ export async function decryptAccountTokens(
  *
  * Usage in auth.ts:
  *
- *   import { buildAccountTokenHooks } from "./token-encryption.js";
+ *   import { buildAccountTokenHooks } from "./token-encryption";
  *   ...
  *   databaseHooks: {
  *     account: buildAccountTokenHooks(kmsAdapter),

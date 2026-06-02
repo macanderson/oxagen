@@ -3,7 +3,7 @@ import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscr
 import { db, schema } from "@oxagen/database";
 import { sumTokenUsage } from "@oxagen/telemetry";
 import { and, eq, inArray } from "drizzle-orm";
-import { logger } from "./logger.js";
+import { logger } from "./logger";
 
 const ACTIVE_STATUSES = ["trialing", "active", "past_due", "paused"];
 

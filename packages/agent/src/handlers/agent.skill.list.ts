@@ -1,6 +1,6 @@
 import { db, schema } from "@oxagen/database";
 import { and, eq, ilike } from "drizzle-orm";
-import type { CapabilityContext } from "../types.js";
+import type { CapabilityContext } from "../types";
 import type { AgentSkillListInput, AgentSkillListOutput } from "@oxagen/oxagen/contracts/agent.skill.list";
 
 export type { AgentSkillListInput, AgentSkillListOutput };

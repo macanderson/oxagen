@@ -5,7 +5,7 @@
 // in isolation.
 
 import { describe, expect, it } from "vitest";
-import { cn } from "./utils.js";
+import { cn } from "./utils";
 
 describe("cn", () => {
   it("returns an empty string for no arguments", () => {

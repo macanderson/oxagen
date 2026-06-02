@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingSubscriptionUpgradeStart } from "@oxagen/oxagen/contracts/billing.subscription.upgrade.start";
 import { createCheckoutSession } from "@oxagen/billing";
-import { logger } from "./logger.js";
+import { logger } from "./logger";
 
 export const billingSubscriptionUpgradeStartHandler: CapabilityHandler<
   typeof billingSubscriptionUpgradeStart

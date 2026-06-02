@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { imageGenerate } from "./image.generate.js";
+import { imageGenerate } from "./image.generate";
 
 describe("image.generate capability", () => {
   it("parses a minimal valid input", () => {

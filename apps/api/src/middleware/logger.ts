@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import pino from "pino";
-import type { AppEnv } from "../app.js";
+import type { AppEnv } from "../app";
 
 export const logger = pino({
   level: process.env.LOG_LEVEL ?? "info",

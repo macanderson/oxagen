@@ -24,7 +24,7 @@
 // environments the runtime can be swapped with mocks.
 
 import type { z } from "zod";
-import { registerCapability } from "./registry.js";
+import { registerCapability } from "./registry";
 import type {
   CapabilityDeclaration,
   CapabilityContext,
@@ -40,8 +40,8 @@ import type {
   CapabilitySurface,
   CapabilityAgentMetadata,
   ResolvedPrincipal,
-} from "./types.js";
-import { isDenial } from "./types.js";
+} from "./types";
+import { isDenial } from "./types";
 
 // ── IAM runtime injection ─────────────────────────────────────────────────────
 //

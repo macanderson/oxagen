@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { videoGenerate } from "@oxagen/oxagen/contracts/video.generate";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { capabilityContext } from "../../lib/context.js";
-import type { AppEnv } from "../../app.js";
+import { capabilityContext } from "../../lib/context";
+import type { AppEnv } from "../../app";
 
 export const videoGenerateRoute = new Hono<AppEnv>();
 

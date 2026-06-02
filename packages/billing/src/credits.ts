@@ -1,6 +1,6 @@
 import { db, schema } from "@oxagen/database";
 import { and, asc, eq, isNull, or, sql, gt } from "drizzle-orm";
-import { CREDIT_REASONS } from "./constants.js";
+import { CREDIT_REASONS } from "./constants";
 
 const ALLOWED_REASONS = new Set<string>(Object.values(CREDIT_REASONS));
 

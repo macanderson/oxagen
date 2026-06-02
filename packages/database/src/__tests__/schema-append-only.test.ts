@@ -38,8 +38,8 @@ import {
   stripeEvents,
   securityEvents,
   creditBalances,
-} from "../schema/index.js";
-import { flattenCheckSql, sqlColumnNames, type DrizzleCheck } from "./_test-helpers.js";
+} from "../schema/index";
+import { flattenCheckSql, sqlColumnNames, type DrizzleCheck } from "./_test-helpers";
 
 // ---------------------------------------------------------------------------
 // 1. Append-only tables: must have no updated_at or deleted_at columns

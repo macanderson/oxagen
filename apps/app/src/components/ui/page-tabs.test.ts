@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { resolveActiveTab } from "../../lib/resolve-active-tab.js";
+import { resolveActiveTab } from "../../lib/resolve-active-tab";
 
 const billingTabs = [
   { href: "/acme/billing" },

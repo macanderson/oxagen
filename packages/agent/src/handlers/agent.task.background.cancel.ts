@@ -1,7 +1,7 @@
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
-import type { CapabilityContext } from "../types.js";
-import { getInngestClient } from "../dispatch/inngest-client.js";
+import type { CapabilityContext } from "../types";
+import { getInngestClient } from "../dispatch/inngest-client";
 import type { AgentTaskBackgroundCancelInput, AgentTaskBackgroundCancelOutput } from "@oxagen/oxagen/contracts/agent.task.background.cancel";
 
 export type { AgentTaskBackgroundCancelInput, AgentTaskBackgroundCancelOutput };

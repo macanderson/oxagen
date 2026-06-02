@@ -27,7 +27,7 @@ import type {
   BillingSubscriptionUpgradeInput,
   BillingWebhookEvent,
   BillingWebhookEventType,
-} from "./provider.js";
+} from "./provider";
 
 // ── Stripe client singleton ──────────────────────────────────────────────────
 

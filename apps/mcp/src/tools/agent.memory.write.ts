@@ -3,7 +3,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentMemoryWrite } from "@oxagen/oxagen/contracts/agent.memory.write";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 export const schema = {
   nodeRef: z.string().describe("Graph node reference to attach the memory to"),

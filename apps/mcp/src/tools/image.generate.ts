@@ -3,7 +3,7 @@ import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { imageGenerate } from "@oxagen/oxagen/contracts/image.generate";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { buildContext } from "../context.js";
+import { buildContext } from "../context";
 
 // Image generation via DALL-E 3 when OPENAI_API_KEY is configured; returns a
 // typed placeholder with an empty-state render directive otherwise. Never throws.

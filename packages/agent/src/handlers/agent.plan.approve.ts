@@ -1,6 +1,6 @@
 import { db, schema } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
-import type { CapabilityContext } from "../types.js";
+import type { CapabilityContext } from "../types";
 import type { AgentPlanApproveInput, AgentPlanApproveOutput } from "@oxagen/oxagen/contracts/agent.plan.approve";
 
 export type { AgentPlanApproveInput, AgentPlanApproveOutput };

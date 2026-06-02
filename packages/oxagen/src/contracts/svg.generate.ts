@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { registerCapability } from "../registry.js";
+import { registerCapability } from "../registry";
 
 // ── Render directive schema (mirrors RenderDirective in stream-event-types) ───
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { svgGenerate } from "./svg.generate.js";
+import { svgGenerate } from "./svg.generate";
 
 describe("svg.generate capability", () => {
   it("parses a minimal valid input", () => {
