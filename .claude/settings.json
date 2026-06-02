@@ -416,7 +416,7 @@
   "worktree.defaultRemote": "origin",
   "worktree.gitCheckoutOptions": ["--recurse-submodules"],
   "worktree.allowlist": [],
-  "worktree.denylist": ["*"],
+  "worktree.denylist": [],
   "worktree.cleanupMode": "prune",
   "worktree.pruneMode": "aggressive"
 
