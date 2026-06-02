@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   requireEnv: vi.fn(),
   generateImageFor: vi.fn(),
+  selectImageModel: vi.fn(),
   createOpenAI: vi.fn(),
 }));
 
@@ -12,9 +13,12 @@ vi.mock("@oxagen/config/env", () => ({
   requireEnv: mocks.requireEnv,
 }));
 
-// The handler delegates all generation to generateImageFor in @oxagen/ai.
+// The handler delegates all generation to generateImageFor in @oxagen/ai, and
+// obtains its ImageModel from selectImageModel() — the single AI chokepoint
+// for image-model construction (wraps @ai-sdk/openai internally).
 vi.mock("@oxagen/ai", () => ({
   generateImageFor: mocks.generateImageFor,
+  selectImageModel: mocks.selectImageModel,
 }));
 
 vi.mock("@ai-sdk/openai", () => ({

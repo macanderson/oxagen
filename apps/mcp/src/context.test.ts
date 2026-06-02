@@ -130,7 +130,7 @@ describe("resolveMcpContext", () => {
   });
 
   it("returns invalid_token when resolveApiKey reports a non-expired failure", async () => {
-    vi.mocked(resolveApiKey).mockResolvedValue({ ok: false, kind: "not_found" });
+    vi.mocked(resolveApiKey).mockResolvedValue({ ok: false, kind: "invalid" });
 
     const result = await resolveMcpContext("Bearer oxk_bad", requestId);
     expect(result).toEqual({ ok: false, reason: "invalid_token" });

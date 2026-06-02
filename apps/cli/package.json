@@ -11,7 +11,8 @@
     "start": "tsx src/index.tsx",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --max-warnings 0"
+    "lint": "eslint src --max-warnings 0",
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
@@ -22,7 +23,9 @@
   "devDependencies": {
     "@types/node": "25.9.1",
     "@types/react": "19.2.15",
+    "@vitest/coverage-v8": "2.1.9",
     "tsx": "4.22.3",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "2.1.9"
   }
 }
