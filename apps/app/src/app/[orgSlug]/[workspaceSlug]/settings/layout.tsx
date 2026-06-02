@@ -17,8 +17,8 @@ export default async function SettingsLayout({
   const tabs = [
     { label: "General", href: workspace.settings.general(ctx) },
     { label: "Members", href: workspace.settings.members(ctx) },
-    { label: "Model keys", href: workspace.settings.modelKeys(ctx) },
-    { label: "Brand kits", href: workspace.settings.brandKits(ctx) },
+    { label: "Model Keys", href: workspace.settings.modelKeys(ctx) },
+    { label: "Brand Kits", href: workspace.settings.brandKits(ctx) },
     { label: "Integrations", href: workspace.settings.integrations(ctx) },
   ];
 
@@ -30,7 +30,7 @@ export default async function SettingsLayout({
         breadcrumb={
           <Breadcrumb
             items={[
-              { label: workspaceSlug, href: workspace.chat(ctx) },
+              { label: workspaceSlug, href: workspace.ask(ctx) },
               { label: "Settings" },
             ]}
           />

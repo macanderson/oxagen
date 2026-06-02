@@ -13,14 +13,19 @@ export default async function SecurityLayout({
   const ctx = { orgSlug };
 
   const tabs = [
+    { label: "SSO", href: org.security.sso(ctx) },
+    { label: "SCIM", href: org.security.scim(ctx) },
+    { label: "MFA", href: org.security.mfa(ctx) },
     { label: "Audit", href: org.security.audit(ctx) },
+    { label: "Compliance", href: org.security.compliance(ctx) },
+    { label: "Incidents", href: org.security.incidents(ctx) },
   ];
 
   return (
     <div className="flex flex-col gap-0">
       <PageHeader
         title="Security"
-        description="Append-only security event log for this organization."
+        description="SSO, SCIM, MFA, audit, compliance, and incidents."
       />
       <PageTabs tabs={tabs} className="mb-6" />
       {children}

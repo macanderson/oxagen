@@ -36,14 +36,14 @@ describe("resolveSidebarMode", () => {
   });
 
   it("returns 'workspace' when workspaceSlug is present and path is not /account", () => {
-    expect(resolveSidebarMode("/acme/production/chat", wsCtx)).toBe("workspace");
+    expect(resolveSidebarMode("/acme/production/ask", wsCtx)).toBe("workspace");
     expect(resolveSidebarMode("/acme/production/knowledge/sources", wsCtx)).toBe("workspace");
   });
 
   it("returns 'workspace' from pathname when ctx has no workspaceSlug (org-layout boundary)", () => {
     // The AppShell at the org layout level has no workspaceSlug in ctx.
     // resolveSidebarMode must derive workspace mode purely from the URL.
-    expect(resolveSidebarMode("/acme/production/chat", orgCtx)).toBe("workspace");
+    expect(resolveSidebarMode("/acme/production/ask", orgCtx)).toBe("workspace");
     expect(resolveSidebarMode("/acme/production/settings/general", orgCtx)).toBe("workspace");
     expect(resolveSidebarMode("/acme/my-ws/knowledge", orgCtx)).toBe("workspace");
   });
@@ -73,9 +73,9 @@ describe("resolveSidebarMode", () => {
 // 2. getSidebarConfig — item counts per mode
 //
 // Spec (application-shell spec §4):
-//   workspace: 6 items (Chat, Knowledge, Automation, Activity, Studio, Settings)
+//   workspace: 6 items (Ask, Knowledge, Automation, Activity, Studio, Settings)
 //   org:       6 items (Workspaces, Members, Access, Security, Billing, Developer)
-//   account:   2 items (Back to app, Profile)
+//   account:   6 items (Back to app, Profile, Security, Cases, Notifications, Privacy)
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
@@ -91,17 +91,17 @@ describe("getSidebarConfig item counts", () => {
     expect(config.items).toHaveLength(6);
   });
 
-  it("account config has exactly 2 items (profile + back link)", () => {
+  it("account config has exactly 6 items", () => {
     const config = getSidebarConfig("account");
     expect(config.mode).toBe("account");
-    expect(config.items).toHaveLength(2);
+    expect(config.items).toHaveLength(6);
   });
 
   it("account config contains exactly one isReturn item", () => {
     const items = getSidebarConfig("account").items;
     const returnItems = items.filter((item) => item.isReturn === true);
     expect(returnItems).toHaveLength(1);
-    expect(returnItems[0]?.id).toBe("back-to-app");
+    expect(returnItems[0]?.id).toBe("back");
   });
 
   it("workspace config has exactly one 'tools' group item (Studio)", () => {
@@ -134,8 +134,8 @@ describe("href builders produce correct paths", () => {
     const config = getSidebarConfig("workspace");
     const findItem = (id: string) => config.items.find((i) => i.id === id)!;
 
-    it("chat -> /{org}/{ws}/chat", () => {
-      expect(findItem("chat").href(wsCtx)).toBe("/acme/production/chat");
+    it("ask -> /{org}/{ws}/ask", () => {
+      expect(findItem("ask").href(wsCtx)).toBe("/acme/production/ask");
     });
 
     it("knowledge -> /{org}/{ws}/knowledge", () => {
@@ -192,12 +192,12 @@ describe("href builders produce correct paths", () => {
     const config = getSidebarConfig("account");
     const findItem = (id: string) => config.items.find((i) => i.id === id)!;
 
-    it("back-to-app with workspaceSlug -> /{org}/{ws}", () => {
-      expect(findItem("back-to-app").href(wsCtx)).toBe("/acme/production");
+    it("back with workspaceSlug -> /{org}/{ws}/ask", () => {
+      expect(findItem("back").href(wsCtx)).toBe("/acme/production/ask");
     });
 
-    it("back-to-app without workspaceSlug -> /{org}", () => {
-      expect(findItem("back-to-app").href(orgCtx)).toBe("/acme");
+    it("back without workspaceSlug -> /{org}", () => {
+      expect(findItem("back").href(orgCtx)).toBe("/acme");
     });
 
     it("profile -> /account/profile", () => {
@@ -217,7 +217,7 @@ describe("enumerateNavTargets", () => {
     const hrefs = targets.map((t) => t.href);
 
     // Spot-check a workspace path and a tab path
-    expect(hrefs).toContain("/acme/production/chat");
+    expect(hrefs).toContain("/acme/production/ask");
     expect(hrefs).toContain("/acme/production/knowledge/sources");
     expect(hrefs).toContain("/acme/production/automation/triggers");
     expect(hrefs).toContain("/acme/production/tools/studio");
@@ -248,7 +248,7 @@ describe("enumerateNavTargets", () => {
     const targets = enumerateNavTargets(orgCtx);
     const hrefs = targets.map((t) => t.href);
 
-    expect(hrefs).not.toContain("/acme/production/chat");
+    expect(hrefs).not.toContain("/acme/production/ask");
     expect(hrefs).not.toContain("/acme/production/knowledge/sources");
   });
 

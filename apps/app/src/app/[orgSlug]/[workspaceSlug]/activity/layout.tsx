@@ -16,7 +16,7 @@ export default async function ActivityLayout({
 
   const tabs = [
     { label: "Runs", href: workspace.activity.runs(ctx) },
-    { label: "Approvals", href: workspace.activity.approvals(ctx) },
+    { label: "Approvals", href: workspace.activity.approvals(ctx), badge: 3 },
     { label: "Audit", href: workspace.activity.audit(ctx) },
   ];
 
@@ -28,7 +28,7 @@ export default async function ActivityLayout({
         breadcrumb={
           <Breadcrumb
             items={[
-              { label: workspaceSlug, href: workspace.chat(ctx) },
+              { label: workspaceSlug, href: workspace.ask(ctx) },
               { label: "Activity" },
             ]}
           />

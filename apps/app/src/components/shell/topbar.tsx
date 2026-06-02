@@ -41,7 +41,7 @@ export function Topbar({
   user,
 }: TopbarProps) {
   const homeHref = workspace
-    ? `/${org.slug}/${workspace.slug}/chat`
+    ? `/${org.slug}/${workspace.slug}/ask`
     : `/${org.slug}`;
 
   const ctx: ScopeContext = {

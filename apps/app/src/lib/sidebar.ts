@@ -9,20 +9,24 @@
  */
 
 import {
-  MessageSquare,
-  BookOpen,
-  Zap,
   Activity,
-  Wrench,
-  Settings,
-  Building2,
-  Users,
-  ShieldCheck,
-  Shield,
+  ArrowLeft,
+  Bell,
+  BookOpen,
   CreditCard,
-  Code2,
-  ChevronLeft,
+  EyeOff,
+  KeyRound,
+  LayoutGrid,
+  LifeBuoy,
+  Lock,
+  MessageSquare,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Terminal,
   User,
+  Users,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 
@@ -69,16 +73,17 @@ const workspaceConfig: SidebarConfig = {
   mode: "workspace",
   items: [
     {
-      id: "chat",
-      label: "Chat",
+      id: "ask",
+      label: "Ask",
       icon: MessageSquare,
-      // Chat is the front door. Uses workspace route; falls back gracefully
+      // Ask is the front door. Uses workspace route; falls back gracefully
       // when workspaceSlug is absent (should not happen in workspace mode).
       href: (ctx) =>
         ctx.workspaceSlug
-          ? workspace.chat(ctx as Required<ScopeContext>)
+          ? workspace.ask(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "primary",
+      external: true,
     },
     {
       id: "knowledge",
@@ -93,7 +98,7 @@ const workspaceConfig: SidebarConfig = {
     {
       id: "automation",
       label: "Automation",
-      icon: Zap,
+      icon: Workflow,
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.automation.root(ctx as Required<ScopeContext>)
@@ -109,11 +114,12 @@ const workspaceConfig: SidebarConfig = {
           ? workspace.activity.root(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "primary",
+      badge: () => 3,
     },
     {
       id: "studio",
       label: "Studio",
-      icon: Wrench,
+      icon: Sparkles,
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.studio.root(ctx as Required<ScopeContext>)
@@ -146,7 +152,7 @@ const orgConfig: SidebarConfig = {
     {
       id: "workspaces",
       label: "Workspaces",
-      icon: Building2,
+      icon: LayoutGrid,
       href: (ctx) => org.root(ctx),
       group: "primary",
       // external = true renders the ↗ affordance to signal mode transition.
@@ -158,18 +164,20 @@ const orgConfig: SidebarConfig = {
       icon: Users,
       href: (ctx) => org.members(ctx),
       group: "primary",
+      badge: () => 2,
     },
     {
       id: "access",
       label: "Access",
-      icon: ShieldCheck,
+      icon: KeyRound,
       href: (ctx) => org.access.root(ctx),
       group: "primary",
+      badge: () => 5,
     },
     {
       id: "security",
       label: "Security",
-      icon: Shield,
+      icon: ShieldCheck,
       href: (ctx) => org.security.root(ctx),
       group: "primary",
     },
@@ -183,7 +191,7 @@ const orgConfig: SidebarConfig = {
     {
       id: "developer",
       label: "Developer",
-      icon: Code2,
+      icon: Terminal,
       href: (ctx) => org.developer.root(ctx),
       group: "primary",
     },
@@ -199,12 +207,17 @@ const accountConfig: SidebarConfig = {
   mode: "account",
   items: [
     {
-      id: "back-to-app",
+      id: "back",
       label: "Back to app",
-      icon: ChevronLeft,
-      // Returns to the org root. The shell can enhance this with
-      // localStorage-persisted last-visited workspace slug in Phase 2.
-      href: (ctx) => (ctx.workspaceSlug ? `/${ctx.orgSlug}/${ctx.workspaceSlug}` : `/${ctx.orgSlug}`),
+      icon: ArrowLeft,
+      // Returns to the workspace Ask surface when a workspace is known,
+      // otherwise the org root or app root.
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.ask(ctx as Required<ScopeContext>)
+          : ctx.orgSlug
+            ? `/${ctx.orgSlug}`
+            : "/",
       group: "primary",
       isReturn: true,
     },
@@ -213,6 +226,34 @@ const accountConfig: SidebarConfig = {
       label: "Profile",
       icon: User,
       href: () => account.profile(),
+      group: "primary",
+    },
+    {
+      id: "security",
+      label: "Security",
+      icon: Lock,
+      href: () => account.security(),
+      group: "primary",
+    },
+    {
+      id: "cases",
+      label: "Cases",
+      icon: LifeBuoy,
+      href: () => account.cases(),
+      group: "primary",
+    },
+    {
+      id: "notifications",
+      label: "Notifications",
+      icon: Bell,
+      href: () => account.notifications(),
+      group: "primary",
+    },
+    {
+      id: "privacy",
+      label: "Privacy",
+      icon: EyeOff,
+      href: () => account.privacy(),
       group: "primary",
     },
   ],
@@ -314,7 +355,7 @@ export function enumerateNavTargets(
     const wsCtx = ctx as Required<ScopeContext>;
 
     // Sidebar-level items
-    targets.push({ label: "Chat", href: workspace.chat(wsCtx), parent: "chat" });
+    targets.push({ label: "Ask", href: workspace.ask(wsCtx), parent: "ask" });
     targets.push({ label: "Knowledge", href: workspace.knowledge.root(wsCtx), parent: "knowledge" });
     targets.push({ label: "Automation", href: workspace.automation.root(wsCtx), parent: "automation" });
     targets.push({ label: "Activity", href: workspace.activity.root(wsCtx), parent: "activity" });
@@ -366,7 +407,12 @@ export function enumerateNavTargets(
   targets.push({ label: "Access · Identities", href: org.access.identities(ctx), parent: "access" });
 
   // Security tabs
+  targets.push({ label: "Security · SSO", href: org.security.sso(ctx), parent: "security" });
+  targets.push({ label: "Security · SCIM", href: org.security.scim(ctx), parent: "security" });
+  targets.push({ label: "Security · MFA", href: org.security.mfa(ctx), parent: "security" });
   targets.push({ label: "Security · Audit", href: org.security.audit(ctx), parent: "security" });
+  targets.push({ label: "Security · Compliance", href: org.security.compliance(ctx), parent: "security" });
+  targets.push({ label: "Security · Incidents", href: org.security.incidents(ctx), parent: "security" });
 
   // Billing tabs
   targets.push({ label: "Billing · Subscription", href: org.billing.subscription(ctx), parent: "billing" });
@@ -376,10 +422,16 @@ export function enumerateNavTargets(
 
   // Developer tabs
   targets.push({ label: "Developer · MCP", href: org.developer.mcp(ctx), parent: "developer" });
+  targets.push({ label: "Developer · Webhooks", href: org.developer.webhooks(ctx), parent: "developer" });
+  targets.push({ label: "Developer · Docs", href: org.developer.docs(ctx), parent: "developer" });
   targets.push({ label: "Developer · Tokens", href: org.developer.tokens(ctx), parent: "developer" });
 
   // -- Account mode --
   targets.push({ label: "Profile", href: account.profile(), parent: "profile" });
+  targets.push({ label: "Security", href: account.security(), parent: "security" });
+  targets.push({ label: "Cases", href: account.cases(), parent: "cases" });
+  targets.push({ label: "Notifications", href: account.notifications(), parent: "notifications" });
+  targets.push({ label: "Privacy", href: account.privacy(), parent: "privacy" });
 
   return targets;
 }

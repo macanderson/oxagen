@@ -20,7 +20,7 @@ import { classifyIntent } from "./intent-router";
 
 vi.mock("@/lib/sidebar", () => ({
   enumerateNavTargets: (_ctx: unknown) => [
-    { label: "Chat", href: "/acme/prod/chat", parent: "chat" },
+    { label: "Ask", href: "/acme/prod/ask", parent: "ask" },
     { label: "Knowledge", href: "/acme/prod/knowledge", parent: "knowledge" },
     { label: "Billing · Invoices", href: "/acme/billing/invoices", parent: "billing" },
     { label: "Members", href: "/acme/members", parent: "members" },
@@ -64,11 +64,11 @@ describe("Fill intent", () => {
 
 describe("Navigate intent", () => {
   it("returns navigate for an exact label match", () => {
-    const result = classifyIntent({ query: "Chat", ctx, hasFillableForm: false });
+    const result = classifyIntent({ query: "Ask", ctx, hasFillableForm: false });
     expect(result.type).toBe("navigate");
     if (result.type === "navigate") {
-      expect(result.href).toBe("/acme/prod/chat");
-      expect(result.label).toBe("Chat");
+      expect(result.href).toBe("/acme/prod/ask");
+      expect(result.label).toBe("Ask");
     }
   });
 

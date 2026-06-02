@@ -38,7 +38,7 @@ export function proxy(request: NextRequest): NextResponse {
   //    Uses 301 (permanent, GET-preserving) per spec — these routes moved for good.
   {
     const wsRouteMove = pathname.match(
-      /^(\/[^/]+\/[^/]+)\/(executions|agents|playbooks)(\/.*)?$/,
+      /^(\/[^/]+\/[^/]+)\/(executions|agents|playbooks|chat)(\/.*)?$/,
     );
     if (wsRouteMove) {
       const [, wsBase, segment, rest = ""] = wsRouteMove;
@@ -47,7 +47,9 @@ export function proxy(request: NextRequest): NextResponse {
           ? "activity/runs"
           : segment === "agents"
             ? "automation/agents"
-            : "automation/playbooks";
+            : segment === "playbooks"
+              ? "automation/playbooks"
+              : "ask";
       return NextResponse.redirect(
         new URL(`${wsBase}/${newSegment}${rest}${search}`, request.url),
         301,

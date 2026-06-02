@@ -28,7 +28,7 @@ export default async function KnowledgeLayout({
         breadcrumb={
           <Breadcrumb
             items={[
-              { label: workspaceSlug, href: workspace.chat(ctx) },
+              { label: workspaceSlug, href: workspace.ask(ctx) },
               { label: "Knowledge" },
             ]}
           />

@@ -54,7 +54,7 @@ export function AskDrawer({
 
   const chatHref =
     ctx.workspaceSlug
-      ? `/${ctx.orgSlug}/${ctx.workspaceSlug}/chat`
+      ? `/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`
       : `/${ctx.orgSlug}`;
 
   return (

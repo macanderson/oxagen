@@ -29,7 +29,7 @@ export default async function AutomationLayout({
         breadcrumb={
           <Breadcrumb
             items={[
-              { label: workspaceSlug, href: workspace.chat(ctx) },
+              { label: workspaceSlug, href: workspace.ask(ctx) },
               { label: "Automation" },
             ]}
           />

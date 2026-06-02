@@ -7,5 +7,5 @@ export default async function WorkspaceRoot({
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }) {
   const { orgSlug, workspaceSlug } = await params;
-  redirect(workspace.chat({ orgSlug, workspaceSlug }));
+  redirect(workspace.ask({ orgSlug, workspaceSlug }));
 }

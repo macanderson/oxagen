@@ -14,7 +14,7 @@ export default async function MembersLayout({
 
   const tabs = [
     { label: "People", href: org.members(ctx) },
-    { label: "Pending", href: `/${orgSlug}/members/pending` },
+    { label: "Pending", href: `/${orgSlug}/members/pending`, badge: 2 },
     { label: "Invitations", href: `/${orgSlug}/members/invitations` },
   ];
 

@@ -14,6 +14,8 @@ export default async function DeveloperLayout({
 
   const tabs = [
     { label: "MCP", href: org.developer.mcp(ctx) },
+    { label: "Webhooks", href: org.developer.webhooks(ctx) },
+    { label: "Docs", href: org.developer.docs(ctx) },
     { label: "Tokens", href: org.developer.tokens(ctx) },
   ];
 
@@ -21,7 +23,7 @@ export default async function DeveloperLayout({
     <div className="flex flex-col gap-0">
       <PageHeader
         title="Developer"
-        description="MCP server configuration and API tokens."
+        description="MCP servers, webhooks, docs, and access tokens."
       />
       <PageTabs tabs={tabs} className="mb-6" />
       {children}

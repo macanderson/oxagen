@@ -27,7 +27,7 @@ export default async function StudioLayout({
         breadcrumb={
           <Breadcrumb
             items={[
-              { label: workspaceSlug, href: workspace.chat(ctx) },
+              { label: workspaceSlug, href: workspace.ask(ctx) },
               { label: "Studio" },
             ]}
           />

@@ -72,6 +72,8 @@ export const org = {
   developer: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer`,
     mcp: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/mcp`,
+    webhooks: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/webhooks`,
+    docs: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/docs`,
     tokens: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/tokens`,
   },
 } as const;
@@ -90,8 +92,8 @@ const wsBase = (ctx: Required<ScopeContext>): string =>
 export const workspace = {
   root: (ctx: Required<ScopeContext>): string => wsBase(ctx),
 
-  // Chat — the front door
-  chat: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/chat`,
+  // Ask — the front door (full-page ask/chat surface).
+  ask: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/ask`,
 
   // Knowledge
   knowledge: {
