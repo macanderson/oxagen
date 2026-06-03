@@ -11,6 +11,7 @@ import Stripe from "stripe";
 import { requireEnv } from "@oxagen/config/env";
 import type {
   BillingCreditPackLineItem,
+  BillingCheckoutDynamicCreditInput,
   BillingCheckoutPaymentInput,
   BillingCheckoutResult,
   BillingCheckoutSession,
@@ -305,6 +306,46 @@ export class StripeProvider implements BillingProvider {
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
       allow_promotion_codes: true,
+    });
+    if (!session.url) throw new Error("Stripe did not return a checkout URL");
+    return { sessionId: session.id, url: session.url };
+  }
+
+  async createDynamicCreditCheckout(
+    input: BillingCheckoutDynamicCreditInput,
+  ): Promise<BillingCheckoutResult> {
+    const session = await stripeClient().checkout.sessions.create({
+      mode: "payment",
+      customer: input.customerId,
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            unit_amount: input.priceCents,
+            product_data: {
+              name: "Oxagen usage credits",
+              metadata: { oxagen_kind: "usage_credits" },
+            },
+          },
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        org_id: input.orgId,
+        credits: String(input.grantCents),
+        gross_cents: String(input.grantCents),
+        discount_percent: String(input.discountPercent),
+      },
+      payment_intent_data: {
+        metadata: {
+          org_id: input.orgId,
+          credits: String(input.grantCents),
+          gross_cents: String(input.grantCents),
+          discount_percent: String(input.discountPercent),
+        },
+      },
+      success_url: input.successUrl,
+      cancel_url: input.cancelUrl,
     });
     if (!session.url) throw new Error("Stripe did not return a checkout URL");
     return { sessionId: session.id, url: session.url };

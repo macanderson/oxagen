@@ -27,6 +27,12 @@ registerHandler(
       .billingSubscriptionUpgradeStartHandler as CapabilityHandlerFn,
 );
 registerHandler(
+  "billing.credits.purchase",
+  async () =>
+    (await import("./billing.credits.purchase"))
+      .billingCreditsPurchaseHandler as CapabilityHandlerFn,
+);
+registerHandler(
   "chat.message.send",
   async () =>
     (await import("./chat.message.send")).chatMessageSendHandler as CapabilityHandlerFn,

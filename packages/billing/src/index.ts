@@ -6,6 +6,7 @@ export * from "./logger";
 export * from "./constants";
 export * from "./customers";
 export * from "./checkout";
+export * from "./credits-purchase";
 export * from "./subscriptions";
 export * from "./seats";
 export * from "./invoices";

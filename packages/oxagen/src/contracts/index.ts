@@ -27,6 +27,7 @@ import { agentTaskBackgroundCancel } from "./agent.task.background.cancel";
 import { agentTaskBackgroundRead } from "./agent.task.background.read";
 import { agentTaskBackgroundStart } from "./agent.task.background.start";
 import { agentToolList } from "./agent.tool.list";
+import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription.upgrade.start";
 import { chatMessageSend } from "./chat.message.send";
@@ -61,6 +62,7 @@ export {
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
   agentToolList,
+  billingCreditsPurchase,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   chatMessageSend,
@@ -104,6 +106,7 @@ export const contracts = [
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
   agentToolList,
+  billingCreditsPurchase,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   chatMessageSend,

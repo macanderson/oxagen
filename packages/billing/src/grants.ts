@@ -270,6 +270,21 @@ export async function grantCreditPackForCheckout(session: BillingCheckoutSession
   for (const item of lineItems) {
     totalCredits += item.creditsPerUnit * item.quantity;
   }
+
+  // Dynamic credit purchases do not have a pre-created Stripe Price, so there
+  // are no credits encoded in price/product metadata. The checkout session
+  // itself carries `credits` (= grantCents, the face value) in its metadata.
+  // Fall back to that value when line items yield nothing.
+  if (totalCredits <= 0) {
+    const metaCredits = session.metadata?.credits;
+    if (metaCredits) {
+      const parsed = Number.parseInt(metaCredits, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        totalCredits = parsed;
+      }
+    }
+  }
+
   if (totalCredits <= 0) return;
 
   const grantDate = new Date();

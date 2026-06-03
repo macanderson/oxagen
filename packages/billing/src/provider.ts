@@ -133,6 +133,21 @@ export interface BillingCheckoutPaymentInput {
   cancelUrl: string;
 }
 
+export interface BillingCheckoutDynamicCreditInput {
+  /** Provider customer id. */
+  customerId: string;
+  /** Org id — stored in session and payment metadata. */
+  orgId: string;
+  /** Amount the customer actually pays, in USD cents (after discount). */
+  priceCents: number;
+  /** Face-value credits the customer receives, in USD cents. */
+  grantCents: number;
+  /** Discount percentage applied, e.g. 15 for 15% off. */
+  discountPercent: number;
+  successUrl: string;
+  cancelUrl: string;
+}
+
 export interface BillingCheckoutResult {
   sessionId: string;
   url: string;
@@ -252,6 +267,16 @@ export interface BillingProvider {
   /** Create a one-time payment checkout session. */
   createPaymentCheckout(
     input: BillingCheckoutPaymentInput,
+  ): Promise<BillingCheckoutResult>;
+
+  /**
+   * Create a dynamic (customer-defined dollar amount) credit checkout session.
+   * Uses inline `price_data` so no pre-created Stripe Price is needed.
+   * The customer pays `priceCents` but receives `grantCents` in credits (the
+   * difference is the volume discount incentive).
+   */
+  createDynamicCreditCheckout(
+    input: BillingCheckoutDynamicCreditInput,
   ): Promise<BillingCheckoutResult>;
 
   /** List the credit-pack line items from a completed checkout session. */

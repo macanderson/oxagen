@@ -12,6 +12,7 @@ import { organizationCreateRoute } from "./routes/v1/organization.create";
 import { workspaceCreateRoute } from "./routes/v1/workspace.create";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read";
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription.upgrade.start";
+import { billingCreditsPurchaseRoute } from "./routes/v1/billing.credits.purchase";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
 import { agentToolListRoute } from "./routes/v1/agent.tool.list";
 import { agentMcpRegisterRoute } from "./routes/v1/agent.mcp.register";
@@ -74,6 +75,7 @@ orgScoped.use("*", authMiddleware, orgMiddleware, workspaceMiddleware);
 orgScoped.route("/workspaces", workspaceCreateRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 orgScoped.route("/billing/subscription/upgrade/start", billingSubscriptionUpgradeStartRoute);
+orgScoped.route("/billing/credits/purchase", billingCreditsPurchaseRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 // Agent-runtime routes live under the org + workspace scope so the runner
 // inherits the same auth, isolation, and audit envelope as every other v1 call.
