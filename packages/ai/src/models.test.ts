@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-// ── hoisted stubs ────────────────────────────────────────────────────────────
+// ── hoisted stubs ───────────────────────────────────────────────────────
 // vi.hoisted runs before any import resolution — refs are safe inside
 // vi.mock factories below.
 const mocks = vi.hoisted(() => ({
@@ -37,7 +37,7 @@ vi.mock("@oxagen/config/env", () => ({
 
 import { selectModel } from "./models";
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────
 
 const resetMocks = () => {
   mocks.anthropicFactory.mockClear();
@@ -51,7 +51,7 @@ const resetMocks = () => {
 describe("selectModel (@oxagen/ai)", () => {
   beforeEach(resetMocks);
 
-  // ── Anthropic path ───────────────────────────────────────────────────────
+  // ── Anthropic path ───────────────────────────────────────────────
 
   it("defaults to anthropic provider and claude-sonnet-4-6 when no selector given", () => {
     envValues = { ANTHROPIC_API_KEY: "sk-ant-test", OPENAI_API_KEY: undefined };
@@ -84,7 +84,7 @@ describe("selectModel (@oxagen/ai)", () => {
     expect(mocks.anthropicFactory).toHaveBeenCalledWith("claude-3-haiku-20240307");
   });
 
-  // ── OpenAI path ──────────────────────────────────────────────────────────
+  // ── OpenAI path ────────────────────────────────────────────────────
 
   it("selects openai provider and gpt-4o when provider=openai and key present", () => {
     envValues = { ANTHROPIC_API_KEY: undefined, OPENAI_API_KEY: "sk-oai-test" };
@@ -124,5 +124,49 @@ describe("selectModel (@oxagen/ai)", () => {
     selectModel({ provider: "openai" });
     expect(mocks.createAnthropic).not.toHaveBeenCalled();
     expect(mocks.anthropicFactory).not.toHaveBeenCalled();
+  });
+
+  // ── Vercel AI Gateway path (AI_GATEWAY_API_KEY present) ───────────────────
+
+  const GATEWAY_ENV = {
+    AI_GATEWAY_API_KEY: "vck_gateway_test",
+    ANTHROPIC_API_KEY: "sk-ant",
+    OPENAI_API_KEY: "sk-oai",
+    OXAGEN_LLM_FAST: "anthropic/claude-haiku-4.5",
+    OXAGEN_LLM_BALANCED: "anthropic/claude-sonnet-4.6",
+    OXAGEN_LLM_PRECISE: "anthropic/claude-opus-4.8",
+  };
+
+  it("routes through the gateway (balanced tier default) when AI_GATEWAY_API_KEY is set", () => {
+    envValues = { ...GATEWAY_ENV };
+    selectModel();
+    // gateway client built against the OpenAI-compatible base URL with the token
+    expect(mocks.createOpenAI).toHaveBeenCalledWith({
+      apiKey: "vck_gateway_test",
+      baseURL: "https://ai-gateway.vercel.sh/v1",
+      name: "vercel-ai-gateway",
+    });
+    // default tier resolves to the balanced gateway model id
+    expect(mocks.openaiFactory).toHaveBeenCalledWith("anthropic/claude-sonnet-4.6");
+    // no direct anthropic client when the gateway handles the call
+    expect(mocks.createAnthropic).not.toHaveBeenCalled();
+  });
+
+  it("resolves the fast tier to its OXAGEN_LLM_FAST gateway id", () => {
+    envValues = { ...GATEWAY_ENV };
+    selectModel({ tier: "fast" });
+    expect(mocks.openaiFactory).toHaveBeenCalledWith("anthropic/claude-haiku-4.5");
+  });
+
+  it("resolves the precise tier to its OXAGEN_LLM_PRECISE gateway id", () => {
+    envValues = { ...GATEWAY_ENV };
+    selectModel({ tier: "precise" });
+    expect(mocks.openaiFactory).toHaveBeenCalledWith("anthropic/claude-opus-4.8");
+  });
+
+  it("an explicit gateway model id wins over a tier", () => {
+    envValues = { ...GATEWAY_ENV };
+    selectModel({ model: "openai/gpt-5.2", tier: "fast" });
+    expect(mocks.openaiFactory).toHaveBeenCalledWith("openai/gpt-5.2");
   });
 });

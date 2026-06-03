@@ -3,7 +3,7 @@ import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
-import { streamAgentReply, defaultModel } from "@oxagen/ai";
+import { streamAgentReply, selectModel } from "@oxagen/ai";
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
 import { db, schema } from "@oxagen/database";
 import { randomUUID } from "node:crypto";
@@ -40,6 +40,12 @@ const BodySchema = z.object({
   parentMessageId: z.string().nullable().default(null),
   orgSlug: z.string().min(1),
   workspaceSlug: z.string().min(1),
+  // Model selection from the prompt's model picker. `tier` is a white-labeled
+  // Oxagen tier (Mini/Plus/Max → fast/balanced/precise); `model` is an explicit
+  // Vercel AI Gateway model id ("creator/model"). Both optional — when omitted
+  // the platform default (balanced tier) is used. `model` wins over `tier`.
+  tier: z.enum(["fast", "balanced", "precise"]).nullable().default(null),
+  model: z.string().min(1).nullable().default(null),
 });
 
 // Maximum number of prior messages to include in the context window.
@@ -93,7 +99,16 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
   }
 
-  const { content, conversationId, parentMessageId, orgSlug, workspaceSlug } = parsed.data;
+  const { content, conversationId, parentMessageId, orgSlug, workspaceSlug, tier, model } =
+    parsed.data;
+
+  // Resolve the language model for this turn from the picker selection. An
+  // explicit gateway model id wins; otherwise the white-labeled tier; otherwise
+  // selectModel() falls back to the balanced-tier default. selectModel routes
+  // through the Vercel AI Gateway when AI_GATEWAY_API_KEY is configured.
+  const turnModel = selectModel({
+    ...(model ? { model } : tier ? { tier } : {}),
+  });
 
   let tenant: Awaited<ReturnType<typeof resolveOrg>>;
   let workspace: Awaited<ReturnType<typeof resolveWorkspace>>;
@@ -213,7 +228,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       try {
         const result = streamAgentReply({
           messages: coreMessages,
-          model: defaultModel(),
+          model: turnModel,
           tools: agentTools,
           telemetry: {
             orgId: tenant.id,

@@ -31,7 +31,7 @@ export const CREDIT_VALUE_USD = 0.01;
 /** Default target *blended* gross margin across all products. */
 export const DEFAULT_TARGET_MARGIN = 0.65;
 
-// ── Cost meter: the provider rate card ──────────────────────────────────────
+// ── Cost meter: the provider rate card ──────────────────────────────────
 // These are the numbers a provider invoices us on: USD per 1,000,000 tokens,
 // split by what they actually meter — input, output, and cached-input reads.
 // This is the configurable input to the gate. Keep it in sync with your real
@@ -68,6 +68,19 @@ export const PROVIDER_RATE_CARD: RateCard = {
   "claude-haiku-4": { provider: "anthropic", inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 },
   "gpt-4o": { provider: "openai", inputPer1M: 2.5, outputPer1M: 10.0, cachedInputPer1M: 1.25 },
   "gpt-4o-mini": { provider: "openai", inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 },
+  // ── Vercel AI Gateway model ids (creator/model form) ───────────────────────
+  // When @oxagen/ai routes through the gateway, model.modelId arrives as
+  // "anthropic/claude-sonnet-4.6" (slash + dotted version) rather than the bare
+  // "claude-sonnet-4-6" key above. Those bare keys never prefix-match the
+  // gateway form, so without these entries every gateway call would fall back to
+  // the Sonnet rate (over-charging Opus, under-charging Haiku). The `…-4` keys
+  // are deliberate PREFIXES so a future dotted minor (e.g. "…-4.7") still
+  // resolves to the right family via {@link resolveRate}.
+  "anthropic/claude-opus-4": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
+  "anthropic/claude-sonnet-4": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
+  "anthropic/claude-haiku-4": { provider: "anthropic", inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 },
+  "openai/gpt-4o-mini": { provider: "openai", inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 },
+  "openai/gpt-4o": { provider: "openai", inputPer1M: 2.5, outputPer1M: 10.0, cachedInputPer1M: 1.25 },
   // DALL·E 3 (OpenAI) is an IMAGE model billed PER IMAGE, not per token, so the
   // per-1M-token fields here cannot express its real cost. PLACEHOLDER — values
   // are 0 (charges $0) pending real pricing. For reference, OpenAI lists ~$0.04
@@ -98,7 +111,7 @@ export function resolveRate(modelId: string, rateCard: RateCard = PROVIDER_RATE_
   return best?.rate ?? rateCard[FALLBACK_RATE_MODEL]!;
 }
 
-// ── Provider cost ───────────────────────────────────────────────────────────
+// ── Provider cost ────────────────────────────────────────────────────────
 
 export interface TokenUsageInput {
   model: string;
@@ -127,7 +140,7 @@ export function providerCostUsdMicros(usage: TokenUsageInput, rateCard: RateCard
   return Math.round(providerCostUsd(usage, rateCard) * 1_000_000);
 }
 
-// ── Products: subscriptions + credit packs ──────────────────────────────────
+// ── Products: subscriptions + credit packs ────────────────────────────────
 // `creditsPerCent` (credits ÷ price-in-cents) is the lever the blended-margin
 // solve reads. A product that hands out more credits per cent is more generous
 // → lower margin. Face value (1 credit = 1 cent) is creditsPerCent === 1.0.
@@ -231,7 +244,7 @@ export const CREDIT_PACKS: CreditPackDef[] = [
   { slug: "credits-scale-v2", displayName: "Scale Credit Pack", priceCents: 20_000, credits: 22_000, weight: 0.15 },
 ];
 
-// ── The margin solve ────────────────────────────────────────────────────────
+// ── The margin solve ────────────────────────────────────────────────────
 
 export type ProductKind = "subscription" | "credit_pack";
 
@@ -348,7 +361,7 @@ export function derivePricing(targetMargin: number = resolveTargetMargin()): Pri
   return { targetMargin, creditValueUsd: CREDIT_VALUE_USD, meterMarkup, blendedMargin, products };
 }
 
-// ── Runtime configuration ───────────────────────────────────────────────────
+// ── Runtime configuration ──────────────────────────────────────────────
 
 // Env is fixed for a process lifetime, and resolveMeterMarkup() is on the gate's
 // hot path (every metered call). Memoise both reads so we parse process.env at
