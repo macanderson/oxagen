@@ -33,7 +33,13 @@ import type {
 
 let _stripe: Stripe | null = null;
 
-function stripeClient(): Stripe {
+/**
+ * Raw Stripe client singleton. Exported for the `billing:stripe-sync` tooling
+ * script, which legitimately needs direct Stripe Product/Price API access to
+ * provision the catalog. Application/domain code must NOT use this — go through
+ * the `BillingProvider` port (`billingProvider()`) to preserve vendor neutrality.
+ */
+export function stripeClient(): Stripe {
   if (_stripe) return _stripe;
   const env = requireEnv(["STRIPE_SECRET_KEY"] as const);
   _stripe = new Stripe(env.STRIPE_SECRET_KEY, {

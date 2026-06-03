@@ -1,5 +1,7 @@
 export * from "./provider";
 export * from "./client";
+// Raw Stripe client — tooling-only (billing:stripe-sync). Domain code uses the port.
+export { stripeClient } from "./stripe-provider";
 export * from "./logger";
 export * from "./constants";
 export * from "./customers";
