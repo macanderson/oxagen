@@ -7,14 +7,19 @@ import {
 
 // ── Production URLs (from CLAUDE.md) ─────────────────────────────────────────
 
-const PROD_API_URL = "https://oxagen-v2-api.vercel.app";
+// The MCP protocol endpoint is served by the xmcp server (apps/mcp), deployed
+// separately at oxagen-v2-mcp.vercel.app on the default `/mcp` path over
+// streamable HTTP. The REST API host (oxagen-v2-api) has NO MCP endpoint.
+// Org + workspace scope is carried by the API key (auth.api_keys is org- and
+// workspace-bound), so the connect URL needs no org/workspace path segment.
+const PROD_MCP_URL = "https://oxagen-v2-mcp.vercel.app";
 const PROD_APP_URL = "https://oxagen-v2-app.vercel.app";
 
 // ── Step builders ─────────────────────────────────────────────────────────────
 
 function stepsForClaudeCode(wsSlug: string | undefined): InstallStep[] {
   const ws = wsSlug ?? "<your-workspace-slug>";
-  const mcpUrl = `${PROD_API_URL}/v1/<your-org-slug>/${ws}/mcp`;
+  const mcpUrl = `${PROD_MCP_URL}/mcp`;
   return [
     {
       label: "Install the Oxagen CLI (requires Node 20+)",
@@ -38,9 +43,8 @@ function stepsForClaudeCode(wsSlug: string | undefined): InstallStep[] {
   ];
 }
 
-function stepsForCursor(wsSlug: string | undefined): InstallStep[] {
-  const ws = wsSlug ?? "<your-workspace-slug>";
-  const mcpUrl = `${PROD_API_URL}/v1/<your-org-slug>/${ws}/mcp`;
+function stepsForCursor(_wsSlug: string | undefined): InstallStep[] {
+  const mcpUrl = `${PROD_MCP_URL}/mcp`;
   return [
     {
       label: "Open Cursor Settings → MCP Servers",
@@ -65,9 +69,8 @@ function stepsForCursor(wsSlug: string | undefined): InstallStep[] {
   ];
 }
 
-function stepsForClaudeDesktop(wsSlug: string | undefined): InstallStep[] {
-  const ws = wsSlug ?? "<your-workspace-slug>";
-  const mcpUrl = `${PROD_API_URL}/v1/<your-org-slug>/${ws}/mcp`;
+function stepsForClaudeDesktop(_wsSlug: string | undefined): InstallStep[] {
+  const mcpUrl = `${PROD_MCP_URL}/mcp`;
   const configEntry = JSON.stringify(
     {
       mcpServers: {
@@ -102,9 +105,8 @@ function stepsForClaudeDesktop(wsSlug: string | undefined): InstallStep[] {
   ];
 }
 
-function stepsForCodex(wsSlug: string | undefined): InstallStep[] {
-  const ws = wsSlug ?? "<your-workspace-slug>";
-  const mcpUrl = `${PROD_API_URL}/v1/<your-org-slug>/${ws}/mcp`;
+function stepsForCodex(_wsSlug: string | undefined): InstallStep[] {
+  const mcpUrl = `${PROD_MCP_URL}/mcp`;
   return [
     {
       label: "Generate an API key",
@@ -128,9 +130,8 @@ function stepsForCodex(wsSlug: string | undefined): InstallStep[] {
   ];
 }
 
-function stepsForVscode(wsSlug: string | undefined): InstallStep[] {
-  const ws = wsSlug ?? "<your-workspace-slug>";
-  const mcpUrl = `${PROD_API_URL}/v1/<your-org-slug>/${ws}/mcp`;
+function stepsForVscode(_wsSlug: string | undefined): InstallStep[] {
+  const mcpUrl = `${PROD_MCP_URL}/mcp`;
   const settingsEntry = JSON.stringify(
     {
       "mcp.servers": {

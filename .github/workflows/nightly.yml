@@ -1,7 +1,11 @@
 name: ci-nightly
 on:
   schedule: [{ cron: "0 8 * * *" }]
-  push: { branches: [main] }
+  # Manual trigger only; the full unfiltered sweep no longer runs on every
+  # push to main (the PR gate already runs the affected matrix, and a per-merge
+  # full run duplicated CI spend + service-container startup for no added
+  # signal). Use the schedule for the daily full-tree regression sweep.
+  workflow_dispatch: {}
 jobs:
   # Full (un-filtered) regression sweep. Unlike the PR `affected` matrix this
   # also runs `build`, which executes loadEnv() during `next build` — so the

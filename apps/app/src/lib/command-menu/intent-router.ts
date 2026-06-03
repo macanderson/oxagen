@@ -154,10 +154,13 @@ export function classifyIntent(options: ClassifyOptions): Intent {
   // 2. Navigate: strip nav prefixes and fuzzy-match against known targets.
   // Always attempt nav match — not gated on prefix, short exact labels match well.
   {
-    const stripped = NAV_PREFIXES.reduce((acc, p) => {
-      if (n.startsWith(p + " ")) return acc.slice(p.length + 1).trim();
-      return acc;
-    }, trimmed);
+    // Find the first matching prefix and strip it once; do NOT reduce through
+    // all prefixes — "go to" and "go" overlap and a second pass would corrupt
+    // the remainder (e.g. "go to Knowledge" → "to Knowledge" on the "go" pass).
+    const matchedPrefix = NAV_PREFIXES.find((p) => n.startsWith(p + " "));
+    const stripped = matchedPrefix
+      ? trimmed.slice(matchedPrefix.length + 1).trim()
+      : trimmed;
 
     const targets = enumerateNavTargets(ctx);
     const match = targets.find((t) => fuzzyMatch(stripped, t.label) || fuzzyMatch(trimmed, t.label));

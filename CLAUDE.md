@@ -84,7 +84,10 @@ Until oxagen.ai is launched, production deploys use Vercel-managed domains:
 
 - App: `https://oxagen-v2-app.vercel.app`
 - Website: `https://oxagen-v2-website.vercel.app`
-- API: `https://oxagen-v2-api.vercel.app`
+- API: `https://oxagen-v2-api.vercel.app` (Hono REST; no MCP protocol endpoint)
+- MCP: `https://oxagen-v2-mcp.vercel.app` (xmcp server; connect at `/mcp` over
+  streamable HTTP — **not** `oxagen-v2-api.../mcp/sse`. Org+workspace scope is
+  carried by the API key, so no org/workspace path segment is needed.)
 - Admin: `https://oxagen-v2-admin.vercel.app`
 - Docs: `https://oxagen-v2-docs.vercel.app`
 
@@ -241,8 +244,11 @@ Do **not** parallelize when:
 
 ### `apps/admin`
 
-- Next.js. Internal operator dashboard. Tenant management, billing
-  overrides, feature-flag controls. Auth-gated; never exposed to customers.
+- Next.js. **Stub — landing page only** as of the foundations milestone (no
+  auth gate, no routes beyond `/`). The intended operator dashboard (tenant
+  management, billing overrides, feature-flag controls; auth-gated, never
+  exposed to customers) is planned but not yet implemented — don't treat it as
+  a real auth surface today.
 
 ### `apps/docs`
 

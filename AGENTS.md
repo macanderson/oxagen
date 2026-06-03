@@ -35,8 +35,8 @@ Enterprise agent platform. Monorepo. Built around three primitives:
 - `api` — HTTP API exposing the same capabilities
 - `app` — web app; hosts the interactive QA agent
 - `website` — marketing site
-- `cli` — first-class CLI product (streaming, keyboard-driven, composable commands)
-- `admin` — internal operator dashboard (Next.js); tenant management, billing overrides, feature flags
+- `cli` — developer utility (Commander + Ink); currently one command, `oxagen dev`, that probes local dev-stack ports. A first-class streaming CLI product is planned, not yet shipped.
+- `admin` — Next.js; **stub/landing page only** today (no auth gate, no routes beyond `/`). Intended as the internal operator dashboard (tenant management, billing overrides, feature flags) — not yet implemented.
 - `docs` — Fumadocs/MDX documentation site; statically generated, deployed as `oxagen-v2-docs`
 
 ## When adding a capability

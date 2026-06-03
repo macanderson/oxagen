@@ -3,10 +3,12 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      // `build` here is `tsc --noEmit` (type-check only), so it emits no
-      // artifact. Env is declared as the service's runtime contract: the Hono
-      // server calls loadEnv() at boot and validates the full schema.
-      "outputs": [],
+      // `build` runs `tsc --noEmit` (type-check) then `node build.mjs`, which
+      // emits a Vercel Build Output API dir at `.vercel/output`. Declaring it as
+      // an output lets the Vercel deploy (which now runs `turbo run build`) reuse
+      // the cached artifact instead of cold-building. Env is the service's
+      // runtime contract: the Hono server calls loadEnv() at boot.
+      "outputs": [".vercel/output/**"],
       "env": [
         "DATABASE_URL",
         "CLICKHOUSE_URL",
@@ -20,8 +22,10 @@
         "BETTER_AUTH_SECRET",
         "BETTER_AUTH_URL",
         "BETTER_AUTH_TRUSTED_ORIGINS",
-        "GOOGLE_CLIENT_ID",
-        "GOOGLE_CLIENT_SECRET",
+        "GOOGLE_LOGIN_CLIENT_ID",
+        "GOOGLE_LOGIN_CLIENT_SECRET",
+        "GOOGLE_DATA_CLIENT_ID",
+        "GOOGLE_DATA_CLIENT_SECRET",
         "GITHUB_CLIENT_ID",
         "GITHUB_CLIENT_SECRET",
         "AUTH_TOKEN_ENCRYPTION_KEY",

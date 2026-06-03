@@ -17,6 +17,7 @@
 
     "build": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "src/**", "public/**", "next.config.*", "tsconfig.json", "package.json"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**", ".xmcp/**", ".vercel/output/**"],
       "passThroughEnv": ["VERCEL", "VERCEL_URL", "NEXT_PHASE"],
       "env": [
@@ -24,8 +25,10 @@
         "BETTER_AUTH_SECRET",
         "BETTER_AUTH_URL",
         "BETTER_AUTH_TRUSTED_ORIGINS",
-        "GOOGLE_CLIENT_ID",
-        "GOOGLE_CLIENT_SECRET",
+        "GOOGLE_LOGIN_CLIENT_ID",
+        "GOOGLE_LOGIN_CLIENT_SECRET",
+        "GOOGLE_DATA_CLIENT_ID",
+        "GOOGLE_DATA_CLIENT_SECRET",
         "GITHUB_CLIENT_ID",
         "GITHUB_CLIENT_SECRET",
         "AUTH_TOKEN_ENCRYPTION_KEY",
@@ -56,10 +59,12 @@
 
     "typecheck": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "src/**", "tsconfig.json", "package.json"],
       "outputs": ["*.tsbuildinfo"]
     },
 
     "lint": {
+      "inputs": ["$TURBO_DEFAULT$", "src/**", ".eslintrc.*", "eslint.config.*", "package.json"],
       "outputs": []
     },
 
@@ -80,8 +85,10 @@
         "BETTER_AUTH_SECRET",
         "BETTER_AUTH_URL",
         "BETTER_AUTH_TRUSTED_ORIGINS",
-        "GOOGLE_CLIENT_ID",
-        "GOOGLE_CLIENT_SECRET",
+        "GOOGLE_LOGIN_CLIENT_ID",
+        "GOOGLE_LOGIN_CLIENT_SECRET",
+        "GOOGLE_DATA_CLIENT_ID",
+        "GOOGLE_DATA_CLIENT_SECRET",
         "GITHUB_CLIENT_ID",
         "GITHUB_CLIENT_SECRET",
         "AUTH_TOKEN_ENCRYPTION_KEY",
@@ -145,8 +152,10 @@
         "BETTER_AUTH_SECRET",
         "BETTER_AUTH_URL",
         "BETTER_AUTH_TRUSTED_ORIGINS",
-        "GOOGLE_CLIENT_ID",
-        "GOOGLE_CLIENT_SECRET",
+        "GOOGLE_LOGIN_CLIENT_ID",
+        "GOOGLE_LOGIN_CLIENT_SECRET",
+        "GOOGLE_DATA_CLIENT_ID",
+        "GOOGLE_DATA_CLIENT_SECRET",
         "GITHUB_CLIENT_ID",
         "GITHUB_CLIENT_SECRET",
         "AUTH_TOKEN_ENCRYPTION_KEY",
