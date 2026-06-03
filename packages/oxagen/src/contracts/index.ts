@@ -32,6 +32,9 @@ import { billingSubscriptionUpgradeStart } from "./billing.subscription.upgrade.
 import { chatMessageSend } from "./chat.message.send";
 import { formFill } from "./form.fill";
 import { organizationCreate } from "./organization.create";
+import { orgMemberAdd } from "./org.member.add";
+import { orgMemberInviteAccept } from "./org.member.invite.accept";
+import { orgMemberInviteDecline } from "./org.member.invite.decline";
 import { workspaceCreate } from "./workspace.create";
 import { videoGenerate } from "./video.generate";
 import { imageGenerate } from "./image.generate";
@@ -63,6 +66,9 @@ export {
   chatMessageSend,
   formFill,
   organizationCreate,
+  orgMemberAdd,
+  orgMemberInviteAccept,
+  orgMemberInviteDecline,
   workspaceCreate,
   videoGenerate,
   imageGenerate,
@@ -103,6 +109,9 @@ export const contracts = [
   chatMessageSend,
   formFill,
   organizationCreate,
+  orgMemberAdd,
+  orgMemberInviteAccept,
+  orgMemberInviteDecline,
   workspaceCreate,
   videoGenerate,
   imageGenerate,

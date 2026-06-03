@@ -22,6 +22,7 @@ import type {
   BillingPaymentMethod,
   BillingProvider,
   BillingSubscription,
+  BillingSubscriptionSeatUpdateInput,
   BillingSubscriptionStatus,
   BillingSubscriptionUpdateInput,
   BillingSubscriptionUpgradeInput,
@@ -244,8 +245,23 @@ export class StripeProvider implements BillingProvider {
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
+    const prorationBehavior = input.prorationBehavior ?? "always_invoice";
     await stripe.subscriptions.update(subscriptionId, {
       items: [{ id: item.id, price: input.newPriceId }],
+      proration_behavior: prorationBehavior,
+    });
+  }
+
+  async setSubscriptionSeats(
+    subscriptionId: string,
+    input: BillingSubscriptionSeatUpdateInput,
+  ): Promise<void> {
+    const stripe = stripeClient();
+    const sub = await stripe.subscriptions.retrieve(subscriptionId);
+    const item = sub.items.data[0];
+    if (!item) throw new Error("subscription has no items");
+    await stripe.subscriptions.update(subscriptionId, {
+      items: [{ id: item.id, quantity: input.seats }],
       proration_behavior: "always_invoice",
     });
   }
@@ -264,10 +280,11 @@ export class StripeProvider implements BillingProvider {
   async createSubscriptionCheckout(
     input: BillingCheckoutSubscriptionInput,
   ): Promise<BillingCheckoutResult> {
+    const seats = input.seats ?? 1;
     const session = await stripeClient().checkout.sessions.create({
       mode: "subscription",
       customer: input.customerId,
-      line_items: [{ price: input.priceId, quantity: 1 }],
+      line_items: [{ price: input.priceId, quantity: seats }],
       subscription_data: { metadata: input.subscriptionMetadata },
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,

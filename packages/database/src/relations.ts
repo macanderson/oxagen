@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { organizations, orgUsers } from "./schema/org";
+import { organizations, orgUsers, invitations } from "./schema/org";
 import {
   principals,
   roles,
@@ -56,11 +56,16 @@ import {
 
 export const organizationsRelations = relations(organizations, ({ many }) => ({
   orgUsers: many(orgUsers),
+  invitations: many(invitations),
   workspaces: many(workspaces),
   subscriptions: many(subscriptions),
   paymentMethods: many(paymentMethods),
   invoices: many(invoices),
   apiKeys: many(apiKeys),
+}));
+
+export const invitationsRelations = relations(invitations, ({ one }) => ({
+  org: one(organizations, { fields: [invitations.orgId], references: [organizations.id] }),
 }));
 
 export const orgUsersRelations = relations(orgUsers, ({ one }) => ({

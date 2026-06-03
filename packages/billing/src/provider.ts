@@ -59,6 +59,17 @@ export interface BillingSubscriptionUpdateInput {
 export interface BillingSubscriptionUpgradeInput {
   /** New price id to switch to (provider-native id). */
   newPriceId: string;
+  /**
+   * Proration behavior.
+   * - 'always_invoice': immediate proration invoice (upgrades).
+   * - 'none': no proration, effective at next billing cycle (downgrades).
+   */
+  prorationBehavior?: "always_invoice" | "none";
+}
+
+export interface BillingSubscriptionSeatUpdateInput {
+  /** New seat/quantity count. Must be >= 1. */
+  seats: number;
 }
 
 // ── Invoice domain types ─────────────────────────────────────────────────────
@@ -104,6 +115,8 @@ export interface BillingInvoice {
 export interface BillingCheckoutSubscriptionInput {
   customerId: string;
   priceId: string;
+  /** Number of seats / licenses. Defaults to 1 when omitted. */
+  seats?: number;
   /** Metadata that Stripe should carry on the resulting subscription. */
   subscriptionMetadata: Record<string, string>;
   successUrl: string;
@@ -212,10 +225,16 @@ export interface BillingProvider {
   /** Cancel a subscription immediately (not at period end). */
   cancelSubscription(subscriptionId: string): Promise<void>;
 
-  /** Swap the price on the first subscription line item, invoicing prorations immediately. */
+  /** Swap the price on the first subscription line item. */
   upgradeSubscription(
     subscriptionId: string,
     input: BillingSubscriptionUpgradeInput,
+  ): Promise<void>;
+
+  /** Update the quantity (seat count) of the first subscription line item. */
+  setSubscriptionSeats(
+    subscriptionId: string,
+    input: BillingSubscriptionSeatUpdateInput,
   ): Promise<void>;
 
   // ── Invoice ─────────────────────────────────────────────────────────────────

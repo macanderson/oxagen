@@ -8,6 +8,13 @@
       "when": 1780282147304,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1748908800000,
+      "tag": "0001_org_invitations",
+      "breakpoints": true
     }
   ]
 }

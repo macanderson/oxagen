@@ -7,6 +7,7 @@ export * from "./constants";
 export * from "./customers";
 export * from "./checkout";
 export * from "./subscriptions";
+export * from "./seats";
 export * from "./invoices";
 export * from "./usage";
 export * from "./webhooks";

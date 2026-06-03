@@ -32,6 +32,9 @@ import { videoGenerateRoute } from "./routes/v1/video.generate";
 import { svgGenerateRoute } from "./routes/v1/svg.generate";
 import { imageGenerateRoute } from "./routes/v1/image.generate";
 import { systemInstallInstructionsRoute } from "./routes/v1/system.install.instructions";
+import { orgMemberAddRoute } from "./routes/v1/org.member.add";
+import { orgMemberInviteAcceptRoute } from "./routes/v1/org.member.invite.accept";
+import { orgMemberInviteDeclineRoute } from "./routes/v1/org.member.invite.decline";
 
 export type AppEnv = {
   Variables: {
@@ -93,4 +96,7 @@ orgScoped.route("/video/generate", videoGenerateRoute);
 orgScoped.route("/svg/generate", svgGenerateRoute);
 orgScoped.route("/image/generate", imageGenerateRoute);
 orgScoped.route("/system/install-instructions", systemInstallInstructionsRoute);
+orgScoped.route("/org/members", orgMemberAddRoute);
+orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
+orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

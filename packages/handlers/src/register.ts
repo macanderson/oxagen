@@ -72,3 +72,18 @@ registerHandler(
     (await import("./system.install.instructions"))
       .systemInstallInstructionsHandler as CapabilityHandlerFn,
 );
+registerHandler(
+  "org.member.add",
+  async () =>
+    (await import("./org.member.add")).orgMemberAddHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "org.member.invite.accept",
+  async () =>
+    (await import("./org.member.invite.accept")).orgMemberInviteAcceptHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "org.member.invite.decline",
+  async () =>
+    (await import("./org.member.invite.decline")).orgMemberInviteDeclineHandler as CapabilityHandlerFn,
+);

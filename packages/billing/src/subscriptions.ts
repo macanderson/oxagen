@@ -2,6 +2,7 @@ import { db, schema } from "@oxagen/database";
 import { eq, and, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
+import { getOrgSeatUsage, SeatLimitError } from "./seats";
 
 async function resolvePlanId(stripeProductId: string | null): Promise<string | null> {
   if (!stripeProductId) return null;
@@ -133,8 +134,146 @@ export async function reactivateOrgSubscription(orgId: string): Promise<void> {
 export async function upgradeSubscription(
   stripeSubId: string,
   newPriceId: string,
+  prorationBehavior: "always_invoice" | "none" = "always_invoice",
 ): Promise<void> {
-  logger.info({ stripeSubId, newPriceId }, "billing: upgrading subscription price");
-  await billingProvider().upgradeSubscription(stripeSubId, { newPriceId });
+  logger.info({ stripeSubId, newPriceId, prorationBehavior }, "billing: upgrading subscription price");
+  await billingProvider().upgradeSubscription(stripeSubId, { newPriceId, prorationBehavior });
   await syncSubscriptionFromStripe(stripeSubId);
+}
+
+/**
+ * Update the seat count on an active subscription.
+ *
+ * Guard: if `seats` is less than the number of currently used seats
+ * (active users + pending invitations), throws `SeatLimitError` — you
+ * cannot drop below provisioned headcount.
+ *
+ * On success, updates the Stripe subscription item quantity (with immediate
+ * proration invoicing) and syncs `seatCount` back to our DB.
+ */
+export async function setSubscriptionSeats(orgId: string, seats: number): Promise<void> {
+  if (seats < 1) throw new Error("seats must be >= 1");
+
+  const d = db();
+  const row = await d.query.subscriptions.findFirst({
+    where: and(
+      eq(schema.subscriptions.orgId, orgId),
+      sql`${schema.subscriptions.status} IN ('active','trialing')`,
+    ),
+    columns: { stripeSubscriptionId: true, seatCount: true },
+  });
+  if (!row) throw new Error(`No active subscription found for org ${orgId}`);
+
+  // Guard: cannot drop below current usage.
+  if (seats < row.seatCount) {
+    const usage = await getOrgSeatUsage(orgId);
+    if (seats < usage.used) {
+      throw new SeatLimitError(seats, usage.used);
+    }
+  }
+
+  logger.info({ orgId, seats, previous: row.seatCount }, "billing: updating subscription seat count");
+  await billingProvider().setSubscriptionSeats(row.stripeSubscriptionId, { seats });
+  await syncSubscriptionFromStripe(row.stripeSubscriptionId);
+}
+
+/**
+ * Change an org's plan to any other plan (any tier → any tier).
+ *
+ * Upgrade path  (target tier higher): swap price immediately, prorate now.
+ * Downgrade path (target tier lower): swap price, prorate at period end (no
+ *   immediate invoice — customer keeps access until cycle renews).
+ *
+ * If the org has NO active subscription (free tier), returns a Checkout
+ * session URL for the new plan; the caller must redirect the user.
+ * If one IS active, swaps the price in-place and returns null.
+ *
+ * Current seat count is preserved through a plan swap.
+ */
+export async function changeOrgPlan(
+  orgId: string,
+  targetPlanSlug: string,
+  interval: "month" | "year",
+  opts?: { successUrl?: string; cancelUrl?: string },
+): Promise<{ checkoutUrl: string } | null> {
+  const d = db();
+
+  // Resolve target plan
+  const targetPlan = await d.query.plans.findFirst({
+    where: eq(schema.plans.slug, targetPlanSlug),
+    columns: { id: true, tier: true, stripePriceIdMonthly: true, stripePriceIdAnnual: true },
+  });
+  if (!targetPlan) throw new Error(`Plan '${targetPlanSlug}' not found`);
+
+  const newPriceId =
+    interval === "year" ? targetPlan.stripePriceIdAnnual : targetPlan.stripePriceIdMonthly;
+  if (!newPriceId) throw new Error(`Plan '${targetPlanSlug}' has no ${interval} price`);
+
+  // Check for active subscription (two queries to avoid `with` inference issues).
+  const activeSubRow = await d.query.subscriptions.findFirst({
+    where: and(
+      eq(schema.subscriptions.orgId, orgId),
+      sql`${schema.subscriptions.status} IN ('active','trialing')`,
+    ),
+    columns: {
+      stripeSubscriptionId: true,
+      seatCount: true,
+      planId: true,
+    },
+  });
+
+  if (!activeSubRow) {
+    // No active subscription — start a Checkout session.
+    const { createCheckoutSession } = await import("./checkout");
+    const result = await createCheckoutSession({
+      orgId,
+      planSlug: targetPlanSlug,
+      interval,
+      successUrl: opts?.successUrl,
+      cancelUrl: opts?.cancelUrl,
+    });
+    logger.info(
+      { orgId, targetPlanSlug, interval },
+      "billing: changeOrgPlan — no active subscription, created checkout session",
+    );
+    return { checkoutUrl: result.url };
+  }
+
+  // Resolve current plan tier for proration decision.
+  const currentPlanRow = await d.query.plans.findFirst({
+    where: eq(schema.plans.id, activeSubRow.planId),
+    columns: { tier: true },
+  });
+
+  // Active subscription — swap the price in-place.
+  // Determine proration behavior by comparing tier order.
+  const TIER_ORDER: Record<string, number> = { free: 0, build: 1, scale: 2, enterprise: 3 };
+  const currentTierOrder = TIER_ORDER[currentPlanRow?.tier ?? "free"] ?? 0;
+  const targetTierOrder = TIER_ORDER[targetPlan.tier] ?? 0;
+  const isUpgrade = targetTierOrder >= currentTierOrder;
+  const prorationBehavior: "always_invoice" | "none" = isUpgrade ? "always_invoice" : "none";
+
+  // Use activeSubRow from now on (renamed to avoid confusion).
+  const activeSub = activeSubRow;
+
+  logger.info(
+    {
+      orgId,
+      targetPlanSlug,
+      interval,
+      currentTier: currentPlanRow?.tier,
+      targetTier: targetPlan.tier,
+      isUpgrade,
+      prorationBehavior,
+    },
+    "billing: changeOrgPlan — swapping price on active subscription",
+  );
+
+  await upgradeSubscription(activeSub.stripeSubscriptionId, newPriceId, prorationBehavior);
+
+  // Preserve seat count: if current seatCount > 1, update the quantity after
+  // the price swap. upgradeSubscription keeps the same item, so quantity persists
+  // through the price swap automatically — no extra call needed.
+
+  return null;
 }

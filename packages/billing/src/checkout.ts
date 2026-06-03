@@ -1,5 +1,5 @@
 import { db, schema } from "@oxagen/database";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import { billingProvider } from "./client";
 import { ensureStripeCustomer } from "./customers";
@@ -7,14 +7,43 @@ import { resolveOrgTier } from "./tier";
 import { canBuyCredits, TierDeniedError } from "./entitlements";
 import { logger } from "./logger";
 
+// ── ActiveSubscriptionError ───────────────────────────────────────────────────
+
+/**
+ * Thrown by `createCheckoutSession` when the org already has an active
+ * subscription. Callers should use `changeOrgPlan` (which swaps the price
+ * in-place) instead of opening a second Checkout session.
+ */
+export class ActiveSubscriptionError extends Error {
+  readonly code = "active_subscription_exists" as const;
+  readonly stripeSubscriptionId: string;
+
+  constructor(stripeSubscriptionId: string) {
+    super(
+      `Org already has an active subscription (${stripeSubscriptionId}). Use changeOrgPlan to swap the plan instead of creating a second subscription.`,
+    );
+    this.name = "ActiveSubscriptionError";
+    this.stripeSubscriptionId = stripeSubscriptionId;
+  }
+}
+
+/** Type guard. */
+export function isActiveSubscriptionError(err: unknown): err is ActiveSubscriptionError {
+  return err instanceof ActiveSubscriptionError;
+}
+
+// ── CreateCheckoutSessionInput ────────────────────────────────────────────────
+
 export interface CreateCheckoutSessionInput {
   orgId: string;
   planSlug: string;
   interval: "month" | "year";
+  /** Number of seats. Defaults to 1. */
+  seats?: number;
   /**
-   * Optional overrides. The agent surface needs to route the user back to the
-   * chat context that initiated the upgrade; the in-app billing UI keeps the
-   * env defaults.
+   * Optional URL overrides. The agent surface needs to route the user back to
+   * the chat context that initiated the upgrade; the in-app billing UI keeps
+   * the env defaults.
    */
   successUrl?: string;
   cancelUrl?: string;
@@ -25,6 +54,19 @@ export async function createCheckoutSession(
 ): Promise<{ url: string; sessionId: string }> {
   const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
   const d = db();
+
+  // Guard: refuse to create a second subscription when one is active.
+  const existingActive = await d.query.subscriptions.findFirst({
+    where: and(
+      eq(schema.subscriptions.orgId, input.orgId),
+      sql`${schema.subscriptions.status} IN ('active','trialing')`,
+    ),
+    columns: { stripeSubscriptionId: true },
+  });
+  if (existingActive) {
+    throw new ActiveSubscriptionError(existingActive.stripeSubscriptionId);
+  }
+
   const plan = await d.query.plans.findFirst({
     where: eq(schema.plans.slug, input.planSlug),
   });
@@ -41,13 +83,14 @@ export async function createCheckoutSession(
   const result = await billingProvider().createSubscriptionCheckout({
     customerId,
     priceId,
+    seats: input.seats ?? 1,
     subscriptionMetadata: { org_id: input.orgId, plan_id: plan.id },
     successUrl:
       input.successUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: input.cancelUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/plans`,
   });
 
-  logger.info({ orgId: input.orgId, planSlug: input.planSlug, sessionId: result.sessionId }, "billing: created subscription checkout session");
+  logger.info({ orgId: input.orgId, planSlug: input.planSlug, seats: input.seats ?? 1, sessionId: result.sessionId }, "billing: created subscription checkout session");
   return result;
 }
 

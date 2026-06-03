@@ -13,3 +13,6 @@ export { videoGenerateHandler } from "./video.generate";
 export { svgGenerateHandler } from "./svg.generate";
 export { imageGenerateHandler } from "./image.generate";
 export { systemInstallInstructionsHandler } from "./system.install.instructions";
+export { orgMemberAddHandler } from "./org.member.add";
+export { orgMemberInviteAcceptHandler } from "./org.member.invite.accept";
+export { orgMemberInviteDeclineHandler } from "./org.member.invite.decline";
