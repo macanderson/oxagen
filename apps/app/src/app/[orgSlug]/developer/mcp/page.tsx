@@ -1,5 +1,5 @@
 import { PlugZap, Terminal, Copy, ExternalLink } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 interface McpEntry {
@@ -69,7 +69,7 @@ export default function DeveloperMcpPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="flex flex-col gap-6">
+        <CardPanel className="flex flex-col gap-6">
           <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
             <ExternalLink className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
@@ -102,7 +102,7 @@ export default function DeveloperMcpPage() {
               </div>
             ))}
           </div>
-        </CardContent>
+        </CardPanel>
       </Card>
     </div>
   );

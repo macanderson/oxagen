@@ -28,7 +28,7 @@ import { useRecent } from "@/lib/command-menu/use-recent";
 import type { ScopeContext } from "@/lib/scope";
 import {
   Dialog,
-  DialogContent,
+  DialogPopup,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -157,7 +157,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
 
   return (
     <Dialog open={pageCtx.isCommandOpen} onOpenChange={(open) => !open && pageCtx.closeCommand()}>
-      <DialogContent
+      <DialogPopup
         className={cn(
           "fixed left-1/2 top-[20%] z-50 -translate-x-1/2 -translate-y-0",
           "w-full max-w-xl p-0 shadow-2xl",
@@ -284,7 +284,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
           <span><kbd className="font-mono">&#8629;</kbd> select</span>
           <span><kbd className="font-mono">Esc</kbd> close</span>
         </div>
-      </DialogContent>
+      </DialogPopup>
     </Dialog>
   );
 }

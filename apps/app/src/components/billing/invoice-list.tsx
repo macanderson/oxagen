@@ -1,5 +1,5 @@
 import { ExternalLink, FileText } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCents, formatDate } from "@/lib/utils";
@@ -23,7 +23,7 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
       <CardHeader>
         <CardTitle>Invoices</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardPanel>
         {invoices.length === 0 ? (
           <p className="text-sm text-muted-foreground">No invoices yet.</p>
         ) : (
@@ -37,20 +37,24 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Badge variant={inv.status === "paid" ? "success" : "warn"}>{inv.status}</Badge>
+                  <Badge variant={inv.status === "paid" ? "success" : "warning"}>{inv.status}</Badge>
                   <span className="font-medium">{formatCents(inv.amountDueCents, inv.currency.toUpperCase())}</span>
                   {inv.hostedInvoiceUrl ? (
-                    <Button asChild size="sm" variant="ghost">
-                      <a href={inv.hostedInvoiceUrl} target="_blank" rel="noreferrer">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
+                    <Button
+                      render={<a href={inv.hostedInvoiceUrl} target="_blank" rel="noreferrer" />}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
                     </Button>
                   ) : null}
                   {inv.invoicePdfUrl ? (
-                    <Button asChild size="sm" variant="ghost">
-                      <a href={inv.invoicePdfUrl} target="_blank" rel="noreferrer">
-                        <FileText className="h-3.5 w-3.5" />
-                      </a>
+                    <Button
+                      render={<a href={inv.invoicePdfUrl} target="_blank" rel="noreferrer" />}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
                     </Button>
                   ) : null}
                 </div>
@@ -58,7 +62,7 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
             ))}
           </ul>
         )}
-      </CardContent>
+      </CardPanel>
     </Card>
   );
 }

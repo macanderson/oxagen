@@ -3,7 +3,7 @@ import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
 import { resolveOrg } from "@/lib/resolve-org";
 import { ShieldCheck, Shield, XCircle, AlertTriangle } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 function formatDate(d: Date | null | undefined): string {
@@ -62,7 +62,7 @@ export default async function AccessGrantsPage({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardPanel>
           {grants.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No explicit grants. Capabilities are typically granted via roles.
@@ -108,7 +108,7 @@ export default async function AccessGrantsPage({
               ))}
             </div>
           )}
-        </CardContent>
+        </CardPanel>
       </Card>
     </div>
   );

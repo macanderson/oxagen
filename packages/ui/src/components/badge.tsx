@@ -1,9 +1,11 @@
+"use client";
 import * as React from "react";
+import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center rounded-md border font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {
     variants: {
       variant: {
@@ -15,21 +17,41 @@ const badgeVariants = cva(
           "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
         outline: "text-foreground",
         muted: "border-transparent bg-muted text-muted-foreground",
-        success:
-          "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-        warn: "border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400",
+        // Semantic colour variants (require the --info/--success/--warning
+        // tokens declared in tokens.css).
+        info: "border-transparent bg-info text-info-foreground",
+        success: "border-transparent bg-success text-success-foreground",
+        warning: "border-transparent bg-warning text-warning-foreground",
+        error: "border-transparent bg-destructive text-destructive-foreground",
+      },
+      // coss ui adds size variants for density control. `lg` matches the fixed
+      // shadcn/ui badge size.
+      size: {
+        sm: "px-2 py-0 text-[10px]",
+        default: "px-2 py-0.5 text-xs",
+        lg: "px-2.5 py-0.5 text-xs",
       },
     },
-    defaultVariants: { variant: "default" },
+    defaultVariants: { variant: "default", size: "default" },
   },
 );
 
 export interface BadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof badgeVariants> {}
+  extends React.HTMLAttributes<HTMLSpanElement>,
+    VariantProps<typeof badgeVariants> {
+  /** Render the badge styling onto another element (Base UI `render`). */
+  render?: React.ReactElement;
+}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+function Badge({ className, variant, size, render, children, ...props }: BadgeProps) {
+  return useRender({
+    render: render ?? <span />,
+    props: {
+      className: cn(badgeVariants({ variant, size }), className),
+      ...props,
+      ...(render ? {} : { children }),
+    },
+  });
 }
 
 export { Badge, badgeVariants };

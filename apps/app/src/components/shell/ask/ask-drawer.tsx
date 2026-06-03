@@ -26,7 +26,7 @@ import { usePageContext } from "@/lib/page-context";
 import type { ScopeContext } from "@/lib/scope";
 import {
   Sheet,
-  SheetContent,
+  SheetPopup,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -64,7 +64,7 @@ export function AskDrawer({
       // Keep the drawer open on outside clicks — closed only via the buttons.
       disablePointerDismissal
     >
-      <SheetContent
+      <SheetPopup
         side="right"
         className={cn(
           // ~480px on desktop, full-width on mobile
@@ -87,13 +87,11 @@ export function AskDrawer({
             <Button
               variant="ghost"
               size="icon"
-              asChild
+              render={<Link href={chatHref} onClick={closeAsk} />}
               className="h-7 w-7 text-muted-foreground hover:text-foreground"
               aria-label="Open in full chat"
             >
-              <Link href={chatHref} onClick={closeAsk}>
-                <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
+              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
         </SheetHeader>
@@ -107,7 +105,7 @@ export function AskDrawer({
             resolvePlanAction={resolvePlanAction}
           />
         </div>
-      </SheetContent>
+      </SheetPopup>
     </Sheet>
   );
 }

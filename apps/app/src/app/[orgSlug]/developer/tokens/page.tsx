@@ -3,7 +3,7 @@ import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
 import { resolveOrg } from "@/lib/resolve-org";
 import { KeySquare, Clock, Layers } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 function formatDate(d: Date | null | undefined): string {
@@ -64,7 +64,7 @@ export default async function DeveloperTokensPage({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardPanel>
           {active.length === 0 && revoked.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No API tokens yet. Tokens can be created via the Oxagen API.
@@ -132,7 +132,7 @@ export default async function DeveloperTokensPage({
               )}
             </div>
           )}
-        </CardContent>
+        </CardPanel>
       </Card>
     </div>
   );

@@ -3,7 +3,7 @@ import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
 import { resolveOrg } from "@/lib/resolve-org";
 import { MonitorDot, Globe, CircleSlash } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 function formatDate(d: Date | null | undefined): string {
@@ -64,7 +64,7 @@ export default async function AccessSessionsPage({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardPanel>
           {active.length === 0 && inactive.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No IAM sessions recorded yet.
@@ -132,7 +132,7 @@ export default async function AccessSessionsPage({
               )}
             </div>
           )}
-        </CardContent>
+        </CardPanel>
       </Card>
     </div>
   );

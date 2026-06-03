@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCents } from "@/lib/utils";
 
 export interface UsageMetric {
@@ -23,7 +23,7 @@ export function UsageChart({ usage }: { usage: UsageSummary }) {
           {new Date(usage.periodStart).toLocaleDateString()} → {new Date(usage.periodEnd).toLocaleDateString()}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardPanel>
         {usage.metrics.length === 0 ? (
           <p className="text-sm text-muted-foreground">No usage yet this period.</p>
         ) : (
@@ -46,7 +46,7 @@ export function UsageChart({ usage }: { usage: UsageSummary }) {
             })}
           </ul>
         )}
-      </CardContent>
+      </CardPanel>
     </Card>
   );
 }

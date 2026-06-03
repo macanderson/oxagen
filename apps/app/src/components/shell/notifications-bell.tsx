@@ -11,7 +11,7 @@ import * as React from "react";
 import { Bell } from "lucide-react";
 import {
   Sheet,
-  SheetContent,
+  SheetPopup,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -39,7 +39,7 @@ export function NotificationsBell() {
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="flex w-80 flex-col p-0 sm:w-80">
+        <SheetPopup side="right" className="flex w-80 flex-col p-0 sm:w-80">
           <SheetHeader className="border-b border-border/40 px-4 py-3">
             <SheetTitle className="text-sm font-medium">Notifications</SheetTitle>
           </SheetHeader>
@@ -55,7 +55,7 @@ export function NotificationsBell() {
               Agent completions, approvals, and alerts will appear here.
             </p>
           </div>
-        </SheetContent>
+        </SheetPopup>
       </Sheet>
     </>
   );

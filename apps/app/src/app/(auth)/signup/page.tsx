@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { LoginForm } from "@/components/auth/login-form";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
@@ -12,7 +12,7 @@ export default function SignupPage() {
           <CardTitle>Create your account</CardTitle>
           <CardDescription>Start building agents on Oxagen.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardPanel>
           <OAuthButtons callbackURL="/" />
           <div className="relative my-6 flex items-center">
             <Separator className="flex-1" />
@@ -26,7 +26,7 @@ export default function SignupPage() {
               Sign in
             </Link>
           </p>
-        </CardContent>
+        </CardPanel>
       </Card>
     </div>
   );

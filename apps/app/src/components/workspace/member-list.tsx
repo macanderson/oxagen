@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
 
 export interface Member {
@@ -16,7 +16,7 @@ export function MemberList({ title, members }: { title: string; members: Member[
       <CardHeader>
         <CardTitle>{title}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardPanel>
         {members.length === 0 ? (
           <p className="text-sm text-muted-foreground">No members yet.</p>
         ) : (
@@ -35,7 +35,7 @@ export function MemberList({ title, members }: { title: string; members: Member[
             ))}
           </ul>
         )}
-      </CardContent>
+      </CardPanel>
     </Card>
   );
 }

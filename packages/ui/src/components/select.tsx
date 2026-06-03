@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
+import { cva, type VariantProps } from "class-variance-authority";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -8,16 +9,32 @@ const Select = SelectPrimitive.Root;
 const SelectGroup = SelectPrimitive.Group;
 const SelectValue = SelectPrimitive.Value;
 
+const selectTriggerVariants = cva(
+  "flex w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+  {
+    // coss ui density scale. `lg` matches the shadcn/ui trigger height (36px).
+    variants: {
+      size: {
+        sm: "h-7",
+        default: "h-8",
+        lg: "h-9",
+      },
+    },
+    defaultVariants: { size: "default" },
+  },
+);
+
+interface SelectTriggerProps
+  extends Omit<React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>, "size">,
+    VariantProps<typeof selectTriggerVariants> {}
+
 const SelectTrigger = React.forwardRef<
   React.ComponentRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
+  SelectTriggerProps
+>(({ className, size, children, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
-    className={cn(
-      "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
-      className,
-    )}
+    className={cn(selectTriggerVariants({ size }), className)}
     {...props}
   >
     {children}
@@ -28,12 +45,28 @@ const SelectTrigger = React.forwardRef<
 ));
 SelectTrigger.displayName = "SelectTrigger";
 
-const SelectContent = React.forwardRef<
+interface SelectPopupProps
+  extends React.ComponentPropsWithoutRef<typeof SelectPrimitive.Popup> {
+  sideOffset?: number;
+  /**
+   * When `true`, the popup aligns the selected item with the trigger text
+   * (Base UI default). Defaults to `false` for a conventional dropdown.
+   */
+  alignItemWithTrigger?: boolean;
+  /** Forwarded to Base UI `Select.Portal` (e.g. `keepMounted`, custom `container`). */
+  portalProps?: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Portal>;
+}
+
+const SelectPopup = React.forwardRef<
   React.ComponentRef<typeof SelectPrimitive.Popup>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Popup> & { sideOffset?: number }
->(({ className, children, sideOffset = 4, ...props }, ref) => (
-  <SelectPrimitive.Portal>
-    <SelectPrimitive.Positioner sideOffset={sideOffset} alignItemWithTrigger={false} className="z-50">
+  SelectPopupProps
+>(({ className, children, sideOffset = 4, alignItemWithTrigger = false, portalProps, ...props }, ref) => (
+  <SelectPrimitive.Portal {...portalProps}>
+    <SelectPrimitive.Positioner
+      sideOffset={sideOffset}
+      alignItemWithTrigger={alignItemWithTrigger}
+      className="z-50"
+    >
       <SelectPrimitive.Popup
         ref={ref}
         className={cn(
@@ -48,7 +81,7 @@ const SelectContent = React.forwardRef<
     </SelectPrimitive.Positioner>
   </SelectPrimitive.Portal>
 ));
-SelectContent.displayName = "SelectContent";
+SelectPopup.displayName = "SelectPopup";
 
 const SelectLabel = React.forwardRef<
   React.ComponentRef<typeof SelectPrimitive.GroupLabel>,
@@ -89,7 +122,7 @@ export {
   SelectGroup,
   SelectValue,
   SelectTrigger,
-  SelectContent,
+  SelectPopup,
   SelectLabel,
   SelectItem,
 };

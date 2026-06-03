@@ -32,17 +32,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
-  SelectContent,
+  SelectPopup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Menu,
+  MenuPopup,
+  MenuGroupLabel,
+  MenuTrigger,
+} from "@/components/ui/menu";
 import { cn } from "@/lib/utils";
 import type { PlanDecision, PlanStep, RiskLevel } from "./stream-event-types";
 
@@ -66,9 +66,9 @@ export interface PlanCardProps {
   ) => Promise<{ ok: boolean; error?: string }>;
 }
 
-const RISK_VARIANT: Record<RiskLevel, "muted" | "warn" | "destructive"> = {
+const RISK_VARIANT: Record<RiskLevel, "muted" | "warning" | "destructive"> = {
   low: "muted",
-  medium: "warn",
+  medium: "warning",
   high: "destructive",
 };
 
@@ -426,7 +426,7 @@ function SortableStepRow({
                 <SelectTrigger id={`${step.id}-capability`} className="h-9 text-xs">
                   <SelectValue placeholder="Choose capability" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectPopup>
                   <SelectItem value="__none__">
                     <span className="text-muted-foreground">No capability</span>
                   </SelectItem>
@@ -440,30 +440,32 @@ function SortableStepRow({
                       </span>
                     </SelectItem>
                   ))}
-                </SelectContent>
+                </SelectPopup>
               </Select>
             </div>
             <div className="space-y-1">
               <label htmlFor={`${step.id}-depends-on`} className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Depends on
               </label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    id={`${step.id}-depends-on`}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9 w-full justify-between text-xs"
-                  >
-                    <span className="truncate">
-                      {step.dependsOn.length > 0 ? step.dependsOn.join(", ") : "None"}
-                    </span>
-                    <ChevronDown className="ml-2 h-3 w-3 opacity-60" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56">
-                  <DropdownMenuLabel>Sibling steps</DropdownMenuLabel>
+              <Menu>
+                <MenuTrigger
+                  render={
+                    <Button
+                      id={`${step.id}-depends-on`}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 w-full justify-between text-xs"
+                    />
+                  }
+                >
+                  <span className="truncate">
+                    {step.dependsOn.length > 0 ? step.dependsOn.join(", ") : "None"}
+                  </span>
+                  <ChevronDown className="ml-2 h-3 w-3 opacity-60" />
+                </MenuTrigger>
+                <MenuPopup className="w-56">
+                  <MenuGroupLabel>Sibling steps</MenuGroupLabel>
                   {siblings.length === 0 ? (
                     <div className="px-2 py-1.5 text-xs text-muted-foreground">
                       No other steps yet.
@@ -490,8 +492,8 @@ function SortableStepRow({
                       );
                     })
                   )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                </MenuPopup>
+              </Menu>
               {cycleWarning ? (
                 <p className="flex items-center gap-1 text-[10px] text-destructive">
                   <AlertTriangle className="h-3 w-3" />

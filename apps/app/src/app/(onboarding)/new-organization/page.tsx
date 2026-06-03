@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NewOrgForm } from "@/components/org/new-organization-form";
 import { getSessionOrRedirect } from "@/lib/session";
 import { createOrgAction } from "./actions";
@@ -14,9 +14,9 @@ export default async function NewTenantPage() {
             Organizations own billing and member access. A default workspace is created for you.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardPanel>
           <NewOrgForm action={createOrgAction} />
-        </CardContent>
+        </CardPanel>
       </Card>
     </div>
   );

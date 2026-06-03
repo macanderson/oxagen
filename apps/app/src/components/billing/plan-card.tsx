@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { Check } from "lucide-react";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCents, cn } from "@/lib/utils";
@@ -41,7 +41,7 @@ export function PlanCard({ plan, interval, isCurrent, onSelect, pending }: PlanC
         </div>
         <CardDescription className="capitalize">{plan.tier} tier</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardPanel>
         <div className="text-3xl font-semibold">
           {formatCents(price)}
           <span className="ml-1 text-sm font-normal text-muted-foreground">/{interval}</span>
@@ -59,7 +59,7 @@ export function PlanCard({ plan, interval, isCurrent, onSelect, pending }: PlanC
             </li>
           ))}
         </ul>
-      </CardContent>
+      </CardPanel>
       <CardFooter>
         <Button
           className="w-full"

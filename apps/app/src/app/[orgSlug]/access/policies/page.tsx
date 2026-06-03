@@ -3,7 +3,7 @@ import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
 import { resolveOrg } from "@/lib/resolve-org";
 import { FileText, Shield, XCircle, AlertTriangle, Lock } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 const EFFECT_LABEL: Record<string, string> = {
@@ -58,7 +58,7 @@ export default async function AccessPoliciesPage({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardPanel>
           {policies.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No policies defined. Policies layer conditional constraints on top of role grants.
@@ -111,7 +111,7 @@ export default async function AccessPoliciesPage({
               ))}
             </div>
           )}
-        </CardContent>
+        </CardPanel>
       </Card>
     </div>
   );

@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
   Select,
-  SelectContent,
+  SelectPopup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -219,11 +219,11 @@ export default function MakeVideoForm({
             >
               <SelectValue placeholder="Select ratio" />
             </SelectTrigger>
-            <SelectContent id={`${aspectRatioId}-listbox`}>
+            <SelectPopup id={`${aspectRatioId}-listbox`}>
               <SelectItem value="16:9">16:9 — Landscape</SelectItem>
               <SelectItem value="9:16">9:16 — Portrait</SelectItem>
               <SelectItem value="1:1">1:1 — Square</SelectItem>
-            </SelectContent>
+            </SelectPopup>
           </Select>
         </div>
       </div>

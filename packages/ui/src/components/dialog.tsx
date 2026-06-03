@@ -24,11 +24,17 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = "DialogOverlay";
 
-const DialogContent = React.forwardRef<
+interface DialogPopupProps
+  extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Popup> {
+  /** Forwarded to Base UI `Dialog.Portal` (e.g. `keepMounted`, custom `container`). */
+  portalProps?: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Portal>;
+}
+
+const DialogPopup = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Popup>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Popup>
->(({ className, children, ...props }, ref) => (
-  <DialogPortal>
+  DialogPopupProps
+>(({ className, children, portalProps, ...props }, ref) => (
+  <DialogPortal {...portalProps}>
     <DialogOverlay />
     <DialogPrimitive.Popup
       ref={ref}
@@ -47,12 +53,18 @@ const DialogContent = React.forwardRef<
     </DialogPrimitive.Popup>
   </DialogPortal>
 ));
-DialogContent.displayName = "DialogContent";
+DialogPopup.displayName = "DialogPopup";
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)} {...props} />
 );
 DialogHeader.displayName = "DialogHeader";
+
+/** coss ui body wrapper — sits between `DialogHeader` and `DialogFooter`. */
+const DialogPanel = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn("flex flex-col gap-2", className)} {...props} />
+);
+DialogPanel.displayName = "DialogPanel";
 
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
@@ -92,8 +104,9 @@ export {
   DialogOverlay,
   DialogTrigger,
   DialogClose,
-  DialogContent,
+  DialogPopup,
   DialogHeader,
+  DialogPanel,
   DialogFooter,
   DialogTitle,
   DialogDescription,

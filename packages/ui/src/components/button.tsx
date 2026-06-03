@@ -12,6 +12,11 @@ const buttonVariants = cva(
         default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
         destructive:
           "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+        // Outline destructive: red affordance without an alarming solid fill.
+        // Use for secondary destructive triggers; reserve `destructive` for the
+        // primary destructive action.
+        "destructive-outline":
+          "border border-destructive/50 text-destructive bg-background shadow-sm hover:bg-destructive/10",
         outline:
           "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
         secondary:
@@ -19,11 +24,17 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
+      // coss ui scale — intentionally more compact than shadcn/ui. To preserve
+      // a shadcn `default` height (36px) use `lg`; for a shadcn `lg` use `xl`.
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "size-9",
+        xs: "h-6 rounded-md px-2 text-xs",
+        sm: "h-7 rounded-md px-3 text-xs",
+        default: "h-8 px-4 py-2",
+        lg: "h-9 rounded-md px-6",
+        xl: "h-10 rounded-md px-8",
+        icon: "size-8",
+        "icon-sm": "size-7",
+        "icon-lg": "size-9",
       },
     },
     defaultVariants: { variant: "default", size: "default" },
@@ -34,35 +45,27 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   /**
-   * Replace the rendered `<button>` with another element while keeping the
-   * button styling and behaviour. Pass a `ReactElement` (Base UI `render`).
+   * Render the button styling/behaviour onto another element (Base UI `render`).
+   * Replaces the shadcn/Radix `asChild` pattern: pass a `ReactElement`.
+   *
+   *   <Button render={<Link href="/login" />}>Login</Button>
    */
   render?: React.ReactElement;
-  /**
-   * Legacy shadcn/Radix composition flag. When set, the single child element
-   * is used as the rendered element (equivalent to Base UI's `render` prop).
-   */
-  asChild?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, render, asChild = false, children, type, ...props }, ref) => {
-    const childElement =
-      asChild && React.isValidElement(children) ? (children as React.ReactElement) : undefined;
-    const renderElement = render ?? childElement;
-
-    return useRender({
-      render: renderElement ?? <button type={type ?? "button"} />,
+  ({ className, variant, size, render, children, type, ...props }, ref) =>
+    useRender({
+      render: render ?? <button type={type ?? "button"} />,
       ref,
       props: {
         className: cn(buttonVariants({ variant, size }), className),
         ...props,
-        // When composing onto a child element, that element supplies its own
+        // When composing onto a `render` element, that element supplies its own
         // content; only pass children when rendering the default <button>.
-        ...(renderElement ? {} : { children }),
+        ...(render ? {} : { children }),
       },
-    });
-  },
+    }),
 );
 Button.displayName = "Button";
 

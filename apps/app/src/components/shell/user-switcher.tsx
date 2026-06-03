@@ -18,13 +18,13 @@ import { useRouter } from "next/navigation";
 import { User, LogOut, Settings, ChevronsUpDown } from "lucide-react";
 import { signOut } from "@oxagen/auth/client";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Menu,
+  MenuPopup,
+  MenuItem,
+  MenuGroupLabel,
+  MenuSeparator,
+  MenuTrigger,
+} from "@/components/ui/menu";
 import { cn } from "@/lib/utils";
 
 export interface SessionUser {
@@ -69,69 +69,71 @@ export function UserSwitcher({ user, className }: UserSwitcherProps) {
   const displayName = user.name ?? user.email;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Open account menu for ${displayName}`}
-          disabled={signingOut}
-          className={cn(
-            "flex w-full items-center gap-2 rounded-md p-2 text-left text-sm transition-colors",
-            "hover:bg-accent hover:text-accent-foreground",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            "disabled:cursor-wait disabled:opacity-60",
-            className,
-          )}
-        >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand text-xs font-semibold text-brand-foreground">
-            {user.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.image} alt={displayName} className="h-full w-full object-cover" />
-            ) : (
-              <span aria-hidden="true">{initials(user.name, user.email)}</span>
+    <Menu>
+      <MenuTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`Open account menu for ${displayName}`}
+            disabled={signingOut}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md p-2 text-left text-sm transition-colors",
+              "hover:bg-accent hover:text-accent-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "disabled:cursor-wait disabled:opacity-60",
+              className,
             )}
-          </span>
-          <span className="grid min-w-0 flex-1 leading-tight">
-            <span className="truncate font-medium">{displayName}</span>
-            <span className="truncate text-xs text-muted-foreground">{user.email}</span>
-          </span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        </button>
-      </DropdownMenuTrigger>
+          />
+        }
+      >
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand text-xs font-semibold text-brand-foreground">
+          {user.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.image} alt={displayName} className="h-full w-full object-cover" />
+          ) : (
+            <span aria-hidden="true">{initials(user.name, user.email)}</span>
+          )}
+        </span>
+        <span className="grid min-w-0 flex-1 leading-tight">
+          <span className="truncate font-medium">{displayName}</span>
+          <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+        </span>
+        <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </MenuTrigger>
 
-      <DropdownMenuContent align="end" side="top" className="w-56">
-        <DropdownMenuLabel className="font-normal">
+      <MenuPopup align="end" side="top" className="w-56">
+        <MenuGroupLabel className="font-normal">
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-medium leading-tight">{displayName}</span>
             <span className="text-xs font-normal text-muted-foreground leading-tight">
               {user.email}
             </span>
           </div>
-        </DropdownMenuLabel>
+        </MenuGroupLabel>
 
-        <DropdownMenuSeparator />
+        <MenuSeparator />
 
-        <DropdownMenuItem onSelect={() => router.push("/account/profile")}>
+        <MenuItem onClick={() => router.push("/account/profile")}>
           <User className="h-4 w-4" aria-hidden="true" />
           Profile
-        </DropdownMenuItem>
+        </MenuItem>
 
-        <DropdownMenuItem onSelect={() => router.push("/account")}>
+        <MenuItem onClick={() => router.push("/account")}>
           <Settings className="h-4 w-4" aria-hidden="true" />
           Settings
-        </DropdownMenuItem>
+        </MenuItem>
 
-        <DropdownMenuSeparator />
+        <MenuSeparator />
 
-        <DropdownMenuItem
-          onSelect={() => void handleSignOut()}
+        <MenuItem
+          onClick={() => void handleSignOut()}
           disabled={signingOut}
           className="text-destructive data-[highlighted]:text-destructive"
         >
           <LogOut className="h-4 w-4" aria-hidden="true" />
           {signingOut ? "Signing out…" : "Sign out"}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
   );
 }
