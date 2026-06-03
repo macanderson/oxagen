@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   txInsertOrgUsers: vi.fn(),
   txFn: vi.fn(),
   grantFreeCredits: vi.fn(),
+  bootstrapOrgIAM: vi.fn(),
 }));
 
 // Default: no existing slug
@@ -74,6 +75,13 @@ vi.mock("@oxagen/billing", () => ({
   grantFreeCredits: mocks.grantFreeCredits,
 }));
 
+// Stub bootstrapOrgIAM — IAM provisioning is tested separately in
+// iam-provision.test.ts. Here we only verify it's called correctly.
+mocks.bootstrapOrgIAM.mockResolvedValue(undefined);
+vi.mock("./iam-provision", () => ({
+  bootstrapOrgIAM: mocks.bootstrapOrgIAM,
+}));
+
 import { organizationCreateHandler } from "./organization.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
@@ -97,6 +105,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     mocks.txInsertOrgReturning.mockClear();
     mocks.txInsertOrgUsers.mockClear();
     mocks.grantFreeCredits.mockClear();
+    mocks.bootstrapOrgIAM.mockClear();
     // Restore defaults
     mocks.orgFindFirst.mockResolvedValue(null);
     mocks.txInsertOrgReturning.mockResolvedValue([
@@ -109,6 +118,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
       },
     ]);
     mocks.grantFreeCredits.mockResolvedValue(undefined);
+    mocks.bootstrapOrgIAM.mockResolvedValue(undefined);
   });
 
   // ── auth guard ───────────────────────────────────────────────────────────
@@ -177,5 +187,17 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     // the org creation).
     expect(mocks.grantFreeCredits).toHaveBeenCalledTimes(1);
     expect(mocks.grantFreeCredits).toHaveBeenCalledWith("internal_org_id");
+  });
+
+  it("calls bootstrapOrgIAM inside the transaction so IAM is atomic with org creation", async () => {
+    await organizationCreateHandler({ name: "IAM Test", slug: "iam-test", planSlug: "free" }, CTX);
+    expect(mocks.bootstrapOrgIAM).toHaveBeenCalledTimes(1);
+    expect(mocks.bootstrapOrgIAM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: "internal_org_id",
+        ownerUserId: "u_1",
+        actorUserId: "u_1",
+      }),
+    );
   });
 });

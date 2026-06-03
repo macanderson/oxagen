@@ -1,4 +1,6 @@
 export { organizationCreateHandler } from "./organization.create";
+export { bootstrapOrgIAM, provisionMemberPrincipal } from "./iam-provision";
+export type { BootstrapOrgIAMArgs, ProvisionMemberPrincipalArgs } from "./iam-provision";
 export { workspaceCreateHandler } from "./workspace.create";
 export { billingSubscriptionReadHandler } from "./billing.subscription.read";
 export { billingSubscriptionUpgradeStartHandler } from "./billing.subscription.upgrade.start";

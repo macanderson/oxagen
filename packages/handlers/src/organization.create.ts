@@ -4,6 +4,7 @@ import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { grantFreeCredits } from "@oxagen/billing";
 import { logger } from "./logger";
+import { bootstrapOrgIAM } from "./iam-provision";
 
 // Postgres unique_violation. Two concurrent creates with the same slug can
 // both pass the pre-check before either insert lands; the loser hits the
@@ -62,6 +63,17 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
         joinedAt: new Date(),
         createdByUserId: ctx.userId,
         updatedByUserId: ctx.userId,
+      });
+
+      // Bootstrap full IAM state for the org — system roles, owner principal,
+      // owner role assignment, and role_grants from capability defaultRoles.
+      // Runs inside the same transaction so the org is never visible without
+      // the owner having access (atomic with the org creation).
+      await bootstrapOrgIAM({
+        orgId: org.id,
+        ownerUserId: ctx.userId!,
+        actorUserId: ctx.userId!,
+        tx,
       });
 
       return {

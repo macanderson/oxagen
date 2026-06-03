@@ -6,6 +6,7 @@ import { grantFreeCredits } from "@oxagen/billing";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { getSessionOrRedirect } from "@/lib/session";
+import { bootstrapOrgIAM } from "@oxagen/handlers/iam-provision";
 
 const FormSchema = z.object({
   name: z.string(),
@@ -78,6 +79,15 @@ export async function createOrgAction(
         joinedAt: new Date(),
         createdByUserId: session.user.id,
         updatedByUserId: session.user.id,
+      });
+
+      // Bootstrap full IAM state atomically with org creation: system roles,
+      // owner principal, owner role assignment, and role_grants from defaultRoles.
+      await bootstrapOrgIAM({
+        orgId: tenant.id,
+        ownerUserId: session.user.id,
+        actorUserId: session.user.id,
+        tx,
       });
 
       return { orgId: tenant.id, orgSlug: tenant.slug, workspaceSlug: workspace.slug };
