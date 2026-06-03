@@ -56,3 +56,6 @@ database-creds.txt
 **/xmcp-env.d.ts
 
 .claude/worktrees
+
+# Plaintext credential dump (full env contract; live secrets)
+creds.txt
