@@ -1,7 +1,36 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createClient } from "@clickhouse/client";
+import { requireEnv } from "@oxagen/config/env";
 import { clickhouse, closeClickhouse } from "./clickhouse";
+
+/**
+ * Create the target database if it doesn't exist. The local docker ClickHouse
+ * auto-creates it from CLICKHOUSE_DB, but ClickHouse Cloud does not — and a
+ * connection scoped to a database that doesn't exist yet is rejected, so the
+ * `CREATE DATABASE` must run through a bootstrap client with no database bound.
+ */
+async function ensureDatabase(): Promise<void> {
+  const env = requireEnv([
+    "CLICKHOUSE_URL",
+    "CLICKHOUSE_USERNAME",
+    "CLICKHOUSE_PASSWORD",
+    "CLICKHOUSE_DATABASE",
+  ] as const);
+  const bootstrap = createClient({
+    url: env.CLICKHOUSE_URL,
+    username: env.CLICKHOUSE_USERNAME,
+    password: env.CLICKHOUSE_PASSWORD,
+  });
+  try {
+    await bootstrap.command({
+      query: `CREATE DATABASE IF NOT EXISTS \`${env.CLICKHOUSE_DATABASE}\``,
+    });
+  } finally {
+    await bootstrap.close();
+  }
+}
 
 function splitStatements(sql: string): string[] {
   // Strip leading comment lines per chunk so a statement preceded by
@@ -23,6 +52,7 @@ function splitStatements(sql: string): string[] {
 // holds versioned ALTERs for existing deployments. Both apply on every run.
 export async function migrate(): Promise<void> {
   const here = dirname(fileURLToPath(import.meta.url));
+  await ensureDatabase();
   const ch = clickhouse();
 
   const schemaSql = readFileSync(join(here, "schema.sql"), "utf8");
