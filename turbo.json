@@ -8,7 +8,24 @@
     "tsconfig.base.json",
     ".npmrc"
   ],
-  "globalEnv": ["NODE_ENV", "VERCEL_ENV", "PLATFORM_VERSION"],
+  "globalEnv": [
+    "NODE_ENV",
+    "VERCEL_ENV",
+    "PLATFORM_VERSION",
+    "AI_GATEWAY_API_KEY",
+    "OXAGEN_LLM_FAST",
+    "OXAGEN_LLM_BALANCED",
+    "OXAGEN_LLM_PRECISE",
+    "OXAGEN_LLM_OCR",
+    "OXAGEN_LLM_VIDEO_BASIC",
+    "OXAGEN_LLM_VIDEO_ADVANCED",
+    "OXAGEN_LLM_IMAGE_BASIC",
+    "OXAGEN_LLM_IMAGE_ADVANCED",
+    "OXAGEN_EMBEDDING_MODEL",
+    "OXAGEN_EMBEDDING_DIMENSIONS",
+    "OXAGEN_EMBEDDING_MULTIMODAL",
+    "AURA_INSTANCENAME"
+  ],
   "globalPassThroughEnv": ["CI", "TURBO_TOKEN", "TURBO_TEAM", "VERCEL", "VERCEL_URL"],
 
   "remoteCache": { "enabled": true },
