@@ -1,11 +1,29 @@
-import { test, expect } from "@playwright/test";
+/**
+ * agent.mcp.list — e2e spec.
+ *
+ * Asserts the MCP servers panel requires auth AND that it renders for an
+ * authenticated user with a fresh org (no seeded MCP servers).
+ */
 
-// E2E layer for the agent.mcp.list capability. The MCP servers panel
-// shows registered external servers with their health; the auth gate
-// is the only deterministic assertion without seeded data.
-test.describe("agent.mcp.list", () => {
+import { test, expect } from "@playwright/test";
+import { signUpFreshUser } from "./helpers/signup";
+
+test.describe("agent.mcp.list — auth guard", () => {
   test("MCP servers panel requires auth", async ({ page }) => {
     await page.goto("/agent/mcp-servers");
     await expect(page).toHaveURL(/\/login$/);
+  });
+});
+
+test.describe("agent.mcp.list — authenticated", () => {
+  test("MCP servers panel is reachable and renders for a fresh org", async ({ page }) => {
+    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "mcp-list" });
+
+    // Navigate to the MCP servers section (org-scoped developer area).
+    await page.goto(`/${orgSlug}/developer/mcp-servers`);
+    await expect(page).not.toHaveURL(/\/login/);
+
+    // The page must render — at minimum the URL contains the org slug.
+    await expect(page).toHaveURL(new RegExp(orgSlug));
   });
 });

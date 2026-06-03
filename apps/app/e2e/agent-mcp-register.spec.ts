@@ -1,11 +1,27 @@
-import { test, expect } from "@playwright/test";
+/**
+ * agent.mcp.register — e2e spec.
+ *
+ * Asserts the add-MCP-server form requires auth AND that a fresh-signup
+ * user can reach the developer area where MCP server registration lives.
+ */
 
-// E2E layer for the agent.mcp.register capability. The "add MCP server"
-// dialog is workspace-scoped; we assert the auth boundary here and defer
-// the full registration flow to the integration suite.
-test.describe("agent.mcp.register", () => {
+import { test, expect } from "@playwright/test";
+import { signUpFreshUser } from "./helpers/signup";
+
+test.describe("agent.mcp.register — auth guard", () => {
   test("add-MCP-server form requires auth", async ({ page }) => {
     await page.goto("/agent/mcp-servers/new");
     await expect(page).toHaveURL(/\/login$/);
+  });
+});
+
+test.describe("agent.mcp.register — authenticated", () => {
+  test("developer area is reachable for a fresh org", async ({ page }) => {
+    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "mcp-reg" });
+
+    // Navigate to the developer section — the MCP register form lives here.
+    await page.goto(`/${orgSlug}/developer/mcp-servers`);
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page).toHaveURL(new RegExp(orgSlug));
   });
 });

@@ -1,10 +1,28 @@
-import { test, expect } from "@playwright/test";
+/**
+ * agent.memory.write — e2e spec.
+ *
+ * Asserts the record-memory dialog requires auth AND that an authenticated
+ * user can reach the knowledge area where memory write surfaces.
+ */
 
-// E2E layer for the agent.memory.write capability. The "record memory"
-// dialog opens off the chat surface; auth gate is the deterministic check.
-test.describe("agent.memory.write", () => {
+import { test, expect } from "@playwright/test";
+import { signUpFreshUser } from "./helpers/signup";
+
+test.describe("agent.memory.write — auth guard", () => {
   test("record-memory dialog requires auth", async ({ page }) => {
     await page.goto("/agent/memory/new");
     await expect(page).toHaveURL(/\/login$/);
+  });
+});
+
+test.describe("agent.memory.write — authenticated", () => {
+  test("knowledge page is reachable for a fresh org (memory write surface)", async ({
+    page,
+  }) => {
+    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "mem-write" });
+
+    await page.goto(`/${orgSlug}/default/knowledge`);
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page).toHaveURL(new RegExp(`${orgSlug}/default`));
   });
 });
