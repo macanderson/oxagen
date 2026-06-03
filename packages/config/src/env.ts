@@ -48,6 +48,17 @@ export const baseEnvSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
 
+  // Vercel AI Gateway. AI_GATEWAY_API_KEY authenticates every model call routed
+  // through the gateway (the primary AI path); when absent, @oxagen/ai falls back
+  // to the direct-provider keys above. The OXAGEN_LLM_* tiers are white-labeled
+  // model handles ("Oxagen Mini/Plus/Max") that resolve to concrete gateway
+  // model ids in `creator/model` form. Defaults mirror the registry staticValues
+  // so local dev and tests resolve a tier without extra configuration.
+  AI_GATEWAY_API_KEY: z.string().optional(),
+  OXAGEN_LLM_FAST: z.string().default("anthropic/claude-haiku-4.5"),
+  OXAGEN_LLM_BALANCED: z.string().default("anthropic/claude-sonnet-4.6"),
+  OXAGEN_LLM_PRECISE: z.string().default("anthropic/claude-opus-4.8"),
+
   LINEAR_API_KEY: z.string().optional(),
 
   NEXT_PUBLIC_APP_URL: z.string().url(),
