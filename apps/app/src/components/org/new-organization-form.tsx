@@ -69,7 +69,7 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
           id="slug"
           name="slug"
           required
-          pattern="[a-z0-9-]{2,40}"
+          pattern="[a-z0-9\-]{2,40}"
           placeholder="acme"
           value={slug}
           onChange={(e) => {

@@ -37,7 +37,7 @@ export function NewWorkspaceForm({ orgSlug, action }: { orgSlug: string; action:
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="ws-slug">Slug</Label>
-        <Input id="ws-slug" name="slug" required pattern="[a-z0-9-]{2,40}" />
+        <Input id="ws-slug" name="slug" required pattern="[a-z0-9\-]{2,40}" />
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <Button type="submit" disabled={pending}>
