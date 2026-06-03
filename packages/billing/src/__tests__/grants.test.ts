@@ -376,4 +376,66 @@ describe("grantCreditPackForCheckout", () => {
 
     expect(dbState.instance!.transaction).not.toHaveBeenCalled();
   });
+
+  it("dynamic purchase — no price metadata credits but session metadata has credits → grants face value", async () => {
+    // Simulate a dynamic checkout where line items return nothing (price_data
+    // has no credits metadata) but the session itself carries credits = grantCents.
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock);
+
+    // Provider returns no credit packs (inline price_data has no credits metadata)
+    getCheckoutSessionCreditPacksMock.mockResolvedValue([]);
+
+    // The session carries the face-value grant in metadata (put there by
+    // createDynamicCreditCheckout → StripeProvider.createDynamicCreditCheckout).
+    await grantCreditPackForCheckout(
+      makeSession({ metadata: { org_id: "org-abc", credits: "25000" } }),
+    );
+
+    // Transaction should have run and granted 25000 cents (face value, not paid amount)
+    expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
+    expect(txMock._lotInsertCalled).toBe(true);
+    expect(txMock._balanceUpsertCalled).toBe(true);
+  });
+
+  it("dynamic purchase — session metadata credits is non-numeric → no transaction", async () => {
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock);
+
+    getCheckoutSessionCreditPacksMock.mockResolvedValue([]);
+
+    await grantCreditPackForCheckout(
+      makeSession({ metadata: { org_id: "org-abc", credits: "not-a-number" } }),
+    );
+
+    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
+  });
+
+  it("dynamic purchase — session metadata credits is zero → no transaction", async () => {
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock);
+
+    getCheckoutSessionCreditPacksMock.mockResolvedValue([]);
+
+    await grantCreditPackForCheckout(
+      makeSession({ metadata: { org_id: "org-abc", credits: "0" } }),
+    );
+
+    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
+  });
+
+  it("dynamic purchase — already granted (ledger conflict) → lot NOT inserted", async () => {
+    const txMock = makeTx(true); // simulate conflict
+    dbState.instance = makeDb(txMock);
+
+    getCheckoutSessionCreditPacksMock.mockResolvedValue([]);
+
+    await grantCreditPackForCheckout(
+      makeSession({ metadata: { org_id: "org-abc", credits: "10000" } }),
+    );
+
+    // Ledger insert was called (idempotency check) but lot/balance were not
+    expect(txMock.insert).toHaveBeenCalledTimes(1);
+    expect(txMock._lotInsertCalled).toBe(false);
+  });
 });
