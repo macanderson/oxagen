@@ -61,9 +61,11 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       props: {
         className: cn(buttonVariants({ variant, size }), className),
         ...props,
-        // When composing onto a `render` element, that element supplies its own
-        // content; only pass children when rendering the default <button>.
-        ...(render ? {} : { children }),
+        // Forward children into the rendered element. For the default <button>
+        // they are its content; for a `render` element (e.g. a Link/anchor)
+        // Base UI merges them in, so icon/label children still render —
+        // e.g. <Button render={<Link href />}>Login</Button>.
+        children,
       },
     }),
 );

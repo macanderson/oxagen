@@ -49,7 +49,9 @@ function Badge({ className, variant, size, render, children, ...props }: BadgePr
     props: {
       className: cn(badgeVariants({ variant, size }), className),
       ...props,
-      ...(render ? {} : { children }),
+      // Forward children into the rendered element (default <span> or a
+      // `render` element), so label content renders in both cases.
+      children,
     },
   });
 }

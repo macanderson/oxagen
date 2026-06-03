@@ -179,7 +179,7 @@ describe("Ask fallback", () => {
 
 describe("nav prefix routing", () => {
   it("'go to' prefix strips correctly so the remainder fuzzy-matches a label", () => {
-    const result = classifyIntent({ query: "go to Chat", ctx, hasFillableForm: false });
+    const result = classifyIntent({ query: "go to Knowledge", ctx, hasFillableForm: false });
     expect(result.type).toBe("navigate");
   });
 
