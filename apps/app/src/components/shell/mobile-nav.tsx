@@ -16,7 +16,7 @@ import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import {
   Sheet,
-  SheetContent,
+  SheetPopup,
   SheetHeader,
   SheetTitle,
   SheetClose,
@@ -68,7 +68,7 @@ export function MobileNav({
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="left" className="flex w-72 max-w-[85vw] flex-col p-0">
+        <SheetPopup side="left" className="flex w-72 max-w-[85vw] flex-col p-0">
           {/* Drawer header — switchers on mobile */}
           <SheetHeader className="flex-col items-start gap-2 border-b px-4 py-3">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
@@ -131,7 +131,7 @@ export function MobileNav({
               );
             })}
           </nav>
-        </SheetContent>
+        </SheetPopup>
       </Sheet>
     </>
   );

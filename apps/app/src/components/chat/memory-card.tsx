@@ -10,9 +10,9 @@ export interface MemoryCardProps {
   topN?: number;
 }
 
-const WEIGHT_VARIANT: Record<string, "success" | "warn" | "muted" | "default"> = {
+const WEIGHT_VARIANT: Record<string, "success" | "warning" | "muted" | "default"> = {
   fact: "success",
-  consider: "warn",
+  consider: "warning",
   ignore: "muted",
 };
 

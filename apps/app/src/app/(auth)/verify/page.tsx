@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function VerifyPage(_props: { searchParams: Promise<{ email?: string }> }) {
   return (
@@ -8,11 +8,11 @@ export default function VerifyPage(_props: { searchParams: Promise<{ email?: str
           <CardTitle>Check your email</CardTitle>
           <CardDescription>We sent you a verification link. Open it to finish signing in.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardPanel>
           <p className="text-sm text-muted-foreground">
             Once you&rsquo;ve verified, you&rsquo;ll be redirected to your workspace.
           </p>
-        </CardContent>
+        </CardPanel>
       </Card>
     </div>
   );

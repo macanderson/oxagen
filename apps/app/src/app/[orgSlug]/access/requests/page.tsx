@@ -3,7 +3,7 @@ import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
 import { resolveOrg } from "@/lib/resolve-org";
 import { Clock, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 function formatDate(d: Date | null | undefined): string {
@@ -64,7 +64,7 @@ export default async function AccessRequestsPage({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardPanel>
           {requests.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No access requests yet. JIT requests appear here when principals request temporary capability access.
@@ -109,7 +109,7 @@ export default async function AccessRequestsPage({
               ))}
             </div>
           )}
-        </CardContent>
+        </CardPanel>
       </Card>
     </div>
   );

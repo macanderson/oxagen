@@ -4,7 +4,7 @@ import { schema } from "@oxagen/database";
 import { resolveOrg } from "@/lib/resolve-org";
 import type { LucideIcon } from "lucide-react";
 import { Fingerprint, Bot, User, Cpu } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 const KIND_ICON: Record<string, LucideIcon> = {
@@ -64,7 +64,7 @@ export default async function AccessIdentitiesPage({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardPanel>
           {principals.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No principals found. Principals are created when members join or agents are registered.
@@ -108,7 +108,7 @@ export default async function AccessIdentitiesPage({
               })}
             </div>
           )}
-        </CardContent>
+        </CardPanel>
       </Card>
     </div>
   );

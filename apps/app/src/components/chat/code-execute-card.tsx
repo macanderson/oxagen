@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsPanel, TabsList, TabsTab } from "@/components/ui/tabs";
 import { StatusIcon } from "./status-icon";
 import { formatDuration } from "./tool-call-card";
 import type { ToolCallStatus } from "./stream-event-types";
@@ -68,25 +68,25 @@ export function CodeExecuteCard({
 
       <Tabs defaultValue="stdout">
         <TabsList>
-          <TabsTrigger value="stdout">stdout</TabsTrigger>
-          <TabsTrigger value="stderr">stderr</TabsTrigger>
+          <TabsTab value="stdout">stdout</TabsTab>
+          <TabsTab value="stderr">stderr</TabsTab>
         </TabsList>
-        <TabsContent value="stdout">
+        <TabsPanel value="stdout">
           <pre
             ref={stdoutRef}
             className="max-h-64 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-emerald-200"
           >
             {stdout ?? (status === "running" ? "Waiting for output…" : "")}
           </pre>
-        </TabsContent>
-        <TabsContent value="stderr">
+        </TabsPanel>
+        <TabsPanel value="stderr">
           <pre
             ref={stderrRef}
             className="max-h-64 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-rose-300"
           >
             {stderr ?? ""}
           </pre>
-        </TabsContent>
+        </TabsPanel>
       </Tabs>
 
       {status !== "running" ? (

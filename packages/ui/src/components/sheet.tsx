@@ -42,15 +42,18 @@ const sheetVariants = cva(
   },
 );
 
-interface SheetContentProps
+interface SheetPopupProps
   extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Popup>,
-    VariantProps<typeof sheetVariants> {}
+    VariantProps<typeof sheetVariants> {
+  /** Forwarded to Base UI `Dialog.Portal` (e.g. `keepMounted`, custom `container`). */
+  portalProps?: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Portal>;
+}
 
-const SheetContent = React.forwardRef<
+const SheetPopup = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Popup>,
-  SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => (
-  <SheetPortal>
+  SheetPopupProps
+>(({ side = "right", className, children, portalProps, ...props }, ref) => (
+  <SheetPortal {...portalProps}>
     <SheetOverlay />
     <DialogPrimitive.Popup ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
       {children}
@@ -61,12 +64,18 @@ const SheetContent = React.forwardRef<
     </DialogPrimitive.Popup>
   </SheetPortal>
 ));
-SheetContent.displayName = "SheetContent";
+SheetPopup.displayName = "SheetPopup";
 
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn("flex flex-col space-y-2 text-center sm:text-left", className)} {...props} />
 );
 SheetHeader.displayName = "SheetHeader";
+
+/** coss ui body wrapper — sits between `SheetHeader` and `SheetFooter`. */
+const SheetPanel = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn("flex flex-1 flex-col gap-2 overflow-y-auto", className)} {...props} />
+);
+SheetPanel.displayName = "SheetPanel";
 
 const SheetFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
@@ -106,8 +115,9 @@ export {
   SheetOverlay,
   SheetTrigger,
   SheetClose,
-  SheetContent,
+  SheetPopup,
   SheetHeader,
+  SheetPanel,
   SheetFooter,
   SheetTitle,
   SheetDescription,

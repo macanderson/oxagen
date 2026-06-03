@@ -55,6 +55,12 @@ them too, so name the relevant skill in an agent's prompt.
   indigo→green gradient ring, Aeonik type, motion tokens, glass/card treatment,
   iconography, voice & casing). Use for any user-facing UI or product copy in
   `apps/app` / `apps/website` so output reads as Oxagen.
+- **`coss-ui`** — the coss ui (Base UI) component system as implemented by
+  `@oxagen/ui`: registry & import paths, `render`-not-`asChild` composition,
+  `*Popup`/`*Panel`/`Menu*`/`TabsTab` naming, size scales & semantic tokens, and
+  the shadcn/Radix → coss migration mapping. Use when building, restyling, or
+  reviewing UI that imports `@oxagen/ui` (`@/components/ui/*`), or migrating
+  shadcn/Radix components to coss/Base UI.
 - **`frontend-patterns`** — a 136-entry library of web-platform technique guides
   (CSS, a11y, Core Web Vitals, forms/autofill, passkeys, view transitions,
   scroll animation, privacy, security). Use when building/reviewing frontend:
@@ -68,9 +74,9 @@ them too, so name the relevant skill in an agent's prompt.
   my code", "give me an audit report", or score package health.
 
 Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first. Building UI →
-`oxagen-design-system` (identity) + `frontend-patterns` (technique). Auth →
-`vendor-better-auth` + the Better Auth `*-best-practices` skills. See
-`.agents/skills/README.md` for the full local-skill manifest.
+`coss-ui` (component API) + `oxagen-design-system` (identity) + `frontend-patterns`
+(technique). Auth → `vendor-better-auth` + the Better Auth `*-best-practices`
+skills. See `.agents/skills/README.md` for the full local-skill manifest.
 
 ## Production URLs (interim)
 

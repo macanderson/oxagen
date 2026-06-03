@@ -116,7 +116,7 @@ function FanoutStatus({ status }: { status: SubagentStatus }) {
     );
   }
   return (
-    <Badge variant="warn" className="ml-auto">
+    <Badge variant="warning" className="ml-auto">
       Partial
     </Badge>
   );

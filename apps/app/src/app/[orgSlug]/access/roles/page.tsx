@@ -3,7 +3,7 @@ import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
 import { resolveOrg } from "@/lib/resolve-org";
 import { Users, Lock } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export default async function AccessRolesPage({
@@ -51,7 +51,7 @@ export default async function AccessRolesPage({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardPanel>
           {roles.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No roles found. System default roles are seeded on org creation.
@@ -87,7 +87,7 @@ export default async function AccessRolesPage({
               ))}
             </div>
           )}
-        </CardContent>
+        </CardPanel>
       </Card>
     </div>
   );

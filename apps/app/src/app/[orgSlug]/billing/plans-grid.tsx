@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTab, TabsPanel } from "@/components/ui/tabs";
 import { PlanCard, type Plan } from "@/components/billing/plan-card";
 import { subscribeAction } from "./actions";
 
@@ -27,11 +27,11 @@ export function PlansGrid({ orgSlug, currentPlanSlug, plans }: PlansGridProps) {
         <h2 className="text-lg font-semibold">Plans</h2>
         <Tabs value={interval} onValueChange={(v) => setInterval(v as "month" | "year")}>
           <TabsList>
-            <TabsTrigger value="month">Monthly</TabsTrigger>
-            <TabsTrigger value="year">Annual</TabsTrigger>
+            <TabsTab value="month">Monthly</TabsTab>
+            <TabsTab value="year">Annual</TabsTab>
           </TabsList>
-          <TabsContent value="month" />
-          <TabsContent value="year" />
+          <TabsPanel value="month" />
+          <TabsPanel value="year" />
         </Tabs>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
