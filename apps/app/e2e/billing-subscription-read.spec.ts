@@ -190,8 +190,11 @@ test.describe("billing.subscription.read — authenticated, seeded state", () =>
     // SubscriptionSummary — heading for active subscription.
     await expect(page.getByText("Current subscription")).toBeVisible();
 
-    // Plan name from seeded data.
-    await expect(page.getByText(PLAN_NAME)).toBeVisible();
+    // Plan name from seeded data — scoped to the subscription card's plan-name
+    // element to avoid strict-mode violation (the text "Build" also appears in
+    // the nav and the plans grid, producing multiple matches).
+    await expect(page.getByTestId("plan-name")).toBeVisible();
+    await expect(page.getByTestId("plan-name")).toHaveText(PLAN_NAME);
 
     // Status badge — "active".
     await expect(page.getByText(/^active$/i)).toBeVisible();

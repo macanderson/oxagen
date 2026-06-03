@@ -13,8 +13,8 @@ const MCP_ENTRIES: McpEntry[] = [
     client: "Claude Code",
     configKey: "claude_code_config",
     snippet: `claude mcp add oxagen \\
-  --transport sse \\
-  --url https://oxagen-v2-api.vercel.app/mcp/sse \\
+  --transport http \\
+  --url https://oxagen-v2-mcp.vercel.app/mcp \\
   --header "Authorization: Bearer $OXAGEN_API_KEY"`,
   },
   {
@@ -40,8 +40,8 @@ const MCP_ENTRIES: McpEntry[] = [
     "servers": [
       {
         "name": "oxagen",
-        "transport": "sse",
-        "url": "https://oxagen-v2-api.vercel.app/mcp/sse",
+        "transport": "http",
+        "url": "https://oxagen-v2-mcp.vercel.app/mcp",
         "headers": {
           "Authorization": "Bearer $OXAGEN_API_KEY"
         }
@@ -75,7 +75,7 @@ export default function DeveloperMcpPage() {
             <span>
               The MCP endpoint is live at{" "}
               <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
-                https://oxagen-v2-api.vercel.app/mcp/sse
+                https://oxagen-v2-mcp.vercel.app/mcp
               </code>
               . Generate an API token on the Tokens tab, then follow the
               install instructions for your client below.

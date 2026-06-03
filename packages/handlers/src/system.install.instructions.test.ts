@@ -54,7 +54,7 @@ describe("systemInstallInstructionsHandler", () => {
     }
   });
 
-  it("includes the production API URL in commands", async () => {
+  it("includes the production MCP connect URL in commands", async () => {
     const result = await systemInstallInstructionsHandler(
       { client: "claude-code" },
       CTX,
@@ -63,7 +63,9 @@ describe("systemInstallInstructionsHandler", () => {
       .filter((s) => s.command)
       .map((s) => s.command!)
       .join("\n");
-    expect(allCommands).toContain("oxagen-v2-api.vercel.app");
+    // MCP is served by the xmcp app (oxagen-v2-mcp) at /mcp, NOT the REST API host.
+    expect(allCommands).toContain("oxagen-v2-mcp.vercel.app/mcp");
+    expect(allCommands).not.toContain("oxagen-v2-api.vercel.app/mcp");
   });
 
   it("interpolates the workspaceSlug when provided", async () => {
@@ -79,8 +81,10 @@ describe("systemInstallInstructionsHandler", () => {
   });
 
   it("uses a placeholder when workspaceSlug is not provided", async () => {
+    // claude-code's `oxagen workspace use <slug>` step still surfaces the slug;
+    // the MCP connect URL itself is workspace-scoped by the API key, not the path.
     const result = await systemInstallInstructionsHandler(
-      { client: "cursor" },
+      { client: "claude-code" },
       CTX,
     );
     const allCommands = result.steps

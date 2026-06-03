@@ -52,7 +52,7 @@ export function SubscriptionSummary({ subscription }: { subscription: Subscripti
         <dl className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <dt className="text-muted-foreground">Plan</dt>
-            <dd className="font-medium">{subscription.planName}</dd>
+            <dd className="font-medium" data-testid="plan-name">{subscription.planName}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Billing</dt>
