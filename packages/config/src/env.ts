@@ -118,6 +118,17 @@ export const baseEnvSchema = z.object({
   // prints the value to set. Must be >= 1 (a markup below 1 would sell
   // credits below provider cost).
   OXAGEN_METER_MARKUP: z.coerce.number().gte(1).optional(),
+
+  // ── Usage-purchase volume discount (hybrid SaaS + usage pricing) ──
+  // When a customer buys usage credits they earn a volume discount of
+  // OXAGEN_USAGE_DISCOUNT_PERCENT% off for every OXAGEN_USAGE_DISCOUNT_INCREMENT
+  // dollars purchased, scaling from $0 up to OXAGEN_USAGE_DISCOUNT_CEILING_USD
+  // (above which it stays flat at the max). Percent + increment are the two
+  // operator-tunable knobs; the ceiling bounds the curve so the discount can't
+  // run away. Defaults: 2.5% per $50, ceiling $250 → max 12.5%.
+  OXAGEN_USAGE_DISCOUNT_PERCENT: z.coerce.number().gte(0).lt(100).default(2.5),
+  OXAGEN_USAGE_DISCOUNT_INCREMENT: z.coerce.number().gt(0).default(50),
+  OXAGEN_USAGE_DISCOUNT_CEILING_USD: z.coerce.number().gt(0).default(250),
 });
 
 // The exact set of keys this schema validates. `normalizeEnv` only ever

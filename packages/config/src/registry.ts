@@ -357,6 +357,42 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_USAGE_DISCOUNT_PERCENT: {
+    group: "Billing",
+    description:
+      "Usage volume discount: percent off per OXAGEN_USAGE_DISCOUNT_INCREMENT dollars " +
+      "of usage credits purchased (e.g. 2.5 = 2.5% per increment).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp", "website", "admin", "docs"],
+    requiredIn: ALL,
+    valueOrigin: "static",
+    staticValue: { "*": "2.5" },
+  },
+  OXAGEN_USAGE_DISCOUNT_INCREMENT: {
+    group: "Billing",
+    description:
+      "Usage volume discount: dollar increment that earns one OXAGEN_USAGE_DISCOUNT_PERCENT " +
+      "step (e.g. 50 = a discount step every $50 purchased).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp", "website", "admin", "docs"],
+    requiredIn: ALL,
+    valueOrigin: "static",
+    staticValue: { "*": "50" },
+  },
+  OXAGEN_USAGE_DISCOUNT_CEILING_USD: {
+    group: "Billing",
+    description:
+      "Usage volume discount: purchase amount (USD) at which the discount caps; above " +
+      "this it stays flat at the max. 2.5% per $50 up to $250 ⇒ 12.5% max.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp", "website", "admin", "docs"],
+    requiredIn: ALL,
+    valueOrigin: "static",
+    staticValue: { "*": "250" },
+  },
 
   // ── Inngest (set on app.inngest.com → Keys) ─────────────────────────────────
   INNGEST_EVENT_KEY: {
