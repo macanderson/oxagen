@@ -38,98 +38,98 @@ SET row_security = off;
 -- Name: agent; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA agent;
+CREATE SCHEMA IF NOT EXISTS agent;
 
 
 --
 -- Name: auth; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA auth;
+CREATE SCHEMA IF NOT EXISTS auth;
 
 
 --
 -- Name: billing; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA billing;
+CREATE SCHEMA IF NOT EXISTS billing;
 
 
 --
 -- Name: chat; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA chat;
+CREATE SCHEMA IF NOT EXISTS chat;
 
 
 --
 -- Name: content; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA content;
+CREATE SCHEMA IF NOT EXISTS content;
 
 
 --
 -- Name: evaluation; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA evaluation;
+CREATE SCHEMA IF NOT EXISTS evaluation;
 
 
 --
 -- Name: event; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA event;
+CREATE SCHEMA IF NOT EXISTS event;
 
 
 --
 -- Name: execution; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA execution;
+CREATE SCHEMA IF NOT EXISTS execution;
 
 
 --
 -- Name: graph; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA graph;
+CREATE SCHEMA IF NOT EXISTS graph;
 
 
 --
 -- Name: integration; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA integration;
+CREATE SCHEMA IF NOT EXISTS integration;
 
 
 --
 -- Name: org; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA org;
+CREATE SCHEMA IF NOT EXISTS org;
 
 
 --
 -- Name: security; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA security;
+CREATE SCHEMA IF NOT EXISTS security;
 
 
 --
 -- Name: workflow; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA workflow;
+CREATE SCHEMA IF NOT EXISTS workflow;
 
 
 --
 -- Name: workspace; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA workspace;
+CREATE SCHEMA IF NOT EXISTS workspace;
 
 
 --
@@ -164,9 +164,22 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 -- Name: uuid_generate_v7(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.uuid_generate_v7() RETURNS uuid
-    LANGUAGE plpgsql
-    AS $$
+-- uuid_generate_v7(): created ONLY when a zero-arg uuid_generate_v7 is not
+-- already provided (e.g. by the pg_uuidv7 extension, which init-postgres.sql
+-- installs when available). Guarding the create keeps this baseline idempotent
+-- and extension-safe: a plain CREATE FUNCTION would fail against a Postgres
+-- where pg_uuidv7 already owns the symbol (e.g. Neon).
+DO $uuidv7_guard$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.proname = 'uuid_generate_v7' AND p.pronargs = 0
+  ) THEN
+    EXECUTE $fn$
+      CREATE FUNCTION public.uuid_generate_v7() RETURNS uuid
+      LANGUAGE plpgsql
+      VOLATILE
+      AS $body$
       declare
         unix_ts_ms bytea;
         uuid_bytes bytea;
@@ -181,7 +194,11 @@ CREATE FUNCTION public.uuid_generate_v7() RETURNS uuid
         uuid_bytes := set_byte(uuid_bytes, 8, (b'10' || get_byte(uuid_bytes, 8)::bit(6))::bit(8)::int);
         return encode(uuid_bytes, 'hex')::uuid;
       end
-      $$;
+      $body$;
+    $fn$;
+  END IF;
+END
+$uuidv7_guard$;
 
 
 SET default_tablespace = '';
