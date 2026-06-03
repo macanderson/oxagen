@@ -62,9 +62,12 @@ function listContractFiles(contractsDir) {
 function readIndexImports(indexPath) {
   const src = readFileSync(indexPath, "utf8");
   const importedBases = new Set();
-  // Match: import { ... } from "./some-name.js";
-  // Also match: import { ... } from "./some.name.js";
-  const importRegex = /from\s+["']\.\/([^"']+)\.js["']/g;
+  // Match relative imports of a sibling contract module. The extension is
+  // optional: this repo uses extensionless imports (TS "bundler" resolution),
+  // but NodeNext-style ".js" specifiers are also accepted.
+  //   from "./some.name"      -> some.name
+  //   from "./some.name.js"   -> some.name
+  const importRegex = /from\s+["']\.\/([^"']+?)(?:\.js)?["']/g;
   let m;
   while ((m = importRegex.exec(src)) !== null) {
     const baseName = m[1];
