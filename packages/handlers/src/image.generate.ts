@@ -4,7 +4,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { imageGenerate } from "@oxagen/oxagen/contracts/image.generate";
 import { logger } from "./logger";
 
-// ── Handler ───────────────────────────────────────────────────────────────────
+// ── Handler ───────────────────────────────────────────────────────────────
 //
 // Delegates image generation to generateImageFor() in @oxagen/ai, which is
 // the single AI chokepoint for all image generation. generateImageFor records
@@ -20,20 +20,23 @@ export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = asy
 ) => {
   const alt = input.alt ?? input.prompt.slice(0, 120);
 
-  // Check for OPENAI_API_KEY without throwing — key is optional in the base schema.
-  let openAiKey: string | undefined;
+  // We can generate as long as SOME image path is reachable: the Vercel AI
+  // Gateway (preferred) or a direct OpenAI key. Read both without throwing —
+  // keys are optional in the base schema. selectImageModel() picks the gateway
+  // when AI_GATEWAY_API_KEY is present, else the direct OpenAI client.
+  let hasImagePath = false;
   try {
-    const env = requireEnv(["OPENAI_API_KEY"] as const);
-    openAiKey = env.OPENAI_API_KEY ?? undefined;
+    const env = requireEnv(["AI_GATEWAY_API_KEY", "OPENAI_API_KEY"] as const);
+    hasImagePath = Boolean(env.AI_GATEWAY_API_KEY ?? env.OPENAI_API_KEY);
   } catch {
-    // requireEnv throws if the key fails Zod validation; treat as absent.
-    openAiKey = undefined;
+    // requireEnv throws if a value fails Zod validation; treat as no path.
+    hasImagePath = false;
   }
 
-  if (!openAiKey) {
+  if (!hasImagePath) {
     logger.info(
       { orgId: ctx.orgId, workspaceId: ctx.workspaceId, prompt: input.prompt },
-      "image.generate: OPENAI_API_KEY not configured — returning placeholder",
+      "image.generate: neither AI_GATEWAY_API_KEY nor OPENAI_API_KEY configured — returning placeholder",
     );
     return {
       alt,

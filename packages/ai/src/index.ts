@@ -1,5 +1,5 @@
-export { selectModel, defaultModel, selectImageModel } from "./models";
-export type { ModelSelector, ProviderName, ImageModelSelector } from "./models";
+export { selectModel, defaultModel, selectImageModel, tierModelId, DEFAULT_TIER } from "./models";
+export type { ModelSelector, ProviderName, ImageModelSelector, OxagenTier } from "./models";
 export { streamAgentReply } from "./stream";
 export type { StreamAgentReplyArgs } from "./stream";
 export { embedText } from "./embed";
