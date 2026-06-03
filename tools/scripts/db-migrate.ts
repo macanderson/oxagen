@@ -18,6 +18,8 @@ import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import kleur from "kleur";
 import { loadEnv } from "@oxagen/config/env";
+import { seedPlatform } from "@oxagen/database/seed";
+import { closeDatabase } from "@oxagen/database/client";
 import { migrate as migrateClickhouse } from "@oxagen/telemetry/migrate";
 import { closeClickhouse } from "@oxagen/telemetry";
 import { migrate as migrateNeo4j } from "@oxagen/ontology/migrate";
@@ -67,6 +69,15 @@ async function migratePostgres(): Promise<void> {
 async function main(): Promise<void> {
   console.log(kleur.bold("[migrate] postgres"));
   await migratePostgres();
+  // Platform-global seed (Free plan, etc.) — idempotent, baked into the migrate
+  // path so a fresh DB / `pnpm db:reset` always re-seeds it. NOT the dev org.
+  console.log(kleur.bold("[migrate] seed (platform defaults)"));
+  try {
+    await seedPlatform();
+    console.log(kleur.green("[seed] platform defaults applied"));
+  } finally {
+    await closeDatabase();
+  }
   console.log(kleur.bold("[migrate] clickhouse"));
   try {
     await migrateClickhouse();

@@ -37,12 +37,25 @@ const PLAN_SEEDS = [
   },
 ];
 
-export async function seed(): Promise<void> {
+/**
+ * Platform-global seed: data every environment (incl. production) must have,
+ * with no tenant data. Currently the Free plan — paid tiers are created from
+ * pricing.ts by `pnpm billing:stripe-sync --apply`. Wired into `pnpm db:migrate`
+ * so a fresh DB / `pnpm db:reset` always re-seeds it idempotently.
+ */
+export async function seedPlatform(): Promise<void> {
   const database = db();
-
   for (const plan of PLAN_SEEDS) {
     await database.insert(plans).values(plan).onConflictDoNothing({ target: plans.slug });
   }
+}
+
+/**
+ * Local-dev seed: the `oxagen-dev` org, a dev user, and a Playground workspace.
+ * Must NOT run against production — call only from local tooling.
+ */
+export async function seedDev(): Promise<void> {
+  const database = db();
 
   const orgSlug = "oxagen-dev";
   await database
@@ -97,6 +110,16 @@ export async function seed(): Promise<void> {
       joinedAt: new Date(),
     })
     .onConflictDoNothing({ target: [workspaceUsers.workspaceId, workspaceUsers.userId] });
+}
+
+/**
+ * Full local seed: platform defaults + the dev org/user/workspace. Direct-run
+ * entrypoint (`tsx packages/database/src/seed.ts`). Production migrate calls
+ * only `seedPlatform()` — never the dev data.
+ */
+export async function seed(): Promise<void> {
+  await seedPlatform();
+  await seedDev();
 }
 
 const isDirectRun = import.meta.url === `file://${process.argv[1]}`;
