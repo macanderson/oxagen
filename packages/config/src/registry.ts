@@ -361,13 +361,13 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Billing",
     description:
       "Usage volume discount: percent off per OXAGEN_USAGE_DISCOUNT_INCREMENT dollars " +
-      "of usage credits purchased (e.g. 2.5 = 2.5% per increment).",
+      "of usage credits purchased (e.g. 3 = 3% per increment ⇒ 15% at the $250 ceiling).",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp", "website", "admin", "docs"],
     requiredIn: ALL,
     valueOrigin: "static",
-    staticValue: { "*": "2.5" },
+    staticValue: { "*": "3" },
   },
   OXAGEN_USAGE_DISCOUNT_INCREMENT: {
     group: "Billing",
@@ -385,7 +385,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Billing",
     description:
       "Usage volume discount: purchase amount (USD) at which the discount caps; above " +
-      "this it stays flat at the max. 2.5% per $50 up to $250 ⇒ 12.5% max.",
+      "this it stays flat at the max. 3% per $50 up to $250 ⇒ 15% max.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp", "website", "admin", "docs"],

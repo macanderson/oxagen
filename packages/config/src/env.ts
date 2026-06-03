@@ -125,8 +125,8 @@ export const baseEnvSchema = z.object({
   // dollars purchased, scaling from $0 up to OXAGEN_USAGE_DISCOUNT_CEILING_USD
   // (above which it stays flat at the max). Percent + increment are the two
   // operator-tunable knobs; the ceiling bounds the curve so the discount can't
-  // run away. Defaults: 2.5% per $50, ceiling $250 → max 12.5%.
-  OXAGEN_USAGE_DISCOUNT_PERCENT: z.coerce.number().gte(0).lt(100).default(2.5),
+  // run away. Defaults: 3% per $50, ceiling $250 → max 15%.
+  OXAGEN_USAGE_DISCOUNT_PERCENT: z.coerce.number().gte(0).lt(100).default(3),
   OXAGEN_USAGE_DISCOUNT_INCREMENT: z.coerce.number().gt(0).default(50),
   OXAGEN_USAGE_DISCOUNT_CEILING_USD: z.coerce.number().gt(0).default(250),
 });
