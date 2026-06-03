@@ -68,6 +68,21 @@ describe("systemInstallInstructionsHandler", () => {
     expect(allCommands).not.toContain("oxagen-v2-api.vercel.app/mcp");
   });
 
+  it("includes the Authorization header in the claude-code connect command", async () => {
+    const result = await systemInstallInstructionsHandler(
+      { client: "claude-code" },
+      CTX,
+    );
+    // The MCP server is API-key scoped; the `claude mcp add` command must carry
+    // the bearer token or every connection 401s.
+    const connectStep = result.steps.find(
+      (s) => typeof s.command === "string" && s.command.includes("claude mcp add"),
+    );
+    expect(connectStep?.command).toContain(
+      '--header "Authorization: Bearer $OXAGEN_API_KEY"',
+    );
+  });
+
   it("interpolates the workspaceSlug when provided", async () => {
     const result = await systemInstallInstructionsHandler(
       { client: "claude-code", workspaceSlug: "my-ws" },
