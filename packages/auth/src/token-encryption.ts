@@ -161,6 +161,36 @@ export async function decryptAccountTokens(
  *     account: buildAccountTokenHooks(kmsAdapter),
  *   },
  */
+
+/**
+ * Remove plaintext token fields from an account object before writing. Migration
+ * 0012 dropped the `access_token` / `refresh_token` columns, so passing them to
+ * the Drizzle adapter raises an "unknown column" error and the OAuth account
+ * (hence the user) cannot be created. MUST run on every account write.
+ */
+function stripDroppedTokenColumns(account: Record<string, unknown>): Record<string, unknown> {
+  const { accessToken: _at, refreshToken: _rt, ...rest } = account;
+  void _at;
+  void _rt;
+  return rest;
+}
+
+/**
+ * Account hooks for environments WITHOUT an encryption key (local dev / tests).
+ * The dropped plaintext columns must always be stripped or OAuth sign-up fails;
+ * without a KMS key the tokens simply aren't persisted (the *_enc columns stay
+ * null) but the account + user are still created so social sign-in works.
+ */
+export function buildStripOnlyAccountHooks(): {
+  create: { before: (a: Record<string, unknown>) => Promise<{ data: Record<string, unknown> }> };
+  update: { before: (a: Record<string, unknown>) => Promise<{ data: Record<string, unknown> }> };
+} {
+  return {
+    create: { before: async (account) => ({ data: stripDroppedTokenColumns(account) }) },
+    update: { before: async (account) => ({ data: stripDroppedTokenColumns(account) }) },
+  };
+}
+
 export function buildAccountTokenHooks(adapter: KmsAdapter, keyId: string): {
   create: {
     before: (account: Record<string, unknown>) => Promise<{ data: Record<string, unknown> }>;

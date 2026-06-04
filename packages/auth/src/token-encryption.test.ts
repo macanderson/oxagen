@@ -22,6 +22,7 @@ import {
   encryptAccountTokens,
   decryptAccountTokens,
   buildAccountTokenHooks,
+  buildStripOnlyAccountHooks,
 } from "./token-encryption";
 
 // ---------------------------------------------------------------------------
@@ -229,5 +230,42 @@ describe("buildAccountTokenHooks", () => {
     // Data returned unchanged; encrypt never called.
     expect(result.data).toBe(account);
     expect(mockEncrypt).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildStripOnlyAccountHooks (no-encryption-key path, e.g. local dev)
+// ---------------------------------------------------------------------------
+
+describe("buildStripOnlyAccountHooks", () => {
+  it("strips the dropped accessToken/refreshToken columns on create so OAuth sign-up succeeds", async () => {
+    const hooks = buildStripOnlyAccountHooks();
+    const account = {
+      providerId: "google",
+      accountId: "g-123",
+      userId: "u-1",
+      accessToken: "ya29.secret",
+      refreshToken: "1//refresh.secret",
+      idToken: "id.jwt",
+      scope: "openid email",
+    };
+    const { data } = await hooks.create.before(account);
+    expect(data).not.toHaveProperty("accessToken");
+    expect(data).not.toHaveProperty("refreshToken");
+    // Non-dropped fields (idToken column is retained) pass through untouched.
+    expect(data.idToken).toBe("id.jwt");
+    expect(data.providerId).toBe("google");
+    expect(data.userId).toBe("u-1");
+    expect(data.scope).toBe("openid email");
+    // It never encrypts (no KMS adapter involved).
+    expect(mockEncrypt).not.toHaveBeenCalled();
+  });
+
+  it("strips the dropped columns on update too", async () => {
+    const hooks = buildStripOnlyAccountHooks();
+    const { data } = await hooks.update.before({ accessToken: "x", refreshToken: "y", scope: "s" });
+    expect(data).not.toHaveProperty("accessToken");
+    expect(data).not.toHaveProperty("refreshToken");
+    expect(data.scope).toBe("s");
   });
 });

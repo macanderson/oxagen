@@ -7,7 +7,7 @@ import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { requireEnv } from "@oxagen/config/env";
 import { createLocalKmsAdapter, loadMasterKey } from "@oxagen/crypto/kms";
 import { recordSecurityEvent } from "@oxagen/telemetry";
-import { buildAccountTokenHooks } from "./token-encryption";
+import { buildAccountTokenHooks, buildStripOnlyAccountHooks } from "./token-encryption";
 
 // Better Auth binds to the canonical auth.users row, not a parallel table.
 // The Drizzle adapter looks up columns via JS property lookup
@@ -261,11 +261,15 @@ export const auth = betterAuth({
   //       from the API/MCP sign-in route handler instead.
   // ---------------------------------------------------------------------------
   databaseHooks: {
-    // Account token encryption is only active when AUTH_TOKEN_ENCRYPTION_KEY is
-    // set. In dev/CI without the key the hooks are omitted so the process boots
-    // without throwing on the missing key. In production, the key is required
-    // (enforced by the startup guard above).
-    ...(kmsAdapter ? { account: buildAccountTokenHooks(kmsAdapter, TOKEN_KEY_ID) } : {}),
+    // The account hook ALWAYS runs: it must strip the dropped plaintext
+    // access_token / refresh_token columns (migration 0012) on every write or
+    // OAuth sign-up fails with an "unknown column" error. When
+    // AUTH_TOKEN_ENCRYPTION_KEY is present (preview/prod, enforced by the
+    // startup guard) the tokens are additionally encrypted into the *_enc
+    // columns; locally without the key they're simply not persisted.
+    account: kmsAdapter
+      ? buildAccountTokenHooks(kmsAdapter, TOKEN_KEY_ID)
+      : buildStripOnlyAccountHooks(),
     session: {
       create: {
         after: async (session) => {
