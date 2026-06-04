@@ -7,13 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { updateProfileAction, type ProfileInput } from "./profile-action";
+import { ConnectedAccounts } from "./connected-accounts";
+import { SetPasswordForm } from "./set-password-form";
 import type { FillableFormSpec, FieldDescriptor } from "@/lib/ask/fill-types";
+import type { ConnectedAccountsState } from "./security-types";
 
 export interface ProfileFormProps {
   userId: string;
   initialDisplayName: string;
   email: string;
   initialAvatarUrl: string;
+  connectedAccountsState: ConnectedAccountsState;
 }
 
 export function ProfileForm({
@@ -21,6 +25,7 @@ export function ProfileForm({
   initialDisplayName,
   email,
   initialAvatarUrl,
+  connectedAccountsState,
 }: ProfileFormProps) {
   const [displayName, setDisplayName] = React.useState(initialDisplayName);
   const [avatarUrl, setAvatarUrl] = React.useState(initialAvatarUrl);
@@ -180,6 +185,20 @@ export function ProfileForm({
           </span>
         )}
       </div>
+
+      {/* Divider */}
+      <hr className="border-border" />
+
+      {/* Connected accounts */}
+      <ConnectedAccounts state={connectedAccountsState} />
+
+      {/* Set password — only when no password exists yet */}
+      {!connectedAccountsState.hasPassword && (
+        <>
+          <hr className="border-border" />
+          <SetPasswordForm />
+        </>
+      )}
     </form>
   );
 }
