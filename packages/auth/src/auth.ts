@@ -214,6 +214,18 @@ export const auth = betterAuth({
         ? { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET }
         : undefined,
   },
+  // Account linking — never create a duplicate user. Google and GitHub both
+  // verify the email they return, so they are trusted: when an OAuth sign-in's
+  // email matches an existing user, the new provider is linked to that user
+  // instead of creating a second account. After linking, the user can sign in
+  // with email/password (if set), Google, or GitHub interchangeably. GitHub can
+  // expose multiple emails — Better Auth matches on the primary verified email.
+  account: {
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["google", "github"],
+    },
+  },
   session: {
     expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,
