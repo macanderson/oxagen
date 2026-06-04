@@ -104,9 +104,17 @@ export const accounts = authSchema.table(
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
 
-    // OXA-1420 CONTRACT phase: access_token and refresh_token plaintext columns
-    // have been dropped (migration 0012). id_token plaintext is retained for now
-    // as it is not a bearer credential (read-only OIDC identity assertion).
+    // Better Auth's drizzle adapter writes these fields on every OAuth account
+    // create/link; without the columns it throws "field does not exist" and
+    // sign-in fails (OXA-1420's encrypt-only contract relied on a databaseHook
+    // stripping them, which Better Auth does not apply on every write path).
+    // Restored as nullable so OAuth login works. These hold LOGIN-client tokens
+    // only (minimal openid/profile/email scopes — low value); the high-value
+    // DATA-client tokens use a separate client and never land here. The *_enc
+    // columns + token-encryption hook remain for proper re-encryption (OXA-1420
+    // follow-up) once Better Auth's hook coverage is confirmed.
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
     idToken: text("id_token"),
 
     // OXA-1420: envelope-encrypted token columns — authoritative.
