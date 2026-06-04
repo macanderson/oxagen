@@ -191,10 +191,6 @@ export const auth = betterAuth({
     },
     additionalFields: {
       status: { type: "string", required: false, defaultValue: "active" },
-      // `hd` is the hosted-domain claim Google includes in the ID token for
-      // Google Workspace accounts. Capturing it lets us detect Workspace users
-      // and prefill organization name on signup (e.g. "acme.com" → "Acme").
-      orgDomain: { type: "string", required: false },
     },
   },
   emailAndPassword: {
@@ -211,9 +207,6 @@ export const auth = betterAuth({
             // Explicit minimal scopes — prevents Google Cloud Console pre-authorized
             // scopes from silently expanding the consent screen.
             scope: ["openid", "profile", "email"],
-            mapProfileToUser: (profile: { hd?: string }) => ({
-              orgDomain: profile.hd ?? null,
-            }),
           }
         : undefined,
     github:

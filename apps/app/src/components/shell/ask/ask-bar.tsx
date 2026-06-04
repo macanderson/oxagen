@@ -46,6 +46,21 @@ export function AskBar({ ctx, className }: AskBarProps) {
   const [isLoading, setIsLoading] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
+  // Keyboard-hint symbol is platform-dependent (⌘ on macOS, Ctrl elsewhere),
+  // but `navigator` is client-only. Reading it at render time made the server
+  // emit "Ctrl+K" and the client "⌘K" → a hydration mismatch that crashed the
+  // Base-UI shell in production. useSyncExternalStore renders the server
+  // snapshot ("⌘K") on SSR + the first hydration pass (so they match — no
+  // mismatch), then swaps to the real platform value on the client.
+  const kbdHint = React.useSyncExternalStore(
+    () => () => {},
+    () => {
+      const platform = (navigator.userAgentData?.platform ?? navigator.platform ?? "").toLowerCase();
+      return platform.includes("mac") ? "⌘K" : "Ctrl+K";
+    },
+    () => "⌘K",
+  );
+
   // Stable refs for use inside event handlers that capture stale closures.
   const pageCtxRef = React.useRef(pageCtx);
   const ctxRef = React.useRef(ctx);
@@ -166,8 +181,6 @@ export function AskBar({ ctx, className }: AskBarProps) {
     [handleSubmit],
   );
 
-  const isMac = typeof navigator !== "undefined" && (navigator.userAgentData?.platform ?? navigator.platform ?? "").toLowerCase().includes("mac");
-  const kbdHint = isMac ? "⌘K" : "Ctrl+K";
 
   return (
     <div
