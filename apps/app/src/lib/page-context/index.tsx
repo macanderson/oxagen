@@ -37,6 +37,18 @@ export function PageContextProvider({ children }: { children: React.ReactNode })
   const [isAskOpen, setIsAskOpen] = React.useState(false);
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
 
+  // Stable callbacks: useCallback with [] dep so these function references
+  // never change. This prevents the pageCtx object from being recreated (via
+  // the useMemo below) on every isAskOpen/isCommandOpen state change. Inline
+  // arrows inside a useMemo would produce new references on every memo run,
+  // causing all consumers of usePageContext() to re-render unnecessarily and
+  // potentially entering a "Maximum update depth exceeded" loop when those
+  // consumers have effects that depend on the full pageCtx object.
+  const openAsk = React.useCallback(() => setIsAskOpen(true), []);
+  const closeAsk = React.useCallback(() => setIsAskOpen(false), []);
+  const openCommand = React.useCallback(() => setIsCommandOpen(true), []);
+  const closeCommand = React.useCallback(() => setIsCommandOpen(false), []);
+
   const value = React.useMemo<PageContextValue>(
     () => ({
       entity,
@@ -48,13 +60,13 @@ export function PageContextProvider({ children }: { children: React.ReactNode })
       _setFillResult: setFillResult,
       _setIsFilling: setIsFilling,
       isAskOpen,
-      openAsk: () => setIsAskOpen(true),
-      closeAsk: () => setIsAskOpen(false),
+      openAsk,
+      closeAsk,
       isCommandOpen,
-      openCommand: () => setIsCommandOpen(true),
-      closeCommand: () => setIsCommandOpen(false),
+      openCommand,
+      closeCommand,
     }),
-    [entity, fillableForm, fillResult, isFilling, isAskOpen, isCommandOpen],
+    [entity, fillableForm, fillResult, isFilling, isAskOpen, openAsk, closeAsk, isCommandOpen, openCommand, closeCommand],
   );
 
   return <PageContext.Provider value={value}>{children}</PageContext.Provider>;

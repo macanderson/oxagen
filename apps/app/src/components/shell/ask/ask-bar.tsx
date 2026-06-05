@@ -31,6 +31,15 @@ import { useRecent } from "@/lib/command-menu/use-recent";
 import { fillFormAction } from "@/lib/ask/fill-action";
 import type { ScopeContext } from "@/lib/scope";
 
+// Module-level stable noop — useSyncExternalStore requires a *stable* subscribe
+// reference. An inline `() => () => {}` creates a new function on every render,
+// causing React to re-subscribe on each pass and triggering spurious snapshot
+// re-checks that accumulate into a "Maximum update depth exceeded" loop in
+// strict-mode dev. Moving it outside the component gives it a permanent identity.
+function _stableNoopSubscribe(_callback: () => void): () => void {
+  return () => {};
+}
+
 export interface AskBarProps {
   /** Required so intent routing can enumerate nav targets for this scope. */
   ctx: ScopeContext;
@@ -52,8 +61,10 @@ export function AskBar({ ctx, className }: AskBarProps) {
   // Base-UI shell in production. useSyncExternalStore renders the server
   // snapshot ("⌘K") on SSR + the first hydration pass (so they match — no
   // mismatch), then swaps to the real platform value on the client.
+  // NOTE: subscribe is the module-level _stableNoopSubscribe — NOT an inline
+  // arrow — to avoid the "Maximum update depth exceeded" loop described above.
   const kbdHint = React.useSyncExternalStore(
-    () => () => {},
+    _stableNoopSubscribe,
     () => {
       const platform = (navigator.userAgentData?.platform ?? navigator.platform ?? "").toLowerCase();
       return platform.includes("mac") ? "⌘K" : "Ctrl+K";
@@ -67,7 +78,12 @@ export function AskBar({ ctx, className }: AskBarProps) {
   const pushRecentRef = React.useRef(pushRecent);
   const routerRef = React.useRef(router);
   React.useEffect(() => { pageCtxRef.current = pageCtx; }, [pageCtx]);
-  React.useEffect(() => { ctxRef.current = ctx; }, [ctx]);
+  // Depend on primitives (orgSlug, workspaceSlug) rather than the ctx object
+  // reference. ShellFrame creates a new ctx object on every re-render (e.g.
+  // after the sidebar collapses from localStorage), so the object-identity dep
+  // fires the effect on every shell re-render even though the values are
+  // identical. Using primitives limits the effect to genuine scope changes.
+  React.useEffect(() => { ctxRef.current = ctx; }, [ctx.orgSlug, ctx.workspaceSlug]); // eslint-disable-line react-hooks/exhaustive-deps
   React.useEffect(() => { pushRecentRef.current = pushRecent; }, [pushRecent]);
   React.useEffect(() => { routerRef.current = router; }, [router]);
 
