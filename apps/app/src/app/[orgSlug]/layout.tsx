@@ -14,6 +14,7 @@ import {
   orgShellResolveApprovalAction,
   orgShellResolvePlanAction,
 } from "./shell-actions";
+import { resolvedTierCatalog } from "@oxagen/ai";
 
 export default async function OrgLayout({
   children,
