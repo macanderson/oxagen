@@ -11,7 +11,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
 import type { PlanStep } from "@/components/chat/stream-event-types";
 import { loadEffectiveModelDefaults } from "@oxagen/ai";
-import { buildSeededModelState } from "@/components/chat/model-picker";
+import { buildSeededModelState } from "@/components/chat/model-state";
 import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
 
 // The unbound action factories — one set per route module because each

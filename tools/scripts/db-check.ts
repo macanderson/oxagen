@@ -14,7 +14,7 @@ async function checkPostgres(): Promise<Result> {
     const { stdout } = await execa("psql", [
       url,
       "-tAc",
-      "select count(*) from information_schema.schemata where schema_name in ('organization','auth','workspace','billing','chat')",
+      "select count(*) from information_schema.schemata where schema_name in ('org','auth','workspace','billing','chat')",
     ]);
     const count = Number(stdout.trim());
     return {

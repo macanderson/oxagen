@@ -20,8 +20,10 @@ begin
   end;
 end$$;
 
--- 13 domain schemas per spec §6.
-create schema if not exists organization;
+-- 14 domain schemas per spec §6. Names must match the canonical set in
+-- packages/database/drizzle.config.ts (schemaFilter) and 0000_baseline.sql.
+-- The org schema is `org` (org.organizations), NOT `organization`.
+create schema if not exists org;
 create schema if not exists auth;
 create schema if not exists workspace;
 create schema if not exists integration;
@@ -34,3 +36,4 @@ create schema if not exists content;
 create schema if not exists graph;
 create schema if not exists evaluation;
 create schema if not exists billing;
+create schema if not exists security;

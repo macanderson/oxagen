@@ -18,7 +18,6 @@ import type {
   TextTier,
   MediaTier,
   MediaKind,
-  EffortLevel,
   ResolvedTierCatalog,
   Vendor,
 } from "@oxagen/ai/catalog";
@@ -36,58 +35,19 @@ import {
 } from "@/components/ui/menu";
 
 // ─── State shape ──────────────────────────────────────────────────────────────
-
-export interface ComposerModelState {
-  /** null = text chat, "image"/"video" = media generation */
-  generate: MediaKind | null;
-  /** Selected text tier (mutually exclusive with `model`) */
-  tier: TextTier | null;
-  /** Explicit "Other Models" gateway model id for text */
-  model: string | null;
-  /** Reasoning level (text only) */
-  effort: EffortLevel | null;
-  /** Selected media tier */
-  mediaTier: MediaTier | null;
-  /** Explicit "Other Models" gateway model id for media */
-  mediaModel: string | null;
-}
-
-export const defaultModelState: ComposerModelState = {
-  generate: null,
-  tier: "fast",
-  model: null,
-  effort: "medium",
-  mediaTier: "basic",
-  mediaModel: null,
-};
-
-/**
- * Seed properties for ComposerModelState derived from effective model defaults
- * resolved server-side (workspace > user > system). Passed once at mount time;
- * the user can still override per-turn via the ModelPicker.
- */
-export interface ModelStateSeed {
-  /** Explicit text model id to pre-select (wins over tier when set). */
-  textModel: string | null;
-  /** Text tier to pre-select (used only when textModel is null). */
-  textTier: TextTier | null;
-  /** Image model id to pre-select in image-generation mode. */
-  imageModel: string | null;
-  /** Video model id to pre-select in video-generation mode. */
-  videoModel: string | null;
-}
-
-/** Build the initial ComposerModelState from seeded effective defaults. */
-export function buildSeededModelState(seed: ModelStateSeed): ComposerModelState {
-  return {
-    generate: null,
-    tier: seed.textModel ? null : (seed.textTier ?? "fast"),
-    model: seed.textModel ?? null,
-    effort: "medium",
-    mediaTier: seed.imageModel || seed.videoModel ? null : "basic",
-    mediaModel: null,
-  };
-}
+//
+// The state shape + pure seed helpers live in `./model-state` (a non-client
+// module) so the chat-shell server component can call `buildSeededModelState()`
+// at request time. They are re-exported here for the (many) client importers
+// that already pull them from `model-picker`.
+import {
+  defaultModelState,
+  buildSeededModelState,
+  type ComposerModelState,
+  type ModelStateSeed,
+} from "./model-state";
+export { defaultModelState, buildSeededModelState };
+export type { ComposerModelState, ModelStateSeed };
 
 // ─── Vendor indicator tile ────────────────────────────────────────────────────
 
