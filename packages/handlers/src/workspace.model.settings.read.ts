@@ -25,11 +25,16 @@ export const workspaceModelSettingsReadHandler: CapabilityHandler<
   });
 
   if (!row) {
-    logger.warn(
+    logger.info(
       { workspaceId: ctx.workspaceId },
-      "workspace.model.settings.read: workspace not found",
+      "workspace.model.settings.read: no row — returning null defaults",
     );
-    throw new Error("workspace not found");
+    return {
+      defaultTextTier: null,
+      defaultTextModel: null,
+      defaultImageModel: null,
+      defaultVideoModel: null,
+    };
   }
 
   logger.info(

@@ -62,9 +62,13 @@ describe("workspaceModelSettingsReadHandler (@oxagen/handlers)", () => {
 
   // ── workspace not found ───────────────────────────────────────────────────
 
-  it("throws when the workspace row is not found", async () => {
+  it("returns null defaults when the workspace row is not found", async () => {
     mocks.workspaceFindFirst.mockResolvedValueOnce(null);
-    await expect(workspaceModelSettingsReadHandler({}, CTX)).rejects.toThrow("workspace not found");
+    const result = await workspaceModelSettingsReadHandler({}, CTX);
+    expect(result.defaultTextTier).toBeNull();
+    expect(result.defaultTextModel).toBeNull();
+    expect(result.defaultImageModel).toBeNull();
+    expect(result.defaultVideoModel).toBeNull();
   });
 
   // ── happy path ────────────────────────────────────────────────────────────

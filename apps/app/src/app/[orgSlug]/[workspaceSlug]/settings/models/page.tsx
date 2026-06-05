@@ -157,8 +157,8 @@ export default async function WorkspaceModelsPage({
         <Alert variant="info" className="max-w-2xl">
           <Info aria-hidden="true" />
           <AlertTitle>
-            This workspace sets default models — your personal preferences for
-            these are not applied here.
+            This workspace sets default models. They apply to everyone here and
+            take precedence over personal preferences.
           </AlertTitle>
           <AlertDescription>
             <ul className="mt-2 flex flex-col gap-1.5 text-sm">
@@ -173,8 +173,22 @@ export default async function WorkspaceModelsPage({
                       wsSettings.defaultTextModel,
                       wsSettings.defaultTextTier as ModelTier | null,
                     )}
-                  </strong>{" "}
-                  (your personal default is ignored in this workspace)
+                  </strong>
+                  {userPrefs.defaultTextModel || userPrefs.defaultTextTier ? (
+                    <>
+                      {" "}
+                      (your preference,{" "}
+                      <strong>
+                        {resolveTextLabel(
+                          userPrefs.defaultTextModel,
+                          userPrefs.defaultTextTier as ModelTier | null,
+                        )}
+                      </strong>
+                      , is not applied in this workspace)
+                    </>
+                  ) : (
+                    <> (applies to everyone in this workspace)</>
+                  )}
                 </li>
               )}
               {overriddenByWorkspace.image && (
@@ -185,8 +199,19 @@ export default async function WorkspaceModelsPage({
                   — workspace uses{" "}
                   <strong>
                     {resolveMediaLabel(wsSettings.defaultImageModel)}
-                  </strong>{" "}
-                  (your personal default is ignored in this workspace)
+                  </strong>
+                  {userPrefs.defaultImageModel ? (
+                    <>
+                      {" "}
+                      (your preference,{" "}
+                      <strong>
+                        {resolveMediaLabel(userPrefs.defaultImageModel)}
+                      </strong>
+                      , is not applied in this workspace)
+                    </>
+                  ) : (
+                    <> (applies to everyone in this workspace)</>
+                  )}
                 </li>
               )}
               {overriddenByWorkspace.video && (
@@ -197,8 +222,19 @@ export default async function WorkspaceModelsPage({
                   — workspace uses{" "}
                   <strong>
                     {resolveMediaLabel(wsSettings.defaultVideoModel)}
-                  </strong>{" "}
-                  (your personal default is ignored in this workspace)
+                  </strong>
+                  {userPrefs.defaultVideoModel ? (
+                    <>
+                      {" "}
+                      (your preference,{" "}
+                      <strong>
+                        {resolveMediaLabel(userPrefs.defaultVideoModel)}
+                      </strong>
+                      , is not applied in this workspace)
+                    </>
+                  ) : (
+                    <> (applies to everyone in this workspace)</>
+                  )}
                 </li>
               )}
             </ul>

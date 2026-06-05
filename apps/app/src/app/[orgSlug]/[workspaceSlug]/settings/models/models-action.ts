@@ -11,6 +11,11 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@oxagen/database";
 import { invoke } from "@oxagen/oxagen";
+// Side-effect import: bind every foundation handler into the shared kernel so
+// invoke("workspace.model.settings.write", …) can resolve its handler. Without
+// this, invoke() throws "No handler registered" at runtime (the type system
+// can't catch a missing side-effect import). Mirrors the chat stream route.
+import "@oxagen/handlers/register";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { getSessionOrRedirect } from "@/lib/session";

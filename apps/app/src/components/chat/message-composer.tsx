@@ -80,6 +80,14 @@ export function MessageComposer({
   );
   const formRef = React.useRef<HTMLFormElement>(null);
 
+  // Refs that always reflect the latest prop values so the queue-drain effect
+  // (dep array [isStreaming]) reads the current parentMessageId / conversationId
+  // rather than the stale closure captured when isStreaming last changed.
+  const parentMessageIdRef = React.useRef(parentMessageId);
+  React.useEffect(() => { parentMessageIdRef.current = parentMessageId; }, [parentMessageId]);
+  const conversationIdRef = React.useRef(conversationId);
+  React.useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
+
   // FIFO queue for messages submitted while a stream is in flight (queue mode).
   const [queue, setQueue] = React.useState<QueuedMessage[]>([]);
 
@@ -106,15 +114,22 @@ export function MessageComposer({
   function toggleGenerate(kind: "image" | "video") {
     if (model.generate === kind) {
       // Toggle off — return to text defaults.
-      setModel((s) => ({ ...s, generate: null }));
+      setModel((s) => ({ ...s, generate: null, mediaTier: "basic", mediaModel: null }));
     } else {
-      // Toggle on — switch to this kind with media defaults.
-      setModel((s) => ({
-        ...s,
-        generate: kind,
-        mediaTier: "basic",
-        mediaModel: null,
-      }));
+      // Toggle on — switch to this kind, pre-filling mediaModel from the
+      // workspace/user seeded preference when available. When a seeded model
+      // is present the tier is not needed (model wins), so clear mediaTier
+      // to avoid sending a redundant field; otherwise fall back to "basic".
+      setModel((s) => {
+        const seeded =
+          kind === "image" ? s.seededImageModel : s.seededVideoModel;
+        return {
+          ...s,
+          generate: kind,
+          mediaTier: seeded ? null : "basic",
+          mediaModel: seeded ?? null,
+        };
+      });
     }
   }
 
@@ -205,10 +220,16 @@ export function MessageComposer({
       setQueue(rest);
       if (!next) return;
       // Build a synthetic FormData for the queued message.
+      // Read parentMessageId and conversationId from refs so we get the
+      // current values (updated after the completed stream persisted the
+      // assistant reply and advanced activeLeafMessageId), not the stale
+      // closure captured when isStreaming last changed.
       const fd = new FormData();
       fd.set("content", next.content);
-      if (conversationId) fd.set("conversationId", conversationId);
-      if (parentMessageId) fd.set("parentMessageId", parentMessageId);
+      const currentConversationId = conversationIdRef.current;
+      const currentParentMessageId = parentMessageIdRef.current;
+      if (currentConversationId) fd.set("conversationId", currentConversationId);
+      if (currentParentMessageId) fd.set("parentMessageId", currentParentMessageId);
       const ms = next.modelState;
       if (ms.generate === null) {
         if (ms.model) {

@@ -22,6 +22,18 @@ export interface ComposerModelState {
   mediaTier: MediaTier | null;
   /** Explicit "Other Models" gateway model id for media */
   mediaModel: string | null;
+  /**
+   * Internal seed memory — the workspace/user preferred image model id
+   * seeded at mount time. NOT serialized into the request payload; only used
+   * to pre-fill `mediaModel` when the user switches INTO image mode.
+   */
+  seededImageModel: string | null;
+  /**
+   * Internal seed memory — the workspace/user preferred video model id
+   * seeded at mount time. NOT serialized into the request payload; only used
+   * to pre-fill `mediaModel` when the user switches INTO video mode.
+   */
+  seededVideoModel: string | null;
 }
 
 export const defaultModelState: ComposerModelState = {
@@ -31,6 +43,8 @@ export const defaultModelState: ComposerModelState = {
   effort: "medium",
   mediaTier: "basic",
   mediaModel: null,
+  seededImageModel: null,
+  seededVideoModel: null,
 };
 
 /**
@@ -56,7 +70,13 @@ export function buildSeededModelState(seed: ModelStateSeed): ComposerModelState 
     tier: seed.textModel ? null : (seed.textTier ?? "fast"),
     model: seed.textModel ?? null,
     effort: "medium",
-    mediaTier: seed.imageModel || seed.videoModel ? null : "basic",
+    // Start in text mode with no media model active. The seeded image/video
+    // model ids are stored in seededImageModel / seededVideoModel so that
+    // toggleGenerate() can pre-fill mediaModel the moment the user enters
+    // image or video mode.
+    mediaTier: "basic",
     mediaModel: null,
+    seededImageModel: seed.imageModel ?? null,
+    seededVideoModel: seed.videoModel ?? null,
   };
 }

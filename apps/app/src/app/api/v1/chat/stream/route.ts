@@ -185,17 +185,33 @@ export async function POST(request: NextRequest): Promise<Response> {
   // ── Media-generation branch ───────────────────────────────────────────────
   //
   // When the composer requests image/video generation, this turn does NOT run
-  // the text agent. It resolves the media model (explicit `mediaModel`, else the
-  // basic/advanced tier from env) and generates, uploads the result to blob
-  // storage + a `content.generated_assets` row (access policy "org" so org
-  // teammates viewing the conversation can see it), then emits a `component`
-  // event the chat registry renders inline via the access-controlled serving
-  // route (image-preview / make-video-form).
+  // the text agent. It resolves the media model with the precedence:
+  //   1. Explicit per-turn `mediaModel` from the request (user picked one).
+  //   2. Effective workspace/user default for the dimension (image or video).
+  //   3. Tier-derived default (imageTierModelId / videoTierModelId).
+  //
+  // The effective-defaults lookup mirrors the text-path pattern (best-effort,
+  // errors swallowed so a missing prefs row never crashes the turn).
   if (generate) {
+    let resolvedMediaModel = mediaModel;
+    if (!resolvedMediaModel) {
+      try {
+        const mediaDefaults = await loadEffectiveModelDefaults({
+          userId: session.user.id,
+          workspaceId: workspace.id,
+        });
+        resolvedMediaModel =
+          generate === "image"
+            ? (mediaDefaults.image.model ?? null)
+            : (mediaDefaults.video.model ?? null);
+      } catch {
+        // Fall through to tier default inside streamMediaGeneration.
+      }
+    }
     const mediaResponse = streamMediaGeneration({
       kind: generate,
       prompt: content,
-      mediaModel,
+      mediaModel: resolvedMediaModel,
       mediaTier: mediaTier ?? "basic",
       userId: session.user.id,
       conversationId,
