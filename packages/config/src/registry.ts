@@ -332,6 +332,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "pk_test_replace_me",
   },
+  STRIPE_TAX_ENABLED: {
+    group: "Stripe",
+    description:
+      "When 'true', enables Stripe Tax automatic_tax on all checkout sessions. Ships dark; flip on only after Stripe Tax is registered/active in the dashboard.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "false",
+  },
 
   // ── Google Maps / Places ────────────────────────────────────────────────────
   // Used by the onboarding billing-address autocomplete. The KEY is the only

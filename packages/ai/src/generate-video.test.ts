@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
   experimentalGenerateVideo: vi.fn(),
   insertTokenUsage: vi.fn(),
   providerFromModelId: vi.fn(),
-  chargeUsageCredits: vi.fn(),
+  chargeVideoCredits: vi.fn(),
+  videoProviderCostUsdMicros: vi.fn(),
   gatewayVideo: vi.fn(),
 }));
 
@@ -23,8 +24,9 @@ mocks.experimentalGenerateVideo.mockResolvedValue({
 });
 mocks.insertTokenUsage.mockResolvedValue(undefined);
 mocks.providerFromModelId.mockReturnValue("google");
-mocks.chargeUsageCredits.mockResolvedValue({
-  costUsdMicros: 350_000,
+mocks.videoProviderCostUsdMicros.mockReturnValue(1_750_000);
+mocks.chargeVideoCredits.mockResolvedValue({
+  costUsdMicros: 1_750_000,
   creditsMetered: 1n,
   creditsCharged: 1n,
   shortfallCredits: 0n,
@@ -45,7 +47,8 @@ vi.mock("@oxagen/telemetry", () => ({
 }));
 
 vi.mock("@oxagen/billing", () => ({
-  chargeUsageCredits: mocks.chargeUsageCredits,
+  chargeVideoCredits: mocks.chargeVideoCredits,
+  videoProviderCostUsdMicros: mocks.videoProviderCostUsdMicros,
 }));
 
 import { generateVideoFor } from "./generate-video";
@@ -67,7 +70,8 @@ beforeEach(() => {
   mocks.experimentalGenerateVideo.mockClear();
   mocks.insertTokenUsage.mockClear();
   mocks.providerFromModelId.mockClear();
-  mocks.chargeUsageCredits.mockClear();
+  mocks.chargeVideoCredits.mockClear();
+  mocks.videoProviderCostUsdMicros.mockClear();
   // restore defaults
   mocks.experimentalGenerateVideo.mockResolvedValue({
     video: { uint8Array: FAKE_BYTES, mimeType: FAKE_MIME },
@@ -78,8 +82,9 @@ beforeEach(() => {
   });
   mocks.insertTokenUsage.mockResolvedValue(undefined);
   mocks.providerFromModelId.mockReturnValue("google");
-  mocks.chargeUsageCredits.mockResolvedValue({
-    costUsdMicros: 350_000,
+  mocks.videoProviderCostUsdMicros.mockReturnValue(1_750_000);
+  mocks.chargeVideoCredits.mockResolvedValue({
+    costUsdMicros: 1_750_000,
     creditsMetered: 1n,
     creditsCharged: 1n,
     shortfallCredits: 0n,
@@ -136,14 +141,19 @@ describe("generateVideoFor (@oxagen/ai)", () => {
   });
 
   it("charges the org's credits through the billing gate", async () => {
-    await generateVideoFor({ model: FAKE_MODEL, prompt: "test", telemetry: TELEMETRY });
+    await generateVideoFor({
+      model: FAKE_MODEL,
+      prompt: "test",
+      durationSeconds: 5,
+      telemetry: TELEMETRY,
+    });
 
-    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
-    const chargeArg = mocks.chargeUsageCredits.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(mocks.chargeVideoCredits).toHaveBeenCalledTimes(1);
+    const chargeArg = mocks.chargeVideoCredits.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(chargeArg.orgId).toBe("org_1");
     expect(chargeArg.referenceId).toBe("asset_abc");
-    expect(chargeArg.inputTokens).toBe(1);
-    expect(chargeArg.outputTokens).toBe(0);
+    expect(chargeArg.model).toBe("google/veo-3.0-fast-generate-001");
+    expect(chargeArg.durationSeconds).toBe(5);
   });
 
   it("swallows an insertTokenUsage error and still returns bytes", async () => {
@@ -158,8 +168,8 @@ describe("generateVideoFor (@oxagen/ai)", () => {
     expect(result.bytes).toBe(FAKE_BYTES);
   });
 
-  it("swallows a chargeUsageCredits error and still returns bytes", async () => {
-    mocks.chargeUsageCredits.mockRejectedValueOnce(new Error("billing down"));
+  it("swallows a chargeVideoCredits error and still returns bytes", async () => {
+    mocks.chargeVideoCredits.mockRejectedValueOnce(new Error("billing down"));
 
     const result = await generateVideoFor({
       model: FAKE_MODEL,

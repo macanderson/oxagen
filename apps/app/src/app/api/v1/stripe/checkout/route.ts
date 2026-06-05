@@ -34,8 +34,8 @@ export async function POST(req: Request) {
       orgId: tenant.id,
       planSlug: body.data.planSlug,
       interval: body.data.interval,
-      successUrl: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/settings/billing?status=success`,
-      cancelUrl: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/settings/billing?status=canceled`,
+      successUrl: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/billing/subscription?status=success`,
+      cancelUrl: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/billing/subscription?status=canceled`,
     });
     return NextResponse.json({ url });
   } catch (err) {

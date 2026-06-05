@@ -18,10 +18,19 @@ import type {
   BillingCheckoutSubscriptionInput,
   BillingCustomerCreateInput,
   BillingCustomerSearchResult,
+  BillingDispute,
   BillingInvoice,
   BillingInvoiceLineItem,
+  BillingOffSessionChargeInput,
+  BillingOffSessionChargeResult,
   BillingPaymentMethod,
+  BillingPlanPreviewInput,
+  BillingProrationPreview,
   BillingProvider,
+  BillingRefundInput,
+  BillingRefundResult,
+  BillingSeatPreviewInput,
+  BillingSetupIntent,
   BillingSubscription,
   BillingSubscriptionSeatUpdateInput,
   BillingSubscriptionStatus,
@@ -30,6 +39,61 @@ import type {
   BillingWebhookEvent,
   BillingWebhookEventType,
 } from "./provider";
+
+/** Wrap an optional Stripe idempotency key into request options. */
+function idempotency(key: string | undefined): Stripe.RequestOptions | undefined {
+  return key ? { idempotencyKey: key } : undefined;
+}
+
+/** Whether automatic tax calculation (Stripe Tax) is enabled for this account. */
+function automaticTaxEnabled(): boolean {
+  // Gated by env so the code path is complete and ships dark until Stripe Tax
+  // is activated in the dashboard (a true external action). Flip
+  // STRIPE_TAX_ENABLED=true once registered.
+  return process.env.STRIPE_TAX_ENABLED === "true";
+}
+
+/**
+ * Reduce a previewed invoice down to the net proration of the simulated change.
+ * Sums only the proration line items (the deltas Stripe would invoice now or
+ * credit), so the caller can show "you'll be charged $X" / "we'll credit $X".
+ */
+function summarizeProration(
+  preview: Stripe.Invoice,
+  prorationDate: number,
+): BillingProrationPreview {
+  const prorationLines = (preview.lines?.data ?? [])
+    .filter((l) => l.proration === true)
+    .map((l) => ({
+      description: l.description ?? "",
+      amountCents: l.amount,
+      proration: true,
+    }));
+  const amountCents = prorationLines.reduce((sum, l) => sum + l.amountCents, 0);
+  return {
+    amountCents,
+    isCharge: amountCents > 0,
+    currency: preview.currency,
+    prorationDate,
+    lines: prorationLines,
+  };
+}
+
+function stripeDisputeToNeutral(d: Stripe.Dispute): BillingDispute {
+  const chargeId = typeof d.charge === "string" ? d.charge : (d.charge?.id ?? null);
+  const piRef = d.payment_intent;
+  const paymentIntentId = piRef ? (typeof piRef === "string" ? piRef : piRef.id) : null;
+  return {
+    id: d.id,
+    chargeId,
+    paymentIntentId,
+    amountCents: d.amount,
+    currency: d.currency,
+    reason: d.reason ?? null,
+    status: d.status,
+    orgId: (d.metadata?.org_id as string | undefined) ?? null,
+  };
+}
 
 // ── Stripe client singleton ──────────────────────────────────────────────────
 
@@ -174,18 +238,35 @@ function stripeEventType(stripeType: string): BillingWebhookEventType {
       return "subscription.updated";
     case "customer.subscription.deleted":
       return "subscription.deleted";
+    case "customer.subscription.trial_will_end":
+      return "subscription.trial_will_end";
     case "invoice.created":
       return "invoice.created";
     case "invoice.paid":
       return "invoice.paid";
     case "invoice.payment_failed":
       return "invoice.payment_failed";
+    case "invoice.payment_action_required":
+      return "invoice.payment_action_required";
+    case "invoice.finalized":
+      return "invoice.finalized";
+    case "invoice.voided":
+      return "invoice.voided";
+    case "invoice.marked_uncollectible":
+      return "invoice.marked_uncollectible";
     case "checkout.session.completed":
       return "checkout.session.completed";
     case "payment_method.attached":
       return "payment_method.attached";
     case "payment_method.detached":
       return "payment_method.detached";
+    case "payment_method.updated":
+    case "payment_method.automatically_updated":
+      return "payment_method.updated";
+    case "charge.dispute.created":
+      return "dispute.created";
+    case "charge.dispute.closed":
+      return "dispute.closed";
     default:
       return "unknown";
   }
@@ -247,10 +328,14 @@ export class StripeProvider implements BillingProvider {
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
     const prorationBehavior = input.prorationBehavior ?? "always_invoice";
-    await stripe.subscriptions.update(subscriptionId, {
-      items: [{ id: item.id, price: input.newPriceId }],
-      proration_behavior: prorationBehavior,
-    });
+    await stripe.subscriptions.update(
+      subscriptionId,
+      {
+        items: [{ id: item.id, price: input.newPriceId }],
+        proration_behavior: prorationBehavior,
+      },
+      idempotency(input.idempotencyKey),
+    );
   }
 
   async setSubscriptionSeats(
@@ -261,10 +346,132 @@ export class StripeProvider implements BillingProvider {
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
-    await stripe.subscriptions.update(subscriptionId, {
-      items: [{ id: item.id, quantity: input.seats }],
-      proration_behavior: "always_invoice",
+    // Increases default to immediate invoice (charge now); decreases pass
+    // 'create_prorations' so the credit rolls to the next invoice — never an
+    // immediate negative charge. The domain layer decides which.
+    await stripe.subscriptions.update(
+      subscriptionId,
+      {
+        items: [{ id: item.id, quantity: input.seats }],
+        proration_behavior: input.prorationBehavior ?? "always_invoice",
+      },
+      idempotency(input.idempotencyKey),
+    );
+  }
+
+  async previewSeatChange(
+    subscriptionId: string,
+    input: BillingSeatPreviewInput,
+  ): Promise<BillingProrationPreview> {
+    const stripe = stripeClient();
+    const sub = await stripe.subscriptions.retrieve(subscriptionId);
+    const item = sub.items.data[0];
+    if (!item) throw new Error("subscription has no items");
+    const prorationDate = Math.floor(Date.now() / 1000);
+    const preview = await stripe.invoices.createPreview({
+      subscription: subscriptionId,
+      subscription_details: {
+        items: [{ id: item.id, quantity: input.seats }],
+        proration_behavior: input.prorationBehavior ?? "always_invoice",
+        proration_date: prorationDate,
+      },
     });
+    return summarizeProration(preview, prorationDate);
+  }
+
+  async previewPlanChange(
+    subscriptionId: string,
+    input: BillingPlanPreviewInput,
+  ): Promise<BillingProrationPreview> {
+    const stripe = stripeClient();
+    const sub = await stripe.subscriptions.retrieve(subscriptionId);
+    const item = sub.items.data[0];
+    if (!item) throw new Error("subscription has no items");
+    const prorationDate = Math.floor(Date.now() / 1000);
+    const preview = await stripe.invoices.createPreview({
+      subscription: subscriptionId,
+      subscription_details: {
+        items: [{ id: item.id, price: input.newPriceId }],
+        proration_behavior: input.prorationBehavior ?? "always_invoice",
+        proration_date: prorationDate,
+      },
+    });
+    return summarizeProration(preview, prorationDate);
+  }
+
+  // ── Payment methods ───────────────────────────────────────────────────────────
+
+  async listPaymentMethods(customerId: string): Promise<BillingPaymentMethod[]> {
+    const res = await stripeClient().paymentMethods.list({ customer: customerId, type: "card" });
+    return res.data.map(stripePaymentMethodToNeutral);
+  }
+
+  async getDefaultPaymentMethodId(customerId: string): Promise<string | null> {
+    const cust = await stripeClient().customers.retrieve(customerId);
+    if (cust.deleted) return null;
+    const dpm = (cust as Stripe.Customer).invoice_settings?.default_payment_method;
+    if (!dpm) return null;
+    return typeof dpm === "string" ? dpm : dpm.id;
+  }
+
+  async setDefaultPaymentMethod(customerId: string, paymentMethodId: string): Promise<void> {
+    await stripeClient().customers.update(customerId, {
+      invoice_settings: { default_payment_method: paymentMethodId },
+    });
+  }
+
+  async detachPaymentMethod(paymentMethodId: string): Promise<void> {
+    await stripeClient().paymentMethods.detach(paymentMethodId);
+  }
+
+  async createSetupIntent(customerId: string): Promise<BillingSetupIntent> {
+    const si = await stripeClient().setupIntents.create({
+      customer: customerId,
+      payment_method_types: ["card"],
+      usage: "off_session",
+    });
+    if (!si.client_secret) throw new Error("Stripe did not return a SetupIntent client secret");
+    return { clientSecret: si.client_secret, setupIntentId: si.id };
+  }
+
+  async chargeOffSession(
+    input: BillingOffSessionChargeInput,
+  ): Promise<BillingOffSessionChargeResult> {
+    const stripe = stripeClient();
+    // Resolve a card to charge: explicit > customer default. PaymentIntent
+    // confirmation requires a concrete payment_method off-session.
+    const paymentMethodId =
+      input.paymentMethodId ?? (await this.getDefaultPaymentMethodId(input.customerId));
+    if (!paymentMethodId) {
+      throw new Error("no payment method on file for off-session charge");
+    }
+    const pi = await stripe.paymentIntents.create(
+      {
+        customer: input.customerId,
+        amount: input.amountCents,
+        currency: "usd",
+        payment_method: paymentMethodId,
+        off_session: true,
+        confirm: true,
+        description: input.description,
+        metadata: input.metadata,
+      },
+      idempotency(input.idempotencyKey),
+    );
+    return { paymentIntentId: pi.id, status: pi.status, succeeded: pi.status === "succeeded" };
+  }
+
+  async createRefund(input: BillingRefundInput): Promise<BillingRefundResult> {
+    const refund = await stripeClient().refunds.create(
+      {
+        payment_intent: input.paymentIntentId,
+        charge: input.chargeId,
+        amount: input.amountCents,
+        reason: input.reason,
+      },
+      idempotency(input.idempotencyKey),
+    );
+    return { refundId: refund.id, amountCents: refund.amount, status: refund.status ?? "unknown" };
   }
 
   // ── Invoice ─────────────────────────────────────────────────────────────────
@@ -282,6 +489,7 @@ export class StripeProvider implements BillingProvider {
     input: BillingCheckoutSubscriptionInput,
   ): Promise<BillingCheckoutResult> {
     const seats = input.seats ?? 1;
+    const taxEnabled = automaticTaxEnabled();
     const session = await stripeClient().checkout.sessions.create({
       mode: "subscription",
       customer: input.customerId,
@@ -290,6 +498,10 @@ export class StripeProvider implements BillingProvider {
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
       allow_promotion_codes: true,
+      automatic_tax: { enabled: taxEnabled },
+      // Persist the address Checkout collects back onto the customer so Stripe
+      // Tax can compute on subsequent invoices/renewals.
+      customer_update: taxEnabled ? { address: "auto" } : undefined,
     });
     if (!session.url) throw new Error("Stripe did not return a checkout URL");
     return { sessionId: session.id, url: session.url };
@@ -298,6 +510,7 @@ export class StripeProvider implements BillingProvider {
   async createPaymentCheckout(
     input: BillingCheckoutPaymentInput,
   ): Promise<BillingCheckoutResult> {
+    const taxEnabled = automaticTaxEnabled();
     const session = await stripeClient().checkout.sessions.create({
       mode: "payment",
       customer: input.customerId,
@@ -306,6 +519,8 @@ export class StripeProvider implements BillingProvider {
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
       allow_promotion_codes: true,
+      automatic_tax: { enabled: taxEnabled },
+      customer_update: taxEnabled ? { address: "auto" } : undefined,
     });
     if (!session.url) throw new Error("Stripe did not return a checkout URL");
     return { sessionId: session.id, url: session.url };
@@ -346,6 +561,8 @@ export class StripeProvider implements BillingProvider {
       },
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
+      automatic_tax: { enabled: automaticTaxEnabled() },
+      customer_update: automaticTaxEnabled() ? { address: "auto" } : undefined,
     });
     if (!session.url) throw new Error("Stripe did not return a checkout URL");
     return { sessionId: session.id, url: session.url };
@@ -394,15 +611,25 @@ export class StripeProvider implements BillingProvider {
     switch (event.type) {
       case "customer.subscription.created":
       case "customer.subscription.updated":
-      case "customer.subscription.deleted": {
+      case "customer.subscription.deleted":
+      case "customer.subscription.trial_will_end": {
         const sub = event.data.object as Stripe.Subscription;
         return { ...base, subscriptionId: sub.id };
       }
       case "invoice.created":
       case "invoice.paid":
-      case "invoice.payment_failed": {
+      case "invoice.payment_failed":
+      case "invoice.payment_action_required":
+      case "invoice.finalized":
+      case "invoice.voided":
+      case "invoice.marked_uncollectible": {
         const inv = event.data.object as Stripe.Invoice;
         return { ...base, invoice: stripeInvoiceToNeutral(inv) };
+      }
+      case "charge.dispute.created":
+      case "charge.dispute.closed": {
+        const dispute = event.data.object as Stripe.Dispute;
+        return { ...base, dispute: stripeDisputeToNeutral(dispute) };
       }
       case "checkout.session.completed": {
         const sess = event.data.object as Stripe.Checkout.Session;
@@ -416,7 +643,9 @@ export class StripeProvider implements BillingProvider {
         return { ...base, checkoutSession };
       }
       case "payment_method.attached":
-      case "payment_method.detached": {
+      case "payment_method.detached":
+      case "payment_method.updated":
+      case "payment_method.automatically_updated": {
         const pm = event.data.object as Stripe.PaymentMethod;
         return { ...base, paymentMethod: stripePaymentMethodToNeutral(pm) };
       }

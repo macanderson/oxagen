@@ -1,0 +1,427 @@
+/**
+ * payment-methods.ts — org payment-method management.
+ *
+ * All card data lives in Stripe; we keep a local DB mirror (billing.payment_methods)
+ * for fast reads and audit. The source of truth for card details is always the
+ * billing provider. The DB mirror is updated via syncPaymentMethodsFromStripe
+ * which is called after SetupIntent success and at any point a caller needs a
+ * fresh view.
+ */
+
+import { db, schema } from "@oxagen/database";
+import { and, eq, isNull } from "drizzle-orm";
+import { billingProvider } from "./client";
+import { ensureStripeCustomer } from "./customers";
+import { logger } from "./logger";
+
+// ── Public types ──────────────────────────────────────────────────────────────
+
+export interface PaymentMethodView {
+  stripePaymentMethodId: string;
+  brand: string | null;
+  last4: string | null;
+  expMonth: number | null;
+  expYear: number | null;
+  isDefault: boolean;
+}
+
+// ── Error types ───────────────────────────────────────────────────────────────
+
+/**
+ * Thrown when the caller tries to remove the last payment method on an org
+ * that has an active subscription.
+ */
+export class LastPaymentMethodError extends Error {
+  readonly code = "last_payment_method" as const;
+
+  constructor() {
+    super(
+      "Cannot remove the last payment method while the org has an active subscription.",
+    );
+    this.name = "LastPaymentMethodError";
+  }
+}
+
+/** Type guard. */
+export function isLastPaymentMethodError(
+  err: unknown,
+): err is LastPaymentMethodError {
+  return err instanceof LastPaymentMethodError;
+}
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+/** Resolve or create a Stripe customer id for the org. */
+async function resolveCustomerId(orgId: string): Promise<string> {
+  // Prefer the customer id already recorded on a subscription row (fastest path).
+  const d = db();
+  const sub = await d.query.subscriptions.findFirst({
+    where: eq(schema.subscriptions.orgId, orgId),
+    columns: { stripeCustomerId: true },
+  });
+  if (sub?.stripeCustomerId) return sub.stripeCustomerId;
+  // Fall back to ensureStripeCustomer which may create the customer.
+  return ensureStripeCustomer(orgId);
+}
+
+// ── listOrgPaymentMethods ─────────────────────────────────────────────────────
+
+/**
+ * Return the org's non-deleted payment methods from the local DB mirror.
+ * isDefault is read directly from the DB flag (kept in sync by
+ * syncPaymentMethodsFromStripe).
+ */
+export async function listOrgPaymentMethods(
+  orgId: string,
+): Promise<PaymentMethodView[]> {
+  const start = Date.now();
+  const d = db();
+
+  const rows = await d.query.paymentMethods.findMany({
+    where: and(
+      eq(schema.paymentMethods.orgId, orgId),
+      isNull(schema.paymentMethods.deletedAt),
+    ),
+    columns: {
+      stripePaymentMethodId: true,
+      brand: true,
+      last4: true,
+      expMonth: true,
+      expYear: true,
+      isDefault: true,
+    },
+  });
+
+  logger.debug(
+    { orgId, count: rows.length, durationMs: Date.now() - start },
+    "billing: listed org payment methods",
+  );
+
+  return rows.map((r) => ({
+    stripePaymentMethodId: r.stripePaymentMethodId,
+    brand: r.brand,
+    last4: r.last4,
+    expMonth: r.expMonth,
+    expYear: r.expYear,
+    isDefault: r.isDefault,
+  }));
+}
+
+// ── createPaymentMethodSetupIntent ────────────────────────────────────────────
+
+/**
+ * Create a SetupIntent so the browser (Stripe.js / Elements) can collect and
+ * save a new card without PAN ever touching our servers.
+ *
+ * After the browser confirms the SetupIntent, call syncPaymentMethodsFromStripe
+ * to pull the newly attached card into the DB mirror.
+ */
+export async function createPaymentMethodSetupIntent(
+  orgId: string,
+): Promise<{ clientSecret: string }> {
+  const start = Date.now();
+  const customerId = await resolveCustomerId(orgId);
+  const { clientSecret } = await billingProvider().createSetupIntent(
+    customerId,
+  );
+
+  logger.info(
+    { orgId, customerId, durationMs: Date.now() - start },
+    "billing: created SetupIntent for org",
+  );
+
+  return { clientSecret };
+}
+
+// ── syncPaymentMethodsFromStripe ──────────────────────────────────────────────
+
+/**
+ * Pull the customer's current payment methods from Stripe and upsert the local
+ * DB mirror:
+ *   - ON CONFLICT (stripe_payment_method_id) DO UPDATE to keep card details
+ *     current (cards can expire or be updated by the network).
+ *   - Set the isDefault flag on exactly one card (the Stripe default).
+ *   - Soft-delete any DB rows for cards that Stripe no longer returns (detached
+ *     by the customer in the Stripe dashboard or via another path).
+ *
+ * Call this after a SetupIntent succeeds or whenever a fresh view is needed.
+ */
+export async function syncPaymentMethodsFromStripe(orgId: string): Promise<void> {
+  const start = Date.now();
+  const customerId = await resolveCustomerId(orgId);
+  const provider = billingProvider();
+  const d = db();
+
+  const [providerMethods, defaultPmId] = await Promise.all([
+    provider.listPaymentMethods(customerId),
+    provider.getDefaultPaymentMethodId(customerId),
+  ]);
+
+  const providerIds = new Set(providerMethods.map((pm) => pm.id));
+
+  // Upsert each active card from Stripe.
+  for (const pm of providerMethods) {
+    const isDefault = pm.id === defaultPmId;
+    await d
+      .insert(schema.paymentMethods)
+      .values({
+        orgId,
+        stripeCustomerId: customerId,
+        stripePaymentMethodId: pm.id,
+        type: pm.type,
+        brand: pm.brand,
+        last4: pm.last4,
+        expMonth: pm.expMonth,
+        expYear: pm.expYear,
+        isDefault,
+        deletedAt: null,
+        deletedByUserId: null,
+      })
+      .onConflictDoUpdate({
+        target: schema.paymentMethods.stripePaymentMethodId,
+        set: {
+          type: pm.type,
+          brand: pm.brand,
+          last4: pm.last4,
+          expMonth: pm.expMonth,
+          expYear: pm.expYear,
+          isDefault,
+          deletedAt: null, // Un-soft-delete if it re-appears.
+          deletedByUserId: null,
+          updatedAt: new Date(),
+        },
+      });
+  }
+
+  // Ensure only one default row per org (clear stale defaults).
+  if (defaultPmId) {
+    // Set isDefault=false on every row for this org except the current default.
+    await d
+      .update(schema.paymentMethods)
+      .set({ isDefault: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.paymentMethods.orgId, orgId),
+          isNull(schema.paymentMethods.deletedAt),
+          // Not the new default
+          eq(schema.paymentMethods.isDefault, true),
+        ),
+      );
+    // Re-set the default (the upsert loop may have already done it, but this is
+    // idempotent and ensures consistency when the loop ran multiple iterations).
+    await d
+      .update(schema.paymentMethods)
+      .set({ isDefault: true, updatedAt: new Date() })
+      .where(
+        eq(schema.paymentMethods.stripePaymentMethodId, defaultPmId),
+      );
+  }
+
+  // Soft-delete rows for cards no longer returned by Stripe.
+  const existingRows = await d.query.paymentMethods.findMany({
+    where: and(
+      eq(schema.paymentMethods.orgId, orgId),
+      isNull(schema.paymentMethods.deletedAt),
+    ),
+    columns: { id: true, stripePaymentMethodId: true },
+  });
+
+  const now = new Date();
+  for (const row of existingRows) {
+    if (!providerIds.has(row.stripePaymentMethodId)) {
+      await d
+        .update(schema.paymentMethods)
+        .set({ deletedAt: now, updatedAt: now })
+        .where(eq(schema.paymentMethods.id, row.id));
+    }
+  }
+
+  logger.info(
+    {
+      orgId,
+      customerId,
+      upserted: providerMethods.length,
+      softDeleted: existingRows.filter(
+        (r) => !providerIds.has(r.stripePaymentMethodId),
+      ).length,
+      durationMs: Date.now() - start,
+    },
+    "billing: synced payment methods from Stripe",
+  );
+}
+
+// ── setOrgDefaultPaymentMethod ────────────────────────────────────────────────
+
+/**
+ * Set the org's default payment method.
+ *
+ * Calls the provider to update the Stripe customer default, then flips the
+ * isDefault flag in the DB (one row true, all others false).
+ */
+export async function setOrgDefaultPaymentMethod(
+  orgId: string,
+  stripePaymentMethodId: string,
+): Promise<void> {
+  const start = Date.now();
+  const customerId = await resolveCustomerId(orgId);
+  const d = db();
+
+  await billingProvider().setDefaultPaymentMethod(
+    customerId,
+    stripePaymentMethodId,
+  );
+
+  // Clear all existing defaults for the org.
+  await d
+    .update(schema.paymentMethods)
+    .set({ isDefault: false, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.paymentMethods.orgId, orgId),
+        isNull(schema.paymentMethods.deletedAt),
+      ),
+    );
+
+  // Set the new default.
+  await d
+    .update(schema.paymentMethods)
+    .set({ isDefault: true, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.paymentMethods.stripePaymentMethodId, stripePaymentMethodId),
+        eq(schema.paymentMethods.orgId, orgId),
+      ),
+    );
+
+  logger.info(
+    { orgId, stripePaymentMethodId, durationMs: Date.now() - start },
+    "billing: default payment method updated",
+  );
+}
+
+// ── removeOrgPaymentMethod ────────────────────────────────────────────────────
+
+/**
+ * Remove a payment method from the org.
+ *
+ * Guard: if this is the LAST remaining payment method and the org has an active
+ * subscription, the call is rejected with LastPaymentMethodError. Removing
+ * the only card on an active sub would break auto-renewal.
+ *
+ * On success:
+ *   - Calls provider.detachPaymentMethod to remove it from Stripe.
+ *   - Soft-deletes the DB row.
+ *   - If this card was the default, promotes the lexicographically first
+ *     remaining card to default (or leaves isDefault=false if none remain).
+ */
+export async function removeOrgPaymentMethod(
+  orgId: string,
+  stripePaymentMethodId: string,
+): Promise<void> {
+  const start = Date.now();
+  const d = db();
+
+  // Load current non-deleted rows for this org.
+  const allRows = await d.query.paymentMethods.findMany({
+    where: and(
+      eq(schema.paymentMethods.orgId, orgId),
+      isNull(schema.paymentMethods.deletedAt),
+    ),
+    columns: {
+      id: true,
+      stripePaymentMethodId: true,
+      isDefault: true,
+    },
+  });
+
+  // Verify the card belongs to this org.
+  const target = allRows.find(
+    (r) => r.stripePaymentMethodId === stripePaymentMethodId,
+  );
+  if (!target) {
+    throw new Error(
+      `billing: payment method ${stripePaymentMethodId} not found for org ${orgId}`,
+    );
+  }
+
+  // Guard: refuse to remove the last card when an active subscription exists.
+  if (allRows.length <= 1) {
+    const activeSub = await d.query.subscriptions.findFirst({
+      where: and(
+        eq(schema.subscriptions.orgId, orgId),
+        eq(schema.subscriptions.status, "active"),
+      ),
+      columns: { id: true },
+    });
+    // Also check trialing.
+    const trialSub = activeSub
+      ? null
+      : await d.query.subscriptions.findFirst({
+          where: and(
+            eq(schema.subscriptions.orgId, orgId),
+            eq(schema.subscriptions.status, "trialing"),
+          ),
+          columns: { id: true },
+        });
+
+    if (activeSub ?? trialSub) {
+      throw new LastPaymentMethodError();
+    }
+  }
+
+  const wasDefault = target.isDefault;
+
+  // Detach from Stripe.
+  await billingProvider().detachPaymentMethod(stripePaymentMethodId);
+
+  // Soft-delete the DB row.
+  const now = new Date();
+  await d
+    .update(schema.paymentMethods)
+    .set({ deletedAt: now, isDefault: false, updatedAt: now })
+    .where(
+      and(
+        eq(schema.paymentMethods.stripePaymentMethodId, stripePaymentMethodId),
+        eq(schema.paymentMethods.orgId, orgId),
+      ),
+    );
+
+  // If this was the default, promote another card.
+  if (wasDefault) {
+    const remaining = allRows.filter(
+      (r) => r.stripePaymentMethodId !== stripePaymentMethodId,
+    );
+    if (remaining.length > 0) {
+      const next = remaining[0]!;
+      const customerId = await resolveCustomerId(orgId);
+      // Best-effort: update Stripe default and DB flag.
+      try {
+        await billingProvider().setDefaultPaymentMethod(
+          customerId,
+          next.stripePaymentMethodId,
+        );
+        await d
+          .update(schema.paymentMethods)
+          .set({ isDefault: true, updatedAt: new Date() })
+          .where(eq(schema.paymentMethods.id, next.id));
+        logger.info(
+          {
+            orgId,
+            newDefaultPmId: next.stripePaymentMethodId,
+          },
+          "billing: promoted next card to default after removal",
+        );
+      } catch (err) {
+        logger.error(
+          { orgId, err },
+          "billing: failed to promote next card to default — continuing",
+        );
+      }
+    }
+  }
+
+  logger.info(
+    { orgId, stripePaymentMethodId, wasDefault, durationMs: Date.now() - start },
+    "billing: payment method removed",
+  );
+}

@@ -392,6 +392,105 @@ export const orgBillingProfiles = billingSchema.table(
   }),
 );
 
+// org_billing_settings: mutable 1:1 companion to org.organizations holding
+// billing AUTOMATION preferences and DUNNING state. Two concerns, one row
+// (both are per-org, 1:1, and read together on the billing page):
+//   • Auto-reload — when the effective credit balance dips below
+//     auto_reload_threshold_cents, an off-session PaymentIntent buys
+//     auto_reload_amount_cents worth of credits on the saved card.
+//   • Dunning — the failed-payment recovery lifecycle. active → grace
+//     (first failed charge, usage still allowed until grace_ends_at) →
+//     suspended (grace elapsed, still unpaid; usage hard-gated).
+// No public_id (internal, addressed only by org_id).
+export const orgBillingSettings = billingSchema.table(
+  "org_billing_settings",
+  {
+    id: uuid("id").primaryKey().default(sql`COALESCE(
+  CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
+    THEN uuid_generate_v7()
+    ELSE uuid_generate_v4()
+  END,
+  uuid_generate_v4()
+)`),
+    // FK → org.organizations.id — CASCADE so settings vanish with the org.
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+
+    // ── Auto-reload ───────────────────────────────────────────────────────────
+    autoReloadEnabled: boolean("auto_reload_enabled").notNull().default(false),
+    // Trigger reload when effective balance falls below this (credit cents).
+    autoReloadThresholdCents: bigint("auto_reload_threshold_cents", { mode: "bigint" })
+      .notNull()
+      .default(sql`500`),
+    // Face-value credits to purchase on each reload (credit cents).
+    autoReloadAmountCents: bigint("auto_reload_amount_cents", { mode: "bigint" })
+      .notNull()
+      .default(sql`2000`),
+    // Saved card to charge off-session; NULL → the customer's default PM.
+    autoReloadPaymentMethodId: text("auto_reload_payment_method_id"),
+    lastAutoReloadAt: timestamp("last_auto_reload_at", { withTimezone: true, mode: "date" }),
+
+    // ── Low-balance warning ─────────────────────────────────────────────────────
+    // Surface a dismissible re-up banner when balance drops below this.
+    lowBalanceThresholdCents: bigint("low_balance_threshold_cents", { mode: "bigint" })
+      .notNull()
+      .default(sql`500`),
+
+    // ── Dunning (failed-payment recovery) ───────────────────────────────────────
+    // CHECK: dunning_state IN ('active','grace','suspended').
+    dunningState: text("dunning_state").notNull().default("active"),
+    // First failed-charge timestamp; cleared on recovery.
+    delinquentSince: timestamp("delinquent_since", { withTimezone: true, mode: "date" }),
+    // Grace window end. While now() < grace_ends_at usage is still allowed.
+    graceEndsAt: timestamp("grace_ends_at", { withTimezone: true, mode: "date" }),
+    // Hard-suspension timestamp once grace elapses and the invoice is still open.
+    suspendedAt: timestamp("suspended_at", { withTimezone: true, mode: "date" }),
+    // Last time we emailed/notified the customer about the delinquency.
+    lastDunningNotifiedAt: timestamp("last_dunning_notified_at", { withTimezone: true, mode: "date" }),
+    ...auditMixin(),
+  },
+  (t) => ({
+    orgIdx: uniqueIndex("org_billing_settings_org_idx").on(t.orgId),
+    dunningStateCheck: check(
+      "org_billing_settings_dunning_state_check",
+      sql`${t.dunningState} IN ('active','grace','suspended')`,
+    ),
+  }),
+);
+
+// billing_disputes: chargebacks / disputes raised against our charges. One row
+// per Stripe dispute (idempotent on stripe_dispute_id). When a dispute opens we
+// claw back any credits funded by the disputed charge and record how much, so
+// the credit ledger stays honest against money actually collected.
+export const billingDisputes = billingSchema.table(
+  "billing_disputes",
+  {
+    ...idMixin("dsp"),
+    ...auditMixin(),
+    // FK → org.organizations.id
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    stripeDisputeId: text("stripe_dispute_id").notNull(),
+    stripeChargeId: text("stripe_charge_id"),
+    paymentIntentId: text("payment_intent_id"),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("usd"),
+    reason: text("reason"),
+    // Stripe dispute status: warning_needs_response, needs_response, under_review,
+    // won, lost, etc. Passthrough string — no CHECK (Stripe owns the vocabulary).
+    status: text("status").notNull(),
+    // Credits reversed from the org's lots when the dispute was opened.
+    clawedBackCents: bigint("clawed_back_cents", { mode: "bigint" }).notNull().default(sql`0`),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    stripeDisputeIdx: uniqueIndex("billing_disputes_stripe_dispute_idx").on(t.stripeDisputeId),
+    orgIdx: index("billing_disputes_org_idx").on(t.orgId, t.status),
+  }),
+);
+
 // stripe_event_processing: mutable sibling of stripe_events. One row per
 // event; written after the event is processed (or on failure). Keeping
 // processing state here means stripe_events is never updated — SOC2

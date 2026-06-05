@@ -11,6 +11,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { BillingAddressFields } from "@/components/billing/billing-address-fields";
+import { AvatarUpload } from "@/components/media/avatar-upload";
 import { slugify } from "@/lib/slug";
 import { ORG_TYPE_OPTIONS, INDUSTRY_OPTIONS, EMPLOYEE_SIZE_OPTIONS } from "@oxagen/config";
 import type { OrgType } from "@oxagen/config";
@@ -32,6 +33,9 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
   const [orgType, setOrgType] = React.useState<OrgType>("business");
   const [industry, setIndustry] = React.useState("");
   const [employeeSize, setEmployeeSize] = React.useState("");
+  // Logo is optional at creation; AvatarUpload.onChange returns the uploaded
+  // blob URL, mirrored into a hidden input so it rides the FormData submit.
+  const [avatarUrl, setAvatarUrl] = React.useState("");
   // The slug auto-follows the name until the user hand-edits it to a non-empty
   // value. Clearing the slug field back to empty re-arms auto-population, so an
   // empty slug + a name change always repopulates the slug.
@@ -132,6 +136,20 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
           }}
         />
         <p className="text-xs text-muted-foreground">Lowercase letters, digits, and hyphens. 2 to 40 chars.</p>
+      </div>
+
+      {/* ── Logo ─────────────────────────────────────────────────────── */}
+      <div className="space-y-1.5">
+        <Label>{isBusiness ? "Logo" : "Photo"} <span className="text-muted-foreground font-normal">(optional)</span></Label>
+        <AvatarUpload
+          value={avatarUrl || null}
+          onChange={setAvatarUrl}
+          fallback={name.charAt(0) || slug.charAt(0)}
+          shape="square"
+          disabled={pending}
+        />
+        {/* Hidden input carries the uploaded URL into FormData on submit. */}
+        <input type="hidden" name="avatarUrl" value={avatarUrl} readOnly />
       </div>
 
       {/* ── Business-only fields ─────────────────────────────────────── */}

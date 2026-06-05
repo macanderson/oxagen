@@ -6,7 +6,7 @@ import {
   providerFromModelId,
   type Surface,
 } from "@oxagen/telemetry";
-import { chargeUsageCredits } from "@oxagen/billing";
+import { chargeVideoCredits, videoProviderCostUsdMicros } from "@oxagen/billing";
 
 /**
  * VideoModel mirrors the `VideoModel` type from the `ai` package (which is not
@@ -15,18 +15,14 @@ import { chargeUsageCredits } from "@oxagen/billing";
  */
 export type VideoModel = string | Experimental_VideoModelV3;
 
-// Video models bill per-asset, not per-token. We record a fixed per-video cost
-// in micro-USD so the token_usage table stays the billing source of truth.
-// Veo 3 Fast (basic): estimate ~$0.35/video-second (list price as of 2026-05).
-// NOTE for billing agent: add a dedicated video rate-card entry to
-// packages/billing/src/pricing.ts (e.g. VIDEO_RATE_CARD keyed by
-// `model:durationSeconds`) so the cost can be resolved dynamically instead of
-// using this compile-time constant. The chargeUsageCredits call below is already
-// wired and will pick up the correct cost once the rate-card entry is present.
-const VEO_3_FAST_COST_USD_MICROS_PER_ASSET = 350_000; // ~$0.35 per short video
+// Video models bill PER ASSET (priced per second of output), not per token. The
+// real per-second cost by model lives in VIDEO_RATE_CARD in @oxagen/billing;
+// this module reads it via videoProviderCostUsdMicros (telemetry) and
+// chargeVideoCredits (the gate), so every render is metered at its actual
+// provider price under the same markup as text — no hardcoded constant.
 
-// Sentinel values written into token_usage.model / .prompt_hash so ClickHouse
-// queries can filter on video generation rows specifically.
+// Fixed sentinel written to token_usage.prompt_hash so ClickHouse can filter
+// video-generation rows. The `model` column carries the real model id.
 const VIDEO_PROMPT_HASH_SENTINEL = "video-generation";
 
 export interface GenerateVideoForArgs {
@@ -95,7 +91,8 @@ function videoModelIdOf(model: VideoModel): string {
  * After generation the function records:
  * - A `token_usage` row to ClickHouse via @oxagen/telemetry (best-effort).
  *   `input_tokens` carries the asset count (= 1), `output_tokens` is 0, and
- *   `cost_usd_micros` is VEO_3_FAST_COST_USD_MICROS_PER_ASSET × 1.
+ *   `cost_usd_micros` is the real per-second provider cost for this model ×
+ *   duration (VIDEO_RATE_CARD via @oxagen/billing).
  * - A credit debit through @oxagen/billing (best-effort, post-call).
  *
  * Both writes are swallowed on failure — they must never fail the caller.
@@ -147,7 +144,7 @@ export async function generateVideoFor(
   const mimeType: string = video.mediaType ?? "video/mp4";
 
   const resolvedModelId = videoModelIdOf(args.model);
-  const costUsdMicros = VEO_3_FAST_COST_USD_MICROS_PER_ASSET;
+  const costUsdMicros = videoProviderCostUsdMicros(resolvedModelId, args.durationSeconds);
 
   // `input_tokens` is repurposed to carry the asset count so the token_usage
   // schema doesn't need a new column. A value of 1 means "1 video generated".
@@ -174,18 +171,15 @@ export async function generateVideoFor(
     // Swallow — telemetry must never fail a capability call.
   }
 
-  // Debit the org's credits for what this call cost at the target margin.
-  // Same pattern as generate-image.ts: until a dedicated VIDEO_RATE_CARD entry
-  // exists in packages/billing/src/pricing.ts, we pass the per-asset cost via
-  // inputTokens (priced at the Sonnet fallback rate). The billing agent should
-  // add a `chargeVideoCredits` variant keyed by modelId + durationSeconds.
+  // Debit the org's credits at the target margin. chargeVideoCredits prices the
+  // real model + duration via VIDEO_RATE_CARD and applies the same solved meter
+  // markup as text calls, so video margin matches the platform target.
   try {
-    await chargeUsageCredits({
+    await chargeVideoCredits({
       orgId: args.telemetry.orgId,
       referenceId: args.telemetry.executionStepId,
       model: resolvedModelId,
-      inputTokens: 1,
-      outputTokens: 0,
+      durationSeconds: args.durationSeconds,
     });
   } catch {
     // Swallow — credit metering must never fail a capability call.

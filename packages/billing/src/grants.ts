@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { db, schema } from "@oxagen/database";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { syncSubscriptionFromStripe } from "./subscriptions";
 import { CREDIT_REASONS } from "./constants";
@@ -257,6 +257,118 @@ export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): P
  * Idempotency is atomic: INSERT … ON CONFLICT DO NOTHING on the ledger row
  * keyed by (org_id, reason, "stripe_checkout_session", deterministicUuid(sessionId)).
  */
+// ---------------------------------------------------------------------------
+// Mid-cycle plan upgrade prorated credit grant
+// ---------------------------------------------------------------------------
+
+/**
+ * Grant the prorated delta of included credits for a mid-cycle plan upgrade.
+ *
+ * Logic:
+ *   delta = toPlan.includedCreditCents - fromPlan.includedCreditCents
+ *   if delta <= 0 → no-op (downgrades / lateral moves do not grant)
+ *   prorated = ceil(delta × daysRemaining / daysInPeriod)
+ *   referenceId = deterministicUuid("plan_upgrade:{orgId}:{toPlanId}:{periodStart.toISOString()}")
+ *
+ * Idempotent: the (org_id, reason, reference_type, reference_id) ledger key
+ * ensures the grant fires at most once per upgrade × period.
+ */
+export async function grantProratedPlanUpgradeCredits(
+  orgId: string,
+  fromPlanId: string,
+  toPlanId: string,
+): Promise<void> {
+  const start = Date.now();
+  const d = db();
+
+  const [fromPlan, toPlan] = await Promise.all([
+    d.query.plans.findFirst({ where: eq(schema.plans.id, fromPlanId), columns: { includedCreditCents: true } }),
+    d.query.plans.findFirst({ where: eq(schema.plans.id, toPlanId), columns: { includedCreditCents: true } }),
+  ]);
+
+  const fromIncluded = fromPlan?.includedCreditCents ?? 0;
+  const toIncluded = toPlan?.includedCreditCents ?? 0;
+  const delta = toIncluded - fromIncluded;
+
+  if (delta <= 0) {
+    logger.debug(
+      { orgId, fromPlanId, toPlanId, delta },
+      "billing: plan upgrade grant — no delta or downgrade, skipping",
+    );
+    return;
+  }
+
+  // Find the active subscription to get period bounds.
+  const sub = await d.query.subscriptions.findFirst({
+    where: and(
+      eq(schema.subscriptions.orgId, orgId),
+      sql`${schema.subscriptions.status} IN ('active','trialing')`,
+    ),
+    columns: { currentPeriodStart: true, currentPeriodEnd: true },
+  });
+
+  if (!sub) {
+    logger.warn({ orgId }, "billing: plan upgrade grant — no active subscription, skipping");
+    return;
+  }
+
+  const now = new Date();
+  const periodStart = sub.currentPeriodStart;
+  const periodEnd = sub.currentPeriodEnd;
+
+  const msInPeriod = periodEnd.getTime() - periodStart.getTime();
+  const msRemaining = periodEnd.getTime() - now.getTime();
+
+  if (msInPeriod <= 0 || msRemaining <= 0) {
+    logger.debug({ orgId }, "billing: plan upgrade grant — period already ended, skipping");
+    return;
+  }
+
+  const daysInPeriod = msInPeriod / (1000 * 60 * 60 * 24);
+  const daysRemaining = msRemaining / (1000 * 60 * 60 * 24);
+  const prorated = Math.ceil((delta * daysRemaining) / daysInPeriod);
+
+  if (prorated <= 0) return;
+
+  const amountCents = BigInt(prorated);
+  const referenceId = deterministicUuid(`plan_upgrade:${orgId}:${toPlanId}:${periodStart.toISOString()}`);
+
+  // Expires end of the grant month.
+  const expiresAt = endOfGrantMonth(now);
+
+  let granted = false;
+  await d.transaction(async (tx) => {
+    granted = await tryInsertGrantLedger(
+      tx,
+      orgId,
+      CREDIT_REASONS.GRANT_PLAN_UPGRADE,
+      "plan_change",
+      referenceId,
+      amountCents,
+    );
+    if (!granted) return;
+    await insertLotAndMirrorBalance(tx, orgId, "subscription", amountCents, now, expiresAt);
+  });
+
+  if (granted) {
+    logger.info(
+      {
+        orgId,
+        fromPlanId,
+        toPlanId,
+        delta,
+        daysRemaining: Math.round(daysRemaining),
+        prorated,
+        expiresAt,
+        durationMs: Date.now() - start,
+      },
+      "billing: prorated plan upgrade credits granted",
+    );
+  } else {
+    logger.debug({ orgId, toPlanId, referenceId }, "billing: plan upgrade credits already granted, skipping");
+  }
+}
+
 export async function grantCreditPackForCheckout(session: BillingCheckoutSession): Promise<void> {
   if (session.mode !== "payment" || session.paymentStatus !== "paid") return;
   const orgId = session.metadata?.org_id;

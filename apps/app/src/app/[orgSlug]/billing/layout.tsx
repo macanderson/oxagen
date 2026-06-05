@@ -16,7 +16,6 @@ export default async function BillingLayout({
     { label: "Subscription", href: org.billing.subscription(ctx) },
     { label: "Usage", href: org.billing.usage(ctx) },
     { label: "Invoices", href: org.billing.invoices(ctx) },
-    { label: "Plans", href: org.billing.plans(ctx) },
   ];
 
   return (

@@ -4,6 +4,8 @@ import { billingProvider } from "./client";
 import { syncSubscriptionFromStripe } from "./subscriptions";
 import { syncInvoiceFromStripe } from "./invoices";
 import { grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } from "./grants";
+import { onInvoicePaymentFailed, onInvoiceRecovered } from "./dunning";
+import { onDisputeCreated, onDisputeClosed } from "./disputes";
 import { logger } from "./logger";
 import type { BillingWebhookEvent } from "./provider";
 
@@ -100,6 +102,18 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
       await syncSubscriptionFromStripe(event.subscriptionId);
       return;
     }
+    case "subscription.trial_will_end": {
+      // Sync subscription state so our DB is current, then log.
+      // Reminder notifications (email / banner) are triggered by the dunning
+      // banner layer watching the subscription.trialEnd column.
+      if (!event.subscriptionId) return;
+      await syncSubscriptionFromStripe(event.subscriptionId);
+      logger.info(
+        { subscriptionId: event.subscriptionId },
+        "billing: subscription trial will end — synced",
+      );
+      return;
+    }
     case "invoice.created":
     case "invoice.paid":
     case "invoice.payment_failed": {
@@ -107,7 +121,32 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
       await syncInvoiceFromStripe(event.invoice.providerInvoiceId);
       // Deposit the plan's included credits on the first invoice and every
       // renewal. Idempotent per event (ledger unique key).
-      if (event.type === "invoice.paid") await grantPlanCreditsForInvoicePaid(event.invoice);
+      if (event.type === "invoice.paid") {
+        await grantPlanCreditsForInvoicePaid(event.invoice);
+        await onInvoiceRecovered(event.invoice);
+      }
+      if (event.type === "invoice.payment_failed") {
+        await onInvoicePaymentFailed(event.invoice);
+      }
+      return;
+    }
+    case "invoice.payment_action_required": {
+      // SCA (Strong Customer Authentication) required — sync the invoice and
+      // surface a warning. A banner/email is triggered externally by the
+      // dunning/notification layer reading invoice status.
+      if (!event.invoice) return;
+      await syncInvoiceFromStripe(event.invoice.providerInvoiceId);
+      logger.warn(
+        { invoiceId: event.invoice.providerInvoiceId, orgId: event.invoice.orgId ?? null },
+        "billing: invoice.payment_action_required — SCA required; notify customer",
+      );
+      return;
+    }
+    case "invoice.finalized":
+    case "invoice.voided":
+    case "invoice.marked_uncollectible": {
+      if (!event.invoice) return;
+      await syncInvoiceFromStripe(event.invoice.providerInvoiceId);
       return;
     }
     case "checkout.session.completed": {
@@ -118,12 +157,23 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
       return;
     }
     case "payment_method.attached":
+    case "payment_method.updated":
     case "payment_method.detached": {
       if (!event.paymentMethod) return;
       await upsertPaymentMethod(
         event.type === "payment_method.detached" ? "detached" : "attached",
         event.paymentMethod,
       );
+      return;
+    }
+    case "dispute.created": {
+      if (!event.dispute) return;
+      await onDisputeCreated(event.dispute);
+      return;
+    }
+    case "dispute.closed": {
+      if (!event.dispute) return;
+      await onDisputeClosed(event.dispute);
       return;
     }
     default:

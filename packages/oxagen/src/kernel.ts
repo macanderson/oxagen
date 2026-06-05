@@ -2,6 +2,35 @@ import type { CapabilityContext, CapabilitySurface, CapabilityEffect, ResolvedPr
 import { getSurfaces } from "./types";
 import { getCapability, listCapabilities } from "./registry";
 
+// ── Billing admission gate (injected at bootstrap) ───────────────────────────
+//
+// The kernel accepts a pluggable billing gate so it carries no direct
+// dependency on @oxagen/billing. The gate is registered once at service
+// bootstrap (apps/api/src/index.ts, apps/mcp middleware, apps/app server
+// component init) via `setBillingAdmissionGate`.
+//
+// The gate fires AFTER IAM (billing shouldn't gate admin calls) and BEFORE
+// the handler runs. Capabilities tagged `noBillingGate: true` skip the check.
+// When no gate is registered (tests, CLI) the call proceeds.
+
+export type BillingAdmissionGateFn = (orgId: string) => Promise<void>;
+
+let _billingGate: BillingAdmissionGateFn | null = null;
+
+/**
+ * Register the billing admission gate. Call once at service bootstrap.
+ * The gate must throw `BillingSuspendedError` or `InsufficientCreditsError`
+ * (from @oxagen/billing) to refuse a turn.
+ */
+export function setBillingAdmissionGate(gate: BillingAdmissionGateFn): void {
+  _billingGate = gate;
+}
+
+/** Remove the billing gate. Used in tests. */
+export function clearBillingAdmissionGate(): void {
+  _billingGate = null;
+}
+
 // ── IAM runtime injection (mirrors define-contract.ts pattern) ────────────────
 //
 // The kernel accepts the same IAMCheckFn / audit-emitter injection as
@@ -373,6 +402,15 @@ export async function invoke(
     }
   }
   // ── End IAM check ─────────────────────────────────────────────────────────
+
+  // ── Billing admission gate ─────────────────────────────────────────────────
+  // Runs after IAM (so admin/billing capabilities bypass the credit check).
+  // Only fires when orgId is present — system-level calls (no org) are exempt.
+  // Gate throws BillingSuspendedError or InsufficientCreditsError to refuse.
+  if (_billingGate !== null && ctx.orgId) {
+    await _billingGate(ctx.orgId);
+  }
+  // ── End billing admission gate ─────────────────────────────────────────────
 
   let output: unknown;
   try {

@@ -14,7 +14,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
-    "test:unit": "vitest run"
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
@@ -27,6 +28,7 @@
     "@types/dockerode": "3.3.47",
     "@types/tar-stream": "3.1.4",
     "typescript": "6.0.3",
-    "vitest": "2.1.9"
+    "vitest": "2.1.9",
+    "@vitest/coverage-v8": "2.1.9"
   }
 }

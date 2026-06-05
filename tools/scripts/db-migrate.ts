@@ -13,6 +13,7 @@
  * Vercel via `vercel env pull`, refreshed by `pnpm env:pull`).
  */
 import { readdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
@@ -30,6 +31,11 @@ const __dirname = resolve(__filename, "..");
 const ROOT = resolve(__dirname, "..", "..");
 const PG_MIGRATIONS_DIR = join(ROOT, "packages/database/drizzle");
 
+/** SHA-256 of a migration file body, used to detect post-apply edits. */
+function checksumOf(body: string): string {
+  return createHash("sha256").update(body, "utf8").digest("hex");
+}
+
 async function migratePostgres(): Promise<void> {
   const env = loadEnv();
   const sql = postgres(env.DATABASE_URL, { max: 1, prepare: false });
@@ -37,23 +43,48 @@ async function migratePostgres(): Promise<void> {
     await sql/* sql */`
       CREATE TABLE IF NOT EXISTS public._migrations (
         filename text primary key,
+        checksum text,
         applied_at timestamptz not null default now()
       )
     `;
-    const applied = await sql<{ filename: string }[]>/* sql */`
-      SELECT filename FROM public._migrations
+    // Pre-checksum DBs have the table without this column; add it idempotently.
+    await sql.unsafe(`ALTER TABLE public._migrations ADD COLUMN IF NOT EXISTS checksum text`);
+
+    const applied = await sql<{ filename: string; checksum: string | null }[]>/* sql */`
+      SELECT filename, checksum FROM public._migrations
     `;
-    const appliedSet = new Set(applied.map((r) => r.filename));
+    const appliedChecksums = new Map(applied.map((r) => [r.filename, r.checksum]));
 
     const files = readdirSync(PG_MIGRATIONS_DIR)
       .filter((f) => f.endsWith(".sql"))
       .sort();
     for (const file of files) {
-      if (appliedSet.has(file)) {
-        console.log(kleur.gray(`[pg] skip ${file} (already applied)`));
+      const body = readFileSync(join(PG_MIGRATIONS_DIR, file), "utf8");
+      const checksum = checksumOf(body);
+
+      if (appliedChecksums.has(file)) {
+        const stored = appliedChecksums.get(file);
+        if (stored == null) {
+          // Legacy row applied before checksums existed — backfill, don't re-run.
+          await sql/* sql */`
+            UPDATE public._migrations SET checksum = ${checksum} WHERE filename = ${file}
+          `;
+          console.log(kleur.gray(`[pg] skip ${file} (already applied; backfilled checksum)`));
+        } else if (stored !== checksum) {
+          // A shipped migration was edited after it was applied. This is the one
+          // thing the immutability rule (engineering policy §5) forbids: edits
+          // never re-run, so the DB and the file silently diverge. Fail loudly.
+          throw new Error(
+            `[pg] checksum mismatch for ${file}: the file was edited after it was ` +
+              `applied (stored ${stored.slice(0, 12)}…, now ${checksum.slice(0, 12)}…). ` +
+              `Shipped migrations are immutable — revert the edit and add a NEW migration instead.`,
+          );
+        } else {
+          console.log(kleur.gray(`[pg] skip ${file} (already applied)`));
+        }
         continue;
       }
-      const body = readFileSync(join(PG_MIGRATIONS_DIR, file), "utf8");
+
       console.log(kleur.cyan(`[pg] applying ${file}`));
       // Reset search_path before every file. 0000_baseline.sql is a pg_dump that
       // runs `set_config('search_path', '', false)`, which persists on this shared
@@ -62,7 +93,7 @@ async function migratePostgres(): Promise<void> {
       await sql.unsafe(`SET search_path TO public`);
       await sql.unsafe(body);
       await sql/* sql */`
-        INSERT INTO public._migrations (filename) VALUES (${file})
+        INSERT INTO public._migrations (filename, checksum) VALUES (${file}, ${checksum})
       `;
     }
     console.log(kleur.green("[pg] migrations complete"));

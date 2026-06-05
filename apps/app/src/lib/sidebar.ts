@@ -481,7 +481,6 @@ export function enumerateNavTargets(
   targets.push({ label: "Billing · Subscription", href: org.billing.subscription(ctx), parent: "billing" });
   targets.push({ label: "Billing · Usage", href: org.billing.usage(ctx), parent: "billing" });
   targets.push({ label: "Billing · Invoices", href: org.billing.invoices(ctx), parent: "billing" });
-  targets.push({ label: "Billing · Plans", href: org.billing.plans(ctx), parent: "billing" });
 
   // Developer tabs
   targets.push({ label: "Developer · MCP", href: org.developer.mcp(ctx), parent: "developer" });

@@ -18,13 +18,16 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/toast";
-import { AlertCircle } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { AlertCircle, CreditCard } from "lucide-react";
+import { formatDate, formatCents } from "@/lib/utils";
+import { formatRelativeRenewal } from "@/lib/billing-format";
 import {
   cancelSubscriptionAction,
   reactivateSubscriptionAction,
   setSeatsAction,
+  previewSeatsAction,
 } from "@/app/[orgSlug]/billing/actions";
+import type { SeatChangePreview } from "@oxagen/billing";
 
 export interface Subscription {
   publicId: string;
@@ -36,6 +39,14 @@ export interface Subscription {
   currentPeriodEnd: string;
   cancelAtPeriodEnd: boolean;
   seatCount: number;
+}
+
+/** Card-on-file display data passed from the server. */
+export interface DefaultCard {
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
 }
 
 const STATUS_VARIANT: Record<string, "success" | "warning" | "destructive" | "muted"> = {
@@ -51,17 +62,23 @@ const STATUS_VARIANT: Record<string, "success" | "warning" | "destructive" | "mu
 
 // ── SeatControl ───────────────────────────────────────────────────────────────
 
-function SeatControl({
-  orgSlug,
-  currentSeats,
-}: {
+interface SeatControlProps {
   orgSlug: string;
   currentSeats: number;
-}) {
+  /** Scroll to the payment methods section. */
+  onChangeCard?: () => void;
+}
+
+function SeatControl({ orgSlug, currentSeats, onChangeCard }: SeatControlProps) {
   const [seats, setSeats] = React.useState(String(currentSeats));
-  const [pending, startTransition] = React.useTransition();
-  const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [dialogError, setDialogError] = React.useState<string | null>(null);
+  const [previewPending, startPreviewTransition] = React.useTransition();
+  const [confirmPending, startConfirmTransition] = React.useTransition();
+
+  /** null = closed, "loading" = fetching, SeatChangePreview = confirm open, "blocked:..." = error dialog */
+  const [dialogState, setDialogState] = React.useState<
+    null | "loading" | SeatChangePreview | string
+  >(null);
+
   const { add: addToast } = useToast();
 
   function handleUpdate() {
@@ -70,20 +87,56 @@ function SeatControl({
       addToast({ title: "Invalid seat count", description: "Seats must be at least 1.", type: "error" });
       return;
     }
-    startTransition(async () => {
+    if (n === currentSeats) return;
+
+    setDialogState("loading");
+    startPreviewTransition(async () => {
+      const result = await previewSeatsAction({ orgSlug, seats: n });
+      if ("error" in result) {
+        setDialogState(null);
+        addToast({ title: "Could not preview seat change", description: result.error, type: "error" });
+        return;
+      }
+      if (result.blocked) {
+        // Use a string prefix to discriminate the blocked-message branch.
+        setDialogState(
+          `blocked:You have members occupying ${result.blocked.used} of ${result.blocked.licenses} licensed seats. Remove members before reducing.`,
+        );
+        return;
+      }
+      setDialogState(result);
+    });
+  }
+
+  function handleConfirm() {
+    const n = parseInt(seats, 10);
+    startConfirmTransition(async () => {
       const res = await setSeatsAction({ orgSlug, seats: n });
       if (res.ok) {
         addToast({ title: "Seats updated", description: `Seat count updated to ${n}.`, type: "success" });
+        setDialogState(null);
       } else if (res.code === "seat_limit_reached") {
-        setDialogError(
-          `You have ${res.used} member${res.used === 1 ? "" : "s"} — you can't drop below ${res.used} license${res.used === 1 ? "" : "s"}. Remove members first.`,
+        setDialogState(
+          `blocked:You have ${res.used} member${res.used === 1 ? "" : "s"} — you can't drop below ${res.used} license${res.used === 1 ? "" : "s"}. Remove members first.`,
         );
-        setDialogOpen(true);
       } else {
         addToast({ title: "Failed to update seats", description: res.error, type: "error" });
+        setDialogState(null);
       }
     });
   }
+
+  const isDialogOpen = dialogState !== null && dialogState !== "loading";
+  // A blocked-message is stored as "blocked:<human text>" string to avoid
+  // union narrowing ambiguity with SeatChangePreview (which also has a `blocked` field).
+  const blockedMessage =
+    typeof dialogState === "string" && dialogState.startsWith("blocked:")
+      ? dialogState.slice("blocked:".length)
+      : null;
+  const preview =
+    typeof dialogState === "object" && dialogState !== null
+      ? (dialogState as SeatChangePreview)
+      : null;
 
   return (
     <>
@@ -97,40 +150,99 @@ function SeatControl({
               value={seats}
               onChange={(e) => setSeats(e.target.value)}
               className="w-20"
-              size="sm" // compact
-              disabled={pending}
+              size="sm"
+              disabled={previewPending || confirmPending || dialogState === "loading"}
             />
             <Button
               size="sm"
               variant="outline"
               onClick={handleUpdate}
-              disabled={pending || seats === String(currentSeats)}
+              disabled={previewPending || confirmPending || dialogState === "loading" || seats === String(currentSeats)}
             >
-              {pending ? "Saving…" : "Update"}
+              {previewPending || dialogState === "loading" ? "Loading…" : "Update"}
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Error dialog: cannot drop below current usage */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* Seat-change confirmation dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) setDialogState(null); }}>
         <DialogPopup>
-          <DialogHeader>
-            <DialogTitle>Cannot reduce seats</DialogTitle>
-            <DialogDescription>You have more members than the requested seat count.</DialogDescription>
-          </DialogHeader>
-          <DialogPanel>
-            {dialogError ? (
-              <Alert variant="error">
-                <AlertCircle />
-                <AlertTitle>Seat limit conflict</AlertTitle>
-                <AlertDescription>{dialogError}</AlertDescription>
-              </Alert>
-            ) : null}
-          </DialogPanel>
-          <DialogFooter>
-            <DialogClose render={<Button variant="default" />}>OK</DialogClose>
-          </DialogFooter>
+          {blockedMessage ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Cannot reduce seats</DialogTitle>
+                <DialogDescription>You have more members than the requested seat count.</DialogDescription>
+              </DialogHeader>
+              <DialogPanel>
+                <Alert variant="error">
+                  <AlertCircle />
+                  <AlertTitle>Seat limit conflict</AlertTitle>
+                  <AlertDescription>{blockedMessage}</AlertDescription>
+                </Alert>
+              </DialogPanel>
+              <DialogFooter>
+                <DialogClose render={<Button variant="default" />}>OK</DialogClose>
+              </DialogFooter>
+            </>
+          ) : preview ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {preview.direction === "increase" ? "Adding seats" : "Removing seats"}
+                </DialogTitle>
+                <DialogDescription>
+                  Review the change before confirming.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogPanel>
+                <div className="space-y-2 text-sm">
+                  {preview.isCharge ? (
+                    <p>
+                      Adding{" "}
+                      <strong>{preview.requestedSeats - preview.currentSeats} seat{preview.requestedSeats - preview.currentSeats === 1 ? "" : "s"}</strong>{" "}
+                      will charge{" "}
+                      <strong>{formatCents(preview.amountCents)}</strong> now to{" "}
+                      {preview.card
+                        ? <strong>{preview.card.brand} ••{preview.card.last4}</strong>
+                        : "your card on file"
+                      }.
+                    </p>
+                  ) : preview.isCredit ? (
+                    <p>
+                      Removing{" "}
+                      <strong>{preview.currentSeats - preview.requestedSeats} seat{preview.currentSeats - preview.requestedSeats === 1 ? "" : "s"}</strong>{" "}
+                      will credit{" "}
+                      <strong>{formatCents(preview.amountCents)}</strong> to your next invoice.
+                    </p>
+                  ) : (
+                    <p>No charge for this change.</p>
+                  )}
+                </div>
+              </DialogPanel>
+              <DialogFooter>
+                <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
+                {preview.isCharge && onChangeCard ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setDialogState(null);
+                      onChangeCard();
+                    }}
+                  >
+                    Change card
+                  </Button>
+                ) : null}
+                <Button onClick={handleConfirm} disabled={confirmPending}>
+                  {confirmPending
+                    ? "Processing…"
+                    : preview.isCharge
+                      ? "Confirm & pay"
+                      : "Confirm"}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
         </DialogPopup>
       </Dialog>
     </>
@@ -226,12 +338,18 @@ export interface SubscriptionSummaryProps {
   orgSlug: string;
   /** Only owner/admin/billing can see plan/seat controls. */
   canManageBilling: boolean;
+  /** Default card on file — passed from the server. */
+  defaultCard?: DefaultCard | null;
+  /** Called when the user clicks "Change card" inside the seat confirm dialog. */
+  onChangeCard?: () => void;
 }
 
 export function SubscriptionSummary({
   subscription,
   orgSlug,
   canManageBilling,
+  defaultCard,
+  onChangeCard,
 }: SubscriptionSummaryProps) {
   if (!subscription) {
     return (
@@ -245,6 +363,10 @@ export function SubscriptionSummary({
       </Card>
     );
   }
+
+  const renewalLabel = formatRelativeRenewal(subscription.currentPeriodEnd, {
+    cancel: subscription.cancelAtPeriodEnd,
+  });
 
   return (
     <Card>
@@ -270,8 +392,10 @@ export function SubscriptionSummary({
             <dd className="font-medium capitalize">{subscription.billingInterval}ly</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Renews</dt>
-            <dd className="font-medium">{formatDate(subscription.currentPeriodEnd)}</dd>
+            <dt className="text-muted-foreground">
+              {subscription.cancelAtPeriodEnd ? "Cancels" : "Renews"}
+            </dt>
+            <dd className="font-medium capitalize">{renewalLabel}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Current seats</dt>
@@ -279,10 +403,25 @@ export function SubscriptionSummary({
           </div>
         </dl>
 
+        {/* Card on file */}
+        {defaultCard ? (
+          <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <CreditCard className="h-4 w-4" />
+            <span>
+              {defaultCard.brand} ••{defaultCard.last4} · expires{" "}
+              {String(defaultCard.expMonth).padStart(2, "0")}/{String(defaultCard.expYear).slice(-2)}
+            </span>
+          </div>
+        ) : null}
+
         {canManageBilling ? (
           <>
             <Separator className="my-4" />
-            <SeatControl orgSlug={orgSlug} currentSeats={subscription.seatCount} />
+            <SeatControl
+              orgSlug={orgSlug}
+              currentSeats={subscription.seatCount}
+              onChangeCard={onChangeCard}
+            />
           </>
         ) : null}
 

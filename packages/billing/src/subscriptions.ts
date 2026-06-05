@@ -172,8 +172,21 @@ export async function setSubscriptionSeats(orgId: string, seats: number): Promis
     }
   }
 
-  logger.info({ orgId, seats, previous: row.seatCount }, "billing: updating subscription seat count");
-  await billingProvider().setSubscriptionSeats(row.stripeSubscriptionId, { seats });
+  // Direction-aware proration: increases invoice immediately, decreases credit
+  // on the next cycle (avoids surprising the customer with an immediate refund).
+  const isIncrease = seats > row.seatCount;
+  const prorationBehavior = isIncrease ? "always_invoice" : "create_prorations";
+  const idempotencyKey = `seats:${row.stripeSubscriptionId}:${seats}`;
+
+  logger.info(
+    { orgId, seats, previous: row.seatCount, prorationBehavior },
+    "billing: updating subscription seat count",
+  );
+  await billingProvider().setSubscriptionSeats(row.stripeSubscriptionId, {
+    seats,
+    prorationBehavior,
+    idempotencyKey,
+  });
   await syncSubscriptionFromStripe(row.stripeSubscriptionId);
 }
 
@@ -275,5 +288,352 @@ export async function changeOrgPlan(
   // the price swap. upgradeSubscription keeps the same item, so quantity persists
   // through the price swap automatically — no extra call needed.
 
+  // After a successful in-place upgrade, grant prorated plan upgrade credits.
+  if (isUpgrade) {
+    try {
+      const { grantProratedPlanUpgradeCredits } = await import("./grants");
+      await grantProratedPlanUpgradeCredits(orgId, activeSub.planId, targetPlan.id);
+    } catch (err) {
+      // Grant failure must never fail the plan swap — log and continue.
+      logger.error(
+        { orgId, fromPlanId: activeSub.planId, toPlanId: targetPlan.id, err },
+        "billing: grantProratedPlanUpgradeCredits failed after plan swap — continuing",
+      );
+    }
+  }
+
   return null;
+}
+
+// ── SeatChangePreview ─────────────────────────────────────────────────────────
+
+export interface SeatChangePreview {
+  currentSeats: number;
+  requestedSeats: number;
+  direction: "increase" | "decrease" | "none";
+  amountCents: number; // >0 = charge now; <0 = credit next cycle
+  isCharge: boolean;
+  isCredit: boolean;
+  currency: string;
+  /** The default card that WOULD be charged; null if none on file. */
+  card: { brand: string | null; last4: string | null } | null;
+  prorationDate: number;
+  /** Present when seats < current usage (decrease blocked by headcount). */
+  blocked?: {
+    code: "seat_limit_reached";
+    licenses: number;
+    used: number;
+  };
+}
+
+/**
+ * Simulate a seat-count change and return what WOULD be charged/credited —
+ * without applying it. Drives the confirm-before-charge UI step.
+ *
+ * - direction increase: proration 'always_invoice' (charge now).
+ * - direction decrease: proration 'create_prorations' (credit next cycle).
+ * - direction none: returns amountCents=0 immediately (no provider call needed).
+ * - Decrease below current usage: returns `blocked` instead of throwing.
+ */
+export async function previewSeatChange(
+  orgId: string,
+  seats: number,
+): Promise<SeatChangePreview> {
+  const start = Date.now();
+  if (seats < 1) throw new Error("seats must be >= 1");
+
+  const d = db();
+  const row = await d.query.subscriptions.findFirst({
+    where: and(
+      eq(schema.subscriptions.orgId, orgId),
+      sql`${schema.subscriptions.status} IN ('active','trialing')`,
+    ),
+    columns: {
+      stripeSubscriptionId: true,
+      stripeCustomerId: true,
+      seatCount: true,
+    },
+  });
+  if (!row) throw new Error(`No active subscription found for org ${orgId}`);
+
+  const currentSeats = row.seatCount;
+  const direction: "increase" | "decrease" | "none" =
+    seats > currentSeats ? "increase" : seats < currentSeats ? "decrease" : "none";
+
+  // No-change path — no provider call needed.
+  if (direction === "none") {
+    logger.debug({ orgId, seats }, "billing: previewSeatChange — no change");
+    return {
+      currentSeats,
+      requestedSeats: seats,
+      direction: "none",
+      amountCents: 0,
+      isCharge: false,
+      isCredit: false,
+      currency: "usd",
+      card: null,
+      prorationDate: Math.floor(Date.now() / 1000),
+    };
+  }
+
+  // Decrease guard: if seats < current usage, return blocked (do NOT throw).
+  if (direction === "decrease") {
+    const usage = await getOrgSeatUsage(orgId);
+    if (seats < usage.used) {
+      logger.warn(
+        { orgId, requestedSeats: seats, used: usage.used },
+        "billing: previewSeatChange — decrease blocked by seat usage",
+      );
+      return {
+        currentSeats,
+        requestedSeats: seats,
+        direction: "decrease",
+        amountCents: 0,
+        isCharge: false,
+        isCredit: false,
+        currency: "usd",
+        card: null,
+        prorationDate: Math.floor(Date.now() / 1000),
+        blocked: {
+          code: "seat_limit_reached",
+          licenses: usage.licenses,
+          used: usage.used,
+        },
+      };
+    }
+  }
+
+  const prorationBehavior =
+    direction === "increase" ? "always_invoice" : "create_prorations";
+
+  const preview = await billingProvider().previewSeatChange(
+    row.stripeSubscriptionId,
+    { seats, prorationBehavior },
+  );
+
+  // Resolve default card details for the confirmation step.
+  let card: { brand: string | null; last4: string | null } | null = null;
+  try {
+    const provider = billingProvider();
+    const defaultPmId = await provider.getDefaultPaymentMethodId(
+      row.stripeCustomerId,
+    );
+    if (defaultPmId) {
+      const methods = await provider.listPaymentMethods(row.stripeCustomerId);
+      const pm = methods.find((m) => m.id === defaultPmId);
+      if (pm) card = { brand: pm.brand, last4: pm.last4 };
+    }
+  } catch (err) {
+    logger.warn({ orgId, err }, "billing: could not resolve default card for seat preview");
+  }
+
+  logger.info(
+    {
+      orgId,
+      currentSeats,
+      requestedSeats: seats,
+      direction,
+      amountCents: preview.amountCents,
+      durationMs: Date.now() - start,
+    },
+    "billing: seat change preview computed",
+  );
+
+  return {
+    currentSeats,
+    requestedSeats: seats,
+    direction,
+    amountCents: preview.amountCents,
+    isCharge: preview.isCharge,
+    isCredit: preview.amountCents < 0,
+    currency: preview.currency,
+    card,
+    prorationDate: preview.prorationDate,
+  };
+}
+
+// ── PlanChangePreview ─────────────────────────────────────────────────────────
+
+export interface PlanChangePreview {
+  targetPlanSlug: string;
+  interval: "month" | "year";
+  amountCents: number;
+  isCharge: boolean;
+  currency: string;
+  /** The default card that WOULD be charged; null if none on file. */
+  card: { brand: string | null; last4: string | null } | null;
+  prorationDate: number;
+  /**
+   * True when the org has no active subscription — the upgrade MUST go through
+   * Stripe Checkout rather than an in-place price swap.
+   */
+  requiresCheckout: boolean;
+}
+
+const TIER_ORDER: Record<string, number> = {
+  free: 0,
+  build: 1,
+  scale: 2,
+  enterprise: 3,
+};
+
+/**
+ * Simulate a plan change and return what WOULD be charged/credited.
+ *
+ * - No active subscription: requiresCheckout=true, amountCents = full plan price.
+ * - Active subscription + upgrade: proration 'always_invoice'.
+ * - Active subscription + downgrade: proration 'none' (no immediate charge).
+ */
+export async function previewPlanChange(
+  orgId: string,
+  targetPlanSlug: string,
+  interval: "month" | "year",
+): Promise<PlanChangePreview> {
+  const start = Date.now();
+  const d = db();
+
+  // Resolve target plan from DB.
+  const targetPlan = await d.query.plans.findFirst({
+    where: eq(schema.plans.slug, targetPlanSlug),
+    columns: {
+      id: true,
+      tier: true,
+      stripePriceIdMonthly: true,
+      stripePriceIdAnnual: true,
+      monthlyCents: true,
+      annualCents: true,
+    },
+  });
+  if (!targetPlan) throw new Error(`Plan '${targetPlanSlug}' not found`);
+
+  const newPriceId =
+    interval === "year"
+      ? targetPlan.stripePriceIdAnnual
+      : targetPlan.stripePriceIdMonthly;
+  if (!newPriceId) {
+    throw new Error(`Plan '${targetPlanSlug}' has no ${interval} price`);
+  }
+
+  // Full plan price for checkout scenario.
+  const fullPriceCents =
+    interval === "year"
+      ? (targetPlan.annualCents ?? targetPlan.monthlyCents)
+      : targetPlan.monthlyCents;
+
+  // Check for an active subscription.
+  const activeSub = await d.query.subscriptions.findFirst({
+    where: and(
+      eq(schema.subscriptions.orgId, orgId),
+      sql`${schema.subscriptions.status} IN ('active','trialing')`,
+    ),
+    columns: {
+      stripeSubscriptionId: true,
+      stripeCustomerId: true,
+      planId: true,
+    },
+  });
+
+  // Helper: resolve default card.
+  async function resolveDefaultCard(
+    customerId: string,
+  ): Promise<{ brand: string | null; last4: string | null } | null> {
+    try {
+      const provider = billingProvider();
+      const defaultPmId = await provider.getDefaultPaymentMethodId(customerId);
+      if (!defaultPmId) return null;
+      const methods = await provider.listPaymentMethods(customerId);
+      const pm = methods.find((m) => m.id === defaultPmId);
+      return pm ? { brand: pm.brand, last4: pm.last4 } : null;
+    } catch (err) {
+      logger.warn({ orgId, err }, "billing: could not resolve default card for plan preview");
+      return null;
+    }
+  }
+
+  if (!activeSub) {
+    // No active subscription → Checkout path. Use the full plan price.
+    // Resolve the customer id for card lookup (may not exist yet).
+    let card: { brand: string | null; last4: string | null } | null = null;
+    try {
+      const customerId = await resolveCustomerId(orgId);
+      card = await resolveDefaultCard(customerId);
+    } catch {
+      // No customer yet — no card on file.
+    }
+
+    const prorationDate = Math.floor(Date.now() / 1000);
+
+    logger.info(
+      { orgId, targetPlanSlug, interval, requiresCheckout: true, durationMs: Date.now() - start },
+      "billing: plan change preview — no active sub, checkout required",
+    );
+
+    return {
+      targetPlanSlug,
+      interval,
+      amountCents: fullPriceCents,
+      isCharge: true,
+      currency: "usd",
+      card,
+      prorationDate,
+      requiresCheckout: true,
+    };
+  }
+
+  // Active subscription — in-place swap preview.
+  const currentPlanRow = await d.query.plans.findFirst({
+    where: eq(schema.plans.id, activeSub.planId),
+    columns: { tier: true },
+  });
+
+  const currentTierOrder = TIER_ORDER[currentPlanRow?.tier ?? "free"] ?? 0;
+  const targetTierOrder = TIER_ORDER[targetPlan.tier] ?? 0;
+  const isUpgrade = targetTierOrder >= currentTierOrder;
+  const prorationBehavior: "always_invoice" | "none" = isUpgrade
+    ? "always_invoice"
+    : "none";
+
+  const preview = await billingProvider().previewPlanChange(
+    activeSub.stripeSubscriptionId,
+    { newPriceId, prorationBehavior },
+  );
+
+  const card = await resolveDefaultCard(activeSub.stripeCustomerId);
+
+  logger.info(
+    {
+      orgId,
+      targetPlanSlug,
+      interval,
+      isUpgrade,
+      amountCents: preview.amountCents,
+      requiresCheckout: false,
+      durationMs: Date.now() - start,
+    },
+    "billing: plan change preview computed",
+  );
+
+  return {
+    targetPlanSlug,
+    interval,
+    amountCents: preview.amountCents,
+    isCharge: preview.isCharge,
+    currency: preview.currency,
+    card,
+    prorationDate: preview.prorationDate,
+    requiresCheckout: false,
+  };
+}
+
+// ── Internal helper used by previewPlanChange ────────────────────────────────
+
+async function resolveCustomerId(orgId: string): Promise<string> {
+  const d = db();
+  const sub = await d.query.subscriptions.findFirst({
+    where: eq(schema.subscriptions.orgId, orgId),
+    columns: { stripeCustomerId: true },
+  });
+  if (sub?.stripeCustomerId) return sub.stripeCustomerId;
+  const { ensureStripeCustomer } = await import("./customers");
+  return ensureStripeCustomer(orgId);
 }

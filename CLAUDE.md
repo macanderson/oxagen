@@ -1,5 +1,33 @@
 # CLAUDE.md
 
+## Prime directive — fix every issue you encounter, no matter what
+
+When you encounter a bug, broken path, dead value, mispriced meter, stale
+config, or any defect — **fix it now, in place, completely.** Do not defer it,
+ticket-and-skip it, footnote it as "cosmetic / out of scope," or hand the user a
+follow-up. If you noticed it, you own it this turn. The user cannot track
+deferred work and has explicitly forbidden it. The only acceptable surface for a
+"later" is a *true external action* you cannot perform from here (e.g. flipping a
+prod env var) — and even then you fix everything in code first. Investigate to
+root cause, fix every co-located instance of the same class of bug (not just the
+one that was reported), and verify with tests/typecheck before declaring done.
+
+## Operating mode — build fast, no customers are live
+
+This repo is in **pre-launch build mode, NOT pull-request mode.** There are no
+live customers and no production traffic to protect.
+
+- **Commit and push directly to `main`.** You do not need to open PRs or wait for
+  review. (CI gates still only run on PRs, so verify locally — typecheck + tests
+  green — before pushing to main.)
+- **Dangerous, breaking edits are allowed**, including changes that would break
+  production, drop/rewrite schemas, or remove APIs. Move fast; don't tiptoe.
+- The one non-negotiable: **everything you ship must be round and complete from a
+  functionality perspective** — fully wired end-to-end, every layer present (no
+  half-built features, no `dall-e-3`-style placeholders left charging $0), tests
+  passing, no dead code. "Fast and breaking" is licence on *process and blast
+  radius*, never on *completeness*. Pair this with the prime directive above.
+
 ## Working with this user
 
 The user routinely sends **multi-part prompts** — a single message asks for

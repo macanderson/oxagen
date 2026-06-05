@@ -81,13 +81,10 @@ export const PROVIDER_RATE_CARD: RateCard = {
   "anthropic/claude-haiku-4": { provider: "anthropic", inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 },
   "openai/gpt-4o-mini": { provider: "openai", inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 },
   "openai/gpt-4o": { provider: "openai", inputPer1M: 2.5, outputPer1M: 10.0, cachedInputPer1M: 1.25 },
-  // DALL·E 3 (OpenAI) is an IMAGE model billed PER IMAGE, not per token, so the
-  // per-1M-token fields here cannot express its real cost. PLACEHOLDER — values
-  // are 0 (charges $0) pending real pricing. For reference, OpenAI lists ~$0.04
-  // per standard 1024×1024 image and ~$0.08 for HD/wide. TODO(billing): set the
-  // real DALL·E 3 cost — ideally via a dedicated per-image rate path — before
-  // metering image generation against this entry.
-  "dall-e-3": { provider: "openai", inputPer1M: 0, outputPer1M: 0, cachedInputPer1M: 0 },
+  // NOTE: image & video models are billed PER ASSET, not per token — they live in
+  // IMAGE_RATE_CARD / VIDEO_RATE_CARD below, not here. The per-1M-token fields
+  // cannot express a per-image price, so a token-rate entry for them would always
+  // be wrong (it priced image gen at $0 before this was split out).
   "text-embedding-3-small": { provider: "openai", inputPer1M: 0.02, outputPer1M: 0.0, cachedInputPer1M: 0.02 },
   "text-embedding-3-large": { provider: "openai", inputPer1M: 0.13, outputPer1M: 0.0, cachedInputPer1M: 0.13 },
 };
@@ -138,6 +135,124 @@ export function providerCostUsd(usage: TokenUsageInput, rateCard: RateCard = PRO
 /** Provider cost in micro-USD (millionths) for ClickHouse `cost_usd_micros`. */
 export function providerCostUsdMicros(usage: TokenUsageInput, rateCard: RateCard = PROVIDER_RATE_CARD): number {
   return Math.round(providerCostUsd(usage, rateCard) * 1_000_000);
+}
+
+// ── Media cost meter: image + video (per-asset, not per-token) ──────────────
+// Image and video models bill PER GENERATED ASSET — an image, or a clip of N
+// seconds — which the per-1M-token ProviderModelRate above cannot express. These
+// cards hold the USD the provider invoices us per asset, keyed by the gateway
+// model id (creator/model form) that @oxagen/ai passes through. Like the token
+// card, a versioned/variant id resolves to the longest matching key prefix via
+// {@link resolveMediaRate}. Numbers are public list-price estimates as of
+// 2026-05 — keep them in sync with real provider invoices; the gate reads them
+// directly and applies the same solved meter markup as token calls, so margin is
+// consistent across text, image, and video.
+
+export interface ImageModelRate {
+  /** Vendor label (matches telemetry `provider`). */
+  vendor: string;
+  /** USD the provider charges us per image at the base 1024×1024 size. */
+  usdPerImage: number;
+  /**
+   * Optional per-size multipliers applied to `usdPerImage`, keyed by the size
+   * string the generator was called with (e.g. "1536x1024"). A size not listed
+   * uses multiplier 1 (base price). Larger/HD renders cost the provider more.
+   */
+  sizeMultiplier?: Record<string, number>;
+}
+
+export interface VideoModelRate {
+  /** Vendor label (matches telemetry `provider`). */
+  vendor: string;
+  /** USD the provider charges us per second of generated video. */
+  usdPerSecond: number;
+  /** Seconds assumed when a caller omits a duration. */
+  defaultSeconds: number;
+}
+
+/** Per-image provider list prices (USD), keyed by gateway model id prefix. */
+export const IMAGE_RATE_CARD: Record<string, ImageModelRate> = {
+  // OpenAI GPT Image 1 — ~$0.04 per 1024² standard image; portrait/landscape HD ~1.5×.
+  "openai/gpt-image-1": {
+    vendor: "openai",
+    usdPerImage: 0.04,
+    sizeMultiplier: { "1024x1536": 1.5, "1536x1024": 1.5 },
+  },
+  // Black Forest Labs FLUX.2 — Max is the premium fidelity tier (~$0.08/image);
+  // the bare family prefix covers pro/flex/klein variants we may select later.
+  "bfl/flux-2-max": { vendor: "bfl", usdPerImage: 0.08 },
+  "bfl/flux-2": { vendor: "bfl", usdPerImage: 0.06 },
+  "bfl/flux": { vendor: "bfl", usdPerImage: 0.05 },
+  // Google image models.
+  "google/imagen-4.0-ultra": { vendor: "google", usdPerImage: 0.06 },
+  "google/imagen-4.0": { vendor: "google", usdPerImage: 0.04 },
+  "google/gemini-3.1-flash-image": { vendor: "google", usdPerImage: 0.03 },
+  "google/gemini": { vendor: "google", usdPerImage: 0.04 },
+  // xAI Grok image.
+  "xai/grok-imagine-image": { vendor: "xai", usdPerImage: 0.05 },
+};
+
+/** Per-second provider list prices (USD), keyed by gateway model id prefix. */
+export const VIDEO_RATE_CARD: Record<string, VideoModelRate> = {
+  // Google Veo 3 — "fast" tier ~$0.35/sec, standard ~$0.75/sec (list, 2026-05).
+  "google/veo-3.0-fast": { vendor: "google", usdPerSecond: 0.35, defaultSeconds: 5 },
+  "google/veo-3.0": { vendor: "google", usdPerSecond: 0.75, defaultSeconds: 5 },
+  "google/veo-3.1-fast": { vendor: "google", usdPerSecond: 0.4, defaultSeconds: 5 },
+  "google/veo-3.1": { vendor: "google", usdPerSecond: 0.8, defaultSeconds: 5 },
+  "google/veo": { vendor: "google", usdPerSecond: 0.75, defaultSeconds: 5 },
+};
+
+/**
+ * Unknown image/video models bias toward over-charging (never silently free),
+ * mirroring {@link FALLBACK_RATE_MODEL} for tokens. These are the most expensive
+ * plausible asset prices so a missing card entry can't under-bill us.
+ */
+export const IMAGE_FALLBACK_RATE: ImageModelRate = { vendor: "", usdPerImage: 0.08 };
+export const VIDEO_FALLBACK_RATE: VideoModelRate = { vendor: "", usdPerSecond: 0.75, defaultSeconds: 5 };
+
+/** Resolve a media model id to its rate by longest-prefix match (generic). */
+function resolveMediaRate<T>(modelId: string, card: Record<string, T>, fallback: T): T {
+  if (card[modelId]) return card[modelId]!;
+  let best: { key: string; rate: T } | null = null;
+  for (const [key, rate] of Object.entries(card)) {
+    if (modelId.startsWith(key) && (!best || key.length > best.key.length)) {
+      best = { key, rate };
+    }
+  }
+  return best?.rate ?? fallback;
+}
+
+/** USD the provider charges us to generate `imageCount` images of `model` at `size`. */
+export function imageProviderCostUsd(
+  model: string,
+  imageCount: number,
+  size?: string,
+  card: Record<string, ImageModelRate> = IMAGE_RATE_CARD,
+): number {
+  const rate = resolveMediaRate(model, card, IMAGE_FALLBACK_RATE);
+  const mult = (size && rate.sizeMultiplier?.[size]) || 1;
+  return Math.max(0, imageCount) * rate.usdPerImage * mult;
+}
+
+/** USD the provider charges us to generate one `model` video of `seconds` length. */
+export function videoProviderCostUsd(
+  model: string,
+  seconds?: number,
+  card: Record<string, VideoModelRate> = VIDEO_RATE_CARD,
+): number {
+  const rate = resolveMediaRate(model, card, VIDEO_FALLBACK_RATE);
+  const dur = seconds && seconds > 0 ? seconds : rate.defaultSeconds;
+  return dur * rate.usdPerSecond;
+}
+
+/** Image provider cost in micro-USD for ClickHouse `cost_usd_micros`. */
+export function imageProviderCostUsdMicros(model: string, imageCount: number, size?: string): number {
+  return Math.round(imageProviderCostUsd(model, imageCount, size) * 1_000_000);
+}
+
+/** Video provider cost in micro-USD for ClickHouse `cost_usd_micros`. */
+export function videoProviderCostUsdMicros(model: string, seconds?: number): number {
+  return Math.round(videoProviderCostUsd(model, seconds) * 1_000_000);
 }
 
 // ── Products: subscriptions + credit packs ────────────────────────────────

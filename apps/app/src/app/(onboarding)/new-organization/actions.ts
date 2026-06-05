@@ -27,6 +27,10 @@ const FormSchema = z.object({
   addressPostalCode: z.string().optional(),
   addressCountry: z.string().optional(),
   addressPlaceId: z.string().optional(),
+  // Logo URL produced by the avatar upload endpoint. Written directly to the
+  // organizations row (the capability contract does not carry avatarUrl), the
+  // same pattern the settings general-action uses.
+  avatarUrl: z.string().url().max(2048).optional().or(z.literal("")),
 });
 
 // Postgres unique_violation. Mirrors isSlugConflict in workspace.create.ts and
@@ -133,6 +137,7 @@ export async function createOrgAction(
           website: org.website ?? null,
           industry: org.industry ?? null,
           employeeSize: org.employeeSize ?? null,
+          avatarUrl: nonEmpty(fd.avatarUrl) ?? null,
           createdByUserId: session.user.id,
           updatedByUserId: session.user.id,
         })

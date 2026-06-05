@@ -87,7 +87,7 @@ export async function createCheckoutSession(
     subscriptionMetadata: { org_id: input.orgId, plan_id: plan.id },
     successUrl:
       input.successUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
-    cancelUrl: input.cancelUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/plans`,
+    cancelUrl: input.cancelUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/subscription`,
   });
 
   logger.info({ orgId: input.orgId, planSlug: input.planSlug, seats: input.seats ?? 1, sessionId: result.sessionId }, "billing: created subscription checkout session");

@@ -93,7 +93,7 @@ jobs:
       # Repo-wide invariants — static file checks (no DB, sub-second), always run.
       # check:manifest is warn-only (incomplete capabilities annotate, don't fail).
       - name: Manifest / contracts / env invariants
-        run: pnpm check:manifest && pnpm check:contracts && pnpm env:check
+        run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations
 
       # On merge to main, file/refresh a Linear ticket for any manifest gap not
       # already covered by an existing issue (idempotent — one umbrella tracker +
@@ -216,6 +216,14 @@ jobs:
       # turbo invocation with full intra-DAG parallelism + remote cache.
       - name: Build + unit tests (affected)
         run: pnpm turbo run build test:unit --filter="...[${TURBO_BASE}]"
+
+      # Coverage thresholds gate (affected only). Runs vitest --coverage for every
+      # affected package and fails if any package's measured coverage falls below
+      # its ratchet floor (thresholds block in each vitest.config.ts).
+      # test:coverage dependsOn ^build so the build graph is already warm from the
+      # previous step and this just runs the coverage pass.
+      - name: Coverage thresholds (affected)
+        run: pnpm turbo run test:coverage --filter="...[${TURBO_BASE}]"
 
   # ──────────────────────────────────────────────────────────────────────
   # deploy — post-merge side-car (main only). The actual app deploys are

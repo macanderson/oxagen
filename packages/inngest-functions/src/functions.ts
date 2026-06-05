@@ -1,4 +1,5 @@
 import { billingRollupUsage } from "./functions/billing.rollup-usage";
+import { billingDunningSweep } from "./functions/billing.dunning-sweep";
 import { stripeSyncSubscription } from "./functions/stripe.sync-subscription";
 import { stripeSyncInvoice } from "./functions/stripe.sync-invoice";
 import { chatPersistStream } from "./functions/chat.persist-stream";
@@ -8,6 +9,7 @@ import { agentVideoRender, agentVideoRenderOnFailure } from "./functions/agent.v
 
 export const functions = [
   billingRollupUsage,
+  billingDunningSweep,
   stripeSyncSubscription,
   stripeSyncInvoice,
   chatPersistStream,

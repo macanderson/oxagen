@@ -162,7 +162,21 @@ export interface ApiKeyEventRow {
 }
 
 export type Surface = "api" | "mcp" | "app" | "runner" | "";
-export type Provider = "anthropic" | "openai" | "";
+// The provider that billed us for a call. Text models are Anthropic/OpenAI;
+// image & video generation reach Google, Black Forest Labs (bfl), and xAI
+// through the gateway, so the label set spans every vendor @oxagen/ai can route
+// to. Stored as LowCardinality(String) in ClickHouse — widening this union needs
+// no migration. "" means "could not be inferred from the model id".
+export type Provider =
+  | "anthropic"
+  | "openai"
+  | "google"
+  | "bfl"
+  | "xai"
+  | "meta"
+  | "mistral"
+  | "deepseek"
+  | "";
 
 export interface TokenUsageRow {
   execution_step_id: string;
@@ -241,18 +255,33 @@ export async function hashPrompt(text: string): Promise<string> {
 }
 
 /**
- * Map an AI SDK model id to its provider. Handles both the prefixed form
- * (`anthropic:claude-…`) and the bare ids the AI SDK actually hands back from
- * `model.modelId` (`claude-sonnet-4-6`, `gpt-4o`, `text-embedding-3-small`),
+ * Map an AI SDK model id to its provider. Handles three shapes:
+ *   - prefixed       `anthropic:claude-…`          (legacy colon form)
+ *   - gateway        `bfl/flux-2-max`, `google/veo-3.0-…`  (creator/model)
+ *   - bare           `claude-sonnet-4-6`, `gpt-4o`, `gpt-image-1`
+ * The leading `creator` segment (split on `:` or `/`) is authoritative when it
+ * names a known vendor; otherwise we fall back to recognising the model family
+ * by id prefix. Covers every vendor @oxagen/ai routes to (text + image + video)
  * so token_usage.provider is never blank for a real call.
  */
 export function providerFromModelId(modelId: string): Provider {
-  const head = modelId.split(":")[0] ?? "";
-  if (head === "anthropic" || head === "openai") return head;
+  const head = (modelId.split(/[:/]/)[0] ?? "").toLowerCase();
+  switch (head) {
+    case "anthropic":
+    case "openai":
+    case "google":
+    case "bfl":
+    case "xai":
+    case "meta":
+    case "mistral":
+    case "deepseek":
+      return head;
+  }
   const id = modelId.toLowerCase();
   if (id.startsWith("claude")) return "anthropic";
   if (
     id.startsWith("gpt") ||
+    id.startsWith("dall-e") ||
     id.startsWith("o1") ||
     id.startsWith("o3") ||
     id.startsWith("o4") ||
@@ -262,6 +291,9 @@ export function providerFromModelId(modelId: string): Provider {
   ) {
     return "openai";
   }
+  if (id.startsWith("gemini") || id.startsWith("veo") || id.startsWith("imagen")) return "google";
+  if (id.startsWith("flux")) return "bfl";
+  if (id.startsWith("grok")) return "xai";
   return "";
 }
 

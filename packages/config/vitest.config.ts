@@ -7,12 +7,12 @@ export default defineConfig({
     include: ["src/**/*.test.ts"],
     coverage: {
       provider: "v8",
+      reporter: ["text", "lcov"],
       // Scope to the files that have tests; index.ts is a pure re-export barrel
       // with a PORTS constant — no logic to assert, nothing to fail against.
       include: ["src/env.ts"],
-      // Current measured floor (2026-06-02):
-      //   env.ts: stmts 100% | branch 100% | funcs 100% | lines 100%
-      // Ratchet target: 85% lines / 80% branch once all source files have tests.
+      // lines floor 100 (measured 100); target 75 — already above target
+      // branches floor 100 (measured 100); target 70 — already above target
       thresholds: {
         lines: 100,
         branches: 100,

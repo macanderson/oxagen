@@ -6,7 +6,19 @@ import { getSession } from "@/lib/session";
 import { SubscriptionSummary } from "@/components/billing/subscription-summary";
 import { CreditBalance } from "@/components/billing/credit-balance";
 import { BuyCredits } from "@/components/billing/buy-credits";
+import { PaymentMethods } from "@/components/billing/payment-methods";
+import { AutoReloadSettings } from "@/components/billing/auto-reload-settings";
+import { LowBalanceBanner } from "@/components/billing/low-balance-banner";
+import { DunningBanner } from "@/components/billing/dunning-banner";
+import { PlansGrid } from "../plans-grid";
+import { fetchPublicPlans, toPlanCards } from "../public-plans";
 import { safeQuery } from "../safe-query";
+import {
+  listOrgPaymentMethods,
+  getOrgBillingSettings,
+  getOrgBillingStatus,
+  isLowBalance,
+} from "@oxagen/billing";
 
 const CAN_MANAGE_BILLING = new Set(["owner", "admin", "billing"]);
 
@@ -19,83 +31,100 @@ export default async function BillingSubscriptionPage({
   const [tenant, session] = await Promise.all([resolveOrg(orgSlug), getSession()]);
 
   // Batch 1: all queries keyed solely on tenant/session ids — run concurrently.
-  const [viewerRoleRow, subscriptionRow, creditBalance, ledgerRows] =
-    await Promise.all([
-      // Viewer's role for billing-control gating.
-      session?.user
-        ? db()
-            .select({ role: schema.orgUsers.role })
-            .from(schema.orgUsers)
+  const [
+    viewerRoleRow,
+    subscriptionRow,
+    creditBalance,
+    ledgerRows,
+    publicPlans,
+  ] = await Promise.all([
+    // Viewer's role for billing-control gating.
+    session?.user
+      ? db()
+          .select({ role: schema.orgUsers.role })
+          .from(schema.orgUsers)
+          .where(
+            and(
+              eq(schema.orgUsers.orgId, tenant.id),
+              eq(schema.orgUsers.userId, session.user.id),
+            ),
+          )
+          .limit(1)
+          .then((rows) => rows[0] ?? null)
+      : Promise.resolve(null),
+    safeQuery(
+      async () =>
+        (
+          await db()
+            .select()
+            .from(schema.subscriptions)
             .where(
               and(
-                eq(schema.orgUsers.orgId, tenant.id),
-                eq(schema.orgUsers.userId, session.user.id),
+                eq(schema.subscriptions.orgId, tenant.id),
+                sql`${schema.subscriptions.status} in ('active','trialing','past_due')`,
               ),
             )
+            .orderBy(desc(schema.subscriptions.createdAt))
             .limit(1)
-            .then((rows) => rows[0] ?? null)
-        : Promise.resolve(null),
-      safeQuery(
-        async () =>
-          (
-            await db()
-              .select()
-              .from(schema.subscriptions)
-              .where(
-                and(
-                  eq(schema.subscriptions.orgId, tenant.id),
-                  sql`${schema.subscriptions.status} in ('active','trialing','past_due')`,
-                ),
-              )
-              .orderBy(desc(schema.subscriptions.createdAt))
-              .limit(1)
-          )[0] ?? null,
-        null as SubscriptionRow | null,
-      ),
-      safeQuery(
-        async () =>
-          (
-            await db()
-              .select()
-              .from(schema.creditBalances)
-              .where(eq(schema.creditBalances.orgId, tenant.id))
-              .limit(1)
-          )[0] ?? null,
-        null as CreditBalanceRow | null,
-      ),
-      safeQuery(
-        () =>
-          db()
+        )[0] ?? null,
+      null as SubscriptionRow | null,
+    ),
+    safeQuery(
+      async () =>
+        (
+          await db()
             .select()
-            .from(schema.creditLedger)
-            .where(eq(schema.creditLedger.orgId, tenant.id))
-            .orderBy(desc(schema.creditLedger.createdAt))
-            .limit(10),
-        [] as CreditLedgerRow[],
-      ),
-    ]);
+            .from(schema.creditBalances)
+            .where(eq(schema.creditBalances.orgId, tenant.id))
+            .limit(1)
+        )[0] ?? null,
+      null as CreditBalanceRow | null,
+    ),
+    safeQuery(
+      () =>
+        db()
+          .select()
+          .from(schema.creditLedger)
+          .where(eq(schema.creditLedger.orgId, tenant.id))
+          .orderBy(desc(schema.creditLedger.createdAt))
+          .limit(10),
+      [] as CreditLedgerRow[],
+    ),
+    fetchPublicPlans(),
+  ]);
 
   const viewerRole = viewerRoleRow?.role ?? "member";
   const canManageBilling = CAN_MANAGE_BILLING.has(viewerRole);
 
-  // Batch 2: planForSub depends on subscriptionRow.planId — must stay sequential.
-  // Resolve the subscribed plan by id (not via the public-plans list) so the
-  // summary names the plan correctly even if it is no longer public/canonical —
-  // e.g. a legacy tier or one hidden by the source-of-truth sync. Plan selection
-  // lives on the dedicated Plans tab, so this page no longer renders PlansGrid.
-  const planForSub = subscriptionRow
-    ? await safeQuery(
-        async () =>
-          (
-            await db()
-              .select()
-              .from(schema.plans)
-              .where(eq(schema.plans.id, subscriptionRow.planId))
-              .limit(1)
-          )[0] ?? null,
-        null as PlanRow | null,
-      )
-    : null;
+  // Batch 2: billing-package queries and plan resolution — can run concurrently
+  // since they don't depend on each other, only on tenant.id.
+  const [
+    planForSub,
+    paymentMethods,
+    billingSettings,
+    billingStatus,
+    lowBalanceResult,
+  ] = await Promise.all([
+    subscriptionRow
+      ? safeQuery(
+          async () =>
+            (
+              await db()
+                .select()
+                .from(schema.plans)
+                .where(eq(schema.plans.id, subscriptionRow.planId))
+                .limit(1)
+            )[0] ?? null,
+          null as PlanRow | null,
+        )
+      : Promise.resolve(null),
+    safeQuery(() => listOrgPaymentMethods(tenant.id), []),
+    canManageBilling
+      ? safeQuery(() => getOrgBillingSettings(tenant.id), null)
+      : Promise.resolve(null),
+    safeQuery(() => getOrgBillingStatus(tenant.id), null),
+    safeQuery(() => isLowBalance(tenant.id), null),
+  ]);
 
   const subscription = subscriptionRow
     ? {
@@ -111,14 +140,53 @@ export default async function BillingSubscriptionPage({
       }
     : null;
 
+  const currentPlanSlug =
+    subscriptionRow
+      ? (publicPlans.find((p) => p.id === subscriptionRow.planId)?.slug ?? null)
+      : null;
+
+  // Default card for display inside SubscriptionSummary.
+  const defaultCard = paymentMethods.find((pm) => pm.isDefault) ?? null;
+
+  const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+
   return (
     <div className="flex flex-col gap-6">
+      {/* Dunning banner — only when not active */}
+      {billingStatus && billingStatus.state !== "active" ? (
+        <DunningBanner orgSlug={orgSlug} status={billingStatus} />
+      ) : null}
+
+      {/* Low-balance banner */}
+      {lowBalanceResult?.low ? (
+        <LowBalanceBanner
+          orgSlug={orgSlug}
+          balanceCents={lowBalanceResult.balanceCents}
+          thresholdCents={lowBalanceResult.thresholdCents}
+        />
+      ) : null}
+
+      {/* Subscription summary + credits sidebar */}
       <div className="grid gap-6 md:grid-cols-3">
         <div className="md:col-span-2">
           <SubscriptionSummary
             subscription={subscription}
             orgSlug={orgSlug}
             canManageBilling={canManageBilling}
+            defaultCard={
+              defaultCard &&
+              defaultCard.brand !== null &&
+              defaultCard.last4 !== null &&
+              defaultCard.expMonth !== null &&
+              defaultCard.expYear !== null
+                ? {
+                    brand: defaultCard.brand,
+                    last4: defaultCard.last4,
+                    expMonth: defaultCard.expMonth,
+                    expYear: defaultCard.expYear,
+                  }
+                : null
+            }
           />
         </div>
         <div className="flex flex-col gap-4">
@@ -134,6 +202,33 @@ export default async function BillingSubscriptionPage({
           {canManageBilling ? <BuyCredits orgSlug={orgSlug} /> : null}
         </div>
       </div>
+
+      {/* Plan cards — upgrade / downgrade in-place */}
+      <PlansGrid
+        orgSlug={orgSlug}
+        currentPlanSlug={currentPlanSlug}
+        plans={toPlanCards(publicPlans)}
+      />
+
+      {/* Payment methods management */}
+      <div id="payment-methods">
+        <PaymentMethods
+          orgSlug={orgSlug}
+          methods={paymentMethods}
+          publishableKey={publishableKey}
+          canManage={canManageBilling}
+        />
+      </div>
+
+      {/* Auto-reload settings */}
+      {canManageBilling && billingSettings ? (
+        <AutoReloadSettings
+          orgSlug={orgSlug}
+          settings={billingSettings}
+          methods={paymentMethods}
+          canManage={canManageBilling}
+        />
+      ) : null}
     </div>
   );
 }

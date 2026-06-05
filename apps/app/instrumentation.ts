@@ -40,12 +40,16 @@ export async function register(): Promise<void> {
         createRequire(import.meta.url);
     }
     const { bootstrapIAMRuntime } = await import("@oxagen/iam");
+    const { bootstrapBillingRuntime } = await import("@oxagen/billing");
     const { setSecurityEventEmitter } = await import("@oxagen/oxagen/kernel");
     const { recordSecurityEvent } = await import("@oxagen/telemetry");
     const { makeSecurityEventInserter } = await import("@oxagen/database/security");
     const { db } = await import("@oxagen/database/client");
 
     bootstrapIAMRuntime();
+    // Wire the billing admission gate (suspended / zero-balance refusal +
+    // auto-reload) into kernel.invoke(), alongside the IAM gate.
+    bootstrapBillingRuntime();
 
     // Wire the Postgres security event emitter (SOC2 CC6/CC7 audit trail).
     // Registered once per server process, immediately after bootstrapIAMRuntime()

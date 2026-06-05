@@ -39,6 +39,9 @@ export const baseEnvSchema = z.object({
   // Bug fix (b): client-side billing components read the NEXT_PUBLIC_ prefixed
   // name; the server keeps the unprefixed key for server-only routes.
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().startsWith("pk_").optional(),
+  // Stripe Tax master switch. Ships dark ("false"); the provider reads
+  // process.env.STRIPE_TAX_ENABLED directly so it stays edge/runtime-agnostic.
+  STRIPE_TAX_ENABLED: z.string().optional(),
 
   // OXA-1349: INNGEST keys are optional in base schema.
   // @oxagen/inngest-functions enforces required-in-production itself.

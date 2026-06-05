@@ -66,7 +66,6 @@ export const org = {
     subscription: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing/subscription`,
     usage: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing/usage`,
     invoices: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing/invoices`,
-    plans: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing/plans`,
   },
 
   // Developer portal

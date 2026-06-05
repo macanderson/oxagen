@@ -1,5 +1,6 @@
 import { loadEnv } from "@oxagen/config/env";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
+import { bootstrapBillingRuntime } from "@oxagen/billing";
 import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
@@ -26,6 +27,9 @@ export function bootstrap(): void {
 
   loadEnv();
   bootstrapIAMRuntime();
+  // Wire the billing admission gate (suspended / zero-balance refusal +
+  // auto-reload) into contract.invoke(), alongside the IAM gate.
+  bootstrapBillingRuntime();
 
   const securityInsert = makeSecurityEventInserter(db());
   setSecurityEventEmitter((kernelEvent) => {
