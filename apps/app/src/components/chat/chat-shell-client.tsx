@@ -17,6 +17,7 @@ import { useToolStream } from "./use-tool-stream";
 import type { ChatShellProps } from "./chat-shell";
 import type { StreamEvent } from "./stream-event-types";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
+import type { ComposerModelState } from "./model-picker";
 
 // Client surface for the chat. The RSC `ChatShell` resolves the messages
 // promise and hands them in; this component:
@@ -43,6 +44,9 @@ export function ChatShellClient({
   orgSlug,
   workspaceSlug,
   modelConfig,
+  enterToSubmit = false,
+  pendingPromptBehavior = "queue",
+  initialModelState,
 }: {
   conversationId: string | null;
   activeLeafMessageId: string | null;
@@ -54,6 +58,12 @@ export function ChatShellClient({
   orgSlug: string;
   workspaceSlug: string;
   modelConfig: ResolvedTierCatalog;
+  /** Whether Enter key submits (from user prefs). Default false. */
+  enterToSubmit?: boolean;
+  /** What to do on concurrent submit (from user prefs). Default 'queue'. */
+  pendingPromptBehavior?: "queue" | "interrupt";
+  /** Initial model state seeded from effective server defaults. */
+  initialModelState?: ComposerModelState;
 }) {
   const {
     plans,
@@ -88,6 +98,18 @@ export function ChatShellClient({
   React.useEffect(() => { workspaceSlugRef.current = workspaceSlug; }, [workspaceSlug]);
 
   const setIsStreamingRef = React.useRef(setIsStreaming);
+
+  // AbortController for the in-flight SSE fetch. A new controller is created
+  // for every turn. Aborted on interrupt and on unmount.
+  const abortControllerRef = React.useRef<AbortController | null>(null);
+
+  // Abort the current stream on unmount to prevent orphaned SSE readers
+  // writing into unmounted state.
+  React.useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   // hasPendingApproval: blocked either by a persisted block (DB) or a live
   // stream approval event that hasn't been resolved yet.
@@ -144,10 +166,18 @@ export function ChatShellClient({
       }
 
       void (async () => {
+        // Create a fresh AbortController for this turn. Any previous controller
+        // is already aborted (either by interrupt or by the previous turn's
+        // natural completion).
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+        const { signal } = controller;
+
         try {
           const res = await fetch("/api/v1/chat/stream", {
             method: "POST",
             headers: { "content-type": "application/json" },
+            signal,
             body: JSON.stringify({
               content,
               conversationId: result.conversationId,
@@ -171,12 +201,20 @@ export function ChatShellClient({
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
 
-          await consumeRef.current(sseToEvents(reader, decoder));
+          await consumeRef.current(sseToEvents(reader, decoder, signal));
         } catch (err) {
-          // Swallow — the RSC revalidate will still show the persisted reply.
-          console.warn("[chat] stream fetch failed", err);
+          // AbortError is expected on interrupt or unmount — not a warning.
+          if (err instanceof Error && err.name !== "AbortError") {
+            // Swallow — the RSC revalidate will still show the persisted reply.
+            console.warn("[chat] stream fetch failed", err);
+          }
         } finally {
-          setIsStreamingRef.current(false);
+          // Only clear isStreaming when this controller is still the active one
+          // (prevents a stale interrupt callback from clearing a newly started
+          // stream's streaming flag).
+          if (abortControllerRef.current === controller) {
+            setIsStreamingRef.current(false);
+          }
         }
       })();
 
@@ -184,6 +222,14 @@ export function ChatShellClient({
     },
     [sendAction],
   );
+
+  // Called by the composer when the user wants to interrupt the in-flight stream.
+  const handleInterrupt = React.useCallback(() => {
+    abortControllerRef.current?.abort();
+    // Reset live state immediately so the partial turn is cleaned up.
+    resetRef.current();
+    setIsStreamingRef.current(false);
+  }, []);
 
   const callbacks: MessageBubbleCallbacks = {
     onResolveApproval: wrappedResolveApproval,
@@ -386,6 +432,11 @@ export function ChatShellClient({
         action={wrappedSendAction}
         disabled={hasPendingApproval}
         modelConfig={modelConfig}
+        enterToSubmit={enterToSubmit}
+        pendingPromptBehavior={pendingPromptBehavior}
+        isStreaming={isStreaming}
+        onInterrupt={handleInterrupt}
+        initialModelState={initialModelState}
       />
     </div>
   );
@@ -394,27 +445,37 @@ export function ChatShellClient({
 // Parse a ReadableStream of raw SSE bytes into an async iterable of
 // StreamEvent objects. Handles partial-line buffering across read() calls
 // and emits each event when `data: [DONE]` is NOT reached.
+// When the AbortSignal fires the generator exits cleanly (the caller's fetch
+// already threw AbortError, but in case the body reader is mid-read we also
+// check signal.aborted on each iteration so the reader releases promptly).
 async function* sseToEvents(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   decoder: TextDecoder,
+  signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
   let buffer = "";
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const data = line.slice(6).trim();
-        if (data === "[DONE]") return;
-        try {
-          yield JSON.parse(data) as StreamEvent;
-        } catch {
-          // Skip malformed JSON lines.
+  try {
+    while (true) {
+      if (signal?.aborted) break;
+      const { value, done } = await reader.read();
+      if (done || signal?.aborted) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") return;
+          try {
+            yield JSON.parse(data) as StreamEvent;
+          } catch {
+            // Skip malformed JSON lines.
+          }
         }
       }
     }
+  } finally {
+    // Always release the lock so the response body can be GC'd.
+    reader.releaseLock();
   }
 }

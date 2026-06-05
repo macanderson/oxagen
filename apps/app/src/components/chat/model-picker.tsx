@@ -61,6 +61,34 @@ export const defaultModelState: ComposerModelState = {
   mediaModel: null,
 };
 
+/**
+ * Seed properties for ComposerModelState derived from effective model defaults
+ * resolved server-side (workspace > user > system). Passed once at mount time;
+ * the user can still override per-turn via the ModelPicker.
+ */
+export interface ModelStateSeed {
+  /** Explicit text model id to pre-select (wins over tier when set). */
+  textModel: string | null;
+  /** Text tier to pre-select (used only when textModel is null). */
+  textTier: TextTier | null;
+  /** Image model id to pre-select in image-generation mode. */
+  imageModel: string | null;
+  /** Video model id to pre-select in video-generation mode. */
+  videoModel: string | null;
+}
+
+/** Build the initial ComposerModelState from seeded effective defaults. */
+export function buildSeededModelState(seed: ModelStateSeed): ComposerModelState {
+  return {
+    generate: null,
+    tier: seed.textModel ? null : (seed.textTier ?? "fast"),
+    model: seed.textModel ?? null,
+    effort: "medium",
+    mediaTier: seed.imageModel || seed.videoModel ? null : "basic",
+    mediaModel: null,
+  };
+}
+
 // ─── Vendor indicator tile ────────────────────────────────────────────────────
 
 /** A small neutral tile showing the vendor's first letter — no image assets. */

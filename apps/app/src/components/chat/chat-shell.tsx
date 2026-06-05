@@ -7,7 +7,9 @@ import {
   BackgroundTaskTray,
   type BackgroundTaskSnapshot,
 } from "./background-task-tray";
-import { resolvedTierCatalog } from "@oxagen/ai";
+import { resolvedTierCatalog, loadEffectiveModelDefaults } from "@oxagen/ai";
+import type { ComposerModelState, ModelStateSeed } from "./model-picker";
+import { buildSeededModelState } from "./model-picker";
 
 export { type ChatMessage } from "./message-bubble";
 
@@ -32,6 +34,12 @@ export interface ChatShellProps {
   /** Slug values forwarded to ChatShellClient for /api/v1/chat/stream requests. */
   orgSlug: string;
   workspaceSlug: string;
+  /** User preference: submit on Enter. Passed through to the composer. */
+  enterToSubmit?: boolean;
+  /** User preference: what to do on concurrent submit. Passed to composer. */
+  pendingPromptBehavior?: "queue" | "interrupt";
+  /** Effective model defaults from server (workspace > user > system). */
+  initialModelState?: ComposerModelState;
 }
 
 // RSC streaming: the messages promise resolves inside a Suspense boundary
@@ -51,6 +59,9 @@ export function ChatShell({
   agentCapabilities,
   orgSlug,
   workspaceSlug,
+  enterToSubmit,
+  pendingPromptBehavior,
+  initialModelState,
 }: ChatShellProps) {
   return (
     <>
@@ -65,6 +76,9 @@ export function ChatShell({
           agentCapabilities={agentCapabilities}
           orgSlug={orgSlug}
           workspaceSlug={workspaceSlug}
+          enterToSubmit={enterToSubmit}
+          pendingPromptBehavior={pendingPromptBehavior}
+          initialModelState={initialModelState}
         />
       </Suspense>
       <BackgroundTaskTray
@@ -86,6 +100,9 @@ async function AsyncShell({
   agentCapabilities,
   orgSlug,
   workspaceSlug,
+  enterToSubmit,
+  pendingPromptBehavior,
+  initialModelState,
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
@@ -96,6 +113,9 @@ async function AsyncShell({
   agentCapabilities?: ChatShellProps["agentCapabilities"];
   orgSlug: string;
   workspaceSlug: string;
+  enterToSubmit?: boolean;
+  pendingPromptBehavior?: "queue" | "interrupt";
+  initialModelState?: ComposerModelState;
 }) {
   const messages = await promise;
   const modelConfig = resolvedTierCatalog();
@@ -111,6 +131,9 @@ async function AsyncShell({
       orgSlug={orgSlug}
       workspaceSlug={workspaceSlug}
       modelConfig={modelConfig}
+      enterToSubmit={enterToSubmit}
+      pendingPromptBehavior={pendingPromptBehavior}
+      initialModelState={initialModelState}
     />
   );
 }

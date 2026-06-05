@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Brain, ImageIcon, Send, Video } from "lucide-react";
+import { Brain, ImageIcon, Send, Video, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -35,6 +35,14 @@ export interface ComposerAction {
   }>;
 }
 
+/** A queued message waiting to be sent once the current stream completes. */
+interface QueuedMessage {
+  /** The text content typed by the user while a stream was in flight. */
+  content: string;
+  /** The model state at the time the user hit submit. */
+  modelState: ComposerModelState;
+}
+
 export function MessageComposer({
   conversationId,
   parentMessageId,
@@ -42,6 +50,11 @@ export function MessageComposer({
   disabled = false,
   disabledReason,
   modelConfig,
+  enterToSubmit = false,
+  pendingPromptBehavior = "queue",
+  isStreaming = false,
+  onInterrupt,
+  initialModelState,
 }: {
   conversationId: string | null;
   parentMessageId: string | null;
@@ -49,11 +62,26 @@ export function MessageComposer({
   disabled?: boolean;
   disabledReason?: string;
   modelConfig: ResolvedTierCatalog;
+  /** When true: Enter submits, Shift+Enter inserts a newline. Default false. */
+  enterToSubmit?: boolean;
+  /** What to do when user submits while a stream is in flight. Default 'queue'. */
+  pendingPromptBehavior?: "queue" | "interrupt";
+  /** Whether an AI stream is currently active. Used to drive queue/interrupt. */
+  isStreaming?: boolean;
+  /** Called to abort the current in-flight stream (interrupt mode only). */
+  onInterrupt?: () => void;
+  /** Initial model state seeded from effective server-side defaults. */
+  initialModelState?: ComposerModelState;
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
-  const [model, setModel] = React.useState<ComposerModelState>(defaultModelState);
+  const [model, setModel] = React.useState<ComposerModelState>(
+    initialModelState ?? defaultModelState,
+  );
   const formRef = React.useRef<HTMLFormElement>(null);
+
+  // FIFO queue for messages submitted while a stream is in flight (queue mode).
+  const [queue, setQueue] = React.useState<QueuedMessage[]>([]);
 
   // Resolve which text model is active (for reasoning capability check).
   const resolvedTextModelId =
@@ -90,44 +118,160 @@ export function MessageComposer({
     }
   }
 
-  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (disabled) return;
-    setError(null);
-    const fd = new FormData(e.currentTarget);
+  /** Build a FormData for the current form state + a given model snapshot. */
+  function buildFormData(
+    form: HTMLFormElement,
+    modelSnapshot: ComposerModelState,
+  ): FormData {
+    const fd = new FormData(form);
     if (conversationId) fd.set("conversationId", conversationId);
     if (parentMessageId) fd.set("parentMessageId", parentMessageId);
-
-    // Append model-selection fields to FormData.
-    if (model.generate === null) {
-      // Text mode: tier OR explicit model (never both).
-      if (model.model) {
-        fd.set("model", model.model);
+    if (modelSnapshot.generate === null) {
+      if (modelSnapshot.model) {
+        fd.set("model", modelSnapshot.model);
       } else {
-        fd.set("tier", model.tier ?? "fast");
+        fd.set("tier", modelSnapshot.tier ?? "fast");
       }
       // Effort only when the resolved model supports reasoning.
-      if (showEffortControl && model.effort) {
-        fd.set("effort", model.effort);
+      const resolvedId =
+        modelSnapshot.model ?? modelConfig.text[modelSnapshot.tier ?? "fast"];
+      const resolvedMeta = resolvedId ? getModel(resolvedId) : undefined;
+      if (supportsReasoning(resolvedMeta) && modelSnapshot.effort) {
+        fd.set("effort", modelSnapshot.effort);
       }
     } else {
-      // Media generation mode.
-      fd.set("generate", model.generate);
-      if (model.mediaModel) {
-        fd.set("mediaModel", model.mediaModel);
+      fd.set("generate", modelSnapshot.generate);
+      if (modelSnapshot.mediaModel) {
+        fd.set("mediaModel", modelSnapshot.mediaModel);
       } else {
-        fd.set("mediaTier", model.mediaTier ?? "basic");
+        fd.set("mediaTier", modelSnapshot.mediaTier ?? "basic");
       }
     }
+    return fd;
+  }
 
+  /** Dispatch a FormData payload via the server action. */
+  function dispatch(fd: FormData) {
+    setError(null);
     startTransition(async () => {
       const res = await action(fd);
       if (!res.ok) {
         setError(res.error ?? "Failed to send message");
-        return;
       }
-      formRef.current?.reset();
     });
+  }
+
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (disabled) return;
+
+    const contentRaw = (formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null)?.value ?? "";
+    if (contentRaw.trim().length === 0) return;
+
+    // If a stream is in flight, honour the pending-prompt behavior.
+    if (isStreaming && !pending) {
+      if (pendingPromptBehavior === "interrupt") {
+        // Abort the current stream, then submit immediately.
+        onInterrupt?.();
+        const fd = buildFormData(e.currentTarget, model);
+        formRef.current?.reset();
+        dispatch(fd);
+      } else {
+        // queue mode: capture the message and model state; clear the textarea.
+        const snapshot = model;
+        const content = contentRaw;
+        setQueue((prev) => [...prev, { content, modelState: snapshot }]);
+        (formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null)?.dispatchEvent(new Event("input"));
+        // Reset the native textarea value directly so the placeholder reappears.
+        const ta = formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null;
+        if (ta) ta.value = "";
+      }
+      return;
+    }
+
+    const fd = buildFormData(e.currentTarget, model);
+    formRef.current?.reset();
+    dispatch(fd);
+  };
+
+  // When streaming ends, drain the FIFO queue one message at a time.
+  const prevIsStreamingRef = React.useRef(isStreaming);
+  React.useEffect(() => {
+    const wasStreaming = prevIsStreamingRef.current;
+    prevIsStreamingRef.current = isStreaming;
+
+    if (wasStreaming && !isStreaming && queue.length > 0) {
+      const [next, ...rest] = queue;
+      setQueue(rest);
+      if (!next) return;
+      // Build a synthetic FormData for the queued message.
+      const fd = new FormData();
+      fd.set("content", next.content);
+      if (conversationId) fd.set("conversationId", conversationId);
+      if (parentMessageId) fd.set("parentMessageId", parentMessageId);
+      const ms = next.modelState;
+      if (ms.generate === null) {
+        if (ms.model) {
+          fd.set("model", ms.model);
+        } else {
+          fd.set("tier", ms.tier ?? "fast");
+        }
+        const resolvedId = ms.model ?? modelConfig.text[ms.tier ?? "fast"];
+        const resolvedMeta = resolvedId ? getModel(resolvedId) : undefined;
+        if (supportsReasoning(resolvedMeta) && ms.effort) {
+          fd.set("effort", ms.effort);
+        }
+      } else {
+        fd.set("generate", ms.generate);
+        if (ms.mediaModel) {
+          fd.set("mediaModel", ms.mediaModel);
+        } else {
+          fd.set("mediaTier", ms.mediaTier ?? "basic");
+        }
+      }
+      dispatch(fd);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStreaming]);
+
+  /**
+   * IME-safe keyboard handler.
+   * Guard: never submit mid-composition (isComposing / keyCode 229).
+   * enterToSubmit=true  : Enter → submit, Shift+Enter → newline.
+   * enterToSubmit=false : Enter → newline, Cmd/Ctrl+Enter → submit.
+   */
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // IME composition guard — never submit during composition.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+
+    const isEnter = e.key === "Enter";
+    if (!isEnter) return;
+
+    const isEmpty =
+      (e.currentTarget.value ?? "").trim().length === 0;
+    if (isEmpty) {
+      // Suppress empty-submit in all modes; allow newline via default.
+      if (enterToSubmit && !e.shiftKey) e.preventDefault();
+      return;
+    }
+
+    if (pending || disabled) return;
+
+    if (enterToSubmit) {
+      if (!e.shiftKey) {
+        // Enter (no shift) → submit.
+        e.preventDefault();
+        formRef.current?.requestSubmit();
+      }
+      // Shift+Enter falls through → browser inserts newline.
+    } else {
+      // Default (enterToSubmit=false): Cmd/Ctrl+Enter → submit.
+      if (e.metaKey || e.ctrlKey) {
+        e.preventDefault();
+        formRef.current?.requestSubmit();
+      }
+      // Plain Enter falls through → browser inserts newline.
+    }
   };
 
   return (
@@ -142,8 +286,32 @@ export function MessageComposer({
         placeholder={placeholder}
         rows={3}
         disabled={pending || disabled}
+        onKeyDown={onKeyDown}
         className="border-none bg-transparent shadow-none focus-visible:ring-0"
       />
+      {/* Queued message chips (queue mode) */}
+      {queue.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 px-1">
+          {queue.map((item, idx) => (
+            <span
+              key={idx}
+              className="inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground"
+            >
+              <span className="truncate">{item.content}</span>
+              <button
+                type="button"
+                aria-label="Remove queued message"
+                onClick={() =>
+                  setQueue((prev) => prev.filter((_, i) => i !== idx))
+                }
+                className="ml-0.5 shrink-0 rounded-full p-0.5 hover:bg-muted"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
       {disabled && disabledReason ? (
         <p className="text-xs text-muted-foreground">{disabledReason}</p>
@@ -208,10 +376,30 @@ export function MessageComposer({
           <Video className="h-4 w-4" />
         </Button>
 
-        <div className="ml-auto">
-          <Button type="submit" disabled={pending || disabled} size="sm">
+        <div className="ml-auto flex items-center gap-1.5">
+          {isStreaming && queue.length > 0 ? (
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {queue.length} queued
+            </span>
+          ) : null}
+          <Button
+            type="submit"
+            disabled={pending || disabled}
+            size="sm"
+            aria-label={
+              isStreaming && pendingPromptBehavior === "interrupt"
+                ? "Interrupt and send"
+                : isStreaming
+                  ? "Queue message"
+                  : "Send message"
+            }
+          >
             <Send className="h-3.5 w-3.5" />
-            {pending ? "Sending…" : "Send"}
+            {pending
+              ? "Sending…"
+              : isStreaming && pendingPromptBehavior === "interrupt"
+                ? "Interrupt"
+                : "Send"}
           </Button>
         </div>
       </div>
