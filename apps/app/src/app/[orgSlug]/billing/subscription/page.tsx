@@ -1,13 +1,11 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db, schema } from "@oxagen/database";
-import type { CreditLedgerRow, SubscriptionRow, CreditBalanceRow } from "@oxagen/database";
+import type { CreditLedgerRow, PlanRow, SubscriptionRow, CreditBalanceRow } from "@oxagen/database";
 import { resolveOrg } from "@/lib/resolve-org";
 import { getSession } from "@/lib/session";
 import { SubscriptionSummary } from "@/components/billing/subscription-summary";
 import { CreditBalance } from "@/components/billing/credit-balance";
 import { BuyCredits } from "@/components/billing/buy-credits";
-import { PlansGrid } from "../plans-grid";
-import { fetchPublicPlans, toPlanCards } from "../public-plans";
 import { safeQuery } from "../safe-query";
 
 const CAN_MANAGE_BILLING = new Set(["owner", "admin", "billing"]);
@@ -39,8 +37,6 @@ export default async function BillingSubscriptionPage({
   const viewerRole = viewerRoleRow?.role ?? "member";
   const canManageBilling = CAN_MANAGE_BILLING.has(viewerRole);
 
-  const plans = await fetchPublicPlans();
-
   const subscriptionRow = await safeQuery(
     async () =>
       (
@@ -59,8 +55,22 @@ export default async function BillingSubscriptionPage({
     null as SubscriptionRow | null,
   );
 
+  // Resolve the subscribed plan by id (not via the public-plans list) so the
+  // summary names the plan correctly even if it is no longer public/canonical —
+  // e.g. a legacy tier or one hidden by the source-of-truth sync. Plan selection
+  // lives on the dedicated Plans tab, so this page no longer renders PlansGrid.
   const planForSub = subscriptionRow
-    ? plans.find((p) => p.id === subscriptionRow.planId)
+    ? await safeQuery(
+        async () =>
+          (
+            await db()
+              .select()
+              .from(schema.plans)
+              .where(eq(schema.plans.id, subscriptionRow.planId))
+              .limit(1)
+          )[0] ?? null,
+        null as PlanRow | null,
+      )
     : null;
 
   const creditBalance = await safeQuery(
@@ -123,8 +133,6 @@ export default async function BillingSubscriptionPage({
           {canManageBilling ? <BuyCredits orgSlug={orgSlug} /> : null}
         </div>
       </div>
-
-      <PlansGrid orgSlug={orgSlug} currentPlanSlug={subscription?.planSlug ?? null} plans={toPlanCards(plans)} />
     </div>
   );
 }

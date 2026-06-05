@@ -240,18 +240,19 @@ test.describe("billing.subscription.read — authenticated, seeded state", () =>
     await expect(page.getByText("consume_execution")).toBeVisible();
   });
 
-  test("plans grid renders at least one plan card", async ({
+  test("plans grid renders at least one plan card on the Plans tab", async ({
     page,
     context,
     baseURL,
   }) => {
     await loginAs(context, billingFixture.sessionToken, baseURL);
-    await page.goto(`/${BILLING_ORG_SLUG}/billing/subscription`);
+    // PlansGrid lives on the dedicated Plans tab; the Subscription tab no longer
+    // duplicates it. The seeded canonical `build-v2` plan passes the page's
+    // source-of-truth slug filter and renders here.
+    await page.goto(`/${BILLING_ORG_SLUG}/billing/plans`);
     await expect(page).not.toHaveURL(/\/login/);
 
-    // PlansGrid renders `data-component="plan-card"` or falls back to role
-    // "article" / heading containing the plan name. Assert the seeded plan
-    // name is visible in the plans section.
+    // Assert the seeded plan name is visible in the plans section.
     await expect(page.getByText(PLAN_NAME).first()).toBeVisible();
   });
 });
