@@ -43,6 +43,13 @@
       "when": 1780696231481,
       "tag": "0005_reconcile_orphaned_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780696231482,
+      "tag": "0006_drop_dead_organization_schema",
+      "breakpoints": true
     }
   ]
 }
