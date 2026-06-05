@@ -15,6 +15,7 @@ import { CHAT_COMPONENTS, logUnknownComponent } from "./chat-component-registry"
 import { useToolStream } from "./use-tool-stream";
 import type { ChatShellProps } from "./chat-shell";
 import type { StreamEvent } from "./stream-event-types";
+import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 
 // Client surface for the chat. The RSC `ChatShell` resolves the messages
 // promise and hands them in; this component:

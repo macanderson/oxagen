@@ -290,6 +290,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           messages: coreMessages,
           model: turnModel,
           tools: agentTools,
+          ...(turnEffort ? { effort: turnEffort } : {}),
           telemetry: {
             orgId: tenant.id,
             workspaceId: workspace.id,
