@@ -53,7 +53,7 @@ export const schema = {
       region: z
         .string()
         .trim()
-        .max(10)
+        .max(100)
         .optional()
         .describe("ISO 3166-2 subdivision code (2-letter US state required when country is US; e.g. 'CA')"),
       postalCode: z.string().trim().min(1).max(20).describe("Postal or ZIP code"),

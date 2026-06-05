@@ -15,3 +15,19 @@
  * optional next/font/local preload migration (OXA-1508).
  */
 @import "@oxagen/ui/styles/globals.css";
+
+/**
+ * Streamdown streaming animation keyframes (sd-fadeIn, sd-blurIn, sd-slideUp).
+ * Must be imported for animated streaming mode to work.
+ */
+@import "streamdown/styles.css";
+
+/**
+ * Tailwind v4 @source — tell the build scanner to include Streamdown's dist
+ * bundles so all Tailwind utility classes used internally are generated.
+ * Paths are relative to this file (apps/app/src/app/globals.css).
+ * node-linker=hoisted means all packages land in the workspace root node_modules.
+ */
+@source "../../../../node_modules/streamdown/dist/*.js";
+@source "../../../../node_modules/@streamdown/code/dist/*.js";
+@source "../../../../node_modules/@streamdown/mermaid/dist/*.js";

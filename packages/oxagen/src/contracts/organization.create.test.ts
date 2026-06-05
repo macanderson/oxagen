@@ -33,8 +33,82 @@ describe("organization.create capability", () => {
       publicId: "org_abc",
       name: "Acme",
       slug: "acme",
+      type: "business",
       createdAt: new Date().toISOString(),
     });
     expect(parsed.publicId).toBe("org_abc");
+    expect(parsed.type).toBe("business");
+  });
+
+  it("defaults type to business", () => {
+    const parsed = organizationCreate.input.parse({ name: "Acme", slug: "acme" });
+    expect(parsed.type).toBe("business");
+  });
+
+  it("rejects business-only fields on a personal account", () => {
+    expect(() =>
+      organizationCreate.input.parse({
+        name: "Me",
+        slug: "me",
+        type: "personal",
+        industry: "software-it",
+      }),
+    ).toThrow();
+  });
+
+  it("accepts a business account with industry and employee size", () => {
+    const parsed = organizationCreate.input.parse({
+      name: "Acme",
+      slug: "acme",
+      type: "business",
+      website: "https://acme.example",
+      industry: "software-it",
+      employeeSize: "11-50",
+    });
+    expect(parsed.industry).toBe("software-it");
+    expect(parsed.employeeSize).toBe("11-50");
+  });
+
+  it("requires a valid US state code when the country is US", () => {
+    expect(() =>
+      organizationCreate.input.parse({
+        name: "Acme",
+        slug: "acme",
+        billingAddress: {
+          line1: "1 Market St",
+          city: "San Francisco",
+          postalCode: "94105",
+          country: "US",
+        },
+      }),
+    ).toThrow();
+
+    const parsed = organizationCreate.input.parse({
+      name: "Acme",
+      slug: "acme",
+      billingAddress: {
+        line1: "1 Market St",
+        city: "San Francisco",
+        region: "CA",
+        postalCode: "94105",
+        country: "us",
+      },
+    });
+    expect(parsed.billingAddress?.region).toBe("CA");
+  });
+
+  it("rejects an unknown ISO country code", () => {
+    expect(() =>
+      organizationCreate.input.parse({
+        name: "Acme",
+        slug: "acme",
+        billingAddress: {
+          line1: "1 Main",
+          city: "Nowhere",
+          postalCode: "00000",
+          country: "ZZ",
+        },
+      }),
+    ).toThrow();
   });
 });

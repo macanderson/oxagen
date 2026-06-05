@@ -317,3 +317,15 @@ export interface ResolvedTierCatalog {
   image: Record<MediaTier, string>;
   video: Record<MediaTier, string>;
 }
+
+// Re-export the pure client-safe model-default resolver so it is available
+// from the "@oxagen/ai/catalog" subpath (client components) without any
+// provider-SDK or DB imports entering the bundle.
+export {
+  resolveModelDefaults,
+} from "./resolve-model-defaults";
+export type {
+  ModelTier,
+  ModelDefaultsInput,
+  ResolvedModelDefaults,
+} from "./resolve-model-defaults";

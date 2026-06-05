@@ -21,6 +21,7 @@ import type { ScopeContext } from "./scope";
 export const account = {
   root: (): string => "/account",
   profile: (): string => "/account/profile",
+  preferences: (): string => "/account/preferences",
   security: (): string => "/account/security",
   cases: (): string => "/account/cases",
   notifications: (): string => "/account/notifications",
@@ -138,6 +139,7 @@ export const workspace = {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings`,
     general: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/general`,
     members: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/members`,
+    models: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/models`,
     modelKeys: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/model-keys`,
     brandKits: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/brand-kits`,
     integrations: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/integrations`,

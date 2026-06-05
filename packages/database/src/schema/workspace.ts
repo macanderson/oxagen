@@ -2,6 +2,7 @@ import { index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg
 import { sql } from "drizzle-orm";
 import { workspaceSchema } from "./_schemas";
 import { auditMixin, citext, idMixin, ltree, orgScopeMixin } from "./_mixins";
+import { modelTierEnum } from "./auth";
 
 export const workspaces = workspaceSchema.table(
   "workspaces",
@@ -13,6 +14,14 @@ export const workspaces = workspaceSchema.table(
     slug: citext("slug").notNull(),
     defaultGraphId: uuid("default_graph_id"),
     settings: jsonb("settings").notNull().default(sql`'{}'::jsonb`),
+    // Workspace-level model defaults. NULL means the workspace sets no default
+    // for that dimension and the user's own preference (or the system default)
+    // applies. An explicit value overrides user preferences for all members.
+    // Uses the same model_tier enum declared in the auth schema (shared type).
+    defaultTextTier: modelTierEnum("default_text_tier"),
+    defaultTextModel: text("default_text_model"),
+    defaultImageModel: text("default_image_model"),
+    defaultVideoModel: text("default_video_model"),
   },
   (t) => ({
     orgSlugIdx: uniqueIndex("workspaces_org_slug_idx").on(t.orgId, t.slug),

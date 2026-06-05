@@ -5,7 +5,7 @@
  * we need to reference billing, chat, or other table rows in application code.
  * Re-exported from the `@oxagen/database` barrel so callers need only one import.
  */
-import type { InferSelectModel } from "drizzle-orm";
+import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 import type {
   plans,
   subscriptions,
@@ -23,6 +23,11 @@ import type {
   policies,
   accessRequests,
   iamSessions,
+  userPreferences,
+  fontSizeEnum,
+  densityEnum,
+  pendingPromptBehaviorEnum,
+  modelTierEnum,
 } from "./schema/index";
 
 // ── Billing row types ────────────────────────────────────────────────────────
@@ -93,3 +98,39 @@ export type IamAccessRequestRow = InferSelectModel<typeof accessRequests>;
 
 /** Row type for `org.iam_sessions`. */
 export type IamSessionRow = InferSelectModel<typeof iamSessions>;
+
+// ── User preferences row types & enum unions ─────────────────────────────────
+// These are the canonical shared vocabulary for the preferences feature.
+// Import from `@oxagen/database` in API, MCP, and app layers.
+
+/** Full SELECT row from `auth.user_preferences`. */
+export type UserPreferences = InferSelectModel<typeof userPreferences>;
+
+/** INSERT shape for `auth.user_preferences` (id/timestamps optional). */
+export type NewUserPreferences = InferInsertModel<typeof userPreferences>;
+
+/**
+ * Closed set of font-size preference values.
+ * Maps to the `auth.font_size` Postgres enum.
+ */
+export type FontSize = (typeof fontSizeEnum.enumValues)[number];
+
+/**
+ * Closed set of UI density preference values.
+ * Maps to the `auth.density` Postgres enum.
+ */
+export type Density = (typeof densityEnum.enumValues)[number];
+
+/**
+ * Closed set of pending-prompt-behavior preference values.
+ * Maps to the `auth.pending_prompt_behavior` Postgres enum.
+ * queue = buffer new prompt; interrupt = cancel in-flight response.
+ */
+export type PendingPromptBehavior = (typeof pendingPromptBehaviorEnum.enumValues)[number];
+
+/**
+ * Closed set of Oxagen model-tier aliases (user & workspace level).
+ * Maps to the `auth.model_tier` Postgres enum.
+ * fast = lowest-latency, balanced = default, precise = best quality.
+ */
+export type ModelTier = (typeof modelTierEnum.enumValues)[number];

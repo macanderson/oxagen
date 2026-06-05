@@ -10,6 +10,7 @@ import { MemoryCard } from "./memory-card";
 import { CodeExecuteCard } from "./code-execute-card";
 import { CHAT_COMPONENTS, logUnknownComponent } from "./chat-component-registry";
 import type { AssistantContentBlock } from "./stream-event-types";
+import { MarkdownMessage } from "./markdown-message";
 
 export interface ChatMessage {
   publicId: string;
@@ -68,7 +69,7 @@ export function MessageBubble({
             {blocks!.map((block, idx) => renderBlock(block, idx, callbacks))}
           </div>
         ) : (
-          <div className="whitespace-pre-wrap leading-relaxed">{message.content}</div>
+          <MarkdownMessage>{message.content}</MarkdownMessage>
         )}
 
         {children}
@@ -87,9 +88,9 @@ function renderBlock(
   switch (block.type) {
     case "text":
       return (
-        <div key={idx} className="whitespace-pre-wrap leading-relaxed">
+        <MarkdownMessage key={idx}>
           {block.text}
-        </div>
+        </MarkdownMessage>
       );
     case "tool-call":
       return (

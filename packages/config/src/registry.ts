@@ -335,10 +335,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
 
   // ── Google Maps / Places ────────────────────────────────────────────────────
   // Used by the onboarding billing-address autocomplete. The KEY is the only
-  // value that must reach the browser (HTTP-referrer-restricted). The SECRET is
-  // a URL-signing secret consumed server-side only — even though the env var
-  // name carries NEXT_PUBLIC_ for namespacing continuity, it must NEVER be
-  // referenced in client bundle code.
+  // value the feature needs in the browser (lock it down with HTTP-referrer
+  // restrictions in the Google Cloud console). The SECRET var is unused by our
+  // code; note that its NEXT_PUBLIC_ prefix means Next.js would still inline it
+  // into the client bundle — a real signing secret belongs in a server-only var.
   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: {
     group: "Google Maps",
     description:
@@ -354,10 +354,12 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   NEXT_PUBLIC_GOOGLE_MAPS_API_SECRET: {
     group: "Google Maps",
     description:
-      "Google Maps URL-signing secret. SERVER-SIDE USE ONLY — must never be bundled into " +
-      "client code despite the NEXT_PUBLIC_ prefix used for namespacing.",
-    secret: true,
-    clientExposed: false,
+      "Google Maps URL-signing secret. WARNING: the NEXT_PUBLIC_ prefix makes Next.js inline " +
+      "this into the browser bundle, so it is PUBLIC. A signing secret should NOT be public — " +
+      "if you actually use URL signing, move it to a server-only var without the NEXT_PUBLIC_ " +
+      "prefix. Not referenced by any Oxagen client or server code today.",
+    secret: false,
+    clientExposed: true,
     services: ["app"],
     requiredIn: [],
     valueOrigin: "manual",

@@ -554,6 +554,40 @@
       }
     },
     {
+      "name": "user.preferences.read",
+      "file": "user.preferences.read.ts",
+      "domain": "user",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "user.preferences.write",
+      "file": "user.preferences.write.ts",
+      "domain": "user",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
       "name": "video.generate",
       "file": "video.generate.ts",
       "domain": "video",
@@ -588,6 +622,40 @@
         "unit": true,
         "e2e": true,
         "docs": true
+      }
+    },
+    {
+      "name": "workspace.model.settings.read",
+      "file": "workspace.model.settings.read.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "workspace.model.settings.write",
+      "file": "workspace.model.settings.write.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true
       }
     }
   ]

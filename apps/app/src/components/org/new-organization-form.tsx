@@ -32,8 +32,10 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
   const [orgType, setOrgType] = React.useState<OrgType>("business");
   const [industry, setIndustry] = React.useState("");
   const [employeeSize, setEmployeeSize] = React.useState("");
-  // Once the user hand-edits the slug we stop overwriting it from name.
-  const slugTouched = React.useRef(false);
+  // The slug auto-follows the name until the user hand-edits it to a non-empty
+  // value. Clearing the slug field back to empty re-arms auto-population, so an
+  // empty slug + a name change always repopulates the slug.
+  const slugManuallyEdited = React.useRef(false);
 
   const isBusiness = orgType === "business";
 
@@ -102,7 +104,12 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
           onChange={(e) => {
             const next = e.target.value;
             setName(next);
-            if (!slugTouched.current) setSlug(deriveSlug(next));
+            // Auto-populate while the user hasn't overridden the slug, and also
+            // whenever the slug is currently empty (re-armed override).
+            if (!slugManuallyEdited.current || slug === "") {
+              slugManuallyEdited.current = false;
+              setSlug(deriveSlug(next));
+            }
           }}
         />
       </div>
@@ -118,8 +125,10 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
           placeholder={isBusiness ? "acme" : "jane-smith"}
           value={slug}
           onChange={(e) => {
-            slugTouched.current = true;
-            setSlug(e.target.value);
+            const next = e.target.value;
+            // An empty slug re-arms auto-population; any non-empty edit overrides it.
+            slugManuallyEdited.current = next !== "";
+            setSlug(next);
           }}
         />
         <p className="text-xs text-muted-foreground">Lowercase letters, digits, and hyphens. 2 to 40 chars.</p>

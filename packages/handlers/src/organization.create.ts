@@ -94,7 +94,12 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
           addressLine1: input.billingAddress?.line1 ?? null,
           addressLine2: input.billingAddress?.line2 ?? null,
           addressCity: input.billingAddress?.city ?? null,
-          addressRegion: input.billingAddress?.region?.toUpperCase() ?? null,
+          // Only uppercase for US (2-letter state codes); non-US regions are
+          // free-text (e.g. "Île-de-France") and must not be forcibly uppercased.
+          addressRegion:
+            input.billingAddress?.country?.toUpperCase() === "US"
+              ? (input.billingAddress.region?.toUpperCase() ?? null)
+              : (input.billingAddress?.region ?? null),
           addressPostalCode: input.billingAddress?.postalCode ?? null,
           addressCountry: input.billingAddress?.country.toUpperCase() ?? null,
           addressPlaceId: input.billingAddress?.placeId ?? null,

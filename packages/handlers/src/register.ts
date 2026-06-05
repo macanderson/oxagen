@@ -93,3 +93,25 @@ registerHandler(
   async () =>
     (await import("./org.member.invite.decline")).orgMemberInviteDeclineHandler as CapabilityHandlerFn,
 );
+registerHandler(
+  "user.preferences.read",
+  async () =>
+    (await import("./user.preferences.read")).userPreferencesReadHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "user.preferences.write",
+  async () =>
+    (await import("./user.preferences.write")).userPreferencesWriteHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "workspace.model.settings.read",
+  async () =>
+    (await import("./workspace.model.settings.read"))
+      .workspaceModelSettingsReadHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "workspace.model.settings.write",
+  async () =>
+    (await import("./workspace.model.settings.write"))
+      .workspaceModelSettingsWriteHandler as CapabilityHandlerFn,
+);

@@ -27,6 +27,7 @@
 import * as React from "react";
 import { useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
+import { MarkdownMessage } from "./markdown-message";
 
 export interface StreamingTextProps {
   /** The full accumulated text so far (grows as deltas arrive). */
@@ -85,8 +86,10 @@ export function StreamingText({ text, isStreaming = false, className }: Streamin
   const caretVisible = !reduceMotion && (isStreaming || count < text.length);
 
   return (
-    <div className={cn("whitespace-pre-wrap leading-relaxed", className)}>
-      {displayed}
+    <div className={cn("relative", className)}>
+      <MarkdownMessage streaming={isStreaming || count < text.length}>
+        {displayed}
+      </MarkdownMessage>
       {caretVisible ? <span className="stream-caret ml-0.5" aria-hidden="true" /> : null}
     </div>
   );

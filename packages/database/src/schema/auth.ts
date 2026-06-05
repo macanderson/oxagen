@@ -1,6 +1,44 @@
-import { boolean, customType, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, customType, index, text, timestamp, uniqueIndex, uuid, jsonb } from "drizzle-orm/pg-core";
 import { authSchema } from "./_schemas";
 import { auditMixin, citext, idMixin, softDeleteMixin, orgScopeMixin } from "./_mixins";
+
+// ── User-preference enums ────────────────────────────────────────────────────
+// Declared in the auth schema so the type lives next to the table that owns it.
+// Shared with workspace.workspaces for model-tier columns (imported from here).
+
+/** UI text size preference. */
+export const fontSizeEnum = authSchema.enum("font_size", [
+  "small",
+  "medium",
+  "large",
+]);
+
+/** UI density / spacing preference. */
+export const densityEnum = authSchema.enum("density", [
+  "compact",
+  "comfortable",
+  "spacious",
+]);
+
+/**
+ * What to do when the user submits a new prompt while the agent is responding.
+ * queue = buffer it; interrupt = cancel the in-flight response immediately.
+ */
+export const pendingPromptBehaviorEnum = authSchema.enum("pending_prompt_behavior", [
+  "queue",
+  "interrupt",
+]);
+
+/**
+ * Oxagen model-tier alias. Maps to a quality/cost tier rather than a specific
+ * model slug, letting us swap underlying models without user-facing changes.
+ * fast = lowest-latency; balanced = default quality/cost; precise = best quality.
+ */
+export const modelTierEnum = authSchema.enum("model_tier", [
+  "fast",
+  "balanced",
+  "precise",
+]);
 
 // bytea for encrypted columns — Drizzle has no first-class bytea helper, so
 // we declare it inline. KMS unwraps the payload at the service boundary; the
@@ -150,6 +188,47 @@ export const verifications = authSchema.table(
   },
   (t) => ({
     identifierIdx: index("verifications_identifier_idx").on(t.identifier),
+  }),
+);
+
+// ── User preferences ─────────────────────────────────────────────────────────
+// 1:1 with auth.users; cross-org (not org-scoped) since UI preferences belong
+// to the person, not to a specific workspace. ON DELETE CASCADE so the row is
+// garbage-collected when the user account is hard-deleted.
+//
+// Nullable model columns: NULL means "no explicit preference → inherit from
+// workspace default → fall back to system default." Explicit model slug wins
+// over tier alias wins over system default.
+
+export const userPreferences = authSchema.table(
+  "user_preferences",
+  {
+    ...idMixin("upr"),
+    ...auditMixin(),
+    ...softDeleteMixin(),
+    // 1:1 enforced by uniqueIndex below. CASCADE deletes the preferences row
+    // when the parent user row is hard-deleted (matches the FK below).
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // UI appearance
+    fontSize: fontSizeEnum("font_size").notNull().default("medium"),
+    density: densityEnum("density").notNull().default("comfortable"),
+    // Input behaviour: false = Enter inserts newline; true = Enter submits.
+    enterToSubmit: boolean("enter_to_submit").notNull().default(false),
+    // Agent interaction: what to do while a response is in flight.
+    pendingPromptBehavior: pendingPromptBehaviorEnum("pending_prompt_behavior")
+      .notNull()
+      .default("queue"),
+    // Model preferences (user level; workspace level overrides available separately)
+    defaultTextTier: modelTierEnum("default_text_tier"),
+    defaultTextModel: text("default_text_model"),
+    defaultImageModel: text("default_image_model"),
+    defaultVideoModel: text("default_video_model"),
+  },
+  (t) => ({
+    // Enforces the 1:1 relationship — one preferences row per user.
+    userIdIdx: uniqueIndex("user_preferences_user_id_idx").on(t.userId),
   }),
 );
 

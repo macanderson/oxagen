@@ -31,11 +31,23 @@ describe("capability registry", () => {
     expect(getCapability("test.alpha")).toBe(cap);
   });
 
-  it("throws on duplicate registration", () => {
-    registerCapability(makeCap("test.beta"));
-    expect(() => registerCapability(makeCap("test.beta"))).toThrow(
-      /already registered/,
-    );
+  it("is idempotent when an identical declaration re-registers (a bundler may evaluate a contract module twice)", () => {
+    const first = registerCapability(makeCap("test.beta"));
+    const second = registerCapability(makeCap("test.beta"));
+    // Same name + same shape collapses to one registration and hands back the
+    // original object, so both module instances share one declaration.
+    expect(second).toBe(first);
+    expect(listCapabilities().filter((c) => c.name === "test.beta")).toHaveLength(1);
+  });
+
+  it("throws when a different declaration claims an already-registered name", () => {
+    registerCapability(makeCap("test.gamma"));
+    expect(() =>
+      registerCapability({
+        ...makeCap("test.gamma"),
+        description: "a conflicting redefinition",
+      }),
+    ).toThrow(/already registered/);
   });
 
   it("lists all registered capabilities", () => {

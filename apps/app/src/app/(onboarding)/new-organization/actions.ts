@@ -109,7 +109,11 @@ export async function createOrgAction(
           addressLine1: org.billingAddress?.line1 ?? null,
           addressLine2: org.billingAddress?.line2 ?? null,
           addressCity: org.billingAddress?.city ?? null,
-          addressRegion: org.billingAddress?.region ?? null,
+          // Only uppercase for US state codes; non-US regions are free-text.
+          addressRegion:
+            org.billingAddress?.country?.toUpperCase() === "US"
+              ? (org.billingAddress.region?.toUpperCase() ?? null)
+              : (org.billingAddress?.region ?? null),
           addressPostalCode: org.billingAddress?.postalCode ?? null,
           addressCountry: org.billingAddress?.country?.toUpperCase() ?? null,
           addressPlaceId: org.billingAddress?.placeId ?? null,

@@ -49,3 +49,15 @@ export { generateImageFor } from "./generate-image";
 export type { GenerateImageForArgs, GenerateImageForResult } from "./generate-image";
 export { generateVideoFor } from "./generate-video";
 export type { GenerateVideoForArgs, GenerateVideoForResult, VideoModel } from "./generate-video";
+
+// Model-default resolver (client-safe, also re-exported from @oxagen/ai/catalog).
+export { resolveModelDefaults } from "./resolve-model-defaults";
+export type {
+  ModelTier,
+  ModelDefaultsInput,
+  ResolvedModelDefaults,
+} from "./resolve-model-defaults";
+
+// Server-only: loads effective model defaults from DB for a user+workspace session.
+export { loadEffectiveModelDefaults } from "./load-effective-model-defaults";
+export type { LoadEffectiveModelDefaultsArgs } from "./load-effective-model-defaults";

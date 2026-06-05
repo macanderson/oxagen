@@ -23,6 +23,7 @@ import {
   MessageSquare,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Terminal,
   User,
@@ -214,7 +215,7 @@ const orgConfig: SidebarConfig = {
 };
 
 // ---------------------------------------------------------------------------
-// Account mode config — 5 items + return link = 6 total
+// Account mode config — 6 items + return link = 7 total
 // /account/... — personal / GDPR surface
 // ---------------------------------------------------------------------------
 
@@ -242,6 +243,13 @@ const accountConfig: SidebarConfig = {
       label: "Profile",
       icon: User,
       href: () => account.profile(),
+      group: "primary",
+    },
+    {
+      id: "preferences",
+      label: "Preferences",
+      icon: SlidersHorizontal,
+      href: () => account.preferences(),
       group: "primary",
     },
     {
@@ -438,6 +446,7 @@ export function enumerateNavTargets(
     // Settings tabs
     targets.push({ label: "Settings · General", href: workspace.settings.general(wsCtx), parent: "settings" });
     targets.push({ label: "Settings · Members", href: workspace.settings.members(wsCtx), parent: "settings" });
+    targets.push({ label: "Settings · Models", href: workspace.settings.models(wsCtx), parent: "settings" });
     targets.push({ label: "Settings · Model Keys", href: workspace.settings.modelKeys(wsCtx), parent: "settings" });
     targets.push({ label: "Settings · Brand Kits", href: workspace.settings.brandKits(wsCtx), parent: "settings" });
     targets.push({ label: "Settings · Integrations", href: workspace.settings.integrations(wsCtx), parent: "settings" });
@@ -482,6 +491,7 @@ export function enumerateNavTargets(
 
   // -- Account mode --
   targets.push({ label: "Profile", href: account.profile(), parent: "profile" });
+  targets.push({ label: "Preferences", href: account.preferences(), parent: "preferences" });
   targets.push({ label: "Security", href: account.security(), parent: "security" });
   targets.push({ label: "Cases", href: account.cases(), parent: "cases" });
   targets.push({ label: "Notifications", href: account.notifications(), parent: "notifications" });

@@ -23,7 +23,8 @@ type GlobalWithRegistry = typeof globalThis & {
 
 const globalRef = globalThis as GlobalWithRegistry;
 const registry: Map<string, CapabilityDeclaration> =
-  globalRef[REGISTRY_KEY] ?? (globalRef[REGISTRY_KEY] = new Map());
+  globalRef[REGISTRY_KEY] ??
+  (globalRef[REGISTRY_KEY] = new Map<string, CapabilityDeclaration>());
 
 // A stable "signature" of a declaration's descriptor, used to tell a benign
 // duplicate-module re-registration (the bundler evaluated one contract twice)
@@ -32,7 +33,7 @@ const registry: Map<string, CapabilityDeclaration> =
 // `{}`, so they are reduced to an opaque marker; every other descriptor field
 // participates in the comparison.
 function capabilitySignature(cap: CapabilityDeclaration): string {
-  return JSON.stringify(cap, (_key, value) => {
+  return JSON.stringify(cap, (_key: string, value: unknown) => {
     if (
       value &&
       typeof value === "object" &&

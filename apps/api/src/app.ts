@@ -37,6 +37,10 @@ import { orgMemberAddRoute } from "./routes/v1/org.member.add";
 import { orgMemberInviteAcceptRoute } from "./routes/v1/org.member.invite.accept";
 import { orgMemberInviteDeclineRoute } from "./routes/v1/org.member.invite.decline";
 import { filesServeRoute } from "./routes/v1/files.serve";
+import { userPreferencesReadRoute } from "./routes/v1/user.preferences.read";
+import { userPreferencesWriteRoute } from "./routes/v1/user.preferences.write";
+import { workspaceModelSettingsReadRoute } from "./routes/v1/workspace.model.settings.read";
+import { workspaceModelSettingsWriteRoute } from "./routes/v1/workspace.model.settings.write";
 
 export type AppEnv = {
   Variables: {
@@ -68,6 +72,8 @@ app.route("/api/inngest", inngestRoute);
 const userScoped = new Hono<AppEnv>();
 userScoped.use("*", authMiddleware);
 userScoped.route("/organizations", organizationCreateRoute);
+userScoped.route("/user/preferences", userPreferencesReadRoute);
+userScoped.route("/user/preferences", userPreferencesWriteRoute);
 app.route("/v1", userScoped);
 
 // /v1/:org_slug/:workspace_slug/* — org + workspace scoped routes.
@@ -103,4 +109,6 @@ orgScoped.route("/org/members", orgMemberAddRoute);
 orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
 orgScoped.route("/files", filesServeRoute);
+orgScoped.route("/workspace/model-settings", workspaceModelSettingsReadRoute);
+orgScoped.route("/workspace/model-settings", workspaceModelSettingsWriteRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

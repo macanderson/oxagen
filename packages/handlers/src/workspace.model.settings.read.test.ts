@@ -1,0 +1,102 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+// ── hoisted stubs ─────────────────────────────────────────────────────────────
+const mocks = vi.hoisted(() => ({
+  workspaceFindFirst: vi.fn(),
+}));
+
+const WS_ROW = {
+  defaultTextTier: "balanced" as const,
+  defaultTextModel: "anthropic/claude-sonnet-4.6",
+  defaultImageModel: null,
+  defaultVideoModel: null,
+};
+
+mocks.workspaceFindFirst.mockResolvedValue(WS_ROW);
+
+vi.mock("@oxagen/database", () => ({
+  db: () => ({
+    query: {
+      workspaces: { findFirst: mocks.workspaceFindFirst },
+    },
+  }),
+  schema: {
+    workspaces: { id: "id" },
+  },
+}));
+
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("drizzle-orm")>();
+  return { eq: orig.eq };
+});
+
+import { workspaceModelSettingsReadHandler } from "./workspace.model.settings.read";
+import type { CapabilityContext } from "@oxagen/oxagen";
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CTX: CapabilityContext = {
+  orgId: "org_1",
+  workspaceId: "ws_1",
+  userId: "u_1",
+  apiKeyId: null,
+  requestId: "req_1",
+  surface: "api",
+  messageId: null,
+};
+
+describe("workspaceModelSettingsReadHandler (@oxagen/handlers)", () => {
+  beforeEach(() => {
+    mocks.workspaceFindFirst.mockReset();
+    mocks.workspaceFindFirst.mockResolvedValue(WS_ROW);
+  });
+
+  // ── workspace guard ───────────────────────────────────────────────────────
+
+  it("throws when workspaceId is empty string (no workspace context)", async () => {
+    const noWsCtx: CapabilityContext = { ...CTX, workspaceId: "" };
+    await expect(workspaceModelSettingsReadHandler({}, noWsCtx)).rejects.toThrow(
+      "workspace.model.settings.read requires a workspace context",
+    );
+  });
+
+  // ── workspace not found ───────────────────────────────────────────────────
+
+  it("throws when the workspace row is not found", async () => {
+    mocks.workspaceFindFirst.mockResolvedValueOnce(null);
+    await expect(workspaceModelSettingsReadHandler({}, CTX)).rejects.toThrow("workspace not found");
+  });
+
+  // ── happy path ────────────────────────────────────────────────────────────
+
+  it("returns all four model settings columns", async () => {
+    const result = await workspaceModelSettingsReadHandler({}, CTX);
+    expect(result.defaultTextTier).toBe("balanced");
+    expect(result.defaultTextModel).toBe("anthropic/claude-sonnet-4.6");
+    expect(result.defaultImageModel).toBeNull();
+    expect(result.defaultVideoModel).toBeNull();
+  });
+
+  // ── all null ──────────────────────────────────────────────────────────────
+
+  it("returns null for all fields when workspace has no model defaults set", async () => {
+    mocks.workspaceFindFirst.mockResolvedValueOnce({
+      defaultTextTier: null,
+      defaultTextModel: null,
+      defaultImageModel: null,
+      defaultVideoModel: null,
+    });
+    const result = await workspaceModelSettingsReadHandler({}, CTX);
+    expect(result.defaultTextTier).toBeNull();
+    expect(result.defaultTextModel).toBeNull();
+    expect(result.defaultImageModel).toBeNull();
+    expect(result.defaultVideoModel).toBeNull();
+  });
+
+  // ── uses workspaceId from context ─────────────────────────────────────────
+
+  it("queries using the workspaceId from context", async () => {
+    await workspaceModelSettingsReadHandler({}, CTX);
+    expect(mocks.workspaceFindFirst).toHaveBeenCalledTimes(1);
+  });
+});

@@ -154,7 +154,13 @@ export function BillingAddressFields() {
   const line1Ref = React.useRef<HTMLInputElement | null>(null);
 
   const patch = React.useCallback((partial: Partial<BillingAddressValue>) => {
-    setAddr((prev) => ({ ...prev, ...partial }));
+    // Filter out undefined values so a missing component from Google (e.g. no
+    // street number) never replaces a defined state value with undefined —
+    // which would flip a controlled input into uncontrolled.
+    const defined = Object.fromEntries(
+      Object.entries(partial).filter(([, v]) => v !== undefined),
+    ) as Partial<BillingAddressValue>;
+    setAddr((prev) => ({ ...prev, ...defined }));
   }, []);
 
   const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;

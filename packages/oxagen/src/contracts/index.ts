@@ -41,6 +41,10 @@ import { videoGenerate } from "./video.generate";
 import { imageGenerate } from "./image.generate";
 import { svgGenerate } from "./svg.generate";
 import { systemInstallInstructions } from "./system.install.instructions";
+import { userPreferencesRead } from "./user.preferences.read";
+import { userPreferencesWrite } from "./user.preferences.write";
+import { workspaceModelSettingsRead } from "./workspace.model.settings.read";
+import { workspaceModelSettingsWrite } from "./workspace.model.settings.write";
 
 export {
   agentApprovalResolve,
@@ -76,6 +80,10 @@ export {
   imageGenerate,
   svgGenerate,
   systemInstallInstructions,
+  userPreferencesRead,
+  userPreferencesWrite,
+  workspaceModelSettingsRead,
+  workspaceModelSettingsWrite,
 };
 
 /**
@@ -120,4 +128,8 @@ export const contracts = [
   imageGenerate,
   svgGenerate,
   systemInstallInstructions,
+  userPreferencesRead,
+  userPreferencesWrite,
+  workspaceModelSettingsRead,
+  workspaceModelSettingsWrite,
 ] as const;
