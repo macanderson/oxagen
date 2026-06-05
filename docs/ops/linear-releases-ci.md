@@ -11,37 +11,54 @@ Linear's official integration is the
 [`linear/linear-release-action@v0`](https://github.com/linear/linear-release-action)
 GitHub Action (documented at <https://linear.app/docs/releases>).
 
-On every push to `main` the action:
+When a **GitHub Release is published** the action:
 
-1. Scans all commits in the range since the previous deploy for `OXA-####`
+1. Scans all commits in the range since the previous release for `OXA-####`
    identifiers (e.g. `Fixes OXA-1417` in a commit message or PR title).
-2. Creates a completed release in the configured Linear pipeline.
+2. Creates the release in the configured Linear pipeline, named and versioned
+   from the GitHub release tag.
 3. Associates each matched issue with that release so Linear shows exactly what
-   shipped.
+   shipped, and attaches the **GitHub release notes** as the release document.
 
 > **Plan requirement.** The Releases feature is available on Linear **Business
 > and Enterprise** plans only.
 
-## What is wired in `.github/workflows/ci.yml`
+> **Trigger change (2026-06-05).** This used to run on *every push to `main`*,
+> which minted a Linear release per checkpoint commit. It now runs only on
+> `release: [published]`. The per-push `deploy` job in `ci.yml` no longer
+> creates Linear releases.
 
-The `deploy` job (runs on every push to `main`) contains:
+## What is wired in `.github/workflows/linear-release.yml`
+
+A dedicated workflow triggers on `release: [published]`:
 
 ```yaml
-- name: Create Linear Release
-  continue-on-error: true
-  uses: linear/linear-release-action@v0
-  with:
-    access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
+on:
+  release:
+    types: [published]
+
+# ...
+      - name: Create Linear release
+        uses: linear/linear-release-action@v0
+        with:
+          access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
+          name: ${{ github.event.release.name || github.event.release.tag_name }}
+          version: ${{ github.event.release.tag_name }}
+          release_notes: .release/notes.md      # GitHub release body, captured to a file
+          github_token: ${{ github.token }}
 ```
 
 Key design decisions:
 
-- `fetch-depth: 0` on the checkout step ensures the action can walk the full
-  commit history and catch every issue reference since the last deploy.
-- `continue-on-error: true` means a Linear outage or misconfigured secret
-  logs a warning but never blocks the deploy job.
-- No user-controlled data is interpolated into `run:` commands — the action
-  handles commit scanning internally.
+- Triggered by `release: [published]` so a Linear release maps 1:1 to a GitHub
+  release (not to every commit on `main`).
+- `fetch-depth: 0` lets the action walk full history and catch every issue
+  reference since the last release.
+- The GitHub release body is written to `.release/notes.md` and passed as
+  `release_notes` so Linear attaches it as the release document. Release-author
+  fields flow through `env:` (never interpolated into `run:`) — no injection.
+- A pre-flight step fails with a clear message if `LINEAR_ACCESS_KEY` is unset,
+  rather than letting the action error cryptically.
 
 ## One-time setup (repo owner)
 
@@ -49,8 +66,9 @@ Key design decisions:
 
 1. Open Linear → **Settings** → **Releases** → **New pipeline**.
 2. Name it `oxagen-v2` (or match your team name).
-3. Set type to **Continuous** — releases are created automatically on every
-   push, with no scheduled stages.
+3. The CI workflow drives releases explicitly (one per published GitHub
+   release, with the tag as the version), so the pipeline type is not critical
+   — a tag/version-based pipeline matches the model best.
 4. Leave **Path filter** blank (monorepo; the action scans all commits).
 5. Click **Create**.
 
@@ -70,7 +88,8 @@ GitHub repo → **Settings** → **Secrets and variables** → **Actions** →
 |---|---|
 | `LINEAR_ACCESS_KEY` | the pipeline access key copied above |
 
-Once the secret is in place the next push to `main` will create a release.
+Once the secret is in place, the next **published GitHub release** will create a
+Linear release. Test it with `gh release create vX.Y.Z --generate-notes`.
 
 ## Commit / PR issue-linking convention
 

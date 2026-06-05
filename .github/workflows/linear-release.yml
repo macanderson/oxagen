@@ -1,0 +1,75 @@
+name: Linear Release
+
+# Standard Linear ↔ GitHub release integration (linear/linear-release-action).
+#
+# Fires whenever a GitHub Release is PUBLISHED. The action scans every commit
+# since the previous release for OXA-#### identifiers, creates the matching
+# release in the Linear release pipeline, associates those issues with it, and
+# attaches the GitHub release notes as the release document.
+#
+# Credential: `access_key` is the Linear release *pipeline* access key
+# (Linear → Settings → Releases → <pipeline> → Access key), stored as the
+# LINEAR_ACCESS_KEY repo secret. This is NOT the `lin_api_` personal key
+# (that one drives the manifest ticketer) and NOT the `lin_access_` OAuth key.
+# See docs/ops/linear-releases-ci.md.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+# One Linear-release sync per tag; never cancel an in-flight sync.
+concurrency:
+  group: linear-release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  linear-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Fail fast with a self-explanatory message if the pipeline key is unset,
+      # rather than letting the action error out cryptically.
+      - name: Verify pipeline access key is configured
+        env:
+          LINEAR_ACCESS_KEY: ${{ secrets.LINEAR_ACCESS_KEY }}
+        run: |
+          if [ -z "$LINEAR_ACCESS_KEY" ]; then
+            echo "::error::LINEAR_ACCESS_KEY is not set. Add the Linear release PIPELINE access key (Linear → Settings → Releases → <pipeline> → Access key) as a repo secret. It is NOT the lin_api_ personal key."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the action can scan every commit since the last
+          # release and resolve all OXA-#### references.
+          fetch-depth: 0
+
+      # Persist the GitHub release body to a file to attach as the Linear release
+      # document. Release-author fields flow through env (never interpolated into
+      # the shell) so a crafted release body cannot inject commands.
+      - name: Capture GitHub release notes
+        env:
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          mkdir -p .release
+          {
+            printf '# %s\n\n' "${RELEASE_NAME:-$RELEASE_TAG}"
+            printf '%s\n' "$RELEASE_BODY"
+          } > .release/notes.md
+          echo "Captured $(wc -l < .release/notes.md) lines of release notes for ${RELEASE_TAG}."
+
+      - name: Create Linear release
+        uses: linear/linear-release-action@v0
+        with:
+          access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
+          # Title + version of the Linear release, taken from the GitHub release.
+          name: ${{ github.event.release.name || github.event.release.tag_name }}
+          version: ${{ github.event.release.tag_name }}
+          # Attach the GitHub release notes as the release document.
+          release_notes: .release/notes.md
+          # github_token defaults to github.token; passed explicitly for clarity.
+          github_token: ${{ github.token }}

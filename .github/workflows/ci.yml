@@ -227,23 +227,10 @@ jobs:
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-        with:
-          # Full history so linear-release-action can scan every commit since
-          # the previous deploy and associate the right OXA-#### issues.
-          fetch-depth: 0
-
       - name: Deploy confirmation
+        # The Linear *release* now fires on GitHub Release publish, not on every
+        # main push — see .github/workflows/linear-release.yml. (Per-push release
+        # creation would mint a Linear release for every checkpoint commit.)
         run: echo "Merge to main detected. Vercel deploys changed apps via its GitHub integration (turbo-ignore skips unchanged apps)."
-
-      # ── Linear Release ────────────────────────────────────────────────────
-      # Scans every commit since the last deploy for OXA-#### references and
-      # creates a completed release in the configured Linear pipeline. Soft-fail
-      # so a Linear outage never blocks the merge. Setup: docs/ops/linear-releases-ci.md.
-      - name: Create Linear Release
-        continue-on-error: true
-        uses: linear/linear-release-action@v0
-        with:
-          access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
