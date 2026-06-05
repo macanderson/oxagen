@@ -5,7 +5,7 @@
 // stable across model id formats — hence dedicated coverage here rather than
 // relying on consumer mocks.
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { hashPrompt, providerFromModelId } from "./clickhouse";
 
 // ---------------------------------------------------------------------------
@@ -75,5 +75,55 @@ describe("providerFromModelId", () => {
   it("returns '' for an unknown model id", () => {
     expect(providerFromModelId("unknown-model-xyz")).toBe("");
     expect(providerFromModelId("")).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// clickhouse() client construction
+//
+// Regression guard: every caller stamps timestamps with `Date.toISOString()`
+// (ISO-8601 `T`/`Z` form). ClickHouse's default `basic` date_time_input_format
+// rejects that against DateTime64 columns ("Cannot parse input ... created_at"),
+// silently dropping all token/tool telemetry. The singleton must enable
+// `best_effort` parsing so ISO timestamps ingest. This test fails if that
+// setting is ever dropped from createClient.
+// ---------------------------------------------------------------------------
+
+const createClientMock = vi.hoisted(() =>
+  vi.fn((_config: { clickhouse_settings?: { date_time_input_format?: string } }) => ({
+    close: vi.fn(),
+  })),
+);
+
+vi.mock("@clickhouse/client", () => ({
+  createClient: createClientMock,
+}));
+
+vi.mock("@oxagen/config/env", () => ({
+  requireEnv: () => ({
+    CLICKHOUSE_URL: "https://ch.example",
+    CLICKHOUSE_USERNAME: "u",
+    CLICKHOUSE_PASSWORD: "p",
+    CLICKHOUSE_DATABASE: "db",
+  }),
+}));
+
+describe("clickhouse client construction", () => {
+  afterEach(() => {
+    vi.resetModules();
+    createClientMock.mockClear();
+  });
+
+  it("enables best_effort date_time_input_format so ISO-8601 timestamps ingest", async () => {
+    // Re-import under the mocks with a fresh module registry so the singleton
+    // is rebuilt and createClient is actually invoked.
+    vi.resetModules();
+    const { clickhouse, closeClickhouse } = await import("./clickhouse");
+    await closeClickhouse();
+    clickhouse();
+
+    expect(createClientMock).toHaveBeenCalledTimes(1);
+    const config = createClientMock.mock.calls[0]![0];
+    expect(config.clickhouse_settings?.date_time_input_format).toBe("best_effort");
   });
 });

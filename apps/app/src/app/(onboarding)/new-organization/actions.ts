@@ -8,9 +8,25 @@ import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { getSessionOrRedirect } from "@/lib/session";
 import { bootstrapOrgIAM } from "@oxagen/handlers/iam-provision";
 
+// FormData schema: captures all flat fields from NewOrgForm.
+// Fields forwarded via hidden inputs (type, industry, employeeSize, addressCountry,
+// addressRegion, addressPlaceId) are always present but may be empty strings —
+// converted to undefined downstream before DB insert.
 const FormSchema = z.object({
-  name: z.string(),
-  slug: z.string(),
+  name: z.string().min(1),
+  slug: z.string().min(2).max(40),
+  type: z.enum(["personal", "business"]).default("business"),
+  website: z.string().optional(),
+  industry: z.string().optional(),
+  employeeSize: z.string().optional(),
+  billingEmail: z.string().optional(),
+  addressLine1: z.string().optional(),
+  addressLine2: z.string().optional(),
+  addressCity: z.string().optional(),
+  addressRegion: z.string().optional(),
+  addressPostalCode: z.string().optional(),
+  addressCountry: z.string().optional(),
+  addressPlaceId: z.string().optional(),
 });
 
 // Postgres unique_violation. Mirrors isSlugConflict in workspace.create.ts and
@@ -18,6 +34,12 @@ const FormSchema = z.object({
 // than sniffing the message string, which is locale- and driver-dependent.
 function isSlugConflict(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
+}
+
+// Coerce an empty string to undefined so we don't write blank strings into
+// optional columns.
+function nonEmpty(s: string | undefined): string | undefined {
+  return s && s.trim().length > 0 ? s.trim() : undefined;
 }
 
 // One server action wraps two capabilities so tenant creation always
@@ -29,19 +51,56 @@ export async function createOrgAction(
   const session = await getSessionOrRedirect();
   const raw = Object.fromEntries(formData);
   const parsedForm = FormSchema.safeParse(raw);
-  if (!parsedForm.success) return { ok: false, error: "Invalid form input" };
+  if (!parsedForm.success) {
+    return { ok: false, error: parsedForm.error.issues[0]?.message ?? "Invalid form input" };
+  }
 
+  const fd = parsedForm.data;
+
+  // Validate core org identity fields through the capability contract.
   const orgInput = organizationCreate.input.safeParse({
-    name: parsedForm.data.name,
-    slug: parsedForm.data.slug,
+    name: fd.name,
+    slug: fd.slug,
   });
-  if (!orgInput.success) return { ok: false, error: orgInput.error.issues[0]?.message ?? "Invalid organization" };
+  if (!orgInput.success) {
+    return { ok: false, error: orgInput.error.issues[0]?.message ?? "Invalid organization" };
+  }
 
   const workspaceInput = workspaceCreate.input.safeParse({
     name: "Default",
     slug: "default",
   });
   if (!workspaceInput.success) return { ok: false, error: "Invalid workspace" };
+
+  // Normalise optional fields — empty strings become undefined.
+  const orgType = fd.type;
+  const isBusiness = orgType === "business";
+
+  const website = isBusiness ? nonEmpty(fd.website) : undefined;
+  const industry = isBusiness ? nonEmpty(fd.industry) : undefined;
+  const employeeSize = isBusiness ? nonEmpty(fd.employeeSize) : undefined;
+  const billingEmail = nonEmpty(fd.billingEmail);
+
+  // Build billing address only when the three required fields are present.
+  const line1 = nonEmpty(fd.addressLine1);
+  const city = nonEmpty(fd.addressCity);
+  const postalCode = nonEmpty(fd.addressPostalCode);
+  const country = nonEmpty(fd.addressCountry);
+  const hasBillingAddress = Boolean(line1 && city && postalCode && country);
+
+  const billingProfile =
+    billingEmail !== undefined || hasBillingAddress
+      ? {
+          billingEmail: billingEmail ?? null,
+          addressLine1: line1 ?? null,
+          addressLine2: nonEmpty(fd.addressLine2) ?? null,
+          addressCity: city ?? null,
+          addressRegion: nonEmpty(fd.addressRegion) ?? null,
+          addressPostalCode: postalCode ?? null,
+          addressCountry: country ?? null,
+          addressPlaceId: nonEmpty(fd.addressPlaceId) ?? null,
+        }
+      : null;
 
   try {
     const result = await db().transaction(async (tx) => {
@@ -52,6 +111,10 @@ export async function createOrgAction(
           slug: orgInput.data.slug,
           planType: orgInput.data.planSlug,
           status: "active",
+          type: orgType,
+          website: website ?? null,
+          industry: industry ?? null,
+          employeeSize: employeeSize ?? null,
           createdByUserId: session.user.id,
           updatedByUserId: session.user.id,
         })
@@ -96,6 +159,16 @@ export async function createOrgAction(
         actorUserId: session.user.id,
         tx,
       });
+
+      // Insert billing profile when billing email or any address field is present.
+      if (billingProfile) {
+        await tx.insert(schema.orgBillingProfiles).values({
+          orgId: tenant.id,
+          ...billingProfile,
+          createdByUserId: session.user.id,
+          updatedByUserId: session.user.id,
+        });
+      }
 
       return { orgId: tenant.id, orgSlug: tenant.slug, workspaceSlug: workspace.slug };
     });

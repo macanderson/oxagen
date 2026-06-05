@@ -9,7 +9,7 @@ export default async function NewTenantPage() {
     <div className="grid min-h-dvh place-items-center p-4">
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle>Create your first organization</CardTitle>
+          <CardTitle>Create organization</CardTitle>
           <CardDescription>
             Organizations own billing and member access. A default workspace is created for you.
           </CardDescription>

@@ -19,6 +19,7 @@ mocks.txInsertOrgReturning.mockResolvedValue([
     publicId: "org_pub_1",
     name: "Acme Corp",
     slug: "acme",
+    type: "business",
     createdAt: new Date("2026-05-01T00:00:00Z"),
     id: "internal_org_id",
   },
@@ -56,9 +57,11 @@ vi.mock("@oxagen/database", () => ({
       id: "id",
       publicId: "publicId",
       name: "name",
+      type: "type",
       createdAt: "createdAt",
     },
     orgUsers: {},
+    orgBillingProfiles: {},
   },
 }));
 
@@ -113,6 +116,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
         publicId: "org_pub_1",
         name: "Acme Corp",
         slug: "acme",
+        type: "business",
         createdAt: new Date("2026-05-01T00:00:00Z"),
         id: "internal_org_id",
       },
@@ -126,7 +130,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
   it("throws when userId is null (unauthenticated request)", async () => {
     const anonCtx: CapabilityContext = { ...CTX, userId: null };
     await expect(
-      organizationCreateHandler({ name: "Test", slug: "test", planSlug: "free" }, anonCtx),
+      organizationCreateHandler({ name: "Test", slug: "test", planSlug: "free", type: "business" as const }, anonCtx),
     ).rejects.toThrow("organization.create requires an authenticated user");
   });
 
@@ -136,7 +140,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     mocks.orgFindFirst.mockResolvedValueOnce({ id: "existing_id" });
 
     await expect(
-      organizationCreateHandler({ name: "Clone", slug: "acme", planSlug: "free" }, CTX),
+      organizationCreateHandler({ name: "Clone", slug: "acme", planSlug: "free", type: "business" as const }, CTX),
     ).rejects.toThrow('slug "acme" already in use');
   });
 
@@ -149,7 +153,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     });
 
     await expect(
-      organizationCreateHandler({ name: "Race", slug: "race-slug", planSlug: "free" }, CTX),
+      organizationCreateHandler({ name: "Race", slug: "race-slug", planSlug: "free", type: "business" as const }, CTX),
     ).rejects.toThrow('slug "race-slug" already in use');
   });
 
@@ -159,26 +163,27 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     });
 
     await expect(
-      organizationCreateHandler({ name: "Bad", slug: "bad-slug", planSlug: "free" }, CTX),
+      organizationCreateHandler({ name: "Bad", slug: "bad-slug", planSlug: "free", type: "business" as const }, CTX),
     ).rejects.toThrow("connection refused");
   });
 
   // ── happy path ───────────────────────────────────────────────────────────
 
-  it("returns the new org's publicId, name, slug, and ISO createdAt", async () => {
+  it("returns the new org's publicId, name, slug, type, and ISO createdAt", async () => {
     const result = await organizationCreateHandler(
-      { name: "Acme Corp", slug: "acme", planSlug: "pro" },
+      { name: "Acme Corp", slug: "acme", planSlug: "pro", type: "business" as const },
       CTX,
     );
 
     expect(result.publicId).toBe("org_pub_1");
     expect(result.name).toBe("Acme Corp");
     expect(result.slug).toBe("acme");
+    expect(result.type).toBe("business");
     expect(result.createdAt).toBe("2026-05-01T00:00:00.000Z");
   });
 
   it("runs the org insert inside a transaction and then calls grantFreeCredits", async () => {
-    await organizationCreateHandler({ name: "Tx Test", slug: "tx-test", planSlug: "free" }, CTX);
+    await organizationCreateHandler({ name: "Tx Test", slug: "tx-test", planSlug: "free", type: "business" as const }, CTX);
     // The org creation (orgs + orgUsers) must happen inside exactly one db
     // transaction so membership is never visible without the org row.
     expect(mocks.txFn).toHaveBeenCalledTimes(1);
@@ -190,7 +195,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
   });
 
   it("calls bootstrapOrgIAM inside the transaction so IAM is atomic with org creation", async () => {
-    await organizationCreateHandler({ name: "IAM Test", slug: "iam-test", planSlug: "free" }, CTX);
+    await organizationCreateHandler({ name: "IAM Test", slug: "iam-test", planSlug: "free", type: "business" as const }, CTX);
     expect(mocks.bootstrapOrgIAM).toHaveBeenCalledTimes(1);
     expect(mocks.bootstrapOrgIAM).toHaveBeenCalledWith(
       expect.objectContaining({

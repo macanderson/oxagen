@@ -136,10 +136,10 @@ class MapsErrorBoundary extends React.Component<
   static getDerivedStateFromError() {
     return { hasError: true };
   }
-  componentDidCatch(err: unknown) {
+  override componentDidCatch(err: Error) {
     console.debug("[billing-address] Maps error boundary caught (suppressed)", err);
   }
-  render() {
+  override render() {
     if (this.state.hasError) return null; // fail silently
     return this.props.children;
   }
