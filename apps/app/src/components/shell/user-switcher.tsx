@@ -14,6 +14,7 @@
  */
 
 import * as React from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { User, LogOut, Settings, ChevronsUpDown, Monitor, Moon, Sun } from "lucide-react";
 import { signOut } from "@oxagen/auth/client";
@@ -100,8 +101,7 @@ export function UserSwitcher({ user, variant = "full", className }: UserSwitcher
       )}
     >
       {user.image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={user.image} alt={displayName} className="h-full w-full object-cover" />
+        <Image src={user.image} alt={displayName} width={32} height={32} className="h-full w-full object-cover" />
       ) : (
         <span aria-hidden="true">{initials(user.name, user.email)}</span>
       )}

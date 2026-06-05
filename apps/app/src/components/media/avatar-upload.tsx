@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import NextImage from "next/image";
 import Cropper, { type Area } from "react-easy-crop";
 // react-easy-crop v5 ships its overlay/handle styles separately — without this
 // the crop area renders unstyled (no mask, no drag handles).
@@ -221,10 +222,11 @@ export function AvatarUpload({
         aria-hidden="true"
       >
         {hasImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <NextImage
             src={value!}
             alt="Avatar"
+            width={64}
+            height={64}
             className="size-full object-cover"
           />
         ) : (

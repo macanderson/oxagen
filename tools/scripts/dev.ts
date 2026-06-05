@@ -31,7 +31,7 @@ async function ensureEnvFile(): Promise<void> {
     console.error(
       kleur.red(
         "Failed to pull env from Vercel. Run `vercel login` and `vercel link` " +
-          "(project oxagen-v2-app, scope 02beta), then `pnpm env:pull`.",
+          "(project oxagen-v2-app, scope oxagen), then `pnpm env:pull`.",
       ),
     );
     process.exit(1);

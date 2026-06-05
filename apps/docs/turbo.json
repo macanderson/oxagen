@@ -1,0 +1,14 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      // Fumadocs static documentation site — depends only on @oxagen/ui and the
+      // local MDX source, and never calls loadEnv() or any backend. No secret
+      // env affects the bundle, so a key rotation must NOT invalidate this build.
+      "env": ["NEXT_PUBLIC_APP_URL"],
+      "passThroughEnv": ["VERCEL", "VERCEL_URL"]
+    }
+  }
+}

@@ -1,6 +1,5 @@
 "use client";
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +9,6 @@ export interface NewWorkspaceAction {
 }
 
 export function NewWorkspaceForm({ orgSlug, action }: { orgSlug: string; action: NewWorkspaceAction }) {
-  const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
 
@@ -24,8 +22,11 @@ export function NewWorkspaceForm({ orgSlug, action }: { orgSlug: string; action:
         setError(res.error);
         return;
       }
-      router.push(`/${orgSlug}/${res.workspaceSlug}`);
-      router.refresh();
+      // Hard navigation into the new workspace — NOT router.push + refresh in one
+      // transition (that race hangs the transition; see new-organization-form).
+      // A full assign also guarantees the org layout re-fetches availableWorkspaces
+      // so the new workspace appears in the switcher.
+      window.location.assign(`/${orgSlug}/${res.workspaceSlug}`);
     });
   };
 

@@ -62,7 +62,14 @@
         "VERCEL_SANDBOX_TEAM_ID",
         "VERCEL_SANDBOX_PROJECT_ID",
         // IAM enforcement
-        "IAM_ENFORCEMENT_ENABLED"
+        "IAM_ENFORCEMENT_ENABLED",
+        // Server Action origin allowlist (next.config bakes these in). The
+        // production domain + manual override bust the build cache when changed;
+        // VERCEL_URL stays passThrough (per-deployment, and a stale value in the
+        // supplementary allowlist is harmless — Next's runtime same-origin check
+        // guards the live host).
+        "VERCEL_PROJECT_PRODUCTION_URL",
+        "SERVER_ACTIONS_ALLOWED_ORIGINS"
       ],
       "passThroughEnv": ["VERCEL", "VERCEL_URL", "NEXT_PHASE"]
     }

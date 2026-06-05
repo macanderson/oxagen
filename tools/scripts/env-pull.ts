@@ -3,9 +3,14 @@
  * Pulls `.env.local` from Vercel's Development environment for every linked
  * project in the monorepo. Vercel is the source of truth — this script just
  * materialises whatever's currently configured in
- * dashboard.vercel.com → 02beta → <project> → Settings → Environment Variables.
+ * dashboard.vercel.com → <team> → <project> → Settings → Environment Variables.
  *
  * Run `pnpm env:pull` after Vercel env edits to refresh local secrets.
+ *
+ * Team scope: set `VERCEL_TEAM_SLUG` to pass `--scope` explicitly (handy when
+ * your CLI default team differs). When unset, the Vercel CLI resolves the team
+ * from each project's linked `.vercel/project.json`, so the pull still works —
+ * we deliberately don't hardcode a team slug here.
  */
 import { execa } from "execa";
 import kleur from "kleur";
@@ -13,7 +18,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 const ROOT = resolve(process.cwd());
-const VERCEL_SCOPE = "02beta";
+const VERCEL_TEAM_SLUG = process.env.VERCEL_TEAM_SLUG?.trim();
 const TARGETS = [
   { name: "root", dir: ROOT },
   { name: "@oxagen/app", dir: resolve(ROOT, "apps/app") },
@@ -28,18 +33,9 @@ async function pull(target: { name: string; dir: string }): Promise<void> {
     return;
   }
   console.log(kleur.cyan(`[env-pull] ${target.name}`));
-  await execa(
-    "vercel",
-    [
-      "env",
-      "pull",
-      ".env.local",
-      "--environment=development",
-      "--yes",
-      `--scope=${VERCEL_SCOPE}`,
-    ],
-    { cwd: target.dir, stdio: "inherit" },
-  );
+  const args = ["env", "pull", ".env.local", "--environment=development", "--yes"];
+  if (VERCEL_TEAM_SLUG) args.push(`--scope=${VERCEL_TEAM_SLUG}`);
+  await execa("vercel", args, { cwd: target.dir, stdio: "inherit" });
 }
 
 async function main(): Promise<void> {

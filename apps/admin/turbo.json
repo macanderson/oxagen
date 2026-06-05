@@ -1,0 +1,15 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      // Stub landing page — depends only on @oxagen/ui and never calls loadEnv().
+      // Only public, build-time-inlined vars affect the bundle, so a Postgres /
+      // Stripe / AI key rotation must NOT invalidate this build. Do not inherit
+      // the root build's full secret env list.
+      "env": ["NEXT_PUBLIC_APP_URL"],
+      "passThroughEnv": ["VERCEL", "VERCEL_URL"]
+    }
+  }
+}

@@ -713,6 +713,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  VERCEL_TEAM_SLUG: {
+    group: "env-manager tooling",
+    description:
+      "Vercel team slug for `pnpm env:pull` --scope (e.g. \"oxagen\"). Optional — when unset, " +
+      "the CLI resolves the team from each project's linked .vercel/project.json.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "oxagen",
+  },
   ENV_MANAGER_PORT: {
     group: "env-manager tooling",
     description: "Local port for the env-manager web UI.",

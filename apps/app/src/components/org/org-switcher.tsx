@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ChevronsUpDown, Plus, Check } from "lucide-react";
 import {
@@ -41,11 +42,12 @@ function OrgAvatar({
 }) {
   if (avatarUrl) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- external blob URL; next/image would need remotePatterns for the blob host.
-      <img
+      <Image
         src={avatarUrl}
         alt=""
         aria-hidden="true"
+        width={32}
+        height={32}
         className={cn("size-8 shrink-0 rounded-md object-cover", className)}
       />
     );

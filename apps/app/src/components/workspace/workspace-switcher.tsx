@@ -45,7 +45,7 @@ export function WorkspaceSwitcher({
           </MenuItem>
         ))}
         <MenuSeparator />
-        <MenuItem onClick={() => router.push(`/${orgSlug}/settings/members`)}>
+        <MenuItem onClick={() => router.push(`/${orgSlug}/new-workspace`)}>
           <Plus className="h-3.5 w-3.5" /> New workspace
         </MenuItem>
       </MenuPopup>

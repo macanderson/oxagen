@@ -1,12 +1,5 @@
-import nextPlugin from "eslint-config-next";
-import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
-import nextTypescript from "eslint-config-next/typescript";
+// Uses the shared Next.js flat config (no-explicit-any: error, …) — see
+// ../../eslint.next.mjs — plus the Fumadocs-generated .source/** ignore on top.
+import nextConfig from "../../eslint.next.mjs";
 
-const config = [
-  { ignores: [".next/**", ".source/**", "node_modules/**", "dist/**", ".turbo/**", "coverage/**"] },
-  ...nextPlugin,
-  ...nextCoreWebVitals,
-  ...nextTypescript,
-];
-
-export default config;
+export default [...nextConfig, { ignores: [".source/**"] }];

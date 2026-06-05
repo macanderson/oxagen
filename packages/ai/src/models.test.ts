@@ -35,7 +35,12 @@ vi.mock("@oxagen/config/env", () => ({
   requireEnv: () => envValues,
 }));
 
-import { selectModel } from "./models";
+import {
+  selectModel,
+  imageTierModelId,
+  videoTierModelId,
+  resolvedTierCatalog,
+} from "./models";
 
 // ──────────────────────────────────────────────────────────────────
 
@@ -170,3 +175,47 @@ describe("selectModel (@oxagen/ai)", () => {
     expect(mocks.openaiFactory).toHaveBeenCalledWith("openai/gpt-5.2");
   });
 });
+
+const MEDIA_ENV = {
+  OXAGEN_LLM_IMAGE_BASIC: "openai/dall-e-3",
+  OXAGEN_LLM_IMAGE_ADVANCED: "bfl/flux-2",
+  OXAGEN_LLM_VIDEO_BASIC: "google/veo-3-fast",
+  OXAGEN_LLM_VIDEO_ADVANCED: "google/veo-3",
+};
+
+describe("media tier resolution (@oxagen/ai)", () => {
+  beforeEach(resetMocks);
+
+  it("resolves image tiers from OXAGEN_LLM_IMAGE_* env", () => {
+    envValues = { ...MEDIA_ENV };
+    expect(imageTierModelId("basic")).toBe("openai/dall-e-3");
+    expect(imageTierModelId("advanced")).toBe("bfl/flux-2");
+  });
+
+  it("resolves video tiers from OXAGEN_LLM_VIDEO_* env", () => {
+    envValues = { ...MEDIA_ENV };
+    expect(videoTierModelId("basic")).toBe("google/veo-3-fast");
+    expect(videoTierModelId("advanced")).toBe("google/veo-3");
+  });
+
+  it("joins every tier to its concrete gateway model id", () => {
+    envValues = { ...GATEWAY_ENV_FOR_CATALOG, ...MEDIA_ENV };
+    expect(resolvedTierCatalog()).toEqual({
+      text: {
+        fast: "anthropic/claude-haiku-4.5",
+        balanced: "anthropic/claude-sonnet-4.6",
+        precise: "anthropic/claude-opus-4.8",
+      },
+      image: { basic: "openai/dall-e-3", advanced: "bfl/flux-2" },
+      video: { basic: "google/veo-3-fast", advanced: "google/veo-3" },
+    });
+  });
+});
+
+// resolvedTierCatalog reads text + media tiers; the env mock returns the whole
+// object regardless of requested keys, so provide both sets together.
+const GATEWAY_ENV_FOR_CATALOG = {
+  OXAGEN_LLM_FAST: "anthropic/claude-haiku-4.5",
+  OXAGEN_LLM_BALANCED: "anthropic/claude-sonnet-4.6",
+  OXAGEN_LLM_PRECISE: "anthropic/claude-opus-4.8",
+};

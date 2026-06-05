@@ -18,43 +18,67 @@ export default async function BillingSubscriptionPage({
   const { orgSlug } = await params;
   const [tenant, session] = await Promise.all([resolveOrg(orgSlug), getSession()]);
 
-  // Viewer's role for billing-control gating.
-  const viewerRoleRow = session?.user
-    ? (
-        await db()
-          .select({ role: schema.orgUsers.role })
-          .from(schema.orgUsers)
-          .where(
-            and(
-              eq(schema.orgUsers.orgId, tenant.id),
-              eq(schema.orgUsers.userId, session.user.id),
-            ),
-          )
-          .limit(1)
-      )[0] ?? null
-    : null;
+  // Batch 1: all queries keyed solely on tenant/session ids — run concurrently.
+  const [viewerRoleRow, subscriptionRow, creditBalance, ledgerRows] =
+    await Promise.all([
+      // Viewer's role for billing-control gating.
+      session?.user
+        ? db()
+            .select({ role: schema.orgUsers.role })
+            .from(schema.orgUsers)
+            .where(
+              and(
+                eq(schema.orgUsers.orgId, tenant.id),
+                eq(schema.orgUsers.userId, session.user.id),
+              ),
+            )
+            .limit(1)
+            .then((rows) => rows[0] ?? null)
+        : Promise.resolve(null),
+      safeQuery(
+        async () =>
+          (
+            await db()
+              .select()
+              .from(schema.subscriptions)
+              .where(
+                and(
+                  eq(schema.subscriptions.orgId, tenant.id),
+                  sql`${schema.subscriptions.status} in ('active','trialing','past_due')`,
+                ),
+              )
+              .orderBy(desc(schema.subscriptions.createdAt))
+              .limit(1)
+          )[0] ?? null,
+        null as SubscriptionRow | null,
+      ),
+      safeQuery(
+        async () =>
+          (
+            await db()
+              .select()
+              .from(schema.creditBalances)
+              .where(eq(schema.creditBalances.orgId, tenant.id))
+              .limit(1)
+          )[0] ?? null,
+        null as CreditBalanceRow | null,
+      ),
+      safeQuery(
+        () =>
+          db()
+            .select()
+            .from(schema.creditLedger)
+            .where(eq(schema.creditLedger.orgId, tenant.id))
+            .orderBy(desc(schema.creditLedger.createdAt))
+            .limit(10),
+        [] as CreditLedgerRow[],
+      ),
+    ]);
 
   const viewerRole = viewerRoleRow?.role ?? "member";
   const canManageBilling = CAN_MANAGE_BILLING.has(viewerRole);
 
-  const subscriptionRow = await safeQuery(
-    async () =>
-      (
-        await db()
-          .select()
-          .from(schema.subscriptions)
-          .where(
-            and(
-              eq(schema.subscriptions.orgId, tenant.id),
-              sql`${schema.subscriptions.status} in ('active','trialing','past_due')`,
-            ),
-          )
-          .orderBy(desc(schema.subscriptions.createdAt))
-          .limit(1)
-      )[0] ?? null,
-    null as SubscriptionRow | null,
-  );
-
+  // Batch 2: planForSub depends on subscriptionRow.planId — must stay sequential.
   // Resolve the subscribed plan by id (not via the public-plans list) so the
   // summary names the plan correctly even if it is no longer public/canonical —
   // e.g. a legacy tier or one hidden by the source-of-truth sync. Plan selection
@@ -72,29 +96,6 @@ export default async function BillingSubscriptionPage({
         null as PlanRow | null,
       )
     : null;
-
-  const creditBalance = await safeQuery(
-    async () =>
-      (
-        await db()
-          .select()
-          .from(schema.creditBalances)
-          .where(eq(schema.creditBalances.orgId, tenant.id))
-          .limit(1)
-      )[0] ?? null,
-    null as CreditBalanceRow | null,
-  );
-
-  const ledgerRows = await safeQuery(
-    () =>
-      db()
-        .select()
-        .from(schema.creditLedger)
-        .where(eq(schema.creditLedger.orgId, tenant.id))
-        .orderBy(desc(schema.creditLedger.createdAt))
-        .limit(10),
-    [] as CreditLedgerRow[],
-  );
 
   const subscription = subscriptionRow
     ? {

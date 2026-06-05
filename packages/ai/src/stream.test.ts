@@ -99,6 +99,18 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     expect(arg.temperature).toBe(0.7);
   });
 
+  it("does not set providerOptions when no effort is supplied", () => {
+    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY });
+    const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.providerOptions).toBeUndefined();
+  });
+
+  it("maps effort to the OpenAI reasoningEffort provider option", () => {
+    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY, effort: "high" });
+    const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.providerOptions).toEqual({ openai: { reasoningEffort: "high" } });
+  });
+
   it("uses defaultModel() when no model arg is given", () => {
     const before = mocks.defaultModel.mock.calls.length;
     streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY });
