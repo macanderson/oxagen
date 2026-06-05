@@ -370,6 +370,95 @@
       }
     },
     {
+      "name": "conversation.archive",
+      "file": "conversation.archive.ts",
+      "domain": "conversation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "conversation.delete",
+      "file": "conversation.delete.ts",
+      "domain": "conversation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "conversation.list",
+      "file": "conversation.list.ts",
+      "domain": "conversation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "conversation.purge",
+      "file": "conversation.purge.ts",
+      "domain": "conversation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "conversation.rename",
+      "file": "conversation.rename.ts",
+      "domain": "conversation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
       "name": "documents.generate",
       "file": "documents.generate.ts",
       "domain": "documents",

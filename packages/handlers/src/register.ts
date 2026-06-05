@@ -115,3 +115,28 @@ registerHandler(
     (await import("./workspace.model.settings.write"))
       .workspaceModelSettingsWriteHandler as CapabilityHandlerFn,
 );
+registerHandler(
+  "conversation.list",
+  async () =>
+    (await import("./conversation.list")).conversationListHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "conversation.rename",
+  async () =>
+    (await import("./conversation.rename")).conversationRenameHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "conversation.archive",
+  async () =>
+    (await import("./conversation.archive")).conversationArchiveHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "conversation.delete",
+  async () =>
+    (await import("./conversation.delete")).conversationDeleteHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "conversation.purge",
+  async () =>
+    (await import("./conversation.purge")).conversationPurgeHandler as CapabilityHandlerFn,
+);

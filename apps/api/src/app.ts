@@ -41,6 +41,11 @@ import { userPreferencesReadRoute } from "./routes/v1/user.preferences.read";
 import { userPreferencesWriteRoute } from "./routes/v1/user.preferences.write";
 import { workspaceModelSettingsReadRoute } from "./routes/v1/workspace.model.settings.read";
 import { workspaceModelSettingsWriteRoute } from "./routes/v1/workspace.model.settings.write";
+import { conversationListRoute } from "./routes/v1/conversation.list";
+import { conversationRenameRoute } from "./routes/v1/conversation.rename";
+import { conversationArchiveRoute } from "./routes/v1/conversation.archive";
+import { conversationDeleteRoute } from "./routes/v1/conversation.delete";
+import { conversationPurgeRoute } from "./routes/v1/conversation.purge";
 
 export type AppEnv = {
   Variables: {
@@ -84,6 +89,11 @@ orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 orgScoped.route("/billing/subscription/upgrade/start", billingSubscriptionUpgradeStartRoute);
 orgScoped.route("/billing/credits/purchase", billingCreditsPurchaseRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
+orgScoped.route("/conversations", conversationListRoute);
+orgScoped.route("/conversations/rename", conversationRenameRoute);
+orgScoped.route("/conversations/archive", conversationArchiveRoute);
+orgScoped.route("/conversations/delete", conversationDeleteRoute);
+orgScoped.route("/conversations/purge", conversationPurgeRoute);
 // Agent-runtime routes live under the org + workspace scope so the runner
 // inherits the same auth, isolation, and audit envelope as every other v1 call.
 orgScoped.route("/agent/tools", agentToolListRoute);

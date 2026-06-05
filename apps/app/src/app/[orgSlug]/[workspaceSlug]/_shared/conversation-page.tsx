@@ -13,6 +13,16 @@ import type { PlanStep } from "@/components/chat/stream-event-types";
 import { loadEffectiveModelDefaults } from "@oxagen/ai";
 import { buildSeededModelState } from "@/components/chat/model-state";
 import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
+import { conversationListHandler } from "@oxagen/handlers/conversation.list";
+import { ConversationNav } from "@/components/conversations/conversation-nav";
+import type { ConversationNavActions } from "@/components/conversations/types";
+import {
+  listConversationsAction,
+  renameConversationAction,
+  archiveConversationsAction,
+  deleteConversationsAction,
+  purgeArchivedConversationsAction,
+} from "./conversation-actions";
 
 // The unbound action factories — one set per route module because each
 // module hard-codes its own revalidatePath segment (/chat vs /ask).
@@ -167,25 +177,42 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
 
   // Agent-surface capabilities feed the plan-card amend UX. Computed
   // once per render here so the client doesn't refetch / refilter.
-  const [agentCapabilities, userPrefs, effectiveModelDefaults] = await Promise.all([
-    Promise.resolve(
-      listCapabilities()
-        .filter((c) => getSurfaces(c).includes("agent"))
-        .map((c) => ({
-          name: c.name,
-          description: c.description,
-          riskLevel: c.agent?.riskLevel ?? "low",
-        })),
-    ),
-    userPreferencesReadHandler({}, userCtx).catch(() => ({
-      enterToSubmit: false as const,
-      pendingPromptBehavior: "queue" as const,
-    })),
-    loadEffectiveModelDefaults({
-      userId: session.user.id,
-      workspaceId: workspace.id,
-    }).catch(() => null),
-  ]);
+  const [agentCapabilities, userPrefs, effectiveModelDefaults, initialConversations] =
+    await Promise.all([
+      Promise.resolve(
+        listCapabilities()
+          .filter((c) => getSurfaces(c).includes("agent"))
+          .map((c) => ({
+            name: c.name,
+            description: c.description,
+            riskLevel: c.agent?.riskLevel ?? "low",
+          })),
+      ),
+      userPreferencesReadHandler({}, userCtx).catch(() => ({
+        enterToSubmit: false as const,
+        pendingPromptBehavior: "queue" as const,
+      })),
+      loadEffectiveModelDefaults({
+        userId: session.user.id,
+        workspaceId: workspace.id,
+      }).catch(() => null),
+      // First page of active conversations for the history nav. Failure is
+      // non-fatal — the nav renders empty rather than crashing the chat page.
+      conversationListHandler({ filter: "active", limit: 50, cursor: null }, userCtx).catch(
+        () => ({ conversations: [], nextCursor: null }),
+      ),
+    ]);
+
+  // Bind the workspace scope into the nav's server actions so the client only
+  // hands them user input, never org/workspace ids.
+  const navCtx = { orgSlug, workspaceSlug };
+  const conversationNavActions: ConversationNavActions = {
+    list: listConversationsAction.bind(null, navCtx),
+    rename: renameConversationAction.bind(null, navCtx),
+    archive: archiveConversationsAction.bind(null, navCtx),
+    delete: deleteConversationsAction.bind(null, navCtx),
+    purge: purgeArchivedConversationsAction.bind(null, navCtx),
+  };
 
   const initialModelState = effectiveModelDefaults
     ? buildSeededModelState({
@@ -197,23 +224,33 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
     : undefined;
 
   return (
-    <div className="mx-auto h-full max-w-4xl">
-      <ChatShell
-        conversationId={conversationId}
-        activeLeafMessageId={activeLeafMessageId}
-        messagesPromise={messagesPromise}
-        sendAction={sendAction}
-        resolveApprovalAction={boundResolveApproval}
-        resolvePlanAction={boundResolvePlan}
-        fetchBackgroundTask={boundReadTask}
-        cancelBackgroundTask={boundCancelTask}
-        agentCapabilities={agentCapabilities as AgentCapability[]}
-        orgSlug={orgSlug}
-        workspaceSlug={workspaceSlug}
-        enterToSubmit={userPrefs.enterToSubmit}
-        pendingPromptBehavior={userPrefs.pendingPromptBehavior}
-        initialModelState={initialModelState}
+    <div className="flex h-full flex-col gap-3 md:flex-row md:gap-4">
+      <ConversationNav
+        currentPublicId={conv?.publicId ?? null}
+        initialActive={initialConversations.conversations}
+        initialActiveNextCursor={initialConversations.nextCursor}
+        actions={conversationNavActions}
       />
+      <div className="min-w-0 flex-1">
+        <div className="mx-auto h-full max-w-4xl">
+          <ChatShell
+            conversationId={conversationId}
+            activeLeafMessageId={activeLeafMessageId}
+            messagesPromise={messagesPromise}
+            sendAction={sendAction}
+            resolveApprovalAction={boundResolveApproval}
+            resolvePlanAction={boundResolvePlan}
+            fetchBackgroundTask={boundReadTask}
+            cancelBackgroundTask={boundCancelTask}
+            agentCapabilities={agentCapabilities as AgentCapability[]}
+            orgSlug={orgSlug}
+            workspaceSlug={workspaceSlug}
+            enterToSubmit={userPrefs.enterToSubmit}
+            pendingPromptBehavior={userPrefs.pendingPromptBehavior}
+            initialModelState={initialModelState}
+          />
+        </div>
+      </div>
     </div>
   );
 }
