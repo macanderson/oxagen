@@ -277,7 +277,7 @@ export function ModelPicker({ value, onChange, modelConfig }: ModelPickerProps) 
           ) : (
             // Media tiers (image or video)
             MEDIA_TIERS.map((t) => {
-              const resolvedId = (tierMap as Record<string, string>)[t.id];
+              const resolvedId = (tierMap as Record<string, string | undefined>)[t.id] ?? t.id;
               const resolvedName = getModel(resolvedId)?.name ?? resolvedId;
               const isActive = value.mediaModel === null && value.mediaTier === t.id;
 
