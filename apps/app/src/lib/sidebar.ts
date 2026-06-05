@@ -57,6 +57,10 @@ export type SidebarItem = {
 
 export type SidebarConfig = {
   mode: SidebarMode;
+  /** Uppercase label shown above the primary group (e.g. "WORKSPACE"). */
+  groupLabel?: string;
+  /** Uppercase label shown above the tools group (e.g. "TOOLS"). */
+  toolsLabel?: string;
   items: SidebarItem[];
 };
 
@@ -71,6 +75,8 @@ export type SidebarConfig = {
 
 const workspaceConfig: SidebarConfig = {
   mode: "workspace",
+  groupLabel: "Workspace",
+  toolsLabel: "Tools",
   items: [
     {
       id: "ask",
@@ -148,6 +154,7 @@ const workspaceConfig: SidebarConfig = {
 
 const orgConfig: SidebarConfig = {
   mode: "org",
+  groupLabel: "Organization",
   items: [
     {
       id: "workspaces",
@@ -205,6 +212,7 @@ const orgConfig: SidebarConfig = {
 
 const accountConfig: SidebarConfig = {
   mode: "account",
+  groupLabel: "Account",
   items: [
     {
       id: "back",

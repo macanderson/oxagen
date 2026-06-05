@@ -18,17 +18,24 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 import { getSidebarConfig, resolveSidebarMode } from "@/lib/sidebar";
 import { SidebarItem } from "@/components/shell/sidebar-item";
-import { UserSwitcher, type SessionUser } from "@/components/shell/user-switcher";
 import { cn } from "@/lib/utils";
 import type { ScopeContext } from "@/lib/scope";
 
 export interface SidebarProps {
   ctx: ScopeContext;
-  user: SessionUser;
+}
+
+/** Uppercase group heading shown above a sidebar section. */
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+      {children}
+    </p>
+  );
 }
 
 /** Desktop sidebar — hidden on mobile, visible at `md` and above. */
-export function Sidebar({ ctx, user }: SidebarProps) {
+export function Sidebar({ ctx }: SidebarProps) {
   const pathname = usePathname();
   const mode = resolveSidebarMode(pathname, ctx);
   const config = getSidebarConfig(mode);
@@ -61,28 +68,25 @@ export function Sidebar({ ctx, user }: SidebarProps) {
     >
       {/* Primary group */}
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2" aria-label="Workspace navigation">
+        {config.groupLabel && <GroupLabel>{config.groupLabel}</GroupLabel>}
         {primary.map(renderItem)}
 
-        {/* Tools group — separated with a subtle divider */}
+        {/* Tools group — its own labelled section, separated by a divider */}
         {tools.length > 0 && (
           <>
-            <div className="my-1.5 mx-2 h-px bg-sidebar-border" role="separator" aria-hidden="true" />
+            <div className="mx-2 my-2 h-px bg-sidebar-border" role="separator" aria-hidden="true" />
+            {config.toolsLabel && <GroupLabel>{config.toolsLabel}</GroupLabel>}
             {tools.map(renderItem)}
           </>
         )}
       </nav>
 
-      {/* Footer nav items — pinned bottom */}
+      {/* Footer nav items — pinned bottom (account control now lives in the topbar) */}
       {footer.length > 0 && (
         <div className="flex flex-col gap-0.5 border-t border-sidebar-border p-2">
           {footer.map(renderItem)}
         </div>
       )}
-
-      {/* User switcher — anchored to the very bottom of the sidenav */}
-      <div className="border-t border-sidebar-border p-2">
-        <UserSwitcher user={user} />
-      </div>
     </aside>
   );
 }

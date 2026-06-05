@@ -21,9 +21,18 @@ import { NotificationsBell } from "./notifications-bell";
 import { ThemeToggle } from "./theme-toggle";
 import { OrgSwitcher } from "@/components/org/org-switcher";
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
+import { UserSwitcher, type SessionUser } from "./user-switcher";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
-import type { SessionUser } from "./user-switcher";
 import type { ScopeContext } from "@/lib/scope";
+
+/** Muted "/" separator between brand and the org / workspace switchers. */
+function Slash() {
+  return (
+    <span className="select-none text-sm text-muted-foreground/50" aria-hidden="true">
+      /
+    </span>
+  );
+}
 
 export interface TopbarProps {
   org: ResolvedOrg;
@@ -51,7 +60,7 @@ export function Topbar({
 
   return (
     <header className="glass sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
-      {/* Left: hamburger (mobile) + wordmark + org switcher */}
+      {/* Left: hamburger (mobile) + brand + org / workspace breadcrumb */}
       <div className="flex min-w-0 items-center gap-2">
         <MobileNav
           ctx={ctx}
@@ -71,7 +80,21 @@ export function Topbar({
           <OxagenWordmark className="hidden h-3.5 w-auto text-foreground md:block" />
         </Link>
 
-        <OrgSwitcher current={org} organizations={availableOrgs} />
+        {/* Breadcrumb switchers: oxagen / org ▾ / workspace ▾ */}
+        <div className="hidden min-w-0 items-center gap-2 sm:flex">
+          <Slash />
+          <OrgSwitcher current={org} organizations={availableOrgs} />
+          {workspace ? (
+            <>
+              <Slash />
+              <WorkspaceSwitcher
+                orgSlug={org.slug}
+                current={workspace}
+                workspaces={availableWorkspaces ?? []}
+              />
+            </>
+          ) : null}
+        </div>
       </div>
 
       {/* Center: ask bar */}
@@ -79,17 +102,11 @@ export function Topbar({
         <AskBar ctx={ctx} />
       </div>
 
-      {/* Right: notifications + workspace picker + theme switcher */}
-      <div className="flex shrink-0 items-center gap-2">
+      {/* Right: notifications + theme switcher + account avatar */}
+      <div className="flex shrink-0 items-center gap-1.5">
         <NotificationsBell />
-        {workspace ? (
-          <WorkspaceSwitcher
-            orgSlug={org.slug}
-            current={workspace}
-            workspaces={availableWorkspaces ?? []}
-          />
-        ) : null}
         <ThemeToggle />
+        <UserSwitcher user={user} variant="avatar" />
       </div>
     </header>
   );

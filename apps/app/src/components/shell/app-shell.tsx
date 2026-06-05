@@ -40,26 +40,27 @@ export function AppShell({
   const ctx = { orgSlug: org.slug, workspaceSlug: workspace?.slug };
 
   return (
-    <div className="app-bg flex h-dvh w-full overflow-hidden">
-      {/* Desktop sidebar — hidden on mobile */}
-      <Sidebar ctx={ctx} user={user} />
+    <div className="app-bg flex h-dvh w-full flex-col overflow-hidden">
+      {/* Topbar spans the full width along the top, above the sidebar. */}
+      <Topbar
+        org={org}
+        workspace={workspace}
+        availableOrgs={availableOrgs}
+        availableWorkspaces={availableWorkspaces}
+        user={user}
+      />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar
-          org={org}
-          workspace={workspace}
-          availableOrgs={availableOrgs}
-          availableWorkspaces={availableWorkspaces}
-          user={user}
-        />
+      {/* Row below the topbar: fixed sidebar (left) + scrollable main. */}
+      <div className="flex min-h-0 flex-1">
+        {/* Desktop sidebar — hidden on mobile */}
+        <Sidebar ctx={ctx} />
+
         {/*
           On mobile the bottom bar is fixed/overlapping, so we add bottom
           padding equal to the bar height (~56px) only at < md so content
           doesn't hide behind it.
         */}
-        <main
-          className="flex-1 overflow-y-auto p-4 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6"
-        >
+        <main className="min-w-0 flex-1 overflow-y-auto p-4 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
           {children}
         </main>
       </div>
