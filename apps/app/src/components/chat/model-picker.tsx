@@ -6,7 +6,6 @@ import {
   gatewayModels,
   vendorLabels,
   getModel,
-  supportsReasoning,
   supportsImage,
   supportsVideo,
   supportsText,
@@ -85,16 +84,6 @@ interface OtherModelsListProps {
 }
 
 function OtherModelsList({ generate, activeModelId, onSelect }: OtherModelsListProps) {
-  const isEnabled = React.useCallback(
-    (vendor: Vendor) => {
-      // We're checking the model not the vendor — kept for completeness.
-      void vendor;
-      return true;
-    },
-    [],
-  );
-  void isEnabled;
-
   return (
     <div className="max-h-80 overflow-y-auto py-1">
       {gatewayModels.map((m) => {
