@@ -153,6 +153,12 @@ export function ChatShellClient({
               parentMessageId: result.userMessageId ?? null,
               orgSlug: orgSlugRef.current,
               workspaceSlug: workspaceSlugRef.current,
+              tier: (formData.get("tier") as string) || null,
+              model: (formData.get("model") as string) || null,
+              effort: (formData.get("effort") as string) || null,
+              generate: (formData.get("generate") as string) || null,
+              mediaTier: (formData.get("mediaTier") as string) || null,
+              mediaModel: (formData.get("mediaModel") as string) || null,
             }),
           });
 
@@ -378,6 +384,7 @@ export function ChatShellClient({
         parentMessageId={activeLeafMessageId}
         action={wrappedSendAction}
         disabled={hasPendingApproval}
+        modelConfig={modelConfig}
       />
     </div>
   );

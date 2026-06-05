@@ -7,6 +7,7 @@ import {
   BackgroundTaskTray,
   type BackgroundTaskSnapshot,
 } from "./background-task-tray";
+import { resolvedTierCatalog } from "@oxagen/ai";
 
 export { type ChatMessage } from "./message-bubble";
 
