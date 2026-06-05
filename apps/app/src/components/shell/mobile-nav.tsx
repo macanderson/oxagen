@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/sheet";
 import { OrgSwitcher } from "@/components/org/org-switcher";
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
-import { getSidebarConfig, resolveSidebarMode } from "@/lib/sidebar";
+import { activeHrefFor, getSidebarConfig, resolveSidebarCtx, resolveSidebarMode } from "@/lib/sidebar";
 import { cn } from "@/lib/utils";
 import type { ScopeContext } from "@/lib/scope";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
@@ -35,7 +35,8 @@ export interface MobileNavProps {
   workspace?: ResolvedWorkspace;
   availableOrgs: { publicId: string; slug: string; name: string }[];
   availableWorkspaces?: { publicId: string; slug: string; name: string }[];
-  user: SessionUser;
+  /** May be undefined during a transient post-signup render. */
+  user: SessionUser | undefined;
 }
 
 /** Hamburger button + slide-in Sheet drawer for sub-`md` viewports. */
@@ -49,10 +50,12 @@ export function MobileNav({
 }: MobileNavProps) {
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname();
+  const effectiveCtx = resolveSidebarCtx(pathname, ctx);
   const mode = resolveSidebarMode(pathname, ctx);
   const config = getSidebarConfig(mode);
 
   const allItems = config.items;
+  const activeHref = activeHrefFor(pathname, allItems.map((item) => item.href(effectiveCtx)));
 
   return (
     <>
@@ -76,7 +79,7 @@ export function MobileNav({
             {/* User display */}
             <div className="flex w-full items-center justify-between">
               <span className="truncate text-xs text-muted-foreground">
-                {user.name ?? user.email}
+                {user ? (user.name ?? user.email) : null}
               </span>
             </div>
 
@@ -99,8 +102,8 @@ export function MobileNav({
             aria-label="Primary navigation"
           >
             {allItems.map((item) => {
-              const href = item.href(ctx);
-              const isActive = pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
+              const href = item.href(effectiveCtx);
+              const isActive = href === activeHref;
               const Icon = item.icon;
               return (
                 <SheetClose
@@ -111,16 +114,16 @@ export function MobileNav({
                       aria-current={isActive ? "page" : undefined}
                       className={cn(
                         "flex min-h-[2.75rem] items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
                         isActive
-                          ? "bg-brand/10 text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                       )}
                     >
                       <Icon
                         className={cn(
                           "h-4 w-4 shrink-0",
-                          isActive ? "text-brand" : undefined,
+                          isActive ? "text-sidebar-accent-foreground" : "text-muted-foreground",
                         )}
                         aria-hidden="true"
                       />

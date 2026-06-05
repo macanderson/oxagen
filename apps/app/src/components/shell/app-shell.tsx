@@ -1,22 +1,22 @@
 /**
  * AppShell — the top-level layout chrome.
  *
- * Renders:
- *   Desktop: fixed-width Sidebar (left) + flex column (Topbar sticky + <main> scrollable)
- *   Mobile:  Topbar (with hamburger) + <main> + MobileBottomBar (fixed bottom)
+ * A floating left-nav shell (stock coss ui, no glass):
+ *   Desktop: a floating, collapsible Sidebar card + an inset content panel
+ *            whose header holds the toggle, Ask bar, and (right) the org /
+ *            workspace pickers + notifications.
+ *   Mobile:  the content panel goes full-bleed; nav is a drawer (MobileNav,
+ *            opened from the header) plus a fixed MobileBottomBar.
  *
- * The shell is a server component. The Sidebar and MobileBottomBar are client
- * components (they read usePathname for active state). The Topbar is a server
- * component that renders client AskBar/NotificationsBell/AvatarMenu as islands.
- *
- * PageContextProvider, AskDrawer, and CommandMenu are mounted once in the
- * route layout (not here) so they persist across page navigations within
- * the same layout boundary.
+ * The shell is a server component. Collapse state + the interactive header live
+ * in the client ShellFrame, wrapped here in SidebarProvider. PageContextProvider,
+ * AskDrawer, and CommandMenu are mounted in the route layout (not here).
  */
 
 import type { ReactNode } from "react";
-import { Sidebar, MobileBottomBar } from "./sidebar";
-import { Topbar } from "./topbar";
+import { SidebarProvider } from "./sidebar-context";
+import { ShellFrame } from "./shell-frame";
+import { MobileBottomBar } from "./sidebar";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
 import type { SessionUser } from "./user-switcher";
 
@@ -25,7 +25,8 @@ export interface AppShellProps {
   workspace?: ResolvedWorkspace;
   availableOrgs: { publicId: string; slug: string; name: string }[];
   availableWorkspaces?: { publicId: string; slug: string; name: string }[];
-  user: SessionUser;
+  /** May be undefined during a transient post-signup render; guarded in UserSwitcher. */
+  user: SessionUser | undefined;
   children: ReactNode;
 }
 
@@ -40,33 +41,19 @@ export function AppShell({
   const ctx = { orgSlug: org.slug, workspaceSlug: workspace?.slug };
 
   return (
-    <div className="app-bg flex h-dvh w-full flex-col overflow-hidden">
-      {/* Topbar spans the full width along the top, above the sidebar. */}
-      <Topbar
+    <SidebarProvider>
+      <ShellFrame
         org={org}
         workspace={workspace}
         availableOrgs={availableOrgs}
         availableWorkspaces={availableWorkspaces}
         user={user}
-      />
-
-      {/* Row below the topbar: fixed sidebar (left) + scrollable main. */}
-      <div className="flex min-h-0 flex-1">
-        {/* Desktop sidebar — hidden on mobile */}
-        <Sidebar ctx={ctx} />
-
-        {/*
-          On mobile the bottom bar is fixed/overlapping, so we add bottom
-          padding equal to the bar height (~56px) only at < md so content
-          doesn't hide behind it.
-        */}
-        <main className="min-w-0 flex-1 overflow-y-auto p-4 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
-          {children}
-        </main>
-      </div>
+      >
+        {children}
+      </ShellFrame>
 
       {/* Mobile bottom tab bar — hidden on desktop */}
       <MobileBottomBar ctx={ctx} />
-    </div>
+    </SidebarProvider>
   );
 }

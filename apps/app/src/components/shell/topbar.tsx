@@ -38,7 +38,8 @@ export interface TopbarProps {
   workspace?: ResolvedWorkspace;
   availableOrgs: { publicId: string; slug: string; name: string }[];
   availableWorkspaces?: { publicId: string; slug: string; name: string }[];
-  user: SessionUser;
+  /** May be undefined during a transient post-signup render; guarded in UserSwitcher. */
+  user: SessionUser | undefined;
 }
 
 export function Topbar({
@@ -58,7 +59,7 @@ export function Topbar({
   };
 
   return (
-    <header className="glass sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4">
       {/* Left: hamburger (mobile) + brand + org / workspace breadcrumb */}
       <div className="flex min-w-0 items-center gap-2">
         <MobileNav

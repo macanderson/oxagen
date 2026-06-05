@@ -11,6 +11,8 @@
 import { describe, it, expect } from "vitest";
 import {
   resolveSidebarMode,
+  resolveSidebarCtx,
+  activeHrefFor,
   getSidebarConfig,
   enumerateNavTargets,
   type SidebarMode,
@@ -258,5 +260,68 @@ describe("enumerateNavTargets", () => {
       expect(t.label.length).toBeGreaterThan(0);
       expect(t.href.startsWith("/")).toBe(true);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. resolveSidebarCtx — recover workspaceSlug from the URL (the "all rows
+//    active / broken nav" regression: the org layout mounts the shell with no
+//    workspaceSlug, collapsing every workspace href to the org root).
+// ---------------------------------------------------------------------------
+
+describe("resolveSidebarCtx", () => {
+  it("recovers workspaceSlug from the URL so workspace hrefs do not collapse", () => {
+    const eff = resolveSidebarCtx("/acme/production/knowledge/sources", orgCtx);
+    expect(eff.workspaceSlug).toBe("production");
+
+    // Regression: before the fix every item's href fell back to "/acme".
+    const hrefs = getSidebarConfig("workspace").items.map((item) => item.href(eff));
+    expect(hrefs.every((h) => h === "/acme")).toBe(false);
+    expect(new Set(hrefs).size).toBe(hrefs.length);
+  });
+
+  it("leaves ctx unchanged in org mode (does not invent a workspace slug)", () => {
+    const eff = resolveSidebarCtx("/acme/members", orgCtx);
+    expect(eff.workspaceSlug).toBeUndefined();
+  });
+
+  it("leaves ctx unchanged in account mode", () => {
+    const eff = resolveSidebarCtx("/account/profile", orgCtx);
+    expect(eff.workspaceSlug).toBeUndefined();
+  });
+
+  it("returns ctx untouched when workspaceSlug is already present", () => {
+    const eff = resolveSidebarCtx("/acme/production/chat", wsCtx);
+    expect(eff).toBe(wsCtx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. activeHrefFor — most-specific (longest) match wins; segment-boundary safe.
+// ---------------------------------------------------------------------------
+
+describe("activeHrefFor", () => {
+  it("returns the exact match when present", () => {
+    expect(activeHrefFor("/acme/members", ["/acme/members", "/acme/billing"])).toBe("/acme/members");
+  });
+
+  it("prefers the longest (most specific) prefix match", () => {
+    const hrefs = ["/acme/production/knowledge", "/acme/production/ask"];
+    expect(activeHrefFor("/acme/production/knowledge/sources", hrefs)).toBe("/acme/production/knowledge");
+  });
+
+  it("does not let an ancestor root stay active on a sibling page", () => {
+    // On /acme/members the org root "/acme" must NOT win over the deeper sibling.
+    expect(activeHrefFor("/acme/members", ["/acme", "/acme/members"])).toBe("/acme/members");
+    // …but the root IS active on the root page itself.
+    expect(activeHrefFor("/acme", ["/acme", "/acme/members"])).toBe("/acme");
+  });
+
+  it("matches on path-segment boundary, not substring", () => {
+    expect(activeHrefFor("/acme-2/x", ["/acme"])).toBeNull();
+  });
+
+  it("returns null when nothing matches", () => {
+    expect(activeHrefFor("/other", ["/acme", "/acme/members"])).toBeNull();
   });
 });

@@ -101,7 +101,7 @@ export function PageTabs({ tabs, className }: PageTabsProps) {
                     "inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1",
                     "text-[10px] font-semibold leading-none",
                     isActive
-                      ? "bg-brand text-brand-foreground"
+                      ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground",
                   )}
                   aria-label={`${tab.badge} items`}
@@ -110,10 +110,10 @@ export function PageTabs({ tabs, className }: PageTabsProps) {
                 </span>
               )}
 
-              {/* Active indicator — 2px gradient bottom bar (the brand mark) */}
+              {/* Active indicator — 2px bottom bar */}
               {isActive && (
                 <span
-                  className="brand-gradient absolute inset-x-0 bottom-0 h-0.5 rounded-full"
+                  className="bg-foreground absolute inset-x-0 bottom-0 h-0.5 rounded-full"
                   aria-hidden="true"
                 />
               )}

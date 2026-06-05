@@ -10,8 +10,8 @@
  *     active={true}
  *   />
  *
- * Visual states:
- *   active   — 3px left accent bar + muted background
+ * Visual states (neutral coss/Base UI tokens — no brand styling):
+ *   active   — `bg-sidebar-accent` + `text-sidebar-accent-foreground`
  *   external — renders an ↗ icon (ArrowUpRight) on the right edge
  *   isReturn — renders a ← icon (ArrowLeft) on the left, before the main icon
  *
@@ -43,6 +43,8 @@ export interface SidebarItemProps {
   external?: boolean;
   /** Shows ← arrow affordance — signals "back to previous mode". */
   isReturn?: boolean;
+  /** Icon-rail mode: hide the label/badge/affordances, center the icon. */
+  collapsed?: boolean;
   className?: string;
 }
 
@@ -54,6 +56,7 @@ export function SidebarItem({
   badge,
   external = false,
   isReturn = false,
+  collapsed = false,
   className,
 }: SidebarItemProps) {
   const affordance = sidebarItemAffordance({ external, isReturn });
@@ -62,32 +65,27 @@ export function SidebarItem({
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
+      aria-label={collapsed ? label : undefined}
+      title={collapsed ? label : undefined}
       className={cn(
         // Layout: flex row, icon + label + badge, full-width, mobile tap target
         "group relative flex min-h-[2.75rem] w-full items-center gap-2.5 rounded-md",
         "px-3 py-2.5 text-sm font-medium",
+        // Rail mode: center the icon, drop horizontal padding
+        collapsed && "justify-center gap-0 px-0",
         // Transition
         "transition-colors",
         // Focus ring
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        // Inactive state — subtle hover lift toward the brand
-        !active &&
-          "text-sidebar-foreground/80 hover:translate-x-0.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-        // Active state — brand tint
-        active && "bg-brand/10 text-foreground",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+        // Inactive — neutral hover
+        !active && "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        // Active — neutral accent fill
+        active && "bg-sidebar-accent text-sidebar-accent-foreground",
         className,
       )}
     >
-      {/* 3px gradient left accent bar — active only (the broken-ring brand mark) */}
-      {active && (
-        <span
-          className="brand-gradient absolute inset-y-1.5 left-0 w-[3px] rounded-full"
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Return arrow (←) — appears before the icon when isReturn */}
-      {affordance === "return" && (
+      {/* Return arrow (←) — appears before the icon when isReturn (full mode only) */}
+      {!collapsed && affordance === "return" && (
         <ArrowLeft
           className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
           aria-hidden="true"
@@ -97,23 +95,24 @@ export function SidebarItem({
       {/* Primary icon */}
       <Icon
         className={cn(
-          "h-4 w-4 shrink-0",
-          active ? "text-brand" : "text-muted-foreground group-hover:text-foreground",
-          "transition-colors duration-[160ms]",
+          "h-4 w-4 shrink-0 transition-colors",
+          active
+            ? "text-sidebar-accent-foreground"
+            : "text-muted-foreground group-hover:text-sidebar-accent-foreground",
         )}
         aria-hidden="true"
       />
 
       {/* Label */}
-      <span className="flex-1 truncate">{label}</span>
+      {!collapsed && <span className="flex-1 truncate">{label}</span>}
 
       {/* Optional numeric badge */}
-      {badge != null && badge > 0 && (
+      {!collapsed && badge != null && badge > 0 && (
         <span
           className={cn(
             "inline-flex h-4.5 min-w-[1.125rem] items-center justify-center rounded-full px-1",
             "text-[10px] font-semibold leading-none",
-            active ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground",
+            "bg-muted text-muted-foreground",
           )}
           aria-label={`${badge} items`}
         >
@@ -122,7 +121,7 @@ export function SidebarItem({
       )}
 
       {/* External arrow (↗) */}
-      {affordance === "external" && (
+      {!collapsed && affordance === "external" && (
         <ArrowUpRight
           className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground"
           aria-hidden="true"

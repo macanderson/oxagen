@@ -92,12 +92,12 @@ export function OxagenWordmark({ className }: { className?: string }) {
   );
 }
 
-/** Gradient-tile logomark — the primary app-chrome brand mark. */
+/** Brand mark tile — renders the logomark in a neutral tile. */
 export function BrandMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "brand-gradient inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-white shadow-sm",
+        "bg-primary inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-primary-foreground shadow-sm",
         className,
       )}
       aria-hidden="true"

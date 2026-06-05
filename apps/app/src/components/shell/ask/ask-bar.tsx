@@ -219,10 +219,10 @@ export function AskBar({ ctx, className }: AskBarProps) {
         className={cn(
           "h-full w-full rounded-lg",
           "pl-8 pr-[4.5rem] text-sm",
-          "glass-subtle border border-border shadow-sm",
+          "border border-input bg-background shadow-sm",
           "text-foreground placeholder:text-muted-foreground",
           "outline-none transition-[box-shadow,border-color]",
-          "focus:border-brand/40 focus:ring-2 focus:ring-brand/30",
+          "focus:border-ring focus:ring-2 focus:ring-ring/40",
           "disabled:cursor-wait disabled:opacity-60",
         )}
       />

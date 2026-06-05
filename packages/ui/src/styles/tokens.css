@@ -4,159 +4,171 @@
  * Authored in oklch (perceptually-uniform) so values compose directly with the
  * `var(--token)` mappings in the @theme block of globals.css — no hsl() wrapper.
  * Light values live on :root; dark overrides live on .dark (toggled by
- * next-themes via the `class` attribute).
+ * ThemeProvider via the `class` attribute).
  *
- * The palette leans cool — an ink-blue neutral ramp on hue 285 — with the
- * Oxagen brand indigo (`--brand`) and a teal companion (`--accent2`). The
- * signature mark is the indigo → green gradient ring, encoded as the
- * `--grad-from / --grad-via / --grad-to` stops and surfaced through the
- * .brand-gradient / .gradient-text / .gradient-ring / .app-bg utilities in
- * globals.css.
+ * SIMPLIFIED PALETTE — black / white / neutral gray. Brand identity (indigo →
+ * green gradient ring) is intentionally removed. Restore by reverting this file
+ * and the brand utility section of globals.css.
+ *
+ * All chroma values are 0 (achromatic). Hue argument is kept as 0 for clarity.
+ * Destructive (red) is retained because it backs error/alert states in the UI.
+ * Semantic status tokens (info/success/warning) are retained for Badge/Alert
+ * variants; those are functional signals, not brand color.
  *
  * Restyle the product by editing these tokens, not the component class strings.
  */
 @layer base {
   :root {
-    --background: oklch(0.98 0.008 285);
-    --foreground: oklch(0.145 0.02 285);
+    /* Light mode: white backgrounds, near-black text, mid-gray borders. */
+    --background: oklch(0.98 0 0);
+    --foreground: oklch(0.13 0 0);
 
-    --card: oklch(0.995 0.005 285);
-    --card-foreground: oklch(0.145 0.02 285);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.13 0 0);
 
-    --popover: oklch(0.995 0.005 285);
-    --popover-foreground: oklch(0.145 0.02 285);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.13 0 0);
 
-    /* Neutral ink-blue primary (buttons, emphasis). */
-    --primary: oklch(0.22 0.04 285);
-    --primary-foreground: oklch(0.985 0 0);
+    /* Near-black primary (buttons, emphasis). */
+    --primary: oklch(0.2 0 0);
+    --primary-foreground: oklch(0.98 0 0);
 
-    --secondary: oklch(0.96 0.01 285);
-    --secondary-foreground: oklch(0.22 0.04 285);
+    --secondary: oklch(0.96 0 0);
+    --secondary-foreground: oklch(0.2 0 0);
 
-    --muted: oklch(0.96 0.01 285);
-    --muted-foreground: oklch(0.45 0.03 285);
+    --muted: oklch(0.95 0 0);
+    --muted-foreground: oklch(0.45 0 0);
 
-    --accent: oklch(0.94 0.015 285);
-    --accent-foreground: oklch(0.22 0.04 285);
+    --accent: oklch(0.93 0 0);
+    --accent-foreground: oklch(0.2 0 0);
 
     --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.985 0 0);
+    --destructive-foreground: oklch(0.98 0 0);
 
     /* Semantic status colours (Badge/Alert info/success/warning/error). */
     --info: oklch(0.55 0.16 250);
-    --info-foreground: oklch(0.985 0 0);
+    --info-foreground: oklch(0.98 0 0);
     --success: oklch(0.6 0.16 150);
-    --success-foreground: oklch(0.985 0 0);
+    --success-foreground: oklch(0.98 0 0);
     --warning: oklch(0.78 0.15 80);
     --warning-foreground: oklch(0.27 0.05 80);
 
-    --border: oklch(0.9 0.015 285);
-    --input: oklch(0.9 0.015 285);
-    --ring: oklch(0.6 0.18 285);
+    --border: oklch(0.88 0 0);
+    --input: oklch(0.88 0 0);
+    --ring: oklch(0.5 0 0);
 
     --radius: 0.75rem;
 
-    /* Brand — Oxagen indigo. Use for active states, brand chips, accents. */
-    --brand: oklch(0.52 0.22 285);
-    --brand-foreground: oklch(0.985 0 0);
+    /*
+     * Brand tokens neutralized — set to mid-gray so any consumer of
+     * bg-brand / text-brand / border-brand gets a neutral swatch rather than
+     * the old indigo. Restore to oklch(0.52 0.22 285) to bring back the color.
+     */
+    --brand: oklch(0.35 0 0);
+    --brand-foreground: oklch(0.98 0 0);
 
-    /* Companion teal. */
-    --accent2: oklch(0.72 0.13 178);
-    --accent2-foreground: oklch(0.18 0.02 285);
+    /* accent2 (formerly teal) — neutralized. */
+    --accent2: oklch(0.6 0 0);
+    --accent2-foreground: oklch(0.13 0 0);
 
     /*
-     * Signature gradient — indigo → blue → green (the broken-ring brand mark).
-     * from: Oxagen indigo (#7182ff), via: transition blue, to: bright green
-     * (#3cff52). Powers .brand-gradient, .gradient-text, .gradient-ring, .app-bg.
+     * Gradient stops neutralized — dark→light gray so gradient utilities
+     * (.brand-gradient, .gradient-text, .gradient-ring, .app-bg) render as
+     * a flat neutral rather than the indigo→green sweep.
      */
-    --grad-from: oklch(0.62 0.2 282);
-    --grad-via: oklch(0.66 0.16 248);
-    --grad-to: oklch(0.82 0.21 150);
+    --grad-from: oklch(0.25 0 0);
+    --grad-via: oklch(0.45 0 0);
+    --grad-to: oklch(0.65 0 0);
 
-    /* Ambient mesh strength — subtle on light. */
-    --mesh-opacity: 0.1;
+    /* Ambient mesh — zeroed out on light (no visible bloom). */
+    --mesh-opacity: 0;
 
-    /* Chart ramp. */
-    --chart-1: oklch(0.62 0.2 282);
-    --chart-2: oklch(0.72 0.13 178);
-    --chart-3: oklch(0.6 0.118 220);
-    --chart-4: oklch(0.82 0.21 150);
-    --chart-5: oklch(0.65 0.2 320);
+    /* Chart ramp — neutral gray scale. */
+    --chart-1: oklch(0.25 0 0);
+    --chart-2: oklch(0.38 0 0);
+    --chart-3: oklch(0.52 0 0);
+    --chart-4: oklch(0.66 0 0);
+    --chart-5: oklch(0.78 0 0);
 
-    /* Sidebar. */
-    --sidebar: oklch(0.995 0.005 285);
-    --sidebar-foreground: oklch(0.145 0.02 285);
-    --sidebar-primary: oklch(0.52 0.22 285);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.94 0.015 285);
-    --sidebar-accent-foreground: oklch(0.22 0.04 285);
-    --sidebar-border: oklch(0.9 0.015 285);
-    --sidebar-ring: oklch(0.6 0.18 285);
+    /* Sidebar — white background, neutral accents. */
+    --sidebar: oklch(0.99 0 0);
+    --sidebar-foreground: oklch(0.13 0 0);
+    --sidebar-primary: oklch(0.2 0 0);
+    --sidebar-primary-foreground: oklch(0.98 0 0);
+    --sidebar-accent: oklch(0.93 0 0);
+    --sidebar-accent-foreground: oklch(0.2 0 0);
+    --sidebar-border: oklch(0.88 0 0);
+    --sidebar-ring: oklch(0.5 0 0);
   }
 
   .dark {
-    --background: oklch(0.17 0.018 285);
-    --foreground: oklch(0.985 0 0);
+    /* Dark mode: near-black backgrounds, white text, dark-gray borders. */
+    --background: oklch(0.13 0 0);
+    --foreground: oklch(0.98 0 0);
 
-    --card: oklch(0.205 0.02 285);
-    --card-foreground: oklch(0.985 0 0);
+    --card: oklch(0.18 0 0);
+    --card-foreground: oklch(0.98 0 0);
 
-    --popover: oklch(0.205 0.02 285);
-    --popover-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.18 0 0);
+    --popover-foreground: oklch(0.98 0 0);
 
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0.02 285);
+    --primary: oklch(0.98 0 0);
+    --primary-foreground: oklch(0.18 0 0);
 
-    --secondary: oklch(0.27 0.02 285);
-    --secondary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.25 0 0);
+    --secondary-foreground: oklch(0.98 0 0);
 
-    --muted: oklch(0.27 0.02 285);
-    --muted-foreground: oklch(0.72 0.015 285);
+    --muted: oklch(0.25 0 0);
+    --muted-foreground: oklch(0.65 0 0);
 
-    --accent: oklch(0.3 0.025 285);
-    --accent-foreground: oklch(0.985 0 0);
+    --accent: oklch(0.28 0 0);
+    --accent-foreground: oklch(0.98 0 0);
 
     --destructive: oklch(0.704 0.191 22.216);
-    --destructive-foreground: oklch(0.985 0 0);
+    --destructive-foreground: oklch(0.98 0 0);
 
-    /* Semantic status colours — brighter against the dark canvas. */
+    /* Semantic status colours — retained for functional signals. */
     --info: oklch(0.62 0.16 250);
-    --info-foreground: oklch(0.985 0 0);
+    --info-foreground: oklch(0.98 0 0);
     --success: oklch(0.68 0.16 150);
     --success-foreground: oklch(0.18 0.03 150);
     --warning: oklch(0.82 0.15 80);
     --warning-foreground: oklch(0.27 0.05 80);
 
-    --border: oklch(0.32 0.025 285);
-    --input: oklch(0.32 0.02 285);
-    --ring: oklch(0.55 0.18 285);
+    --border: oklch(0.3 0 0);
+    --input: oklch(0.3 0 0);
+    --ring: oklch(0.55 0 0);
 
-    --brand: oklch(0.65 0.2 285);
-    --brand-foreground: oklch(0.985 0 0);
+    /* Brand neutralized to light-gray so it reads on dark backgrounds. */
+    --brand: oklch(0.75 0 0);
+    --brand-foreground: oklch(0.13 0 0);
 
-    --accent2: oklch(0.78 0.13 178);
-    --accent2-foreground: oklch(0.18 0.02 285);
+    --accent2: oklch(0.65 0 0);
+    --accent2-foreground: oklch(0.13 0 0);
 
-    --grad-from: oklch(0.66 0.2 285);
-    --grad-via: oklch(0.7 0.16 250);
-    --grad-to: oklch(0.85 0.22 150);
+    /* Gradient stops — light gray sweep on dark (still achromatic). */
+    --grad-from: oklch(0.6 0 0);
+    --grad-via: oklch(0.72 0 0);
+    --grad-to: oklch(0.85 0 0);
 
-    /* Mesh is more vivid against the dark canvas. */
-    --mesh-opacity: 0.2;
+    /* Ambient mesh — zeroed out. */
+    --mesh-opacity: 0;
 
-    --chart-1: oklch(0.66 0.2 285);
-    --chart-2: oklch(0.78 0.13 178);
-    --chart-3: oklch(0.7 0.13 220);
-    --chart-4: oklch(0.85 0.22 150);
-    --chart-5: oklch(0.7 0.2 320);
+    /* Chart ramp — neutral gray scale against dark canvas. */
+    --chart-1: oklch(0.75 0 0);
+    --chart-2: oklch(0.65 0 0);
+    --chart-3: oklch(0.55 0 0);
+    --chart-4: oklch(0.45 0 0);
+    --chart-5: oklch(0.35 0 0);
 
-    --sidebar: oklch(0.19 0.018 285);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.65 0.2 285);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.3 0.025 285);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.32 0.02 285);
-    --sidebar-ring: oklch(0.65 0.2 285);
+    /* Sidebar — slightly lighter than background, neutral. */
+    --sidebar: oklch(0.16 0 0);
+    --sidebar-foreground: oklch(0.98 0 0);
+    --sidebar-primary: oklch(0.98 0 0);
+    --sidebar-primary-foreground: oklch(0.18 0 0);
+    --sidebar-accent: oklch(0.28 0 0);
+    --sidebar-accent-foreground: oklch(0.98 0 0);
+    --sidebar-border: oklch(0.3 0 0);
+    --sidebar-ring: oklch(0.55 0 0);
   }
 }

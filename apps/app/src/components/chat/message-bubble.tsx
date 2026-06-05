@@ -174,8 +174,8 @@ function renderBlock(
         <Suspense
           key={block.toolCallId}
           fallback={
-            // Tasteful skeleton: glass card matching the design-system glass
-            // style, two shimmer lines to suggest loading content.
+            // Tasteful skeleton: an opaque card with two shimmer lines to
+            // suggest loading content.
             <div
               className={cn(
                 "rounded-xl border bg-card px-4 py-3",

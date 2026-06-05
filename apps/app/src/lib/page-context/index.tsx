@@ -120,11 +120,19 @@ export function useRegisterFillableForm(form: RegisteredFillableForm): void {
   // Derive a stable key from formId + field names so the effect only re-fires
   // when the form shape actually changes rather than on every render.
   const formId = form.formId;
+  // Derive stable string keys from field names and current values so the effect
+  // only re-fires when form content actually changes — not on every render when
+  // the caller passes a new array literal with identical data.
   const fieldsKey = form.fields.map((f) => f.name).join(",");
-  // `apply` is a callback; capture a stable ref so it does not re-register on
-  // every render when the caller creates a new function reference each time.
-  // The ref is updated in a layout effect (not inline during render) to stay
-  // compatible with the react-hooks/refs lint rule.
+  const fieldsCurrentKey = form.fields.map((f) => `${f.name}:${String(f.current ?? "")}`).join("|");
+  const formTitle = form.title;
+  // Snapshot the fields array at the time the stable keys are computed so the
+  // effect closure captures the latest values without depending on the unstable
+  // object reference itself.
+  const fieldsRef = React.useRef(form.fields);
+  React.useLayoutEffect(() => {
+    fieldsRef.current = form.fields;
+  });
   const applyRef = React.useRef(form.apply);
   React.useLayoutEffect(() => {
     applyRef.current = form.apply;
@@ -136,12 +144,17 @@ export function useRegisterFillableForm(form: RegisteredFillableForm): void {
   React.useEffect(() => {
     _setFillableForm({
       formId,
-      title: form.title,
-      fields: form.fields,
+      title: formTitle,
+      fields: fieldsRef.current,
       apply: stableApply,
     });
     return () => {
       _setFillableForm(null);
     };
-  }, [_setFillableForm, formId, form.title, form.fields, fieldsKey, stableApply]);
+    // Depend only on stable primitive keys — not the `form.fields` array
+    // reference, which is a new object on every render and was the source of
+    // the infinite-render loop. `fieldsRef`/`applyRef` are refs (stable), and
+    // fieldsKey/fieldsCurrentKey re-fire the effect when content genuinely
+    // changes.
+  }, [_setFillableForm, formId, formTitle, fieldsKey, fieldsCurrentKey, stableApply]);
 }

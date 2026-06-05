@@ -104,38 +104,22 @@
 /*
  * Brand utility layer.
  *
- * Glass surfaces, the indigo → green gradient family, the ambient mesh
- * backdrop, and a few motion helpers. These compose over the tokens above and
- * are the building blocks for the Oxagen app shell. The color-mix() calls
- * require Chrome 111+ / Safari 16.2+.
+ * Brand gradient utilities are intentionally neutralized to monochrome.
+ * Class names are preserved so consumers don't break. Restore the colored
+ * versions by reverting tokens.css (grad-from/via/to) — these utilities
+ * already reference those token vars.
+ *
+ * NOTE: the translucent `.glass` / `.glass-strong` / `.glass-subtle`
+ * glassmorphism utilities were removed — surfaces use the opaque `bg-card` /
+ * `bg-popover` / `bg-background` tokens so nothing renders see-through.
  */
 @layer utilities {
-  /* Glassmorphism surfaces. */
-  .glass {
-    background-color: color-mix(in oklch, var(--card) 72%, transparent);
-    backdrop-filter: blur(16px) saturate(140%);
-    -webkit-backdrop-filter: blur(16px) saturate(140%);
-    border-color: color-mix(in oklch, var(--foreground) 6%, transparent);
-    box-shadow:
-      0 0 0 1px color-mix(in oklch, var(--foreground) 4%, transparent),
-      0 1px 2px color-mix(in oklch, var(--foreground) 3%, transparent);
-  }
-  .glass-strong {
-    background-color: color-mix(in oklch, var(--card) 85%, transparent);
-    backdrop-filter: blur(24px) saturate(160%);
-    -webkit-backdrop-filter: blur(24px) saturate(160%);
-    border-color: color-mix(in oklch, var(--foreground) 8%, transparent);
-    box-shadow:
-      0 0 0 1px color-mix(in oklch, var(--foreground) 5%, transparent),
-      0 2px 8px color-mix(in oklch, var(--foreground) 4%, transparent);
-  }
-  .glass-subtle {
-    background-color: color-mix(in oklch, var(--card) 50%, transparent);
-    backdrop-filter: blur(12px) saturate(120%);
-    -webkit-backdrop-filter: blur(12px) saturate(120%);
-  }
-
-  /* Solid brand gradient for fills (logo tiles, primary chips, indicators). */
+  /*
+   * .brand-gradient — was indigo→green; now a flat near-black fill.
+   * Consumers (BrandMark tile, active tab indicator) render as solid dark.
+   * The grad-* tokens are also achromatic, so restoring color is a token-only
+   * change; the gradient syntax is intentionally kept to make that easy.
+   */
   .brand-gradient {
     background-image: linear-gradient(
       135deg,
@@ -145,20 +129,18 @@
     );
   }
 
-  /* Gradient text for the brand wordmark / headline accents. */
+  /*
+   * .gradient-text — was colored sweep; now inherits currentColor (no clip).
+   * The background-clip trick is removed so text renders opaquely.
+   */
   .gradient-text {
-    background-image: linear-gradient(
-      100deg,
-      var(--grad-from),
-      var(--grad-via) 48%,
-      var(--grad-to)
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: currentColor;
   }
 
-  /* Hairline gradient ring used to wrap glass surfaces (the broken-ring mark). */
+  /*
+   * .gradient-ring — was hairline indigo→green border ring.
+   * Now a plain 1px neutral border via the ::before pseudo-element.
+   */
   .gradient-ring {
     position: relative;
   }
@@ -168,12 +150,7 @@
     inset: 0;
     border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(
-      135deg,
-      color-mix(in oklch, var(--grad-from) 50%, transparent),
-      transparent 35%,
-      color-mix(in oklch, var(--grad-to) 45%, transparent)
-    );
+    background: var(--border);
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
@@ -182,32 +159,16 @@
     pointer-events: none;
   }
 
-  /* Ambient mesh background — fixed behind content, adapts via --mesh-opacity. */
+  /*
+   * .app-bg — was multi-color radial mesh bloom.
+   * With --mesh-opacity: 0 in tokens.css the radial gradients are already
+   * invisible; we also simplify to a no-op so there is no pseudo-element cost.
+   */
   .app-bg::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background:
-      radial-gradient(
-        ellipse 70% 50% at 5% -5%,
-        color-mix(in oklch, var(--grad-from) calc(var(--mesh-opacity) * 100%), transparent),
-        transparent 55%
-      ),
-      radial-gradient(
-        ellipse 60% 45% at 98% 2%,
-        color-mix(in oklch, var(--grad-to) calc(var(--mesh-opacity) * 90%), transparent),
-        transparent 50%
-      ),
-      radial-gradient(
-        ellipse 80% 60% at 50% 105%,
-        color-mix(in oklch, var(--grad-via) calc(var(--mesh-opacity) * 75%), transparent),
-        transparent 55%
-      );
+    content: none;
   }
 
-  /* Motion helpers (the brand "rise on hover"). */
+  /* Motion helpers — unchanged; hover-glow references --brand which is now gray. */
   .hover-lift {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }

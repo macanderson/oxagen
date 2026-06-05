@@ -11,7 +11,7 @@ export interface SvgPreviewProps {
 }
 
 /**
- * Renders a server-sanitized SVG inside a glass card.
+ * Renders a server-sanitized SVG inside a card.
  *
  * Security: the SVG is encoded as a data URI and set as an <img> src.
  * This prevents inline script execution at the browser level — the image

@@ -36,7 +36,12 @@ export interface SessionUser {
 }
 
 export interface UserSwitcherProps {
-  user: SessionUser;
+  /**
+   * The authenticated user. May be undefined during a transient post-signup
+   * render before the session is fully committed; the component renders nothing
+   * in that case rather than crashing.
+   */
+  user: SessionUser | undefined;
   /**
    * Trigger shape:
    *   "full"   — wide button (avatar + name + email + chevron) for the sidebar.
@@ -80,6 +85,10 @@ export function UserSwitcher({ user, variant = "full", className }: UserSwitcher
     }
   }, [router]);
 
+  // Defense-in-depth guard: user may be undefined during a transient post-signup
+  // render before the session is fully committed. Render nothing rather than crash.
+  if (!user) return null;
+
   const displayName = user.name ?? user.email;
 
   // The avatar circle is shared by both trigger shapes.
@@ -87,7 +96,7 @@ export function UserSwitcher({ user, variant = "full", className }: UserSwitcher
     <span
       className={cn(
         "flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full",
-        "bg-brand text-xs font-semibold text-brand-foreground",
+        "bg-muted text-xs font-semibold text-muted-foreground",
       )}
     >
       {user.image ? (
@@ -168,7 +177,7 @@ export function UserSwitcher({ user, variant = "full", className }: UserSwitcher
           >
             <Icon className="h-4 w-4" aria-hidden="true" />
             <span className="flex-1">{label}</span>
-            {theme === value && <span className="size-1.5 rounded-full bg-brand" aria-hidden="true" />}
+            {theme === value && <span className="size-1.5 rounded-full bg-foreground" aria-hidden="true" />}
           </MenuItem>
         ))}
 

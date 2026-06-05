@@ -338,6 +338,43 @@ export function resolveSidebarMode(pathname: string, ctx: ScopeContext): Sidebar
   return "org";
 }
 
+/**
+ * Recover the effective scope context for sidebar href resolution.
+ *
+ * The org-level layout (`/[orgSlug]/layout.tsx`) mounts the shell WITHOUT a
+ * workspaceSlug — it has no access to that route param. In workspace mode every
+ * workspace item's `href()` would then hit its `ctx.workspaceSlug ? … : /{org}`
+ * fallback and collapse to the org root, so all items share one href and the
+ * prefix active-check lights up every row (and every link points at the org
+ * root). We recover the workspace slug from the URL (the 2nd path segment) so
+ * hrefs resolve to real workspace routes. Returns ctx unchanged when it already
+ * has a workspaceSlug or the mode is not workspace.
+ */
+export function resolveSidebarCtx(pathname: string, ctx: ScopeContext): ScopeContext {
+  if (ctx.workspaceSlug) return ctx;
+  if (resolveSidebarMode(pathname, ctx) !== "workspace") return ctx;
+  const workspaceSlug = pathname.split("/").filter(Boolean)[1];
+  return workspaceSlug ? { ...ctx, workspaceSlug } : ctx;
+}
+
+/**
+ * Pick the active item href for a pathname: the MOST SPECIFIC (longest) item
+ * href that the pathname matches exactly or by path-segment prefix. Selecting
+ * the longest match prevents an ancestor item (e.g. the org root "Workspaces"
+ * at `/{org}`) from staying highlighted on every descendant page (`/{org}/...`)
+ * — only the deepest matching item is active. Returns null when nothing matches.
+ */
+export function activeHrefFor(pathname: string, hrefs: string[]): string | null {
+  let best: string | null = null;
+  for (const href of hrefs) {
+    const matches = pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
+    if (matches && (best === null || href.length > best.length)) {
+      best = href;
+    }
+  }
+  return best;
+}
+
 // ---------------------------------------------------------------------------
 // Nav target enumeration — used by the Phase-2 command menu
 // ---------------------------------------------------------------------------
