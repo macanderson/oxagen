@@ -1,12 +1,13 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db, schema } from "@oxagen/database";
-import type { CreditLedgerRow, PlanRow, SubscriptionRow, CreditBalanceRow } from "@oxagen/database";
+import type { CreditLedgerRow, SubscriptionRow, CreditBalanceRow } from "@oxagen/database";
 import { resolveOrg } from "@/lib/resolve-org";
 import { getSession } from "@/lib/session";
 import { SubscriptionSummary } from "@/components/billing/subscription-summary";
 import { CreditBalance } from "@/components/billing/credit-balance";
 import { BuyCredits } from "@/components/billing/buy-credits";
 import { PlansGrid } from "../plans-grid";
+import { fetchPublicPlans, toPlanCards } from "../public-plans";
 import { safeQuery } from "../safe-query";
 
 const CAN_MANAGE_BILLING = new Set(["owner", "admin", "billing"]);
@@ -38,10 +39,7 @@ export default async function BillingSubscriptionPage({
   const viewerRole = viewerRoleRow?.role ?? "member";
   const canManageBilling = CAN_MANAGE_BILLING.has(viewerRole);
 
-  const plans = await safeQuery(
-    () => db().select().from(schema.plans).where(eq(schema.plans.isPublic, true)),
-    [] as PlanRow[],
-  );
+  const plans = await fetchPublicPlans();
 
   const subscriptionRow = await safeQuery(
     async () =>
@@ -126,23 +124,7 @@ export default async function BillingSubscriptionPage({
         </div>
       </div>
 
-      <PlansGrid
-        orgSlug={orgSlug}
-        currentPlanSlug={subscription?.planSlug ?? null}
-        plans={plans.map((p) => ({
-          publicId: p.publicId,
-          slug: p.slug,
-          name: p.name,
-          tier: p.tier,
-          monthlyCents: p.monthlyCents,
-          annualCents: p.annualCents,
-          includedCreditCents: p.includedCreditCents,
-          includedSeats: p.includedSeats,
-          features: Array.isArray((p.features as { list?: unknown[] } | null)?.list)
-            ? ((p.features as { list: unknown[] }).list as string[]).map((label) => ({ label }))
-            : [],
-        }))}
-      />
+      <PlansGrid orgSlug={orgSlug} currentPlanSlug={subscription?.planSlug ?? null} plans={toPlanCards(plans)} />
     </div>
   );
 }

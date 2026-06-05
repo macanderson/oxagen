@@ -32,7 +32,10 @@ const PLAN_SEEDS = [
     annualCents: null,
     includedCreditCents: 0,
     includedSeats: 1,
-    features: { tools: "basic", agents: 1 },
+    // Display-only bullets in the PlanFeatures `{ list }` shape the billing UI
+    // reads (see @oxagen/billing). Free is filtered out of the upgrade grid by
+    // the source-of-truth slug allowlist, so these are not normally rendered.
+    features: { list: ["1 agent", "Community support"] },
     isPublic: true,
   },
 ];

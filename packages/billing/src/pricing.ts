@@ -145,6 +145,18 @@ export function providerCostUsdMicros(usage: TokenUsageInput, rateCard: RateCard
 // solve reads. A product that hands out more credits per cent is more generous
 // → lower margin. Face value (1 credit = 1 cent) is creditsPerCent === 1.0.
 
+/**
+ * Plan feature presentation. `list` is the ordered set of human-readable selling
+ * points rendered as bullets on the plan card — it is the contract the billing UI
+ * reads (`features.list`). Seats and included credits are rendered from the
+ * dedicated `seats` / `includedCredits` fields, so they are NOT repeated here.
+ * Entitlement enforcement (e.g. Enterprise ACL/SSO/SCIM/audit access) is driven by
+ * `tier`, never by this list — these strings are display-only by design.
+ */
+export interface PlanFeatures {
+  list: string[];
+}
+
 export interface SubscriptionPlanDef {
   /** Version-2 identifier (carries the `-v2` suffix). Maps to billing.plans.slug. */
   slug: string;
@@ -162,7 +174,8 @@ export interface SubscriptionPlanDef {
   seats: number;
   /** Expected share of total credit revenue — used by the blended-margin solve. */
   weight: number;
-  features: Record<string, unknown>;
+  /** Display-only feature bullets for the plan card. See {@link PlanFeatures}. */
+  features: PlanFeatures;
 }
 
 export interface CreditPackDef {
@@ -193,7 +206,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     annualCents: 20_000, // 2 months free
     seats: 5,
     weight: 0.35,
-    features: { tools: "all", agents: 25, support: "email", seats: 5 },
+    features: { list: ["All tools & integrations", "Up to 25 concurrent agents", "Email support"] },
   },
   {
     slug: "scale-v2",
@@ -204,7 +217,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     annualCents: 99_000, // 2 months free
     seats: 25,
     weight: 0.2,
-    features: { tools: "all", agents: "unlimited", support: "priority", seats: 25 },
+    features: { list: ["All tools & integrations", "Unlimited concurrent agents", "Priority support"] },
   },
   {
     // Priced self-serve plan (Enterprise customers may also engage at rate card
@@ -220,15 +233,16 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     annualCents: 500_000, // 2 months free
     seats: 5,
     weight: 0.1,
+    // Display-only. The SOC2 surface below (ACLs/SSO/SCIM/audit) is gated by
+    // `tier === "enterprise"`, not by these strings — they only describe it.
     features: {
-      tools: "all",
-      agents: "unlimited",
-      support: "dedicated",
-      seats: 5,
-      acls: true,
-      sso: true,
-      scim: true,
-      audit: true,
+      list: [
+        "Everything in Scale",
+        "Dedicated support",
+        "SSO & SCIM provisioning",
+        "Access control lists (ACLs)",
+        "Immutable audit log",
+      ],
     },
   },
 ];

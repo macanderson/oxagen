@@ -35,7 +35,7 @@ import {
   type DerivedProduct,
 } from "@oxagen/billing";
 import { db, schema, closeDatabase } from "@oxagen/database";
-import { eq } from "drizzle-orm";
+import { and, eq, notInArray } from "drizzle-orm";
 
 interface Flags {
   apply: boolean;
@@ -321,6 +321,29 @@ async function upsertPlans(synced: SyncedPlan[], apply: boolean): Promise<void> 
       columns: { id: true, stripeProductId: true },
     });
     console.log(`  ${kleur.green("upserted")} ${plan.slug} → plan ${back?.id} (product ${back?.stripeProductId})`);
+  }
+
+  // Reconcile deletions. upsertPlans only ever *adds* the canonical plans, so
+  // without this step any row that drops out of the source of truth — a legacy
+  // pre-`-v2` slug, the seeded `free` tier, an e2e-test plan — lingers with
+  // is_public = true and surfaces in the billing UI as a duplicate/unrelated
+  // plan. Tombstone (is_public = false) rather than DELETE: subscriptions FK
+  // billing.plans, and the row is still needed to name historical plans.
+  const canonicalSlugs = SUBSCRIPTION_PLANS.map((p) => p.slug);
+  if (apply) {
+    const hidden = await d
+      .update(schema.plans)
+      .set({ isPublic: false, updatedAt: new Date() })
+      .where(and(eq(schema.plans.isPublic, true), notInArray(schema.plans.slug, canonicalSlugs)))
+      .returning({ slug: schema.plans.slug });
+    for (const row of hidden) {
+      console.log(`  ${kleur.yellow("hidden")}   ${row.slug} (not in source of truth → is_public=false)`);
+    }
+    if (hidden.length === 0) {
+      console.log(kleur.dim("  no stale public plans to hide"));
+    }
+  } else {
+    console.log(kleur.dim(`  would hide any public plan whose slug ∉ {${canonicalSlugs.join(", ")}}`));
   }
 }
 

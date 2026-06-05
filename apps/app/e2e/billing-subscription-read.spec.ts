@@ -56,7 +56,9 @@ const IDS = {
 // $20/mo = 2000 cents; credit balance: $47.50 = 4750 cents.
 const BALANCE_CENTS = 4750;
 const PLAN_NAME = "Build";
-const PLAN_SLUG = "build";
+// Canonical source-of-truth slug — the billing UI filters to these (the page
+// hides a legacy un-suffixed "build" row). tier stays "build" per the CHECK.
+const PLAN_SLUG = "build-v2";
 
 let billingFixture: AgentRuntimeFixture;
 

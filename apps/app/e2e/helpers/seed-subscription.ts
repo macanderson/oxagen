@@ -25,7 +25,11 @@ const DATABASE_URL = deQuote(
 
 export interface SeedSubscriptionOpts {
   orgId: string;
-  /** Plan slug, must exist in billing.plans (created by this helper if absent). */
+  /**
+   * Plan slug. Defaults to the canonical `build-v2` so the seeded row passes the
+   * billing UI's source-of-truth slug filter (see billing/public-plans.ts) — a
+   * legacy un-suffixed slug would be filtered out and never render.
+   */
   planSlug?: string;
   /** Plan name shown in the UI. */
   planName?: string;
@@ -50,11 +54,15 @@ export async function seedSubscription(
 ): Promise<SeededSubscription> {
   const {
     orgId,
-    planSlug = "build",
+    planSlug = "build-v2",
     planName = "Build",
     seatCount = 5,
     billingInterval = "month",
   } = opts;
+
+  // tier must satisfy the billing.plans CHECK (free|build|scale|enterprise); the
+  // slug carries the `-v2` product-version suffix, the tier does not.
+  const tier = planSlug.replace(/-v2$/, "");
 
   const sql = postgres(DATABASE_URL, { max: 2, prepare: false });
 
@@ -72,7 +80,7 @@ export async function seedSubscription(
         ${"pln_e2e_" + planSlug + "_" + orgId.slice(-8)},
         ${planName},
         ${planSlug},
-        ${planSlug},
+        ${tier},
         ${"prod_e2e_" + planSlug},
         2000, 20000,
         500, ${seatCount},
