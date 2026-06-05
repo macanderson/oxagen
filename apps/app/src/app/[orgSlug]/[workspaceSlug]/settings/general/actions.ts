@@ -16,13 +16,23 @@ const UpdateWorkspaceGeneralSchema = z.object({
   orgSlug: z.string().min(1),
   workspaceSlug: z.string().min(1),
   name: z.string().min(1).max(255),
+  // Lowercase letters, digits, and single hyphens — no leading/trailing or
+  // doubled hyphens. Mirrors the client-side slugify() output.
+  slug: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+      "Slug must be lowercase letters, numbers, and single hyphens",
+    ),
   description: z.string().max(2000).optional(),
 });
 
 type UpdateInput = z.infer<typeof UpdateWorkspaceGeneralSchema>;
 
 export type UpdateWorkspaceGeneralResult =
-  | { ok: true }
+  | { ok: true; slug: string }
   | { ok: false; error: string };
 
 // ---------------------------------------------------------------------------
@@ -48,11 +58,30 @@ export async function updateWorkspaceGeneralAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  const { orgSlug, workspaceSlug, name, description } = parsed.data;
+  const { orgSlug, workspaceSlug, name, slug, description } = parsed.data;
 
   // Resolve org + workspace — notFound() on mismatch prevents cross-tenant writes.
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
+
+  // Guard the per-org slug uniqueness before writing so we can return a clean
+  // error instead of surfacing a raw unique-constraint violation. Only check
+  // when the slug actually changed.
+  if (slug !== workspaceSlug) {
+    const conflict = await db()
+      .select({ id: schema.workspaces.id })
+      .from(schema.workspaces)
+      .where(
+        and(
+          eq(schema.workspaces.orgId, org.id),
+          eq(schema.workspaces.slug, slug),
+        ),
+      )
+      .limit(1);
+    if (conflict.length > 0) {
+      return { ok: false, error: "That slug is already taken in this organization." };
+    }
+  }
 
   // Merge description into the JSONB settings column. We use a Postgres
   // JSONB concatenation (`||`) to preserve existing keys while updating
@@ -68,6 +97,7 @@ export async function updateWorkspaceGeneralAction(
     .update(schema.workspaces)
     .set({
       name,
+      slug,
       settings: newSettings,
     })
     .where(
@@ -77,8 +107,14 @@ export async function updateWorkspaceGeneralAction(
       ),
     );
 
+  // Revalidate both the old and (if changed) the new slug paths so the cache
+  // is correct regardless of which URL the client lands on next.
   revalidatePath(`/${orgSlug}/${workspaceSlug}/settings/general`);
   revalidatePath(`/${orgSlug}/${workspaceSlug}/settings`);
+  if (slug !== workspaceSlug) {
+    revalidatePath(`/${orgSlug}/${slug}/settings/general`);
+    revalidatePath(`/${orgSlug}/${slug}/settings`);
+  }
 
-  return { ok: true };
+  return { ok: true, slug };
 }

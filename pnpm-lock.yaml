@@ -197,6 +197,9 @@ importers:
       '@oxagen/iam':
         specifier: workspace:*
         version: link:../../packages/iam
+      '@oxagen/inngest-functions':
+        specifier: workspace:*
+        version: link:../../packages/inngest-functions
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../../packages/oxagen
@@ -566,9 +569,15 @@ importers:
       '@ai-sdk/anthropic':
         specifier: 3.0.81
         version: 3.0.81(zod@3.25.76)
+      '@ai-sdk/gateway':
+        specifier: 3.0.125
+        version: 3.0.125(zod@3.25.76)
       '@ai-sdk/openai':
         specifier: 3.0.68
         version: 3.0.68(zod@3.25.76)
+      '@ai-sdk/provider':
+        specifier: 3.0.10
+        version: 3.0.10
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../billing
@@ -796,6 +805,9 @@ importers:
       '@oxagen/agent':
         specifier: workspace:*
         version: link:../agent
+      '@oxagen/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../billing
@@ -808,6 +820,9 @@ importers:
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../oxagen
+      '@oxagen/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry

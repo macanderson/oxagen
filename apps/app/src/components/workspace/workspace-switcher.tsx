@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { ChevronsUpDown, Check, Plus } from "lucide-react";
+import { ChevronsUpDown, Check, Plus, Settings } from "lucide-react";
 import {
   Menu,
   MenuTrigger,
@@ -44,6 +44,14 @@ export function WorkspaceSwitcher({
             {w.publicId === current.publicId ? <Check className="h-3.5 w-3.5" /> : null}
           </MenuItem>
         ))}
+        <MenuSeparator />
+        {/* Settings for the active workspace — mirrors the org switcher's
+            governance shortcut so each scope's settings sit on its switcher. */}
+        <MenuItem
+          onClick={() => router.push(`/${orgSlug}/${current.slug}/settings`)}
+        >
+          <Settings className="h-3.5 w-3.5" /> Workspace settings
+        </MenuItem>
         <MenuSeparator />
         <MenuItem onClick={() => router.push(`/${orgSlug}/new-workspace`)}>
           <Plus className="h-3.5 w-3.5" /> New workspace

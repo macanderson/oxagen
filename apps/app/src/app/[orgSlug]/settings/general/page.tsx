@@ -23,6 +23,7 @@ export default async function OrgGeneralSettingsPage({
   const rows = await db()
     .select({
       name: schema.organizations.name,
+      slug: schema.organizations.slug,
       avatarUrl: schema.organizations.avatarUrl,
       role: schema.orgUsers.role,
     })
@@ -58,6 +59,7 @@ export default async function OrgGeneralSettingsPage({
     <OrgGeneralForm
       orgSlug={orgSlug}
       initialName={row.name}
+      initialSlug={row.slug}
       initialAvatarUrl={row.avatarUrl ?? ""}
       canEdit={canEdit}
       action={boundAction}

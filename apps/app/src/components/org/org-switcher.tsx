@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ChevronsUpDown, Plus, Check } from "lucide-react";
+import { ChevronsUpDown, Plus, Check, Settings, CreditCard } from "lucide-react";
 import {
   Menu,
   MenuTrigger,
@@ -106,6 +106,33 @@ export function OrgSwitcher({
             {t.publicId === current.publicId ? <Check className="size-4 shrink-0" /> : null}
           </MenuItem>
         ))}
+        <MenuSeparator />
+        {/* Governance shortcuts for the active org — settings + billing are
+            otherwise only reachable once you're already on an org-scope page. */}
+        <MenuItem
+          onClick={() => router.push(`/${current.slug}/settings/general`)}
+          className="gap-2 py-2"
+        >
+          <span
+            aria-hidden="true"
+            className="flex size-8 shrink-0 items-center justify-center text-muted-foreground"
+          >
+            <Settings className="size-4" />
+          </span>
+          Organization settings
+        </MenuItem>
+        <MenuItem
+          onClick={() => router.push(`/${current.slug}/billing`)}
+          className="gap-2 py-2"
+        >
+          <span
+            aria-hidden="true"
+            className="flex size-8 shrink-0 items-center justify-center text-muted-foreground"
+          >
+            <CreditCard className="size-4" />
+          </span>
+          Billing &amp; plans
+        </MenuItem>
         <MenuSeparator />
         <MenuItem onClick={() => router.push("/new-organization")} className="gap-2 py-2">
           <span

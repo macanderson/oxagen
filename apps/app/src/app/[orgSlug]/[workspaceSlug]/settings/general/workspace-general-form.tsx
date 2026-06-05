@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRegisterFillableForm, useRegisterPageEntity } from "@/lib/page-context";
@@ -17,11 +18,29 @@ interface WorkspaceGeneralFormProps {
   workspaceSlug: string;
   workspaceId: string;
   initialName: string;
+  initialSlug: string;
 }
 
 interface FormValues {
   name: string;
+  slug: string;
   description: string;
+}
+
+// ---------------------------------------------------------------------------
+// Slugify — lowercase, drop URL-unsafe characters, spaces → hyphens.
+// Mirrors the format enforced by the server action's slug schema so what the
+// user sees while typing is exactly what gets persisted.
+// ---------------------------------------------------------------------------
+
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "") // drop anything that isn't url-safe
+    .replace(/\s+/g, "-") // spaces → hyphens
+    .replace(/-+/g, "-") // collapse repeated hyphens
+    .replace(/^-+|-+$/g, ""); // trim leading/trailing hyphens
 }
 
 // ---------------------------------------------------------------------------
@@ -33,9 +52,12 @@ export function WorkspaceGeneralForm({
   workspaceSlug,
   workspaceId,
   initialName,
+  initialSlug,
 }: WorkspaceGeneralFormProps) {
+  const router = useRouter();
   const [values, setValues] = React.useState<FormValues>({
     name: initialName,
+    slug: initialSlug,
     description: "",
   });
   const [isSaving, setIsSaving] = React.useState(false);
@@ -67,6 +89,13 @@ export function WorkspaceGeneralForm({
         required: true,
       },
       {
+        name: "slug",
+        label: "Workspace slug",
+        type: "text",
+        current: values.slug,
+        required: true,
+      },
+      {
         name: "description",
         label: "Description",
         type: "textarea",
@@ -74,7 +103,7 @@ export function WorkspaceGeneralForm({
         required: false,
       },
     ],
-    [values.name, values.description],
+    [values.name, values.slug, values.description],
   );
 
   const spec: FillableFormSpec = React.useMemo(
@@ -91,6 +120,8 @@ export function WorkspaceGeneralForm({
     (proposed: Record<string, unknown>, _mode: "field" | "all", _fieldName?: string) => {
       setValues((prev) => ({
         name: typeof proposed.name === "string" ? proposed.name : prev.name,
+        slug:
+          typeof proposed.slug === "string" ? slugify(proposed.slug) : prev.slug,
         description:
           typeof proposed.description === "string" ? proposed.description : prev.description,
       }));
@@ -112,10 +143,16 @@ export function WorkspaceGeneralForm({
         orgSlug,
         workspaceSlug,
         name: values.name,
+        slug: values.slug,
         description: values.description || undefined,
       });
       if (result.ok) {
         setSavedAt(new Date());
+        // The slug is part of the route. If it changed, the current URL is now
+        // stale — move the user to the canonical path for the new slug.
+        if (result.slug !== workspaceSlug) {
+          router.replace(`/${orgSlug}/${result.slug}/settings/general`);
+        }
       }
       // On error: result.ok is false but we intentionally do not crash the
       // form — the user can retry. A future iteration may show a toast.
@@ -127,18 +164,41 @@ export function WorkspaceGeneralForm({
   }
 
   // -------------------------------------------------------------------------
-  // Field change handler
+  // Field change handlers
   // -------------------------------------------------------------------------
   function handleChange(field: keyof FormValues, value: string) {
-    setValues((prev) => ({ ...prev, [field]: value }));
+    setValues((prev) => {
+      const next = { ...prev, [field]: value };
+      // While the slug is empty, keep deriving it from the name as the user
+      // types — so an emptied slug refills the moment they edit the name.
+      if (field === "name" && prev.slug.trim() === "") {
+        next.slug = slugify(value);
+      }
+      return next;
+    });
     setSavedAt(null);
+  }
+
+  // The slug input always normalizes user keystrokes to a valid slug.
+  function handleSlugChange(value: string) {
+    setValues((prev) => ({ ...prev, slug: slugify(value) }));
+    setSavedAt(null);
+  }
+
+  // Focusing the name field while the slug is empty seeds the slug from the
+  // current name (covers the case where the name was set before the slug was
+  // cleared and the user simply tabs back into the name field).
+  function handleNameFocus() {
+    setValues((prev) =>
+      prev.slug.trim() === "" ? { ...prev, slug: slugify(prev.name) } : prev,
+    );
   }
 
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="max-w-2xl">
       <form
         onSubmit={handleSave}
         aria-label="Workspace general settings"
@@ -164,6 +224,7 @@ export function WorkspaceGeneralForm({
             autoComplete="organization"
             value={values.name}
             onChange={(e) => handleChange("name", e.target.value)}
+            onFocus={handleNameFocus}
             placeholder="Production"
             className={cn(
               "h-10 w-full rounded-xl border border-border/70 bg-background px-3 py-2",
@@ -174,6 +235,42 @@ export function WorkspaceGeneralForm({
           />
           <p className="text-xs text-muted-foreground">
             Visible to all workspace members.
+          </p>
+        </div>
+
+        {/* Slug */}
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="ws-slug"
+            className="text-sm font-medium leading-none text-foreground"
+          >
+            Workspace slug
+            <span className="ml-1 text-destructive" aria-hidden="true">
+              *
+            </span>
+          </label>
+          <input
+            id="ws-slug"
+            name="slug"
+            type="text"
+            required
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            value={values.slug}
+            onChange={(e) => handleSlugChange(e.target.value)}
+            placeholder="production"
+            className={cn(
+              "h-10 w-full rounded-xl border border-border/70 bg-background px-3 py-2",
+              "font-mono text-sm text-foreground placeholder:text-muted-foreground",
+              "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+            )}
+          />
+          <p className="text-xs text-muted-foreground">
+            Used in this workspace&rsquo;s URL. Lowercase letters, numbers, and
+            hyphens only. Clear it and edit the name to regenerate it.
           </p>
         </div>
 
@@ -210,7 +307,7 @@ export function WorkspaceGeneralForm({
           <Button
             type="submit"
             size="sm"
-            disabled={isSaving || !values.name.trim()}
+            disabled={isSaving || !values.name.trim() || !values.slug.trim()}
             className="gap-1.5"
           >
             <Save className="h-3.5 w-3.5" aria-hidden="true" />

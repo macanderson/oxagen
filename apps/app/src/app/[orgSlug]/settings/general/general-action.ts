@@ -13,14 +13,27 @@ import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
 
 const OrgGeneralSchema = z.object({
   name: z.string().min(1).max(120).trim(),
+  // Lowercase letters, digits, and single hyphens — no leading/trailing or
+  // doubled hyphens. Mirrors the client-side slugify() output.
+  slug: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+      "Slug must be lowercase letters, numbers, and single hyphens",
+    ),
   avatarUrl: z.string().url().max(2048).optional().or(z.literal("")),
 });
 
 // ---------------------------------------------------------------------------
-// Result type
+// Result type — returns the persisted slug so the client can redirect to the
+// new URL when the slug changed (the slug is the first path segment).
 // ---------------------------------------------------------------------------
 
-export type OrgGeneralActionResult = { ok: true } | { ok: false; error: string };
+export type OrgGeneralActionResult =
+  | { ok: true; slug: string }
+  | { ok: false; error: string };
 
 // ---------------------------------------------------------------------------
 // Action
@@ -66,6 +79,7 @@ export async function updateOrgGeneralAction(
     // 5. Validate inputs.
     const raw = {
       name: formData.get("name"),
+      slug: formData.get("slug"),
       avatarUrl: formData.get("avatarUrl") ?? undefined,
     };
     const parsed = OrgGeneralSchema.safeParse(raw);
@@ -73,22 +87,41 @@ export async function updateOrgGeneralAction(
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
     }
 
-    const { name, avatarUrl } = parsed.data;
+    const { name, slug, avatarUrl } = parsed.data;
+
+    // 5b. Org slug is globally unique (organizations_slug_idx). When the slug
+    //     changed, guard uniqueness up front so we return a clean error rather
+    //     than surfacing a raw unique-constraint violation.
+    if (slug !== orgSlug) {
+      const conflict = await db()
+        .select({ id: schema.organizations.id })
+        .from(schema.organizations)
+        .where(eq(schema.organizations.slug, slug))
+        .limit(1);
+      if (conflict.length > 0 && conflict[0]?.id !== org.id) {
+        return { ok: false, error: "That slug is already taken." };
+      }
+    }
 
     // 6. Persist the update.
     await db()
       .update(schema.organizations)
       .set({
         name,
+        slug,
         avatarUrl: avatarUrl || null,
         updatedByUserId: session.user.id,
       })
       .where(eq(schema.organizations.id, org.id));
 
     // 7. Invalidate the settings page so a refresh shows the latest values.
+    //    Revalidate both the old and (if changed) the new slug path.
     revalidatePath(`/${orgSlug}/settings/general`);
+    if (slug !== orgSlug) {
+      revalidatePath(`/${slug}/settings/general`);
+    }
 
-    return { ok: true };
+    return { ok: true, slug };
   } catch (err) {
     const message = err instanceof Error ? err.message : "An unexpected error occurred";
     return { ok: false, error: message };

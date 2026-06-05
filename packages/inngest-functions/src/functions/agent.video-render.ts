@@ -35,10 +35,10 @@ export const agentVideoRender = inngest.createFunction(
     id: "agent.video-render",
     retries: 0,
     concurrency: { limit: 4, key: "event.data.orgId" },
-    // Allow 16 minutes of wall-clock time per run. Veo renders can take
-    // 2-5+ minutes; `generateVideoFor` enforces a 15-minute AbortController
-    // timeout, so this gives 1 minute of headroom before Inngest cancels.
-    timeouts: { functionRun: "16m" },
+    // Allow 16 minutes total wall-clock time for the run to finish. Veo renders
+    // can take 2-5+ minutes; `generateVideoFor` enforces a 15-minute
+    // AbortController timeout, giving 1 minute of Inngest headroom.
+    timeouts: { finish: "16m" },
   },
   { event: "agent/video.render" },
   async ({ event, step }) => {
@@ -53,16 +53,22 @@ export const agentVideoRender = inngest.createFunction(
       aspectRatio,
     } = event.data;
 
-    // ── Step 1: generate the video ───────────────────────────────────────────
-    const { bytes, mimeType, durationMs } = await step.run(
-      "generate-video",
+    // ── Steps 1+2: generate the video and upload in a single step ───────────
+    //
+    // IMPORTANT: `Uint8Array` cannot cross an Inngest step boundary because
+    // Inngest checkpoints results via JSON serialization — a Uint8Array round-
+    // trips as `{ [index]: number }`, which would corrupt the bytes. We combine
+    // generate+upload into one atomic step so raw bytes never leave the closure.
+    // The step returns only JSON-safe metadata (url, key, sizes).
+    const { storageUrl, storageKey, sizeBytes, durationMs, mimeType } = await step.run(
+      "generate-and-upload",
       async () => {
         const videoModel = selectVideoModel({
           model: model || undefined,
           tier: mediaTier,
         });
 
-        return generateVideoFor({
+        const { bytes, mimeType: generatedMime, durationMs: genMs } = await generateVideoFor({
           model: videoModel,
           prompt,
           durationSeconds,
@@ -77,20 +83,22 @@ export const agentVideoRender = inngest.createFunction(
             executionStepId: assetId,
           },
         });
-      },
-    );
 
-    // ── Step 2: upload to storage ────────────────────────────────────────────
-    const { url: storageUrl, key: storageKey, bytes: sizeBytes } = await step.run(
-      "upload-to-storage",
-      async () => {
-        const ext = mimeType === "video/mp4" ? "mp4" : "bin";
-        return storage().put({
+        const ext = generatedMime === "video/mp4" ? "mp4" : "bin";
+        const putResult = await storage().put({
           key: `generated/videos/${orgId}/${assetId}.${ext}`,
           body: bytes,
-          contentType: mimeType,
+          contentType: generatedMime,
           access: "public",
         });
+
+        return {
+          storageUrl: putResult.url,
+          storageKey: putResult.key,
+          sizeBytes: putResult.bytes,
+          mimeType: generatedMime,
+          durationMs: genMs,
+        };
       },
     );
 

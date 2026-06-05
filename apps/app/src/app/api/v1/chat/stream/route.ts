@@ -14,6 +14,8 @@ import {
   modelIdOf,
 } from "@oxagen/ai";
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
+import { persistGeneratedAsset, createPendingGeneratedAsset } from "@oxagen/handlers";
+import { inngest } from "@oxagen/inngest-functions/client";
 import { db, schema } from "@oxagen/database";
 import { randomUUID } from "node:crypto";
 import type { ModelMessage } from "ai";
@@ -165,16 +167,20 @@ export async function POST(request: NextRequest): Promise<Response> {
   //
   // When the composer requests image/video generation, this turn does NOT run
   // the text agent. It resolves the media model (explicit `mediaModel`, else the
-  // basic/advanced tier from env) and generates, emitting a `component` event
-  // the chat registry renders inline (image-preview / make-video-form). Results
-  // are streamed live and not persisted to Postgres — a generated asset belongs
-  // in blob storage, not a messages.content_blocks JSON column (tracked).
+  // basic/advanced tier from env) and generates, uploads the result to blob
+  // storage + a `content.generated_assets` row (access policy "org" so org
+  // teammates viewing the conversation can see it), then emits a `component`
+  // event the chat registry renders inline via the access-controlled serving
+  // route (image-preview / make-video-form).
   if (generate) {
     const mediaResponse = streamMediaGeneration({
       kind: generate,
       prompt: content,
       mediaModel,
       mediaTier: mediaTier ?? "basic",
+      userId: session.user.id,
+      conversationId,
+      messageId: parentMessageId,
       telemetry: {
         orgId: tenant.id,
         workspaceId: workspace.id,
@@ -460,6 +466,9 @@ function streamMediaGeneration(args: {
   prompt: string;
   mediaModel: string | null;
   mediaTier: "basic" | "advanced";
+  userId: string;
+  conversationId: string | null;
+  messageId: string | null;
   telemetry: { orgId: string; workspaceId: string; executionStepId: string };
 }): Response {
   const encoder = new TextEncoder();
@@ -488,14 +497,36 @@ function streamMediaGeneration(args: {
               },
             });
             const b64 = images[0];
-            emit({
-              type: "component",
-              toolCallId,
-              componentId: "image-preview",
-              props: b64
-                ? { dataUri: `data:image/png;base64,${b64}`, alt: args.prompt }
-                : { placeholder: true, prompt: args.prompt, alt: args.prompt },
-            });
+            if (!b64) {
+              emit({
+                type: "component",
+                toolCallId,
+                componentId: "image-preview",
+                props: { placeholder: true, prompt: args.prompt, alt: args.prompt },
+              });
+            } else {
+              // Persist to blob storage + a generated_assets row, then render via
+              // the access-controlled serving route (never the raw blob URL).
+              const asset = await persistGeneratedAsset({
+                orgId: args.telemetry.orgId,
+                workspaceId: args.telemetry.workspaceId,
+                userId: args.userId,
+                kind: "image",
+                accessPolicy: "org",
+                bytes: Buffer.from(b64, "base64"),
+                mimeType: "image/png",
+                prompt: args.prompt,
+                model: modelId,
+                conversationId: args.conversationId,
+                messageId: args.messageId,
+              });
+              emit({
+                type: "component",
+                toolCallId,
+                componentId: "image-preview",
+                props: { url: asset.serveUrl, alt: args.prompt },
+              });
+            }
           } catch (genErr) {
             // Generation failed (no key / unsupported model / provider error):
             // render the image-preview empty-state with the reason instead of
@@ -515,17 +546,41 @@ function streamMediaGeneration(args: {
             });
           }
         } else {
-          // video — wired stub. Resolve the configured model for the record.
-          const modelId =
-            args.mediaModel ?? videoTierModelId(args.mediaTier);
-          console.info(
-            `[chat/stream] video generation requested (model ${modelId}) — pipeline stub, emitting make-video-form`,
-          );
+          // video — asynchronous render. Veo renders take minutes, so we don't
+          // block the request: create a pending generated_assets row, dispatch
+          // the `agent/video.render` Inngest job (which generates, uploads to
+          // blob, and flips the row to `ready`), and emit a video-result
+          // component that polls the serving route until the asset is ready.
+          const modelId = args.mediaModel ?? videoTierModelId(args.mediaTier);
+          const pending = await createPendingGeneratedAsset({
+            orgId: args.telemetry.orgId,
+            workspaceId: args.telemetry.workspaceId,
+            userId: args.userId,
+            kind: "video",
+            accessPolicy: "org",
+            mimeType: "video/mp4",
+            prompt: args.prompt,
+            model: modelId,
+            conversationId: args.conversationId,
+            messageId: args.messageId,
+          });
+          await inngest.send({
+            name: "agent/video.render",
+            data: {
+              assetId: pending.id,
+              orgId: args.telemetry.orgId,
+              workspaceId: args.telemetry.workspaceId,
+              userId: args.userId,
+              prompt: args.prompt,
+              model: modelId,
+              mediaTier: args.mediaTier,
+            },
+          });
           emit({
             type: "component",
             toolCallId,
-            componentId: "make-video-form",
-            props: { prompt: args.prompt },
+            componentId: "video-result",
+            props: { url: pending.serveUrl, prompt: args.prompt },
           });
         }
       } catch (err) {

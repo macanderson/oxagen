@@ -18,3 +18,18 @@ export { orgMemberInviteAcceptHandler } from "./org.member.invite.accept";
 export { orgMemberInviteDeclineHandler } from "./org.member.invite.decline";
 export { serveFile, FileNotFoundError, FileForbiddenError } from "./file.serve";
 export type { FileServePrincipal, FileServeResult } from "./file.serve";
+export { persistGeneratedAsset, createPendingGeneratedAsset } from "./generated-asset.persist";
+export type {
+  PersistGeneratedAssetArgs,
+  PersistedGeneratedAsset,
+  CreatePendingGeneratedAssetArgs,
+  PendingGeneratedAsset,
+  AssetKind,
+  AssetAccessPolicy,
+} from "./generated-asset.persist";
+export {
+  serveGeneratedAsset,
+  GeneratedAssetNotFoundError,
+  GeneratedAssetForbiddenError,
+} from "./generated-asset.serve";
+export type { AssetServePrincipal, AssetServeResult } from "./generated-asset.serve";

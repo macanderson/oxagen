@@ -1,4 +1,5 @@
-import { experimental_generateVideo, type VideoModel } from "ai";
+import { experimental_generateVideo } from "ai";
+import type { Experimental_VideoModelV3 } from "@ai-sdk/provider";
 import { gateway } from "@ai-sdk/gateway";
 import {
   insertTokenUsage,
@@ -6,6 +7,13 @@ import {
   type Surface,
 } from "@oxagen/telemetry";
 import { chargeUsageCredits } from "@oxagen/billing";
+
+/**
+ * VideoModel mirrors the `VideoModel` type from the `ai` package (which is not
+ * publicly exported). It is `string | Experimental_VideoModelV3` — a bare
+ * gateway model-id string OR a typed video model object from `@ai-sdk/gateway`.
+ */
+export type VideoModel = string | Experimental_VideoModelV3;
 
 // Video models bill per-asset, not per-token. We record a fixed per-video cost
 // in micro-USD so the token_usage table stays the billing source of truth.
@@ -135,7 +143,8 @@ export async function generateVideoFor(
   // provider-reported content type (e.g. "video/mp4").
   const video = result.video;
   const bytes: Uint8Array = video.uint8Array;
-  const mimeType: string = video.mimeType ?? "video/mp4";
+  // GeneratedFile exposes `mediaType` (not `mimeType`) in AI SDK v6.
+  const mimeType: string = video.mediaType ?? "video/mp4";
 
   const resolvedModelId = videoModelIdOf(args.model);
   const costUsdMicros = VEO_3_FAST_COST_USD_MICROS_PER_ASSET;
@@ -184,10 +193,6 @@ export async function generateVideoFor(
 
   return { bytes, mimeType, durationMs };
 }
-
-// Re-export VideoModel so callers can type their model arguments without
-// importing `ai` directly.
-export type { VideoModel };
 
 // Re-export gateway for consumers that need to build a VideoModel directly
 // (e.g. tests or callers that want to bypass selectVideoModel).

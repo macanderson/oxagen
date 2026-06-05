@@ -4,7 +4,13 @@ import Image from "next/image";
 import { ImageOff } from "lucide-react";
 
 export interface ImagePreviewProps {
-  /** Base-64 data URI (data:image/png;base64,...). Present when generation succeeded. */
+  /**
+   * Access-controlled serving URL (e.g. /api/v1/assets/gen_…) for a persisted
+   * generated asset. Preferred over `dataUri`; the blob is streamed through our
+   * own origin so the asset's access policy is enforced.
+   */
+  url?: string;
+  /** Base-64 data URI (data:image/png;base64,...). Legacy/inline fallback. */
   dataUri?: string;
   /** Accessible alt text for the image. */
   alt: string;
@@ -24,13 +30,15 @@ export interface ImagePreviewProps {
  * image optimisation pipeline cannot process inline data URIs.
  */
 export default function ImagePreview({
+  url,
   dataUri,
   alt,
   placeholder = false,
   prompt,
   errorReason,
 }: ImagePreviewProps) {
-  if (placeholder || !dataUri) {
+  const src = url ?? dataUri;
+  if (placeholder || !src) {
     return (
       <div
         className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm overflow-hidden"
@@ -72,7 +80,7 @@ export default function ImagePreview({
     >
       <div className="relative w-full bg-muted/30 dark:bg-muted/10">
         <Image
-          src={dataUri}
+          src={src}
           alt={alt}
           width={1024}
           height={1024}

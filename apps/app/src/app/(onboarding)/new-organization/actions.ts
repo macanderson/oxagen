@@ -13,6 +13,13 @@ const FormSchema = z.object({
   slug: z.string(),
 });
 
+// Postgres unique_violation. Mirrors isSlugConflict in workspace.create.ts and
+// the organization/workspace handlers — match the structured error code rather
+// than sniffing the message string, which is locale- and driver-dependent.
+function isSlugConflict(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
+}
+
 // One server action wraps two capabilities so tenant creation always
 // leaves the user inside at least one workspace. Both inserts share a
 // transaction so partial state is impossible.
@@ -104,10 +111,13 @@ export async function createOrgAction(
 
     return { ok: true, orgSlug: result.orgSlug, workspaceSlug: result.workspaceSlug };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to create organization";
-    if (message.toLowerCase().includes("unique")) {
-      return { ok: false, error: "Slug is already taken" };
+    // The only unique index reachable here is organizations_slug_idx — the
+    // workspace insert always uses slug "default" under a freshly-minted org id,
+    // so a 23505 means the org slug collided.
+    if (isSlugConflict(err)) {
+      return { ok: false, error: `Slug "${orgInput.data.slug}" is already taken` };
     }
+    const message = err instanceof Error ? err.message : "Failed to create organization";
     return { ok: false, error: message };
   }
 }

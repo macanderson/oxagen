@@ -60,4 +60,7 @@ export const CHAT_COMPONENTS = {
   "make-video-form": lazy(
     () => import("@/components/chat/registry-components/make-video-form"),
   ),
+  "video-result": lazy(
+    () => import("@/components/chat/registry-components/video-result"),
+  ),
 } as unknown as Record<string, AnyLazy>;

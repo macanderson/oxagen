@@ -14,9 +14,14 @@
  * reveal speed scales with how far behind the cursor is, so a fast model never
  * leaves the reader waiting, while a steady trickle still types deliberately.
  *
+ * Lifecycle: callers key one instance per assistant message
+ * (`key={msg.messageId}`), so a new turn mounts a fresh component — the cursor
+ * starts at 0 with no reset bookkeeping. Within a message the accumulated text
+ * only ever grows.
+ *
  * Accessibility: under `prefers-reduced-motion` (surfaced via framer-motion's
  * `useReducedMotion`, wired to `reducedMotion="user"` by the app MotionProvider)
- * the full text renders immediately with no caret — no per-frame churn.
+ * the full text renders immediately with no caret and no animation frames.
  */
 
 import * as React from "react";
@@ -37,74 +42,51 @@ const BASE_CPS = 90;
 
 export function StreamingText({ text, isStreaming = false, className }: StreamingTextProps) {
   const reduceMotion = useReducedMotion();
-  const [displayed, setDisplayed] = React.useState("");
+  const [count, setCount] = React.useState(0);
 
-  // Latest target text + how many chars we've revealed, held in refs so the
-  // rAF loop reads current values without being torn down on every delta.
-  const targetRef = React.useRef(text);
+  // Revealed-character count persisted across deltas. The effect re-runs on
+  // every `text` change with a fresh closure over the latest text, so the loop
+  // always animates toward the current snapshot without a render-phase ref.
   const countRef = React.useRef(0);
-  const rafRef = React.useRef<number | null>(null);
-  const lastTsRef = React.useRef(0);
-  targetRef.current = text;
 
-  // The single rAF stepper. Self-reschedules until the cursor catches the
-  // target, then parks itself (rafRef = null) to be restarted by the effect
-  // below when more text arrives.
-  const step = React.useCallback((ts: number) => {
-    const target = targetRef.current;
-    if (countRef.current >= target.length) {
-      rafRef.current = null;
-      return;
-    }
-    const last = lastTsRef.current || ts;
-    // Clamp large frame gaps (tab backgrounded) so we don't leap the whole
-    // string at once on the first frame back.
-    const dt = Math.min(0.05, (ts - last) / 1000);
-    lastTsRef.current = ts;
-
-    const remaining = target.length - countRef.current;
-    const cps = Math.max(BASE_CPS, remaining * 6);
-    const advance = Math.max(1, Math.round(cps * dt));
-    countRef.current = Math.min(target.length, countRef.current + advance);
-    setDisplayed(target.slice(0, countRef.current));
-
-    rafRef.current = requestAnimationFrame(step);
-  }, []);
-
-  // Reduced motion: always show the complete text, never animate.
-  React.useEffect(() => {
-    if (!reduceMotion) return;
-    countRef.current = text.length;
-    setDisplayed(text);
-  }, [reduceMotion, text]);
-
-  // Drive / restart the reveal as the target grows (or resets on a new turn).
   React.useEffect(() => {
     if (reduceMotion) return;
-    // New turn: the accumulator shrank (reset to ""), so rewind the cursor.
-    if (countRef.current > text.length) {
-      countRef.current = 0;
-      setDisplayed("");
+    let frame = 0;
+    let lastTs = 0;
+    // rAF stepper, defined inside the effect so it closes over the current
+    // `text`. Reschedules until the cursor catches the snapshot, then parks.
+    // setState lives in this frame callback (not the effect body), so it does
+    // not trigger cascading synchronous renders.
+    const loop = (ts: number) => {
+      if (countRef.current >= text.length) return;
+      const last = lastTs || ts;
+      // Clamp large frame gaps (e.g. backgrounded tab) so we don't leap the
+      // whole string at once on the first frame back.
+      const dt = Math.min(0.05, (ts - last) / 1000);
+      lastTs = ts;
+      const remaining = text.length - countRef.current;
+      const cps = Math.max(BASE_CPS, remaining * 6);
+      const advance = Math.max(1, Math.round(cps * dt));
+      countRef.current = Math.min(text.length, countRef.current + advance);
+      setCount(countRef.current);
+      frame = requestAnimationFrame(loop);
+    };
+    if (countRef.current < text.length) {
+      frame = requestAnimationFrame(loop);
     }
-    if (rafRef.current === null && countRef.current < text.length) {
-      lastTsRef.current = 0;
-      rafRef.current = requestAnimationFrame(step);
-    }
-  }, [text, reduceMotion, step]);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [text, reduceMotion]);
 
-  // Cancel any in-flight frame on unmount.
-  React.useEffect(
-    () => () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    },
-    [],
-  );
-
-  const caretVisible = !reduceMotion && (isStreaming || displayed.length < text.length);
+  // Reduced motion shows everything at once; otherwise reveal up to the cursor.
+  // slice() clamps, so a stale `count` never over- or under-reads `text`.
+  const displayed = reduceMotion ? text : text.slice(0, count);
+  const caretVisible = !reduceMotion && (isStreaming || count < text.length);
 
   return (
     <div className={cn("whitespace-pre-wrap leading-relaxed", className)}>
-      {reduceMotion ? text : displayed}
+      {displayed}
       {caretVisible ? <span className="stream-caret ml-0.5" aria-hidden="true" /> : null}
     </div>
   );
