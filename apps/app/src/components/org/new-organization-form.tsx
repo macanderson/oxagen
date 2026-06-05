@@ -3,7 +3,17 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectPopup,
+  SelectItem,
+} from "@/components/ui/select";
+import { BillingAddressFields } from "@/components/billing/billing-address-fields";
 import { slugify } from "@/lib/slug";
+import { ORG_TYPE_OPTIONS, INDUSTRY_OPTIONS, EMPLOYEE_SIZE_OPTIONS } from "@oxagen/config";
+import type { OrgType } from "@oxagen/config";
 
 export interface NewOrgAction {
   (formData: FormData): Promise<{ ok: true; orgSlug: string; workspaceSlug: string } | { ok: false; error: string }>;
@@ -19,8 +29,13 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
   const [error, setError] = React.useState<string | null>(null);
   const [name, setName] = React.useState("");
   const [slug, setSlug] = React.useState("");
+  const [orgType, setOrgType] = React.useState<OrgType>("business");
+  const [industry, setIndustry] = React.useState("");
+  const [employeeSize, setEmployeeSize] = React.useState("");
   // Once the user hand-edits the slug we stop overwriting it from name.
   const slugTouched = React.useRef(false);
+
+  const isBusiness = orgType === "business";
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -46,14 +61,43 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
+      {/* ── Type selector ─────────────────────────────────────────────── */}
       <div className="space-y-1.5">
-        <Label htmlFor="name">Organization name</Label>
+        <Label>Account type</Label>
+        <div className="flex rounded-md border border-input overflow-hidden">
+          {ORG_TYPE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setOrgType(opt.value)}
+              className={[
+                "flex-1 px-4 py-2 text-sm font-medium transition-colors",
+                "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                orgType === opt.value
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground",
+              ].join(" ")}
+              aria-pressed={orgType === opt.value}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {/* Submit the type discriminator via FormData */}
+        <input type="hidden" name="type" value={orgType} />
+      </div>
+
+      {/* ── Name ─────────────────────────────────────────────────────── */}
+      <div className="space-y-1.5">
+        <Label htmlFor="name">
+          {isBusiness ? "Organization name" : "Your name"}
+        </Label>
         <Input
           id="name"
           name="name"
           required
           maxLength={120}
-          placeholder="Acme Inc."
+          placeholder={isBusiness ? "Acme Inc." : "Jane Smith"}
           value={name}
           onChange={(e) => {
             const next = e.target.value;
@@ -62,6 +106,8 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
           }}
         />
       </div>
+
+      {/* ── Slug ─────────────────────────────────────────────────────── */}
       <div className="space-y-1.5">
         <Label htmlFor="slug">Slug</Label>
         <Input
@@ -69,7 +115,7 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
           name="slug"
           required
           pattern="[a-z0-9\-]{2,40}"
-          placeholder="acme"
+          placeholder={isBusiness ? "acme" : "jane-smith"}
           value={slug}
           onChange={(e) => {
             slugTouched.current = true;
@@ -78,7 +124,80 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
         />
         <p className="text-xs text-muted-foreground">Lowercase letters, digits, and hyphens. 2 to 40 chars.</p>
       </div>
+
+      {/* ── Business-only fields ─────────────────────────────────────── */}
+      {isBusiness && (
+        <>
+          <div className="space-y-1.5">
+            <Label htmlFor="website">Business website <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Input
+              id="website"
+              name="website"
+              type="url"
+              placeholder="https://acme.com"
+              autoComplete="url"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="industry">Industry <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Select
+              value={industry || undefined}
+              onValueChange={(v) => setIndustry(v ?? "")}
+            >
+              <SelectTrigger id="industry" size="lg" className="w-full">
+                <SelectValue placeholder="Select industry" />
+              </SelectTrigger>
+              <SelectPopup>
+                {INDUSTRY_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+            <input type="hidden" name="industry" value={industry} readOnly />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="employeeSize">Team size <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Select
+              value={employeeSize || undefined}
+              onValueChange={(v) => setEmployeeSize(v ?? "")}
+            >
+              <SelectTrigger id="employeeSize" size="lg" className="w-full">
+                <SelectValue placeholder="Select team size" />
+              </SelectTrigger>
+              <SelectPopup>
+                {EMPLOYEE_SIZE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+            <input type="hidden" name="employeeSize" value={employeeSize} readOnly />
+          </div>
+        </>
+      )}
+
+      {/* ── Billing email ─────────────────────────────────────────────── */}
+      <div className="space-y-1.5">
+        <Label htmlFor="billingEmail">Billing email <span className="text-muted-foreground font-normal">(optional)</span></Label>
+        <Input
+          id="billingEmail"
+          name="billingEmail"
+          type="email"
+          placeholder="billing@acme.com"
+          autoComplete="email"
+        />
+      </div>
+
+      {/* ── Billing address ───────────────────────────────────────────── */}
+      <BillingAddressFields />
+
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
       <Button type="submit" size="lg" disabled={pending}>
         {pending ? "Creating…" : "Create organization"}
       </Button>

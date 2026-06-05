@@ -85,6 +85,8 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
 
       // Persist billing profile when either billing email or address is supplied.
       // A missing profile simply means not yet collected; the org itself is valid.
+      // Country code is normalised to uppercase here (the contract validates length
+      // only; the uppercase transform was removed to avoid Zod inference issues).
       if (input.billingEmail !== undefined || input.billingAddress !== undefined) {
         await tx.insert(schema.orgBillingProfiles).values({
           orgId: org.id,
@@ -92,9 +94,9 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
           addressLine1: input.billingAddress?.line1 ?? null,
           addressLine2: input.billingAddress?.line2 ?? null,
           addressCity: input.billingAddress?.city ?? null,
-          addressRegion: input.billingAddress?.region ?? null,
+          addressRegion: input.billingAddress?.region?.toUpperCase() ?? null,
           addressPostalCode: input.billingAddress?.postalCode ?? null,
-          addressCountry: input.billingAddress?.country ?? null,
+          addressCountry: input.billingAddress?.country.toUpperCase() ?? null,
           addressPlaceId: input.billingAddress?.placeId ?? null,
           createdByUserId: ctx.userId,
           updatedByUserId: ctx.userId,
