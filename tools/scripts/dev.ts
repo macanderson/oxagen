@@ -3,6 +3,7 @@ import { execa } from "execa";
 import kleur from "kleur";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { startStripeTunnel } from "./stripe-tunnel";
 
 const ROOT = resolve(process.cwd());
 const COMPOSE_FILE = "docker-compose.dev.yml";
@@ -114,6 +115,9 @@ async function main(): Promise<void> {
   await up();
   await waitForHealthy();
   await migrate();
+  // Open the Stripe test-mode webhook tunnel and export its signing secret
+  // BEFORE turbo spawns the API, so local webhook signature verification works.
+  await startStripeTunnel();
   await turbo();
 }
 

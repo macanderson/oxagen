@@ -40,6 +40,9 @@ playwright-report
 .env*
 .env*.local
 
+# Stripe webhook tunnel pidfile (written by `pnpm dev`, *.log already ignored)
+.stripe-listen.pid
+
 # Plaintext credential dumps — never commit (real DB/secret values live here)
 database-creds.txt
 *-creds.txt
