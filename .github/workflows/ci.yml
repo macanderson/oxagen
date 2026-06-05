@@ -57,13 +57,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Event context is passed via env (never interpolated into the shell body)
+      # so a crafted ref/SHA can't inject shell. EVENT_BEFORE is a commit SHA.
       - name: Compute affected base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ]; then
             git fetch origin main --no-tags
             echo "TURBO_BASE=origin/main" >> "$GITHUB_ENV"
           else
-            BEFORE="${{ github.event.before }}"
+            BEFORE="$EVENT_BEFORE"
             # First push to a branch (or a force-push) can report an all-zero or
             # unreachable "before" SHA — fall back to the previous commit.
             if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
@@ -83,7 +88,7 @@ jobs:
       # Affected lint + typecheck. Empty affected set → turbo runs nothing and
       # exits 0, so docs-only / config-only changes pass in seconds.
       - name: Lint + typecheck (affected)
-        run: pnpm turbo run lint typecheck --filter=...[${TURBO_BASE}]
+        run: pnpm turbo run lint typecheck --filter="...[${TURBO_BASE}]"
 
       # Repo-wide invariants — static file checks (no DB, sub-second), always run.
       - name: Manifest / contracts / env invariants
@@ -150,12 +155,15 @@ jobs:
           fetch-depth: 0
 
       - name: Compute affected base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ]; then
             git fetch origin main --no-tags
             echo "TURBO_BASE=origin/main" >> "$GITHUB_ENV"
           else
-            BEFORE="${{ github.event.before }}"
+            BEFORE="$EVENT_BEFORE"
             if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
               BEFORE="$(git rev-parse HEAD~1)"
             fi
@@ -193,7 +201,7 @@ jobs:
       # the affected dependency graph then runs the affected tests — all in one
       # turbo invocation with full intra-DAG parallelism + remote cache.
       - name: Build + unit tests (affected)
-        run: pnpm turbo run build test:unit --filter=...[${TURBO_BASE}]
+        run: pnpm turbo run build test:unit --filter="...[${TURBO_BASE}]"
 
   # ──────────────────────────────────────────────────────────────────────
   # deploy — post-merge side-car (main only). The actual app deploys are
