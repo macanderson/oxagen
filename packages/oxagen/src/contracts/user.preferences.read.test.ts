@@ -23,7 +23,7 @@ describe("user.preferences.read capability", () => {
       defaultTextTier: "precise",
       defaultTextModel: "anthropic/claude-opus-4.8",
       defaultImageModel: "bfl/flux-2-max",
-      defaultVideoModel: "google/veo-3",
+      defaultVideoModel: "google/veo-3.0-generate-001",
     });
     expect(parsed.fontSize).toBe("large");
     expect(parsed.defaultTextTier).toBe("precise");

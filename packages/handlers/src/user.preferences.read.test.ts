@@ -44,7 +44,7 @@ const FULL_ROW = {
   defaultTextTier: "precise" as const,
   defaultTextModel: "anthropic/claude-opus-4.8",
   defaultImageModel: "bfl/flux-2-max",
-  defaultVideoModel: "google/veo-3",
+  defaultVideoModel: "google/veo-3.0-generate-001",
 };
 
 describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
@@ -73,7 +73,7 @@ describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
     expect(result.defaultTextTier).toBe("precise");
     expect(result.defaultTextModel).toBe("anthropic/claude-opus-4.8");
     expect(result.defaultImageModel).toBe("bfl/flux-2-max");
-    expect(result.defaultVideoModel).toBe("google/veo-3");
+    expect(result.defaultVideoModel).toBe("google/veo-3.0-generate-001");
   });
 
   // ── no row — schema defaults ──────────────────────────────────────────────

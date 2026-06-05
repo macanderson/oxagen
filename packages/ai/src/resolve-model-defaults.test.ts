@@ -46,7 +46,7 @@ describe("resolveModelDefaults", () => {
         defaultTextTier: "precise",
         defaultTextModel: "anthropic/claude-opus-4.8",
         defaultImageModel: "bfl/flux-2-max",
-        defaultVideoModel: "google/veo-3",
+        defaultVideoModel: "google/veo-3.0-generate-001",
       },
       workspace: null,
     };
@@ -54,7 +54,7 @@ describe("resolveModelDefaults", () => {
     expect(result.text.tier).toBe("precise");
     expect(result.text.model).toBe("anthropic/claude-opus-4.8");
     expect(result.image.model).toBe("bfl/flux-2-max");
-    expect(result.video.model).toBe("google/veo-3");
+    expect(result.video.model).toBe("google/veo-3.0-generate-001");
     expect(result.overriddenByWorkspace.text).toBe(false);
     expect(result.overriddenByWorkspace.image).toBe(false);
     expect(result.overriddenByWorkspace.video).toBe(false);
@@ -89,14 +89,14 @@ describe("resolveModelDefaults", () => {
         defaultTextTier: "balanced",
         defaultTextModel: "anthropic/claude-sonnet-4.6",
         defaultImageModel: "bfl/flux-2-max",
-        defaultVideoModel: "google/veo-3",
+        defaultVideoModel: "google/veo-3.0-generate-001",
       },
     };
     const result = resolveModelDefaults(input);
     expect(result.text.tier).toBe("balanced");
     expect(result.text.model).toBe("anthropic/claude-sonnet-4.6");
     expect(result.image.model).toBe("bfl/flux-2-max");
-    expect(result.video.model).toBe("google/veo-3");
+    expect(result.video.model).toBe("google/veo-3.0-generate-001");
     expect(result.overriddenByWorkspace.text).toBe(true);
     expect(result.overriddenByWorkspace.image).toBe(true);
     expect(result.overriddenByWorkspace.video).toBe(true);
@@ -110,20 +110,20 @@ describe("resolveModelDefaults", () => {
         defaultTextTier: "precise",
         defaultTextModel: "anthropic/claude-opus-4.8",
         defaultImageModel: "openai/gpt-image-1",
-        defaultVideoModel: "google/veo-3-fast",
+        defaultVideoModel: "google/veo-3.0-fast-generate-001",
       },
       workspace: {
         defaultTextTier: "fast",
         defaultTextModel: "openai/gpt-5-mini",
         defaultImageModel: "bfl/flux-2-max",
-        defaultVideoModel: "google/veo-3",
+        defaultVideoModel: "google/veo-3.0-generate-001",
       },
     };
     const result = resolveModelDefaults(input);
     expect(result.text.tier).toBe("fast");
     expect(result.text.model).toBe("openai/gpt-5-mini");
     expect(result.image.model).toBe("bfl/flux-2-max");
-    expect(result.video.model).toBe("google/veo-3");
+    expect(result.video.model).toBe("google/veo-3.0-generate-001");
     expect(result.overriddenByWorkspace.text).toBe(true);
     expect(result.overriddenByWorkspace.image).toBe(true);
     expect(result.overriddenByWorkspace.video).toBe(true);
@@ -135,7 +135,7 @@ describe("resolveModelDefaults", () => {
         defaultTextTier: "precise",
         defaultTextModel: "anthropic/claude-opus-4.8",
         defaultImageModel: "openai/gpt-image-1",
-        defaultVideoModel: "google/veo-3",
+        defaultVideoModel: "google/veo-3.0-generate-001",
       },
       workspace: {
         defaultTextTier: null,
@@ -148,7 +148,7 @@ describe("resolveModelDefaults", () => {
     expect(result.text.tier).toBe("precise");
     expect(result.text.model).toBe("anthropic/claude-opus-4.8");
     expect(result.image.model).toBe("bfl/flux-2-max");
-    expect(result.video.model).toBe("google/veo-3");
+    expect(result.video.model).toBe("google/veo-3.0-generate-001");
     expect(result.overriddenByWorkspace.text).toBe(false);
     expect(result.overriddenByWorkspace.image).toBe(true);
     expect(result.overriddenByWorkspace.video).toBe(false);

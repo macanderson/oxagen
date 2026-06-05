@@ -553,7 +553,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { "*": "google/veo-3-fast" },
+    staticValue: { "*": "google/veo-3.0-fast-generate-001" },
   },
   OXAGEN_LLM_VIDEO_ADVANCED: {
     group: "AI providers",
@@ -563,7 +563,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { "*": "google/veo-3" },
+    staticValue: { "*": "google/veo-3.0-generate-001" },
   },
 
   // ── Email (transactional — @oxagen/notifications SMTP transport) ─────────────

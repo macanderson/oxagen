@@ -171,14 +171,14 @@ export const gatewayModels: GatewayModel[] = [
     context: "32K",
   },
   {
-    id: "google/veo-3",
+    id: "google/veo-3.0-generate-001",
     name: "Veo 3",
     vendor: "google",
     released: "2025-08-15",
     capabilities: ["video"],
   },
   {
-    id: "google/veo-3-fast",
+    id: "google/veo-3.0-fast-generate-001",
     name: "Veo 3 Fast",
     vendor: "google",
     released: "2025-08-15",

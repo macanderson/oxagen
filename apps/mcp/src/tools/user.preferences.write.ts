@@ -44,7 +44,7 @@ export const schema = {
     .min(1)
     .nullable()
     .optional()
-    .describe("Explicit video model id, e.g. 'google/veo-3' (null clears)"),
+    .describe("Explicit video model id, e.g. 'google/veo-3.0-generate-001' (null clears)"),
 };
 
 export const metadata: ToolMetadata = {

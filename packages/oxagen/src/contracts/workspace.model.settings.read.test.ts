@@ -13,12 +13,12 @@ describe("workspace.model.settings.read capability", () => {
       defaultTextTier: "balanced",
       defaultTextModel: "anthropic/claude-sonnet-4.6",
       defaultImageModel: "bfl/flux-2-max",
-      defaultVideoModel: "google/veo-3",
+      defaultVideoModel: "google/veo-3.0-generate-001",
     });
     expect(parsed.defaultTextTier).toBe("balanced");
     expect(parsed.defaultTextModel).toBe("anthropic/claude-sonnet-4.6");
     expect(parsed.defaultImageModel).toBe("bfl/flux-2-max");
-    expect(parsed.defaultVideoModel).toBe("google/veo-3");
+    expect(parsed.defaultVideoModel).toBe("google/veo-3.0-generate-001");
   });
 
   it("parses a valid output with all fields null", () => {

@@ -72,8 +72,8 @@ export const baseEnvSchema = z.object({
   // resolves them via imageTierModelId / videoTierModelId.
   OXAGEN_LLM_IMAGE_BASIC: z.string().default("openai/gpt-image-1"),
   OXAGEN_LLM_IMAGE_ADVANCED: z.string().default("bfl/flux-2-max"),
-  OXAGEN_LLM_VIDEO_BASIC: z.string().default("google/veo-3-fast"),
-  OXAGEN_LLM_VIDEO_ADVANCED: z.string().default("google/veo-3"),
+  OXAGEN_LLM_VIDEO_BASIC: z.string().default("google/veo-3.0-fast-generate-001"),
+  OXAGEN_LLM_VIDEO_ADVANCED: z.string().default("google/veo-3.0-generate-001"),
 
   // ── Email (transactional, via @oxagen/notifications SMTP transport) ──
   // Optional in the base schema (not every service sends mail); the

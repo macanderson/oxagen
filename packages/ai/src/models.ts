@@ -117,7 +117,7 @@ export function imageTierModelId(tier: MediaTier): string {
     "OXAGEN_LLM_IMAGE_ADVANCED",
   ] as const);
   // Defaults are guaranteed by the schema (env.ts); coalesce for mocked envs.
-  return env[IMAGE_TIER_ENV_KEY[tier]] ?? "openai/dall-e-3";
+  return env[IMAGE_TIER_ENV_KEY[tier]] ?? "openai/gpt-image-1";
 }
 
 /** Resolve a video tier to its concrete gateway model id from env. */
@@ -126,7 +126,7 @@ export function videoTierModelId(tier: MediaTier): string {
     "OXAGEN_LLM_VIDEO_BASIC",
     "OXAGEN_LLM_VIDEO_ADVANCED",
   ] as const);
-  return env[VIDEO_TIER_ENV_KEY[tier]] ?? "google/veo-3-fast";
+  return env[VIDEO_TIER_ENV_KEY[tier]] ?? "google/veo-3.0-fast-generate-001";
 }
 
 /**

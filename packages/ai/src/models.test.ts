@@ -179,8 +179,8 @@ describe("selectModel (@oxagen/ai)", () => {
 const MEDIA_ENV = {
   OXAGEN_LLM_IMAGE_BASIC: "openai/gpt-image-1",
   OXAGEN_LLM_IMAGE_ADVANCED: "bfl/flux-2-max",
-  OXAGEN_LLM_VIDEO_BASIC: "google/veo-3-fast",
-  OXAGEN_LLM_VIDEO_ADVANCED: "google/veo-3",
+  OXAGEN_LLM_VIDEO_BASIC: "google/veo-3.0-fast-generate-001",
+  OXAGEN_LLM_VIDEO_ADVANCED: "google/veo-3.0-generate-001",
 };
 
 describe("media tier resolution (@oxagen/ai)", () => {
@@ -194,8 +194,8 @@ describe("media tier resolution (@oxagen/ai)", () => {
 
   it("resolves video tiers from OXAGEN_LLM_VIDEO_* env", () => {
     envValues = { ...MEDIA_ENV };
-    expect(videoTierModelId("basic")).toBe("google/veo-3-fast");
-    expect(videoTierModelId("advanced")).toBe("google/veo-3");
+    expect(videoTierModelId("basic")).toBe("google/veo-3.0-fast-generate-001");
+    expect(videoTierModelId("advanced")).toBe("google/veo-3.0-generate-001");
   });
 
   it("joins every tier to its concrete gateway model id", () => {
@@ -207,7 +207,7 @@ describe("media tier resolution (@oxagen/ai)", () => {
         precise: "anthropic/claude-opus-4.8",
       },
       image: { basic: "openai/gpt-image-1", advanced: "bfl/flux-2-max" },
-      video: { basic: "google/veo-3-fast", advanced: "google/veo-3" },
+      video: { basic: "google/veo-3.0-fast-generate-001", advanced: "google/veo-3.0-generate-001" },
     });
   });
 });

@@ -19,7 +19,7 @@ describe("workspace.model.settings.write capability", () => {
       defaultTextTier: "balanced",
       defaultTextModel: "anthropic/claude-sonnet-4.6",
       defaultImageModel: "openai/gpt-image-1",
-      defaultVideoModel: "google/veo-3",
+      defaultVideoModel: "google/veo-3.0-generate-001",
     });
     expect(parsed.defaultTextTier).toBe("balanced");
     expect(parsed.defaultTextModel).toBe("anthropic/claude-sonnet-4.6");
