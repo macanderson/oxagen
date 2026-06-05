@@ -21,7 +21,7 @@ import {
   SheetTitle,
   SheetClose,
 } from "@/components/ui/sheet";
-import { OrgSwitcher } from "@/components/org/org-switcher";
+import { OrgSwitcher, type OrgOption } from "@/components/org/org-switcher";
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
 import { activeHrefFor, getSidebarConfig, resolveSidebarCtx, resolveSidebarMode } from "@/lib/sidebar";
 import { cn } from "@/lib/utils";
@@ -33,7 +33,7 @@ export interface MobileNavProps {
   ctx: ScopeContext;
   org: ResolvedOrg;
   workspace?: ResolvedWorkspace;
-  availableOrgs: { publicId: string; slug: string; name: string }[];
+  availableOrgs: OrgOption[];
   availableWorkspaces?: { publicId: string; slug: string; name: string }[];
   /** May be undefined during a transient post-signup render. */
   user: SessionUser | undefined;

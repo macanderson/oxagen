@@ -17,10 +17,19 @@
  *   import { ThemeProvider } from "@oxagen/ui";
  *   import { ThemeScript } from "@oxagen/ui/components/theme-script";
  *   ...
- *   <body>
- *     <ThemeScript />
- *     <ThemeProvider>{children}</ThemeProvider>
- *   </body>
+ *   <html lang="en" suppressHydrationWarning>
+ *     <head>
+ *       <ThemeScript />
+ *     </head>
+ *     <body>
+ *       <ThemeProvider>{children}</ThemeProvider>
+ *     </body>
+ *   </html>
+ *
+ * ThemeScript MUST be in <head>, not <body>. Placing it in <body> causes
+ * React 19.2's client reconciler to hit the createInstance path for the
+ * <script> node and fire "Encountered a script tag while rendering React
+ * component" on every client-side navigation or remount.
  *
  * Keep <html suppressHydrationWarning> on the layout: the bootstrap script
  * mutates <html>'s class before hydration, so its attributes legitimately

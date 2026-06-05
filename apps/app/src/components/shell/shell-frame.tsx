@@ -15,12 +15,14 @@
  */
 
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { PanelLeft } from "lucide-react";
 import { Sidebar } from "./sidebar";
+import { resolveSidebarCtx } from "@/lib/sidebar";
 import { MobileNav } from "./mobile-nav";
 import { AskBar } from "@/components/shell/ask/ask-bar";
 import { NotificationsBell } from "./notifications-bell";
-import { OrgSwitcher } from "@/components/org/org-switcher";
+import { OrgSwitcher, type OrgOption } from "@/components/org/org-switcher";
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "./sidebar-context";
@@ -31,7 +33,7 @@ import type { ScopeContext } from "@/lib/scope";
 export interface ShellFrameProps {
   org: ResolvedOrg;
   workspace?: ResolvedWorkspace;
-  availableOrgs: { publicId: string; slug: string; name: string }[];
+  availableOrgs: OrgOption[];
   availableWorkspaces?: { publicId: string; slug: string; name: string }[];
   /** May be undefined during a transient post-signup render; guarded in UserSwitcher. */
   user: SessionUser | undefined;
@@ -47,7 +49,24 @@ export function ShellFrame({
   children,
 }: ShellFrameProps) {
   const { toggle } = useSidebar();
-  const ctx: ScopeContext = { orgSlug: org.slug, workspaceSlug: workspace?.slug };
+  const pathname = usePathname();
+
+  // The shell mounts at the [orgSlug] layout, which can't see the
+  // [workspaceSlug] route param — so `workspace` is undefined on workspace
+  // routes. Recover the active workspace slug from the URL (same parse the
+  // sidebar uses) so the AskBar scopes correctly and the workspace picker shows.
+  const ctx: ScopeContext = resolveSidebarCtx(pathname, {
+    orgSlug: org.slug,
+    workspaceSlug: workspace?.slug,
+  });
+
+  // Active workspace for the picker: prefer the explicit prop, else match the
+  // slug parsed from the path against the org's workspaces. Null on org-level
+  // routes (no workspace in the path) → the picker is hidden.
+  const currentWorkspace =
+    (workspace
+      ? { publicId: workspace.publicId, slug: workspace.slug, name: workspace.name }
+      : availableWorkspaces?.find((w) => w.slug === ctx.workspaceSlug)) ?? null;
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-muted/40 md:gap-2 md:p-2">
@@ -78,23 +97,35 @@ export function ShellFrame({
             />
           </div>
 
+          {/* Top-left: org / workspace pickers (org ▾ / workspace ▾). */}
+          <div className="flex min-w-0 shrink items-center gap-2">
+            <OrgSwitcher current={org} organizations={availableOrgs} />
+            {currentWorkspace ? (
+              <>
+                <span
+                  className="select-none text-sm text-muted-foreground/50"
+                  aria-hidden="true"
+                >
+                  /
+                </span>
+                <WorkspaceSwitcher
+                  orgSlug={org.slug}
+                  current={currentWorkspace}
+                  workspaces={availableWorkspaces ?? []}
+                />
+              </>
+            ) : null}
+          </div>
+
           {/* Ask bar — fills the remaining header width. */}
           <div className="hidden min-w-0 flex-1 sm:block">
-            <div className="max-w-xl">
+            <div className="mx-auto max-w-xl">
               <AskBar ctx={ctx} />
             </div>
           </div>
 
-          {/* Right cluster: org / workspace pickers + notifications. */}
+          {/* Right cluster: notifications. */}
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <OrgSwitcher current={org} organizations={availableOrgs} />
-            {workspace ? (
-              <WorkspaceSwitcher
-                orgSlug={org.slug}
-                current={workspace}
-                workspaces={availableWorkspaces ?? []}
-              />
-            ) : null}
             <NotificationsBell />
           </div>
         </header>

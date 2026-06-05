@@ -87,10 +87,10 @@ describe("getSidebarConfig item counts", () => {
     expect(config.items).toHaveLength(6);
   });
 
-  it("org config has exactly 6 items", () => {
+  it("org config has exactly 7 items", () => {
     const config = getSidebarConfig("org");
     expect(config.mode).toBe("org");
-    expect(config.items).toHaveLength(6);
+    expect(config.items).toHaveLength(7);
   });
 
   it("account config has exactly 6 items", () => {
@@ -124,6 +124,13 @@ describe("getSidebarConfig item counts", () => {
     const items = getSidebarConfig("org").items;
     const workspacesItem = items.find((item) => item.id === "workspaces");
     expect(workspacesItem?.external).toBe(true);
+  });
+
+  it("org config has exactly one 'footer' group item (Settings)", () => {
+    const items = getSidebarConfig("org").items;
+    const footerItems = items.filter((item) => item.group === "footer");
+    expect(footerItems).toHaveLength(1);
+    expect(footerItems[0]?.id).toBe("org-settings");
   });
 });
 
@@ -187,6 +194,10 @@ describe("href builders produce correct paths", () => {
 
     it("developer -> /{org}/developer", () => {
       expect(findItem("developer").href(orgCtx)).toBe("/acme/developer");
+    });
+
+    it("org-settings -> /{org}/settings/general", () => {
+      expect(findItem("org-settings").href(orgCtx)).toBe("/acme/settings/general");
     });
   });
 

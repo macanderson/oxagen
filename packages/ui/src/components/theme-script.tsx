@@ -13,9 +13,15 @@
  * warning entirely: a Server Component never hydrates, so React never
  * re-renders this node on the client.
  *
- * Render it once, as early as possible (first child of <body>), alongside the
- * client `ThemeProvider`. The inline IIFE applies the persisted/system theme to
- * <html> before first paint, eliminating the flash of incorrect theme.
+ * Render it once, inside an explicit `<head>` element in the root layout (NOT
+ * as a child of `<body>`). Placing it in `<head>` ensures React 19's client
+ * reconciler never reaches the createInstance path for the `<script>` node —
+ * elements in `<head>` are handled by the browser's head-management path and
+ * are not re-created client-side, which is what triggers the "Encountered a
+ * script tag while rendering React component" console error. The IIFE still
+ * executes from the server-rendered HTML before first paint, eliminating any
+ * flash of incorrect theme. Pair it with the client `ThemeProvider` as a
+ * sibling inside `<body>`.
  */
 
 export interface ThemeScriptProps {

@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   Bell,
   BookOpen,
+  Building2,
   CreditCard,
   EyeOff,
   KeyRound,
@@ -201,6 +202,13 @@ const orgConfig: SidebarConfig = {
       icon: Terminal,
       href: (ctx) => org.developer.root(ctx),
       group: "primary",
+    },
+    {
+      id: "org-settings",
+      label: "Settings",
+      icon: Building2,
+      href: (ctx) => org.settings.general(ctx),
+      group: "footer",
     },
   ],
 };
@@ -442,6 +450,7 @@ export function enumerateNavTargets(
   targets.push({ label: "Security", href: org.security.root(ctx), parent: "security" });
   targets.push({ label: "Billing", href: org.billing.root(ctx), parent: "billing" });
   targets.push({ label: "Developer", href: org.developer.root(ctx), parent: "developer" });
+  targets.push({ label: "Settings · General", href: org.settings.general(ctx), parent: "org-settings" });
 
   // Access tabs
   targets.push({ label: "Access · Grants", href: org.access.grants(ctx), parent: "access" });

@@ -92,16 +92,22 @@ export function SidebarItem({
         />
       )}
 
-      {/* Primary icon */}
-      <Icon
-        className={cn(
-          "h-4 w-4 shrink-0 transition-colors",
-          active
-            ? "text-sidebar-accent-foreground"
-            : "text-muted-foreground group-hover:text-sidebar-accent-foreground",
-        )}
-        aria-hidden="true"
-      />
+      {/* Primary icon — skipped in full mode for return items, where the ←
+          affordance above already stands in for it (rendering both produces a
+          duplicate arrow, e.g. the "Back to app" item whose icon is also
+          ArrowLeft). Still shown in the collapsed rail so the row keeps a
+          glyph to tap. */}
+      {(collapsed || affordance !== "return") && (
+        <Icon
+          className={cn(
+            "h-4 w-4 shrink-0 transition-colors",
+            active
+              ? "text-sidebar-accent-foreground"
+              : "text-muted-foreground group-hover:text-sidebar-accent-foreground",
+          )}
+          aria-hidden="true"
+        />
+      )}
 
       {/* Label */}
       {!collapsed && <span className="flex-1 truncate">{label}</span>}

@@ -1,6 +1,5 @@
 "use client";
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +21,6 @@ function deriveSlug(name: string): string {
 }
 
 export function NewOrgForm({ action }: { action: NewOrgAction }) {
-  const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
   const [name, setName] = React.useState("");
@@ -40,8 +38,15 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
         setError(res.error);
         return;
       }
-      router.push(`/${res.orgSlug}/${res.workspaceSlug}`);
-      router.refresh();
+      // Hard navigation into the freshly-created tenant — NOT router.push +
+      // router.refresh(). Issuing both inside one transition races the soft
+      // navigation against a cache-busting refresh of the *current* tree and
+      // hangs the transition (the button sticks on "Creating…" and the URL
+      // never commits, even though the org was created). A full-page assign
+      // renders the new org/workspace tree from scratch on the server, so the
+      // org appears in the switcher with no stale App Router cache and no race.
+      // This path runs once per org create, so the full reload cost is moot.
+      window.location.assign(`/${res.orgSlug}/${res.workspaceSlug}`);
     });
   };
 

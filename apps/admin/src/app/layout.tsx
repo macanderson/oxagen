@@ -13,8 +13,15 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>
+      {/*
+       * ThemeScript lives in <head> so React 19's client reconciler never hits
+       * the createInstance path for the inline <script>. The IIFE still runs
+       * before first paint from the server HTML. See apps/app/src/app/layout.tsx.
+       */}
+      <head>
         <ThemeScript />
+      </head>
+      <body>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

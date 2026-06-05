@@ -17,13 +17,14 @@ import type { ReactNode } from "react";
 import { SidebarProvider } from "./sidebar-context";
 import { ShellFrame } from "./shell-frame";
 import { MobileBottomBar } from "./sidebar";
+import type { OrgOption } from "@/components/org/org-switcher";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
 import type { SessionUser } from "./user-switcher";
 
 export interface AppShellProps {
   org: ResolvedOrg;
   workspace?: ResolvedWorkspace;
-  availableOrgs: { publicId: string; slug: string; name: string }[];
+  availableOrgs: OrgOption[];
   availableWorkspaces?: { publicId: string; slug: string; name: string }[];
   /** May be undefined during a transient post-signup render; guarded in UserSwitcher. */
   user: SessionUser | undefined;

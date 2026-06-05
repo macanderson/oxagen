@@ -424,6 +424,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  BLOB_READ_WRITE_TOKEN: {
+    group: "File storage",
+    description:
+      "Vercel Blob read/write token. Authenticates @oxagen/storage (avatar/image uploads). Swap-point for S3/R2.",
+    secret: true,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "vercel_blob_rw_xxxxxxxxxxxxxxxx",
+  },
   OPENAI_API_KEY: {
     group: "AI providers",
     description: "OpenAI API key (embeddings + image generation).",

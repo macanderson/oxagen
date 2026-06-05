@@ -93,7 +93,7 @@ export function Sidebar({ ctx, user }: SidebarProps) {
       <div className={cn("flex h-14 shrink-0 items-center px-3", collapsed && "justify-center px-0")}>
         <Link href={homeHref} aria-label="Oxagen home" className="flex items-center gap-2">
           <BrandMark />
-          {!collapsed && <OxagenWordmark className="h-3.5 w-auto text-foreground" />}
+          {!collapsed && <OxagenWordmark className="h-7 w-auto text-foreground" />}
         </Link>
       </div>
 

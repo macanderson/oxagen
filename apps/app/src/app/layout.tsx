@@ -37,13 +37,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       {/*
+       * ThemeScript is placed in <head> so React 19's client reconciler never
+       * tries to create the <script> DOM node on the client — elements explicitly
+       * rendered inside <head> are handled by the browser's head-management path,
+       * not the standard HostComponent createInstance path that fires the
+       * "Encountered a script tag while rendering React component" warning.
+       * The inline IIFE still executes on initial server HTML before first paint,
+       * preserving the no-flash guarantee.
+       *
        * Font variables (--font-sans / --font-display / --font-mono) are set as
        * CSS custom properties on :root by @oxagen/ui/styles/globals.css and flow
        * through via the Tailwind @theme tokens. No className injection needed here.
        * Add font-sans so Tailwind's utility class applies the correct font-family.
        */}
-      <body className="min-h-dvh font-sans antialiased">
+      <head>
         <ThemeScript />
+      </head>
+      <body className="min-h-dvh font-sans antialiased">
         <ThemeProvider>
           <ToastProvider>
             {children}

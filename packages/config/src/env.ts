@@ -48,6 +48,12 @@ export const baseEnvSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
 
+  // File/blob storage (avatars, uploaded images). Authenticates the Vercel Blob
+  // driver behind @oxagen/storage. Optional in the base schema (not every
+  // service uploads); the upload route enforces presence via requireEnv at call
+  // time. Swapping to S3/R2 is a driver+env change — keep it isolated to config.
+  BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
+
   // Vercel AI Gateway. AI_GATEWAY_API_KEY authenticates every model call routed
   // through the gateway (the primary AI path); when absent, @oxagen/ai falls back
   // to the direct-provider keys above. The OXAGEN_LLM_* tiers are white-labeled

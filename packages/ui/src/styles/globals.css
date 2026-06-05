@@ -16,6 +16,19 @@
 @import "tailwindcss";
 @import "./tokens.css";
 
+/*
+ * Scan the @oxagen/ui component source for utility classes.
+ *
+ * Tailwind v4's automatic content detection starts from the importing app and
+ * deliberately skips node_modules — but @oxagen/ui is consumed through a
+ * node_modules symlink, so popup/overlay-only utilities that appear ONLY in
+ * this package (e.g. `bg-popover` on MenuPopup/SelectPopup, `bg-background`
+ * on Toast) were never generated. The result: see-through menus and toasts.
+ * This @source makes the build scan the components so those classes ship.
+ * Path is relative to this file (packages/ui/src/styles → ../components).
+ */
+@source "../components";
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -98,6 +111,26 @@
     color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * Pointer cursor on every clickable, non-form-input element — including
+   * menu/select items, tabs, and ARIA buttons rendered as <div>. Disabled
+   * controls fall back to the default arrow. Form fields are intentionally
+   * excluded so text/inputs keep their I-beam / native cursor.
+   */
+  button:not(:disabled):not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([data-disabled]),
+  [role="menuitemradio"]:not([data-disabled]),
+  [role="menuitemcheckbox"]:not([data-disabled]),
+  [role="option"]:not([data-disabled]),
+  [role="tab"]:not([data-disabled]),
+  [role="switch"]:not([data-disabled]),
+  a[href],
+  label[for],
+  summary {
+    cursor: pointer;
   }
 }
 

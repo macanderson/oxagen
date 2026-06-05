@@ -1,8 +1,8 @@
 "use client";
 import * as React from "react";
-import Image from "next/image";
 import { useRegisterFillableForm } from "@/lib/page-context";
 import { FieldFillTransition } from "@/components/ui/field-fill-transition";
+import { AvatarUpload } from "@/components/media/avatar-upload";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -93,112 +93,98 @@ export function ProfileForm({
   const isSaving = status === "saving";
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="flex max-w-lg flex-col gap-5"
-      aria-label="Profile settings"
-      noValidate
-    >
-      {/* Email — read-only */}
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="profile-email">Email</Label>
-        <Input
-          id="profile-email"
-          type="email"
-          value={email}
-          readOnly
-          disabled
-          autoComplete="email"
-          aria-readonly="true"
-          className="cursor-not-allowed opacity-60"
-        />
-        <p className="text-xs text-muted-foreground">
-          Email address cannot be changed here. Contact support to update your email.
-        </p>
-      </div>
-
-      {/* Display name */}
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="profile-display-name">Display name</Label>
-        <FieldFillTransition active={status === "saving"}>
+    <div className="flex max-w-lg flex-col gap-5">
+      {/* Profile fields form — submits only display name + avatar */}
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-5"
+        aria-label="Profile settings"
+        noValidate
+      >
+        {/* Email — read-only */}
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="profile-email">Email</Label>
           <Input
-            id="profile-display-name"
-            name="displayName"
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            required
-            maxLength={120}
-            autoComplete="name"
-            placeholder="Your name"
-            disabled={isSaving}
+            id="profile-email"
+            type="email"
+            value={email}
+            readOnly
+            disabled
+            autoComplete="email"
+            aria-readonly="true"
+            className="cursor-not-allowed opacity-60"
           />
-        </FieldFillTransition>
-      </div>
+          <p className="text-xs text-muted-foreground">
+            Email address cannot be changed here. Contact support to update your email.
+          </p>
+        </div>
 
-      {/* Avatar URL */}
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="profile-avatar-url">Avatar URL</Label>
-        <FieldFillTransition active={status === "saving"}>
-          <Input
-            id="profile-avatar-url"
-            name="avatarUrl"
-            type="url"
-            value={avatarUrl}
-            onChange={(e) => setAvatarUrl(e.target.value)}
-            maxLength={2048}
-            autoComplete="photo"
-            placeholder="https://example.com/avatar.png"
-            disabled={isSaving}
-          />
-        </FieldFillTransition>
-        {avatarUrl && (
-          <div className="flex items-center gap-2 pt-1">
-            <Image
-              src={avatarUrl}
-              alt="Avatar preview"
-              width={40}
-              height={40}
-              className="rounded-full object-cover ring-1 ring-border"
-              unoptimized
+        {/* Display name */}
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="profile-display-name">Display name</Label>
+          <FieldFillTransition active={status === "saving"}>
+            <Input
+              id="profile-display-name"
+              name="displayName"
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              required
+              maxLength={120}
+              autoComplete="name"
+              placeholder="Your name"
+              disabled={isSaving}
             />
-            <span className="text-xs text-muted-foreground">Preview</span>
-          </div>
-        )}
-      </div>
+          </FieldFillTransition>
+        </div>
 
-      {/* Errors */}
-      {status === "error" && errorMsg && (
-        <p className="text-sm text-destructive" role="alert">
-          {errorMsg}
-        </p>
-      )}
+        {/* Avatar — upload + crop, falling back to initials. The cropped image
+            is uploaded to blob storage and its URL flows through the same
+            `avatarUrl` state the save action persists (and Ask-to-Fill sets). */}
+        <div className="flex flex-col gap-1.5">
+          <Label>Photo</Label>
+          <AvatarUpload
+            value={avatarUrl || null}
+            onChange={setAvatarUrl}
+            fallback={(displayName || email).charAt(0).toUpperCase()}
+            shape="circle"
+            disabled={isSaving}
+          />
+        </div>
 
-      {/* Save button */}
-      <div className="flex items-center gap-3 pt-1">
-        <Button type="submit" disabled={isSaving}>
-          {isSaving ? "Saving…" : "Save changes"}
-        </Button>
-        {status === "saved" && (
-          <span className="text-xs text-muted-foreground" role="status">
-            Saved
-          </span>
+        {/* Errors */}
+        {status === "error" && errorMsg && (
+          <p className="text-sm text-destructive" role="alert">
+            {errorMsg}
+          </p>
         )}
-      </div>
+
+        {/* Save button */}
+        <div className="flex items-center gap-3 pt-1">
+          <Button type="submit" disabled={isSaving}>
+            {isSaving ? "Saving…" : "Save changes"}
+          </Button>
+          {status === "saved" && (
+            <span className="text-xs text-muted-foreground" role="status">
+              Saved
+            </span>
+          )}
+        </div>
+      </form>
 
       {/* Divider */}
       <hr className="border-border" />
 
-      {/* Connected accounts */}
+      {/* Connected accounts — sibling of both forms, not inside either */}
       <ConnectedAccounts state={connectedAccountsState} />
 
-      {/* Set password — only when no password exists yet */}
+      {/* Set password — only when no password exists yet; sibling form, never nested */}
       {!connectedAccountsState.hasPassword && (
         <>
           <hr className="border-border" />
           <SetPasswordForm />
         </>
       )}
-    </form>
+    </div>
   );
 }

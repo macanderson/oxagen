@@ -10,6 +10,9 @@ export const organizations = orgSchema.table(
     ...auditMixin(),
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
+    // Org avatar/logo. Nullable: orgs render initials until a logo is uploaded.
+    // Stores the public blob URL returned by the storage adapter (Vercel Blob).
+    avatarUrl: text("avatar_url"),
     planType: text("plan_type").notNull(),
     status: text("status").notNull(),
     settings: jsonb("settings").notNull().default(sql`'{}'::jsonb`),

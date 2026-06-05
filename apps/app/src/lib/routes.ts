@@ -76,6 +76,12 @@ export const org = {
     docs: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/docs`,
     tokens: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/tokens`,
   },
+
+  // Org-level settings — editable by owners and admins only.
+  settings: {
+    root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,
+    general: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,
+  },
 } as const;
 
 // ---------------------------------------------------------------------------
