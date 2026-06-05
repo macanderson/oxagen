@@ -222,12 +222,16 @@ function SeatControl({ orgSlug, currentSeats, onChangeCard }: SeatControlProps) 
               </DialogPanel>
               <DialogFooter>
                 <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
-                {preview.isCharge && onChangeCard ? (
+                {preview.isCharge ? (
                   <Button
                     variant="outline"
                     onClick={() => {
                       setDialogState(null);
-                      onChangeCard();
+                      if (onChangeCard) {
+                        onChangeCard();
+                      } else {
+                        document.getElementById("payment-methods")?.scrollIntoView({ behavior: "smooth" });
+                      }
                     }}
                   >
                     Change card

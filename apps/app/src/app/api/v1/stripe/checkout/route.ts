@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createCheckoutSession } from "@oxagen/billing";
 import { loadEnv } from "@oxagen/config/env";
 import { getSession } from "@/lib/session";
-import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
+import { resolveOrg, assertBillingManager } from "@/lib/resolve-org";
 
 const BodySchema = z.object({
   orgSlug: z.string(),
@@ -25,9 +25,9 @@ export async function POST(req: Request) {
 
   const tenant = await resolveOrg(body.data.orgSlug);
 
-  // Membership gate: assert the session user is a member of this org before
-  // creating a Stripe checkout session on their behalf (IDOR guard).
-  await assertOrgMember(tenant.id, session.user.id);
+  // Billing-management gate: starting a paid checkout requires owner/admin/
+  // billing role (not mere membership). Also closes the cross-org IDOR.
+  await assertBillingManager(tenant.id, session.user.id);
 
   try {
     const { url } = await createCheckoutSession({

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createUsageCreditCheckout } from "@oxagen/billing";
 import { loadEnv } from "@oxagen/config/env";
 import { getSession } from "@/lib/session";
-import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
+import { resolveOrg, assertBillingManager } from "@/lib/resolve-org";
 
 const BodySchema = z.object({
   orgSlug: z.string().min(1),
@@ -30,16 +30,16 @@ export async function POST(req: Request) {
 
   const tenant = await resolveOrg(body.data.orgSlug);
 
-  // Membership gate: assert the session user is a member of this org before
-  // creating a Stripe checkout session on their behalf (IDOR guard).
-  await assertOrgMember(tenant.id, session.user.id);
+  // Billing-management gate: spending the org's money on credits requires
+  // owner/admin/billing role (not mere membership). Also closes the cross-org IDOR.
+  await assertBillingManager(tenant.id, session.user.id);
 
   try {
     const result = await createUsageCreditCheckout({
       orgId: tenant.id,
       grantCents: Math.round(body.data.amountUsd * 100),
-      successUrl: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/settings/billing?status=success`,
-      cancelUrl: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/settings/billing?status=canceled`,
+      successUrl: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/billing/subscription?status=success`,
+      cancelUrl: `${env.NEXT_PUBLIC_APP_URL}/${body.data.orgSlug}/billing/subscription?status=canceled`,
     });
     return NextResponse.json({
       url: result.url,

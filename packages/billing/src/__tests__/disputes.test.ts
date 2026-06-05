@@ -4,13 +4,15 @@
  * Covers:
  *  - onDisputeCreated: upsert row + clawback credits + idempotency
  *  - onDisputeCreated: orgId resolution fallback
- *  - onDisputeCreated: no orgId → early return (no crash)
+ *  - onDisputeCreated: no orgId → logs CRITICAL, no crash
  *  - onDisputeClosed: updates status + resolvedAt
- *  - refundOrgPayment: delegates to provider.createRefund
+ *  - onChargeRefunded: happy path clawback
+ *  - onChargeRefunded: idempotency on repeat (existing ledger row)
+ *  - onChargeRefunded: unresolved-org logs critical, no crash
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { BillingDispute } from "../provider";
+import type { BillingDispute, BillingRefundedCharge } from "../provider";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -18,6 +20,8 @@ import type { BillingDispute } from "../provider";
 
 vi.mock("drizzle-orm", () => ({
   eq: (a: unknown, b: unknown) => ({ _eq: [a, b] }),
+  and: (...args: unknown[]) => ({ _and: args }),
+  isNotNull: (a: unknown) => ({ _isNotNull: a }),
 }));
 
 const consumeCreditsMock = vi.fn().mockResolvedValue({ chargedCents: 500n, shortfallCents: 0n, balanceCents: 0n });
@@ -25,27 +29,23 @@ vi.mock("../credits", () => ({
   consumeCredits: consumeCreditsMock,
 }));
 
-const createRefundMock = vi.fn().mockResolvedValue({ refundId: "re_test_001", amountCents: 1000, status: "succeeded" });
-vi.mock("../client", () => ({
-  billingProvider: () => ({
-    createRefund: createRefundMock,
-  }),
-}));
+// ---------------------------------------------------------------------------
+// DB mock
+// ---------------------------------------------------------------------------
 
-// DB mock.
 interface DbState {
   disputeRow: Record<string, unknown> | null;
-  disputeById: Record<string, unknown> | null;
   insertCalled: boolean;
   updateSets: Array<Record<string, unknown>>;
+  creditLedgerRow: Record<string, unknown> | null;
 }
 
 function makeState(): DbState {
   return {
     disputeRow: null,
-    disputeById: null,
     insertCalled: false,
     updateSets: [],
+    creditLedgerRow: null,
   };
 }
 
@@ -53,11 +53,10 @@ function makeDb(state: DbState) {
   return {
     query: {
       billingDisputes: {
-        findFirst: vi.fn(async () => {
-          // First call during resolve (by stripeDisputeId): returns disputeRow.
-          // Second call after insert (by stripeDisputeId for update): returns disputeById.
-          return state.disputeRow;
-        }),
+        findFirst: vi.fn(async () => state.disputeRow),
+      },
+      creditLedger: {
+        findFirst: vi.fn(async () => state.creditLedgerRow),
       },
     },
     insert: vi.fn(() => {
@@ -85,12 +84,20 @@ vi.mock("@oxagen/database", () => ({
     billingDisputes: {
       stripeDisputeId: "billingDisputes.stripeDisputeId",
       id: "billingDisputes.id",
+      paymentIntentId: "billingDisputes.paymentIntentId",
+      stripeChargeId: "billingDisputes.stripeChargeId",
+    },
+    creditLedger: {
+      orgId: "creditLedger.orgId",
+      reason: "creditLedger.reason",
+      referenceType: "creditLedger.referenceType",
+      referenceId: "creditLedger.referenceId",
     },
   },
 }));
 
 // Import after mocks.
-const { onDisputeCreated, onDisputeClosed, refundOrgPayment } = await import("../disputes");
+const { onDisputeCreated, onDisputeClosed, onChargeRefunded } = await import("../disputes");
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -110,8 +117,19 @@ function makeDispute(overrides: Partial<BillingDispute> = {}): BillingDispute {
   };
 }
 
+function makeRefundedCharge(overrides: Partial<BillingRefundedCharge> = {}): BillingRefundedCharge {
+  return {
+    id: "ch_refund_001",
+    paymentIntentId: "pi_refund_001",
+    amountRefundedCents: 2000,
+    currency: "usd",
+    orgId: "org-xyz",
+    ...overrides,
+  };
+}
+
 // ---------------------------------------------------------------------------
-// Tests
+// onDisputeCreated tests
 // ---------------------------------------------------------------------------
 
 describe("onDisputeCreated", () => {
@@ -122,11 +140,8 @@ describe("onDisputeCreated", () => {
 
   it("inserts dispute row and claws back credits", async () => {
     const state = makeState();
-    state.disputeRow = null; // no existing row on first findFirst, then return row for update
-    // First call: upsert check → null (not yet inserted)
-    // After insert, second call for update → return row
-    let callCount = 0;
     const db = makeDb(state);
+    let callCount = 0;
     vi.spyOn(db.query.billingDisputes, "findFirst").mockImplementation(async () => {
       callCount++;
       if (callCount === 1) return null; // upsert check
@@ -151,7 +166,7 @@ describe("onDisputeCreated", () => {
     const db = makeDb(state);
     vi.spyOn(db.query.billingDisputes, "findFirst").mockResolvedValue({
       id: "dispute-uuid-1",
-      clawedBackCents: 2000n, // already clawed back
+      clawedBackCents: 2000n,
     });
     dbHolder.instance = db as ReturnType<typeof makeDb>;
 
@@ -160,14 +175,16 @@ describe("onDisputeCreated", () => {
     expect(consumeCreditsMock).not.toHaveBeenCalled();
   });
 
-  it("returns early when orgId is null and cannot be resolved", async () => {
+  it("logs CRITICAL when orgId is null and cannot be resolved", async () => {
     const state = makeState();
     const db = makeDb(state);
-    // billingDisputes findFirst returns null (no existing dispute to get orgId from)
     vi.spyOn(db.query.billingDisputes, "findFirst").mockResolvedValue(null);
     dbHolder.instance = db as ReturnType<typeof makeDb>;
 
-    await onDisputeCreated(makeDispute({ orgId: null, chargeId: null, paymentIntentId: null }));
+    // Should not throw — logs critical and returns.
+    await expect(
+      onDisputeCreated(makeDispute({ orgId: null, chargeId: null, paymentIntentId: null })),
+    ).resolves.toBeUndefined();
 
     expect(state.insertCalled).toBe(false);
     expect(consumeCreditsMock).not.toHaveBeenCalled();
@@ -192,6 +209,10 @@ describe("onDisputeCreated", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// onDisputeClosed tests
+// ---------------------------------------------------------------------------
+
 describe("onDisputeClosed", () => {
   it("updates status and resolvedAt", async () => {
     const state = makeState();
@@ -204,40 +225,88 @@ describe("onDisputeClosed", () => {
   });
 });
 
-describe("refundOrgPayment", () => {
+// ---------------------------------------------------------------------------
+// onChargeRefunded tests
+// ---------------------------------------------------------------------------
+
+describe("onChargeRefunded", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    createRefundMock.mockResolvedValue({ refundId: "re_test_001", amountCents: 1000, status: "succeeded" });
+    consumeCreditsMock.mockResolvedValue({ chargedCents: 2000n, shortfallCents: 0n, balanceCents: 0n });
   });
 
-  it("calls provider.createRefund and returns result", async () => {
-    const result = await refundOrgPayment("org-abc", {
-      paymentIntentId: "pi_test_001",
-      amountCents: 1000,
-      reason: "requested_by_customer",
-    });
+  it("happy path: resolves org from charge.orgId, calls consumeCredits, logs info", async () => {
+    const state = makeState();
+    state.creditLedgerRow = null; // no prior clawback
+    dbHolder.instance = makeDb(state);
 
-    expect(createRefundMock).toHaveBeenCalledWith(expect.objectContaining({
-      paymentIntentId: "pi_test_001",
-      amountCents: 1000,
-      reason: "requested_by_customer",
+    await onChargeRefunded(makeRefundedCharge({ orgId: "org-xyz", amountRefundedCents: 2000 }));
+
+    expect(consumeCreditsMock).toHaveBeenCalledWith(expect.objectContaining({
+      orgId: "org-xyz",
+      requestedCents: 2000n,
+      reason: "refund",
+      referenceType: "charge_refund",
     }));
-    expect(result.refundId).toBe("re_test_001");
-    expect(result.amountCents).toBe(1000);
-    expect(result.status).toBe("succeeded");
+    // referenceId should be a deterministic UUID (not the raw charge id).
+    const call = consumeCreditsMock.mock.calls[0]![0] as { referenceId: string };
+    expect(call.referenceId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
   });
 
-  it("passes chargeId when provided instead of paymentIntentId", async () => {
-    createRefundMock.mockResolvedValue({ refundId: "re_test_002", amountCents: 500, status: "succeeded" });
-    const result = await refundOrgPayment("org-abc", {
-      chargeId: "ch_test_001",
-      reason: "fraudulent",
-    });
+  it("idempotency: skips clawback when ledger row already exists for this charge", async () => {
+    const state = makeState();
+    state.creditLedgerRow = { id: "ledger-uuid-1" }; // already clawed back
+    dbHolder.instance = makeDb(state);
 
-    expect(createRefundMock).toHaveBeenCalledWith(expect.objectContaining({
-      chargeId: "ch_test_001",
-      reason: "fraudulent",
-    }));
-    expect(result.refundId).toBe("re_test_002");
+    await onChargeRefunded(makeRefundedCharge({ orgId: "org-xyz" }));
+
+    expect(consumeCreditsMock).not.toHaveBeenCalled();
+  });
+
+  it("idempotency: same charge id always produces the same referenceId UUID", async () => {
+    // The deterministicUuid is a pure SHA-256 derivation; verify consistency.
+    const state1 = makeState();
+    state1.creditLedgerRow = null;
+    const db1 = makeDb(state1);
+    dbHolder.instance = db1 as ReturnType<typeof makeDb>;
+
+    await onChargeRefunded(makeRefundedCharge({ id: "ch_stable_001", orgId: "org-xyz", amountRefundedCents: 100 }));
+
+    const callA = consumeCreditsMock.mock.calls[0]![0] as { referenceId: string };
+
+    consumeCreditsMock.mockClear();
+    const state2 = makeState();
+    state2.creditLedgerRow = null;
+    dbHolder.instance = makeDb(state2);
+
+    await onChargeRefunded(makeRefundedCharge({ id: "ch_stable_001", orgId: "org-xyz", amountRefundedCents: 100 }));
+
+    const callB = consumeCreditsMock.mock.calls[0]![0] as { referenceId: string };
+    expect(callA.referenceId).toBe(callB.referenceId);
+  });
+
+  it("unresolved org logs CRITICAL and does NOT crash or call consumeCredits", async () => {
+    const state = makeState();
+    const db = makeDb(state);
+    // All fallback queries return null.
+    vi.spyOn(db.query.billingDisputes, "findFirst").mockResolvedValue(null);
+    dbHolder.instance = db as ReturnType<typeof makeDb>;
+
+    await expect(
+      onChargeRefunded(makeRefundedCharge({ orgId: null })),
+    ).resolves.toBeUndefined();
+
+    expect(consumeCreditsMock).not.toHaveBeenCalled();
+  });
+
+  it("skips clawback gracefully when amountRefundedCents is 0", async () => {
+    const state = makeState();
+    dbHolder.instance = makeDb(state);
+
+    await onChargeRefunded(makeRefundedCharge({ orgId: "org-xyz", amountRefundedCents: 0 }));
+
+    expect(consumeCreditsMock).not.toHaveBeenCalled();
   });
 });

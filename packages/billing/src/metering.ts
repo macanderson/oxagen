@@ -42,8 +42,18 @@ export async function assertCanStartTurn(orgId: string): Promise<void> {
   // Step 1: refuse suspended orgs immediately.
   await assertOrgCanConsume(orgId);
 
-  // Step 2: try auto-reload if balance is low.
-  await maybeAutoReload(orgId);
+  // Step 2: try auto-reload if balance is low. BEST-EFFORT — a reload failure
+  // (Stripe/DB hiccup) must never block the turn or surface as an unclassified
+  // error; the balance check below is the real gate and will refuse cleanly
+  // with InsufficientCreditsError if no credits ended up available.
+  try {
+    await maybeAutoReload(orgId);
+  } catch (err) {
+    logger.error(
+      { orgId, err: err instanceof Error ? err.message : String(err) },
+      "billing: assertCanStartTurn — auto-reload threw, continuing to balance check",
+    );
+  }
 
   // Step 3: require a positive balance after any reload attempt.
   const balance = await effectiveBalance(orgId);

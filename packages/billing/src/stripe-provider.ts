@@ -27,8 +27,7 @@ import type {
   BillingPlanPreviewInput,
   BillingProrationPreview,
   BillingProvider,
-  BillingRefundInput,
-  BillingRefundResult,
+  BillingRefundedCharge,
   BillingSeatPreviewInput,
   BillingSetupIntent,
   BillingSubscription,
@@ -92,6 +91,22 @@ function stripeDisputeToNeutral(d: Stripe.Dispute): BillingDispute {
     reason: d.reason ?? null,
     status: d.status,
     orgId: (d.metadata?.org_id as string | undefined) ?? null,
+  };
+}
+
+function stripeChargeToNeutral(c: Stripe.Charge): BillingRefundedCharge {
+  const piRef = c.payment_intent;
+  const paymentIntentId = piRef
+    ? typeof piRef === "string"
+      ? piRef
+      : piRef.id
+    : null;
+  return {
+    id: c.id,
+    paymentIntentId,
+    amountRefundedCents: c.amount_refunded,
+    currency: c.currency,
+    orgId: (c.metadata?.org_id as string | undefined) ?? null,
   };
 }
 
@@ -267,6 +282,8 @@ function stripeEventType(stripeType: string): BillingWebhookEventType {
       return "dispute.created";
     case "charge.dispute.closed":
       return "dispute.closed";
+    case "charge.refunded":
+      return "charge.refunded";
     default:
       return "unknown";
   }
@@ -461,19 +478,6 @@ export class StripeProvider implements BillingProvider {
     return { paymentIntentId: pi.id, status: pi.status, succeeded: pi.status === "succeeded" };
   }
 
-  async createRefund(input: BillingRefundInput): Promise<BillingRefundResult> {
-    const refund = await stripeClient().refunds.create(
-      {
-        payment_intent: input.paymentIntentId,
-        charge: input.chargeId,
-        amount: input.amountCents,
-        reason: input.reason,
-      },
-      idempotency(input.idempotencyKey),
-    );
-    return { refundId: refund.id, amountCents: refund.amount, status: refund.status ?? "unknown" };
-  }
-
   // ── Invoice ─────────────────────────────────────────────────────────────────
 
   async getInvoice(invoiceId: string): Promise<BillingInvoice> {
@@ -630,6 +634,10 @@ export class StripeProvider implements BillingProvider {
       case "charge.dispute.closed": {
         const dispute = event.data.object as Stripe.Dispute;
         return { ...base, dispute: stripeDisputeToNeutral(dispute) };
+      }
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        return { ...base, refundedCharge: stripeChargeToNeutral(charge) };
       }
       case "checkout.session.completed": {
         const sess = event.data.object as Stripe.Checkout.Session;

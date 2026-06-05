@@ -193,28 +193,25 @@ export async function syncPaymentMethodsFromStripe(orgId: string): Promise<void>
       });
   }
 
-  // Ensure only one default row per org (clear stale defaults).
+  // Ensure exactly one default row per org. Both writes run in ONE transaction
+  // so a concurrent read never observes a window with zero defaults.
   if (defaultPmId) {
-    // Set isDefault=false on every row for this org except the current default.
-    await d
-      .update(schema.paymentMethods)
-      .set({ isDefault: false, updatedAt: new Date() })
-      .where(
-        and(
-          eq(schema.paymentMethods.orgId, orgId),
-          isNull(schema.paymentMethods.deletedAt),
-          // Not the new default
-          eq(schema.paymentMethods.isDefault, true),
-        ),
-      );
-    // Re-set the default (the upsert loop may have already done it, but this is
-    // idempotent and ensures consistency when the loop ran multiple iterations).
-    await d
-      .update(schema.paymentMethods)
-      .set({ isDefault: true, updatedAt: new Date() })
-      .where(
-        eq(schema.paymentMethods.stripePaymentMethodId, defaultPmId),
-      );
+    await d.transaction(async (tx) => {
+      await tx
+        .update(schema.paymentMethods)
+        .set({ isDefault: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.paymentMethods.orgId, orgId),
+            isNull(schema.paymentMethods.deletedAt),
+            eq(schema.paymentMethods.isDefault, true),
+          ),
+        );
+      await tx
+        .update(schema.paymentMethods)
+        .set({ isDefault: true, updatedAt: new Date() })
+        .where(eq(schema.paymentMethods.stripePaymentMethodId, defaultPmId));
+    });
   }
 
   // Soft-delete rows for cards no longer returned by Stripe.
@@ -271,27 +268,28 @@ export async function setOrgDefaultPaymentMethod(
     stripePaymentMethodId,
   );
 
-  // Clear all existing defaults for the org.
-  await d
-    .update(schema.paymentMethods)
-    .set({ isDefault: false, updatedAt: new Date() })
-    .where(
-      and(
-        eq(schema.paymentMethods.orgId, orgId),
-        isNull(schema.paymentMethods.deletedAt),
-      ),
-    );
-
-  // Set the new default.
-  await d
-    .update(schema.paymentMethods)
-    .set({ isDefault: true, updatedAt: new Date() })
-    .where(
-      and(
-        eq(schema.paymentMethods.stripePaymentMethodId, stripePaymentMethodId),
-        eq(schema.paymentMethods.orgId, orgId),
-      ),
-    );
+  // Flip the flags in ONE transaction so a concurrent read never observes a
+  // window with zero defaults.
+  await d.transaction(async (tx) => {
+    await tx
+      .update(schema.paymentMethods)
+      .set({ isDefault: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.paymentMethods.orgId, orgId),
+          isNull(schema.paymentMethods.deletedAt),
+        ),
+      );
+    await tx
+      .update(schema.paymentMethods)
+      .set({ isDefault: true, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.paymentMethods.stripePaymentMethodId, stripePaymentMethodId),
+          eq(schema.paymentMethods.orgId, orgId),
+        ),
+      );
+  });
 
   logger.info(
     { orgId, stripePaymentMethodId, durationMs: Date.now() - start },

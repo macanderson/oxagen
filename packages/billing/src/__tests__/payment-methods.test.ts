@@ -67,9 +67,14 @@ const updateWhereMock = vi.fn().mockResolvedValue(undefined);
 updateSetMock.mockReturnValue({ where: updateWhereMock });
 const updateMock = vi.fn().mockReturnValue({ set: updateSetMock });
 
+// Transaction runs the callback with the same mock surface (insert/update),
+// so default-flag flips inside db().transaction(...) exercise updateMock.
+const transactionMock = vi.fn(async (cb: (tx: typeof dbMocks) => Promise<unknown>) => cb(dbMocks));
+
 const dbMocks = {
   insert: insertMock,
   update: updateMock,
+  transaction: transactionMock,
   query: {
     paymentMethods: {
       findMany: vi.fn().mockImplementation(async () => _findManyResult),

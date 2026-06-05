@@ -127,7 +127,7 @@ export interface BillingPlanPreviewInput {
   prorationBehavior?: BillingProrationBehavior;
 }
 
-// ── Setup intent / off-session charge / refund ────────────────────────────────
+// ── Setup intent / off-session charge ────────────────────────────────────────
 
 export interface BillingSetupIntent {
   /** Client secret the browser passes to Stripe.js to collect a card. */
@@ -152,20 +152,23 @@ export interface BillingOffSessionChargeResult {
   succeeded: boolean;
 }
 
-export interface BillingRefundInput {
-  /** Charge or PaymentIntent id to refund. */
-  paymentIntentId?: string;
-  chargeId?: string;
-  /** Partial refund amount; omit for a full refund. */
-  amountCents?: number;
-  reason?: "duplicate" | "fraudulent" | "requested_by_customer";
-  idempotencyKey?: string;
-}
+// ── Refunded charge domain type ───────────────────────────────────────────────
 
-export interface BillingRefundResult {
-  refundId: string;
-  amountCents: number;
-  status: string;
+/**
+ * Neutral representation of a Stripe `charge.refunded` event payload.
+ * Ops issues a refund in the Stripe dashboard → Stripe fires this event →
+ * we clawback the corresponding credits.
+ */
+export interface BillingRefundedCharge {
+  /** Stripe charge id (ch_xxx). */
+  id: string;
+  /** The PaymentIntent that produced this charge, if any. */
+  paymentIntentId: string | null;
+  /** Total amount already refunded on this charge, in cents. */
+  amountRefundedCents: number;
+  currency: string;
+  /** Org id from charge metadata, if Stripe carried it. */
+  orgId: string | null;
 }
 
 // ── Dispute domain type ───────────────────────────────────────────────────────
@@ -306,6 +309,7 @@ export type BillingWebhookEventType =
   | "payment_method.updated"
   | "dispute.created"
   | "dispute.closed"
+  | "charge.refunded"
   | "unknown";
 
 export interface BillingWebhookEvent {
@@ -323,6 +327,7 @@ export interface BillingWebhookEvent {
   checkoutSession?: BillingCheckoutSession;  // checkout.session.completed
   paymentMethod?: BillingPaymentMethod;      // payment_method.* events
   dispute?: BillingDispute;       // dispute.* events
+  refundedCharge?: BillingRefundedCharge;   // charge.refunded events
 }
 
 export interface BillingCheckoutSession {
@@ -412,9 +417,6 @@ export interface BillingProvider {
 
   /** Charge a saved card off-session (used by credit auto-reload). */
   chargeOffSession(input: BillingOffSessionChargeInput): Promise<BillingOffSessionChargeResult>;
-
-  /** Issue a refund against a charge or PaymentIntent. */
-  createRefund(input: BillingRefundInput): Promise<BillingRefundResult>;
 
   // ── Invoice ─────────────────────────────────────────────────────────────────
 

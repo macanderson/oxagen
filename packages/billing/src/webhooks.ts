@@ -5,7 +5,7 @@ import { syncSubscriptionFromStripe } from "./subscriptions";
 import { syncInvoiceFromStripe } from "./invoices";
 import { grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } from "./grants";
 import { onInvoicePaymentFailed, onInvoiceRecovered } from "./dunning";
-import { onDisputeCreated, onDisputeClosed } from "./disputes";
+import { onDisputeCreated, onDisputeClosed, onChargeRefunded } from "./disputes";
 import { logger } from "./logger";
 import type { BillingWebhookEvent } from "./provider";
 
@@ -174,6 +174,11 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
     case "dispute.closed": {
       if (!event.dispute) return;
       await onDisputeClosed(event.dispute);
+      return;
+    }
+    case "charge.refunded": {
+      if (!event.refundedCharge) return;
+      await onChargeRefunded(event.refundedCharge);
       return;
     }
     default:

@@ -145,26 +145,50 @@ export async function maybeAutoReload(orgId: string): Promise<AutoReloadResult> 
     return { reloaded: false, reason: `charge_status:${chargeResult.status}` };
   }
 
-  // Grant a purchase credit lot expiring 1 year from now.
+  // ── Grant credits for the successful charge ────────────────────────────────
+  // CRITICAL ordering note: the card has ALREADY been charged at this point.
+  // If the grant write fails we must NOT throw (that would both crash the
+  // caller's turn AND leave the customer charged-but-uncredited). Instead we
+  // log a critical alert with the paymentIntentId and DON'T stamp
+  // lastAutoReloadAt — so the next turn (within the same hour idempotency
+  // window) retries the grant against the same, de-duplicated charge and
+  // self-heals, while ops has the paymentIntentId to compensate if it doesn't.
   const grantDate = now;
   const expiresAt = new Date(grantDate);
   expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
-  await createCreditLot({
-    orgId,
-    amountCents: BigInt(amountCents),
-    source: "purchase",
-    expiresAt,
-    reason: CREDIT_REASONS.GRANT_AUTO_RELOAD,
-    referenceType: "payment_intent",
-    referenceId: chargeResult.paymentIntentId,
-  });
+  try {
+    await createCreditLot({
+      orgId,
+      amountCents: BigInt(amountCents),
+      source: "purchase",
+      expiresAt,
+      reason: CREDIT_REASONS.GRANT_AUTO_RELOAD,
+      referenceType: "payment_intent",
+      referenceId: chargeResult.paymentIntentId,
+    });
 
-  // Record the reload timestamp to enforce the 1-hour idempotency window.
-  await d
-    .update(schema.orgBillingSettings)
-    .set({ lastAutoReloadAt: now, updatedAt: now })
-    .where(eq(schema.orgBillingSettings.orgId, orgId));
+    // Record the reload timestamp to enforce the 1-hour idempotency window.
+    await d
+      .update(schema.orgBillingSettings)
+      .set({ lastAutoReloadAt: now, updatedAt: now })
+      .where(eq(schema.orgBillingSettings.orgId, orgId));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error(
+      {
+        orgId,
+        customerId,
+        amountCents,
+        paymentIntentId: chargeResult.paymentIntentId,
+        err: message,
+        durationMs: Date.now() - start,
+        alert: "auto_reload_charged_but_not_granted",
+      },
+      "billing: auto-reload — CHARGED but credit grant failed; customer charged without credits, needs reconciliation (retries next turn)",
+    );
+    return { reloaded: false, reason: "grant_failed_after_charge" };
+  }
 
   logger.info(
     {

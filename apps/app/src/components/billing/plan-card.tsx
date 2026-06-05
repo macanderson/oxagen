@@ -28,8 +28,6 @@ export type PlanRelation = "current" | "upgrade" | "downgrade" | "switch";
 export interface PlanCardProps {
   plan: Plan;
   interval: "month" | "year";
-  /** @deprecated Use `relation` instead. Kept for callers that haven't migrated yet. */
-  isCurrent?: boolean;
   /** Relationship to the current subscription — drives CTA label + ring. */
   relation?: PlanRelation;
   onSelect: (slug: string, interval: "month" | "year") => void;
@@ -43,11 +41,8 @@ const RELATION_LABEL: Record<PlanRelation, string> = {
   switch: "Switch",
 };
 
-export function PlanCard({ plan, interval, isCurrent, relation, onSelect, pending }: PlanCardProps) {
-  // Normalise: if the new `relation` prop is provided, it wins; otherwise fall
-  // back to the legacy `isCurrent` boolean for backward compatibility.
-  const effectiveRelation: PlanRelation =
-    relation ?? (isCurrent ? "current" : "switch");
+export function PlanCard({ plan, interval, relation, onSelect, pending }: PlanCardProps) {
+  const effectiveRelation: PlanRelation = relation ?? "switch";
 
   const price = interval === "month" ? plan.monthlyCents : (plan.annualCents ?? plan.monthlyCents * 12);
   const isCur = effectiveRelation === "current";

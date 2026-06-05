@@ -92,3 +92,34 @@ export const assertOrgMember = cache(
     }
   },
 );
+
+/** Roles permitted to manage billing (mirror of the billing actions gate). */
+const BILLING_MANAGER_ROLES = new Set(["owner", "admin", "billing"]);
+
+/**
+ * Assert that the user is a member of the org AND holds a billing-management
+ * role (owner/admin/billing). Calls `notFound()` otherwise — a non-manager is
+ * treated like a non-member (404), consistent with {@link assertOrgMember}.
+ *
+ * Use in any server route/action that MUTATES billing or starts a paid Stripe
+ * flow (checkout, credit purchase). Membership alone is NOT sufficient: without
+ * the role gate any org member could spend the org's money or change its plan.
+ */
+export const assertBillingManager = cache(
+  async (orgId: string, userId: string): Promise<void> => {
+    const rows = await db()
+      .select({ role: schema.orgUsers.role })
+      .from(schema.orgUsers)
+      .where(
+        and(
+          eq(schema.orgUsers.orgId, orgId),
+          eq(schema.orgUsers.userId, userId),
+        ),
+      )
+      .limit(1);
+    const role = rows[0]?.role;
+    if (!role || !BILLING_MANAGER_ROLES.has(role)) {
+      notFound();
+    }
+  },
+);

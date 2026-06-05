@@ -16,11 +16,12 @@
  *  8. invoice.payment_action_required syncs invoice (SCA warning).
  *  9. payment_method.updated: upserts payment method.
  *  10. dispute.created / dispute.closed dispatch dunning handlers.
- *  11. Unhandled event type → stored, no dispatcher, returns "applied".
+ *  11. charge.refunded dispatches onChargeRefunded.
+ *  12. Unhandled event type → stored, no dispatcher, returns "applied".
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { BillingWebhookEvent, BillingDispute } from "../provider";
+import type { BillingWebhookEvent, BillingDispute, BillingRefundedCharge } from "../provider";
 
 // ---------------------------------------------------------------------------
 // Module mocks — hoisted before any import of the module under test.
@@ -65,9 +66,11 @@ vi.mock("../dunning", () => ({
 // Mock dispute handlers.
 const onDisputeCreatedMock = vi.fn().mockResolvedValue(undefined);
 const onDisputeClosedMock = vi.fn().mockResolvedValue(undefined);
+const onChargeRefundedMock = vi.fn().mockResolvedValue(undefined);
 vi.mock("../disputes", () => ({
   onDisputeCreated: onDisputeCreatedMock,
   onDisputeClosed: onDisputeClosedMock,
+  onChargeRefunded: onChargeRefundedMock,
 }));
 
 // Config mock to prevent env-var validation at import time.
@@ -484,6 +487,31 @@ describe("processStripeEvent", () => {
     expect(result).toEqual({ status: "applied" });
     expect(onDisputeClosedMock).toHaveBeenCalledWith(dispute);
     expect(onDisputeCreatedMock).not.toHaveBeenCalled();
+  });
+
+  it("charge.refunded dispatches onChargeRefunded", async () => {
+    dbState.instance = makeDb([{ id: "row-uuid-12" }]);
+
+    const refundedCharge: BillingRefundedCharge = {
+      id: "ch_refund_001",
+      paymentIntentId: "pi_refund_001",
+      amountRefundedCents: 1500,
+      currency: "usd",
+      orgId: "org-abc",
+    };
+
+    const event = makeWebhookEvent({
+      providerEventId: "evt_charge_refunded_001",
+      type: "charge.refunded",
+      subscriptionId: undefined,
+      refundedCharge,
+    });
+
+    const result = await processStripeEvent(event);
+    expect(result).toEqual({ status: "applied" });
+    expect(onChargeRefundedMock).toHaveBeenCalledWith(refundedCharge);
+    expect(onDisputeCreatedMock).not.toHaveBeenCalled();
+    expect(onDisputeClosedMock).not.toHaveBeenCalled();
   });
 
   it("unhandled event type — event is stored but no dispatcher is invoked, returns 'applied'", async () => {

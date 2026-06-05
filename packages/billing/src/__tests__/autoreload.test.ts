@@ -279,6 +279,30 @@ describe("maybeAutoReload", () => {
     expect(state.updateCalled).toBe(false);
   });
 
+  it("does not throw and does not stamp lastAutoReloadAt when the grant fails after a successful charge", async () => {
+    // C-2: the card was charged but the credit-lot write fails. We must NOT
+    // throw (would crash the caller's admission gate) and must NOT set
+    // lastAutoReloadAt — so the next turn retries the grant against the same
+    // (idempotency-deduped) charge instead of leaving the customer uncredited.
+    const state = makeState();
+    state.subRow = { stripeCustomerId: "cus_test_001" };
+    dbHolder.instance = makeDb(state);
+    getOrgBillingSettingsMock.mockResolvedValue(makeSettings());
+    effectiveBalanceMock.mockResolvedValue(100n);
+    chargeOffSessionMock.mockResolvedValue({
+      paymentIntentId: "pi_test_001",
+      status: "succeeded",
+      succeeded: true,
+    });
+    createCreditLotMock.mockRejectedValueOnce(new Error("db connection lost"));
+
+    const result = await maybeAutoReload("org-abc");
+    expect(result.reloaded).toBe(false);
+    expect(result.reason).toBe("grant_failed_after_charge");
+    // The reload window must NOT be marked consumed, so a retry can self-heal.
+    expect(state.updateCalled).toBe(false);
+  });
+
   it("returns reloaded=false when charge did not succeed", async () => {
     const state = makeState();
     state.subRow = { stripeCustomerId: "cus_test_001" };

@@ -61,7 +61,8 @@ describe("formatRelativeRenewal", () => {
   });
 
   it("rounds 75 days to 3 months (per spec: 75d → '3 months')", () => {
-    // round(75/30) = 3 (note spec said 75d→"2 months" but that's round(75/30)=3 — spec example used 2mo for a different date; we match the formula)
+    // months = Math.round(days / 30): 75 / 30 = 2.5 → rounds to 3.
+    // The original spec example used ~63 days (63 / 30 = 2.1 → 2 months); see the 63-day test below.
     const end = new Date("2026-08-19T00:00:00.000Z"); // 75 days from 2026-06-05
     expect(formatRelativeRenewal(end, { now: NOW })).toBe(
       "renews in 3 months on August 19th, 2026",

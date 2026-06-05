@@ -137,7 +137,16 @@ export async function upgradeSubscription(
   prorationBehavior: "always_invoice" | "none" = "always_invoice",
 ): Promise<void> {
   logger.info({ stripeSubId, newPriceId, prorationBehavior }, "billing: upgrading subscription price");
-  await billingProvider().upgradeSubscription(stripeSubId, { newPriceId, prorationBehavior });
+  // Idempotency: dedupe a double-submitted plan change (double-click / client
+  // retry) so we never fire two proration invoices. Bucketed to a 10s window —
+  // dedupes rapid resubmits, still allows a deliberate later change (Stripe
+  // keys expire after 24h regardless).
+  const idempotencyKey = `plan_change:${stripeSubId}:${newPriceId}:${Math.floor(Date.now() / 10_000)}`;
+  await billingProvider().upgradeSubscription(stripeSubId, {
+    newPriceId,
+    prorationBehavior,
+    idempotencyKey,
+  });
   await syncSubscriptionFromStripe(stripeSubId);
 }
 

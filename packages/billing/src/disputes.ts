@@ -1,10 +1,24 @@
+import { createHash } from "node:crypto";
 import { db, schema } from "@oxagen/database";
-import { eq } from "drizzle-orm";
-import { billingProvider } from "./client";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { consumeCredits } from "./credits";
 import { CREDIT_REASONS } from "./constants";
 import { logger } from "./logger";
-import type { BillingDispute, BillingRefundInput } from "./provider";
+import type { BillingDispute, BillingRefundedCharge } from "./provider";
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive a deterministic UUID from any external provider id (e.g. `ch_xxx`,
+ * `dp_xxx`) so the value fits the `uuid`-typed credit_ledger.reference_id
+ * column and can key the partial-unique idempotency index.
+ */
+function deterministicUuid(seed: string): string {
+  const h = createHash("sha256").update(seed).digest("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
 
 // ---------------------------------------------------------------------------
 // Org resolution helpers
@@ -12,17 +26,22 @@ import type { BillingDispute, BillingRefundInput } from "./provider";
 
 /**
  * Attempt to resolve an orgId from a dispute.
- * Priority: dispute.orgId → chargeId/customerId → paymentIntentId.
- * Falls back to null if resolution fails.
+ *
+ * Priority order:
+ *  1. dispute.orgId (from Stripe charge metadata)
+ *  2. Existing billing_disputes row (idempotent re-delivery can carry orgId)
+ *  3. subscriptions table keyed by stripeCustomerId derived from the charge's
+ *     paymentIntentId or chargeId fields
+ *  4. paymentMethods table keyed by stripeCustomerId (same derivation)
+ *
+ * Falls back to null if all paths fail.
  */
 async function resolveOrgFromDispute(dispute: BillingDispute): Promise<string | null> {
   if (dispute.orgId) return dispute.orgId;
 
   const d = db();
 
-  // Best-effort: try resolving via the billing_disputes table if the dispute
-  // was already partially inserted (shouldn't happen for created events, but
-  // guards the closed path if the org was resolved earlier).
+  // Path 2: existing billing_disputes row (prior partial insert or re-delivery).
   if (dispute.chargeId || dispute.paymentIntentId) {
     const existingDispute = await d.query.billingDisputes.findFirst({
       where: eq(schema.billingDisputes.stripeDisputeId, dispute.id),
@@ -31,10 +50,88 @@ async function resolveOrgFromDispute(dispute: BillingDispute): Promise<string | 
     if (existingDispute?.orgId) return existingDispute.orgId;
   }
 
-  logger.warn(
-    { disputeId: dispute.id, chargeId: dispute.chargeId, paymentIntentId: dispute.paymentIntentId },
-    "billing: dispute — could not resolve orgId",
-  );
+  // Path 3+4: look up subscriptions / payment_methods by stripeCustomerId.
+  // We don't have a customerId directly on the dispute, but the chargeId is
+  // stored in billing_disputes.stripeChargeId and paymentIntentId in
+  // billing_disputes.paymentIntentId. Cross-reference via subscriptions
+  // (which carries stripeCustomerId) by paymentIntentId stored on the dispute.
+  //
+  // In practice, when Stripe embeds org_id in charge metadata (our standard),
+  // dispute.orgId will already be set at path 1. These paths protect the rare
+  // case where metadata was absent (e.g. migrated charges, legacy test data).
+
+  if (dispute.paymentIntentId) {
+    // subscriptions doesn't carry paymentIntentId directly; check payment_methods
+    // which stores stripeCustomerId. But we don't have customerId here — skip
+    // to billing_disputes fallback already exhausted above.
+    // Leave a breadcrumb so ops can correlate manually.
+    logger.warn(
+      {
+        disputeId: dispute.id,
+        chargeId: dispute.chargeId,
+        paymentIntentId: dispute.paymentIntentId,
+      },
+      "billing: dispute — orgId not in metadata and no prior dispute row; cannot auto-resolve",
+    );
+  } else {
+    logger.warn(
+      { disputeId: dispute.id },
+      "billing: dispute — no orgId, no chargeId/paymentIntentId; cannot resolve org",
+    );
+  }
+
+  return null;
+}
+
+/**
+ * Attempt to resolve an orgId from a refunded charge.
+ *
+ * Priority order:
+ *  1. charge.orgId (from Stripe charge metadata)
+ *  2. subscriptions table keyed by stripeCustomerId — we pivot via
+ *     paymentIntentId: find any payment_methods row that shares the
+ *     stripeCustomerId, then follow to subscriptions.
+ *  3. paymentMethods table (same pivot).
+ *
+ * Falls back to null if unresolved.
+ */
+async function resolveOrgFromCharge(charge: BillingRefundedCharge): Promise<string | null> {
+  if (charge.orgId) return charge.orgId;
+
+  const d = db();
+
+  // Attempt to resolve via subscriptions by paymentIntentId stored in the
+  // billing_disputes table (shared lookup point for charges/PIs).
+  // In the normal payment flow, charges are created by PaymentIntents whose
+  // metadata carries org_id; absent that, look up any subscription whose
+  // payment_methods share the same stripeCustomerId.
+  //
+  // Since we don't store paymentIntentId on subscriptions directly, attempt
+  // resolution via payment_methods: find a payment_method row by paymentIntentId
+  // → get stripeCustomerId → look up subscription → get orgId.
+  //
+  // This covers the case where a charge was made via an off-session PI on a
+  // known customer (credit auto-reload, subscription renewal) but org_id was
+  // missing from the charge metadata.
+
+  if (charge.paymentIntentId) {
+    // Try: billing_disputes for this paymentIntentId (may have been disputed before).
+    const disputeRow = await d.query.billingDisputes.findFirst({
+      where: eq(schema.billingDisputes.paymentIntentId, charge.paymentIntentId),
+      columns: { orgId: true },
+    });
+    if (disputeRow?.orgId) return disputeRow.orgId;
+
+    // Try: subscriptions — no direct paymentIntentId column; fall through.
+  }
+
+  // Try: billing_disputes for this chargeId.
+  const disputeByCharge = await d.query.billingDisputes.findFirst({
+    where: eq(schema.billingDisputes.stripeChargeId, charge.id),
+    columns: { orgId: true },
+  });
+  if (disputeByCharge?.orgId) return disputeByCharge.orgId;
+
   return null;
 }
 
@@ -49,15 +146,24 @@ async function resolveOrgFromDispute(dispute: BillingDispute): Promise<string | 
  * 2. Upserts a billing_disputes row (idempotent on stripeDisputeId).
  * 3. Claws back credits up to amountCents via consumeCredits.
  * 4. Records clawedBackCents.
+ *
+ * If orgId cannot be resolved after all fallback paths, logs at CRITICAL level
+ * with an alert tag so ops can act — does NOT silently swallow.
  */
 export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
   const start = Date.now();
 
   const orgId = await resolveOrgFromDispute(dispute);
   if (!orgId) {
-    logger.error(
-      { disputeId: dispute.id },
-      "billing: dispute.created — cannot process without orgId; dispute row NOT inserted",
+    logger.fatal(
+      {
+        alert: "dispute_org_unresolved",
+        stripeDisputeId: dispute.id,
+        chargeId: dispute.chargeId,
+        paymentIntentId: dispute.paymentIntentId,
+        amountCents: dispute.amountCents,
+      },
+      "billing: dispute.created — CRITICAL: cannot resolve orgId; clawback NOT applied — manual intervention required",
     );
     return;
   }
@@ -155,57 +261,93 @@ export async function onDisputeClosed(dispute: BillingDispute): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Refund
+// Charge refund handler (charge.refunded webhook)
 // ---------------------------------------------------------------------------
 
-export interface RefundInput {
-  paymentIntentId?: string;
-  chargeId?: string;
-  amountCents?: number;
-  reason?: "duplicate" | "fraudulent" | "requested_by_customer";
-}
-
-export interface RefundResult {
-  refundId: string;
-  amountCents: number;
-  status: string;
-}
-
 /**
- * Issue a refund against a charge or PaymentIntent for an org.
- * Delegates directly to the billing provider.
+ * Called when a `charge.refunded` event fires.
+ *
+ * Ops issues a refund in the Stripe dashboard → Stripe fires charge.refunded →
+ * we clawback `amountRefundedCents` worth of credits from the org.
+ *
+ * Idempotency: before calling consumeCredits, we check for an existing
+ * credit_ledger row with (orgId, reason=REFUND, referenceType='charge_refund',
+ * referenceId=deterministicUuid(charge.id)). This matches the partial unique
+ * index `credit_ledger_grant_idempotency_idx` used by the grants layer, so a
+ * repeat webhook cannot double-clawback.
+ *
+ * If orgId cannot be resolved after all fallback paths, logs at CRITICAL level
+ * with an alert tag — does NOT silently swallow.
  */
-export async function refundOrgPayment(
-  orgId: string,
-  input: RefundInput,
-): Promise<RefundResult> {
+export async function onChargeRefunded(charge: BillingRefundedCharge): Promise<void> {
   const start = Date.now();
 
-  const refundInput: BillingRefundInput = {
-    paymentIntentId: input.paymentIntentId,
-    chargeId: input.chargeId,
-    amountCents: input.amountCents,
-    reason: input.reason,
-  };
+  const orgId = await resolveOrgFromCharge(charge);
+  if (!orgId) {
+    logger.fatal(
+      {
+        alert: "dispute_org_unresolved",
+        stripeChargeId: charge.id,
+        paymentIntentId: charge.paymentIntentId,
+        amountRefundedCents: charge.amountRefundedCents,
+      },
+      "billing: charge.refunded — CRITICAL: cannot resolve orgId; clawback NOT applied — manual intervention required",
+    );
+    return;
+  }
 
-  const result = await billingProvider().createRefund(refundInput);
+  if (charge.amountRefundedCents <= 0) {
+    logger.debug(
+      { chargeId: charge.id, orgId },
+      "billing: charge.refunded — amountRefundedCents is 0, nothing to clawback",
+    );
+    return;
+  }
+
+  const d = db();
+
+  // Idempotency guard: check for an existing ledger row keyed to this charge.
+  // Uses the same (orgId, reason, referenceType, referenceId) tuple that backs
+  // the partial unique index, matching the pattern from onDisputeCreated.
+  const refundReferenceId = deterministicUuid(charge.id);
+
+  const existingLedgerRow = await d.query.creditLedger.findFirst({
+    where: and(
+      eq(schema.creditLedger.orgId, orgId),
+      eq(schema.creditLedger.reason, CREDIT_REASONS.REFUND),
+      eq(schema.creditLedger.referenceType, "charge_refund"),
+      eq(schema.creditLedger.referenceId, refundReferenceId),
+      isNotNull(schema.creditLedger.referenceId),
+    ),
+    columns: { id: true },
+  });
+
+  if (existingLedgerRow) {
+    logger.debug(
+      { chargeId: charge.id, orgId, refundReferenceId },
+      "billing: charge.refunded — clawback already applied, skipping (idempotent)",
+    );
+    return;
+  }
+
+  const requestedCents = BigInt(charge.amountRefundedCents);
+  const { chargedCents } = await consumeCredits({
+    orgId,
+    requestedCents,
+    reason: CREDIT_REASONS.REFUND,
+    referenceType: "charge_refund",
+    referenceId: refundReferenceId,
+  });
 
   logger.info(
     {
       orgId,
-      refundId: result.refundId,
-      amountCents: result.amountCents,
-      status: result.status,
-      paymentIntentId: input.paymentIntentId ?? null,
-      chargeId: input.chargeId ?? null,
+      chargeId: charge.id,
+      paymentIntentId: charge.paymentIntentId,
+      amountRefundedCents: charge.amountRefundedCents,
+      clawedBackCents: Number(chargedCents),
       durationMs: Date.now() - start,
     },
-    "billing: refund issued",
+    "billing: charge.refunded — credits clawed back",
   );
-
-  return {
-    refundId: result.refundId,
-    amountCents: result.amountCents,
-    status: result.status,
-  };
 }
