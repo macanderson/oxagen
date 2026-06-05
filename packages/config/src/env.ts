@@ -65,6 +65,16 @@ export const baseEnvSchema = z.object({
   OXAGEN_LLM_BALANCED: z.string().default("anthropic/claude-sonnet-4.6"),
   OXAGEN_LLM_PRECISE: z.string().default("anthropic/claude-opus-4.8"),
 
+  // Media-generation tiers. Image and video each expose a "basic" (default,
+  // cheaper) and "advanced" tier that resolve to concrete gateway model ids,
+  // mirroring the text tiers above. The composer's image/video model picker
+  // shows "basic" as the default and "advanced" in the primary list; @oxagen/ai
+  // resolves them via imageTierModelId / videoTierModelId.
+  OXAGEN_LLM_IMAGE_BASIC: z.string().default("openai/dall-e-3"),
+  OXAGEN_LLM_IMAGE_ADVANCED: z.string().default("bfl/flux-2"),
+  OXAGEN_LLM_VIDEO_BASIC: z.string().default("google/veo-3-fast"),
+  OXAGEN_LLM_VIDEO_ADVANCED: z.string().default("google/veo-3"),
+
   LINEAR_API_KEY: z.string().optional(),
 
   NEXT_PUBLIC_APP_URL: z.string().url(),

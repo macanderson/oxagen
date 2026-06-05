@@ -2,6 +2,7 @@ import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
 import { openai, createOpenAI } from "@ai-sdk/openai";
 import type { ImageModel, LanguageModel } from "ai";
 import { requireEnv } from "@oxagen/config/env";
+import type { MediaTier, ResolvedTierCatalog } from "./catalog";
 
 export type ProviderName = "anthropic" | "openai";
 
@@ -76,6 +77,67 @@ export function tierModelId(tier: OxagenTier): string {
     "OXAGEN_LLM_PRECISE",
   ] as const);
   return tierFromEnv(env, tier);
+}
+
+// ── Media tiers (image + video) ────────────────────────────────────────────
+//
+// Image and video generation expose two white-labeled tiers — "basic" (the
+// default, cheaper) and "advanced" — that resolve to concrete gateway model ids
+// via the OXAGEN_LLM_{IMAGE,VIDEO}_{BASIC,ADVANCED} env vars. Same pattern as
+// the text tiers above: the customer-facing name stays decoupled from the
+// vendor model so swapping the underlying generator is an env change.
+
+const IMAGE_TIER_ENV_KEY = {
+  basic: "OXAGEN_LLM_IMAGE_BASIC",
+  advanced: "OXAGEN_LLM_IMAGE_ADVANCED",
+} as const satisfies Record<MediaTier, string>;
+
+const VIDEO_TIER_ENV_KEY = {
+  basic: "OXAGEN_LLM_VIDEO_BASIC",
+  advanced: "OXAGEN_LLM_VIDEO_ADVANCED",
+} as const satisfies Record<MediaTier, string>;
+
+/** Resolve an image tier to its concrete gateway model id from env. */
+export function imageTierModelId(tier: MediaTier): string {
+  const env = requireEnv([
+    "OXAGEN_LLM_IMAGE_BASIC",
+    "OXAGEN_LLM_IMAGE_ADVANCED",
+  ] as const);
+  // Defaults are guaranteed by the schema (env.ts); coalesce for mocked envs.
+  return env[IMAGE_TIER_ENV_KEY[tier]] ?? "openai/dall-e-3";
+}
+
+/** Resolve a video tier to its concrete gateway model id from env. */
+export function videoTierModelId(tier: MediaTier): string {
+  const env = requireEnv([
+    "OXAGEN_LLM_VIDEO_BASIC",
+    "OXAGEN_LLM_VIDEO_ADVANCED",
+  ] as const);
+  return env[VIDEO_TIER_ENV_KEY[tier]] ?? "google/veo-3-fast";
+}
+
+/**
+ * Resolve every white-labeled tier to its concrete gateway model id in a single
+ * read. Server-only (reads env); the chat RSC calls this and passes the result
+ * to the client model picker as one serializable prop so the picker can label
+ * each tier with its underlying model without the client ever touching env.
+ */
+export function resolvedTierCatalog(): ResolvedTierCatalog {
+  return {
+    text: {
+      fast: tierModelId("fast"),
+      balanced: tierModelId("balanced"),
+      precise: tierModelId("precise"),
+    },
+    image: {
+      basic: imageTierModelId("basic"),
+      advanced: imageTierModelId("advanced"),
+    },
+    video: {
+      basic: videoTierModelId("basic"),
+      advanced: videoTierModelId("advanced"),
+    },
+  };
 }
 
 // Direct-provider fallback model ids (used only when AI_GATEWAY_API_KEY is

@@ -7,6 +7,7 @@ import {
 } from "@oxagen/telemetry";
 import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
 import { defaultModel } from "./models";
+import type { EffortLevel } from "./catalog";
 
 export interface StreamAgentReplyArgs {
   messages: CoreMessage[];
@@ -14,6 +15,14 @@ export interface StreamAgentReplyArgs {
   tools?: ToolSet;
   system?: string;
   temperature?: number;
+  /**
+   * Reasoning effort for reasoning-capable models. Maps to the OpenAI-style
+   * `reasoning_effort` request field, which the Vercel AI Gateway normalizes
+   * per-provider. Only forward this for models that actually support reasoning
+   * (see `supportsReasoning` in ./catalog) — passing it to a non-reasoning
+   * model can be rejected upstream. Omit to use the provider default.
+   */
+  effort?: EffortLevel;
   /**
    * Required for OXA-1351 instrumentation. The caller's CapabilityContext
    * carries `orgId`, `workspaceId`, and `surface`; pass them through so
@@ -55,6 +64,15 @@ export function streamAgentReply(args: StreamAgentReplyArgs) {
     tools: args.tools,
     system: args.system,
     temperature: args.temperature ?? 0.7,
+    // Reasoning effort is expressed via the OpenAI-style `reasoningEffort`
+    // provider option. The gateway client is built with @ai-sdk/openai, which
+    // reads provider options under the `openai` namespace; the Vercel AI
+    // Gateway forwards `reasoning_effort` to whichever vendor backs the model.
+    // Only set when the caller passed `effort` (already gated to
+    // reasoning-capable models by the route via supportsReasoning).
+    ...(args.effort
+      ? { providerOptions: { openai: { reasoningEffort: args.effort } } }
+      : {}),
     onFinish: async (event) => {
       const durationMs = Date.now() - startedAt;
       const inputTokens = event.usage.promptTokens ?? 0;

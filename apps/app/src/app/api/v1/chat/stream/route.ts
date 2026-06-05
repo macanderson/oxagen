@@ -3,7 +3,15 @@ import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
-import { streamAgentReply, selectModel } from "@oxagen/ai";
+import {
+  streamAgentReply,
+  selectModel,
+  selectImageModel,
+  imageTierModelId,
+  videoTierModelId,
+  generateImageFor,
+  supportsReasoning,
+} from "@oxagen/ai";
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
 import { db, schema } from "@oxagen/database";
 import { randomUUID } from "node:crypto";
@@ -41,11 +49,22 @@ const BodySchema = z.object({
   orgSlug: z.string().min(1),
   workspaceSlug: z.string().min(1),
   // Model selection from the prompt's model picker. `tier` is a white-labeled
-  // Oxagen tier (Mini/Plus/Max → fast/balanced/precise); `model` is an explicit
-  // Vercel AI Gateway model id ("creator/model"). Both optional — when omitted
-  // the platform default (balanced tier) is used. `model` wins over `tier`.
+  // Oxagen text tier (Fast/Balanced/Precise → fast/balanced/precise); `model`
+  // is an explicit Vercel AI Gateway model id ("creator/model"). Both optional —
+  // when omitted the platform default (balanced tier) is used. `model` wins over
+  // `tier`.
   tier: z.enum(["fast", "balanced", "precise"]).nullable().default(null),
   model: z.string().min(1).nullable().default(null),
+  // Reasoning effort for reasoning-capable models. Forwarded to streamAgentReply
+  // only when the resolved model actually supports reasoning (guard below).
+  effort: z.enum(["low", "medium", "high"]).nullable().default(null),
+  // Media-generation intent. When set, this turn generates an image/video using
+  // a media model instead of running the text agent. `mediaModel` is an explicit
+  // gateway id; otherwise `mediaTier` (basic/advanced, default basic) resolves
+  // one from the OXAGEN_LLM_{IMAGE,VIDEO}_* env.
+  generate: z.enum(["image", "video"]).nullable().default(null),
+  mediaTier: z.enum(["basic", "advanced"]).nullable().default(null),
+  mediaModel: z.string().min(1).nullable().default(null),
 });
 
 // Maximum number of prior messages to include in the context window.
@@ -99,8 +118,19 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
   }
 
-  const { content, conversationId, parentMessageId, orgSlug, workspaceSlug, tier, model } =
-    parsed.data;
+  const {
+    content,
+    conversationId,
+    parentMessageId,
+    orgSlug,
+    workspaceSlug,
+    tier,
+    model,
+    effort,
+    generate,
+    mediaTier,
+    mediaModel,
+  } = parsed.data;
 
   // Resolve the language model for this turn from the picker selection. An
   // explicit gateway model id wins; otherwise the white-labeled tier; otherwise
@@ -109,6 +139,13 @@ export async function POST(request: NextRequest): Promise<Response> {
   const turnModel = selectModel({
     ...(model ? { model } : tier ? { tier } : {}),
   });
+
+  // Reasoning effort is only valid on reasoning-capable models. The picker
+  // already gates the control, but re-check server-side against the catalog
+  // (keyed by the resolved gateway model id) so a stray `effort` for a
+  // non-reasoning model is dropped rather than forwarded and rejected upstream.
+  const turnEffort =
+    effort && supportsReasoning(turnModel.modelId) ? effort : undefined;
 
   let tenant: Awaited<ReturnType<typeof resolveOrg>>;
   let workspace: Awaited<ReturnType<typeof resolveWorkspace>>;
@@ -121,6 +158,29 @@ export async function POST(request: NextRequest): Promise<Response> {
     workspace = await resolveWorkspace(tenant.id, workspaceSlug);
   } catch {
     return NextResponse.json({ error: "Org or workspace not found" }, { status: 404 });
+  }
+
+  // ── Media-generation branch ───────────────────────────────────────────────
+  //
+  // When the composer requests image/video generation, this turn does NOT run
+  // the text agent. It resolves the media model (explicit `mediaModel`, else the
+  // basic/advanced tier from env) and generates, emitting a `component` event
+  // the chat registry renders inline (image-preview / make-video-form). Results
+  // are streamed live and not persisted to Postgres — a generated asset belongs
+  // in blob storage, not a messages.content_blocks JSON column (tracked).
+  if (generate) {
+    const mediaResponse = streamMediaGeneration({
+      kind: generate,
+      prompt: content,
+      mediaModel,
+      mediaTier: mediaTier ?? "basic",
+      telemetry: {
+        orgId: tenant.id,
+        workspaceId: workspace.id,
+        executionStepId: parentMessageId ?? randomUUID(),
+      },
+    });
+    return mediaResponse;
   }
 
   // Load full conversation history from Postgres so the model has context
