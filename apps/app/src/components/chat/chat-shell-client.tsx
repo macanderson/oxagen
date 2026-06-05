@@ -41,6 +41,7 @@ export function ChatShellClient({
   agentCapabilities,
   orgSlug,
   workspaceSlug,
+  modelConfig,
 }: {
   conversationId: string | null;
   activeLeafMessageId: string | null;
@@ -51,6 +52,7 @@ export function ChatShellClient({
   agentCapabilities?: ChatShellProps["agentCapabilities"];
   orgSlug: string;
   workspaceSlug: string;
+  modelConfig: ResolvedTierCatalog;
 }) {
   const {
     plans,

@@ -442,3 +442,114 @@ export async function POST(request: NextRequest): Promise<Response> {
     },
   });
 }
+
+// Stream a media-generation turn as text/event-stream, mirroring the text path's
+// SSE framing (data: <StreamEvent>\n\n … event: done\ndata: [DONE]\n\n) so the
+// client's `useToolStream` consumes both paths identically.
+//
+//  - image: resolve the media model (explicit id or basic/advanced tier), call
+//    the @oxagen/ai image chokepoint (telemetry + billing live inside it), and
+//    emit a `component` event the registry renders via "image-preview".
+//  - video: there is no AI SDK v4 video primitive yet, so this is a wired stub
+//    (per the documented stub policy): it resolves the configured video model
+//    for the record and emits the existing "make-video-form" component, whose
+//    bound server action returns a queued result. Tracked for the real pipeline.
+function streamMediaGeneration(args: {
+  kind: "image" | "video";
+  prompt: string;
+  mediaModel: string | null;
+  mediaTier: "basic" | "advanced";
+  telemetry: { orgId: string; workspaceId: string; executionStepId: string };
+}): Response {
+  const encoder = new TextEncoder();
+  const responseStream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      function emit(event: StreamEvent): void {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      }
+      const toolCallId = randomUUID();
+      try {
+        if (args.kind === "image") {
+          const modelId =
+            args.mediaModel ?? imageTierModelId(args.mediaTier);
+          const imageModel = selectImageModel({ model: modelId });
+          try {
+            const { images } = await generateImageFor({
+              model: imageModel,
+              prompt: args.prompt,
+              n: 1,
+              size: "1024x1024",
+              telemetry: {
+                orgId: args.telemetry.orgId,
+                workspaceId: args.telemetry.workspaceId,
+                surface: "app",
+                executionStepId: args.telemetry.executionStepId,
+              },
+            });
+            const b64 = images[0];
+            emit({
+              type: "component",
+              toolCallId,
+              componentId: "image-preview",
+              props: b64
+                ? { dataUri: `data:image/png;base64,${b64}`, alt: args.prompt }
+                : { placeholder: true, prompt: args.prompt, alt: args.prompt },
+            });
+          } catch (genErr) {
+            // Generation failed (no key / unsupported model / provider error):
+            // render the image-preview empty-state with the reason instead of
+            // failing the turn.
+            const reason =
+              genErr instanceof Error ? genErr.message : "Generation failed";
+            emit({
+              type: "component",
+              toolCallId,
+              componentId: "image-preview",
+              props: {
+                placeholder: true,
+                prompt: args.prompt,
+                alt: args.prompt,
+                errorReason: reason,
+              },
+            });
+          }
+        } else {
+          // video — wired stub. Resolve the configured model for the record.
+          const modelId =
+            args.mediaModel ?? videoTierModelId(args.mediaTier);
+          console.info(
+            `[chat/stream] video generation requested (model ${modelId}) — pipeline stub, emitting make-video-form`,
+          );
+          emit({
+            type: "component",
+            toolCallId,
+            componentId: "make-video-form",
+            props: { prompt: args.prompt },
+          });
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Generation error";
+        emit({
+          type: "text",
+          messageId: toolCallId,
+          text: `\n\n[Error: ${message}]`,
+        });
+      } finally {
+        try {
+          controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
+        } catch {
+          // Controller may already be errored.
+        }
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(responseStream, {
+    headers: {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache",
+      connection: "keep-alive",
+    },
+  });
+}
