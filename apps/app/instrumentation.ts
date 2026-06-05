@@ -24,6 +24,21 @@ export async function register(): Promise<void> {
   // during client-side builds). bootstrapIAMRuntime depends on @oxagen/database
   // which uses `pg` — a Node.js-only module.
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    // Turbopack HMR re-evaluates module factories via (0, eval)(code) in global
+    // scope where `require` is not defined (it's only a CJS module-wrapper param).
+    // next/dist/esm/build/templates/app-page.js contains `require('path')` inside
+    // its handler function; after any HMR update this throws ReferenceError.
+    // Exposing require on globalThis makes it available to indirect-eval scope.
+    // Only in Node.js dev — production never uses Turbopack HMR eval.
+    // See: https://github.com/vercel/next.js issues with require in HMR eval context.
+    if (process.env.NODE_ENV === "development") {
+      // Make `require` available in global scope so that Turbopack HMR's indirect
+      // eval — `(0, eval)(factoryCode)` — can resolve bare require() calls inside
+      // re-evaluated module factories (e.g. `require('path')` in app-page.js).
+      const { createRequire } = await import("module");
+      (globalThis as unknown as Record<string, unknown>).require =
+        createRequire(import.meta.url);
+    }
     const { bootstrapIAMRuntime } = await import("@oxagen/iam");
     const { setSecurityEventEmitter } = await import("@oxagen/oxagen/kernel");
     const { recordSecurityEvent } = await import("@oxagen/telemetry");

@@ -68,9 +68,9 @@ export function PageHeader({
                 type="button"
                 onClick={onAskAboutThis}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-xl border border-border/60",
-                  "bg-background/40 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur",
-                  "transition-all hover:border-accent/40 hover:bg-accent/5 hover:text-foreground",
+                  "inline-flex items-center gap-1.5 rounded-xl border border-border",
+                  "bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground",
+                  "transition-colors hover:bg-accent hover:text-accent-foreground",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 )}
                 aria-label="Ask about this page"
