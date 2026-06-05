@@ -1,4 +1,4 @@
-import { streamText, type ModelMessage, type LanguageModel, type ToolSet } from "ai";
+import { streamText, type ModelMessage, type LanguageModel, type ToolSet, type StreamTextResult } from "ai";
 import {
   hashPrompt,
   insertTokenUsage,
@@ -43,7 +43,7 @@ export interface StreamAgentReplyArgs {
   }) => Promise<void> | void;
 }
 
-export function streamAgentReply(args: StreamAgentReplyArgs) {
+export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<ToolSet, never> {
   const model = args.model ?? defaultModel();
   const modelId = modelIdOf(model);
   const provider = providerFromModelId(modelId);

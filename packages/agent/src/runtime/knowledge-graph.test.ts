@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { isKnowledgeGraphEnabled, readWorkspaceContext, injectContext } from "./knowledge-graph";
 import type { ContextBlock } from "./knowledge-graph";
-import type { CoreMessage } from "ai";
+import type { ModelMessage } from "ai";
 
 // Store original env vars so we can restore them after each test.
 const ORIGINAL_NEO4J_URI = process.env.NEO4J_URI;
@@ -83,10 +83,10 @@ describe("readWorkspaceContext", () => {
 });
 
 describe("injectContext", () => {
-  const userMsg: CoreMessage = { role: "user", content: "hello" };
+  const userMsg: ModelMessage = { role: "user", content: "hello" };
 
   it("returns messages unchanged when blocks is empty", () => {
-    const messages: CoreMessage[] = [userMsg];
+    const messages: ModelMessage[] = [userMsg];
     const result = injectContext(messages, []);
     // Must be the SAME reference as the input array — true no-op, zero allocation.
     expect(result).toBe(messages);
@@ -111,7 +111,7 @@ describe("injectContext", () => {
   });
 
   it("leaves the original messages array unmodified", () => {
-    const messages: CoreMessage[] = [userMsg];
+    const messages: ModelMessage[] = [userMsg];
     const blocks: ContextBlock[] = [{ source: "src", text: "ctx" }];
     const result = injectContext(messages, blocks);
     // Original array must be untouched (injectContext returns a new array).

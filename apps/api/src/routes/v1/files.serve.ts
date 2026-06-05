@@ -46,6 +46,11 @@ filesServeRoute.get("/:file_id", async (c) => {
       "content-type": out.mimeType,
       "content-length": out.sizeBytes.toString(),
       "cache-control": "private, max-age=0, must-revalidate",
+      // Stored-XSS defence: never let the browser sniff a different type, and
+      // force download for anything not on the render-safe allowlist (html,
+      // svg, xml, …) since these bytes are served from our own origin.
+      "content-disposition": out.contentDisposition,
+      "x-content-type-options": "nosniff",
     },
   });
 });

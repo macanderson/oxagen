@@ -13,7 +13,6 @@
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "e2e": true,
         "docs": true
@@ -121,7 +120,6 @@
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "e2e": true,
         "docs": true
@@ -279,6 +277,25 @@
       }
     },
     {
+      "name": "billing.credits.purchase",
+      "file": "billing.credits.purchase.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
       "name": "billing.subscription.read",
       "file": "billing.subscription.read.ts",
       "domain": "billing",
@@ -422,6 +439,63 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "org.member.add",
+      "file": "org.member.add.ts",
+      "domain": "organization",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "org.member.invite.accept",
+      "file": "org.member.invite.accept.ts",
+      "domain": "organization",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "org.member.invite.decline",
+      "file": "org.member.invite.decline.ts",
+      "domain": "organization",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
       }
     },
     {

@@ -51,7 +51,7 @@ export async function materializeMcpTools(
     const key = `${prefix}.${t.name}`;
     out[key] = tool({
       description: t.description ?? `External MCP tool ${t.name}`,
-      parameters: z.record(z.string(), z.unknown()),
+      inputSchema: z.record(z.string(), z.unknown()),
       execute: async (input: unknown) => {
         const res = await client.callTool({ name: t.name, arguments: input as Record<string, unknown> });
         return res.content;

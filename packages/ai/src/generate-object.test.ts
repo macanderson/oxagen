@@ -18,7 +18,7 @@ const FIXED_OBJECT = { answer: "Paris", confidence: 0.99 };
 // generateObject resolves immediately with a fixed result — no real LLM.
 mocks.generateObject.mockResolvedValue({
   object: FIXED_OBJECT,
-  usage: { promptTokens: 12, completionTokens: 8, totalTokens: 20 },
+  usage: { inputTokens: 12, outputTokens: 8, totalTokens: 20 },
   finishReason: "stop",
 });
 mocks.insertTokenUsage.mockResolvedValue(undefined);
@@ -44,7 +44,7 @@ vi.mock("@oxagen/billing", () => ({
   providerCostUsdMicros: mocks.providerCostUsdMicros,
   chargeUsageCredits: mocks.chargeUsageCredits,
 }));
-vi.mock("./models", () => ({ defaultModel: mocks.defaultModel }));
+vi.mock("./models", () => ({ defaultModel: mocks.defaultModel, modelIdOf: (m: { modelId: string } | string) => (typeof m === "string" ? m : m.modelId) }));
 
 import { generateObjectFor } from "./generate-object";
 
@@ -72,7 +72,7 @@ beforeEach(() => {
   // restore defaults
   mocks.generateObject.mockResolvedValue({
     object: FIXED_OBJECT,
-    usage: { promptTokens: 12, completionTokens: 8, totalTokens: 20 },
+    usage: { inputTokens: 12, outputTokens: 8, totalTokens: 20 },
     finishReason: "stop",
   });
   mocks.insertTokenUsage.mockResolvedValue(undefined);

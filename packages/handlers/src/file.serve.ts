@@ -75,6 +75,30 @@ export interface FileServeResult {
   body: ReadableStream<Uint8Array>;
   mimeType: string;
   sizeBytes: bigint;
+  /**
+   * Safe `Content-Disposition` value the route MUST set on the response.
+   * `inline` only for a vetted allowlist of render-safe types; `attachment`
+   * for everything else. Forcing download on active types (html, svg, xml…)
+   * neutralises stored-XSS: a user-uploaded file is served from our own
+   * authenticated origin, so an inline-rendered script would run in-origin.
+   */
+  contentDisposition: "inline" | "attachment";
+}
+
+/** Content types that are safe to render inline in the browser. */
+const INLINE_SAFE_TYPES = new Set(["application/pdf", "text/plain"]);
+
+/**
+ * Decide whether a stored object may be served `inline` or must be forced to
+ * `attachment`. SVG is explicitly excluded from the image allowlist because it
+ * can carry script. The default is the safe one (`attachment`).
+ */
+function safeContentDisposition(mimeType: string): "inline" | "attachment" {
+  const type = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (type.startsWith("image/") && type !== "image/svg+xml") return "inline";
+  if (type.startsWith("video/") || type.startsWith("audio/")) return "inline";
+  if (INLINE_SAFE_TYPES.has(type)) return "inline";
+  return "attachment";
 }
 
 // ── Main function ─────────────────────────────────────────────────────────────
@@ -204,5 +228,6 @@ export async function serveFile(
     body: obj.body,
     mimeType: file.mimeType,
     sizeBytes: file.sizeBytes,
+    contentDisposition: safeContentDisposition(file.mimeType),
   };
 }

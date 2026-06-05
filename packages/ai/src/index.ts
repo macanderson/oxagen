@@ -6,6 +6,7 @@ export {
   imageTierModelId,
   videoTierModelId,
   resolvedTierCatalog,
+  modelIdOf,
   DEFAULT_TIER,
 } from "./models";
 export type { ModelSelector, ProviderName, ImageModelSelector, OxagenTier } from "./models";

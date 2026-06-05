@@ -24,7 +24,15 @@ const nextConfig = {
     // shared Vercel Blob domain; the single-segment `*` matches the store id so
     // a store rotation doesn't require a config change. Add a brand host here
     // (e.g. "blob.oxagen.ai") only if blobs are ever proxied through it.
-    remotePatterns: [{ protocol: "https", hostname: "*.public.blob.vercel-storage.com" }],
+    //
+    // Google avatar shards (`user.image` from Google OAuth login) are served
+    // from lh3–lh6.googleusercontent.com; the single-segment `*` covers every
+    // shard. Uploaded avatars go to Vercel Blob above; this only covers the
+    // initial OAuth-provided photo.
+    remotePatterns: [
+      { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
+      { protocol: "https", hostname: "*.googleusercontent.com" },
+    ],
   },
   experimental: {
     serverActions: { allowedOrigins: serverActionsAllowedOrigins },

@@ -1,4 +1,4 @@
-import type { CoreMessage } from "ai";
+import type { ModelMessage } from "ai";
 import type { CapabilityContext } from "../types";
 
 /**
@@ -57,10 +57,10 @@ export async function readWorkspaceContext(
  * When `blocks` is empty the original array is returned unchanged — a
  * true no-op so callers pay zero allocation cost today.
  */
-export function injectContext(messages: CoreMessage[], blocks: ContextBlock[]): CoreMessage[] {
+export function injectContext(messages: ModelMessage[], blocks: ContextBlock[]): ModelMessage[] {
   if (blocks.length === 0) return messages;
   const contextText = blocks.map((b) => `[${b.source}]\n${b.text}`).join("\n\n");
-  const systemBlock: CoreMessage = {
+  const systemBlock: ModelMessage = {
     role: "system",
     content: contextText,
   };

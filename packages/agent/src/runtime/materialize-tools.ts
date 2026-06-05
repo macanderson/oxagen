@@ -222,7 +222,7 @@ export async function materializeTools(
           if (typeof capturedExecute !== "function") continue;
           out[capturedKey] = tool({
             description: rawTool.description,
-            parameters: z.record(z.string(), z.unknown()),
+            inputSchema: z.record(z.string(), z.unknown()),
             execute: async (input: unknown) => {
               const invocationId = crypto.randomUUID();
               const startedAt = Date.now();

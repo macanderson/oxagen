@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>@oxagen/oxagen — Capability Kernel · Oxagen</title>
+<meta name="description" content="The Oxagen capability kernel — every platform capability declared once as a typed Zod contract, exposed identically across the app, REST API, and MCP server." />
+<style>
+  /* ============================================================
+     Oxagen README design system — self-contained, no external deps.
+     Palette + type mirror .agents/skills/oxagen-design-system.
+     ============================================================ */
+  :root {
+    --teal:#1fd0b5; --cyan:#10a7da; --blue:#343adc; --indigo:#562cf0;
+    --violet:#a269ff; --green:#28c36b; --grad-a:#7182ff; --grad-b:#3cff52;
+    --grad: linear-gradient(90deg, var(--grad-a), var(--grad-b));
+    --grad-alt: linear-gradient(90deg, #3b4fe6, #be1af0);
+    --radius:14px; --radius-sm:9px;
+    --mono:"SFMono-Regular",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:"Aeonik",-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+  }
+  html[data-theme="dark"]{
+    --bg:#15151f; --bg-2:#1c1c29; --panel:#1e1e2d; --panel-2:#23233399;
+    --ink:#f3f4f7; --ink-soft:#b9bbc9; --ink-faint:#7e8195;
+    --border:#2c2c3d; --border-soft:#26263499; --shadow:0 18px 50px -24px #000;
+    --code-bg:#13131c;
+  }
+  html[data-theme="light"]{
+    --bg:#f3f5f8; --bg-2:#eaedf3; --panel:#ffffff; --panel-2:#ffffffcc;
+    --ink:#0f131c; --ink-soft:#3f4658; --ink-faint:#6c7286;
+    --border:#dde1ea; --border-soft:#e7eaf1; --shadow:0 18px 50px -30px #5560871f;
+    --code-bg:#0f131c;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; font-family:var(--sans); background:var(--bg); color:var(--ink);
+    line-height:1.62; font-size:16px; -webkit-font-smoothing:antialiased;
+    transition:background .3s ease,color .3s ease;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(680px 420px at 12% -8%, #562cf02e, transparent 60%),
+      radial-gradient(720px 460px at 100% 0%, #1fd0b526, transparent 55%);
+    opacity:.9;
+  }
+  .wrap{position:relative; z-index:1; max-width:1080px; margin:0 auto; padding:0 24px 120px}
+  a{color:inherit}
+
+  /* ---- top bar ---- */
+  .topbar{
+    position:sticky; top:0; z-index:20; backdrop-filter:blur(14px);
+    background:color-mix(in oklab, var(--bg) 78%, transparent);
+    border-bottom:1px solid var(--border-soft);
+  }
+  .topbar .inner{max-width:1080px; margin:0 auto; padding:12px 24px; display:flex; align-items:center; gap:18px}
+  .ring{width:26px;height:26px;border-radius:50%;background:var(--grad);box-shadow:0 0 0 4px color-mix(in oklab,var(--grad-a) 22%,transparent);flex:0 0 auto}
+  .brand{font-weight:600; letter-spacing:-.01em}
+  .brand b{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .topnav{display:flex; gap:6px; margin-left:auto; flex-wrap:wrap}
+  .topnav a{
+    font-size:13px; color:var(--ink-soft); text-decoration:none; padding:6px 11px;
+    border-radius:999px; border:1px solid transparent; transition:.18s;
+  }
+  .topnav a:hover{color:var(--ink); border-color:var(--border); background:var(--panel)}
+  .toggle{
+    cursor:pointer; border:1px solid var(--border); background:var(--panel);
+    color:var(--ink); border-radius:999px; padding:6px 12px; font-size:13px; font-family:var(--sans);
+    display:inline-flex; gap:7px; align-items:center; transition:.18s;
+  }
+  .toggle:hover{border-color:var(--violet)}
+
+  /* ---- hero ---- */
+  header.hero{padding:64px 0 30px}
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:9px; font-size:12.5px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--ink-faint); font-weight:600;
+  }
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}
+  h1{font-size:clamp(34px,5vw,52px); line-height:1.04; letter-spacing:-.025em; margin:18px 0 14px; font-weight:680}
+  h1 .accent{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:19px; color:var(--ink-soft); max-width:70ch; margin:0}
+  .pkgline{margin-top:22px; display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+
+  /* ---- chips / badges ---- */
+  .chip{
+    display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:500;
+    padding:5px 11px; border-radius:999px; border:1px solid var(--border); background:var(--panel);
+    color:var(--ink-soft);
+  }
+  .chip code{font-family:var(--mono); font-size:12px; color:var(--ink)}
+  .chip.live{border-color:#28c36b55}
+  .chip.live .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+  .chip.grad{border:0; background:var(--grad); color:#0b0b12; font-weight:600}
+
+  /* ---- sections ---- */
+  section{margin-top:46px; scroll-margin-top:74px}
+  h2{font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; margin:0 0 18px; display:flex; align-items:center; gap:10px}
+  h2::before{content:""; width:22px; height:2px; border-radius:2px; background:var(--grad)}
+  h3{font-size:18px; letter-spacing:-.01em; margin:0 0 8px}
+  p{color:var(--ink-soft); margin:0 0 14px}
+
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:22px 24px; box-shadow:var(--shadow)}
+  .grid{display:grid; gap:16px}
+  @media(min-width:720px){.grid.cols-2{grid-template-columns:1fr 1fr}.grid.cols-3{grid-template-columns:repeat(3,1fr)}}
+
+  .feature{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:20px}
+  .feature .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--bg-2);border:1px solid var(--border);font-size:18px;margin-bottom:12px}
+  .feature h3{font-size:15.5px}
+  .feature p{font-size:14px; margin:0}
+
+  /* ---- code blocks + copy ---- */
+  .code{position:relative; margin:14px 0}
+  .code pre{
+    margin:0; background:var(--code-bg); color:#dfe3f2; border:1px solid var(--border);
+    border-radius:var(--radius-sm); padding:16px 18px; overflow:auto; font-family:var(--mono);
+    font-size:13.5px; line-height:1.65;
+  }
+  .code pre .c{color:#6f7590}
+  .code pre .k{color:#a269ff}
+  .code pre .s{color:#3cff52}
+  .code pre .n{color:#1fd0b5}
+  .copy{
+    position:absolute; top:9px; right:9px; cursor:pointer; font-family:var(--sans);
+    font-size:11.5px; border:1px solid #ffffff22; background:#ffffff10; color:#dfe3f2;
+    padding:4px 10px; border-radius:7px; transition:.15s; backdrop-filter:blur(4px);
+  }
+  .copy:hover{background:#ffffff20; border-color:var(--green)}
+  .copy.done{color:var(--green); border-color:var(--green)}
+
+  /* ---- tabs ---- */
+  .tabs{margin:14px 0}
+  .tablist{display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:0; flex-wrap:wrap}
+  .tablist button{
+    font-family:var(--sans); font-size:13.5px; color:var(--ink-faint); background:none; border:0;
+    border-bottom:2px solid transparent; padding:9px 14px; cursor:pointer; transition:.15s; margin-bottom:-1px;
+  }
+  .tablist button:hover{color:var(--ink)}
+  .tablist button[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--violet)}
+  .tabpanel{display:none; padding-top:6px}
+  .tabpanel.active{display:block}
+
+  /* ---- details ---- */
+  details{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm); margin:10px 0; overflow:hidden}
+  details summary{
+    cursor:pointer; padding:14px 18px; font-weight:540; list-style:none; display:flex; align-items:center; gap:11px;
+    font-size:14.5px;
+  }
+  details summary::-webkit-details-marker{display:none}
+  details summary .caret{transition:.2s; color:var(--ink-faint)}
+  details[open] summary .caret{transform:rotate(90deg); color:var(--violet)}
+  details .body{padding:0 18px 16px; color:var(--ink-soft); font-size:14.5px}
+  details .body p:last-child{margin-bottom:0}
+
+  /* ---- tables ---- */
+  table{width:100%; border-collapse:collapse; font-size:14px; margin:6px 0}
+  th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--border)}
+  th{font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); font-weight:600}
+  td code,p code,li code,.body code{font-family:var(--mono); font-size:12.5px; background:var(--bg-2); border:1px solid var(--border-soft); padding:1.5px 6px; border-radius:6px; color:var(--ink)}
+  tr:last-child td{border-bottom:0}
+
+  ul.clean{list-style:none; padding:0; margin:0}
+  ul.clean li{padding:9px 0 9px 26px; position:relative; color:var(--ink-soft); border-bottom:1px solid var(--border-soft)}
+  ul.clean li:last-child{border-bottom:0}
+  ul.clean li::before{content:""; position:absolute; left:4px; top:16px; width:8px; height:8px; border-radius:50%; background:var(--grad)}
+  ul.clean li b{color:var(--ink); font-weight:560}
+
+  /* ---- dep map ---- */
+  .deps{display:flex; flex-wrap:wrap; gap:8px}
+  .dep{font-family:var(--mono); font-size:12.5px; padding:5px 11px; border-radius:8px; border:1px solid var(--border); background:var(--bg-2); color:var(--ink-soft)}
+  .dep.ws{border-color:#562cf055; color:var(--ink)}
+  .dep.ws::before{content:"◆ "; color:var(--violet)}
+
+  /* ---- flow diagram ---- */
+  .flow{display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-family:var(--mono); font-size:13px}
+  .flow .node{padding:7px 13px; border-radius:9px; background:var(--panel); border:1px solid var(--border); color:var(--ink)}
+  .flow .arrow{color:var(--violet)}
+  .flow .node.hl{border-color:transparent; background:var(--grad); color:#0b0b12; font-weight:600}
+
+  footer{margin-top:64px; padding-top:26px; border-top:1px solid var(--border); color:var(--ink-faint); font-size:13.5px; display:flex; flex-wrap:wrap; gap:14px; justify-content:space-between}
+  footer a{color:var(--ink-soft); text-decoration:none}
+  footer a:hover{color:var(--ink)}
+  .kbd{font-family:var(--mono); font-size:11.5px; border:1px solid var(--border); border-bottom-width:2px; padding:1px 6px; border-radius:5px; background:var(--bg-2)}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="inner">
+    <span class="ring" aria-hidden="true"></span>
+    <span class="brand">Oxagen <b>·</b> oxagen</span>
+    <nav class="topnav">
+      <a href="#what">What</a>
+      <a href="#import">Import</a>
+      <a href="#exports">Exports</a>
+      <a href="#usage">Usage</a>
+      <a href="#layout">Layout</a>
+      <a href="#consumers">Consumers</a>
+      <a href="#scripts">Scripts</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <button class="toggle" id="themeBtn" aria-label="Toggle theme"><span id="themeIcon">◐</span><span id="themeLbl">Dark</span></button>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <span class="eyebrow"><span class="dot"></span> packages/oxagen · @oxagen/oxagen</span>
+    <h1>The <span class="accent">capability kernel</span></h1>
+    <p class="lede">Every platform capability is declared once here as a typed Zod contract, then exposed identically across the in-app agent, the REST API, and the MCP server. This is the single source of truth that enforces no drift across surfaces.</p>
+    <div class="pkgline">
+      <span class="chip">internal package</span>
+      <span class="chip">Node.js runtime</span>
+      <span class="chip"><code>@oxagen/oxagen</code></span>
+      <span class="chip">zod <code>3.x</code></span>
+      <span class="chip">import path <code>packages/oxagen</code></span>
+    </div>
+  </header>
+
+  <section id="what">
+    <h2>What this is</h2>
+    <div class="card">
+      <p><b>@oxagen/oxagen</b> is the capability kernel of the platform. A "capability" is anything the platform can do — create an organization, send a chat message, fill a form, generate a document. Each capability is declared exactly once as a <em>contract</em> using <code>defineContract</code>, with a Zod input schema, a Zod output schema, and an identity. The registry collects all contracts; the kernel wires them to IAM. Downstream, the API routes, MCP tools, and app handlers each import the same contract objects — they never re-declare intent or re-invent schemas.</p>
+      <div class="flow" style="margin-top:12px">
+        <span class="node">defineContract</span><span class="arrow">→</span>
+        <span class="node hl">registry</span><span class="arrow">→</span>
+        <span class="node">API route</span>
+        <span class="arrow">·</span>
+        <span class="node">MCP tool</span>
+        <span class="arrow">·</span>
+        <span class="node">app handler</span>
+      </div>
+    </div>
+    <div class="grid cols-3" style="margin-top:16px">
+      <div class="feature"><div class="ic">◇</div><h3>Define once</h3><p>One <code>defineContract</code> call produces the canonical schema. No parallel Zod schemas in three different packages.</p></div>
+      <div class="feature"><div class="ic">⇄</div><h3>Expose everywhere</h3><p>The API, MCP, and app all import from this package. Surface parity is a structural guarantee, not a discipline.</p></div>
+      <div class="feature"><div class="ic">◈</div><h3>IAM-aware</h3><p>Contracts carry permission metadata. The kernel enforces access at the boundary before dispatch reaches any handler.</p></div>
+    </div>
+  </section>
+
+  <section id="import">
+    <h2>Install / import</h2>
+    <p>This is a workspace-internal package. Consuming packages declare it as <code>workspace:*</code> in their <code>package.json</code> — no npm install required.</p>
+    <div class="tabs" data-tabs>
+      <div class="tablist" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="pkg">package.json</button>
+        <button role="tab" aria-selected="false" data-tab="import">TypeScript import</button>
+        <button role="tab" aria-selected="false" data-tab="contract">Contract import</button>
+      </div>
+      <div class="tabpanel active" data-panel="pkg">
+        <div class="code"><button class="copy">Copy</button><pre><span class="c">// in the consuming package's package.json</span>
+{
+  <span class="s">"dependencies"</span>: {
+    <span class="s">"@oxagen/oxagen"</span>: <span class="s">"workspace:*"</span>
+  }
+}</pre></div>
+      </div>
+      <div class="tabpanel" data-panel="import">
+        <div class="code"><button class="copy">Copy</button><pre><span class="k">import</span> { registry, kernel } <span class="k">from</span> <span class="s">"@oxagen/oxagen"</span>;
+<span class="k">import</span> { defineContract } <span class="k">from</span> <span class="s">"@oxagen/oxagen/define-contract"</span>;
+<span class="k">import</span> { contracts } <span class="k">from</span> <span class="s">"@oxagen/oxagen/contracts"</span>;
+<span class="k">import</span> <span class="k">type</span> { CapabilityContract } <span class="k">from</span> <span class="s">"@oxagen/oxagen/types"</span>;</pre></div>
+      </div>
+      <div class="tabpanel" data-panel="contract">
+        <div class="code"><button class="copy">Copy</button><pre><span class="c">// import a specific contract by subpath</span>
+<span class="k">import</span> { orgCreateContract } <span class="k">from</span> <span class="s">"@oxagen/oxagen/contracts/organization"</span>;
+
+<span class="c">// or from the contracts barrel</span>
+<span class="k">import</span> { orgCreateContract, chatSendContract } <span class="k">from</span> <span class="s">"@oxagen/oxagen/contracts"</span>;</pre></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="exports">
+    <h2>Exports</h2>
+    <div class="card">
+      <table>
+        <tr><th>Subpath</th><th>Provides</th></tr>
+        <tr><td><code>.</code></td><td>Root barrel — re-exports <code>registry</code>, <code>kernel</code>, and top-level types</td></tr>
+        <tr><td><code>./contracts</code></td><td>Barrel of all declared contracts (generated + hand-authored)</td></tr>
+        <tr><td><code>./contracts/*</code></td><td>Individual contract modules (e.g. <code>./contracts/organization</code>)</td></tr>
+        <tr><td><code>./registry</code></td><td>Contract registry — lookup, list, and validate all known contracts</td></tr>
+        <tr><td><code>./kernel</code></td><td>Capability kernel — resolves a contract id to its handler ref and IAM check</td></tr>
+        <tr><td><code>./types</code></td><td>Shared TypeScript types: <code>CapabilityContract</code>, <code>ContractInput</code>, <code>ContractOutput</code></td></tr>
+        <tr><td><code>./define-contract</code></td><td><code>defineContract()</code> factory — the only way to declare a new capability</td></tr>
+        <tr><td><code>./iam</code></td><td>IAM helpers — permission resolution, scope guards used by the kernel</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="usage">
+    <h2>Declaring a contract</h2>
+    <p>All capability declarations go through <code>defineContract</code>. The function accepts an id, a Zod input schema, a Zod output schema, and optional IAM metadata. It registers the contract in the global registry at module load time.</p>
+    <div class="code"><button class="copy">Copy</button><pre><span class="k">import</span> { defineContract } <span class="k">from</span> <span class="s">"@oxagen/oxagen/define-contract"</span>;
+<span class="k">import</span> { z } <span class="k">from</span> <span class="s">"zod"</span>;
+
+<span class="k">export const</span> <span class="n">workspaceCreateContract</span> = defineContract({
+  id: <span class="s">"workspace.create"</span>,
+  description: <span class="s">"Create a new workspace within an organization."</span>,
+  input: z.object({
+    orgId:  z.string().uuid(),
+    name:   z.string().min(1).max(64),
+    slug:   z.string().regex(<span class="s">/^[a-z0-9-]+$/</span>),
+  }),
+  output: z.object({
+    workspaceId: z.string().uuid(),
+    slug:        z.string(),
+    createdAt:   z.string().datetime(),
+  }),
+  iam: { permission: <span class="s">"workspace:write"</span>, scope: <span class="s">"org"</span> },
+});</pre></div>
+    <p style="font-size:13.5px">The same <code>workspaceCreateContract</code> object is then imported by the API route handler, the MCP tool definition, and the app server action — no schema is ever written twice.</p>
+  </section>
+
+  <section id="layout">
+    <h2>Source layout</h2>
+    <div class="card">
+      <ul class="clean">
+        <li><b>src/define-contract.ts</b> — <code>defineContract()</code> factory; registers into the registry side-effect-free</li>
+        <li><b>src/contracts/</b> — one file per domain (organization, workspace, chat, documents, billing, …); all call <code>defineContract</code></li>
+        <li><b>src/contracts.generated.ts</b> — machine-generated barrel re-exporting every contract; regenerated via <code>pnpm codegen</code></li>
+        <li><b>src/registry.ts</b> — in-memory contract registry: <code>getContract(id)</code>, <code>listContracts()</code>, <code>validateAll()</code></li>
+        <li><b>src/kernel.ts</b> — capability kernel: resolves a contract id → handler ref + IAM enforcement before dispatch</li>
+        <li><b>src/iam/</b> — permission matchers, scope guards, and role-to-permission maps shared across surfaces</li>
+        <li><b>src/types.ts</b> — <code>CapabilityContract</code>, <code>ContractInput&lt;T&gt;</code>, <code>ContractOutput&lt;T&gt;</code>, and other shared TS types</li>
+        <li><b>src/index.ts</b> — root barrel; re-exports registry, kernel, and types</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="consumers">
+    <h2>Consumed by</h2>
+    <div class="card">
+      <p>Every surface that exposes platform capabilities imports from this package. Nothing else is allowed to declare new capabilities.</p>
+      <div class="deps">
+        <span class="dep ws">apps/api</span>
+        <span class="dep ws">apps/mcp</span>
+        <span class="dep ws">apps/app</span>
+        <span class="dep ws">@oxagen/agent</span>
+        <span class="dep ws">@oxagen/ai-adjacent</span>
+        <span class="dep ws">@oxagen/billing</span>
+        <span class="dep ws">@oxagen/handlers</span>
+        <span class="dep ws">@oxagen/iam</span>
+        <span class="dep ws">@oxagen/inngest-functions</span>
+      </div>
+    </div>
+    <div class="grid cols-2" style="margin-top:16px">
+      <div class="card">
+        <h3>External dependencies</h3>
+        <p style="font-size:13.5px">Intentionally minimal. The kernel has no runtime I/O of its own — it is a pure type and validation layer.</p>
+        <div class="deps">
+          <span class="dep">zod</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Workspace dependencies</h3>
+        <p style="font-size:13.5px">None. <code>@oxagen/oxagen</code> sits at the bottom of the dependency graph — it must not depend on any sibling package.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="scripts">
+    <h2>Scripts</h2>
+    <div class="card">
+      <table>
+        <tr><th>Command</th><th>Does</th></tr>
+        <tr><td><code>pnpm build</code></td><td>Compile TypeScript to <code>dist/</code> via <code>tsc</code></td></tr>
+        <tr><td><code>pnpm dev</code></td><td>Watch mode — recompile on change</td></tr>
+        <tr><td><code>pnpm typecheck</code></td><td><code>tsc --noEmit</code> — verify types without emitting</td></tr>
+        <tr><td><code>pnpm codegen</code></td><td>Regenerate <code>contracts.generated.ts</code> barrel from <code>src/contracts/</code></td></tr>
+        <tr><td><code>pnpm test</code></td><td>Vitest unit suite — contract shape, registry invariants, IAM rules</td></tr>
+        <tr><td><code>pnpm lint</code></td><td>ESLint</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="faq">
+    <h2>FAQ &amp; design notes</h2>
+    <details>
+      <summary><span class="caret">▸</span> What is the difference between the registry and the kernel?</summary>
+      <div class="body">
+        <p>The <b>registry</b> is a passive catalog: it knows every declared contract by id and can look them up or validate their schemas. It has no opinion about execution.</p>
+        <p>The <b>kernel</b> is the execution boundary: given a contract id and a caller context, it resolves the handler reference, enforces IAM (checking the caller's permissions against the contract's <code>iam</code> metadata), and returns a typed dispatch function. The kernel is what prevents an API route from accidentally calling a handler the caller is not permitted to reach.</p>
+      </div>
+    </details>
+    <details>
+      <summary><span class="caret">▸</span> How does IAM enforcement work?</summary>
+      <div class="body">
+        <p>Each contract optionally declares <code>iam: { permission, scope }</code>. When the kernel resolves a contract, it calls the IAM helper from <code>src/iam/</code> with the caller's session and the required permission. If the check fails, the kernel throws before the handler is ever invoked. This means IAM is enforced at the contract boundary — not scattered across individual handler implementations.</p>
+      </div>
+    </details>
+    <details>
+      <summary><span class="caret">▸</span> Why is zod the only external dependency?</summary>
+      <div class="body">
+        <p><code>@oxagen/oxagen</code> must sit at the very bottom of the dependency graph — every other package imports from it. If it pulled in runtime I/O (a database driver, an HTTP client, the AI SDK), circular dependency risk would be severe and cold-start cost would be paid by every surface. Zod provides the schema and validation layer without any I/O. All I/O lives in the packages above (handlers, agent, billing) which import this package, not the other way around.</p>
+      </div>
+    </details>
+    <details>
+      <summary><span class="caret">▸</span> When should I add a new contract vs. modifying an existing one?</summary>
+      <div class="body">
+        <p>Add a new contract when the operation is semantically distinct — a new intent with a new id. Modify an existing contract only for additive, backward-compatible changes (adding optional fields). Breaking changes to input/output schemas require a version bump in the contract id (e.g. <code>workspace.create.v2</code>) so existing callers on all three surfaces can migrate at their own pace.</p>
+      </div>
+    </details>
+  </section>
+
+  <footer>
+    <span>@oxagen/oxagen · v0.1.0 · internal package · Oxagen monorepo</span>
+    <span><a href="../../README.html">monorepo index ↗</a> &nbsp;·&nbsp; <a href="../../README.md">root readme</a> &nbsp;·&nbsp; press <span class="kbd">T</span> to toggle theme</span>
+  </footer>
+</div>
+
+<script>
+  /* theme toggle (persisted) */
+  (function(){
+    var root=document.documentElement, btn=document.getElementById('themeBtn'),
+        icon=document.getElementById('themeIcon'), lbl=document.getElementById('themeLbl');
+    function apply(t){root.setAttribute('data-theme',t); icon.textContent=t==='dark'?'◐':'◑'; lbl.textContent=t==='dark'?'Dark':'Light'; try{localStorage.setItem('oxa-theme',t)}catch(e){}}
+    try{var s=localStorage.getItem('oxa-theme'); if(s)apply(s);}catch(e){}
+    btn.addEventListener('click',function(){apply(root.getAttribute('data-theme')==='dark'?'light':'dark')});
+    document.addEventListener('keydown',function(e){if((e.key==='t'||e.key==='T')&&!/INPUT|TEXTAREA/.test(e.target.tagName))apply(root.getAttribute('data-theme')==='dark'?'light':'dark')});
+  })();
+  /* copy buttons */
+  document.querySelectorAll('.copy').forEach(function(b){
+    b.addEventListener('click',function(){
+      var pre=b.parentElement.querySelector('pre');
+      navigator.clipboard.writeText(pre.innerText).then(function(){
+        var o=b.textContent; b.textContent='Copied ✓'; b.classList.add('done');
+        setTimeout(function(){b.textContent=o; b.classList.remove('done')},1400);
+      });
+    });
+  });
+  /* tabs */
+  document.querySelectorAll('[data-tabs]').forEach(function(group){
+    var tabs=group.querySelectorAll('[data-tab]'), panels=group.querySelectorAll('[data-panel]');
+    tabs.forEach(function(t){t.addEventListener('click',function(){
+      tabs.forEach(function(x){x.setAttribute('aria-selected','false')});
+      t.setAttribute('aria-selected','true');
+      panels.forEach(function(p){p.classList.toggle('active',p.getAttribute('data-panel')===t.getAttribute('data-tab'))});
+    })});
+  });
+</script>
+</body>
+</html>

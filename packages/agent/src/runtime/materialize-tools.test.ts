@@ -106,11 +106,11 @@ describe("materializeTools", () => {
     expect(tools.capB).toBeDefined();
   });
 
-  it("produces AI SDK tools with description, parameters, and execute", async () => {
+  it("produces AI SDK tools with description, inputSchema, and execute", async () => {
     const tools = await materializeTools(CTX);
-    const t = tools.capA as { description?: string; parameters?: unknown; execute?: (i: unknown) => Promise<unknown> };
+    const t = tools.capA as { description?: string; inputSchema?: unknown; execute?: (i: unknown) => Promise<unknown> };
     expect(t.description).toBe("low risk agent cap");
-    expect(t.parameters).toBeDefined();
+    expect(t.inputSchema).toBeDefined();
     expect(typeof t.execute).toBe("function");
     await t.execute!({ x: "hello" });
     expect(invoke).toHaveBeenCalledWith("capA", { x: "hello" }, CTX, { surface: "agent" });

@@ -70,7 +70,7 @@ export function ProfileForm({
     },
   });
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
     setStatus("saving");
     setErrorMsg(null);

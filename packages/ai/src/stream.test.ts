@@ -39,7 +39,7 @@ vi.mock("@oxagen/billing", () => ({
   providerCostUsdMicros: mocks.providerCostUsdMicros,
   chargeUsageCredits: mocks.chargeUsageCredits,
 }));
-vi.mock("./models", () => ({ defaultModel: mocks.defaultModel }));
+vi.mock("./models", () => ({ defaultModel: mocks.defaultModel, modelIdOf: (m: { modelId: string } | string) => (typeof m === "string" ? m : m.modelId) }));
 
 import { streamAgentReply } from "./stream";
 
@@ -48,7 +48,7 @@ import { streamAgentReply } from "./stream";
 type StreamResult = ReturnType<typeof streamAgentReply> & {
   _onFinish: (event: {
     text: string;
-    usage: { promptTokens: number; completionTokens: number; totalTokens: number };
+    totalUsage: { inputTokens: number; outputTokens: number; totalTokens: number };
     finishReason: string;
   }) => Promise<void>;
 };
@@ -66,7 +66,7 @@ const MESSAGES = [
 
 const USAGE_EVENT = {
   text: "hi there",
-  usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+  totalUsage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
   finishReason: "stop",
 };
 
@@ -243,7 +243,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     const result = streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY }) as StreamResult;
     await result._onFinish({
       text: "",
-      usage: { promptTokens: undefined as unknown as number, completionTokens: undefined as unknown as number, totalTokens: 0 },
+      totalUsage: { inputTokens: undefined as unknown as number, outputTokens: undefined as unknown as number, totalTokens: 0 },
       finishReason: "stop",
     });
     const rows = (mocks.insertTokenUsage.mock.calls[0] as [unknown[]])[0];

@@ -75,9 +75,15 @@ function toPutBody(body: StorageBody): Blob | Buffer {
  * include a UUID in the key, so a second random suffix would only obscure it.
  */
 export function createVercelBlobAdapter(token: string): StorageAdapter {
-  // Derive the base URL once at construction time so the get() method
-  // doesn't re-parse the token on every request.
-  const base = publicBaseUrlFromToken(token);
+  // The public base URL is derived lazily on first get() call so that
+  // adapters constructed for put/delete-only use cases (e.g. avatar uploads)
+  // can use any token string without requiring the full vercel_blob_rw_…
+  // format. The derivation is memoised after the first parse.
+  let _base: string | null = null;
+  function base(): string {
+    if (!_base) _base = publicBaseUrlFromToken(token);
+    return _base;
+  }
 
   return {
     driver: "vercel-blob",
@@ -88,7 +94,7 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       // from the store ID and the object key. We fetch through fetch() so
       // the response body is a web-standard ReadableStream that can be
       // piped directly into a Response (zero-copy streaming).
-      const url = `${base}/${encodeURI(key)}`;
+      const url = `${base()}/${encodeURI(key)}`;
       const res = await fetch(url);
       if (!res.ok || !res.body) {
         logger.warn(

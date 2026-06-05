@@ -11,11 +11,12 @@ import {
   videoTierModelId,
   generateImageFor,
   supportsReasoning,
+  modelIdOf,
 } from "@oxagen/ai";
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
 import { db, schema } from "@oxagen/database";
 import { randomUUID } from "node:crypto";
-import type { CoreMessage } from "ai";
+import type { ModelMessage } from "ai";
 import type { RenderDirective, StreamEvent } from "@/components/chat/stream-event-types";
 
 // Side-effect imports: bind every handler into the shared kernel BEFORE
@@ -31,10 +32,10 @@ import "@oxagen/agent/register";
  * `TextStreamPart<ToolSet>` generic, which does not resolve the `tool-result`
  * arm to a concrete narrowable shape when TOOLS is the wide `ToolSet` alias.
  */
-interface TextDeltaPart { type: "text-delta"; textDelta: string }
-interface ToolCallPart { type: "tool-call"; toolCallId: string; toolName: string; args: unknown }
-interface ToolResultPart { type: "tool-result"; toolCallId: string; toolName: string; result: unknown }
-interface FinishPart { type: "finish"; usage: { promptTokens: number; completionTokens: number; totalTokens: number } }
+interface TextDeltaPart { type: "text-delta"; text: string }
+interface ToolCallPart { type: "tool-call"; toolCallId: string; toolName: string; input: unknown }
+interface ToolResultPart { type: "tool-result"; toolCallId: string; toolName: string; output: unknown }
+interface FinishPart { type: "finish"; totalUsage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }
 
 function partType(p: unknown): string | undefined {
   return typeof p === "object" && p !== null && "type" in p
@@ -145,7 +146,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   // (keyed by the resolved gateway model id) so a stray `effort` for a
   // non-reasoning model is dropped rather than forwarded and rejected upstream.
   const turnEffort =
-    effort && supportsReasoning(turnModel.modelId) ? effort : undefined;
+    effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
 
   let tenant: Awaited<ReturnType<typeof resolveOrg>>;
   let workspace: Awaited<ReturnType<typeof resolveWorkspace>>;
@@ -207,7 +208,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     userId: session.user.id,
   });
 
-  let historyMessages: CoreMessage[] = [];
+  let historyMessages: ModelMessage[] = [];
   if (conversationId) {
     // Fetch the most-recent HISTORY_LIMIT rows by ordering DESC + LIMIT,
     // then reverse in JS so they end up chronological (oldest→newest). This
@@ -258,13 +259,13 @@ export async function POST(request: NextRequest): Promise<Response> {
     lastHistory.role === "user" &&
     lastHistory.content === content;
 
-  const messagesWithCurrent: CoreMessage[] = currentAlreadyInHistory
+  const messagesWithCurrent: ModelMessage[] = currentAlreadyInHistory
     ? historyMessages
     : [...historyMessages, { role: "user", content }];
 
   // Inject knowledge-graph context as a leading system message (no-op when
   // blocks is empty, which is the default until Neo4j is configured).
-  const coreMessages: CoreMessage[] = injectContext(messagesWithCurrent, blocks);
+  const coreMessages: ModelMessage[] = injectContext(messagesWithCurrent, blocks);
 
   const requestId = randomUUID();
   const agentTools = await materializeTools({
@@ -318,8 +319,8 @@ export async function POST(request: NextRequest): Promise<Response> {
           const pType = partType(raw);
           if (pType === "text-delta") {
             const part = raw as TextDeltaPart;
-            assistantText += part.textDelta;
-            emit({ type: "text", messageId: requestId, text: part.textDelta });
+            assistantText += part.text;
+            emit({ type: "text", messageId: requestId, text: part.text });
           } else if (pType === "tool-call") {
             const part = raw as ToolCallPart;
             toolStartedAt[part.toolCallId] = Date.now();
@@ -328,7 +329,7 @@ export async function POST(request: NextRequest): Promise<Response> {
               messageId: requestId,
               toolCallId: part.toolCallId,
               capability: part.toolName,
-              inputPreview: part.args,
+              inputPreview: part.input,
               // Default risk level; capabilities may override via tool metadata.
               riskLevel: "low",
             });
@@ -342,12 +343,12 @@ export async function POST(request: NextRequest): Promise<Response> {
               type: "tool-call-end",
               toolCallId: part.toolCallId,
               status: "completed",
-              output: part.result,
+              output: part.output,
               durationMs,
             });
             // If the tool result carries a render directive, emit a "component"
             // event so the client renders the typed React component inline.
-            const rawResult = part.result;
+            const rawResult = part.output;
             if (rawResult !== null && rawResult !== undefined && typeof rawResult === "object") {
               const render = (rawResult as Record<string, unknown>)["render"] as
                 | RenderDirective
@@ -372,9 +373,9 @@ export async function POST(request: NextRequest): Promise<Response> {
             emit({
               type: "usage",
               usage: {
-                promptTokens: part.usage.promptTokens ?? 0,
-                completionTokens: part.usage.completionTokens ?? 0,
-                totalTokens: part.usage.totalTokens ?? 0,
+                promptTokens: part.totalUsage.inputTokens ?? 0,
+                completionTokens: part.totalUsage.outputTokens ?? 0,
+                totalTokens: part.totalUsage.totalTokens ?? 0,
               },
             });
           }

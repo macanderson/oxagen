@@ -100,13 +100,15 @@ export async function generateObjectFor<T>(
       : JSON.stringify(lastUserMessage.content)
     : (args.prompt ?? "");
 
+  // AI SDK v6 models the prompt as a `messages` XOR `prompt` union — passing
+  // both (even as undefined) no longer type-checks. Include exactly one:
+  // messages when provided, otherwise the single-turn prompt string.
   const result = await generateObject({
     model,
     schema: args.schema,
     system: args.system,
-    messages: args.messages,
-    prompt: args.prompt,
     temperature: args.temperature ?? 0,
+    ...(args.messages ? { messages: args.messages } : { prompt: args.prompt ?? "" }),
   });
 
   const durationMs = Date.now() - startedAt;
