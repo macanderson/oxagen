@@ -229,7 +229,10 @@ export function MessageComposer({
           fd.set("mediaTier", ms.mediaTier ?? "basic");
         }
       }
-      dispatch(fd);
+      // Defer the dispatch out of the effect body to satisfy the
+      // react-hooks/set-state-in-effect rule — the queue drain should not
+      // cascade synchronously within the effect.
+      setTimeout(() => dispatch(fd), 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStreaming]);

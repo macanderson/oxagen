@@ -18,7 +18,7 @@ describe("workspace.model.settings.write capability", () => {
     const parsed = workspaceModelSettingsWrite.input.parse({
       defaultTextTier: "balanced",
       defaultTextModel: "anthropic/claude-sonnet-4.6",
-      defaultImageModel: "openai/dall-e-3",
+      defaultImageModel: "openai/gpt-image-1",
       defaultVideoModel: "google/veo-3",
     });
     expect(parsed.defaultTextTier).toBe("balanced");
@@ -54,11 +54,11 @@ describe("workspace.model.settings.write capability", () => {
     const parsed = workspaceModelSettingsWrite.output.parse({
       defaultTextTier: "fast",
       defaultTextModel: null,
-      defaultImageModel: "bfl/flux-2",
+      defaultImageModel: "bfl/flux-2-max",
       defaultVideoModel: null,
     });
     expect(parsed.defaultTextTier).toBe("fast");
-    expect(parsed.defaultImageModel).toBe("bfl/flux-2");
+    expect(parsed.defaultImageModel).toBe("bfl/flux-2-max");
     expect(parsed.defaultVideoModel).toBeNull();
   });
 

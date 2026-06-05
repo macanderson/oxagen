@@ -43,7 +43,7 @@ const FULL_ROW = {
   pendingPromptBehavior: "interrupt" as const,
   defaultTextTier: "precise" as const,
   defaultTextModel: "anthropic/claude-opus-4.8",
-  defaultImageModel: "bfl/flux-2",
+  defaultImageModel: "bfl/flux-2-max",
   defaultVideoModel: "google/veo-3",
 };
 
@@ -72,7 +72,7 @@ describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
     expect(result.pendingPromptBehavior).toBe("interrupt");
     expect(result.defaultTextTier).toBe("precise");
     expect(result.defaultTextModel).toBe("anthropic/claude-opus-4.8");
-    expect(result.defaultImageModel).toBe("bfl/flux-2");
+    expect(result.defaultImageModel).toBe("bfl/flux-2-max");
     expect(result.defaultVideoModel).toBe("google/veo-3");
   });
 

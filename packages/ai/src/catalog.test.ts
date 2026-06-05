@@ -30,19 +30,19 @@ describe("model catalog (@oxagen/ai/catalog)", () => {
   });
 
   it("classifies image vs video vs text capability", () => {
-    expect(supportsImage("openai/dall-e-3")).toBe(true);
+    expect(supportsImage("openai/gpt-image-1")).toBe(true);
     expect(supportsImage("anthropic/claude-opus-4.8")).toBe(false);
     expect(supportsVideo("google/veo-3")).toBe(true);
-    expect(supportsVideo("openai/dall-e-3")).toBe(false);
+    expect(supportsVideo("openai/gpt-image-1")).toBe(false);
     // Pure media models are NOT text-capable; chat models are.
-    expect(supportsText("openai/dall-e-3")).toBe(false);
+    expect(supportsText("openai/gpt-image-1")).toBe(false);
     expect(supportsText("google/veo-3")).toBe(false);
     expect(supportsText("anthropic/claude-opus-4.8")).toBe(true);
   });
 
   it("supportsMedia dispatches on kind", () => {
-    expect(supportsMedia("openai/dall-e-3", "image")).toBe(true);
-    expect(supportsMedia("openai/dall-e-3", "video")).toBe(false);
+    expect(supportsMedia("openai/gpt-image-1", "image")).toBe(true);
+    expect(supportsMedia("openai/gpt-image-1", "video")).toBe(false);
     expect(supportsMedia("google/veo-3", "video")).toBe(true);
   });
 
@@ -66,8 +66,8 @@ describe("model catalog (@oxagen/ai/catalog)", () => {
   it("every media env default resolves to a media-capable catalog entry", () => {
     // Guards the env defaults (env.ts) against drift from the catalog — a basic
     // image default that isn't an image model would silently break generation.
-    expect(supportsImage("openai/dall-e-3")).toBe(true); // OXAGEN_LLM_IMAGE_BASIC
-    expect(supportsImage("bfl/flux-2")).toBe(true); // OXAGEN_LLM_IMAGE_ADVANCED
+    expect(supportsImage("openai/gpt-image-1")).toBe(true); // OXAGEN_LLM_IMAGE_BASIC
+    expect(supportsImage("bfl/flux-2-max")).toBe(true); // OXAGEN_LLM_IMAGE_ADVANCED
     expect(supportsVideo("google/veo-3-fast")).toBe(true); // OXAGEN_LLM_VIDEO_BASIC
     expect(supportsVideo("google/veo-3")).toBe(true); // OXAGEN_LLM_VIDEO_ADVANCED
   });

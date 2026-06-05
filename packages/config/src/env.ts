@@ -70,8 +70,8 @@ export const baseEnvSchema = z.object({
   // mirroring the text tiers above. The composer's image/video model picker
   // shows "basic" as the default and "advanced" in the primary list; @oxagen/ai
   // resolves them via imageTierModelId / videoTierModelId.
-  OXAGEN_LLM_IMAGE_BASIC: z.string().default("openai/dall-e-3"),
-  OXAGEN_LLM_IMAGE_ADVANCED: z.string().default("bfl/flux-2"),
+  OXAGEN_LLM_IMAGE_BASIC: z.string().default("openai/gpt-image-1"),
+  OXAGEN_LLM_IMAGE_ADVANCED: z.string().default("bfl/flux-2-max"),
   OXAGEN_LLM_VIDEO_BASIC: z.string().default("google/veo-3-fast"),
   OXAGEN_LLM_VIDEO_ADVANCED: z.string().default("google/veo-3"),
 

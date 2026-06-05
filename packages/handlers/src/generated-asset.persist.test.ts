@@ -33,7 +33,7 @@ const BASE = {
   workspaceId: "ws-1",
   userId: "user-1",
   prompt: "a calico cat",
-  model: "openai/dall-e-3",
+  model: "openai/gpt-image-1",
 } as const;
 
 beforeEach(() => {

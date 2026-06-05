@@ -38,7 +38,7 @@ export const schema = {
     .min(1)
     .nullable()
     .optional()
-    .describe("Explicit image model id, e.g. 'bfl/flux-2' (null clears)"),
+    .describe("Explicit image model id, e.g. 'bfl/flux-2-max' (null clears)"),
   defaultVideoModel: z
     .string()
     .min(1)

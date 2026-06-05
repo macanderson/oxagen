@@ -55,6 +55,11 @@ async function migratePostgres(): Promise<void> {
       }
       const body = readFileSync(join(PG_MIGRATIONS_DIR, file), "utf8");
       console.log(kleur.cyan(`[pg] applying ${file}`));
+      // Reset search_path before every file. 0000_baseline.sql is a pg_dump that
+      // runs `set_config('search_path', '', false)`, which persists on this shared
+      // single connection (max:1) and would otherwise make later migrations that
+      // reference unqualified types (e.g. `citext`) fail with "type does not exist".
+      await sql.unsafe(`SET search_path TO public`);
       await sql.unsafe(body);
       await sql/* sql */`
         INSERT INTO public._migrations (filename) VALUES (${file})

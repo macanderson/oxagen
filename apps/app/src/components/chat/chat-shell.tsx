@@ -7,9 +7,8 @@ import {
   BackgroundTaskTray,
   type BackgroundTaskSnapshot,
 } from "./background-task-tray";
-import { resolvedTierCatalog, loadEffectiveModelDefaults } from "@oxagen/ai";
-import type { ComposerModelState, ModelStateSeed } from "./model-picker";
-import { buildSeededModelState } from "./model-picker";
+import { resolvedTierCatalog } from "@oxagen/ai";
+import type { ComposerModelState } from "./model-picker";
 
 export { type ChatMessage } from "./message-bubble";
 

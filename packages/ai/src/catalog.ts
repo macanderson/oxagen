@@ -139,10 +139,10 @@ export const gatewayModels: GatewayModel[] = [
     context: "200K",
   },
   {
-    id: "openai/dall-e-3",
-    name: "DALL·E 3",
+    id: "openai/gpt-image-1",
+    name: "GPT Image 1",
     vendor: "openai",
-    released: "2023-10-01",
+    released: "2025-04-23",
     capabilities: ["image"],
   },
   // ── Google ──
@@ -222,8 +222,8 @@ export const gatewayModels: GatewayModel[] = [
   },
   // ── Black Forest Labs ──
   {
-    id: "bfl/flux-2",
-    name: "FLUX.2",
+    id: "bfl/flux-2-max",
+    name: "FLUX.2 Max",
     vendor: "bfl",
     released: "2025-11-28",
     capabilities: ["image"],
@@ -261,7 +261,7 @@ export function supportsVideo(model: string | GatewayModel | undefined): boolean
 
 /**
  * A model is "text-capable" when it can take part in a chat turn — i.e. it has
- * at least one non-media capability. Pure image/video models (DALL·E, Veo,
+ * at least one non-media capability. Pure image/video models (GPT Image, Veo,
  * FLUX) are not selectable in the text composer.
  */
 export function supportsText(model: string | GatewayModel | undefined): boolean {

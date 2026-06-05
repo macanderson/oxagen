@@ -22,7 +22,7 @@ describe("user.preferences.write capability", () => {
       pendingPromptBehavior: "interrupt",
       defaultTextTier: "precise",
       defaultTextModel: "anthropic/claude-opus-4.8",
-      defaultImageModel: "bfl/flux-2",
+      defaultImageModel: "bfl/flux-2-max",
       defaultVideoModel: "google/veo-3",
     });
     expect(parsed.fontSize).toBe("large");

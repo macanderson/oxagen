@@ -531,7 +531,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { "*": "openai/dall-e-3" },
+    staticValue: { "*": "openai/gpt-image-1" },
   },
   OXAGEN_LLM_IMAGE_ADVANCED: {
     group: "AI providers",
@@ -541,7 +541,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { "*": "bfl/flux-2" },
+    staticValue: { "*": "bfl/flux-2-max" },
   },
   OXAGEN_LLM_VIDEO_BASIC: {
     group: "AI providers",

@@ -226,15 +226,15 @@ export const defaultModel = () => selectModel();
 // Single chokepoint for all image model construction. Like selectModel(), the
 // Vercel AI Gateway is the primary path so packages outside @oxagen/ai never
 // import a provider SDK directly. The gateway exposes image models in the same
-// `creator/model` form (e.g. "openai/dall-e-3", "bfl/flux-2",
+// `creator/model` form (e.g. "openai/gpt-image-1", "bfl/flux-2-max",
 // "google/gemini-3.1-flash-image-preview"); without a gateway token we fall
-// back to OpenAI's DALL·E directly.
+// back to OpenAI's image API directly.
 
 export interface ImageModelSelector {
   /**
-   * Gateway image model id, e.g. "openai/dall-e-3" or "bfl/flux-2". On the
-   * no-gateway fallback path a bare OpenAI image model id (e.g. "dall-e-3") is
-   * used instead. Defaults to DALL·E 3.
+   * Gateway image model id, e.g. "openai/gpt-image-1" or "bfl/flux-2-max". On
+   * the no-gateway fallback path a bare OpenAI image model id (e.g.
+   * "gpt-image-1") is used instead. Defaults to GPT Image 1.
    */
   model?: string;
   /**
@@ -244,8 +244,8 @@ export interface ImageModelSelector {
   provider?: "openai";
 }
 
-const IMAGE_DEFAULT_GATEWAY = "openai/dall-e-3";
-const IMAGE_DEFAULT_DIRECT = "dall-e-3";
+const IMAGE_DEFAULT_GATEWAY = "openai/gpt-image-1";
+const IMAGE_DEFAULT_DIRECT = "gpt-image-1";
 
 /**
  * Build and return the AI SDK `ImageModel` for the requested model. Routes

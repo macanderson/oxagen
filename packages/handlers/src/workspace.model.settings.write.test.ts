@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 const UPDATED_ROW = {
   defaultTextTier: "fast" as const,
   defaultTextModel: null,
-  defaultImageModel: "bfl/flux-2",
+  defaultImageModel: "bfl/flux-2-max",
   defaultVideoModel: null,
 };
 
@@ -95,13 +95,13 @@ describe("workspaceModelSettingsWriteHandler (@oxagen/handlers)", () => {
 
   it("calls update().set().where().returning() and returns updated fields", async () => {
     const result = await workspaceModelSettingsWriteHandler(
-      { defaultTextTier: "fast", defaultImageModel: "bfl/flux-2" },
+      { defaultTextTier: "fast", defaultImageModel: "bfl/flux-2-max" },
       CTX,
     );
     expect(mocks.updateSet).toHaveBeenCalledTimes(1);
     expect(mocks.updateReturning).toHaveBeenCalledTimes(1);
     expect(result.defaultTextTier).toBe("fast");
-    expect(result.defaultImageModel).toBe("bfl/flux-2");
+    expect(result.defaultImageModel).toBe("bfl/flux-2-max");
     expect(result.defaultTextModel).toBeNull();
     expect(result.defaultVideoModel).toBeNull();
   });

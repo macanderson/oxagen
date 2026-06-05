@@ -45,7 +45,7 @@ describe("resolveModelDefaults", () => {
       user: {
         defaultTextTier: "precise",
         defaultTextModel: "anthropic/claude-opus-4.8",
-        defaultImageModel: "bfl/flux-2",
+        defaultImageModel: "bfl/flux-2-max",
         defaultVideoModel: "google/veo-3",
       },
       workspace: null,
@@ -53,7 +53,7 @@ describe("resolveModelDefaults", () => {
     const result = resolveModelDefaults(input);
     expect(result.text.tier).toBe("precise");
     expect(result.text.model).toBe("anthropic/claude-opus-4.8");
-    expect(result.image.model).toBe("bfl/flux-2");
+    expect(result.image.model).toBe("bfl/flux-2-max");
     expect(result.video.model).toBe("google/veo-3");
     expect(result.overriddenByWorkspace.text).toBe(false);
     expect(result.overriddenByWorkspace.image).toBe(false);
@@ -65,7 +65,7 @@ describe("resolveModelDefaults", () => {
       user: {
         defaultTextTier: "fast",
         defaultTextModel: null,
-        defaultImageModel: "openai/dall-e-3",
+        defaultImageModel: "openai/gpt-image-1",
         defaultVideoModel: null,
       },
       workspace: nullPrefs,
@@ -73,7 +73,7 @@ describe("resolveModelDefaults", () => {
     const result = resolveModelDefaults(input);
     expect(result.text.tier).toBe("fast");
     expect(result.text.model).toBeNull();
-    expect(result.image.model).toBe("openai/dall-e-3");
+    expect(result.image.model).toBe("openai/gpt-image-1");
     expect(result.video.model).toBeNull();
     expect(result.overriddenByWorkspace.text).toBe(false);
     expect(result.overriddenByWorkspace.image).toBe(false);
@@ -88,14 +88,14 @@ describe("resolveModelDefaults", () => {
       workspace: {
         defaultTextTier: "balanced",
         defaultTextModel: "anthropic/claude-sonnet-4.6",
-        defaultImageModel: "bfl/flux-2",
+        defaultImageModel: "bfl/flux-2-max",
         defaultVideoModel: "google/veo-3",
       },
     };
     const result = resolveModelDefaults(input);
     expect(result.text.tier).toBe("balanced");
     expect(result.text.model).toBe("anthropic/claude-sonnet-4.6");
-    expect(result.image.model).toBe("bfl/flux-2");
+    expect(result.image.model).toBe("bfl/flux-2-max");
     expect(result.video.model).toBe("google/veo-3");
     expect(result.overriddenByWorkspace.text).toBe(true);
     expect(result.overriddenByWorkspace.image).toBe(true);
@@ -109,20 +109,20 @@ describe("resolveModelDefaults", () => {
       user: {
         defaultTextTier: "precise",
         defaultTextModel: "anthropic/claude-opus-4.8",
-        defaultImageModel: "openai/dall-e-3",
+        defaultImageModel: "openai/gpt-image-1",
         defaultVideoModel: "google/veo-3-fast",
       },
       workspace: {
         defaultTextTier: "fast",
         defaultTextModel: "openai/gpt-5-mini",
-        defaultImageModel: "bfl/flux-2",
+        defaultImageModel: "bfl/flux-2-max",
         defaultVideoModel: "google/veo-3",
       },
     };
     const result = resolveModelDefaults(input);
     expect(result.text.tier).toBe("fast");
     expect(result.text.model).toBe("openai/gpt-5-mini");
-    expect(result.image.model).toBe("bfl/flux-2");
+    expect(result.image.model).toBe("bfl/flux-2-max");
     expect(result.video.model).toBe("google/veo-3");
     expect(result.overriddenByWorkspace.text).toBe(true);
     expect(result.overriddenByWorkspace.image).toBe(true);
@@ -134,20 +134,20 @@ describe("resolveModelDefaults", () => {
       user: {
         defaultTextTier: "precise",
         defaultTextModel: "anthropic/claude-opus-4.8",
-        defaultImageModel: "openai/dall-e-3",
+        defaultImageModel: "openai/gpt-image-1",
         defaultVideoModel: "google/veo-3",
       },
       workspace: {
         defaultTextTier: null,
         defaultTextModel: null,
-        defaultImageModel: "bfl/flux-2",
+        defaultImageModel: "bfl/flux-2-max",
         defaultVideoModel: null,
       },
     };
     const result = resolveModelDefaults(input);
     expect(result.text.tier).toBe("precise");
     expect(result.text.model).toBe("anthropic/claude-opus-4.8");
-    expect(result.image.model).toBe("bfl/flux-2");
+    expect(result.image.model).toBe("bfl/flux-2-max");
     expect(result.video.model).toBe("google/veo-3");
     expect(result.overriddenByWorkspace.text).toBe(false);
     expect(result.overriddenByWorkspace.image).toBe(true);

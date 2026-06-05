@@ -7,11 +7,12 @@ import { ChatShell, type ChatMessage } from "@/components/chat/chat-shell";
 import type { AgentCapability } from "@/components/chat/plan-card";
 import type { AssistantContentBlock } from "@/components/chat/stream-event-types";
 import { listCapabilities, getSurfaces } from "@oxagen/oxagen";
+import type { CapabilityContext } from "@oxagen/oxagen";
 import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
 import type { PlanStep } from "@/components/chat/stream-event-types";
 import { loadEffectiveModelDefaults } from "@oxagen/ai";
 import { buildSeededModelState } from "@/components/chat/model-picker";
-import { userPreferencesReadHandler } from "@oxagen/handlers/src/user.preferences.read";
+import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
 
 // The unbound action factories — one set per route module because each
 // module hard-codes its own revalidatePath segment (/chat vs /ask).
@@ -151,15 +152,49 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
     workspaceId: workspace.id,
   });
 
+  // User preferences + effective model defaults — fetched in parallel with
+  // the capability list. Failures are non-fatal: fall back to defaults so
+  // the chat page never crashes due to a missing prefs row.
+  const userCtx: CapabilityContext = {
+    orgId: tenant.id,
+    workspaceId: workspace.id,
+    userId: session.user.id,
+    apiKeyId: null,
+    requestId: crypto.randomUUID(),
+    surface: "app",
+    messageId: null,
+  };
+
   // Agent-surface capabilities feed the plan-card amend UX. Computed
   // once per render here so the client doesn't refetch / refilter.
-  const agentCapabilities: AgentCapability[] = listCapabilities()
-    .filter((c) => getSurfaces(c).includes("agent"))
-    .map((c) => ({
-      name: c.name,
-      description: c.description,
-      riskLevel: c.agent?.riskLevel ?? "low",
-    }));
+  const [agentCapabilities, userPrefs, effectiveModelDefaults] = await Promise.all([
+    Promise.resolve(
+      listCapabilities()
+        .filter((c) => getSurfaces(c).includes("agent"))
+        .map((c) => ({
+          name: c.name,
+          description: c.description,
+          riskLevel: c.agent?.riskLevel ?? "low",
+        })),
+    ),
+    userPreferencesReadHandler({}, userCtx).catch(() => ({
+      enterToSubmit: false as const,
+      pendingPromptBehavior: "queue" as const,
+    })),
+    loadEffectiveModelDefaults({
+      userId: session.user.id,
+      workspaceId: workspace.id,
+    }).catch(() => null),
+  ]);
+
+  const initialModelState = effectiveModelDefaults
+    ? buildSeededModelState({
+        textModel: effectiveModelDefaults.text.model,
+        textTier: effectiveModelDefaults.text.tier,
+        imageModel: effectiveModelDefaults.image.model,
+        videoModel: effectiveModelDefaults.video.model,
+      })
+    : undefined;
 
   return (
     <div className="mx-auto h-full max-w-4xl">
@@ -172,9 +207,12 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
         resolvePlanAction={boundResolvePlan}
         fetchBackgroundTask={boundReadTask}
         cancelBackgroundTask={boundCancelTask}
-        agentCapabilities={agentCapabilities}
+        agentCapabilities={agentCapabilities as AgentCapability[]}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
+        enterToSubmit={userPrefs.enterToSubmit}
+        pendingPromptBehavior={userPrefs.pendingPromptBehavior}
+        initialModelState={initialModelState}
       />
     </div>
   );

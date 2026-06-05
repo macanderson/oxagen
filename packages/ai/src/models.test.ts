@@ -177,8 +177,8 @@ describe("selectModel (@oxagen/ai)", () => {
 });
 
 const MEDIA_ENV = {
-  OXAGEN_LLM_IMAGE_BASIC: "openai/dall-e-3",
-  OXAGEN_LLM_IMAGE_ADVANCED: "bfl/flux-2",
+  OXAGEN_LLM_IMAGE_BASIC: "openai/gpt-image-1",
+  OXAGEN_LLM_IMAGE_ADVANCED: "bfl/flux-2-max",
   OXAGEN_LLM_VIDEO_BASIC: "google/veo-3-fast",
   OXAGEN_LLM_VIDEO_ADVANCED: "google/veo-3",
 };
@@ -188,8 +188,8 @@ describe("media tier resolution (@oxagen/ai)", () => {
 
   it("resolves image tiers from OXAGEN_LLM_IMAGE_* env", () => {
     envValues = { ...MEDIA_ENV };
-    expect(imageTierModelId("basic")).toBe("openai/dall-e-3");
-    expect(imageTierModelId("advanced")).toBe("bfl/flux-2");
+    expect(imageTierModelId("basic")).toBe("openai/gpt-image-1");
+    expect(imageTierModelId("advanced")).toBe("bfl/flux-2-max");
   });
 
   it("resolves video tiers from OXAGEN_LLM_VIDEO_* env", () => {
@@ -206,7 +206,7 @@ describe("media tier resolution (@oxagen/ai)", () => {
         balanced: "anthropic/claude-sonnet-4.6",
         precise: "anthropic/claude-opus-4.8",
       },
-      image: { basic: "openai/dall-e-3", advanced: "bfl/flux-2" },
+      image: { basic: "openai/gpt-image-1", advanced: "bfl/flux-2-max" },
       video: { basic: "google/veo-3-fast", advanced: "google/veo-3" },
     });
   });

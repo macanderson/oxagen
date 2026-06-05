@@ -12,6 +12,7 @@ import {
   generateImageFor,
   supportsReasoning,
   modelIdOf,
+  loadEffectiveModelDefaults,
 } from "@oxagen/ai";
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
 import { persistGeneratedAsset, createPendingGeneratedAsset } from "@oxagen/handlers";
@@ -135,21 +136,6 @@ export async function POST(request: NextRequest): Promise<Response> {
     mediaModel,
   } = parsed.data;
 
-  // Resolve the language model for this turn from the picker selection. An
-  // explicit gateway model id wins; otherwise the white-labeled tier; otherwise
-  // selectModel() falls back to the balanced-tier default. selectModel routes
-  // through the Vercel AI Gateway when AI_GATEWAY_API_KEY is configured.
-  const turnModel = selectModel({
-    ...(model ? { model } : tier ? { tier } : {}),
-  });
-
-  // Reasoning effort is only valid on reasoning-capable models. The picker
-  // already gates the control, but re-check server-side against the catalog
-  // (keyed by the resolved gateway model id) so a stray `effort` for a
-  // non-reasoning model is dropped rather than forwarded and rejected upstream.
-  const turnEffort =
-    effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
-
   let tenant: Awaited<ReturnType<typeof resolveOrg>>;
   let workspace: Awaited<ReturnType<typeof resolveWorkspace>>;
   try {
@@ -162,6 +148,39 @@ export async function POST(request: NextRequest): Promise<Response> {
   } catch {
     return NextResponse.json({ error: "Org or workspace not found" }, { status: 404 });
   }
+
+  // Resolve the language model for this turn from the picker selection. An
+  // explicit gateway model id wins; otherwise the white-labeled tier; otherwise
+  // fall back to the effective workspace/user defaults (safety net for direct
+  // API callers that omit both model and tier); finally selectModel() falls
+  // back to the balanced-tier system default.
+  let resolvedModel = model;
+  let resolvedTier = tier;
+  if (!resolvedModel && !resolvedTier) {
+    // Neither supplied — look up effective defaults for this session.
+    // Best-effort: ignore errors so a missing prefs row never breaks the turn.
+    try {
+      const defaults = await loadEffectiveModelDefaults({
+        userId: session.user.id,
+        workspaceId: workspace.id,
+      });
+      resolvedModel = defaults.text.model;
+      resolvedTier = defaults.text.tier;
+    } catch {
+      // Fall through to system default inside selectModel().
+    }
+  }
+
+  const turnModel = selectModel({
+    ...(resolvedModel ? { model: resolvedModel } : resolvedTier ? { tier: resolvedTier } : {}),
+  });
+
+  // Reasoning effort is only valid on reasoning-capable models. The picker
+  // already gates the control, but re-check server-side against the catalog
+  // (keyed by the resolved gateway model id) so a stray `effort` for a
+  // non-reasoning model is dropped rather than forwarded and rejected upstream.
+  const turnEffort =
+    effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
 
   // ── Media-generation branch ───────────────────────────────────────────────
   //
