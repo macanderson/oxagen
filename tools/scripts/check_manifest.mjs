@@ -1,13 +1,34 @@
 #!/usr/bin/env node
 /**
- * check_manifest.mjs — regenerate the capability manifest and verify every
- * declared layer has a file on disk. A red exit blocks the verification gate.
+ * check_manifest.mjs — regenerate the capability manifest and report any
+ * declared layer that has no file on disk.
+ *
+ * Output modes:
+ *   (default)   warn-only — gaps print as GitHub `::warning::` annotations and
+ *               the process exits 0. Incomplete, in-progress capabilities (a
+ *               normal mid-phase state) therefore do NOT fail CI. The gaps are
+ *               instead tracked in Linear by tools/scripts/ensure-manifest-tickets.ts.
+ *   --strict    restore the old behaviour — exit 1 if any gap exists (use when
+ *               you want a hard completeness gate, e.g. a release cut).
+ *   --json      emit the gaps as JSON to stdout ({ gaps: [{ capability, missing[] }] })
+ *               and suppress the human logs. Consumed by the ticketer. Exit 0.
+ *
+ * A structural error (no contracts dir) always hard-fails (exit 2) regardless
+ * of mode — that's a broken repo, not an incomplete feature.
  *
  * Layer→path map matches this monorepo's layout (not the skill template's
  * placeholder Next.js single-app layout).
  */
 import { readdirSync, existsSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+
+const ARGS = new Set(process.argv.slice(2));
+const JSON_MODE = ARGS.has("--json");
+const STRICT = ARGS.has("--strict");
+
+// In --json mode stdout must be pure JSON for the ticketer, so silence the
+// human-readable progress logs.
+const info = JSON_MODE ? () => {} : (...a) => console.log(...a);
 
 const ROOT = resolve(process.cwd());
 const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
@@ -119,20 +140,22 @@ function main() {
   // Auto-discovery: rewrite the contract barrel so adding a contract file is
   // the only step needed to register it.
   writeContractBarrel(caps.map((c) => c.file));
-  console.log(`Wrote ${BARREL} with ${caps.length} contract imports.`);
+  info(`Wrote ${BARREL} with ${caps.length} contract imports.`);
 
   // No timestamp: this file is committed, so a `generatedAt` would make it
   // nondeterministic and churn git on every regeneration. The content is a
   // pure function of the contract files, which is what we want to track.
   const manifest = { capabilities: [] };
-  const gaps = [];
+  // gapsByCap: { "<capability>": ["<missing layer>", ...] } — grouped so the
+  // ticketer can open one item per capability rather than one per layer.
+  const gapsByCap = {};
 
   for (const cap of caps) {
     const layerStatus = {};
     for (const layer of cap.layers) {
       const ok = layerSatisfied(layer, cap.name, cap.surfaces);
       layerStatus[layer] = ok;
-      if (!ok) gaps.push(`${cap.name}: missing "${layer}"`);
+      if (!ok) (gapsByCap[cap.name] ??= []).push(layer);
     }
     manifest.capabilities.push({
       name: cap.name,
@@ -145,14 +168,41 @@ function main() {
   }
 
   writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2) + "\n");
-  console.log(`Wrote ${MANIFEST} with ${manifest.capabilities.length} capabilities.`);
+  info(`Wrote ${MANIFEST} with ${manifest.capabilities.length} capabilities.`);
+
+  const gaps = Object.entries(gapsByCap).map(([capability, missing]) => ({
+    capability,
+    missing,
+  }));
+
+  // --json: emit the structured gap list for ensure-manifest-tickets.ts.
+  if (JSON_MODE) {
+    process.stdout.write(JSON.stringify({ gaps }, null, 2) + "\n");
+    return;
+  }
 
   if (gaps.length) {
-    console.error("\nMANIFEST GAPS — feature incomplete:");
-    for (const g of gaps) console.error(`  - ${g}`);
-    process.exit(1);
+    // GitHub Actions surfaces `::warning::` lines as annotations on the run.
+    for (const { capability, missing } of gaps) {
+      console.log(
+        `::warning title=Manifest gap::${capability} missing layer(s): ${missing.join(", ")}`,
+      );
+    }
+    console.error("\nMANIFEST GAPS — feature incomplete (tracked in Linear, not blocking):");
+    for (const { capability, missing } of gaps) {
+      for (const layer of missing) console.error(`  - ${capability}: missing "${layer}"`);
+    }
+    // --strict restores the hard gate; default is warn-only (exit 0).
+    if (STRICT) {
+      console.error("\n--strict: failing because gaps exist.");
+      process.exit(1);
+    }
+    console.error(
+      "\n(warn-only — pass --strict to fail; gaps are filed to Linear by ensure-manifest-tickets.)",
+    );
+    return;
   }
-  console.log("All declared layers satisfied.");
+  info("All declared layers satisfied.");
 }
 
 main();

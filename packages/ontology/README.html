@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>@oxagen/ontology — Neo4j · Graph Data · Oxagen</title>
+<meta name="description" content="@oxagen/ontology: Neo4j graph driver for Oxagen. Owns entity relationships, workflow lineage, agent memory and topology, and semantic retrieval." />
+<style>
+  /* ============================================================
+     Oxagen README design system — self-contained, no external deps.
+     Palette + type mirror .agents/skills/oxagen-design-system.
+     ============================================================ */
+  :root {
+    --teal:#1fd0b5; --cyan:#10a7da; --blue:#343adc; --indigo:#562cf0;
+    --violet:#a269ff; --green:#28c36b; --grad-a:#7182ff; --grad-b:#3cff52;
+    --grad: linear-gradient(90deg, var(--grad-a), var(--grad-b));
+    --grad-alt: linear-gradient(90deg, #3b4fe6, #be1af0);
+    --radius:14px; --radius-sm:9px;
+    --mono:"SFMono-Regular",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:"Aeonik",-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+  }
+  html[data-theme="dark"]{
+    --bg:#15151f; --bg-2:#1c1c29; --panel:#1e1e2d; --panel-2:#23233399;
+    --ink:#f3f4f7; --ink-soft:#b9bbc9; --ink-faint:#7e8195;
+    --border:#2c2c3d; --border-soft:#26263499; --shadow:0 18px 50px -24px #000;
+    --code-bg:#13131c;
+  }
+  html[data-theme="light"]{
+    --bg:#f3f5f8; --bg-2:#eaedf3; --panel:#ffffff; --panel-2:#ffffffcc;
+    --ink:#0f131c; --ink-soft:#3f4658; --ink-faint:#6c7286;
+    --border:#dde1ea; --border-soft:#e7eaf1; --shadow:0 18px 50px -30px #5560871f;
+    --code-bg:#0f131c;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; font-family:var(--sans); background:var(--bg); color:var(--ink);
+    line-height:1.62; font-size:16px; -webkit-font-smoothing:antialiased;
+    transition:background .3s ease,color .3s ease;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(680px 420px at 12% -8%, #562cf02e, transparent 60%),
+      radial-gradient(720px 460px at 100% 0%, #1fd0b526, transparent 55%);
+    opacity:.9;
+  }
+  .wrap{position:relative; z-index:1; max-width:1080px; margin:0 auto; padding:0 24px 120px}
+  a{color:inherit}
+
+  /* ---- top bar ---- */
+  .topbar{
+    position:sticky; top:0; z-index:20; backdrop-filter:blur(14px);
+    background:color-mix(in oklab, var(--bg) 78%, transparent);
+    border-bottom:1px solid var(--border-soft);
+  }
+  .topbar .inner{max-width:1080px; margin:0 auto; padding:12px 24px; display:flex; align-items:center; gap:18px}
+  .ring{width:26px;height:26px;border-radius:50%;background:var(--grad);box-shadow:0 0 0 4px color-mix(in oklab,var(--grad-a) 22%,transparent);flex:0 0 auto}
+  .brand{font-weight:600; letter-spacing:-.01em}
+  .brand b{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .topnav{display:flex; gap:6px; margin-left:auto; flex-wrap:wrap}
+  .topnav a{
+    font-size:13px; color:var(--ink-soft); text-decoration:none; padding:6px 11px;
+    border-radius:999px; border:1px solid transparent; transition:.18s;
+  }
+  .topnav a:hover{color:var(--ink); border-color:var(--border); background:var(--panel)}
+  .toggle{
+    cursor:pointer; border:1px solid var(--border); background:var(--panel);
+    color:var(--ink); border-radius:999px; padding:6px 12px; font-size:13px; font-family:var(--sans);
+    display:inline-flex; gap:7px; align-items:center; transition:.18s;
+  }
+  .toggle:hover{border-color:var(--violet)}
+
+  /* ---- hero ---- */
+  header.hero{padding:64px 0 30px}
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:9px; font-size:12.5px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--ink-faint); font-weight:600;
+  }
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}
+  h1{font-size:clamp(34px,5vw,52px); line-height:1.04; letter-spacing:-.025em; margin:18px 0 14px; font-weight:680}
+  h1 .accent{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:19px; color:var(--ink-soft); max-width:70ch; margin:0}
+  .pkgline{margin-top:22px; display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+
+  /* ---- chips / badges ---- */
+  .chip{
+    display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:500;
+    padding:5px 11px; border-radius:999px; border:1px solid var(--border); background:var(--panel);
+    color:var(--ink-soft);
+  }
+  .chip code{font-family:var(--mono); font-size:12px; color:var(--ink)}
+  .chip.live{border-color:#28c36b55}
+  .chip.live .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+  .chip.grad{border:0; background:var(--grad); color:#0b0b12; font-weight:600}
+
+  /* ---- sections ---- */
+  section{margin-top:46px; scroll-margin-top:74px}
+  h2{font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; margin:0 0 18px; display:flex; align-items:center; gap:10px}
+  h2::before{content:""; width:22px; height:2px; border-radius:2px; background:var(--grad)}
+  h3{font-size:18px; letter-spacing:-.01em; margin:0 0 8px}
+  p{color:var(--ink-soft); margin:0 0 14px}
+
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:22px 24px; box-shadow:var(--shadow)}
+  .grid{display:grid; gap:16px}
+  @media(min-width:720px){.grid.cols-2{grid-template-columns:1fr 1fr}.grid.cols-3{grid-template-columns:repeat(3,1fr)}}
+
+  .feature{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:20px}
+  .feature .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--bg-2);border:1px solid var(--border);font-size:18px;margin-bottom:12px}
+  .feature h3{font-size:15.5px}
+  .feature p{font-size:14px; margin:0}
+
+  /* ---- code blocks + copy ---- */
+  .code{position:relative; margin:14px 0}
+  .code pre{
+    margin:0; background:var(--code-bg); color:#dfe3f2; border:1px solid var(--border);
+    border-radius:var(--radius-sm); padding:16px 18px; overflow:auto; font-family:var(--mono);
+    font-size:13.5px; line-height:1.65;
+  }
+  .code pre .c{color:#6f7590}
+  .code pre .k{color:#a269ff}
+  .code pre .s{color:#3cff52}
+  .code pre .n{color:#1fd0b5}
+  .copy{
+    position:absolute; top:9px; right:9px; cursor:pointer; font-family:var(--sans);
+    font-size:11.5px; border:1px solid #ffffff22; background:#ffffff10; color:#dfe3f2;
+    padding:4px 10px; border-radius:7px; transition:.15s; backdrop-filter:blur(4px);
+  }
+  .copy:hover{background:#ffffff20; border-color:var(--green)}
+  .copy.done{color:var(--green); border-color:var(--green)}
+
+  /* ---- tabs ---- */
+  .tabs{margin:14px 0}
+  .tablist{display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:0; flex-wrap:wrap}
+  .tablist button{
+    font-family:var(--sans); font-size:13.5px; color:var(--ink-faint); background:none; border:0;
+    border-bottom:2px solid transparent; padding:9px 14px; cursor:pointer; transition:.15s; margin-bottom:-1px;
+  }
+  .tablist button:hover{color:var(--ink)}
+  .tablist button[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--violet)}
+  .tabpanel{display:none; padding-top:6px}
+  .tabpanel.active{display:block}
+
+  /* ---- details ---- */
+  details{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm); margin:10px 0; overflow:hidden}
+  details summary{
+    cursor:pointer; padding:14px 18px; font-weight:540; list-style:none; display:flex; align-items:center; gap:11px;
+    font-size:14.5px;
+  }
+  details summary::-webkit-details-marker{display:none}
+  details summary .caret{transition:.2s; color:var(--ink-faint)}
+  details[open] summary .caret{transform:rotate(90deg); color:var(--violet)}
+  details .body{padding:0 18px 16px; color:var(--ink-soft); font-size:14.5px}
+  details .body p:last-child{margin-bottom:0}
+
+  /* ---- tables ---- */
+  table{width:100%; border-collapse:collapse; font-size:14px; margin:6px 0}
+  th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--border)}
+  th{font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); font-weight:600}
+  td code,p code,li code,.body code{font-family:var(--mono); font-size:12.5px; background:var(--bg-2); border:1px solid var(--border-soft); padding:1.5px 6px; border-radius:6px; color:var(--ink)}
+  tr:last-child td{border-bottom:0}
+
+  ul.clean{list-style:none; padding:0; margin:0}
+  ul.clean li{padding:9px 0 9px 26px; position:relative; color:var(--ink-soft); border-bottom:1px solid var(--border-soft)}
+  ul.clean li:last-child{border-bottom:0}
+  ul.clean li::before{content:""; position:absolute; left:4px; top:16px; width:8px; height:8px; border-radius:50%; background:var(--grad)}
+  ul.clean li b{color:var(--ink); font-weight:560}
+
+  /* ---- dep map ---- */
+  .deps{display:flex; flex-wrap:wrap; gap:8px}
+  .dep{font-family:var(--mono); font-size:12.5px; padding:5px 11px; border-radius:8px; border:1px solid var(--border); background:var(--bg-2); color:var(--ink-soft)}
+  .dep.ws{border-color:#562cf055; color:var(--ink)}
+  .dep.ws::before{content:"◆ "; color:var(--violet)}
+
+  /* ---- flow diagram ---- */
+  .flow{display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-family:var(--mono); font-size:13px}
+  .flow .node{padding:7px 13px; border-radius:9px; background:var(--panel); border:1px solid var(--border); color:var(--ink)}
+  .flow .arrow{color:var(--violet)}
+  .flow .node.hl{border-color:transparent; background:var(--grad); color:#0b0b12; font-weight:600}
+
+  footer{margin-top:64px; padding-top:26px; border-top:1px solid var(--border); color:var(--ink-faint); font-size:13.5px; display:flex; flex-wrap:wrap; gap:14px; justify-content:space-between}
+  footer a{color:var(--ink-soft); text-decoration:none}
+  footer a:hover{color:var(--ink)}
+  .kbd{font-family:var(--mono); font-size:11.5px; border:1px solid var(--border); border-bottom-width:2px; padding:1px 6px; border-radius:5px; background:var(--bg-2)}
+
+  /* ---- boundary callout ---- */
+  .boundary{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:22px 24px; box-shadow:var(--shadow); border-left:3px solid var(--violet)}
+  .boundary h3{font-size:15px; margin-bottom:10px; display:flex; align-items:center; gap:9px}
+  .boundary .allow{color:var(--green); font-weight:600}
+  .boundary .deny{color:#ff6b6b; font-weight:600}
+  .boundary ul{margin:6px 0 0; padding-left:20px; color:var(--ink-soft); font-size:14px}
+  .boundary ul li{margin-bottom:4px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="inner">
+    <span class="ring" aria-hidden="true"></span>
+    <span class="brand">Oxagen <b>·</b> ontology</span>
+    <nav class="topnav">
+      <a href="#what">What</a>
+      <a href="#boundary">Store boundary</a>
+      <a href="#install">Install</a>
+      <a href="#exports">Exports</a>
+      <a href="#usage">Usage</a>
+      <a href="#scripts">Scripts</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <button class="toggle" id="themeBtn" aria-label="Toggle theme"><span id="themeIcon">◐</span><span id="themeLbl">Dark</span></button>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <span class="eyebrow"><span class="dot"></span> packages/ontology · @oxagen/ontology</span>
+    <h1>Neo4j <span class="accent">graph data</span></h1>
+    <p class="lede">The graph layer of the Oxagen platform. Owns entity relationships, workflow lineage, execution graphs, agent memory and topology, and semantic retrieval — the deterministic source of truth for how everything in the platform connects.</p>
+    <div class="pkgline">
+      <span class="chip"><code>@oxagen/ontology</code></span>
+      <span class="chip">internal package</span>
+      <span class="chip">⇄ Neo4j</span>
+      <span class="chip">import <code>@oxagen/ontology</code></span>
+    </div>
+  </header>
+
+  <section id="what">
+    <h2>What this is</h2>
+    <div class="card">
+      <p><b>@oxagen/ontology</b> is the Neo4j layer of Oxagen's four-store data model. It exports a typed driver session factory, a Cypher migration runner, graph schema constraints, and the TypeScript types that describe nodes and relationships. Every package that needs to traverse or write the knowledge graph depends on this package.</p>
+      <div class="flow" style="margin-top:10px">
+        <span class="node">agent / query</span><span class="arrow">→</span>
+        <span class="node hl">@oxagen/ontology</span><span class="arrow">→</span>
+        <span class="node">neo4j-driver</span><span class="arrow">→</span>
+        <span class="node">Neo4j</span>
+      </div>
+    </div>
+    <div class="grid cols-3" style="margin-top:16px">
+      <div class="feature"><div class="ic">⇄</div><h3>Entity relationships</h3><p>Ontology and typed edges between business entities — the ground truth for how concepts relate across the platform.</p></div>
+      <div class="feature"><div class="ic">◎</div><h3>Workflow lineage</h3><p>Execution graphs and lineage edges that show how a result was produced — traversable in both directions.</p></div>
+      <div class="feature"><div class="ic">⊹</div><h3>Agent memory</h3><p>Agent topology and long-horizon memory live as first-class graph nodes, queryable without full-text search overhead.</p></div>
+    </div>
+  </section>
+
+  <section id="boundary">
+    <h2>Store boundary</h2>
+    <div class="boundary">
+      <h3>⟁ What belongs in Neo4j</h3>
+      <p style="font-size:14px; margin-bottom:10px">This store owns <b>graph data</b> — structured relationships between entities where the connection itself carries semantic meaning and traversal is a first-class operation. If the question "what is this connected to, and how?" is central, the data belongs here.</p>
+      <div class="grid cols-2" style="margin-top:4px">
+        <div>
+          <p style="font-size:13px; margin-bottom:6px" class="allow">Belongs here</p>
+          <ul>
+            <li>Ontology type hierarchy and entity taxonomy</li>
+            <li>Typed relationships between entities (owns, depends-on, calls, references)</li>
+            <li>Workflow execution graphs and lineage chains</li>
+            <li>Agent memory nodes and topology</li>
+            <li>Semantic retrieval indices (entity embeddings as node properties)</li>
+            <li>Entity resolution and deduplication edges</li>
+          </ul>
+        </div>
+        <div>
+          <p style="font-size:13px; margin-bottom:6px" class="deny">Must never go here</p>
+          <ul>
+            <li>Analytics or aggregated metrics → <code>@oxagen/telemetry</code> (ClickHouse)</li>
+            <li>Transactional state (users, billing, configs) → <code>@oxagen/database</code> (Postgres)</li>
+            <li>Append-only event streams or logs → <code>@oxagen/telemetry</code></li>
+            <li>Binary file content → <code>@oxagen/storage</code></li>
+          </ul>
+        </div>
+      </div>
+      <p style="font-size:13px; margin-top:12px; margin-bottom:0">The graph is the deterministic source of truth for entity resolution. When the same real-world concept appears under different names or IDs across integrations, the graph owns the canonical merge node and the edges to all aliases.</p>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Install</h2>
+    <p>This is a workspace-internal package. Reference it with the workspace protocol.</p>
+    <div class="code"><button class="copy">Copy</button><pre><span class="c"># package.json in any consuming app or package</span>
+{
+  <span class="s">"dependencies"</span>: {
+    <span class="s">"@oxagen/ontology"</span>: <span class="s">"workspace:*"</span>
+  }
+}</pre></div>
+  </section>
+
+  <section id="exports">
+    <h2>Exports</h2>
+    <div class="card">
+      <table>
+        <tr><th>Export</th><th>Contents</th><th>Typical consumer</th></tr>
+        <tr><td><code>@oxagen/ontology</code></td><td>Re-exports from all sub-paths; primary entry point</td><td>All consumers</td></tr>
+        <tr><td><code>@oxagen/ontology/client</code></td><td>Neo4j driver factory and typed session helper</td><td>packages/agent, apps/app</td></tr>
+        <tr><td><code>@oxagen/ontology/migrate</code></td><td>Cypher migration runner that applies <code>schema.cypher</code> constraints</td><td>CI setup, local bootstrap</td></tr>
+        <tr><td><code>@oxagen/ontology/types</code></td><td>TypeScript types for graph nodes, relationships, and query results</td><td>Any package writing graph queries</td></tr>
+      </table>
+    </div>
+
+    <h2 style="margin-top:36px">Source layout</h2>
+    <div class="card">
+      <ul class="clean">
+        <li><b>src/client.ts</b> — Neo4j driver factory; returns a typed session with auto-close</li>
+        <li><b>src/migrate.ts</b> — reads <code>schema.cypher</code> and runs constraint/index creation against the configured Neo4j instance</li>
+        <li><b>src/schema.cypher</b> — the authoritative graph schema: node labels, uniqueness constraints, and property indices</li>
+        <li><b>src/types.ts</b> — TypeScript node and relationship types inferred from the Cypher schema</li>
+        <li><b>src/index.ts</b> — package entry; re-exports the public surface</li>
+      </ul>
+    </div>
+
+    <h2 style="margin-top:36px">Dependencies</h2>
+    <div class="card">
+      <p style="font-size:13.5px; margin-bottom:12px">External runtime dependencies</p>
+      <div class="deps">
+        <span class="dep">neo4j-driver</span>
+      </div>
+      <p style="font-size:13.5px; margin-top:16px; margin-bottom:12px">Workspace dependencies</p>
+      <div class="deps">
+        <span class="dep ws">@oxagen/config</span>
+      </div>
+    </div>
+
+    <h2 style="margin-top:36px">Consumed by</h2>
+    <div class="card">
+      <div class="deps">
+        <span class="dep ws">@oxagen/agent</span>
+        <span class="dep ws">apps/app</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="usage">
+    <h2>Usage</h2>
+    <div class="tabs" data-tabs>
+      <div class="tablist" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="query">Driver query</button>
+        <button role="tab" aria-selected="false" data-tab="migrate">Run migration</button>
+        <button role="tab" aria-selected="false" data-tab="import">Import</button>
+      </div>
+      <div class="tabpanel active" data-panel="query">
+        <p style="font-size:13.5px">Open a session, run a Cypher statement, and let the helper close the session automatically on completion or error.</p>
+        <div class="code"><button class="copy">Copy</button><pre><span class="k">import</span> { withSession } <span class="k">from</span> <span class="s">"@oxagen/ontology/client"</span>
+<span class="k">import</span> <span class="k">type</span> { EntityNode } <span class="k">from</span> <span class="s">"@oxagen/ontology/types"</span>
+
+<span class="c">// withSession opens a Neo4j session, runs the callback, then closes it</span>
+<span class="k">const</span> results = <span class="k">await</span> withSession(<span class="k">async</span> (session) => {
+  <span class="k">const</span> { records } = <span class="k">await</span> session.run(
+    <span class="s">`MATCH (e:Entity {publicId: $id})-[r:RELATES_TO]->(t)
+     RETURN e, r, t LIMIT 50`</span>,
+    { id: <span class="n">publicId</span> }
+  )
+  <span class="k">return</span> records.map((rec) => rec.get(<span class="s">"t"</span>) <span class="k">as</span> EntityNode)
+})</pre></div>
+      </div>
+      <div class="tabpanel" data-panel="migrate">
+        <p style="font-size:13.5px">Apply the Cypher schema constraints and indices to the Neo4j instance. Run once on initial setup and after any <code>schema.cypher</code> changes.</p>
+        <div class="code"><button class="copy">Copy</button><pre><span class="c"># Apply schema.cypher constraints and indices</span>
+pnpm <span class="k">--filter</span> @oxagen/ontology migrate
+
+<span class="c"># Equivalent direct invocation</span>
+tsx src/migrate.ts</pre></div>
+        <p style="font-size:13.5px">The migration runner is idempotent — running it against an already-configured instance is safe. Constraints that already exist are skipped.</p>
+      </div>
+      <div class="tabpanel" data-panel="import">
+        <p style="font-size:13.5px">Import types for use in graph query results or when authoring new node/relationship definitions.</p>
+        <div class="code"><button class="copy">Copy</button><pre><span class="k">import</span> { withSession, driver } <span class="k">from</span> <span class="s">"@oxagen/ontology/client"</span>
+<span class="k">import</span> <span class="k">type</span> { EntityNode, RelationshipEdge } <span class="k">from</span> <span class="s">"@oxagen/ontology/types"</span>
+
+<span class="c">// Or use the root import for all public exports</span>
+<span class="k">import</span> { withSession } <span class="k">from</span> <span class="s">"@oxagen/ontology"</span></pre></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="scripts">
+    <h2>Scripts</h2>
+    <div class="card">
+      <table>
+        <tr><th>Command</th><th>Does</th></tr>
+        <tr><td><code>pnpm migrate</code></td><td><code>tsx src/migrate.ts</code> — apply Cypher schema constraints and indices</td></tr>
+        <tr><td><code>pnpm typecheck</code></td><td><code>tsc --noEmit</code></td></tr>
+        <tr><td><code>pnpm lint</code></td><td>ESLint over <code>src/</code></td></tr>
+        <tr><td><code>pnpm test:unit</code></td><td>Vitest unit suite (client factory, type shape assertions)</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="faq">
+    <h2>FAQ &amp; conventions</h2>
+    <details>
+      <summary><span class="caret">▸</span> What lives in the graph vs the other stores?</summary>
+      <div class="body">
+        <p>The graph owns <em>relationships and topology</em>. An entity's identity and transactional attributes (name, timestamps, owner) live in Postgres via <code>@oxagen/database</code>. The graph holds edges that say "entity A depends on entity B" or "workflow run X produced artifact Y". Metrics produced by those workflows live in ClickHouse via <code>@oxagen/telemetry</code>.</p>
+        <p>A practical test: if you need to traverse hops to answer the question, the data lives in Neo4j. If you need ACID guarantees and point lookups by primary key, it lives in Postgres.</p>
+      </div>
+    </details>
+    <details>
+      <summary><span class="caret">▸</span> Why is the graph the source of truth for entity resolution?</summary>
+      <div class="body">
+        <p>Integrations frequently surface the same real-world concept under different names, IDs, or schemas. The graph stores a canonical merge node for each resolved entity and attaches alias nodes (one per integration identity) as edges. Any query for "what is this thing?" resolves through the graph first, so consumers never need to know which integration coined the original identifier.</p>
+        <p>This is a hard architectural rule: entity resolution logic must not be duplicated in Postgres or in application code. If two integration records represent the same entity, the merge edge lives here.</p>
+      </div>
+    </details>
+    <details>
+      <summary><span class="caret">▸</span> How do I add a new node label or relationship type?</summary>
+      <div class="body">
+        <p>Edit <code>src/schema.cypher</code> to add the <code>CREATE CONSTRAINT</code> or <code>CREATE INDEX</code> statements for the new label. Add the corresponding TypeScript type to <code>src/types.ts</code>. Run <code>pnpm migrate</code> locally to verify the migration applies cleanly, then commit both files together — schema and types must stay in sync.</p>
+      </div>
+    </details>
+  </section>
+
+  <footer>
+    <span>@oxagen/ontology · v0.1.0 · internal package · Oxagen monorepo</span>
+    <span>
+      <a href="../../README.html">monorepo index ↗</a> &nbsp;·&nbsp;
+      <a href="../../README.md">root readme</a> &nbsp;·&nbsp;
+      press <span class="kbd">T</span> to toggle theme
+    </span>
+  </footer>
+</div>
+
+<script>
+  /* theme toggle (persisted) */
+  (function(){
+    var root=document.documentElement, btn=document.getElementById('themeBtn'),
+        icon=document.getElementById('themeIcon'), lbl=document.getElementById('themeLbl');
+    function apply(t){root.setAttribute('data-theme',t); icon.textContent=t==='dark'?'◐':'◑'; lbl.textContent=t==='dark'?'Dark':'Light'; try{localStorage.setItem('oxa-theme',t)}catch(e){}}
+    try{var s=localStorage.getItem('oxa-theme'); if(s)apply(s);}catch(e){}
+    btn.addEventListener('click',function(){apply(root.getAttribute('data-theme')==='dark'?'light':'dark')});
+    document.addEventListener('keydown',function(e){if((e.key==='t'||e.key==='T')&&!/INPUT|TEXTAREA/.test(e.target.tagName))apply(root.getAttribute('data-theme')==='dark'?'light':'dark')});
+  })();
+  /* copy buttons */
+  document.querySelectorAll('.copy').forEach(function(b){
+    b.addEventListener('click',function(){
+      var pre=b.parentElement.querySelector('pre');
+      navigator.clipboard.writeText(pre.innerText).then(function(){
+        var o=b.textContent; b.textContent='Copied ✓'; b.classList.add('done');
+        setTimeout(function(){b.textContent=o; b.classList.remove('done')},1400);
+      });
+    });
+  });
+  /* tabs */
+  document.querySelectorAll('[data-tabs]').forEach(function(group){
+    var tabs=group.querySelectorAll('[data-tab]'), panels=group.querySelectorAll('[data-panel]');
+    tabs.forEach(function(t){t.addEventListener('click',function(){
+      tabs.forEach(function(x){x.setAttribute('aria-selected','false')});
+      t.setAttribute('aria-selected','true');
+      panels.forEach(function(p){p.classList.toggle('active',p.getAttribute('data-panel')===t.getAttribute('data-tab'))});
+    })});
+  });
+</script>
+</body>
+</html>

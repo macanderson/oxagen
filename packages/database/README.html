@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>@oxagen/database — PostgreSQL · Transactional State · Oxagen</title>
+<meta name="description" content="@oxagen/database: Drizzle ORM over PostgreSQL. Owns all transactional state — users, orgs, permissions, billing, configs, job metadata, and durable application state." />
+<style>
+  /* ============================================================
+     Oxagen README design system — self-contained, no external deps.
+     Palette + type mirror .agents/skills/oxagen-design-system.
+     ============================================================ */
+  :root {
+    --teal:#1fd0b5; --cyan:#10a7da; --blue:#343adc; --indigo:#562cf0;
+    --violet:#a269ff; --green:#28c36b; --grad-a:#7182ff; --grad-b:#3cff52;
+    --grad: linear-gradient(90deg, var(--grad-a), var(--grad-b));
+    --grad-alt: linear-gradient(90deg, #3b4fe6, #be1af0);
+    --radius:14px; --radius-sm:9px;
+    --mono:"SFMono-Regular",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:"Aeonik",-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+  }
+  html[data-theme="dark"]{
+    --bg:#15151f; --bg-2:#1c1c29; --panel:#1e1e2d; --panel-2:#23233399;
+    --ink:#f3f4f7; --ink-soft:#b9bbc9; --ink-faint:#7e8195;
+    --border:#2c2c3d; --border-soft:#26263499; --shadow:0 18px 50px -24px #000;
+    --code-bg:#13131c;
+  }
+  html[data-theme="light"]{
+    --bg:#f3f5f8; --bg-2:#eaedf3; --panel:#ffffff; --panel-2:#ffffffcc;
+    --ink:#0f131c; --ink-soft:#3f4658; --ink-faint:#6c7286;
+    --border:#dde1ea; --border-soft:#e7eaf1; --shadow:0 18px 50px -30px #5560871f;
+    --code-bg:#0f131c;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; font-family:var(--sans); background:var(--bg); color:var(--ink);
+    line-height:1.62; font-size:16px; -webkit-font-smoothing:antialiased;
+    transition:background .3s ease,color .3s ease;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(680px 420px at 12% -8%, #562cf02e, transparent 60%),
+      radial-gradient(720px 460px at 100% 0%, #1fd0b526, transparent 55%);
+    opacity:.9;
+  }
+  .wrap{position:relative; z-index:1; max-width:1080px; margin:0 auto; padding:0 24px 120px}
+  a{color:inherit}
+
+  /* ---- top bar ---- */
+  .topbar{
+    position:sticky; top:0; z-index:20; backdrop-filter:blur(14px);
+    background:color-mix(in oklab, var(--bg) 78%, transparent);
+    border-bottom:1px solid var(--border-soft);
+  }
+  .topbar .inner{max-width:1080px; margin:0 auto; padding:12px 24px; display:flex; align-items:center; gap:18px}
+  .ring{width:26px;height:26px;border-radius:50%;background:var(--grad);box-shadow:0 0 0 4px color-mix(in oklab,var(--grad-a) 22%,transparent);flex:0 0 auto}
+  .brand{font-weight:600; letter-spacing:-.01em}
+  .brand b{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .topnav{display:flex; gap:6px; margin-left:auto; flex-wrap:wrap}
+  .topnav a{
+    font-size:13px; color:var(--ink-soft); text-decoration:none; padding:6px 11px;
+    border-radius:999px; border:1px solid transparent; transition:.18s;
+  }
+  .topnav a:hover{color:var(--ink); border-color:var(--border); background:var(--panel)}
+  .toggle{
+    cursor:pointer; border:1px solid var(--border); background:var(--panel);
+    color:var(--ink); border-radius:999px; padding:6px 12px; font-size:13px; font-family:var(--sans);
+    display:inline-flex; gap:7px; align-items:center; transition:.18s;
+  }
+  .toggle:hover{border-color:var(--violet)}
+
+  /* ---- hero ---- */
+  header.hero{padding:64px 0 30px}
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:9px; font-size:12.5px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--ink-faint); font-weight:600;
+  }
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}
+  h1{font-size:clamp(34px,5vw,52px); line-height:1.04; letter-spacing:-.025em; margin:18px 0 14px; font-weight:680}
+  h1 .accent{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:19px; color:var(--ink-soft); max-width:70ch; margin:0}
+  .pkgline{margin-top:22px; display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+
+  /* ---- chips / badges ---- */
+  .chip{
+    display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:500;
+    padding:5px 11px; border-radius:999px; border:1px solid var(--border); background:var(--panel);
+    color:var(--ink-soft);
+  }
+  .chip code{font-family:var(--mono); font-size:12px; color:var(--ink)}
+  .chip.live{border-color:#28c36b55}
+  .chip.live .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+  .chip.grad{border:0; background:var(--grad); color:#0b0b12; font-weight:600}
+
+  /* ---- sections ---- */
+  section{margin-top:46px; scroll-margin-top:74px}
+  h2{font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; margin:0 0 18px; display:flex; align-items:center; gap:10px}
+  h2::before{content:""; width:22px; height:2px; border-radius:2px; background:var(--grad)}
+  h3{font-size:18px; letter-spacing:-.01em; margin:0 0 8px}
+  p{color:var(--ink-soft); margin:0 0 14px}
+
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:22px 24px; box-shadow:var(--shadow)}
+  .grid{display:grid; gap:16px}
+  @media(min-width:720px){.grid.cols-2{grid-template-columns:1fr 1fr}.grid.cols-3{grid-template-columns:repeat(3,1fr)}}
+
+  .feature{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:20px}
+  .feature .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--bg-2);border:1px solid var(--border);font-size:18px;margin-bottom:12px}
+  .feature h3{font-size:15.5px}
+  .feature p{font-size:14px; margin:0}
+
+  /* ---- code blocks + copy ---- */
+  .code{position:relative; margin:14px 0}
+  .code pre{
+    margin:0; background:var(--code-bg); color:#dfe3f2; border:1px solid var(--border);
+    border-radius:var(--radius-sm); padding:16px 18px; overflow:auto; font-family:var(--mono);
+    font-size:13.5px; line-height:1.65;
+  }
+  .code pre .c{color:#6f7590}
+  .code pre .k{color:#a269ff}
+  .code pre .s{color:#3cff52}
+  .code pre .n{color:#1fd0b5}
+  .copy{
+    position:absolute; top:9px; right:9px; cursor:pointer; font-family:var(--sans);
+    font-size:11.5px; border:1px solid #ffffff22; background:#ffffff10; color:#dfe3f2;
+    padding:4px 10px; border-radius:7px; transition:.15s; backdrop-filter:blur(4px);
+  }
+  .copy:hover{background:#ffffff20; border-color:var(--green)}
+  .copy.done{color:var(--green); border-color:var(--green)}
+
+  /* ---- tabs ---- */
+  .tabs{margin:14px 0}
+  .tablist{display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:0; flex-wrap:wrap}
+  .tablist button{
+    font-family:var(--sans); font-size:13.5px; color:var(--ink-faint); background:none; border:0;
+    border-bottom:2px solid transparent; padding:9px 14px; cursor:pointer; transition:.15s; margin-bottom:-1px;
+  }
+  .tablist button:hover{color:var(--ink)}
+  .tablist button[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--violet)}
+  .tabpanel{display:none; padding-top:6px}
+  .tabpanel.active{display:block}
+
+  /* ---- details ---- */
+  details{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm); margin:10px 0; overflow:hidden}
+  details summary{
+    cursor:pointer; padding:14px 18px; font-weight:540; list-style:none; display:flex; align-items:center; gap:11px;
+    font-size:14.5px;
+  }
+  details summary::-webkit-details-marker{display:none}
+  details summary .caret{transition:.2s; color:var(--ink-faint)}
+  details[open] summary .caret{transform:rotate(90deg); color:var(--violet)}
+  details .body{padding:0 18px 16px; color:var(--ink-soft); font-size:14.5px}
+  details .body p:last-child{margin-bottom:0}
+
+  /* ---- tables ---- */
+  table{width:100%; border-collapse:collapse; font-size:14px; margin:6px 0}
+  th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--border)}
+  th{font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); font-weight:600}
+  td code,p code,li code,.body code{font-family:var(--mono); font-size:12.5px; background:var(--bg-2); border:1px solid var(--border-soft); padding:1.5px 6px; border-radius:6px; color:var(--ink)}
+  tr:last-child td{border-bottom:0}
+
+  ul.clean{list-style:none; padding:0; margin:0}
+  ul.clean li{padding:9px 0 9px 26px; position:relative; color:var(--ink-soft); border-bottom:1px solid var(--border-soft)}
+  ul.clean li:last-child{border-bottom:0}
+  ul.clean li::before{content:""; position:absolute; left:4px; top:16px; width:8px; height:8px; border-radius:50%; background:var(--grad)}
+  ul.clean li b{color:var(--ink); font-weight:560}
+
+  /* ---- dep map ---- */
+  .deps{display:flex; flex-wrap:wrap; gap:8px}
+  .dep{font-family:var(--mono); font-size:12.5px; padding:5px 11px; border-radius:8px; border:1px solid var(--border); background:var(--bg-2); color:var(--ink-soft)}
+  .dep.ws{border-color:#562cf055; color:var(--ink)}
+  .dep.ws::before{content:"◆ "; color:var(--violet)}
+
+  /* ---- flow diagram ---- */
+  .flow{display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-family:var(--mono); font-size:13px}
+  .flow .node{padding:7px 13px; border-radius:9px; background:var(--panel); border:1px solid var(--border); color:var(--ink)}
+  .flow .arrow{color:var(--violet)}
+  .flow .node.hl{border-color:transparent; background:var(--grad); color:#0b0b12; font-weight:600}
+
+  footer{margin-top:64px; padding-top:26px; border-top:1px solid var(--border); color:var(--ink-faint); font-size:13.5px; display:flex; flex-wrap:wrap; gap:14px; justify-content:space-between}
+  footer a{color:var(--ink-soft); text-decoration:none}
+  footer a:hover{color:var(--ink)}
+  .kbd{font-family:var(--mono); font-size:11.5px; border:1px solid var(--border); border-bottom-width:2px; padding:1px 6px; border-radius:5px; background:var(--bg-2)}
+
+  /* ---- boundary callout ---- */
+  .boundary{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:22px 24px; box-shadow:var(--shadow); border-left:3px solid var(--violet)}
+  .boundary h3{font-size:15px; margin-bottom:10px; display:flex; align-items:center; gap:9px}
+  .boundary .allow{color:var(--green); font-weight:600}
+  .boundary .deny{color:#ff6b6b; font-weight:600}
+  .boundary ul{margin:6px 0 0; padding-left:20px; color:var(--ink-soft); font-size:14px}
+  .boundary ul li{margin-bottom:4px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="inner">
+    <span class="ring" aria-hidden="true"></span>
+    <span class="brand">Oxagen <b>·</b> database</span>
+    <nav class="topnav">
+      <a href="#what">What</a>
+      <a href="#boundary">Store boundary</a>
+      <a href="#install">Install</a>
+      <a href="#exports">Exports</a>
+      <a href="#usage">Usage</a>
+      <a href="#scripts">Scripts</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <button class="toggle" id="themeBtn" aria-label="Toggle theme"><span id="themeIcon">◐</span><span id="themeLbl">Dark</span></button>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <span class="eyebrow"><span class="dot"></span> packages/database · @oxagen/database</span>
+    <h1>PostgreSQL <span class="accent">transactional state</span></h1>
+    <p class="lede">Drizzle ORM over PostgreSQL. The single source of truth for users, organisations, permissions, billing, configs, job metadata, and all durable application state in the Oxagen platform.</p>
+    <div class="pkgline">
+      <span class="chip"><code>@oxagen/database</code></span>
+      <span class="chip">internal package</span>
+      <span class="chip">◈ PostgreSQL</span>
+      <span class="chip">import <code>@oxagen/database</code></span>
+      <span class="chip">localhost <code>:5433</code> (dev)</span>
+    </div>
+  </header>
+
+  <section id="what">
+    <h2>What this is</h2>
+    <div class="card">
+      <p><b>@oxagen/database</b> is the PostgreSQL layer of Oxagen's four-store data model. It wraps Drizzle ORM, exports the full schema, a typed client, security helpers, seed utilities, and all migration tooling. Every package that needs to read or write transactional state depends on this package — it is the only place SQL is written.</p>
+      <div class="flow" style="margin-top:10px">
+        <span class="node">apps / packages</span><span class="arrow">→</span>
+        <span class="node hl">@oxagen/database</span><span class="arrow">→</span>
+        <span class="node">Drizzle ORM</span><span class="arrow">→</span>
+        <span class="node">PostgreSQL :5433</span>
+      </div>
+    </div>
+    <div class="grid cols-3" style="margin-top:16px">
+      <div class="feature"><div class="ic">◈</div><h3>Drizzle ORM</h3><p>Type-safe schema definitions, query builder, and migrations. No raw SQL outside of <code>drizzle-kit</code> migration files.</p></div>
+      <div class="feature"><div class="ic">⊹</div><h3>Row conventions</h3><p>Every row carries a UUID <code>id</code> (internal FK target) and a <code>public_id</code> (externally visible, collision-resistant). Soft-delete via <code>deleted_at</code>.</p></div>
+      <div class="feature"><div class="ic">◇</div><h3>Security helpers</h3><p>The <code>./security</code> export enforces row-level access rules so consumers never construct ad-hoc permission checks.</p></div>
+    </div>
+  </section>
+
+  <section id="boundary">
+    <h2>Store boundary</h2>
+    <div class="boundary">
+      <h3>⟁ What belongs in PostgreSQL</h3>
+      <p style="font-size:14px; margin-bottom:10px">This store owns <b>transactional state</b> — data that must be consistent, ACID-safe, and queryable by primary key. When in doubt, ask: does this row change over time and does it represent the authoritative state of a business entity? If yes, it belongs here.</p>
+      <div class="grid cols-2" style="margin-top:4px">
+        <div>
+          <p style="font-size:13px; margin-bottom:6px" class="allow">Belongs here</p>
+          <ul>
+            <li>Users, organisations, memberships, invites</li>
+            <li>Permissions and IAM policy rows</li>
+            <li>Billing subscriptions, invoices, credit balances</li>
+            <li>Feature flags and tenant configs</li>
+            <li>Job metadata and scheduled task records</li>
+            <li>File reference rows (binary content lives in <code>@oxagen/storage</code>)</li>
+            <li>Any durable application state with CRUD semantics</li>
+          </ul>
+        </div>
+        <div>
+          <p style="font-size:13px; margin-bottom:6px" class="deny">Must never go here</p>
+          <ul>
+            <li>Graph relationships or entity topology → <code>@oxagen/ontology</code> (Neo4j)</li>
+            <li>Append-only runtime events, logs, metrics, traces → <code>@oxagen/telemetry</code> (ClickHouse)</li>
+            <li>Binary file or object content → <code>@oxagen/storage</code> (Vercel Blob)</li>
+            <li>Agent memory or workflow execution graphs → <code>@oxagen/ontology</code></li>
+          </ul>
+        </div>
+      </div>
+      <p style="font-size:13px; margin-top:12px; margin-bottom:0">Mixing stores is a hard architectural violation. If you are unsure which store a piece of data belongs to, consult the engineering policy before writing the schema.</p>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Install</h2>
+    <p>This is a workspace-internal package. Reference it with the workspace protocol — never publish it or pin an external version.</p>
+    <div class="code"><button class="copy">Copy</button><pre><span class="c"># package.json in any consuming app or package</span>
+{
+  <span class="s">"dependencies"</span>: {
+    <span class="s">"@oxagen/database"</span>: <span class="s">"workspace:*"</span>
+  }
+}</pre></div>
+  </section>
+
+  <section id="exports">
+    <h2>Exports</h2>
+    <div class="card">
+      <table>
+        <tr><th>Export</th><th>Contents</th><th>Typical consumer</th></tr>
+        <tr><td><code>@oxagen/database</code></td><td>Re-exports from all sub-paths; primary entry point</td><td>All consumers</td></tr>
+        <tr><td><code>@oxagen/database/schema</code></td><td>All Drizzle table definitions and inferred TypeScript types</td><td>Any package needing table shape</td></tr>
+        <tr><td><code>@oxagen/database/client</code></td><td>Typed Drizzle client factory + connection pool</td><td>apps/api, apps/mcp, packages/handlers</td></tr>
+        <tr><td><code>@oxagen/database/security</code></td><td>Row-level security helpers and permission-check utilities</td><td>packages/iam, packages/auth</td></tr>
+        <tr><td><code>@oxagen/database/seed</code></td><td>Deterministic seed data for local development and CI</td><td>Dev and test environments only</td></tr>
+      </table>
+    </div>
+
+    <h2 style="margin-top:36px">Source layout</h2>
+    <div class="card">
+      <ul class="clean">
+        <li><b>src/schema/</b> — Drizzle table definitions, one file per domain (users, orgs, billing, …)</li>
+        <li><b>src/client.ts</b> — connection pool and typed Drizzle client factory</li>
+        <li><b>src/security.ts</b> — row-level access helpers; the only place permission checks are authored</li>
+        <li><b>src/relations.ts</b> — Drizzle relation definitions (foreign-key shape for query building)</li>
+        <li><b>src/seed.ts</b> — deterministic dev seed; imports schema and client</li>
+        <li><b>src/types.ts</b> — inferred row types, insert types, and shared enums exported from this package</li>
+        <li><b>src/index.ts</b> — package entry; re-exports the public surface</li>
+      </ul>
+    </div>
+
+    <h2 style="margin-top:36px">Dependencies</h2>
+    <div class="card">
+      <p style="font-size:13.5px; margin-bottom:12px">External runtime dependencies</p>
+      <div class="deps">
+        <span class="dep">drizzle-orm</span>
+        <span class="dep">postgres</span>
+        <span class="dep">zod</span>
+      </div>
+      <p style="font-size:13.5px; margin-top:16px; margin-bottom:12px">Dev / build-time dependencies</p>
+      <div class="deps">
+        <span class="dep">drizzle-kit</span>
+        <span class="dep ws">@oxagen/telemetry</span>
+        <span class="dep">@types/pg</span>
+      </div>
+    </div>
+
+    <h2 style="margin-top:36px">Consumed by</h2>
+    <div class="card">
+      <div class="deps">
+        <span class="dep ws">apps/api</span>
+        <span class="dep ws">apps/mcp</span>
+        <span class="dep ws">apps/app</span>
+        <span class="dep ws">@oxagen/auth</span>
+        <span class="dep ws">@oxagen/billing</span>
+        <span class="dep ws">@oxagen/handlers</span>
+        <span class="dep ws">@oxagen/iam</span>
+        <span class="dep ws">@oxagen/inngest-functions</span>
+        <span class="dep ws">@oxagen/agent</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="usage">
+    <h2>Usage</h2>
+    <div class="tabs" data-tabs>
+      <div class="tablist" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="migrate">Migrate</button>
+        <button role="tab" aria-selected="false" data-tab="studio">Studio</button>
+        <button role="tab" aria-selected="false" data-tab="import">Import</button>
+      </div>
+      <div class="tabpanel active" data-panel="migrate">
+        <p style="font-size:13.5px">Generate SQL migration files from the current schema, then apply them to the local Postgres instance on port 5433.</p>
+        <div class="code"><button class="copy">Copy</button><pre><span class="c"># Step 1 — generate migration SQL from schema changes</span>
+pnpm <span class="k">--filter</span> @oxagen/database generate
+
+<span class="c"># Step 2 — apply pending migrations to the database</span>
+pnpm <span class="k">--filter</span> @oxagen/database migrate</pre></div>
+        <p style="font-size:13.5px">In CI, <code>migrate</code> runs automatically on pull requests via the Turborepo pipeline. Never apply migrations directly to production outside of the CI gate.</p>
+      </div>
+      <div class="tabpanel" data-panel="studio">
+        <p style="font-size:13.5px">Drizzle Studio opens a local browser UI to inspect and edit the database. Useful during development; never run against the production connection string.</p>
+        <div class="code"><button class="copy">Copy</button><pre><span class="c"># Spin up Drizzle Studio at http://local.drizzle.studio</span>
+pnpm <span class="k">--filter</span> @oxagen/database studio</pre></div>
+      </div>
+      <div class="tabpanel" data-panel="import">
+        <p style="font-size:13.5px">Import the typed client and schema in any server-side package or app. Never import the database client in client components or edge runtimes.</p>
+        <div class="code"><button class="copy">Copy</button><pre><span class="k">import</span> { db } <span class="k">from</span> <span class="s">"@oxagen/database/client"</span>
+<span class="k">import</span> { users, orgs } <span class="k">from</span> <span class="s">"@oxagen/database/schema"</span>
+<span class="k">import</span> <span class="k">type</span> { User, Org } <span class="k">from</span> <span class="s">"@oxagen/database"</span>
+
+<span class="c">// Typed query — Drizzle infers the return shape from the schema</span>
+<span class="k">const</span> user = <span class="k">await</span> db
+  .select()
+  .from(users)
+  .where(eq(users.publicId, <span class="n">publicId</span>))
+  .limit(<span class="n">1</span>)</pre></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="scripts">
+    <h2>Scripts</h2>
+    <div class="card">
+      <table>
+        <tr><th>Command</th><th>Does</th></tr>
+        <tr><td><code>pnpm generate</code></td><td><code>drizzle-kit generate</code> — diff schema and emit SQL migration files</td></tr>
+        <tr><td><code>pnpm migrate</code></td><td><code>drizzle-kit migrate</code> — apply pending migrations to the configured database</td></tr>
+        <tr><td><code>pnpm studio</code></td><td><code>drizzle-kit studio</code> — open Drizzle Studio at <code>local.drizzle.studio</code></td></tr>
+        <tr><td><code>pnpm typecheck</code></td><td><code>tsc --noEmit</code></td></tr>
+        <tr><td><code>pnpm lint</code></td><td>ESLint over <code>src/</code></td></tr>
+        <tr><td><code>pnpm test:unit</code></td><td>Vitest unit suite (schema validators, security helper assertions)</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="faq">
+    <h2>FAQ &amp; conventions</h2>
+    <details>
+      <summary><span class="caret">▸</span> The UUID + <code>public_id</code> pattern</summary>
+      <div class="body">
+        <p>Every table carries two identifiers. The <code>id</code> column is a UUID used exclusively as the internal primary key and foreign-key target — it is never returned to or accepted from the outside world. The <code>public_id</code> column is a separate, externally-visible identifier (typically a prefixed CUID2, e.g. <code>usr_…</code>) that appears in URLs, API responses, and client payloads.</p>
+        <p>This split means internal row references never leak to clients, external IDs can be rotated without breaking FK integrity, and accidental UUID enumeration in public APIs is impossible by construction.</p>
+      </div>
+    </details>
+    <details>
+      <summary><span class="caret">▸</span> Soft-delete behavior</summary>
+      <div class="body">
+        <p>Rows are soft-deleted by setting <code>deleted_at</code> to the current timestamp. Hard deletes are reserved for compliance-driven purge operations and must go through the security helpers in <code>./security</code> — never issue a raw <code>DELETE</code> from application code.</p>
+        <p>All standard queries in <code>@oxagen/database</code> automatically filter <code>WHERE deleted_at IS NULL</code>. If you need to read deleted rows (e.g. audit export), use the explicit <code>includeDeleted</code> query option rather than bypassing the filter.</p>
+      </div>
+    </details>
+    <details>
+      <summary><span class="caret">▸</span> Why does dev Postgres run on 5433 instead of 5432?</summary>
+      <div class="body">
+        <p>The Oxagen v1 stack runs locally on the default 5432 port. To prevent collision, the v2 local Postgres is mapped to 5433. The connection string is read from <code>DATABASE_URL</code> in the workspace <code>.env.local</code> — do not hard-code the port in application code.</p>
+      </div>
+    </details>
+    <details>
+      <summary><span class="caret">▸</span> Can I write raw SQL queries?</summary>
+      <div class="body">
+        <p>Raw SQL belongs only inside <code>drizzle-kit</code>-generated migration files. All application queries must go through the Drizzle query builder so TypeScript can verify column names and return types at compile time. If Drizzle's query API does not cover your use case, open a discussion before reaching for <code>db.execute(sql\`…\`)</code>.</p>
+      </div>
+    </details>
+  </section>
+
+  <footer>
+    <span>@oxagen/database · v0.1.0 · internal package · Oxagen monorepo</span>
+    <span>
+      <a href="../../README.html">monorepo index ↗</a> &nbsp;·&nbsp;
+      <a href="../../README.md">root readme</a> &nbsp;·&nbsp;
+      press <span class="kbd">T</span> to toggle theme
+    </span>
+  </footer>
+</div>
+
+<script>
+  /* theme toggle (persisted) */
+  (function(){
+    var root=document.documentElement, btn=document.getElementById('themeBtn'),
+        icon=document.getElementById('themeIcon'), lbl=document.getElementById('themeLbl');
+    function apply(t){root.setAttribute('data-theme',t); icon.textContent=t==='dark'?'◐':'◑'; lbl.textContent=t==='dark'?'Dark':'Light'; try{localStorage.setItem('oxa-theme',t)}catch(e){}}
+    try{var s=localStorage.getItem('oxa-theme'); if(s)apply(s);}catch(e){}
+    btn.addEventListener('click',function(){apply(root.getAttribute('data-theme')==='dark'?'light':'dark')});
+    document.addEventListener('keydown',function(e){if((e.key==='t'||e.key==='T')&&!/INPUT|TEXTAREA/.test(e.target.tagName))apply(root.getAttribute('data-theme')==='dark'?'light':'dark')});
+  })();
+  /* copy buttons */
+  document.querySelectorAll('.copy').forEach(function(b){
+    b.addEventListener('click',function(){
+      var pre=b.parentElement.querySelector('pre');
+      navigator.clipboard.writeText(pre.innerText).then(function(){
+        var o=b.textContent; b.textContent='Copied ✓'; b.classList.add('done');
+        setTimeout(function(){b.textContent=o; b.classList.remove('done')},1400);
+      });
+    });
+  });
+  /* tabs */
+  document.querySelectorAll('[data-tabs]').forEach(function(group){
+    var tabs=group.querySelectorAll('[data-tab]'), panels=group.querySelectorAll('[data-panel]');
+    tabs.forEach(function(t){t.addEventListener('click',function(){
+      tabs.forEach(function(x){x.setAttribute('aria-selected','false')});
+      t.setAttribute('aria-selected','true');
+      panels.forEach(function(p){p.classList.toggle('active',p.getAttribute('data-panel')===t.getAttribute('data-tab'))});
+    })});
+  });
+</script>
+</body>
+</html>

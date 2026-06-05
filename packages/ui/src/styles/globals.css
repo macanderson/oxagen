@@ -248,9 +248,11 @@
     content: none;
   }
 
-  /* Motion helpers — unchanged; hover-glow references --brand which is now gray. */
+  /* Motion helpers — driven by the shared --ease-*/--motion-* tokens. */
   .hover-lift {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition:
+      transform var(--motion-base) var(--ease-hover),
+      box-shadow var(--motion-base) var(--ease-hover);
   }
   .hover-lift:hover {
     transform: translateY(-2px);
@@ -291,7 +293,24 @@
   }
 
   .animate-in {
-    animation: fade-in 0.2s ease-out;
+    animation: fade-in var(--motion-base) var(--ease-entry);
+  }
+
+  /*
+   * Typewriter caret — a thin block that trails streamed AI text while a
+   * response is being written. `steps(1)` gives a hard on/off blink (no fade),
+   * which reads as a terminal cursor. Suppressed under prefers-reduced-motion
+   * by the global rule below (it zeroes animation-duration), so the caret holds
+   * steady rather than blinking for those users.
+   */
+  .stream-caret {
+    display: inline-block;
+    width: 0.5ch;
+    height: 1em;
+    transform: translateY(0.12em);
+    background-color: currentColor;
+    border-radius: 1px;
+    animation: caret-blink 1s steps(1) infinite;
   }
 }
 
@@ -313,4 +332,9 @@
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes caret-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
 }

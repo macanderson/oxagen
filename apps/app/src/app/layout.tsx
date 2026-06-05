@@ -15,9 +15,9 @@
  * self-hosted and active via the shared CSS.
  */
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import "./globals.css";
-import { ThemeProvider } from "@oxagen/ui";
-import { ThemeScript } from "@oxagen/ui/components/theme-script";
+import { ThemeProvider, THEME_COOKIE_NAME, parseTheme, themeClass } from "@oxagen/ui";
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
@@ -31,28 +31,23 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // No-flash theming with no inline <script>: read the preference cookie on the
+  // server and render the resolved class straight onto <html>. "system" renders
+  // no class and is resolved by CSS @media (prefers-color-scheme) — see
+  // @oxagen/ui ThemeProvider / styles/tokens.css. Keep suppressHydrationWarning:
+  // for "system" the provider adds the OS-resolved class after hydration.
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE_NAME)?.value);
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={themeClass(theme)} suppressHydrationWarning>
       {/*
-       * ThemeScript is placed in <head> so React 19's client reconciler never
-       * tries to create the <script> DOM node on the client — elements explicitly
-       * rendered inside <head> are handled by the browser's head-management path,
-       * not the standard HostComponent createInstance path that fires the
-       * "Encountered a script tag while rendering React component" warning.
-       * The inline IIFE still executes on initial server HTML before first paint,
-       * preserving the no-flash guarantee.
-       *
        * Font variables (--font-sans / --font-display / --font-mono) are set as
        * CSS custom properties on :root by @oxagen/ui/styles/globals.css and flow
-       * through via the Tailwind @theme tokens. No className injection needed here.
-       * Add font-sans so Tailwind's utility class applies the correct font-family.
+       * through via the Tailwind @theme tokens. font-sans applies the family.
        */}
-      <head>
-        <ThemeScript />
-      </head>
       <body className="min-h-dvh font-sans antialiased">
-        <ThemeProvider>
+        <ThemeProvider initialTheme={theme}>
           <ToastProvider>
             {children}
             <ToastViewport />

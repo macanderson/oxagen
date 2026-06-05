@@ -11,6 +11,7 @@
     "./styles/globals.css": "./src/styles/globals.css",
     "./styles/tokens.css": "./src/styles/tokens.css",
     "./lib/utils": "./src/lib/utils.ts",
+    "./lib/motion": "./src/lib/motion.ts",
     "./components/*": "./src/components/*.tsx"
   },
   "scripts": {
@@ -23,6 +24,7 @@
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "lucide-react": "0.469.0",
+    "motion": "12.40.0",
     "tailwind-merge": "2.6.1"
   },
   "peerDependencies": {

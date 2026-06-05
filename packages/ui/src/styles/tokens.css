@@ -19,6 +19,10 @@
  */
 @layer base {
   :root {
+    /* Native form controls / scrollbars follow the theme. Overridden on .dark
+     * and (for "system") by the prefers-color-scheme media query below. */
+    color-scheme: light;
+
     /* Light mode: white backgrounds, near-black text, mid-gray borders. */
     --background: oklch(0.98 0 0);
     --foreground: oklch(0.13 0 0);
@@ -58,6 +62,25 @@
     --ring: oklch(0.5 0 0);
 
     --radius: 0.75rem;
+
+    /*
+     * Motion tokens — easing curves + durations (oxagen-design-system).
+     * Theme-independent, so declared once on :root. The CSS-transition
+     * components (menu/select/dialog/sheet/toast popups, hover-lift) consume
+     * the var() forms; the framer-motion layer mirrors the same numbers in
+     * packages/ui/src/lib/motion.ts. Keep the two in sync.
+     *
+     *   --ease-entry  rise + settle for elements coming in (decelerate)
+     *   --ease-hover  hover/focus micro-interactions (gentle ease-out)
+     *   --ease-exit   elements leaving (accelerate)
+     */
+    --ease-entry: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-hover: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+    --motion-micro: 160ms;
+    --motion-base: 220ms;
+    --motion-overlay: 200ms;
+    --motion-entry: 320ms;
 
     /*
      * Brand tokens neutralized — set to mid-gray so any consumer of
@@ -102,6 +125,8 @@
   }
 
   .dark {
+    color-scheme: dark;
+
     /* Dark mode: near-black backgrounds, white text, dark-gray borders. */
     --background: oklch(0.13 0 0);
     --foreground: oklch(0.98 0 0);
@@ -170,5 +195,83 @@
     --sidebar-accent-foreground: oklch(0.98 0 0);
     --sidebar-border: oklch(0.3 0 0);
     --sidebar-ring: oklch(0.55 0 0);
+  }
+
+  /*
+   * "System" theme, resolved with zero JS. When no explicit .light/.dark class
+   * is present (theme === "system" → layout renders no class) and the OS prefers
+   * dark, apply the dark palette. This is what makes the no-script, no-flash
+   * server-rendered theming work for system users.
+   *
+   * KEEP IN SYNC with the `.dark` block above — these are the same overrides,
+   * gated on the media query instead of the class. Plain CSS has no "extend", so
+   * the values are necessarily duplicated; change both together.
+   */
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light):not(.dark) {
+      color-scheme: dark;
+
+      --background: oklch(0.13 0 0);
+      --foreground: oklch(0.98 0 0);
+
+      --card: oklch(0.18 0 0);
+      --card-foreground: oklch(0.98 0 0);
+
+      --popover: oklch(0.18 0 0);
+      --popover-foreground: oklch(0.98 0 0);
+
+      --primary: oklch(0.98 0 0);
+      --primary-foreground: oklch(0.18 0 0);
+
+      --secondary: oklch(0.25 0 0);
+      --secondary-foreground: oklch(0.98 0 0);
+
+      --muted: oklch(0.25 0 0);
+      --muted-foreground: oklch(0.65 0 0);
+
+      --accent: oklch(0.28 0 0);
+      --accent-foreground: oklch(0.98 0 0);
+
+      --destructive: oklch(0.704 0.191 22.216);
+      --destructive-foreground: oklch(0.98 0 0);
+
+      --info: oklch(0.62 0.16 250);
+      --info-foreground: oklch(0.98 0 0);
+      --success: oklch(0.68 0.16 150);
+      --success-foreground: oklch(0.18 0.03 150);
+      --warning: oklch(0.82 0.15 80);
+      --warning-foreground: oklch(0.27 0.05 80);
+
+      --border: oklch(0.3 0 0);
+      --input: oklch(0.3 0 0);
+      --ring: oklch(0.55 0 0);
+
+      --brand: oklch(0.75 0 0);
+      --brand-foreground: oklch(0.13 0 0);
+
+      --accent2: oklch(0.65 0 0);
+      --accent2-foreground: oklch(0.13 0 0);
+
+      --grad-from: oklch(0.6 0 0);
+      --grad-via: oklch(0.72 0 0);
+      --grad-to: oklch(0.85 0 0);
+
+      --mesh-opacity: 0;
+
+      --chart-1: oklch(0.75 0 0);
+      --chart-2: oklch(0.65 0 0);
+      --chart-3: oklch(0.55 0 0);
+      --chart-4: oklch(0.45 0 0);
+      --chart-5: oklch(0.35 0 0);
+
+      --sidebar: oklch(0.16 0 0);
+      --sidebar-foreground: oklch(0.98 0 0);
+      --sidebar-primary: oklch(0.98 0 0);
+      --sidebar-primary-foreground: oklch(0.18 0 0);
+      --sidebar-accent: oklch(0.28 0 0);
+      --sidebar-accent-foreground: oklch(0.98 0 0);
+      --sidebar-border: oklch(0.3 0 0);
+      --sidebar-ring: oklch(0.55 0 0);
+    }
   }
 }
