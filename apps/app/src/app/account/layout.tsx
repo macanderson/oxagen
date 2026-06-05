@@ -13,6 +13,7 @@ import {
   orgShellResolvePlanAction,
 } from "@/app/[orgSlug]/shell-actions";
 import type { ResolvedOrg } from "@/lib/resolve-org";
+import { resolvedTierCatalog } from "@oxagen/ai";
 
 export default async function AccountLayout({
   children,
@@ -77,6 +78,7 @@ export default async function AccountLayout({
         sendAction={orgShellSendAction}
         resolveApprovalAction={orgShellResolveApprovalAction}
         resolvePlanAction={orgShellResolvePlanAction}
+        modelConfig={resolvedTierCatalog()}
       />
 
       {/* Command menu — Cmd+K overlay */}
