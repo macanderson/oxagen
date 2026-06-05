@@ -36,9 +36,13 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
 vi.mock("./check-iam", () => ({ checkIAM: mocks.checkIAM }));
 vi.mock("./access-request", () => ({ createAccessRequest: mocks.createAccessRequest }));
 
-vi.mock("@oxagen/config/env", () => ({
-  requireEnv: mocks.requireEnv,
-}));
+vi.mock("@oxagen/config/env", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("@oxagen/config/env")>();
+  return {
+    ...orig,
+    requireEnv: mocks.requireEnv,
+  };
+});
 
 import { bootstrapIAMRuntime } from "./bootstrap";
 
