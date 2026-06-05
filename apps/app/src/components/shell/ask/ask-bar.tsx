@@ -185,8 +185,7 @@ export function AskBar({ ctx, className }: AskBarProps) {
   return (
     <div
       className={cn(
-        "relative flex h-9 items-center",
-        "w-full sm:w-64 md:w-80 lg:w-96",
+        "relative flex h-9 w-full items-center",
         className,
       )}
     >

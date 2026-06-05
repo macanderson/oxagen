@@ -18,7 +18,6 @@ import { BrandMark, OxagenWordmark } from "@/components/ui/brand";
 import { MobileNav } from "./mobile-nav";
 import { AskBar } from "@/components/shell/ask/ask-bar";
 import { NotificationsBell } from "./notifications-bell";
-import { ThemeToggle } from "./theme-toggle";
 import { OrgSwitcher } from "@/components/org/org-switcher";
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
 import { UserSwitcher, type SessionUser } from "./user-switcher";
@@ -97,15 +96,16 @@ export function Topbar({
         </div>
       </div>
 
-      {/* Center: ask bar */}
+      {/* Center: ask bar — the prominent workspace search/command centerpiece */}
       <div className="hidden min-w-0 flex-1 justify-center px-2 sm:flex">
-        <AskBar ctx={ctx} />
+        <div className="w-full max-w-xl">
+          <AskBar ctx={ctx} />
+        </div>
       </div>
 
-      {/* Right: notifications + theme switcher + account avatar */}
+      {/* Right: notifications + account avatar (theme lives in the avatar menu) */}
       <div className="flex shrink-0 items-center gap-1.5">
         <NotificationsBell />
-        <ThemeToggle />
         <UserSwitcher user={user} variant="avatar" />
       </div>
     </header>

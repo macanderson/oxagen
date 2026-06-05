@@ -15,8 +15,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { User, LogOut, Settings, ChevronsUpDown } from "lucide-react";
+import { User, LogOut, Settings, ChevronsUpDown, Monitor, Moon, Sun } from "lucide-react";
 import { signOut } from "@oxagen/auth/client";
+import { useTheme } from "@oxagen/ui";
 import {
   Menu,
   MenuPopup,
@@ -58,8 +59,15 @@ function initials(name: string | null, email: string): string {
   return (email[0] ?? "").toUpperCase();
 }
 
+const THEME_OPTIONS = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
+] as const;
+
 export function UserSwitcher({ user, variant = "full", className }: UserSwitcherProps) {
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
   const [signingOut, setSigningOut] = React.useState(false);
 
   const handleSignOut = React.useCallback(async () => {
@@ -148,6 +156,21 @@ export function UserSwitcher({ user, variant = "full", className }: UserSwitcher
           <Settings className="h-4 w-4" aria-hidden="true" />
           Settings
         </MenuItem>
+
+        <MenuSeparator />
+
+        <MenuGroupLabel className="text-xs font-normal text-muted-foreground">Theme</MenuGroupLabel>
+        {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
+          <MenuItem
+            key={value}
+            onClick={() => setTheme(value)}
+            className={cn(theme === value && "text-foreground")}
+          >
+            <Icon className="h-4 w-4" aria-hidden="true" />
+            <span className="flex-1">{label}</span>
+            {theme === value && <span className="size-1.5 rounded-full bg-brand" aria-hidden="true" />}
+          </MenuItem>
+        ))}
 
         <MenuSeparator />
 

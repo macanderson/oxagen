@@ -22,6 +22,12 @@ export function OrgSwitcher({ current, organizations }: { current: OrgOption; or
   return (
     <Menu>
       <MenuTrigger render={<Button variant="outline" size="sm" className="gap-2" />}>
+        <span
+          aria-hidden="true"
+          className="flex size-4 shrink-0 items-center justify-center rounded bg-foreground/[0.08] text-[10px] font-semibold uppercase text-foreground"
+        >
+          {current.name.charAt(0)}
+        </span>
         <span className="truncate font-medium">{current.name}</span>
         <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
       </MenuTrigger>
