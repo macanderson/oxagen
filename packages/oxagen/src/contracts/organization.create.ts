@@ -47,12 +47,8 @@ export const organizationCreate = registerCapability({
           /** ISO 3166-2 subdivision code (e.g. "CA"). Required when country is "US". */
           region: z.string().trim().max(10).optional(),
           postalCode: z.string().trim().min(1).max(20),
-          /** ISO 3166-1 alpha-2, normalised to uppercase by transform. */
-          country: z
-            .string()
-            .trim()
-            .length(2)
-            .transform((s) => s.toUpperCase()),
+          /** ISO 3166-1 alpha-2 code. Normalised to uppercase in the handler. */
+          country: z.string().trim().length(2),
           /** Google Places place_id for address provenance tracking. */
           placeId: z.string().trim().max(255).optional(),
         })
