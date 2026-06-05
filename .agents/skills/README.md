@@ -31,6 +31,19 @@ Hands-on setup companions to `vendor-better-auth`'s index:
 - [`better-auth-security-best-practices`](better-auth-security-best-practices/SKILL.md) — rate limiting, secrets, CSRF, cookies, token encryption.
 - [`create-auth-skill`](create-auth-skill/SKILL.md) — scaffold auth into a new/existing app.
 
+## Visualization skills (Reaviz family)
+
+React data-/graph-viz component libraries, each a directory of per-component
+reference docs under a top-level `SKILL.md`:
+
+- [`reaviz`](reaviz/SKILL.md) — charts & data visualization (`charts/`, `common/`).
+- [`reagraph`](reagraph/SKILL.md) — 2D/3D graph & network visualization — `GraphCanvas`, layouts, selection, theming.
+- [`reablocks`](reablocks/SKILL.md) — UI building blocks (`elements/`, `form/`, `layout/`, `layers/`, `data/`, `typography/`).
+
+## Feature workflow
+
+- [`oxagen-feature`](oxagen-feature/SKILL.md) — end-to-end feature build workflow (capability → API route → MCP tool → schema → tests → docs → marketing), with a memory loop and a manifest checker (`references/`, `scripts/`).
+
 ## Adding a skill
 
 1. Create `.agents/skills/<name>/SKILL.md` with frontmatter:
