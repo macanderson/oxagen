@@ -46,6 +46,27 @@ type Events = {
   "agent/task.background.cancel": {
     data: { orgId: string; taskId: string };
   };
+  "agent/video.render": {
+    data: {
+      /** The `generated_assets.id` UUID row to update on completion/failure. */
+      assetId: string;
+      orgId: string;
+      workspaceId: string;
+      userId: string;
+      prompt: string;
+      /**
+       * Explicit gateway model id (e.g. "google/veo-3.0-fast-generate-001").
+       * Takes precedence over `mediaTier` if non-empty.
+       */
+      model: string;
+      /** White-labeled tier fallback when `model` is not provided. */
+      mediaTier: "basic" | "advanced";
+      /** Duration hint in seconds forwarded to the video model. */
+      durationSeconds?: number;
+      /** Aspect ratio in `{width}:{height}` format. */
+      aspectRatio?: string;
+    };
+  };
 };
 
 // OXA-1349: INNGEST keys are optional in the base schema (not every service

@@ -57,7 +57,7 @@ function readGaps(): Gap[] {
 
 /** Functional-area label names to attach per capability domain prefix. */
 function areaLabelsFor(capability: string): string[] {
-  const prefix = capability.split(".")[0];
+  const prefix = capability.split(".")[0] ?? "";
   const map: Record<string, string[]> = {
     billing: ["billing"],
     org: ["iam", "foundations"],

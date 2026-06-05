@@ -17,7 +17,9 @@
   "dependencies": {
     "ai": "6.0.197",
     "@ai-sdk/anthropic": "3.0.81",
+    "@ai-sdk/gateway": "3.0.125",
     "@ai-sdk/openai": "3.0.68",
+    "@ai-sdk/provider": "3.0.10",
     "@oxagen/config": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "zod": "3.25.76",

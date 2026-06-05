@@ -17,10 +17,12 @@
   },
   "dependencies": {
     "@oxagen/agent": "workspace:*",
+    "@oxagen/ai": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
+    "@oxagen/storage": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "drizzle-orm": "0.45.2",
     "inngest": "3.54.2",

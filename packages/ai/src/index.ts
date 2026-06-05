@@ -2,6 +2,7 @@ export {
   selectModel,
   defaultModel,
   selectImageModel,
+  selectVideoModel,
   tierModelId,
   imageTierModelId,
   videoTierModelId,
@@ -9,7 +10,7 @@ export {
   modelIdOf,
   DEFAULT_TIER,
 } from "./models";
-export type { ModelSelector, ProviderName, ImageModelSelector, OxagenTier } from "./models";
+export type { ModelSelector, ProviderName, ImageModelSelector, VideoModelSelector, OxagenTier } from "./models";
 
 // Re-export the client-safe catalog from the package root for server callers
 // (route guards, RSC). Client components should import from "@oxagen/ai/catalog"
@@ -46,3 +47,5 @@ export { generateObjectFor } from "./generate-object";
 export type { GenerateObjectArgs, GenerateObjectUsage, GenerateObjectResult } from "./generate-object";
 export { generateImageFor } from "./generate-image";
 export type { GenerateImageForArgs, GenerateImageForResult } from "./generate-image";
+export { generateVideoFor } from "./generate-video";
+export type { GenerateVideoForArgs, GenerateVideoForResult, VideoModel } from "./generate-video";

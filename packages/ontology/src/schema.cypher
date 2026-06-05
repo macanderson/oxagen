@@ -32,12 +32,16 @@ CREATE CONSTRAINT plan_public_id IF NOT EXISTS FOR (n:Plan) REQUIRE n.publicId I
 //   BRANCHED_TO_SUBAGENT :Message -> :Message (parent fanout to child)
 //   APPROVED_BY          :Execution -> :User (approval audit)
 
-// --- Tenant-scope range indexes for fast filtering ---
-CREATE INDEX execution_tenant IF NOT EXISTS FOR (n:Execution) ON (n.tenantId);
-CREATE INDEX document_tenant IF NOT EXISTS FOR (n:Document) ON (n.tenantId);
+// --- Org-scope range indexes for fast filtering ---
+// Runtime writes/filters nodes on `orgId` (see packages/agent/src/memory/neo4j.ts
+// `WHERE node.orgId = $orgId`), so the scope indexes MUST be on `orgId`. The old
+// `tenantId` indexes were dead (no node carries that property) and left orgId
+// lookups unindexed.
+CREATE INDEX execution_org IF NOT EXISTS FOR (n:Execution) ON (n.orgId);
+CREATE INDEX document_org IF NOT EXISTS FOR (n:Document) ON (n.orgId);
 CREATE INDEX message_conversation IF NOT EXISTS FOR (n:Message) ON (n.conversationId);
-CREATE INDEX agent_memory_tenant IF NOT EXISTS FOR (n:AgentMemory) ON (n.tenantId);
-CREATE INDEX background_task_tenant IF NOT EXISTS FOR (n:BackgroundTask) ON (n.tenantId);
+CREATE INDEX agent_memory_org IF NOT EXISTS FOR (n:AgentMemory) ON (n.orgId);
+CREATE INDEX background_task_org IF NOT EXISTS FOR (n:BackgroundTask) ON (n.orgId);
 
 // --- Vector indexes (spec §8.1) ---
 CREATE VECTOR INDEX document_embedding_index IF NOT EXISTS

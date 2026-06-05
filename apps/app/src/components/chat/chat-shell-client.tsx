@@ -12,6 +12,7 @@ import { CodeExecuteCard } from "./code-execute-card";
 import { MemoryCard } from "./memory-card";
 import { SubagentFanout } from "./subagent-fanout";
 import { CHAT_COMPONENTS, logUnknownComponent } from "./chat-component-registry";
+import { StreamingText } from "./streaming-text";
 import { useToolStream } from "./use-tool-stream";
 import type { ChatShellProps } from "./chat-shell";
 import type { StreamEvent } from "./stream-event-types";
@@ -331,12 +332,12 @@ export function ChatShellClient({
                 ))}
                 {liveTextMessages.map((msg) =>
                   msg.text ? (
-                    <div
+                    <StreamingText
                       key={msg.messageId}
-                      className="whitespace-pre-wrap leading-relaxed text-sm"
-                    >
-                      {msg.text}
-                    </div>
+                      text={msg.text}
+                      isStreaming={isStreaming}
+                      className="text-sm"
+                    />
                   ) : null,
                 )}
                 {liveComponentList.map((lc) => {

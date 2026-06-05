@@ -91,8 +91,22 @@ jobs:
         run: pnpm turbo run lint typecheck --filter="...[${TURBO_BASE}]"
 
       # Repo-wide invariants — static file checks (no DB, sub-second), always run.
+      # check:manifest is warn-only (incomplete capabilities annotate, don't fail).
       - name: Manifest / contracts / env invariants
         run: pnpm check:manifest && pnpm check:contracts && pnpm env:check
+
+      # On merge to main, file/refresh a Linear ticket for any manifest gap not
+      # already covered by an existing issue (idempotent — one umbrella tracker +
+      # per-capability sub-issues, deduped by a hidden marker). Main-only to avoid
+      # PR noise; soft-fail so a Linear outage never breaks CI; no-ops when the
+      # LINEAR_API_KEY secret is unset.
+      - name: File Linear tickets for manifest gaps
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          LINEAR_PROJECT_ID: ${{ vars.LINEAR_PROJECT_ID || 'oxagen-v2-355ea6b2a3f7' }}
+        run: pnpm check:manifest:tickets
 
   # ──────────────────────────────────────────────────────────────────────
   # test — build + unit tests (affected only), against real service

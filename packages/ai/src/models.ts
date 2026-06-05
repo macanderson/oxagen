@@ -1,6 +1,8 @@
 import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
 import { openai, createOpenAI } from "@ai-sdk/openai";
+import { gateway } from "@ai-sdk/gateway";
 import type { ImageModel, LanguageModel } from "ai";
+import type { Experimental_VideoModelV3 } from "@ai-sdk/provider";
 import { requireEnv } from "@oxagen/config/env";
 import type { MediaTier, ResolvedTierCatalog } from "./catalog";
 
@@ -256,12 +258,12 @@ export function selectImageModel(selector: ImageModelSelector = {}): ImageModel 
   const env = requireEnv(["AI_GATEWAY_API_KEY", "OPENAI_API_KEY"] as const);
 
   if (env.AI_GATEWAY_API_KEY) {
-    const gateway = createOpenAI({
+    const gatewayClient = createOpenAI({
       apiKey: env.AI_GATEWAY_API_KEY,
       baseURL: GATEWAY_BASE_URL,
       name: GATEWAY_PROVIDER_NAME,
     });
-    return gateway.image(selector.model ?? IMAGE_DEFAULT_GATEWAY);
+    return gatewayClient.image(selector.model ?? IMAGE_DEFAULT_GATEWAY);
   }
 
   // Fallback: strip any `creator/` prefix to a bare OpenAI image model id.
@@ -272,4 +274,66 @@ export function selectImageModel(selector: ImageModelSelector = {}): ImageModel 
       : (raw ?? IMAGE_DEFAULT_DIRECT);
   if (!env.OPENAI_API_KEY) return openai.image(modelId);
   return createOpenAI({ apiKey: env.OPENAI_API_KEY }).image(modelId);
+}
+
+// ── Video model selection ─────────────────────────────────────────────────────
+//
+// Single chokepoint for all video model construction. Uses `@ai-sdk/gateway`
+// directly (not the OpenAI-compat shim) because the gateway SDK exposes a
+// `.video(modelId)` factory that returns an `Experimental_VideoModelV3`, which
+// is what `experimental_generateVideo` expects. There is no direct-provider
+// fallback for video: if AI_GATEWAY_API_KEY is absent the factory still builds
+// a gateway client (it will surface an auth error at call time, not here).
+
+/** Default gateway video model ids for each tier. */
+const VIDEO_DEFAULT_BASIC = "google/veo-3.0-fast-generate-001";
+const VIDEO_DEFAULT_ADVANCED = "google/veo-3.0-generate-001";
+
+export interface VideoModelSelector {
+  /**
+   * Explicit Vercel AI Gateway video model id in `creator/model` form, e.g.
+   * "google/veo-3.0-generate-001". Takes precedence over `tier`.
+   */
+  model?: string;
+  /**
+   * White-labeled media tier; resolves to a gateway video model id from the
+   * `OXAGEN_LLM_VIDEO_{BASIC,ADVANCED}` env vars.
+   */
+  tier?: MediaTier;
+}
+
+/**
+ * Build and return an `Experimental_VideoModelV3` for the requested model tier.
+ * Always routes through the Vercel AI Gateway via `@ai-sdk/gateway`; the gateway
+ * SDK is the only official way to get a typed VideoModelV3 for Veo and other
+ * hosted video providers. `AI_GATEWAY_API_KEY` is read from env at call time and
+ * forwarded automatically by the gateway client.
+ *
+ * Callers that need the raw gateway model id string (e.g. for telemetry) can
+ * call `videoTierModelId(tier)` directly.
+ */
+export function selectVideoModel(
+  selector: VideoModelSelector = {},
+): Experimental_VideoModelV3 {
+  // Resolve the concrete model id: explicit model > tier env var > hardcoded default.
+  let modelId: string;
+  if (selector.model) {
+    modelId = selector.model;
+  } else {
+    const tier = selector.tier ?? "basic";
+    const env = requireEnv([
+      "OXAGEN_LLM_VIDEO_BASIC",
+      "OXAGEN_LLM_VIDEO_ADVANCED",
+    ] as const);
+    if (tier === "advanced") {
+      modelId = env.OXAGEN_LLM_VIDEO_ADVANCED ?? VIDEO_DEFAULT_ADVANCED;
+    } else {
+      modelId = env.OXAGEN_LLM_VIDEO_BASIC ?? VIDEO_DEFAULT_BASIC;
+    }
+  }
+
+  // `gateway.video(modelId)` constructs an Experimental_VideoModelV3 that reads
+  // AI_GATEWAY_API_KEY from the environment. The key is not injected here so the
+  // call site (which already checks env) stays the authority.
+  return gateway.video(modelId);
 }
