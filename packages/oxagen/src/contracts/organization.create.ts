@@ -80,14 +80,17 @@ export const organizationCreate = registerCapability({
         }
       }
       // Billing address country + region validation.
+      // Country is normalised to uppercase for comparison; actual storage-time
+      // normalisation happens in the handler.
       if (data.billingAddress) {
-        if (!isValidCountryCode(data.billingAddress.country)) {
+        const countryUpper = data.billingAddress.country.toUpperCase();
+        if (!isValidCountryCode(countryUpper)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: `"${data.billingAddress.country}" is not a valid ISO 3166-1 alpha-2 country code`,
             path: ["billingAddress", "country"],
           });
-        } else if (data.billingAddress.country === "US") {
+        } else if (countryUpper === "US") {
           if (!data.billingAddress.region) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
