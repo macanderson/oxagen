@@ -18,6 +18,18 @@ export function clickhouse(): ClickHouseClient {
     username: env.CLICKHOUSE_USERNAME,
     password: env.CLICKHOUSE_PASSWORD,
     database: env.CLICKHOUSE_DATABASE,
+    clickhouse_settings: {
+      // Every caller stamps timestamps with `new Date().toISOString()`
+      // (`2026-06-05T12:00:00.000Z`). ClickHouse's default `basic`
+      // date_time_input_format rejects the ISO `T`/`Z` form against a
+      // DateTime64 column, surfacing as "Cannot parse input ... created_at"
+      // on every insert (token_usage, tool_invocations, traces, spans,
+      // events, audit_events) and on the DateTime64 query params in
+      // sumTokenUsage. `best_effort` parses ISO-8601 with millisecond
+      // precision into DateTime64(3). Set once on the singleton so all
+      // datetime columns ingest correctly — no per-row format conversion.
+      date_time_input_format: "best_effort",
+    },
   });
   return _client;
 }
