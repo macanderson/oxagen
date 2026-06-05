@@ -132,11 +132,13 @@ function AskDrawerChatShell({
   sendAction,
   resolveApprovalAction,
   resolvePlanAction,
+  modelConfig,
 }: {
   ctx: ScopeContext;
   sendAction: import("@/components/chat/message-composer").ComposerAction;
   resolveApprovalAction: import("@/components/chat/chat-shell").ChatShellProps["resolveApprovalAction"];
   resolvePlanAction: import("@/components/chat/chat-shell").ChatShellProps["resolvePlanAction"];
+  modelConfig: ResolvedTierCatalog;
 }) {
   return (
     <Suspense
@@ -155,6 +157,7 @@ function AskDrawerChatShell({
         resolvePlanAction={resolvePlanAction}
         orgSlug={ctx.orgSlug}
         workspaceSlug={ctx.workspaceSlug ?? ""}
+        modelConfig={modelConfig}
       />
     </Suspense>
   );
