@@ -15,6 +15,7 @@ import type {
   usageRecords,
   conversations,
   messages,
+  generatedAssets,
   principals,
   roles,
   roleGrants,
@@ -64,6 +65,11 @@ export type ConversationRow = InferSelectModel<typeof conversations>;
 
 /** Row type for `chat.messages` — used by the active-branch walker. */
 export type DbMessageRow = InferSelectModel<typeof messages>;
+
+// ── Content row types ──────────────────────────────────────────────────────────
+
+/** Row type for `content.generated_assets` (AI-generated image/video assets). */
+export type GeneratedAssetRow = InferSelectModel<typeof generatedAssets>;
 
 // ── IAM row types ────────────────────────────────────────────────────────────
 

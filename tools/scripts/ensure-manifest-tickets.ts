@@ -88,18 +88,22 @@ async function main() {
   // ── Resolve the static IDs we need from the project ──────────────────────
   const ctx = await gql<{
     viewer: { id: string };
-    project: { name: string; teams: { nodes: Array<{ id: string }> } } | null;
+    project: { id: string; name: string; teams: { nodes: Array<{ id: string }> } } | null;
     issueLabels: { nodes: Array<{ id: string; name: string }> };
   }>(
     `query($p:String!){
       viewer{ id }
-      project(id:$p){ name teams{ nodes{ id } } }
+      project(id:$p){ id name teams{ nodes{ id } } }
       issueLabels(first:250){ nodes{ id name } }
     }`,
     { p: PROJECT_ID },
   );
   const teamId = ctx.project?.teams.nodes[0]?.id;
   if (!teamId) throw new Error(`Could not resolve a team for project ${PROJECT_ID}`);
+  // Mutations require the project's canonical UUID; LINEAR_PROJECT_ID may be the
+  // slug form (oxagen-v2-<hex>), which `project(id:)` accepts for reads but
+  // issueCreate rejects.
+  const projectUuid = ctx.project!.id;
   const assigneeId = ctx.viewer.id;
   const labelId = (name: string) =>
     ctx.issueLabels.nodes.find((l) => l.name.toLowerCase() === name.toLowerCase())?.id;
