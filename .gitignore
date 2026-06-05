@@ -62,3 +62,7 @@ database-creds.txt
 
 # Plaintext credential dump (full env contract; live secrets)
 creds.txt
+
+# playwright test artifacts
+.playwright-mcp*/
+.playwright*
