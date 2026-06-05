@@ -14,7 +14,6 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import {
   resolveModelDefaults,
   TEXT_TIERS,
-  gatewayModels,
   getModel,
   vendorLabels,
 } from "@oxagen/ai/catalog";

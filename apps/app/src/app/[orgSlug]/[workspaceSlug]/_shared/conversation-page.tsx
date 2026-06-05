@@ -9,6 +9,9 @@ import type { AssistantContentBlock } from "@/components/chat/stream-event-types
 import { listCapabilities, getSurfaces } from "@oxagen/oxagen";
 import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
 import type { PlanStep } from "@/components/chat/stream-event-types";
+import { loadEffectiveModelDefaults } from "@oxagen/ai";
+import { buildSeededModelState } from "@/components/chat/model-picker";
+import { userPreferencesReadHandler } from "@oxagen/handlers/src/user.preferences.read";
 
 // The unbound action factories — one set per route module because each
 // module hard-codes its own revalidatePath segment (/chat vs /ask).
