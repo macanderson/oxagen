@@ -98,6 +98,7 @@ async function AsyncShell({
   workspaceSlug: string;
 }) {
   const messages = await promise;
+  const modelConfig = resolvedTierCatalog();
   return (
     <ChatShellClient
       conversationId={conversationId}
@@ -109,6 +110,7 @@ async function AsyncShell({
       agentCapabilities={agentCapabilities}
       orgSlug={orgSlug}
       workspaceSlug={workspaceSlug}
+      modelConfig={modelConfig}
     />
   );
 }
