@@ -15,6 +15,7 @@
  */
 @import "tailwindcss";
 @import "./tokens.css";
+@import "./fonts/aeonik.css";
 
 /*
  * Scan the @oxagen/ui component source for utility classes.
@@ -90,13 +91,29 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+}
 
+/*
+ * Brand type tokens — Aeonik (see ./fonts/aeonik.css).
+ *
+ * Deliberately a NON-inline @theme block: the color block above is `@theme
+ * inline`, which resolves utilities to literal values and does NOT emit its
+ * vars to :root. Fonts need the opposite — emitting --font-sans/--font-display/
+ * --font-mono to :root so BOTH the Tailwind `font-sans`/`font-display`/
+ * `font-mono` utilities AND the raw `var(--font-*)` references in the base
+ * body/heading rules below resolve to the Aeonik families. Each stack leads
+ * with Aeonik and keeps a system fallback so text renders if a woff2 fails.
+ */
+@theme {
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Aeonik", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
+  --font-display:
+    "Aeonik Fono", "Aeonik", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono:
-    ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas,
-    "DejaVu Sans Mono", monospace;
+    "Aeonik Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo,
+    Consolas, "DejaVu Sans Mono", monospace;
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -111,6 +128,36 @@
     color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * Headings default to the display face (Aeonik Fono) per the Oxagen design
+   * system — medium weight, tight tracking. Per-element `font-sans`/`font-mono`
+   * utilities still override when a different face is wanted.
+   */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.025em;
+  }
+
+  /*
+   * All monospace elements use Aeonik Mono. Tailwind v4 preflight maps
+   * code/kbd/samp/pre to var(--default-mono-font-family) (a generic stack),
+   * NOT --font-mono — so without this rule bare <code>/<pre> in prose would
+   * miss the brand mono face. This forces the family; the `font-sans` utility
+   * still overrides per-element where a non-mono face is wanted.
+   */
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
   }
 
   /*

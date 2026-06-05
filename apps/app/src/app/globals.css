@@ -3,14 +3,15 @@
  *
  * Pulls in the shared @oxagen/ui base which provides:
  *   - Tailwind v4 + design tokens (tokens.css)
- *   - Aeonik @font-face declarations (fonts/aeonik.css) — inert until
- *     licensed .woff2 binaries are placed in packages/ui/src/styles/fonts/
+ *   - Aeonik variable @font-face declarations (fonts/aeonik.css) — ACTIVE;
+ *     self-hosted woff2 binaries live in packages/ui/src/styles/fonts/ and are
+ *     emitted by this app's build from that one shared location
  *   - CSS custom properties: --font-sans / --font-display / --font-mono
  *   - Tailwind @theme font-family tokens: font-sans / font-display / font-mono
  *   - Base heading styles (Aeonik Fono, wt 500, tracking -0.025em)
  *   - Stock shadcn neutral tokens (glass/aurora utilities removed)
  *
- * See packages/ui/src/styles/fonts/README.md for the binary asset checklist
- * and the next/font/local migration guide (OXA-1508).
+ * See packages/ui/src/styles/fonts/README.md for the family/weight map and the
+ * optional next/font/local preload migration (OXA-1508).
  */
 @import "@oxagen/ui/styles/globals.css";

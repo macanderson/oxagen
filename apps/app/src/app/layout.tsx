@@ -1,20 +1,18 @@
 /**
  * Root layout — font strategy
  *
- * Aeonik is a licensed typeface (CoType Foundry). The .woff2 binaries are NOT
- * in this repository. @font-face declarations live in:
+ * Aeonik (CoType Foundry, licensed) is ACTIVE. Self-hosted variable woff2 live
+ * in packages/ui/src/styles/fonts/ and the @font-face declarations in
  *   packages/ui/src/styles/fonts/aeonik.css
- * and are loaded transitively via @oxagen/ui/styles/globals.css → globals.css.
+ * are wired into every app through @oxagen/ui/styles/globals.css → globals.css.
+ * The shared globals binds the three families to --font-sans / --font-display /
+ * --font-mono on :root, so the `font-sans` utility on <body> below and the base
+ * heading rules render in Aeonik with no per-app font config. Each stack keeps
+ * a system fallback if a woff2 fails to load.
  *
- * While binaries are absent, the @font-face rules are inert and the system-font
- * fallback stacks (defined as CSS variables in packages/ui/src/styles/globals.css)
- * keep the app fully functional.
- *
- * TODO (OXA-1508 — activate after binaries arrive):
- *   Replace the CSS-variable approach below with next/font/local declarations
- *   (see packages/ui/src/styles/fonts/aeonik.css for the exact migration code).
- *   next/font/local will error at build time if referenced .woff2 paths are
- *   missing, which is why we intentionally defer it until assets are in place.
+ * Optional (OXA-1508): migrate to next/font/local for automatic preload +
+ * size-adjust fallback metrics. Not required — the variable fonts are already
+ * self-hosted and active via the shared CSS.
  */
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
