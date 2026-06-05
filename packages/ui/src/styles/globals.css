@@ -248,7 +248,7 @@
     content: none;
   }
 
-  /* Motion helpers — driven by the shared --ease-*/--motion-* tokens. */
+  /* Motion helpers — driven by the shared --ease-… and --motion-… tokens. */
   .hover-lift {
     transition:
       transform var(--motion-base) var(--ease-hover),

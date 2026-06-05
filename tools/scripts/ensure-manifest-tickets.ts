@@ -215,7 +215,7 @@ async function main() {
       {
         input: {
           teamId,
-          projectId: PROJECT_ID,
+          projectId: projectUuid,
           assigneeId,
           labelIds,
           priority: 2, // High — billing/IAM completeness is audit-adjacent.
@@ -246,7 +246,7 @@ async function main() {
       {
         input: {
           teamId,
-          projectId: PROJECT_ID,
+          projectId: projectUuid,
           parentId: trackerId,
           assigneeId,
           labelIds: subLabels,

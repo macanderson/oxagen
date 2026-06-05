@@ -45,7 +45,7 @@ function ToastList() {
       className={cn(
         "group pointer-events-auto relative flex w-full items-center justify-between gap-2 overflow-hidden rounded-md border p-4 pr-8 shadow-lg",
         (toast.type && TOAST_VARIANTS[toast.type]) ?? TOAST_DEFAULT_VARIANT,
-        "transition-[opacity,transform] data-[starting-style]:opacity-0 data-[starting-style]:translate-x-full data-[ending-style]:opacity-0",
+        "transition-[opacity,transform] duration-[var(--motion-base)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:translate-x-full data-[ending-style]:opacity-0",
       )}
     >
       <div className="grid gap-1">

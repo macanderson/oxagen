@@ -19,8 +19,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { resolveActiveTab } from "@/lib/resolve-active-tab";
+import { transition } from "@oxagen/ui/lib/motion";
 
 // Re-export so callers can import from one place if needed
 export { resolveActiveTab } from "@/lib/resolve-active-tab";
@@ -110,11 +112,13 @@ export function PageTabs({ tabs, className }: PageTabsProps) {
                 </span>
               )}
 
-              {/* Active indicator — 2px bottom bar */}
+              {/* Active indicator — shared-layout sliding 2px bottom bar */}
               {isActive && (
-                <span
+                <motion.span
+                  layoutId="page-tab-indicator"
                   className="bg-foreground absolute inset-x-0 bottom-0 h-0.5 rounded-full"
                   aria-hidden="true"
+                  transition={transition.entry}
                 />
               )}
             </Link>

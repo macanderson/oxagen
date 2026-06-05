@@ -1,8 +1,10 @@
 "use client";
 import * as React from "react";
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
+import { motion } from "motion/react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
+import { fadeInUp } from "../lib/motion";
 
 const Tabs = TabsPrimitive.Root;
 
@@ -57,7 +59,7 @@ TabsTab.displayName = "TabsTab";
 const TabsPanel = React.forwardRef<
   React.ComponentRef<typeof TabsPrimitive.Panel>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Panel>
->(({ className, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => (
   <TabsPrimitive.Panel
     ref={ref}
     className={cn(
@@ -65,8 +67,45 @@ const TabsPanel = React.forwardRef<
       className,
     )}
     {...props}
-  />
+  >
+    <motion.div
+      key={props.value as string | undefined}
+      initial="hidden"
+      animate="visible"
+      variants={fadeInUp}
+    >
+      {children}
+    </motion.div>
+  </TabsPrimitive.Panel>
 ));
 TabsPanel.displayName = "TabsPanel";
 
-export { Tabs, TabsList, TabsTab, TabsPanel };
+/**
+ * coss ui sliding tab indicator powered by Base UI's `Tabs.Indicator`.
+ * Base UI writes `--active-tab-left`, `--active-tab-right`, `--active-tab-top`,
+ * `--active-tab-bottom`, `--active-tab-width`, `--active-tab-height` CSS vars onto
+ * the element so it self-positions. Wire it inside `TabsList`, after the last `TabsTab`.
+ *
+ * Works for both `default` (pill) and `underline` list variants — set styling
+ * via the `className` prop to match your variant.
+ */
+const TabsIndicator = React.forwardRef<
+  React.ComponentRef<typeof TabsPrimitive.Indicator>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Indicator>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.Indicator
+    ref={ref}
+    className={cn(
+      // Base positioning — Base UI CSS vars drive left/width automatically.
+      "absolute bottom-0 left-0 h-0.5 rounded-full bg-foreground",
+      "transition-all duration-[var(--motion-base)] ease-[var(--ease-entry)]",
+      // Override width/left from Base UI CSS vars.
+      "[left:var(--active-tab-left)] [width:var(--active-tab-width)]",
+      className,
+    )}
+    {...props}
+  />
+));
+TabsIndicator.displayName = "TabsIndicator";
+
+export { Tabs, TabsList, TabsTab, TabsPanel, TabsIndicator };

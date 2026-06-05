@@ -15,6 +15,13 @@
       "when": 1748908800000,
       "tag": "0001_org_invitations",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780690792632,
+      "tag": "0002_bumpy_clea",
+      "breakpoints": true
     }
   ]
 }
