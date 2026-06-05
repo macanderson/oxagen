@@ -57,14 +57,43 @@ export async function createOrgAction(
 
   const fd = parsedForm.data;
 
-  // Validate core org identity fields through the capability contract.
+  const isBusiness = fd.type === "business";
+
+  // Assemble the billing address only when all required parts are present.
+  const line1 = nonEmpty(fd.addressLine1);
+  const city = nonEmpty(fd.addressCity);
+  const postalCode = nonEmpty(fd.addressPostalCode);
+  const country = nonEmpty(fd.addressCountry)?.toUpperCase();
+  const hasBillingAddress = Boolean(line1 && city && postalCode && country);
+
+  // Validate the FULL payload through the capability contract so this onboarding
+  // surface enforces the exact same ISO-code / US-region / business-field rules
+  // as the API and MCP surfaces (no drift, defense in depth — the UI selects
+  // produce codes, but a crafted POST must not bypass them).
   const orgInput = organizationCreate.input.safeParse({
     name: fd.name,
     slug: fd.slug,
+    type: fd.type,
+    website: isBusiness ? nonEmpty(fd.website) : undefined,
+    industry: isBusiness ? nonEmpty(fd.industry) : undefined,
+    employeeSize: isBusiness ? nonEmpty(fd.employeeSize) : undefined,
+    billingEmail: nonEmpty(fd.billingEmail),
+    billingAddress: hasBillingAddress
+      ? {
+          line1,
+          line2: nonEmpty(fd.addressLine2),
+          city,
+          region: nonEmpty(fd.addressRegion),
+          postalCode,
+          country,
+          placeId: nonEmpty(fd.addressPlaceId),
+        }
+      : undefined,
   });
   if (!orgInput.success) {
     return { ok: false, error: orgInput.error.issues[0]?.message ?? "Invalid organization" };
   }
+  const org = orgInput.data;
 
   const workspaceInput = workspaceCreate.input.safeParse({
     name: "Default",
@@ -72,33 +101,18 @@ export async function createOrgAction(
   });
   if (!workspaceInput.success) return { ok: false, error: "Invalid workspace" };
 
-  // Normalise optional fields — empty strings become undefined.
-  const orgType = fd.type;
-  const isBusiness = orgType === "business";
-
-  const website = isBusiness ? nonEmpty(fd.website) : undefined;
-  const industry = isBusiness ? nonEmpty(fd.industry) : undefined;
-  const employeeSize = isBusiness ? nonEmpty(fd.employeeSize) : undefined;
-  const billingEmail = nonEmpty(fd.billingEmail);
-
-  // Build billing address only when the three required fields are present.
-  const line1 = nonEmpty(fd.addressLine1);
-  const city = nonEmpty(fd.addressCity);
-  const postalCode = nonEmpty(fd.addressPostalCode);
-  const country = nonEmpty(fd.addressCountry);
-  const hasBillingAddress = Boolean(line1 && city && postalCode && country);
-
+  // Build the billing-profile row from the validated, normalised input.
   const billingProfile =
-    billingEmail !== undefined || hasBillingAddress
+    org.billingEmail !== undefined || org.billingAddress !== undefined
       ? {
-          billingEmail: billingEmail ?? null,
-          addressLine1: line1 ?? null,
-          addressLine2: nonEmpty(fd.addressLine2) ?? null,
-          addressCity: city ?? null,
-          addressRegion: nonEmpty(fd.addressRegion) ?? null,
-          addressPostalCode: postalCode ?? null,
-          addressCountry: country ?? null,
-          addressPlaceId: nonEmpty(fd.addressPlaceId) ?? null,
+          billingEmail: org.billingEmail ?? null,
+          addressLine1: org.billingAddress?.line1 ?? null,
+          addressLine2: org.billingAddress?.line2 ?? null,
+          addressCity: org.billingAddress?.city ?? null,
+          addressRegion: org.billingAddress?.region ?? null,
+          addressPostalCode: org.billingAddress?.postalCode ?? null,
+          addressCountry: org.billingAddress?.country?.toUpperCase() ?? null,
+          addressPlaceId: org.billingAddress?.placeId ?? null,
         }
       : null;
 
@@ -107,14 +121,14 @@ export async function createOrgAction(
       const [tenant] = await tx
         .insert(schema.organizations)
         .values({
-          name: orgInput.data.name,
-          slug: orgInput.data.slug,
-          planType: orgInput.data.planSlug,
+          name: org.name,
+          slug: org.slug,
+          planType: org.planSlug,
           status: "active",
-          type: orgType,
-          website: website ?? null,
-          industry: industry ?? null,
-          employeeSize: employeeSize ?? null,
+          type: org.type,
+          website: org.website ?? null,
+          industry: org.industry ?? null,
+          employeeSize: org.employeeSize ?? null,
           createdByUserId: session.user.id,
           updatedByUserId: session.user.id,
         })
@@ -188,7 +202,7 @@ export async function createOrgAction(
     // workspace insert always uses slug "default" under a freshly-minted org id,
     // so a 23505 means the org slug collided.
     if (isSlugConflict(err)) {
-      return { ok: false, error: `Slug "${orgInput.data.slug}" is already taken` };
+      return { ok: false, error: `Slug "${org.slug}" is already taken` };
     }
     const message = err instanceof Error ? err.message : "Failed to create organization";
     return { ok: false, error: message };

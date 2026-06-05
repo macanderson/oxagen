@@ -44,8 +44,12 @@ export const organizationCreate = registerCapability({
           line1: z.string().trim().min(1).max(255),
           line2: z.string().trim().max(255).optional(),
           city: z.string().trim().min(1).max(120),
-          /** ISO 3166-2 subdivision code (e.g. "CA"). Required when country is "US". */
-          region: z.string().trim().max(10).optional(),
+          /**
+           * Subdivision: an ISO 3166-2 code (e.g. "CA") — required and validated
+           * as a US state/DC code when country is "US"; free-text region name for
+           * non-US countries where we don't enumerate subdivisions.
+           */
+          region: z.string().trim().max(100).optional(),
           postalCode: z.string().trim().min(1).max(20),
           /** ISO 3166-1 alpha-2 code. Normalised to uppercase in the handler. */
           country: z.string().trim().length(2),
