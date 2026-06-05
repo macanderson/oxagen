@@ -106,6 +106,7 @@ export default async function OrgLayout({
         sendAction={orgShellSendAction}
         resolveApprovalAction={orgShellResolveApprovalAction}
         resolvePlanAction={orgShellResolvePlanAction}
+        modelConfig={resolvedTierCatalog()}
       />
 
       {/* Command menu — Cmd+K overlay */}
