@@ -18,5 +18,6 @@ export * from "./components/skeleton";
 export * from "./components/tabs";
 export * from "./components/textarea";
 export * from "./components/theme-provider";
+export * from "./components/theme-script";
 export * from "./components/toast";
 export { cn } from "./lib/utils";

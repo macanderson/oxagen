@@ -18,7 +18,8 @@
  */
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { ThemeProvider } from "@/components/shell/theme-provider";
+import { ThemeProvider } from "@oxagen/ui";
+import { ThemeScript } from "@oxagen/ui/components/theme-script";
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
        * Add font-sans so Tailwind's utility class applies the correct font-family.
        */}
       <body className="min-h-dvh font-sans antialiased">
+        <ThemeScript />
         <ThemeProvider>
           <ToastProvider>
             {children}

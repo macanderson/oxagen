@@ -119,12 +119,22 @@ const MenuRadioItem = React.forwardRef<
 ));
 MenuRadioItem.displayName = "MenuRadioItem";
 
+/**
+ * MenuGroupLabel — standalone, non-interactive label inside a menu popup. This
+ * is the coss equivalent of shadcn's `DropdownMenuLabel` (a plain styled `div`),
+ * NOT Base UI's `Menu.GroupLabel` — the latter throws "MenuGroupContext is
+ * missing" unless wrapped in a `<Menu.Group>`/`<Menu.RadioGroup>`. Use this for
+ * headers and section titles that aren't bound to a specific group. If you need
+ * a label that's ARIA-associated with a group, render it inside `<MenuGroup>`;
+ * the styling still applies.
+ */
 const MenuGroupLabel = React.forwardRef<
-  React.ComponentRef<typeof MenuPrimitive.GroupLabel>,
-  React.ComponentPropsWithoutRef<typeof MenuPrimitive.GroupLabel> & { inset?: boolean }
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement> & { inset?: boolean }
 >(({ className, inset, ...props }, ref) => (
-  <MenuPrimitive.GroupLabel
+  <div
     ref={ref}
+    role="presentation"
     className={cn("px-2 py-1.5 text-sm font-semibold", inset && "pl-8", className)}
     {...props}
   />
