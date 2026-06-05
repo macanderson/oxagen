@@ -24,6 +24,7 @@ import { ArrowUpRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePageContext } from "@/lib/page-context";
 import type { ScopeContext } from "@/lib/scope";
+import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 import {
   Sheet,
   SheetPopup,
@@ -42,6 +43,8 @@ export interface AskDrawerProps {
   sendAction: import("@/components/chat/message-composer").ComposerAction;
   resolveApprovalAction: import("@/components/chat/chat-shell").ChatShellProps["resolveApprovalAction"];
   resolvePlanAction: import("@/components/chat/chat-shell").ChatShellProps["resolvePlanAction"];
+  /** Resolved tier→model map from the server, forwarded to the composer. */
+  modelConfig: ResolvedTierCatalog;
 }
 
 export function AskDrawer({
@@ -49,6 +52,7 @@ export function AskDrawer({
   sendAction,
   resolveApprovalAction,
   resolvePlanAction,
+  modelConfig,
 }: AskDrawerProps) {
   const { isAskOpen, closeAsk } = usePageContext();
 
@@ -103,6 +107,7 @@ export function AskDrawer({
             sendAction={sendAction}
             resolveApprovalAction={resolveApprovalAction}
             resolvePlanAction={resolvePlanAction}
+            modelConfig={modelConfig}
           />
         </div>
       </SheetPopup>

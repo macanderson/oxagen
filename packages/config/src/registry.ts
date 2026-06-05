@@ -447,8 +447,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   AI_GATEWAY_API_KEY: {
     group: "AI providers",
     description:
-      "Vercel AI Gateway token (intended primary AI auth). NOTE: referenced in no " +
-      "source file yet — wire it into @oxagen/ai or retire it (tracked).",
+      "Vercel AI Gateway token — the primary AI auth. When set, @oxagen/ai routes " +
+      "every model call (text, image) through the gateway; absent, it falls back to " +
+      "the direct-provider keys above.",
     secret: true,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -457,7 +458,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   OXAGEN_LLM_FAST: {
     group: "AI providers",
-    description: "Fast-tier model id. NOTE: referenced in no source file yet (tracked).",
+    description:
+      "Fast text tier (\"Oxagen Fast\") — the gateway model id @oxagen/ai resolves for " +
+      "the fast tier. The ask-page default.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -467,7 +470,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   OXAGEN_LLM_BALANCED: {
     group: "AI providers",
-    description: "Balanced-tier model id. NOTE: referenced in no source file yet (tracked).",
+    description: "Balanced text tier (\"Oxagen Balanced\") — gateway model id for the balanced tier.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -477,13 +480,57 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   OXAGEN_LLM_PRECISE: {
     group: "AI providers",
-    description: "Precise-tier model id. NOTE: referenced in no source file yet (tracked).",
+    description: "Precise text tier (\"Oxagen Precise\") — gateway model id for the precise tier.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
     staticValue: { "*": "anthropic/claude-opus-4.8" },
+  },
+  OXAGEN_LLM_IMAGE_BASIC: {
+    group: "AI providers",
+    description:
+      "Basic image tier (\"Oxagen Basic\") — default gateway image model for composer " +
+      "image generation.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "openai/dall-e-3" },
+  },
+  OXAGEN_LLM_IMAGE_ADVANCED: {
+    group: "AI providers",
+    description: "Advanced image tier (\"Oxagen Advanced\") — high-fidelity gateway image model.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "bfl/flux-2" },
+  },
+  OXAGEN_LLM_VIDEO_BASIC: {
+    group: "AI providers",
+    description:
+      "Basic video tier (\"Oxagen Basic\") — default gateway video model for composer " +
+      "video generation (pipeline stub).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "google/veo-3-fast" },
+  },
+  OXAGEN_LLM_VIDEO_ADVANCED: {
+    group: "AI providers",
+    description: "Advanced video tier (\"Oxagen Advanced\") — high-fidelity gateway video model.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "google/veo-3" },
   },
 
   // ── Linear (capability provenance) ───────────────────────────────────────────
