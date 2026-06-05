@@ -380,22 +380,15 @@ export function SubscriptionSummary({
         </CardTitle>
       </CardHeader>
       <CardPanel>
+        {/* Prominent, plain-language renewal statement (exact date always shown). */}
+        <p className="mb-4 text-sm" data-testid="renewal-statement">
+          Your <span className="font-medium" data-testid="plan-name">{subscription.planName}</span>{" "}
+          plan {renewalLabel}.
+        </p>
         <dl className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <dt className="text-muted-foreground">Plan</dt>
-            <dd className="font-medium" data-testid="plan-name">
-              {subscription.planName}
-            </dd>
-          </div>
           <div>
             <dt className="text-muted-foreground">Billing</dt>
             <dd className="font-medium capitalize">{subscription.billingInterval}ly</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">
-              {subscription.cancelAtPeriodEnd ? "Cancels" : "Renews"}
-            </dt>
-            <dd className="font-medium capitalize">{renewalLabel}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Current seats</dt>
@@ -408,7 +401,7 @@ export function SubscriptionSummary({
           <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
             <CreditCard className="h-4 w-4" />
             <span>
-              {defaultCard.brand} ••{defaultCard.last4} · expires{" "}
+              <span className="capitalize">{defaultCard.brand}</span> ••{defaultCard.last4} · expires{" "}
               {String(defaultCard.expMonth).padStart(2, "0")}/{String(defaultCard.expYear).slice(-2)}
             </span>
           </div>
