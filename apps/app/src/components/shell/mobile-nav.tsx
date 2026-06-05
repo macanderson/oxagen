@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import type { ScopeContext } from "@/lib/scope";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
 import type { SessionUser } from "./user-switcher";
+import type { NewWorkspaceAction } from "@/components/workspace/new-workspace-form";
 
 export interface MobileNavProps {
   ctx: ScopeContext;
@@ -37,6 +38,8 @@ export interface MobileNavProps {
   availableWorkspaces?: { publicId: string; slug: string; name: string }[];
   /** May be undefined during a transient post-signup render. */
   user: SessionUser | undefined;
+  /** Bound server action for inline workspace creation dialog. */
+  createWorkspaceAction?: NewWorkspaceAction;
 }
 
 /** Hamburger button + slide-in Sheet drawer for sub-`md` viewports. */
@@ -47,6 +50,7 @@ export function MobileNav({
   availableOrgs,
   availableWorkspaces,
   user,
+  createWorkspaceAction,
 }: MobileNavProps) {
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname();
@@ -91,6 +95,7 @@ export function MobileNav({
                   orgSlug={org.slug}
                   current={workspace}
                   workspaces={availableWorkspaces ?? []}
+                  createWorkspaceAction={createWorkspaceAction}
                 />
               )}
             </div>

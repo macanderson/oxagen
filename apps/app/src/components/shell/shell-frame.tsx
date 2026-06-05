@@ -29,6 +29,7 @@ import { useSidebar } from "./sidebar-context";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
 import type { SessionUser } from "./user-switcher";
 import type { ScopeContext } from "@/lib/scope";
+import type { NewWorkspaceAction } from "@/components/workspace/new-workspace-form";
 
 export interface ShellFrameProps {
   org: ResolvedOrg;
@@ -37,6 +38,8 @@ export interface ShellFrameProps {
   availableWorkspaces?: { publicId: string; slug: string; name: string }[];
   /** May be undefined during a transient post-signup render; guarded in UserSwitcher. */
   user: SessionUser | undefined;
+  /** Bound server action for inline workspace creation dialog. */
+  createWorkspaceAction?: NewWorkspaceAction;
   children: ReactNode;
 }
 
@@ -46,6 +49,7 @@ export function ShellFrame({
   availableOrgs,
   availableWorkspaces,
   user,
+  createWorkspaceAction,
   children,
 }: ShellFrameProps) {
   const { toggle } = useSidebar();
@@ -94,6 +98,7 @@ export function ShellFrame({
               availableOrgs={availableOrgs}
               availableWorkspaces={availableWorkspaces}
               user={user}
+              createWorkspaceAction={createWorkspaceAction}
             />
           </div>
 
@@ -112,6 +117,7 @@ export function ShellFrame({
                   orgSlug={org.slug}
                   current={currentWorkspace}
                   workspaces={availableWorkspaces ?? []}
+                  createWorkspaceAction={createWorkspaceAction}
                 />
               </>
             ) : null}

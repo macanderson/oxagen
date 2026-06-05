@@ -13,5 +13,6 @@ export default async function OrgHome({ params }: { params: Promise<{ orgSlug: s
     .where(eq(schema.workspaces.orgId, org.id))
     .limit(1);
   if (rows[0]) redirect(`/${orgSlug}/${rows[0].slug}`);
-  redirect(`/${orgSlug}/members`);
+  // No workspaces in this org yet — send the user to the creation page.
+  redirect(`/${orgSlug}/new-workspace`);
 }

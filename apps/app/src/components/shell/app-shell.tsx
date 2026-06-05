@@ -20,6 +20,8 @@ import { MobileBottomBar } from "./sidebar";
 import type { OrgOption } from "@/components/org/org-switcher";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
 import type { SessionUser } from "./user-switcher";
+import { createWorkspaceAction } from "@/app/[orgSlug]/new-workspace/actions";
+import type { NewWorkspaceAction } from "@/components/workspace/new-workspace-form";
 
 export interface AppShellProps {
   org: ResolvedOrg;
@@ -41,6 +43,14 @@ export function AppShell({
 }: AppShellProps) {
   const ctx = { orgSlug: org.slug, workspaceSlug: workspace?.slug };
 
+  // Bind the org slug so the client switcher/dialog only deal with FormData.
+  // The type cast is safe: .bind drops the first positional arg, yielding
+  // exactly the NewWorkspaceAction signature.
+  const boundCreateWorkspace = createWorkspaceAction.bind(
+    null,
+    org.slug,
+  ) as NewWorkspaceAction;
+
   return (
     <SidebarProvider>
       <ShellFrame
@@ -49,6 +59,7 @@ export function AppShell({
         availableOrgs={availableOrgs}
         availableWorkspaces={availableWorkspaces}
         user={user}
+        createWorkspaceAction={boundCreateWorkspace}
       >
         {children}
       </ShellFrame>
