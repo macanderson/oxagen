@@ -1,4 +1,4 @@
-import { streamText, type CoreMessage, type LanguageModel, type ToolSet } from "ai";
+import { streamText, type ModelMessage, type LanguageModel, type ToolSet } from "ai";
 import {
   hashPrompt,
   insertTokenUsage,
@@ -6,11 +6,11 @@ import {
   type Surface,
 } from "@oxagen/telemetry";
 import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
-import { defaultModel } from "./models";
+import { defaultModel, modelIdOf } from "./models";
 import type { EffortLevel } from "./catalog";
 
 export interface StreamAgentReplyArgs {
-  messages: CoreMessage[];
+  messages: ModelMessage[];
   model?: LanguageModel;
   tools?: ToolSet;
   system?: string;
@@ -45,7 +45,8 @@ export interface StreamAgentReplyArgs {
 
 export function streamAgentReply(args: StreamAgentReplyArgs) {
   const model = args.model ?? defaultModel();
-  const provider = providerFromModelId(model.modelId);
+  const modelId = modelIdOf(model);
+  const provider = providerFromModelId(modelId);
   const startedAt = Date.now();
   // Render the user-message content into a stable hash key. The prompt
   // text itself stays in Postgres `chat.messages.content` — we ship only
@@ -75,8 +76,11 @@ export function streamAgentReply(args: StreamAgentReplyArgs) {
       : {}),
     onFinish: async (event) => {
       const durationMs = Date.now() - startedAt;
-      const inputTokens = event.usage.promptTokens ?? 0;
-      const outputTokens = event.usage.completionTokens ?? 0;
+      // AI SDK v6: usage fields are inputTokens/outputTokens (was
+      // promptTokens/completionTokens in v4). `totalUsage` aggregates every
+      // step of the tool-loop, so it's the correct figure to meter/bill.
+      const inputTokens = event.totalUsage.inputTokens ?? 0;
+      const outputTokens = event.totalUsage.outputTokens ?? 0;
       // The cost meter (provider rate card) turns tokens-in/out-by-model into
       // the USD a provider invoices us. This is the input to both the telemetry
       // cost column and the credit charge below.
@@ -88,7 +92,7 @@ export function streamAgentReply(args: StreamAgentReplyArgs) {
       // event.providerMetadata.anthropic.cacheReadInputTokens) so the meter
       // prices those tokens at the cheaper cached rate; otherwise the customer
       // is over-charged on the cached portion.
-      const usage = { model: model.modelId, inputTokens, outputTokens };
+      const usage = { model: modelId, inputTokens, outputTokens };
       const costUsdMicros = providerCostUsdMicros(usage);
 
       // Telemetry write is best-effort; if ClickHouse is unreachable, the
@@ -100,7 +104,7 @@ export function streamAgentReply(args: StreamAgentReplyArgs) {
             execution_step_id: args.telemetry.messageId,
             org_id: args.telemetry.orgId,
             workspace_id: args.telemetry.workspaceId,
-            model: model.modelId,
+            model: modelId,
             provider,
             input_tokens: inputTokens,
             output_tokens: outputTokens,
@@ -133,9 +137,9 @@ export function streamAgentReply(args: StreamAgentReplyArgs) {
       await args.onFinish?.({
         text: event.text,
         usage: {
-          promptTokens: event.usage.promptTokens ?? 0,
-          completionTokens: event.usage.completionTokens ?? 0,
-          totalTokens: event.usage.totalTokens ?? 0,
+          promptTokens: inputTokens,
+          completionTokens: outputTokens,
+          totalTokens: event.totalUsage.totalTokens ?? 0,
         },
         finishReason: event.finishReason,
       });

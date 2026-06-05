@@ -20,6 +20,7 @@
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
+    "@oxagen/storage": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "drizzle-orm": "0.45.2",
     "pino": "9.14.0",

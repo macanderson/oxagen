@@ -31,7 +31,7 @@
     "@dnd-kit/utilities": "3.2.2",
     "@base-ui/react": "1.5.0",
     "@stripe/stripe-js": "4.10.0",
-    "ai": "4.3.19",
+    "ai": "6.0.197",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "drizzle-orm": "0.45.2",

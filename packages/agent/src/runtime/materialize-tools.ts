@@ -83,7 +83,7 @@ export async function materializeTools(
     const requiresApproval = cap.agent?.requiresApproval === true;
     out[cap.name] = tool({
       description: cap.description,
-      parameters: cap.input,
+      inputSchema: cap.input,
       execute: async (input: unknown) => {
         await beforeTool({ capability: cap.name, ctx, input });
         const invocationId = crypto.randomUUID();

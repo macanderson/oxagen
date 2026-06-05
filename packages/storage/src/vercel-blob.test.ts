@@ -8,7 +8,7 @@ vi.mock("@vercel/blob", () => ({
   del: (...args: unknown[]): unknown => delMock(...args) as unknown,
 }));
 
-import { createVercelBlobAdapter } from "./vercel-blob";
+import { createVercelBlobAdapter, publicBaseUrlFromToken, StorageNotFoundError } from "./vercel-blob";
 
 describe("createVercelBlobAdapter", () => {
   beforeEach(() => {
@@ -57,5 +57,95 @@ describe("createVercelBlobAdapter", () => {
     await adapter.delete("https://blob.example/avatars/u/x.webp");
 
     expect(delMock).toHaveBeenCalledWith("https://blob.example/avatars/u/x.webp", { token: "tok-9" });
+  });
+
+  // ── get() ────────────────────────────────────────────────────────────────────
+
+  it("get: streams the object body and returns content-type + size from response headers", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(new Uint8Array([10, 20, 30]), {
+        status: 200,
+        headers: {
+          "content-type": "image/png",
+          "content-length": "3",
+        },
+      }),
+    );
+
+    const adapter = createVercelBlobAdapter("vercel_blob_rw_abc123_supersecret");
+    const result = await adapter.get("uploads/fil_XYZ/file.png");
+
+    // The URL is constructed from the storeId (abc123) + the key
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "https://abc123.public.blob.vercel-storage.com/uploads/fil_XYZ/file.png",
+    );
+    expect(result.contentType).toBe("image/png");
+    expect(result.sizeBytes).toBe(3);
+    expect(result.body).toBeInstanceOf(ReadableStream);
+
+    fetchSpy.mockRestore();
+  });
+
+  it("get: null content-length in response yields null sizeBytes", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(new Uint8Array([1]), {
+        status: 200,
+        headers: { "content-type": "application/octet-stream" },
+        // no content-length header
+      }),
+    );
+
+    const adapter = createVercelBlobAdapter("vercel_blob_rw_store99_secret");
+    const result = await adapter.get("some/key.bin");
+
+    expect(result.sizeBytes).toBeNull();
+    fetchSpy.mockRestore();
+  });
+
+  it("get: throws StorageNotFoundError when backend returns 404", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(null, { status: 404 }),
+    );
+
+    const adapter = createVercelBlobAdapter("vercel_blob_rw_store42_secret");
+
+    await expect(adapter.get("missing/key.bin")).rejects.toBeInstanceOf(StorageNotFoundError);
+    fetchSpy.mockRestore();
+  });
+});
+
+// ── publicBaseUrlFromToken ────────────────────────────────────────────────────
+
+describe("publicBaseUrlFromToken", () => {
+  it("derives the correct base URL from a well-formed token", () => {
+    const token = "vercel_blob_rw_abc123xyz_mysupersecret";
+    expect(publicBaseUrlFromToken(token)).toBe(
+      "https://abc123xyz.public.blob.vercel-storage.com",
+    );
+  });
+
+  it("derives the correct base URL for a different store ID", () => {
+    const token = "vercel_blob_rw_storeABC_randomsecretpart";
+    expect(publicBaseUrlFromToken(token)).toBe(
+      "https://storeABC.public.blob.vercel-storage.com",
+    );
+  });
+
+  it("throws a clear error when the token is empty", () => {
+    expect(() => publicBaseUrlFromToken("")).toThrow(
+      "BLOB_READ_WRITE_TOKEN is missing",
+    );
+  });
+
+  it("throws a clear error when the token prefix is malformed (too few segments)", () => {
+    expect(() => publicBaseUrlFromToken("vercel_blob")).toThrow(
+      "unexpected format",
+    );
+  });
+
+  it("throws a clear error when the token does not start with 'vercel_blob_rw'", () => {
+    expect(() => publicBaseUrlFromToken("aws_s3_rw_storeid_secret")).toThrow(
+      "unexpected format",
+    );
   });
 });

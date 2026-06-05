@@ -36,6 +36,7 @@ import { systemInstallInstructionsRoute } from "./routes/v1/system.install.instr
 import { orgMemberAddRoute } from "./routes/v1/org.member.add";
 import { orgMemberInviteAcceptRoute } from "./routes/v1/org.member.invite.accept";
 import { orgMemberInviteDeclineRoute } from "./routes/v1/org.member.invite.decline";
+import { filesServeRoute } from "./routes/v1/files.serve";
 
 export type AppEnv = {
   Variables: {
@@ -101,4 +102,5 @@ orgScoped.route("/system/install-instructions", systemInstallInstructionsRoute);
 orgScoped.route("/org/members", orgMemberAddRoute);
 orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
+orgScoped.route("/files", filesServeRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

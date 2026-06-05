@@ -20,6 +20,17 @@ export type OxagenTier = "fast" | "balanced" | "precise";
 /** Platform default tier when a caller doesn't pick one. */
 export const DEFAULT_TIER: OxagenTier = "balanced";
 
+/**
+ * Read the concrete gateway model id from a LanguageModel. In AI SDK v6
+ * `LanguageModel` is a union that also admits a bare model-id string, so callers
+ * can no longer access `.modelId` unconditionally — this narrows it. The
+ * selectModel()/selectImageModel() factories always return a provider object, so
+ * the string arm is only there to satisfy the union.
+ */
+export function modelIdOf(model: LanguageModel): string {
+  return typeof model === "string" ? model : model.modelId;
+}
+
 export interface ModelSelector {
   /**
    * Explicit Vercel AI Gateway model id in `creator/model` form, e.g.

@@ -40,6 +40,21 @@ export interface PutObjectResult {
   bytes: number;
 }
 
+/**
+ * Result shape returned by {@link StorageAdapter.get}.
+ *
+ * `body` is a raw web-platform `ReadableStream` so callers can pipe it
+ * directly into a `Response` without buffering the full object in memory.
+ * Both `contentType` and `sizeBytes` mirror what the storage backend
+ * reports in HTTP headers; either may be `null` when the backend omits
+ * the header.
+ */
+export interface GetObjectResult {
+  body: ReadableStream<Uint8Array>;
+  contentType: string | null;
+  sizeBytes: number | null;
+}
+
 export interface StorageAdapter {
   /** Driver identifier, for logs/metrics (e.g. "vercel-blob"). */
   readonly driver: string;
@@ -47,4 +62,10 @@ export interface StorageAdapter {
   put(input: PutObjectInput): Promise<PutObjectResult>;
   /** Delete an object by the URL or key returned from {@link put}. Idempotent. */
   delete(urlOrKey: string): Promise<void>;
+  /**
+   * Stream an object by its canonical key. Throws a {@link StorageNotFoundError}
+   * when the key does not exist. Does NOT buffer the body — pipe `result.body`
+   * into a `Response` to stream bytes to the caller.
+   */
+  get(key: string): Promise<GetObjectResult>;
 }

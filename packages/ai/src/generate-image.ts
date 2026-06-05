@@ -1,4 +1,4 @@
-import { experimental_generateImage as generateImage, type ImageModel } from "ai";
+import { generateImage, type ImageModel } from "ai";
 import {
   insertTokenUsage,
   providerFromModelId,

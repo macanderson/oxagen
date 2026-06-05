@@ -1,4 +1,4 @@
-import { generateObject, type LanguageModel, type CoreMessage } from "ai";
+import { generateObject, type LanguageModel, type ModelMessage } from "ai";
 import { z } from "zod";
 import {
   hashPrompt,
@@ -7,7 +7,7 @@ import {
   type Surface,
 } from "@oxagen/telemetry";
 import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
-import { defaultModel } from "./models";
+import { defaultModel, modelIdOf } from "./models";
 
 export interface GenerateObjectArgs<T> {
   /**
@@ -29,7 +29,7 @@ export interface GenerateObjectArgs<T> {
    * Full message history. When provided alongside `prompt`, messages take
    * precedence for the conversation context.
    */
-  messages?: CoreMessage[];
+  messages?: ModelMessage[];
   /**
    * Single-turn plain-text prompt. Use when there is no prior conversation.
    */
@@ -85,7 +85,8 @@ export async function generateObjectFor<T>(
   args: GenerateObjectArgs<T>,
 ): Promise<GenerateObjectResult<T>> {
   const model = args.model ?? defaultModel();
-  const provider = providerFromModelId(model.modelId);
+  const modelId = modelIdOf(model);
+  const provider = providerFromModelId(modelId);
   const startedAt = Date.now();
 
   // Derive a stable prompt text for hashing. Prefer the last user message
@@ -109,9 +110,10 @@ export async function generateObjectFor<T>(
   });
 
   const durationMs = Date.now() - startedAt;
-  const inputTokens = result.usage.promptTokens ?? 0;
-  const outputTokens = result.usage.completionTokens ?? 0;
-  const usage = { model: model.modelId, inputTokens, outputTokens };
+  // AI SDK v6: usage fields renamed to inputTokens/outputTokens.
+  const inputTokens = result.usage.inputTokens ?? 0;
+  const outputTokens = result.usage.outputTokens ?? 0;
+  const usage = { model: modelId, inputTokens, outputTokens };
   const costUsdMicros = providerCostUsdMicros(usage);
 
   // Telemetry write is best-effort; if ClickHouse is unreachable the caller
@@ -123,7 +125,7 @@ export async function generateObjectFor<T>(
         execution_step_id: args.telemetry.messageId,
         org_id: args.telemetry.orgId,
         workspace_id: args.telemetry.workspaceId,
-        model: model.modelId,
+        model: modelId,
         provider,
         input_tokens: inputTokens,
         output_tokens: outputTokens,

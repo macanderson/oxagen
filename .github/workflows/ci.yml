@@ -6,19 +6,95 @@ on:
     branches: [main]
 
 # Cancel superseded PR runs so a rapid push sequence doesn't queue redundant
-# gates (formerly provided by the now-removed pr.yml). Main pushes use the SHA
-# so deploy runs are never cancelled by a follow-up commit.
+# gates. Main pushes key on the SHA so a post-merge run is never cancelled by a
+# follow-up commit (each merge gets its own advisory signal + deploy side-car).
 concurrency:
   group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # ────────────────────────────────────────────────────────────────────────
-# PR gate — lint, typecheck, test, build (affected packages only)
-# Runs on every PR open/sync. This is the canonical quality signal.
+# Shared env for every job. These are non-secret CI defaults (dummy creds /
+# localhost URLs) the env schema requires when loadEnv() runs during package
+# builds. Only the `test` job spins up the matching service containers; the
+# `checks` job never connects, so the localhost URLs are inert strings there.
+# Real secrets come from `secrets.*` (Turbo remote cache token).
 # ────────────────────────────────────────────────────────────────────────
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+  DATABASE_URL: postgres://oxagen:oxagen@localhost:5432/oxagen
+  CLICKHOUSE_URL: http://localhost:8123
+  CLICKHOUSE_USERNAME: default
+  CLICKHOUSE_PASSWORD: ""
+  CLICKHOUSE_DATABASE: oxagen
+  NEO4J_URI: bolt://localhost:7687
+  NEO4J_USERNAME: neo4j
+  NEO4J_PASSWORD: oxagen-dev
+  BETTER_AUTH_SECRET: ci-secret-ci-secret-ci-secret-ci-x
+  BETTER_AUTH_URL: http://localhost:3000
+  STRIPE_SECRET_KEY: sk_test_ci
+  STRIPE_PUBLISHABLE_KEY: pk_test_ci
+  STRIPE_WEBHOOK_SECRET: whsec_test_ci
+  NEXT_PUBLIC_APP_URL: http://localhost:3000
+  NEXT_PUBLIC_API_URL: http://localhost:4000
+  # Required by the env schema when NODE_ENV=production (set by `next build`).
+  INNGEST_EVENT_KEY: ci_inngest_event
+  INNGEST_SIGNING_KEY: signkey-test-ci0000000000000000000000000000000000000000000000000000000000
+
 jobs:
-  gate:
-    if: github.event_name == 'pull_request'
+  # ──────────────────────────────────────────────────────────────────────
+  # checks — lint + typecheck (affected only) + repo-wide invariants.
+  # No DB service containers: these tasks never touch a live store, so this
+  # job starts instantly and runs IN PARALLEL with `test`. Runs on every PR
+  # AND on merge to main (advisory post-merge signal; does NOT gate deploys).
+  # ──────────────────────────────────────────────────────────────────────
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # fetch-depth: 0 so the affected-diff base is reachable (shallow breaks it).
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute affected base
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin main --no-tags
+            echo "TURBO_BASE=origin/main" >> "$GITHUB_ENV"
+          else
+            BEFORE="${{ github.event.before }}"
+            # First push to a branch (or a force-push) can report an all-zero or
+            # unreachable "before" SHA — fall back to the previous commit.
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+              BEFORE="$(git rev-parse HEAD~1)"
+            fi
+            echo "TURBO_BASE=$BEFORE" >> "$GITHUB_ENV"
+          fi
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Affected lint + typecheck. Empty affected set → turbo runs nothing and
+      # exits 0, so docs-only / config-only changes pass in seconds.
+      - name: Lint + typecheck (affected)
+        run: pnpm turbo run lint typecheck --filter=...[${TURBO_BASE}]
+
+      # Repo-wide invariants — static file checks (no DB, sub-second), always run.
+      - name: Manifest / contracts / env invariants
+        run: pnpm check:manifest && pnpm check:contracts && pnpm env:check
+
+  # ──────────────────────────────────────────────────────────────────────
+  # test — build + unit tests (affected only), against real service
+  # containers. The long pole; runs in parallel with `checks`. Runs on every
+  # PR AND on merge to main (advisory; does NOT gate deploys).
+  # ──────────────────────────────────────────────────────────────────────
+  test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -44,8 +120,7 @@ jobs:
           # Do NOT set CLICKHOUSE_USER/PASSWORD: overriding the built-in
           # `default` user writes a users.d password config that makes the
           # HTTP interface (8123) reject the empty-password login the
-          # migrator uses, even though the native-protocol healthcheck
-          # passes. Leaving them unset keeps `default` truly passwordless.
+          # migrator uses, even though the native-protocol healthcheck passes.
           CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
         ports:
           - 8123:8123
@@ -69,42 +144,23 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
-    env:
-      # ── Turborepo remote cache ──────────────────────────────────────────────
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-      # ── Runtime env ───────────────────────────────────────────────────
-      DATABASE_URL: postgres://oxagen:oxagen@localhost:5432/oxagen
-      CLICKHOUSE_URL: http://localhost:8123
-      CLICKHOUSE_USERNAME: default
-      CLICKHOUSE_PASSWORD: ""
-      CLICKHOUSE_DATABASE: oxagen
-      NEO4J_URI: bolt://localhost:7687
-      NEO4J_USERNAME: neo4j
-      NEO4J_PASSWORD: oxagen-dev
-      BETTER_AUTH_SECRET: ci-secret-ci-secret-ci-secret-ci-x
-      BETTER_AUTH_URL: http://localhost:3000
-      STRIPE_SECRET_KEY: sk_test_ci
-      STRIPE_PUBLISHABLE_KEY: pk_test_ci
-      STRIPE_WEBHOOK_SECRET: whsec_test_ci
-      NEXT_PUBLIC_APP_URL: http://localhost:3000
-      NEXT_PUBLIC_API_URL: http://localhost:4000
-      # Required by the env schema when NODE_ENV=production, which `next build`
-      # sets. Without them the production build fails collecting page data for
-      # routes that call loadEnv() at module load (e.g. /api/auth/[...all]).
-      INNGEST_EVENT_KEY: ci_inngest_event
-      INNGEST_SIGNING_KEY: signkey-test-ci0000000000000000000000000000000000000000000000000000000000
-
     steps:
-      # Fetch enough history so that turbo --filter=...[origin/main] can
-      # compute the diff base. 0 = full clone; a shallow clone breaks the
-      # affected-detection diff.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Fetch main for affected detection
-        run: git fetch origin main --no-tags
+      - name: Compute affected base
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin main --no-tags
+            echo "TURBO_BASE=origin/main" >> "$GITHUB_ENV"
+          else
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+              BEFORE="$(git rev-parse HEAD~1)"
+            fi
+            echo "TURBO_BASE=$BEFORE" >> "$GITHUB_ENV"
+          fi
 
       - name: Apply Postgres init schemas
         run: |
@@ -112,7 +168,6 @@ jobs:
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -120,11 +175,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # ── Migration gate (schema/migration files changed only) ───────────────
+      # Run migrations only when migration files changed in this diff range.
       - name: Detect migration changes
         id: migration_changes
         run: |
-          if git diff --name-only origin/main...HEAD | grep -qE '^packages/database/drizzle/'; then
+          if git diff --name-only "${TURBO_BASE}"...HEAD | grep -qE '^packages/database/drizzle/'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -134,51 +189,37 @@ jobs:
         if: steps.migration_changes.outputs.changed == 'true'
         run: pnpm db:migrate
 
-      # ── Affected-only quality gate ────────────────────────────────────
-      # lint/typecheck/test:unit/test:contract/build are scoped to affected
-      # packages via --filter=...[origin/main]; check:manifest/check:contracts
-      # are repo-wide invariant checks (sub-second) and always run.
-      - name: Gate (affected packages)
-        run: pnpm gate
+      # Affected build + unit tests. test:unit dependsOn ^build, so turbo builds
+      # the affected dependency graph then runs the affected tests — all in one
+      # turbo invocation with full intra-DAG parallelism + remote cache.
+      - name: Build + unit tests (affected)
+        run: pnpm turbo run build test:unit --filter=...[${TURBO_BASE}]
 
-# ────────────────────────────────────────────────────────────────────────
-# Deploy — runs on merge to main, trusts PR gate, does NOT re-run test suite
-# ────────────────────────────────────────────────────────────────────────
+  # ──────────────────────────────────────────────────────────────────────
+  # deploy — post-merge side-car (main only). The actual app deploys are
+  # triggered by Vercel's own GitHub integration, which now skips any app
+  # whose affected set is unchanged (vercel.json `ignoreCommand: turbo-ignore`).
+  # Per the chosen model this is UNGATED — it runs alongside checks/test, not
+  # after them (main is already gated by the required PR check before merge).
+  # ──────────────────────────────────────────────────────────────────────
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
-    env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history so linear-release-action can scan all commits in the
-          # range since the previous deploy and associate the right OXA-#### issues.
+          # Full history so linear-release-action can scan every commit since
+          # the previous deploy and associate the right OXA-#### issues.
           fetch-depth: 0
 
-      # Vercel deploys are triggered by Vercel's own GitHub integration on push
-      # to main; this job exists as the CI side-car that runs post-merge steps
-      # (e.g. production migrations, cache warm-up) without re-running the full
-      # test suite.  Add steps here as needed.
       - name: Deploy confirmation
-        run: echo "Merge to main detected. Vercel deploy triggered by GitHub integration."
+        run: echo "Merge to main detected. Vercel deploys changed apps via its GitHub integration (turbo-ignore skips unchanged apps)."
 
       # ── Linear Release ────────────────────────────────────────────────────
-      # Uses the official linear/linear-release-action@v0 to scan every commit
-      # since the last deploy for OXA-#### references and automatically create
-      # a completed release in the configured Linear pipeline.
-      #
-      # Prerequisites (one-time, done in the Linear UI — see docs/ops/linear-releases-ci.md):
-      #   1. Linear Settings → Releases → New pipeline → Continuous.
-      #   2. Copy the pipeline's access key (NOT a personal API key).
-      #   3. Add it as a repo secret: Settings → Secrets → Actions → LINEAR_ACCESS_KEY.
-      #
-      # Requires: Business or Enterprise Linear plan.
-      # Soft-fail: continue-on-error so a Linear outage never blocks the deploy.
+      # Scans every commit since the last deploy for OXA-#### references and
+      # creates a completed release in the configured Linear pipeline. Soft-fail
+      # so a Linear outage never blocks the merge. Setup: docs/ops/linear-releases-ci.md.
       - name: Create Linear Release
         continue-on-error: true
         uses: linear/linear-release-action@v0
