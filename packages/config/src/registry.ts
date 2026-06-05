@@ -533,6 +533,71 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     staticValue: { "*": "google/veo-3" },
   },
 
+  // ── Email (transactional — @oxagen/notifications SMTP transport) ─────────────
+  // SMTP is the vendor-neutral seam: Resend today, any SMTP provider tomorrow
+  // with an env-only swap. Optional in the schema; the transport enforces
+  // presence at first send. Pushed to every app surface so any can send mail.
+  SMTP_HOST: {
+    group: "Email",
+    description: "SMTP server host (Resend: smtp.resend.com).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp", "website", "admin"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "smtp.resend.com" },
+  },
+  SMTP_PORT: {
+    group: "Email",
+    description: "SMTP port. 465 = implicit TLS; 587 = STARTTLS (TLS enforced).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp", "website", "admin"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "587" },
+  },
+  SMTP_USERNAME: {
+    group: "Email",
+    description: 'SMTP username (Resend: the literal "resend").',
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp", "website", "admin"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "resend" },
+  },
+  SMTP_PASSWORD: {
+    group: "Email",
+    description: "SMTP password — for Resend this is an API key (re_…).",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp", "website", "admin"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "re_xxxxxxxxxxxxxxxx",
+  },
+  SMTP_FROM_EMAIL: {
+    group: "Email",
+    description: "Default sender address. Its domain must be verified at the provider.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp", "website", "admin"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "noreply@notifications.oxagen.ai" },
+  },
+  SMTP_FROM_NAME: {
+    group: "Email",
+    description: "Default sender display name.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp", "website", "admin"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "Oxagen (DO NOT REPLY)" },
+  },
+
   // ── Linear (capability provenance) ───────────────────────────────────────────
   LINEAR_API_KEY: {
     group: "Linear",

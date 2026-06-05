@@ -49,6 +49,32 @@ export interface MaterializeOptions {
   riskCeiling?: "low" | "medium" | "high";
 }
 
+// Result of materializeTools: the Vercel AI SDK tool map keyed by *model-safe*
+// names, plus a reverse map from each model-safe name back to the real
+// capability name. See toModelToolName for why the keys must be sanitized.
+export interface MaterializedTools {
+  tools: ToolSet;
+  // model-safe tool name → real capability name (e.g.
+  // "agent_code_execute" → "agent.code.execute"). The route translates
+  // tool-call stream events back to the real name for the UI.
+  nameMap: Record<string, string>;
+}
+
+// Provider tool-name constraint enforced by the Vercel AI Gateway (and the
+// OpenAI / Anthropic / Bedrock backends it routes to): a function/tool name
+// must match ^[a-zA-Z0-9_-]{1,128}$. Oxagen capability names are dotted
+// (e.g. "agent.code.execute", "form.fill"), and MCP synthetic keys embed
+// dots too ("mcp.<serverId>.<tool>"), so passing them verbatim makes the
+// gateway reject EVERY tool-bearing turn with a 400
+// ("tools.0.custom.name: String should match pattern ..."). Present the model
+// a sanitized alias instead; the tool's execute() closure still invokes the
+// real dotted capability, so behaviour is unchanged.
+const MODEL_TOOL_NAME_MAX = 128;
+
+export function toModelToolName(capabilityName: string): string {
+  return capabilityName.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, MODEL_TOOL_NAME_MAX);
+}
+
 const RISK_ORDER: Record<string, number> = { low: 0, medium: 1, high: 2 };
 
 function passesRisk(cap: AnyCapability, ceiling?: MaterializeOptions["riskCeiling"]): boolean {
@@ -63,7 +89,7 @@ function passesRisk(cap: AnyCapability, ceiling?: MaterializeOptions["riskCeilin
 export async function materializeTools(
   ctx: CapabilityContext,
   opts: MaterializeOptions = {},
-): Promise<ToolSet> {
+): Promise<MaterializedTools> {
   await ensureRegistry();
   const listFn = _listCapabilities;
   const surfacesFn = _getSurfaces;
@@ -74,6 +100,23 @@ export async function materializeTools(
   // Off by default in prod so the tool is not advertised to the model.
   const sandboxEnabled = requireEnv(["SANDBOX_ENABLED"] as const).SANDBOX_ENABLED === true;
   const out: Record<string, Tool> = {};
+  const nameMap: Record<string, string> = {};
+
+  // Register a tool under a model-safe alias and record the reverse mapping.
+  // Sanitizing collapses distinct chars to "_", so two real names could in
+  // principle map to one alias; disambiguate deterministically with a numeric
+  // suffix so every tool stays addressable and the reverse map is exact.
+  function register(realName: string, toolDef: Tool): void {
+    let alias = toModelToolName(realName);
+    if (nameMap[alias] !== undefined && nameMap[alias] !== realName) {
+      let n = 2;
+      const base = alias.slice(0, MODEL_TOOL_NAME_MAX - 3);
+      while (nameMap[`${base}_${n}`] !== undefined) n += 1;
+      alias = `${base}_${n}`;
+    }
+    out[alias] = toolDef;
+    nameMap[alias] = realName;
+  }
   for (const cap of all) {
     if (!surfacesFn(cap).includes("agent")) continue;
     if (opts.allowlist && !opts.allowlist.has(cap.name)) continue;
@@ -81,7 +124,7 @@ export async function materializeTools(
     if (cap.name === "agent.code.execute" && !sandboxEnabled) continue;
     const riskLevel: "low" | "medium" | "high" = cap.agent?.riskLevel ?? "low";
     const requiresApproval = cap.agent?.requiresApproval === true;
-    out[cap.name] = tool({
+    register(cap.name, tool({
       description: cap.description,
       inputSchema: cap.input,
       execute: async (input: unknown) => {
@@ -172,7 +215,7 @@ export async function materializeTools(
           throw err;
         }
       },
-    });
+    }));
   }
   // ── MCP tool integration (OXA-1498) ─────────────────────────────────────────
   // Load tools from healthy registered MCP servers for this workspace.
@@ -220,7 +263,7 @@ export async function materializeTools(
           const capturedKey = rawKey;
           const capturedExecute = rawTool.execute;
           if (typeof capturedExecute !== "function") continue;
-          out[capturedKey] = tool({
+          register(capturedKey, tool({
             description: rawTool.description,
             inputSchema: z.record(z.string(), z.unknown()),
             execute: async (input: unknown) => {
@@ -289,7 +332,7 @@ export async function materializeTools(
                 throw err;
               }
             },
-          });
+          }));
         }
         // Do NOT close the connection here. Every materialized tool's
         // `execute` closure (via materializeMcpTools) calls `client.callTool`
@@ -310,5 +353,5 @@ export async function materializeTools(
   }
   // ── End MCP tools ─────────────────────────────────────────────────────────
 
-  return out;
+  return { tools: out, nameMap };
 }

@@ -84,30 +84,43 @@ describe("materializeTools", () => {
     vi.mocked(invoke).mockClear();
   });
 
-  it("returns only agent-surfaced capabilities", async () => {
-    const tools = await materializeTools(CTX);
-    expect(Object.keys(tools).sort()).toEqual(["capA", "capB", "form.fill"]);
+  it("returns only agent-surfaced capabilities, keyed by model-safe names", async () => {
+    // Dotted capability names (form.fill) are sanitized to ^[a-zA-Z0-9_-]+$
+    // so the gateway accepts them; undotted names (capA/capB) pass through.
+    const { tools } = await materializeTools(CTX);
+    expect(Object.keys(tools).sort()).toEqual(["capA", "capB", "form_fill"]);
     expect(tools["organization.create"]).toBeUndefined();
+    expect(tools["form.fill"]).toBeUndefined();
+  });
+
+  it("maps every model-safe tool name back to its real capability name", async () => {
+    const { nameMap } = await materializeTools(CTX);
+    expect(nameMap["form_fill"]).toBe("form.fill");
+    expect(nameMap["capA"]).toBe("capA");
+    // No alias may contain a dot — that is the whole point of the sanitizer.
+    for (const alias of Object.keys(nameMap)) {
+      expect(alias).toMatch(/^[a-zA-Z0-9_-]{1,128}$/);
+    }
   });
 
   it("filters by allowlist", async () => {
-    const tools = await materializeTools(CTX, { allowlist: new Set(["capA"]) });
+    const { tools } = await materializeTools(CTX, { allowlist: new Set(["capA"]) });
     expect(Object.keys(tools)).toEqual(["capA"]);
   });
 
   it("excludes capabilities above the risk ceiling", async () => {
-    const tools = await materializeTools(CTX, { riskCeiling: "medium" });
+    const { tools } = await materializeTools(CTX, { riskCeiling: "medium" });
     expect(tools.capA).toBeDefined();
     expect(tools.capB).toBeUndefined();
   });
 
   it("includes high risk when ceiling is high", async () => {
-    const tools = await materializeTools(CTX, { riskCeiling: "high" });
+    const { tools } = await materializeTools(CTX, { riskCeiling: "high" });
     expect(tools.capB).toBeDefined();
   });
 
   it("produces AI SDK tools with description, inputSchema, and execute", async () => {
-    const tools = await materializeTools(CTX);
+    const { tools } = await materializeTools(CTX);
     const t = tools.capA as { description?: string; inputSchema?: unknown; execute?: (i: unknown) => Promise<unknown> };
     expect(t.description).toBe("low risk agent cap");
     expect(t.inputSchema).toBeDefined();
@@ -120,7 +133,7 @@ describe("materializeTools", () => {
     mocks.beforeTool.mockClear();
     mocks.afterTool.mockClear();
     mocks.onError.mockClear();
-    const tools = await materializeTools(CTX);
+    const { tools } = await materializeTools(CTX);
     await (tools.capA as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ x: "hi" });
     expect(mocks.beforeTool).toHaveBeenCalledTimes(1);
     expect(mocks.afterTool).toHaveBeenCalledTimes(1);
@@ -132,7 +145,7 @@ describe("materializeTools", () => {
     mocks.afterTool.mockClear();
     mocks.onError.mockClear();
     vi.mocked(invoke).mockRejectedValueOnce(new Error("boom"));
-    const tools = await materializeTools(CTX);
+    const { tools } = await materializeTools(CTX);
     await expect(
       (tools.capA as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ x: "hi" }),
     ).rejects.toThrow("boom");
@@ -153,7 +166,7 @@ describe("materializeTools", () => {
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
-    const tools = await mt({ ...CTX, messageId: "msg_42" });
+    const { tools } = await mt({ ...CTX, messageId: "msg_42" });
     await (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 });
     expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
     expect(mocks.waitForApproval).toHaveBeenCalledTimes(1);
@@ -177,7 +190,7 @@ describe("materializeTools", () => {
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
-    const tools = await mt({ ...CTX, messageId: "msg_42" });
+    const { tools } = await mt({ ...CTX, messageId: "msg_42" });
     await expect(
       (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 }),
     ).rejects.toThrow(/approval denied/);
@@ -191,8 +204,9 @@ describe("materializeTools", () => {
     // that is surfaced on agent resolves end-to-end through kernel invoke.
     vi.mocked(invoke).mockClear();
     vi.mocked(invoke).mockResolvedValueOnce({ filled: true });
-    const tools = await materializeTools(CTX);
-    const formFillTool = tools["form.fill"] as { execute?: (i: unknown) => Promise<unknown> };
+    const { tools } = await materializeTools(CTX);
+    // Keyed by the model-safe alias; execute still invokes the real "form.fill".
+    const formFillTool = tools["form_fill"] as { execute?: (i: unknown) => Promise<unknown> };
     expect(formFillTool).toBeDefined();
     const result = await formFillTool.execute!({ formId: "workspace-general", values: { name: "Prod" } });
     // Kernel invoke must have been called — not the agent-internal loader
@@ -227,8 +241,8 @@ describe("materializeTools", () => {
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
-    const tools = await mt(CTX);
-    const svgTool = tools["svg.generate"] as { execute?: (i: unknown) => Promise<unknown> };
+    const { tools } = await mt(CTX);
+    const svgTool = tools["svg_generate"] as { execute?: (i: unknown) => Promise<unknown> };
     expect(svgTool).toBeDefined();
     const result = await svgTool.execute!({ prompt: "a red circle" });
     expect(invoke).toHaveBeenCalledWith(
@@ -251,7 +265,7 @@ describe("materializeTools", () => {
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
-    const tools = await mt({ ...CTX, messageId: null });
+    const { tools } = await mt({ ...CTX, messageId: null });
     await (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 });
     expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
   });

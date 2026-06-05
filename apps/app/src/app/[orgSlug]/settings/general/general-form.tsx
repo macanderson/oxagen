@@ -5,6 +5,7 @@ import { AvatarUpload } from "@/components/media/avatar-upload";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { slugify } from "@/lib/slug";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,22 +22,6 @@ export interface OrgGeneralFormProps {
   action: (
     formData: FormData,
   ) => Promise<{ ok: true; slug: string } | { ok: false; error: string }>;
-}
-
-// ---------------------------------------------------------------------------
-// Slugify — lowercase, drop URL-unsafe characters, spaces → hyphens.
-// Mirrors the format enforced by the server action's slug schema so what the
-// user sees while typing is exactly what gets persisted.
-// ---------------------------------------------------------------------------
-
-function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, "") // drop anything that isn't url-safe
-    .replace(/\s+/g, "-") // spaces → hyphens
-    .replace(/-+/g, "-") // collapse repeated hyphens
-    .replace(/^-+|-+$/g, ""); // trim leading/trailing hyphens
 }
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useRegisterFillableForm, useRegisterPageEntity } from "@/lib/page-context";
 import type { FillableFormSpec, FieldDescriptor } from "@/lib/ask/fill-types";
 import { cn } from "@/lib/utils";
+import { slugify } from "@/lib/slug";
 import { updateWorkspaceGeneralAction } from "./actions";
 
 // ---------------------------------------------------------------------------
@@ -25,22 +26,6 @@ interface FormValues {
   name: string;
   slug: string;
   description: string;
-}
-
-// ---------------------------------------------------------------------------
-// Slugify — lowercase, drop URL-unsafe characters, spaces → hyphens.
-// Mirrors the format enforced by the server action's slug schema so what the
-// user sees while typing is exactly what gets persisted.
-// ---------------------------------------------------------------------------
-
-function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, "") // drop anything that isn't url-safe
-    .replace(/\s+/g, "-") // spaces → hyphens
-    .replace(/-+/g, "-") // collapse repeated hyphens
-    .replace(/^-+|-+$/g, ""); // trim leading/trailing hyphens
 }
 
 // ---------------------------------------------------------------------------

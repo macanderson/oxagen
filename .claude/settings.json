@@ -323,7 +323,7 @@
       "Bash(docker rm *)",
       "Bash(docker rmi *)"
     ],
-    "defaultMode": "acceptEdits"
+    "defaultMode": "dontAsk"
   },
   "model": "claude-haiku-4-5",
   "availableModels": [
@@ -377,14 +377,20 @@
     "verbs": [
       "oxagenating",
       "everyday I'm hustling",
-      "i get knocked down but i get up again",
-      "oh danny you're never gonna keep me down",
-      "i saw the sign and it opened up my eyes",
-      "i dont want to be your downfall",
-      "code so clean you could eat off it",
-      "refactoring your mom...",
-      "huntie singing",
-      "huntie is rooting for you"
+      "hustle mode: activated",
+      "grinding away",
+      "just keep swimming",
+      "cooking up some code",
+      "brewing bits of brilliance",
+      "spinning solutions to solve some sensational super superb stuff",
+      "hatching plans before they hatch",
+      "synthesizing insightful insights",
+      "crossing catalyzing creativity chasms",
+      "orchestrating outcomes",
+      "navigating complexities involved in simplicity",
+      "decoding the problem",
+      "engineering a solution",
+      "assembling the answer"
     ]
   },
   "alwaysThinkingEnabled": true,

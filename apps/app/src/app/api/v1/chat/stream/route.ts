@@ -274,7 +274,11 @@ export async function POST(request: NextRequest): Promise<Response> {
   const coreMessages: ModelMessage[] = injectContext(messagesWithCurrent, blocks);
 
   const requestId = randomUUID();
-  const agentTools = await materializeTools({
+  // materializeTools returns the AI SDK tool map keyed by *model-safe* names
+  // (the gateway rejects the dotted capability names — see toModelToolName)
+  // plus a reverse map back to the real capability name. The map translates
+  // tool-call stream events so the UI still shows/routes on the real name.
+  const { tools: agentTools, nameMap: toolNameMap } = await materializeTools({
     orgId: tenant.id,
     workspaceId: workspace.id,
     userId: session.user.id,
@@ -334,7 +338,10 @@ export async function POST(request: NextRequest): Promise<Response> {
               type: "tool-call-start",
               messageId: requestId,
               toolCallId: part.toolCallId,
-              capability: part.toolName,
+              // Translate the model-safe tool name back to the real dotted
+              // capability name so the UI labels and routes (e.g.
+              // agent.code.execute → CodeExecuteCard) on the real name.
+              capability: toolNameMap[part.toolName] ?? part.toolName,
               inputPreview: part.input,
               // Default risk level; capabilities may override via tool metadata.
               riskLevel: "low",
@@ -384,9 +391,27 @@ export async function POST(request: NextRequest): Promise<Response> {
                 totalTokens: part.totalUsage.totalTokens ?? 0,
               },
             });
+          } else if (pType === "error") {
+            // streamText surfaces provider/gateway failures (e.g. a 400 from a
+            // bad request, auth, or rate limit) as an `error` PART rather than
+            // throwing — iterating fullStream never rejects. If we don't
+            // forward it the turn produces zero output and the user sees
+            // nothing at all. Surface it as a text event (same shape the outer
+            // catch uses) so the failure is visible instead of silent.
+            const errVal = (raw as { error?: unknown }).error;
+            const message =
+              errVal instanceof Error
+                ? errVal.message
+                : typeof errVal === "string"
+                  ? errVal
+                  : "Stream error";
+            // Show the failure live but do NOT fold it into assistantText —
+            // persisting "[Error: …]" as the assistant reply would feed the
+            // error back into the next turn's history context.
+            emit({ type: "text", messageId: requestId, text: `\n\n[Error: ${message}]` });
           }
           // step-start, step-finish, tool-call-streaming-start, tool-call-delta,
-          // error, reasoning, source — intentionally not forwarded to the client.
+          // reasoning, source — intentionally not forwarded to the client.
         }
 
         // Persist the assistant reply so it survives a page refresh and is

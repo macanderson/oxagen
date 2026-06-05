@@ -75,6 +75,19 @@ export const baseEnvSchema = z.object({
   OXAGEN_LLM_VIDEO_BASIC: z.string().default("google/veo-3-fast"),
   OXAGEN_LLM_VIDEO_ADVANCED: z.string().default("google/veo-3"),
 
+  // ── Email (transactional, via @oxagen/notifications SMTP transport) ──
+  // Optional in the base schema (not every service sends mail); the
+  // notifications transport enforces presence at first send via requireEnv and
+  // fails closed with a precise error. SMTP is the vendor-neutral seam — Resend
+  // today (host smtp.resend.com, username "resend", password = a Resend API
+  // key); switching providers is an env-only change, no code change.
+  SMTP_HOST: z.string().min(1).optional(),
+  SMTP_PORT: z.coerce.number().int().positive().optional(),
+  SMTP_USERNAME: z.string().min(1).optional(),
+  SMTP_PASSWORD: z.string().min(1).optional(),
+  SMTP_FROM_EMAIL: z.string().email().optional(),
+  SMTP_FROM_NAME: z.string().min(1).optional(),
+
   LINEAR_API_KEY: z.string().optional(),
 
   NEXT_PUBLIC_APP_URL: z.string().url(),

@@ -3,6 +3,7 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { slugify } from "@/lib/slug";
 
 export interface NewOrgAction {
   (formData: FormData): Promise<{ ok: true; orgSlug: string; workspaceSlug: string } | { ok: false; error: string }>;
@@ -10,14 +11,7 @@ export interface NewOrgAction {
 
 // Slug rules mirror the organization.create contract pattern: [a-z0-9-]{2,40}.
 function deriveSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]+/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
+  return slugify(name).slice(0, 40);
 }
 
 export function NewOrgForm({ action }: { action: NewOrgAction }) {

@@ -63,6 +63,9 @@ database-creds.txt
 # Plaintext credential dump (full env contract; live secrets)
 creds.txt
 
+# Local dev login credentials for browser-driven frontend verification
+creds.json
+
 # playwright test artifacts
 .playwright-mcp*/
 .playwright*
