@@ -48,10 +48,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
        */}
       <body className="min-h-dvh font-sans antialiased">
         <ThemeProvider initialTheme={theme}>
-          <ToastProvider>
-            {children}
-            <ToastViewport />
-          </ToastProvider>
+          {/*
+           * MotionProvider sets framer-motion's reducedMotion="user" so every
+           * motion.* element across the app honours the OS reduce-motion setting
+           * (framer-motion does NOT do this by default), matching the global CSS
+           * prefers-reduced-motion kill-switch in @oxagen/ui globals.
+           */}
+          <MotionProvider>
+            <ToastProvider>
+              {children}
+              <ToastViewport />
+            </ToastProvider>
+          </MotionProvider>
         </ThemeProvider>
       </body>
     </html>
