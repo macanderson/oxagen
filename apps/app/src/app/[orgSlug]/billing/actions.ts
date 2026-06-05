@@ -30,48 +30,53 @@ const CAN_MANAGE_BILLING = new Set(["owner", "admin", "billing"]);
 // ── resolveOrgWithBillingGate ─────────────────────────────────────────────────
 
 /**
- * Shared guard: resolve org + assert the calling user has billing-management
- * rights. Returns the resolved tenant. Throws a redirect if not authed, or
- * returns `null` if the caller lacks the required role.
+ * Shared authorization gate for every mutating billing action.
  *
- * Exported for testing only — prefer the individual action functions in
- * application code.
+ * Resolves the org AND asserts the caller (a) is a member of that org and
+ * (b) holds a billing-management role (owner/admin/billing). Returns the
+ * org id on success, or `null` when the caller lacks rights — which also
+ * closes the cross-org IDOR (a member of org A cannot pass org B's slug,
+ * since the orgUsers lookup is keyed on (tenant.id, session.user.id) and a
+ * non-member yields no row). `getSessionOrRedirect` still redirects an
+ * unauthenticated caller before we get here.
  */
-async function resolveManagedOrg(orgSlug: string) {
+async function resolveManagedOrg(orgSlug: string): Promise<{ orgId: string } | null> {
   const session = await getSessionOrRedirect();
   const tenant = await resolveOrg(orgSlug);
+  if (!session.user) return null;
 
-  if (session.user) {
-    const { db, schema } = await import("@oxagen/database");
-    const { eq, and } = await import("drizzle-orm");
-    const [row] = await db()
-      .select({ role: schema.orgUsers.role })
-      .from(schema.orgUsers)
-      .where(
-        and(
-          eq(schema.orgUsers.orgId, tenant.id),
-          eq(schema.orgUsers.userId, session.user.id),
-        ),
-      )
-      .limit(1);
-    const role = row?.role ?? "member";
-    if (!CAN_MANAGE_BILLING.has(role)) {
-      return { tenant: null as never, orgId: "" };
-    }
+  const { db, schema } = await import("@oxagen/database");
+  const { eq, and } = await import("drizzle-orm");
+  const [row] = await db()
+    .select({ role: schema.orgUsers.role })
+    .from(schema.orgUsers)
+    .where(
+      and(
+        eq(schema.orgUsers.orgId, tenant.id),
+        eq(schema.orgUsers.userId, session.user.id),
+      ),
+    )
+    .limit(1);
+  const role = row?.role ?? null;
+  if (!role || !CAN_MANAGE_BILLING.has(role)) {
+    logger.warn({ orgSlug, userId: session.user.id, role }, "billing: action denied — not a billing manager");
+    return null;
   }
-
-  return { tenant, orgId: tenant.id };
+  return { orgId: tenant.id };
 }
+
+/** Standard unauthorized message for billing-management actions. */
+const NOT_AUTHORIZED = "You don't have permission to manage billing for this organization.";
 
 // ── cancelSubscriptionAction ─────────────────────────────────────────────────
 
 export async function cancelSubscriptionAction(input: {
   orgSlug: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  await getSessionOrRedirect();
-  const tenant = await resolveOrg(input.orgSlug);
+  const managed = await resolveManagedOrg(input.orgSlug);
+  if (!managed) return { ok: false, error: NOT_AUTHORIZED };
   try {
-    await cancelOrgSubscription(tenant.id);
+    await cancelOrgSubscription(managed.orgId);
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Cancel failed" };
   }
@@ -85,10 +90,10 @@ export async function cancelSubscriptionAction(input: {
 export async function reactivateSubscriptionAction(input: {
   orgSlug: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  await getSessionOrRedirect();
-  const tenant = await resolveOrg(input.orgSlug);
+  const managed = await resolveManagedOrg(input.orgSlug);
+  if (!managed) return { ok: false, error: NOT_AUTHORIZED };
   try {
-    await reactivateOrgSubscription(tenant.id);
+    await reactivateOrgSubscription(managed.orgId);
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Reactivate failed" };
   }
@@ -113,16 +118,16 @@ const ChangePlanSchema = z.object({
 export async function changePlanAction(
   input: z.infer<typeof ChangePlanSchema>,
 ): Promise<{ ok: true; url: string | null } | { ok: false; error: string }> {
-  await getSessionOrRedirect();
   const parsed = ChangePlanSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
   const { orgSlug, targetPlanSlug, interval } = parsed.data;
+  const managed = await resolveManagedOrg(orgSlug);
+  if (!managed) return { ok: false, error: NOT_AUTHORIZED };
   const env = loadEnv();
-  const tenant = await resolveOrg(orgSlug);
 
   try {
-    const result = await changeOrgPlan(tenant.id, targetPlanSlug, interval, {
+    const result = await changeOrgPlan(managed.orgId, targetPlanSlug, interval, {
       successUrl: `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/billing/subscription?status=success`,
       cancelUrl: `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/billing/subscription?status=canceled`,
     });
@@ -160,17 +165,17 @@ export type SetSeatsResult =
 export async function setSeatsAction(
   input: z.infer<typeof SetSeatsSchema>,
 ): Promise<SetSeatsResult> {
-  await getSessionOrRedirect();
   const parsed = SetSeatsSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, code: "internal", error: "Invalid input" };
   }
 
   const { orgSlug, seats } = parsed.data;
-  const tenant = await resolveOrg(orgSlug);
+  const managed = await resolveManagedOrg(orgSlug);
+  if (!managed) return { ok: false, code: "internal", error: NOT_AUTHORIZED };
 
   try {
-    await setSubscriptionSeats(tenant.id, seats);
+    await setSubscriptionSeats(managed.orgId, seats);
     revalidatePath(`/${orgSlug}/billing`);
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug, seats }, "billing: seats updated");
@@ -206,11 +211,12 @@ const BuyCreditsSchema = z.object({
 export async function buyCreditsAction(
   input: z.infer<typeof BuyCreditsSchema>,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
-  await getSessionOrRedirect();
   const parsed = BuyCreditsSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
   const { orgSlug, amountUsd } = parsed.data;
+  const managed = await resolveManagedOrg(orgSlug);
+  if (!managed) return { ok: false, error: NOT_AUTHORIZED };
   const env = loadEnv();
 
   try {
@@ -242,15 +248,15 @@ const PreviewSeatsSchema = z.object({
 export async function previewSeatsAction(
   input: z.infer<typeof PreviewSeatsSchema>,
 ): Promise<SeatChangePreview | { error: string }> {
-  await getSessionOrRedirect();
   const parsed = PreviewSeatsSchema.safeParse(input);
   if (!parsed.success) return { error: "Invalid input" };
 
   const { orgSlug, seats } = parsed.data;
-  const tenant = await resolveOrg(orgSlug);
+  const managed = await resolveManagedOrg(orgSlug);
+  if (!managed) return { error: NOT_AUTHORIZED };
 
   try {
-    const preview = await previewSeatChange(tenant.id, seats);
+    const preview = await previewSeatChange(managed.orgId, seats);
     logger.info({ orgSlug, seats }, "billing: previewSeatsAction");
     return preview;
   } catch (err) {
@@ -271,15 +277,15 @@ const PreviewPlanSchema = z.object({
 export async function previewPlanAction(
   input: z.infer<typeof PreviewPlanSchema>,
 ): Promise<PlanChangePreview | { error: string }> {
-  await getSessionOrRedirect();
   const parsed = PreviewPlanSchema.safeParse(input);
   if (!parsed.success) return { error: "Invalid input" };
 
   const { orgSlug, targetPlanSlug, interval } = parsed.data;
-  const tenant = await resolveOrg(orgSlug);
+  const managed = await resolveManagedOrg(orgSlug);
+  if (!managed) return { error: NOT_AUTHORIZED };
 
   try {
-    const preview = await previewPlanChange(tenant.id, targetPlanSlug, interval);
+    const preview = await previewPlanChange(managed.orgId, targetPlanSlug, interval);
     logger.info({ orgSlug, targetPlanSlug, interval }, "billing: previewPlanAction");
     return preview;
   } catch (err) {
@@ -296,15 +302,15 @@ const OrgSlugSchema = z.object({ orgSlug: z.string().min(1) });
 export async function createSetupIntentAction(input: {
   orgSlug: string;
 }): Promise<{ ok: true; clientSecret: string } | { ok: false; error: string }> {
-  await getSessionOrRedirect();
   const parsed = OrgSlugSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
   const { orgSlug } = parsed.data;
-  const tenant = await resolveOrg(orgSlug);
+  const managed = await resolveManagedOrg(orgSlug);
+  if (!managed) return { ok: false, error: NOT_AUTHORIZED };
 
   try {
-    const { clientSecret } = await createPaymentMethodSetupIntent(tenant.id);
+    const { clientSecret } = await createPaymentMethodSetupIntent(managed.orgId);
     logger.info({ orgSlug }, "billing: createSetupIntentAction");
     return { ok: true, clientSecret };
   } catch (err) {
@@ -319,15 +325,15 @@ export async function createSetupIntentAction(input: {
 export async function syncPaymentMethodsAction(input: {
   orgSlug: string;
 }): Promise<{ ok: boolean }> {
-  await getSessionOrRedirect();
   const parsed = OrgSlugSchema.safeParse(input);
   if (!parsed.success) return { ok: false };
 
   const { orgSlug } = parsed.data;
-  const tenant = await resolveOrg(orgSlug);
+  const managed = await resolveManagedOrg(orgSlug);
+  if (!managed) return { ok: false };
 
   try {
-    await syncPaymentMethodsFromStripe(tenant.id);
+    await syncPaymentMethodsFromStripe(managed.orgId);
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug }, "billing: syncPaymentMethodsAction");
     return { ok: true };
@@ -348,15 +354,15 @@ export async function setDefaultPaymentMethodAction(input: {
   orgSlug: string;
   paymentMethodId: string;
 }): Promise<{ ok: true } | { error: string }> {
-  await getSessionOrRedirect();
   const parsed = PaymentMethodSchema.safeParse(input);
   if (!parsed.success) return { error: "Invalid input" };
 
   const { orgSlug, paymentMethodId } = parsed.data;
-  const tenant = await resolveOrg(orgSlug);
+  const managed = await resolveManagedOrg(orgSlug);
+  if (!managed) return { error: NOT_AUTHORIZED };
 
   try {
-    await setOrgDefaultPaymentMethod(tenant.id, paymentMethodId);
+    await setOrgDefaultPaymentMethod(managed.orgId, paymentMethodId);
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug, paymentMethodId }, "billing: setDefaultPaymentMethodAction");
     return { ok: true };
@@ -373,15 +379,15 @@ export async function removePaymentMethodAction(input: {
   orgSlug: string;
   paymentMethodId: string;
 }): Promise<{ ok: true } | { error: string; code?: string }> {
-  await getSessionOrRedirect();
   const parsed = PaymentMethodSchema.safeParse(input);
   if (!parsed.success) return { error: "Invalid input" };
 
   const { orgSlug, paymentMethodId } = parsed.data;
-  const tenant = await resolveOrg(orgSlug);
+  const managed = await resolveManagedOrg(orgSlug);
+  if (!managed) return { error: NOT_AUTHORIZED };
 
   try {
-    await removeOrgPaymentMethod(tenant.id, paymentMethodId);
+    await removeOrgPaymentMethod(managed.orgId, paymentMethodId);
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug, paymentMethodId }, "billing: removePaymentMethodAction");
     return { ok: true };
@@ -409,15 +415,15 @@ export async function updateAutoReloadAction(input: {
   amountCents?: number;
   paymentMethodId?: string;
 }): Promise<{ ok: true; settings: OrgBillingSettings } | { error: string }> {
-  await getSessionOrRedirect();
   const parsed = UpdateAutoReloadSchema.safeParse(input);
   if (!parsed.success) return { error: "Invalid input" };
 
   const { orgSlug, ...updates } = parsed.data;
-  const tenant = await resolveOrg(orgSlug);
+  const managed = await resolveManagedOrg(orgSlug);
+  if (!managed) return { error: NOT_AUTHORIZED };
 
   try {
-    const settings = await updateAutoReloadSettings(tenant.id, updates);
+    const settings = await updateAutoReloadSettings(managed.orgId, updates);
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug }, "billing: updateAutoReloadAction");
     return { ok: true, settings };

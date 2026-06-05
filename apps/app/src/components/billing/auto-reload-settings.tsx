@@ -193,7 +193,7 @@ export function AutoReloadSettings({
         {enabled && (
           <p className="text-xs text-muted-foreground">
             When your balance falls below ${parseFloat(threshold || "0").toFixed(2)},
-            we'll automatically buy ${parseFloat(amount || "0").toFixed(2)} in
+            we&apos;ll automatically buy ${parseFloat(amount || "0").toFixed(2)} in
             credits.
           </p>
         )}

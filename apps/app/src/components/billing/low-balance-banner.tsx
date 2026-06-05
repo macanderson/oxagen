@@ -71,7 +71,7 @@ export function LowBalanceBanner({
       <AlertTriangle className="h-4 w-4" />
       <div className="flex items-start justify-between gap-4">
         <div>
-          <AlertTitle>You're low on credits</AlertTitle>
+          <AlertTitle>You&apos;re low on credits</AlertTitle>
           <AlertDescription>
             {formatCents(balanceCents)} remaining.{" "}
             <Button

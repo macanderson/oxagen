@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogTrigger,
   DialogPopup,
   DialogHeader,
   DialogPanel,
@@ -123,13 +122,11 @@ function AddCardDialog({
   const [clientSecret, setClientSecret] = React.useState<string | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
 
-  // Fetch a SetupIntent clientSecret when the dialog opens.
+  // Fetch a SetupIntent clientSecret when the dialog opens. Resetting state on
+  // close happens in handleOpenChange (an event handler), NOT here — a
+  // synchronous setState inside an effect trips the cascading-render lint.
   React.useEffect(() => {
-    if (!open) {
-      setClientSecret(null);
-      setLoadError(null);
-      return;
-    }
+    if (!open) return;
     let cancelled = false;
     createSetupIntentAction({ orgSlug }).then((result) => {
       if (cancelled) return;
@@ -144,13 +141,22 @@ function AddCardDialog({
     };
   }, [open, orgSlug]);
 
+  function handleOpenChange(next: boolean) {
+    if (!next) {
+      // Clear the consumed SetupIntent so reopening always fetches a fresh one.
+      setClientSecret(null);
+      setLoadError(null);
+    }
+    onOpenChange(next);
+  }
+
   function handleSuccess() {
-    onOpenChange(false);
+    handleOpenChange(false);
     router.refresh();
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogPopup>
         <DialogHeader>
           <DialogTitle>Add payment method</DialogTitle>
@@ -172,7 +178,7 @@ function AddCardDialog({
               <AddCardForm
                 orgSlug={orgSlug}
                 onSuccess={handleSuccess}
-                onCancel={() => onOpenChange(false)}
+                onCancel={() => handleOpenChange(false)}
               />
             </StripeElementsProvider>
           )}

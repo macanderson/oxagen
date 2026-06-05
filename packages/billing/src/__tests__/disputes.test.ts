@@ -50,8 +50,6 @@ function makeState(): DbState {
 }
 
 function makeDb(state: DbState) {
-  // Track insert call count to distinguish first vs subsequent.
-  let insertIdx = 0;
   return {
     query: {
       billingDisputes: {
@@ -63,7 +61,6 @@ function makeDb(state: DbState) {
       },
     },
     insert: vi.fn(() => {
-      insertIdx++;
       state.insertCalled = true;
       return {
         values: vi.fn(() => Promise.resolve()),
