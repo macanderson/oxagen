@@ -198,6 +198,42 @@ Do **not** parallelize when:
 - Prefer `Explore` agent (read-only, fast) over `general-purpose` for
   search-only tasks.
 
+## Local frontend verification (encouraged every session)
+
+You are **authorized and encouraged** to drive the local app in a browser to
+verify your own frontend work — every session, any time you touch UI, without
+asking permission first. Don't ship UI changes you haven't seen render.
+
+**Credentials.** A reusable local-dev account lives in `creds.json` at the repo
+root (gitignored — never commit it, never print the password in chat). It holds
+the login email/password plus the seeded org/workspace slugs. Reuse it across
+sessions. If the local DB was reset and login fails, recreate the account via
+the signup flow below and update `creds.json` (keep the same email/password so
+it stays stable).
+
+**Spin up the stack.** The dev server is usually already running:
+- `apps/app` → `http://localhost:3000` (check `lsof -ti:3000` first; the repo
+  runs all four Next apps on 3000/3100/3200/3300 via `pnpm dev`).
+- Local Postgres is on `:5433` (Docker). `pnpm dev` brings up Docker + env.
+- If port 3000 is free, run `pnpm dev` (needs Docker running).
+
+**Log in / sign up (email+password, no social).** The whole app is auth-gated —
+every route 307s to `/login` until you have a session. Email/password signup
+auto-signs-in (no email verification locally).
+1. Go to `/signup`, fill name/email/password from `creds.json`, submit.
+2. A brand-new user lands on `/new-organization` — create the org (it also
+   creates a default workspace), then you're at `/{org}/{ws}/ask`.
+3. Returning sessions: use `/login` with the saved creds.
+
+**Driving the browser.** Prefer the chrome-devtools MCP
+(`mcp__plugin_chrome-devtools-mcp_chrome-devtools__*`) — it manages its own
+browser. The Playwright MCP shares one profile and errors with "Browser is
+already in use" when another session holds it; don't kill that browser (it may
+be another agent's). The chrome-devtools `fill` tool **appends** to inputs and
+its empty-string clear does **not** fire React's controlled `onChange`; to set
+a React-controlled field reliably (or to clear one), use `evaluate_script` with
+the native value setter + a bubbling `input` event.
+
 ## App stack
 
 ### `apps/app` — interactive agent UI

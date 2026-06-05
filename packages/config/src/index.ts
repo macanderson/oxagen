@@ -1,5 +1,7 @@
 export * from "./env";
 export * from "./registry";
+export * from "./domain";
+export * from "./geo";
 
 export const PORTS = {
   app: 3000,

@@ -15,11 +15,29 @@ export const organizations = orgSchema.table(
     avatarUrl: text("avatar_url"),
     planType: text("plan_type").notNull(),
     status: text("status").notNull(),
+    // Discriminator: 'personal' = solo user, 'business' = team/company.
+    // Business orgs unlock team features, billing profiles, and enterprise
+    // controls. CHECK enforced below.
+    type: text("type").notNull().default("business"),
+    // Business-only profile fields. NULL on personal orgs.
+    website: text("website"),
+    industry: text("industry"),
+    // CHECK: closed size-range slugs or NULL (personal orgs omit).
+    employeeSize: text("employee_size"),
     settings: jsonb("settings").notNull().default(sql`'{}'::jsonb`),
   },
   (t) => ({
     slugIdx: uniqueIndex("organizations_slug_idx").on(t.slug),
     statusIdx: index("organizations_status_idx").on(t.status),
+    typeCheck: check(
+      "organizations_type_check",
+      sql`${t.type} IN ('personal','business')`,
+    ),
+    // NULL is valid (personal orgs and business orgs that skipped the field).
+    employeeSizeCheck: check(
+      "organizations_employee_size_check",
+      sql`${t.employeeSize} IS NULL OR ${t.employeeSize} IN ('1','2-10','11-50','51-200','201-500','501-1000','1001-5000','5001-10000','10000+')`,
+    ),
   }),
 );
 

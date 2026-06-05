@@ -88,6 +88,18 @@ export const baseEnvSchema = z.object({
   SMTP_FROM_EMAIL: z.string().email().optional(),
   SMTP_FROM_NAME: z.string().min(1).optional(),
 
+  // Google Maps / Places API. NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is the browser-
+  // exposed API key used by the onboarding address autocomplete component; it
+  // must be HTTP-referrer-restricted in the Google Cloud console. Optional so
+  // builds stay green without it — the address form degrades to plain manual
+  // entry when absent.
+  // NEXT_PUBLIC_GOOGLE_MAPS_API_SECRET is the URL-signing secret and must be
+  // consumed SERVER-SIDE ONLY. Despite the NEXT_PUBLIC_ prefix it must NEVER
+  // be referenced in client bundle code; it is registered here purely so the
+  // env contract documents and validates it alongside its sibling key.
+  NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
+  NEXT_PUBLIC_GOOGLE_MAPS_API_SECRET: z.string().min(1).optional(),
+
   LINEAR_API_KEY: z.string().optional(),
 
   NEXT_PUBLIC_APP_URL: z.string().url(),

@@ -30,7 +30,7 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
   }
 
   let orgId: string;
-  let result: { publicId: string; name: string; slug: string; createdAt: string };
+  let result: { publicId: string; name: string; slug: string; type: string; createdAt: string };
 
   try {
     const txResult = await d.transaction(async (tx) => {
@@ -41,6 +41,12 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
           slug: input.slug,
           planType: input.planSlug,
           status: "active",
+          type: input.type,
+          // Business-only fields: contract superRefine guarantees these are
+          // undefined for personal accounts, so the DB columns stay null.
+          website: input.type === "business" ? (input.website ?? null) : null,
+          industry: input.type === "business" ? (input.industry ?? null) : null,
+          employeeSize: input.type === "business" ? (input.employeeSize ?? null) : null,
           createdByUserId: ctx.userId,
           updatedByUserId: ctx.userId,
         })
@@ -48,6 +54,7 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
           publicId: schema.organizations.publicId,
           name: schema.organizations.name,
           slug: schema.organizations.slug,
+          type: schema.organizations.type,
           createdAt: schema.organizations.createdAt,
           id: schema.organizations.id,
         });
@@ -76,10 +83,29 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
         tx,
       });
 
+      // Persist billing profile when either billing email or address is supplied.
+      // A missing profile simply means not yet collected; the org itself is valid.
+      if (input.billingEmail !== undefined || input.billingAddress !== undefined) {
+        await tx.insert(schema.orgBillingProfiles).values({
+          orgId: org.id,
+          billingEmail: input.billingEmail ?? null,
+          addressLine1: input.billingAddress?.line1 ?? null,
+          addressLine2: input.billingAddress?.line2 ?? null,
+          addressCity: input.billingAddress?.city ?? null,
+          addressRegion: input.billingAddress?.region ?? null,
+          addressPostalCode: input.billingAddress?.postalCode ?? null,
+          addressCountry: input.billingAddress?.country ?? null,
+          addressPlaceId: input.billingAddress?.placeId ?? null,
+          createdByUserId: ctx.userId,
+          updatedByUserId: ctx.userId,
+        });
+      }
+
       return {
         publicId: org.publicId,
         name: org.name,
         slug: org.slug,
+        type: org.type,
         createdAt: org.createdAt.toISOString(),
         id: org.id,
       };
@@ -90,6 +116,7 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
       publicId: txResult.publicId,
       name: txResult.name,
       slug: txResult.slug,
+      type: txResult.type,
       createdAt: txResult.createdAt,
     };
     logger.info(

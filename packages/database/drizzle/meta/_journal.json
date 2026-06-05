@@ -22,6 +22,13 @@
       "when": 1780690792632,
       "tag": "0002_generated_assets",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780695208151,
+      "tag": "0003_org_type_and_billing_profile",
+      "breakpoints": true
     }
   ]
 }

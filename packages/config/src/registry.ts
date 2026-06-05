@@ -333,6 +333,37 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     placeholder: "pk_test_replace_me",
   },
 
+  // ── Google Maps / Places ────────────────────────────────────────────────────
+  // Used by the onboarding billing-address autocomplete. The KEY is the only
+  // value that must reach the browser (HTTP-referrer-restricted). The SECRET is
+  // a URL-signing secret consumed server-side only — even though the env var
+  // name carries NEXT_PUBLIC_ for namespacing continuity, it must NEVER be
+  // referenced in client bundle code.
+  NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: {
+    group: "Google Maps",
+    description:
+      "Browser-exposed Google Maps / Places API key powering billing-address autocomplete " +
+      "in onboarding. Restrict to HTTP referrers in the Google Cloud console.",
+    secret: false,
+    clientExposed: true,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
+  NEXT_PUBLIC_GOOGLE_MAPS_API_SECRET: {
+    group: "Google Maps",
+    description:
+      "Google Maps URL-signing secret. SERVER-SIDE USE ONLY — must never be bundled into " +
+      "client code despite the NEXT_PUBLIC_ prefix used for namespacing.",
+    secret: true,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
+
   // ── Billing / usage meter ────────────────────────────────────────────────────
   OXAGEN_TARGET_MARGIN: {
     group: "Billing",
