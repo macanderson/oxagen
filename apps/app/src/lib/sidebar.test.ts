@@ -77,7 +77,7 @@ describe("resolveSidebarMode", () => {
 // Spec (application-shell spec §4):
 //   workspace: 6 items (Ask, Knowledge, Automation, Activity, Studio, Settings)
 //   org:       6 items (Workspaces, Members, Access, Security, Billing, Developer)
-//   account:   6 items (Back to app, Profile, Security, Cases, Notifications, Privacy)
+//   account:   7 items (Back to app, Profile, Preferences, Security, Cases, Notifications, Privacy)
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
@@ -93,10 +93,10 @@ describe("getSidebarConfig item counts", () => {
     expect(config.items).toHaveLength(7);
   });
 
-  it("account config has exactly 6 items", () => {
+  it("account config has exactly 7 items", () => {
     const config = getSidebarConfig("account");
     expect(config.mode).toBe("account");
-    expect(config.items).toHaveLength(6);
+    expect(config.items).toHaveLength(7);
   });
 
   it("account config contains exactly one isReturn item", () => {
