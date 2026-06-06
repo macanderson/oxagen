@@ -128,7 +128,7 @@
       "Bash(git clean -fdx *)",
       "Bash(git filter-branch *)",
       "Bash(git filter-repo *)"
-      ],
+    ],
     "ask": [
       "Read(.env)",
       "Read(.env.*.local)",
@@ -250,7 +250,6 @@
     "defaultMode": "bypassPermissions"
   },
   "model": "opusplan",
-  "terminalProgressBarEnabled": true,
   "availableModels": [
     "opus[1m]",
     "opus",
@@ -259,12 +258,32 @@
     "haiku",
     "opusplan"
   ],
+  "enableAllProjectMcpServers": true,
+  "hooks": {},
+  "worktree": {
+    "symlinkDirectories": [
+      "node_modules",
+      ".cache",
+      ".turbo",
+      ".next",
+      ".venv",
+      "target",
+      "dist"
+    ],
+    "sparsePaths": [
+      "apps",
+      "packages",
+      "tools",
+      ".agents",
+      ".claude"
+    ],
+    "baseRef": "head",
+    "bgIsolation": "none"
+  },
   "statusLine": {
     "type": "command",
     "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/statusline-command.sh\""
   },
-  "enableAllProjectMcpServers": true,
-  "hooks": {},
   "enabledPlugins": {
     "github@claude-plugins-official": true,
     "linear@claude-plugins-official": true,
@@ -290,8 +309,7 @@
     "superpowers@claude-plugins-official": true,
     "outputai@claude-plugins-official": true,
     "remember@claude-plugins-official": true,
-    "posthog@claude-plugins-official": true,
-    "oxagen@oxagen-local": true
+    "posthog@claude-plugins-official": true
   },
   "sandbox": {
     "enabled": false,
@@ -334,19 +352,6 @@
   "tui": "fullscreen",
   "autoMemoryEnabled": true,
   "showThinkingSummaries": true,
-  "teammateMode": "auto",
-  "worktree": {
-    "sparsePaths": [
-      "apps",
-      "packages",
-      "tools",
-      ".agents",
-      ".claude"
-    ],
-    "symlinkDirectories": [
-      "node_modules", ".cache", ".turbo", ".next", ".venv", "target", "dist"
-    ],
-    "baseRef": "head",
-    "bgIsolation": "none"
-  }
+  "terminalProgressBarEnabled": true,
+  "teammateMode": "auto"
 }
