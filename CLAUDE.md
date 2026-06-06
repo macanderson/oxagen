@@ -93,6 +93,14 @@ them too, so name the relevant skill in an agent's prompt.
   (CSS, a11y, Core Web Vitals, forms/autofill, passkeys, view transitions,
   scroll animation, privacy, security). Use when building/reviewing frontend:
   open the one or two matching technique files, don't read the whole library.
+- **`reablocks`** — component/chart/graph library used in `apps/app`. Use when
+  building or restyling data-rich UI: tables, timelines, block-based layouts.
+- **`reagraph`** — graph-visualization layer (WebGL, force-directed). Use when
+  rendering knowledge-graph, lineage, or topology views.
+- **`reaviz`** — charting library (d3-backed). Use when building analytics charts,
+  sparklines, or metric visualizations in the app.
+- **`oxagen-feature`** — feature-development workflow skill. Use when scaffolding
+  a new product feature end-to-end (contracts → routes → UI → tests).
 - **`vendor-better-auth`** — documentation map (llms.txt index) for Better Auth.
   Use to jump to the right official doc; pair with the `*-best-practices` auth
   skills for hands-on setup.
@@ -103,8 +111,9 @@ them too, so name the relevant skill in an agent's prompt.
 
 Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first. Building UI →
 `coss-ui` (component API) + `oxagen-design-system` (identity) + `frontend-patterns`
-(technique). Auth → `vendor-better-auth` + the Better Auth `*-best-practices`
-skills. See `.agents/skills/README.md` for the full local-skill manifest.
+(technique) + `reablocks`/`reagraph`/`reaviz` (component libs as needed). Auth →
+`vendor-better-auth` + the Better Auth `*-best-practices` skills. New features →
+`oxagen-feature`. See `.agents/skills/README.md` for the full local-skill manifest.
 
 ## Production URLs (interim)
 
@@ -142,14 +151,17 @@ variable in the root of this repo.
   parent ticket; more is a sign the parent is too big.
 - **Assignee: Mac Anderson** (`mac@oxagen.ai`,
   uuid `aa47fc28-1b3a-4b45-bb02-d18f2e59c6bb`). Always set on creation.
-- **Labels — every ticket:**
-  - `agent-created` (workspace label, mandatory)
-  - One or more **functional-area** labels: `foundations`,
-    `application-shell`, `iam`, `SOC2`, `security`, `observability`,
-    `infra`, `tech-debt`, etc. Check `list_issue_labels` before
-    inventing a new one. If a new area emerges (e.g. `command-menu`,
-    `studio`, `agent-runtime`), create it with `create_issue_label`
-    and write its description.
+- **Labels — every ticket:** Call `list_issue_labels` to get the live
+  set — do not guess or hard-code. The active taxonomy (~28 slugs, ≤50
+  cap) includes: `web-app`, `mobile-ux`, `api`, `mcp`, `knowledge-graph`,
+  `ingestion`, `connectors`, `agents`, `agent-memory`, `content-studio`,
+  `llm`, `automation`, `auth`, `billing`, `security`, `soc-2`,
+  `observability`, `infra`, `ci`, `database`, `performance`, `reliability`,
+  `bug`, `epic`, `tech-debt`, `testing`, `user-docs`, `adr`.
+  Labels `agent-created`, `foundations`, `application-shell`, `iam`,
+  `SOC2` no longer exist — do not use them. Add a new label with
+  `create_issue_label` only when no existing slug fits; keep the total
+  under 50.
 - **T-shirt size** every ticket using Linear `estimate`:
   - XS (1): ≤1h, single-file, no schema impact, near-zero risk.
   - S (2): half-day, ≤5 files, isolated module, low risk.
@@ -166,8 +178,9 @@ variable in the root of this repo.
   for the next quarter's milestones; P3 = Medium / P4 = Low otherwise.
 - **Description structure** — always include:
   1. One-sentence purpose.
-  2. Link to the relevant `docs/architecture/<topic>/spec.md` (or
-     `plan.md`) section.
+  2. Link to the relevant `docs/architecture/<topic>/spec.md` (or the
+     topic's `plan.md` / top-level architecture MD when no `spec.md`
+     exists) section.
   3. What changes — explicit file list / migration name / contract
      id, not vague verbs.
   4. Acceptance criteria as a checklist.
@@ -218,8 +231,10 @@ Do **not** parallelize when:
 ### Cost discipline
 
 - Match model to task — don't run Opus on a one-line rename.
-- Use the Oxagen graph (`code.*`, `ontology.*`) before opening files;
-  graph queries are cheap, file reads are not.
+- For contract introspection, use `pnpm check:manifest --json` (cheap,
+  accurate). For codebase exploration, batch file reads in one turn.
+  The `code.*` / `ontology.*` graph query layer is **not yet shipped**
+  — do not attempt those calls; they will fail.
 - Batch independent reads into one turn; don't chain them.
 - A subagent is a context isolation tool, not a default. Use it when
   results would blow up the parent's context or when work is parallelizable.
@@ -270,8 +285,10 @@ Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level override
   `proxy.ts` replaces `middleware.ts` (see below).
 - **AI SDK `ai@6.0.x`** — use `modelIdOf()` to resolve model handles to gateway
   slugs; the v4/v5 web docs do NOT match this version. `streamText` /
-  `generateObject` / `generateText` are the correct APIs; `ai/rsc` and
-  `useChat` are forbidden (see App stack notes).
+  `generateObject` / `generateText` are the correct server-side APIs.
+  `ai/rsc` (`streamUI`, `createStreamableUI`, `createAI`) is **forbidden**
+  (experimental). `@ai-sdk/react` (`useChat` / `useCompletion`) is permitted
+  on the client when needed (see App stack notes).
 - **TypeScript `6.0.3`** — stricter inference; no `any`.
 
 ## App stack
@@ -284,18 +301,22 @@ Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level override
   `generateObject`) on the server. **Do NOT use AI SDK RSC**
   (`ai/rsc`, `streamUI`, `createStreamableUI`, `createAI`) — it is
   flagged experimental and not recommended for production. No experimental
-  or unstable SDKs ship in this product. **Do NOT reach for `@ai-sdk/react`
-  (`useChat` / `useCompletion`) either** — the client does not use the AI
-  SDK UI layer; it consumes the `POST /api/v1/chat/stream` SSE endpoint
-  through the hand-rolled `use-tool-stream.ts` hook
-  (`apps/app/src/components/chat/use-tool-stream.ts`).
+  or unstable SDKs ship in this product.
+- The primary chat path does **not** use `@ai-sdk/react` — it consumes the
+  `POST /api/v1/chat/stream` SSE endpoint through the hand-rolled
+  `use-tool-stream.ts` hook
+  (`apps/app/src/components/chat/use-tool-stream.ts`). Do not roll a second
+  transport alongside it. `@ai-sdk/react` (`useChat` / `useCompletion`) may
+  be used on the client for **other** surfaces (e.g. lightweight form
+  generation, secondary panels) where the full SSE pipeline is overkill —
+  but never for the main chat path.
 - Generative UI ("generate UI components from a prompt") is done **without
   RSC**: the model returns structured tool-call / `generateObject` output
   and the client maps it to React components via the chat component
   registry. The model streams *data*, not server-rendered React trees.
 - Tool calls, generative UI, and message branching all flow through the
-  SSE stream consumed by `use-tool-stream.ts` — do not roll a second
-  transport, and do not reach for `ai/rsc` or `@ai-sdk/react` to get there.
+  SSE stream consumed by `use-tool-stream.ts` — do not reach for `ai/rsc`
+  to get there.
 - Server actions handle mutations; client components subscribe to
   streamed responses.
 - Auth lives in server components; client never sees session tokens.
@@ -348,6 +369,40 @@ Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level override
 
 - Fumadocs/MDX documentation site. Statically generated; deployed as
   `oxagen-v2-docs.vercel.app`. No interactive runtime features.
+
+## Common commands
+
+```bash
+pnpm dev                         # start all apps + Docker (Postgres :5433)
+pnpm typecheck                   # run TS across the monorepo (do before push)
+pnpm test                        # run test suite
+pnpm check:manifest              # verify API↔MCP capability parity (warn-only)
+pnpm check:manifest --json       # machine-readable parity output
+pnpm db:migrate                  # apply pending Postgres migrations
+lsof -ti:3000                    # check if app dev server is already running
+git fetch origin && git rebase origin/main  # sync before pushing (avoids force-push)
+```
+
+## Gotchas
+
+- **`"use client"` boundary** — never call a `"use client"` function from a
+  Server Component; the compiler won't catch it but it will blow up at runtime.
+- **`invoke()` needs handler registration** — any file that calls `invoke()`
+  must `import "@oxagen/handlers/register"` before the call; forgetting it
+  silently no-ops the metering/IAM layer.
+- **Turbopack extensionless imports** — Next.js 16 + Turbopack requires
+  extension-free imports (e.g. `import Foo from "./Foo"` not `"./Foo.tsx"`).
+- **`proxy.ts` not `middleware.ts`** — Next.js 16 renamed the interception
+  file; `middleware.ts` is no longer recognized.
+- **Raw `db()` is banned** — use `withTenantDb` / `withSystemDb` /
+  `scopedSession`; the ESLint rule enforces this. `FORCE RLS` requires the
+  `oxagen_app` non-superuser role.
+- **Rebase before pushing to main** — other agents/users push to main
+  concurrently; always `git fetch origin && git rebase origin/main` before
+  `git push` to avoid non-fast-forward errors.
+- **AI Gateway slug drift** — gateway model slugs can be dropped/renamed
+  silently; always use `modelIdOf()` to resolve handles, never hard-code
+  slugs. Verify against live `/v1/models` when adding a new model.
 
 ## Infrastructure boundaries
 
