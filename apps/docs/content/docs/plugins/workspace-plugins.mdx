@@ -1,0 +1,67 @@
+---
+title: Workspace Plugins
+description: Enable org-installed plugin servers for your workspace so agents can use their tools.
+---
+
+## Overview
+
+Once an org admin has installed a plugin server at the org level, workspace Owners and
+Admins can enable it for their workspace. Only enabled servers have their tools injected
+into the agent toolchain for that workspace.
+
+## Enabling a plugin for your workspace
+
+1. Go to **Workspace settings → Integrations**.
+2. The page lists all org-installed servers available to this workspace.
+3. Toggle a server on with the **Enable** switch.
+4. If the server requires authentication (OAuth or API key), a **Connect** button appears — see below.
+
+## Authenticating an OAuth server
+
+1. Click **Connect** next to an OAuth-protected server.
+2. You are redirected to the provider's authorization page.
+3. After granting access you are returned to the integrations page with status **Connected**.
+4. Tokens are stored encrypted (AES-256-GCM + KMS). You will receive an in-app notification
+   if your token expires and re-authentication is needed.
+
+## Storing an API key (secret auth)
+
+1. Click **Set secret** next to a server that requires an API key.
+2. Paste your API key or bearer token into the input.
+3. Click **Save**. The secret is encrypted at rest and never exposed in the UI after saving.
+
+## Re-authenticating
+
+If an OAuth token expires or is revoked, the server's status changes to **Needs re-auth**. A
+notification appears in the bell menu with a deep link to re-authenticate. You can also
+click **Re-authenticate** directly on the integrations page.
+
+## Health status
+
+Each server row shows a health indicator:
+
+| Status | Meaning |
+|---|---|
+| Healthy | Server is reachable and responding to health probes. |
+| Degraded | Some MCP calls are failing; tools may be unreliable. |
+| Unreachable | Server did not respond to the last health probe. |
+| Needs re-auth | OAuth token is expired or revoked. |
+
+Agents only use servers with **Healthy** status. Degraded or unreachable servers are
+skipped at runtime and a warning is logged in execution telemetry.
+
+## Disabling a plugin
+
+Toggle the **Enable** switch off at any time. The server's tools are immediately removed
+from the agent toolchain for this workspace. The org listing and credential remain intact;
+you can re-enable at any time.
+
+## Role requirements
+
+| Action | Required role |
+|---|---|
+| Enable / disable for workspace | Workspace Owner or Org Owner/Admin |
+| Connect / re-authenticate OAuth | Workspace Owner or Org Owner/Admin |
+| Set API key / secret | Workspace Owner or Org Owner/Admin |
+| Install / uninstall from org | Org Owner or Admin only |
+| Manage denylist | Org Owner or Admin only |

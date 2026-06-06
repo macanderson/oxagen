@@ -1,0 +1,85 @@
+---
+title: Plugin Marketplace
+description: Discover and install MCP servers, integrations, and content tools for your organization.
+---
+
+## Overview
+
+The **Plugin Marketplace** lets organization Owners and Admins browse, install, and govern
+third-party plugin servers — MCP servers, data-source integrations, and content tools — that
+contribute additional AI tools to every workspace in your org.
+
+Plugins must be installed at the **org level** first (where they are disabled by default),
+then enabled for individual workspaces. This two-tier model gives admins centralized control
+over what agents can access.
+
+## Opening the marketplace
+
+1. Sign in as an org **Owner** or **Admin**.
+2. Go to **Org settings → Plugins**.
+3. Click **Browse marketplace**.
+
+The marketplace dialog opens with three tabs: **MCP Servers**, **Integrations**, and
+**Content Tools**. Use the search bar and filters (auth kind) to narrow results.
+
+## Installing a server
+
+### Single install
+
+1. Click a server card to open its detail panel.
+2. Review the description, tools list, and README.
+3. Click **Install to organization**. The server is added to your org allow-list (disabled by default).
+
+### Bulk install
+
+1. Check the checkbox on one or more server cards.
+2. The **Install selected (n)** button appears at the bottom of the dialog.
+3. Click it to install all selected servers at once.
+
+After installation each server appears in the **Installed Plugins** section of the Plugins settings page.
+Enable it there, then enable it per-workspace from **Workspace settings → Integrations**.
+
+## Denied servers
+
+Servers blocked by your org's denylist are shown with a greyed-out, disabled treatment
+and a **"Blocked by your organization's admins"** label. They cannot be installed while
+on the denylist. See [Denylist](#denylist) below.
+
+## Adding a custom server
+
+1. On the **Plugins** settings page, click **Add custom MCP server**.
+2. Enter a name and the MCP endpoint URL.
+3. Choose the transport (streamable HTTP or SSE) and authentication kind (OAuth, API key, or none).
+4. Click **Add plugin**. The server is added directly to your org allow-list.
+
+## Adding a custom registry
+
+1. Click **Add registry**.
+2. Enter a name and the base URL (must implement the MCP Registry OpenAPI 2025-12-01 spec).
+3. Click **Add registry**. The registry syncs its catalog automatically.
+
+After syncing, servers from the registry appear in the marketplace under the MCP Servers tab.
+
+## Denylist
+
+The denylist prevents specific servers from being installed or enabled in any workspace under your organization.
+
+1. On the **Plugins** settings page, scroll to **Denied Plugins**.
+2. Click **Deny a plugin**.
+3. Enter the server name (reverse-DNS format, e.g. `io.github.acme.my-server`).
+4. Optionally enter a reason.
+5. Click **Deny plugin**.
+
+Denylisted servers are immediately disabled and removed from all workspace installs. They remain visible in the marketplace with a "Blocked" badge so admins know they exist.
+
+To remove a server from the denylist, click the trash icon next to its entry in the **Denied Plugins** table.
+
+## Role requirements
+
+| Action | Required role |
+|---|---|
+| Browse marketplace | Any org member |
+| Install / uninstall from org | Org Owner or Admin |
+| Manage denylist | Org Owner or Admin |
+| Add custom server | Org Owner or Admin |
+| Add custom registry | Org Owner or Admin |
