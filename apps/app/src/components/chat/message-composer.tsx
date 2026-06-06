@@ -28,9 +28,11 @@ export interface ComposerAction {
     error?: string;
     // sendMessageAction returns these on success so the caller can start the
     // chat stream with the persisted conversation id and the just-created
-    // user-message id. Optional because other composer actions (e.g. the
-    // org-shell quick-send) don't produce them.
+    // user-message id, and pin the browser URL to the conversation's public id
+    // when the turn created it. Optional because other composer actions (e.g.
+    // the org-shell quick-send) don't produce them.
     conversationId?: string;
+    conversationPublicId?: string;
     userMessageId?: string;
   }>;
 }

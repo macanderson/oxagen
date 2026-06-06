@@ -344,5 +344,16 @@ Authoritative. See AGENTS.md for the why.
 - token analytics and tool usage
 - runtime telemetry and historical performance
 
+### File / blob storage — binary assets only
+
+- user and org avatars
+- generated images, video, documents, PDFs, SVGs
+- uploaded workspace files
+- The blob lives here; its reference row (URL + metadata) lives in Postgres.
+  Never store binary payloads in any of the three DB stores.
+- Driver: Vercel Blob behind the `@oxagen/storage` vendor-neutral adapter
+  (`BLOB_READ_WRITE_TOKEN`). Served via access-controlled `/api/v1/assets/[id]`
+  (generated assets) or `/api/v1/files/[id]` (workspace files).
+
 **Never:** analytics in Neo4j. Graph relationships in Postgres.
-Transactional state in ClickHouse.
+Transactional state in ClickHouse. Binary payloads in any of the three DB stores.
