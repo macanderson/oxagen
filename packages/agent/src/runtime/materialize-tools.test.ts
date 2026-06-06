@@ -57,7 +57,7 @@ const dbMocks = vi.hoisted(() => {
       authStrategy: "mcp.authStrategy",
       authConfig: "mcp.authConfig",
     },
-    pluginOrgListings: { id: "listing.id", enabled: "listing.enabled", deletedAt: "listing.deletedAt" },
+    pluginOrgListings: { id: "listing.id", enabled: "listing.enabled", deletedAt: "listing.deletedAt", authKind: "listing.authKind" },
     pluginOrgDenylist: { orgId: "deny.orgId", serverName: "deny.serverName" },
   };
   const rowsByTable = new Map<unknown, unknown[]>();
@@ -78,9 +78,23 @@ vi.mock("@oxagen/database", () => ({
   schema: dbMocks.schema,
 }));
 
-// The MCP contributor decrypts per-workspace credentials via @oxagen/plugins.
+// The MCP contributor uses @oxagen/plugins for credentials, OAuth provider, and reauth marking.
 vi.mock("@oxagen/plugins", () => ({
   getWorkspaceSecret: vi.fn(async () => null),
+  DbOAuthClientProvider: vi.fn().mockImplementation(() => ({
+    redirectUrl: "https://app.example.com/api/v1/mcp/oauth/callback",
+    clientMetadata: {},
+    state: vi.fn(() => "runtime:listing_1"),
+    clientInformation: vi.fn(async () => undefined),
+    saveClientInformation: vi.fn(async () => undefined),
+    tokens: vi.fn(async () => undefined),
+    saveTokens: vi.fn(async () => undefined),
+    redirectToAuthorization: vi.fn(async () => undefined),
+    saveCodeVerifier: vi.fn(async () => undefined),
+    codeVerifier: vi.fn(async () => "verifier"),
+    pendingRedirect: null,
+  })),
+  markCredentialNeedsReauth: vi.fn(async () => undefined),
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
@@ -92,6 +106,13 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
 // detect a real driver.
 vi.mock("@oxagen/sandbox", () => ({
   isSandboxAvailable: vi.fn(() => false),
+}));
+
+// Stub @modelcontextprotocol/sdk/client/auth.js — UnauthorizedError used by the MCP contributor.
+vi.mock("@modelcontextprotocol/sdk/client/auth.js", () => ({
+  UnauthorizedError: class UnauthorizedError extends Error {
+    constructor(msg?: string) { super(msg ?? "Unauthorized"); this.name = "UnauthorizedError"; }
+  },
 }));
 
 // Stub the MCP client so tests can inject fake tool executes.
@@ -354,6 +375,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     authStrategy: "bearer",
     authConfig: { token: "tok_test" },
     healthStatus: "healthy",
+    authKind: "secret", // static bearer path (not oauth)
   };
 
   // A fake MCP tool execute function the test can spy on.
