@@ -22,8 +22,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.agents", policyClass: "standard" },
   { table: "agent.agent_versions", policyClass: "standard" },
   { table: "agent.tools", policyClass: "standard" },
-  { table: "agent.tool_versions", policyClass: "standard" },
-  { table: "agent.tool_assignments", policyClass: "standard" },
   { table: "agent.skills", policyClass: "standard" },
   { table: "agent.skill_versions", policyClass: "standard" },
   { table: "agent.background_tasks", policyClass: "standard" },
@@ -37,17 +35,14 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "workflow.playbooks", policyClass: "standard" },
   { table: "workflow.playbook_versions", policyClass: "standard" },
   { table: "workflow.playbook_steps", policyClass: "standard" },
-  { table: "workflow.playbook_step_assignments", policyClass: "standard" },
 
   // ── event.* (orgScopeMixin) ───────────────────────────────────────────────
   { table: "event.triggers", policyClass: "standard" },
-  { table: "event.workflow_triggers", policyClass: "standard" },
 
   // ── execution.* (org_id + workspace_id, inline or via orgScopeMixin) ──────
   { table: "execution.executions", policyClass: "standard" },
   { table: "execution.execution_steps", policyClass: "standard" },
   { table: "execution.tool_calls", policyClass: "standard" },
-  { table: "execution.execution_artifacts", policyClass: "standard" },
 
   // ── chat.* (orgScopeMixin) ────────────────────────────────────────────────
   { table: "chat.conversations", policyClass: "standard" },

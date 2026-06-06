@@ -175,7 +175,10 @@ export async function setupAgentRuntimeFixture(
   // so the runtime never runs; we seed the expected final DB state here so the
   // Postgres assertions in the spec pass deterministically.
 
-  // 1. Stub agent tools + tool_versions (one per capability used in scenario).
+  // 1. Stub agent tools (one per capability used in scenario).
+  // agent.tool_versions was dropped (release-audit Check 4 — dead schema).
+  // tool_calls.tool_version_id now carries tool IDs directly (app-enforced
+  // reference; no DB-level FK constraint was ever present).
   const capabilities = [
     { id: SCENARIO_IDS.toolMemoryRecall, tvId: SCENARIO_IDS.toolVersionMemoryRecall, name: "agent.memory.recall", slug: "e2e-memory-recall", toolType: "capability" },
     { id: SCENARIO_IDS.toolMemoryWrite,  tvId: SCENARIO_IDS.toolVersionMemoryWrite,  name: "agent.memory.write",  slug: "e2e-memory-write",  toolType: "capability" },
@@ -197,25 +200,6 @@ export async function setupAgentRuntimeFixture(
         true,
         false,
         'low'
-      )
-      ON CONFLICT (id) DO NOTHING
-    `;
-    await sql`
-      INSERT INTO agent.tool_versions (id, public_id, tool_id, version_number, is_latest, input_schema, output_schema, runtime_config, execution_handler, execution_mode, timeout_seconds, org_id, workspace_id)
-      VALUES (
-        ${cap.tvId}::uuid,
-        'tvr_e2e_' || ${cap.slug},
-        ${cap.id}::uuid,
-        1,
-        true,
-        '{}'::jsonb,
-        '{}'::jsonb,
-        '{}'::jsonb,
-        'e2e-stub',
-        'inline',
-        30,
-        ${orgId},
-        ${workspaceId}
       )
       ON CONFLICT (id) DO NOTHING
     `;
@@ -426,10 +410,9 @@ export async function setupAgentRuntimeFixture(
     workspaceSlug: opts.workspaceSlug,
     async queryDbState(): Promise<DbState> {
       // Query tool calls with their capability names. `tool_version_id` on
-      // `execution.tool_calls` references `agent.tool_versions`, which in turn
-      // references `agent.tools` (which carries the capability `name`).
-      // The `execution.tool_versions` table does not exist — the correct join
-      // path is through the `agent` schema.
+      // `execution.tool_calls` carries the tool ID directly (agent.tool_versions
+      // was dropped in migration 0004 — release-audit Check 4). The e2e fixture
+      // seeds tool_calls with tvId === tool.id so the direct join works here.
       const toolCalls = await sql<
         { id: string; capability: string; status: string }[]
       >`
@@ -437,8 +420,7 @@ export async function setupAgentRuntimeFixture(
                COALESCE(t.name, 'unknown') AS capability,
                tc.status
         FROM execution.tool_calls tc
-        LEFT JOIN agent.tool_versions tv ON tv.id = tc.tool_version_id
-        LEFT JOIN agent.tools t ON t.id = tv.tool_id
+        LEFT JOIN agent.tools t ON t.id = tc.tool_version_id
         WHERE tc.created_at > now() - interval '10 minutes'
       `;
       const byCap: Record<string, number> = {};
@@ -531,9 +513,6 @@ export async function teardownFixture(opts: {
       SELECT id FROM execution.executions WHERE org_id = ${orgId}
     )`;
     await sql`DELETE FROM execution.executions WHERE org_id = ${orgId}`;
-    await sql`DELETE FROM agent.tool_versions WHERE tool_id IN (
-      SELECT id FROM agent.tools WHERE org_id = ${orgId}
-    )`;
     await sql`DELETE FROM agent.tools WHERE org_id = ${orgId}`;
     await sql`DELETE FROM agent.subagent_runs WHERE fanout_id IN (
       SELECT id FROM agent.subagent_fanouts WHERE org_id = ${orgId}
