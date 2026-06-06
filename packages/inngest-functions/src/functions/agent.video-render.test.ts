@@ -20,9 +20,10 @@ const fakeDb = { update: mocks.dbUpdate };
 
 vi.mock("@oxagen/database", () => ({
   db: () => fakeDb,
-  // withTenantDb pass-through: invokes the callback with the same fake tx so
-  // handler assertions keep working without a real transaction or GUC.
+  // withTenantDb / withSystemDb pass-through: invokes the callback with the
+  // same fake tx so handler assertions keep working without a real tx or GUC.
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
+  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
   schema: {
     generatedAssets: { id: "id" },
   },

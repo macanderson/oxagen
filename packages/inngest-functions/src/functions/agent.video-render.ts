@@ -1,5 +1,5 @@
 import { inngest } from "../inngest";
-import { db, schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { generateVideoFor, selectVideoModel } from "@oxagen/ai";
 import { storage } from "@oxagen/storage";
@@ -158,9 +158,9 @@ export const agentVideoRenderOnFailure = inngest.createFunction(
 
     await step.run("mark-failed", async () => {
       // Scope tightly around the DB update only (no LLM/IO here).
-      // Fall back to raw db() when orgId/workspaceId are missing from the
-      // original event (e.g. older event schema) — these are non-null in
-      // agent/video.render events but may be absent in tests/legacy data.
+      // orgId/workspaceId are non-null in agent/video.render events but may be
+      // absent in legacy/malformed data — fall back to a system bypass so the
+      // failure record still lands.
       if (orgId && workspaceId) {
         await runInTenantScope({ orgId, workspaceId }, () =>
           withTenantDb((tx) =>
@@ -175,16 +175,18 @@ export const agentVideoRenderOnFailure = inngest.createFunction(
           ),
         );
       } else {
-        // tenancy: unscoped seam (no tenant on payload) — OXA-1515
-        // originalData is missing orgId/workspaceId (legacy or malformed event).
-        await db()
-          .update(schema.generatedAssets)
-          .set({
-            status: "failed",
-            metadata: { failureReason: errorMessage },
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.generatedAssets.id, assetId));
+        // tenancy: system bypass via withSystemDb (legacy/malformed event with
+        // no orgId/workspaceId — the failure record must still land) — OXA-1515
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.generatedAssets)
+            .set({
+              status: "failed",
+              metadata: { failureReason: errorMessage },
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.generatedAssets.id, assetId)),
+        );
       }
     });
 
