@@ -17,6 +17,16 @@ vi.mock("@oxagen/database", () => ({
       }),
     }),
   }),
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      update: (_table: unknown) => ({
+        set: (_vals: unknown) => ({
+          where: (_cond: unknown) => ({
+            returning: mocks.updateReturning,
+          }),
+        }),
+      }),
+    }),
   schema: {
     conversations: {
       publicId: "publicId",

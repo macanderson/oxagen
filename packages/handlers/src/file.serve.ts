@@ -115,6 +115,9 @@ export async function serveFile(
   principal: FileServePrincipal,
 ): Promise<FileServeResult> {
   // ── 1. Load the file row ─────────────────────────────────────────────────
+  // tenancy: unscoped seam (not a kernel capability — called directly from the
+  // route layer without a kernel invocation; no ALS tenant scope is present;
+  // authz is enforced via the principal's orgId/userId fields below) — OXA-1515
   const rows = await db()
     .select()
     .from(schema.files)
@@ -152,6 +155,7 @@ export async function serveFile(
     // Direct query (not imported from apps/app) — same logic as
     // assertOrgMember() in resolve-org.ts, replicated here to keep
     // packages/handlers free of app-layer imports.
+    // tenancy: unscoped seam (same as above — no kernel scope) — OXA-1515
     const membership = await db()
       .select({ id: schema.orgUsers.id })
       .from(schema.orgUsers)

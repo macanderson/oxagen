@@ -23,6 +23,10 @@ vi.mock("@oxagen/database", () => ({
   db: () => ({
     update: (_table: unknown) => ({ set: mocks.updateSet }),
   }),
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      update: (_table: unknown) => ({ set: mocks.updateSet }),
+    }),
   schema: {
     workspaces: {
       id: "id",

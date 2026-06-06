@@ -84,6 +84,10 @@ export interface BootstrapOrgIAMArgs {
  */
 export async function bootstrapOrgIAM(args: BootstrapOrgIAMArgs): Promise<void> {
   const { orgId, ownerUserId, actorUserId, tx } = args;
+  // tenancy: unscoped seam (bootstraps IAM for a new org; always called with
+  // an explicit tx from the org/workspace creation transaction — the tx param
+  // path is always used in practice; the raw db() fallback is a safety valve
+  // for direct seeding calls outside the kernel scope) — OXA-1515
   const d = (tx ?? getDb()) as ReturnType<typeof getDb>;
 
   // ── (a) Upsert 7 system roles ─────────────────────────────────────────────
@@ -340,6 +344,9 @@ export async function provisionMemberPrincipal(
   args: ProvisionMemberPrincipalArgs,
 ): Promise<string> {
   const { orgId, userId, actorUserId, tx } = args;
+  // tenancy: unscoped seam (always called with an explicit tx from the
+  // invite-accept transaction; the raw db() fallback is a safety valve for
+  // direct seeding calls outside the kernel scope) — OXA-1515
   const d = (tx ?? getDb()) as ReturnType<typeof getDb>;
 
   // Check if principal already exists.

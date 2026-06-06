@@ -18,6 +18,8 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
     logger.warn({ orgId: ctx.orgId }, "organization.create: rejected — no authenticated user");
     throw new Error("organization.create requires an authenticated user");
   }
+  // tenancy: unscoped seam (creates the org's own root row — the new org does not
+  // exist yet and ctx.orgId is the caller's current org, not the new one) — OXA-1515
   const d = db();
   // Fast-path friendly error for the common (non-racing) case; the unique
   // index + the catch below are the authoritative guard against the race.

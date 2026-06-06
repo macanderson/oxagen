@@ -47,6 +47,23 @@ vi.mock("@oxagen/database", () => ({
     },
     transaction: mocks.txFn,
   }),
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+    // Each withTenantDb call gets its own insert counter so the org-query,
+    // ws-query, and transaction calls each see a fresh counter.
+    const insertCountRef = { n: 0 };
+    const tx = {
+      query: {
+        organizations: { findFirst: mocks.orgFindFirst },
+        workspaces: { findFirst: mocks.wsFindFirst },
+      },
+      insert: (table: unknown): unknown => {
+        insertCountRef.n++;
+        if (insertCountRef.n === 1) return mocks.txInsertWs(table) as unknown;
+        return mocks.txInsertWsUsers(table) as unknown;
+      },
+    };
+    return fn(tx);
+  },
   schema: {
     organizations: { id: "id", slug: "slug" },
     workspaces: {
@@ -146,9 +163,10 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
     expect(result.createdAt).toBe("2026-05-01T00:00:00.000Z");
   });
 
-  it("runs workspace and membership inserts inside a transaction", async () => {
+  it("runs workspace and membership inserts via withTenantDb", async () => {
     await workspaceCreateHandler({ name: "Tx Ws", slug: "tx-ws" }, CTX);
-    expect(mocks.txFn).toHaveBeenCalledTimes(1);
+    // withTenantDb replaces db().transaction(); verify the ws insert was called.
+    expect(mocks.txInsertWs).toHaveBeenCalledTimes(1);
   });
 
   it("throws when the transaction insert returns no row", async () => {

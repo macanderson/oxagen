@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { conversationRename } from "@oxagen/oxagen/contracts/conversation.rename";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -13,29 +13,31 @@ export const conversationRenameHandler: CapabilityHandler<typeof conversationRen
     throw new Error("conversation.rename requires an authenticated user");
   }
 
-  const d = db();
+  const userId = ctx.userId;
   const now = new Date();
 
-  const rows = await d
-    .update(schema.conversations)
-    .set({
-      title: input.title,
-      updatedAt: now,
-      updatedByUserId: ctx.userId,
-    })
-    .where(
-      and(
-        eq(schema.conversations.publicId, input.conversationId),
-        eq(schema.conversations.orgId, ctx.orgId),
-        eq(schema.conversations.workspaceId, ctx.workspaceId),
-        eq(schema.conversations.userId, ctx.userId),
-        isNull(schema.conversations.deletedAt),
-      ),
-    )
-    .returning({
-      publicId: schema.conversations.publicId,
-      title: schema.conversations.title,
-    });
+  const rows = await withTenantDb((tx) =>
+    tx
+      .update(schema.conversations)
+      .set({
+        title: input.title,
+        updatedAt: now,
+        updatedByUserId: userId,
+      })
+      .where(
+        and(
+          eq(schema.conversations.publicId, input.conversationId),
+          eq(schema.conversations.orgId, ctx.orgId),
+          eq(schema.conversations.workspaceId, ctx.workspaceId),
+          eq(schema.conversations.userId, userId),
+          isNull(schema.conversations.deletedAt),
+        ),
+      )
+      .returning({
+        publicId: schema.conversations.publicId,
+        title: schema.conversations.title,
+      }),
+  );
 
   if (rows.length === 0) {
     logger.warn(
@@ -43,7 +45,7 @@ export const conversationRenameHandler: CapabilityHandler<typeof conversationRen
         conversationId: input.conversationId,
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
-        userId: ctx.userId,
+        userId,
       },
       "conversation.rename: conversation not found",
     );

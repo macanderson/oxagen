@@ -87,6 +87,8 @@ async function authorize(
     return true;
   }
   if (principal.userId) {
+    // tenancy: unscoped seam (not a kernel capability — no ALS tenant scope;
+    // authz enforced by principal fields, not RLS) — OXA-1515
     const membership = await db()
       .select({ id: schema.orgUsers.id })
       .from(schema.orgUsers)
@@ -109,6 +111,9 @@ export async function serveGeneratedAsset(
   assetId: string,
   principal: AssetServePrincipal,
 ): Promise<AssetServeResult> {
+  // tenancy: unscoped seam (not a kernel capability — called directly from the
+  // route layer without a kernel invocation; no ALS tenant scope is present;
+  // authz is enforced by the access_policy + principal's orgId/userId) — OXA-1515
   const rows = await db()
     .select()
     .from(schema.generatedAssets)

@@ -29,6 +29,10 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<typeof orgMemberInv
     throw new Error("Unauthorized: must be authenticated to accept an invitation");
   }
 
+  // tenancy: unscoped seam (resolves an invitation by publicId with NO orgId filter;
+  // the invitee's current ctx.orgId may differ from the invitation's orgId — the
+  // cross-org lookup is intentional; the transaction below writes to the invitation
+  // org, which also cannot satisfy RLS for the caller's scope) — OXA-1515
   const d = db();
 
   // ── Resolve invitation ───────────────────────────────────────────────────────

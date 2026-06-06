@@ -74,6 +74,7 @@ vi.mock("@oxagen/database", () => ({
     },
     transaction: mocks.txFn,
   }),
+  withTenantDb: (fn: (tx: unknown) => Promise<unknown>): Promise<unknown> => mocks.txFn(fn) as Promise<unknown>,
   schema: {
     conversations: {
       id: "id",

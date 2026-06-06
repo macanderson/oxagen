@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { userPreferencesWrite } from "@oxagen/oxagen/contracts/user.preferences.write";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import type { NewUserPreferences } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
@@ -14,12 +14,14 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
     throw new Error("user.preferences.write requires an authenticated user");
   }
 
+  const userId = ctx.userId;
+
   // Build the typed insert values. Required fields get their provided value or
   // fall back to the schema default so the upsert is always valid on first insert.
   const insertValues: NewUserPreferences = {
-    userId: ctx.userId,
-    createdByUserId: ctx.userId,
-    updatedByUserId: ctx.userId,
+    userId,
+    createdByUserId: userId,
+    updatedByUserId: userId,
     // Non-nullable columns: use provided value or schema default on first insert.
     fontSize: input.fontSize ?? "medium",
     density: input.density ?? "comfortable",
@@ -35,7 +37,7 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
   // Build the partial update set — only update fields that were explicitly provided.
   // "not provided" leaves the existing column value unchanged.
   const updateSet: Partial<NewUserPreferences> & { updatedByUserId: string } = {
-    updatedByUserId: ctx.userId,
+    updatedByUserId: userId,
   };
 
   if (input.fontSize !== undefined) updateSet.fontSize = input.fontSize;
@@ -48,30 +50,32 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
   if ("defaultImageModel" in input) updateSet.defaultImageModel = input.defaultImageModel;
   if ("defaultVideoModel" in input) updateSet.defaultVideoModel = input.defaultVideoModel;
 
-  const d = db();
-
-  await d
-    .insert(schema.userPreferences)
-    .values(insertValues)
-    .onConflictDoUpdate({
-      target: schema.userPreferences.userId,
-      set: updateSet,
-    });
+  await withTenantDb((tx) =>
+    tx
+      .insert(schema.userPreferences)
+      .values(insertValues)
+      .onConflictDoUpdate({
+        target: schema.userPreferences.userId,
+        set: updateSet,
+      }),
+  );
 
   // Re-read the full row to return canonical post-upsert state.
-  const row = await d.query.userPreferences.findFirst({
-    where: eq(schema.userPreferences.userId, ctx.userId),
-    columns: {
-      fontSize: true,
-      density: true,
-      enterToSubmit: true,
-      pendingPromptBehavior: true,
-      defaultTextTier: true,
-      defaultTextModel: true,
-      defaultImageModel: true,
-      defaultVideoModel: true,
-    },
-  });
+  const row = await withTenantDb((tx) =>
+    tx.query.userPreferences.findFirst({
+      where: eq(schema.userPreferences.userId, userId),
+      columns: {
+        fontSize: true,
+        density: true,
+        enterToSubmit: true,
+        pendingPromptBehavior: true,
+        defaultTextTier: true,
+        defaultTextModel: true,
+        defaultImageModel: true,
+        defaultVideoModel: true,
+      },
+    }),
+  );
 
   if (!row) {
     // Should never happen — we just upserted.
@@ -79,7 +83,7 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
   }
 
   logger.info(
-    { userId: ctx.userId, surface: ctx.surface },
+    { userId, surface: ctx.surface },
     "user.preferences.write: preferences updated",
   );
 

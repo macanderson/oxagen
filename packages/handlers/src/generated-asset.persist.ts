@@ -88,6 +88,11 @@ export async function persistGeneratedAsset(
     access: "public",
   });
 
+  // tenancy: unscoped seam (shared utility called from both kernel handlers and
+  // Inngest workers; Inngest workers run outside kernel.invoke() and have no ALS
+  // scope — migrating to withTenantDb requires each callsite to establish scope
+  // first; orgId/workspaceId are carried explicitly in args as defense-in-depth)
+  // — OXA-1515
   const [row] = await db()
     .insert(schema.generatedAssets)
     .values({
@@ -158,6 +163,7 @@ export interface PendingGeneratedAsset {
 export async function createPendingGeneratedAsset(
   args: CreatePendingGeneratedAssetArgs,
 ): Promise<PendingGeneratedAsset> {
+  // tenancy: unscoped seam (same as persistGeneratedAsset above) — OXA-1515
   const [row] = await db()
     .insert(schema.generatedAssets)
     .values({

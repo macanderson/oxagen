@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceModelSettingsWrite } from "@oxagen/oxagen/contracts/workspace.model.settings.write";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -39,20 +39,18 @@ export const workspaceModelSettingsWriteHandler: CapabilityHandler<
     updateSet.defaultVideoModel = input.defaultVideoModel;
   }
 
-  const d = db();
-
-  const [updated] = await d
-    .update(schema.workspaces)
-    .set(
-      updateSet as Parameters<ReturnType<typeof d.update>["set"]>[0],
-    )
-    .where(eq(schema.workspaces.id, ctx.workspaceId))
-    .returning({
-      defaultTextTier: schema.workspaces.defaultTextTier,
-      defaultTextModel: schema.workspaces.defaultTextModel,
-      defaultImageModel: schema.workspaces.defaultImageModel,
-      defaultVideoModel: schema.workspaces.defaultVideoModel,
-    });
+  const [updated] = await withTenantDb((tx) =>
+    tx
+      .update(schema.workspaces)
+      .set(updateSet as Parameters<ReturnType<typeof tx.update>["set"]>[0])
+      .where(eq(schema.workspaces.id, ctx.workspaceId))
+      .returning({
+        defaultTextTier: schema.workspaces.defaultTextTier,
+        defaultTextModel: schema.workspaces.defaultTextModel,
+        defaultImageModel: schema.workspaces.defaultImageModel,
+        defaultVideoModel: schema.workspaces.defaultVideoModel,
+      }),
+  );
 
   if (!updated) {
     logger.warn(

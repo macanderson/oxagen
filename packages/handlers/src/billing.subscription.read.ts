@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { sumTokenUsage } from "@oxagen/telemetry";
 import { and, eq, inArray } from "drizzle-orm";
 import { logger } from "./logger";
@@ -20,40 +20,44 @@ export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSub
       throw new Error("Forbidden: orgId is required to read billing data");
     }
 
-    const d = db();
-
     // Single round trip per panel render: subscription + plan + credit
     // balance. No N+1 — three indexed lookups, all bounded result sets.
-    const sub = await d.query.subscriptions.findFirst({
-      where: and(
-        eq(schema.subscriptions.orgId, ctx.orgId),
-        inArray(schema.subscriptions.status, ACTIVE_STATUSES),
-      ),
-      columns: {
-        publicId: true,
-        status: true,
-        billingInterval: true,
-        currentPeriodStart: true,
-        currentPeriodEnd: true,
-        cancelAtPeriodEnd: true,
-        seatCount: true,
-        planId: true,
-      },
-    });
+    const sub = await withTenantDb((tx) =>
+      tx.query.subscriptions.findFirst({
+        where: and(
+          eq(schema.subscriptions.orgId, ctx.orgId),
+          inArray(schema.subscriptions.status, ACTIVE_STATUSES),
+        ),
+        columns: {
+          publicId: true,
+          status: true,
+          billingInterval: true,
+          currentPeriodStart: true,
+          currentPeriodEnd: true,
+          cancelAtPeriodEnd: true,
+          seatCount: true,
+          planId: true,
+        },
+      }),
+    );
 
     const planSlug = sub
       ? (
-          await d.query.plans.findFirst({
-            where: eq(schema.plans.id, sub.planId),
-            columns: { slug: true },
-          })
+          await withTenantDb((tx) =>
+            tx.query.plans.findFirst({
+              where: eq(schema.plans.id, sub.planId),
+              columns: { slug: true },
+            }),
+          )
         )?.slug ?? "unknown"
       : null;
 
-    const balance = await d.query.creditBalances.findFirst({
-      where: eq(schema.creditBalances.orgId, ctx.orgId),
-      columns: { balanceCents: true },
-    });
+    const balance = await withTenantDb((tx) =>
+      tx.query.creditBalances.findFirst({
+        where: eq(schema.creditBalances.orgId, ctx.orgId),
+        columns: { balanceCents: true },
+      }),
+    );
 
     // OXA-1347: roll up the current billing period's token + cost totals
     // from ClickHouse when a subscription is active. Telemetry is best-

@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { conversationArchive } from "@oxagen/oxagen/contracts/conversation.archive";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -13,27 +13,29 @@ export const conversationArchiveHandler: CapabilityHandler<typeof conversationAr
     throw new Error("conversation.archive requires an authenticated user");
   }
 
-  const d = db();
+  const userId = ctx.userId;
   const now = new Date();
 
-  const rows = await d
-    .update(schema.conversations)
-    .set({
-      archivedAt: input.archived ? now : null,
-      archivedByUserId: input.archived ? ctx.userId : null,
-      updatedAt: now,
-      updatedByUserId: ctx.userId,
-    })
-    .where(
-      and(
-        inArray(schema.conversations.publicId, input.conversationIds),
-        eq(schema.conversations.orgId, ctx.orgId),
-        eq(schema.conversations.workspaceId, ctx.workspaceId),
-        eq(schema.conversations.userId, ctx.userId),
-        isNull(schema.conversations.deletedAt),
-      ),
-    )
-    .returning({ publicId: schema.conversations.publicId });
+  const rows = await withTenantDb((tx) =>
+    tx
+      .update(schema.conversations)
+      .set({
+        archivedAt: input.archived ? now : null,
+        archivedByUserId: input.archived ? userId : null,
+        updatedAt: now,
+        updatedByUserId: userId,
+      })
+      .where(
+        and(
+          inArray(schema.conversations.publicId, input.conversationIds),
+          eq(schema.conversations.orgId, ctx.orgId),
+          eq(schema.conversations.workspaceId, ctx.workspaceId),
+          eq(schema.conversations.userId, userId),
+          isNull(schema.conversations.deletedAt),
+        ),
+      )
+      .returning({ publicId: schema.conversations.publicId }),
+  );
 
   logger.info(
     {

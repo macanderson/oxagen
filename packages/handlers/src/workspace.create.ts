@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -19,12 +19,13 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
     logger.warn({ orgId: ctx.orgId }, "workspace.create: rejected — no authenticated user");
     throw new Error("workspace.create requires an authenticated user");
   }
-  const d = db();
 
-  const tenant = await d.query.organizations.findFirst({
-    where: eq(schema.organizations.id, ctx.orgId),
-    columns: { slug: true },
-  });
+  const tenant = await withTenantDb((tx) =>
+    tx.query.organizations.findFirst({
+      where: eq(schema.organizations.id, ctx.orgId),
+      columns: { slug: true },
+    }),
+  );
   if (!tenant) {
     logger.warn({ orgId: ctx.orgId }, "workspace.create: tenant not found");
     throw new Error("tenant not found");
@@ -32,20 +33,22 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
 
   // (org_id, slug) uniqueness pre-checked for friendly errors. The
   // composite unique index still enforces it as a hard constraint.
-  const existing = await d.query.workspaces.findFirst({
-    where: and(
-      eq(schema.workspaces.orgId, ctx.orgId),
-      eq(schema.workspaces.slug, input.slug),
-    ),
-    columns: { id: true },
-  });
+  const existing = await withTenantDb((tx) =>
+    tx.query.workspaces.findFirst({
+      where: and(
+        eq(schema.workspaces.orgId, ctx.orgId),
+        eq(schema.workspaces.slug, input.slug),
+      ),
+      columns: { id: true },
+    }),
+  );
   if (existing) {
     logger.warn({ orgId: ctx.orgId, slug: input.slug }, "workspace.create: slug already in use (pre-check)");
     throw new Error(`slug "${input.slug}" already in use for this tenant`);
   }
 
   try {
-    return await d.transaction(async (tx) => {
+    return await withTenantDb(async (tx) => {
       const [ws] = await tx
         .insert(schema.workspaces)
         .values({
