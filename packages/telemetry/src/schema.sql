@@ -3,7 +3,12 @@
 
 CREATE TABLE IF NOT EXISTS execution_logs (
   execution_id UUID,
-  step_id UUID,
+  -- Nullable: tool.before/after log lines (and any capability not running
+  -- inside an execution step) have no step id. A non-nullable UUID forced
+  -- callers to send "" — which ClickHouse's UUID text parser cannot parse,
+  -- greedily over-reading into org_id and failing the whole row insert
+  -- (CANNOT_PARSE_INPUT_ASSERTION_FAILED). NULL is the correct "no step".
+  step_id Nullable(UUID),
   org_id UUID,
   workspace_id UUID,
   log_level LowCardinality(String),

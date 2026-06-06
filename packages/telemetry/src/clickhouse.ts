@@ -112,7 +112,8 @@ export async function sumTokenUsage(args: {
 
 export interface ExecutionLogRow {
   execution_id: string;
-  step_id: string;
+  /** NULL when the log line isn't tied to a specific execution step. */
+  step_id: string | null;
   org_id: string;
   workspace_id: string;
   log_level: "debug" | "info" | "warn" | "error" | "fatal";

@@ -1,0 +1,13 @@
+-- OXA: execution_logs.step_id must be Nullable(UUID).
+--
+-- The agent runtime hooks (beforeTool/afterTool) emit a log row per tool call
+-- with no execution step id. Against the original non-nullable `step_id UUID`
+-- column the hook sent the empty string "", which ClickHouse cannot parse as a
+-- UUID: its text parser over-reads into the following column (org_id) and
+-- aborts the entire row with CANNOT_PARSE_INPUT_ASSERTION_FAILED, so every
+-- tool.before / tool.after log was dropped. Making the column Nullable lets the
+-- hook send NULL ("no step") and the row inserts cleanly.
+--
+-- MODIFY COLUMN to Nullable(UUID) is a metadata change plus a background
+-- mutation; idempotent to re-run.
+ALTER TABLE execution_logs MODIFY COLUMN step_id Nullable(UUID);

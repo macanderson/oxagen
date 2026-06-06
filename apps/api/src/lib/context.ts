@@ -19,7 +19,11 @@ export function capabilityContext(
     workspaceId: workspaceId ?? "",
     userId: c.get("userId") ?? null,
     apiKeyId: c.get("apiKeyId") ?? null,
-    requestId: c.get("requestId") ?? "",
+    // Must be a valid UUID: it flows into non-nullable ClickHouse UUID columns
+    // (execution_logs.execution_id, audit_events.request_id). The logger
+    // middleware sets a randomUUID per request; the fallback guards any route
+    // reached before it runs so we never write "" into a UUID column.
+    requestId: c.get("requestId") ?? crypto.randomUUID(),
     surface: "api",
     messageId: null,
   };

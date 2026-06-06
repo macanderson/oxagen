@@ -20,7 +20,10 @@ async function emit(level: "info" | "error", h: HookContext, message: string): P
     await insertExecutionLogs([
       {
         execution_id: h.executionId ?? h.ctx.requestId,
-        step_id: h.stepId ?? "",
+        // NULL, not "" — step_id is a Nullable(UUID) column and ClickHouse
+        // cannot parse "" as a UUID (it over-reads into the next field and
+        // fails the whole insert). undefined stepId means "no step".
+        step_id: h.stepId ?? null,
         org_id: h.ctx.orgId,
         workspace_id: h.ctx.workspaceId,
         log_level: level === "error" ? "error" : "info",

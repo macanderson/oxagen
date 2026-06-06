@@ -40,6 +40,23 @@ describe("hooks runtime", () => {
     expect(mocks.insertExecutionLogsMock).toHaveBeenCalledTimes(1);
   });
 
+  // Regression: step_id is a Nullable(UUID) column. The hook must send NULL,
+  // never "" — ClickHouse cannot parse an empty string as a UUID and fails the
+  // entire row insert (CANNOT_PARSE_INPUT_ASSERTION_FAILED).
+  it("omits step_id as null (not empty string) when no stepId is provided", async () => {
+    await beforeTool({ ctx: CTX, capability: "svg.generate" });
+    const row = (mocks.insertExecutionLogsMock.mock.calls[0]?.[0] as Array<Record<string, unknown>>)[0]!;
+    expect(row.step_id).toBeNull();
+    expect(row.step_id).not.toBe("");
+  });
+
+  it("passes a provided stepId through to step_id", async () => {
+    const stepId = "f0d3c4b2-1a2b-4c3d-8e9f-0a1b2c3d4e5f";
+    await beforeTool({ ctx: CTX, capability: "svg.generate", stepId });
+    const row = (mocks.insertExecutionLogsMock.mock.calls[0]?.[0] as Array<Record<string, unknown>>)[0]!;
+    expect(row.step_id).toBe(stepId);
+  });
+
   it("onError writes execution_logs with error level", async () => {
     await onError({ ctx: CTX, capability: "agent.code.execute", error: new Error("boom") });
     const row = (mocks.insertExecutionLogsMock.mock.calls[0]?.[0] as Array<Record<string, unknown>>)[0]!;
