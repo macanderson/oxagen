@@ -1,4 +1,4 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { effectiveBalance, createCreditLot } from "./credits";
@@ -90,11 +90,12 @@ export async function maybeAutoReload(orgId: string): Promise<AutoReloadResult> 
   }
 
   // Resolve the Stripe customer id from the active subscription.
-  const d = db();
-  const subRow = await d.query.subscriptions.findFirst({
-    where: eq(schema.subscriptions.orgId, orgId),
-    columns: { stripeCustomerId: true },
-  });
+  const subRow = await withTenantDb((tx) =>
+    tx.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.orgId, orgId),
+      columns: { stripeCustomerId: true },
+    }),
+  );
 
   if (!subRow?.stripeCustomerId) {
     logger.warn({ orgId }, "billing: auto-reload — no stripe customer found, cannot charge");
@@ -169,10 +170,12 @@ export async function maybeAutoReload(orgId: string): Promise<AutoReloadResult> 
     });
 
     // Record the reload timestamp to enforce the 1-hour idempotency window.
-    await d
-      .update(schema.orgBillingSettings)
-      .set({ lastAutoReloadAt: now, updatedAt: now })
-      .where(eq(schema.orgBillingSettings.orgId, orgId));
+    await withTenantDb((tx) =>
+      tx
+        .update(schema.orgBillingSettings)
+        .set({ lastAutoReloadAt: now, updatedAt: now })
+        .where(eq(schema.orgBillingSettings.orgId, orgId)),
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error(

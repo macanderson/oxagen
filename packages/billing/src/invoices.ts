@@ -1,3 +1,6 @@
+// tenancy: unscoped seam (resolves org from external Stripe invoice id before a
+// tenant scope exists) — OXA-1515. Raw db() is kept for the org-resolution query.
+// The sync transaction keeps existing eq(orgId) predicates for isolation.
 import { db, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { billingProvider } from "./client";

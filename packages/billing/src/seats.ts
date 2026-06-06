@@ -10,7 +10,7 @@
  */
 
 import { and, count, eq, sql } from "drizzle-orm";
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { logger } from "./logger";
 
 // ── SeatLimitError ────────────────────────────────────────────────────────────
@@ -65,41 +65,38 @@ export interface OrgSeatUsage {
  * Pure DB read — no Stripe calls, safe to call on every request.
  */
 export async function getOrgSeatUsage(orgId: string): Promise<OrgSeatUsage> {
-  const d = db();
+  const { activeSub, usersRow, invRow } = await withTenantDb(async (tx) => {
+    const sub = await tx
+      .select({ seatCount: schema.subscriptions.seatCount })
+      .from(schema.subscriptions)
+      .where(
+        and(
+          eq(schema.subscriptions.orgId, orgId),
+          sql`${schema.subscriptions.status} IN ('active','trialing')`,
+        ),
+      )
+      .limit(1);
 
-  // ── Resolve license count ────────────────────────────────────────────────────
-  const activeSub = await d
-    .select({ seatCount: schema.subscriptions.seatCount })
-    .from(schema.subscriptions)
-    .where(
-      and(
-        eq(schema.subscriptions.orgId, orgId),
-        sql`${schema.subscriptions.status} IN ('active','trialing')`,
-      ),
-    )
-    .limit(1);
+    const [uRow] = await tx
+      .select({ total: count() })
+      .from(schema.orgUsers)
+      .where(eq(schema.orgUsers.orgId, orgId));
+
+    const [iRow] = await tx
+      .select({ total: count() })
+      .from(schema.invitations)
+      .where(
+        and(
+          eq(schema.invitations.orgId, orgId),
+          eq(schema.invitations.status, "pending"),
+        ),
+      );
+
+    return { activeSub: sub, usersRow: uRow, invRow: iRow };
+  });
 
   const licenses = activeSub[0]?.seatCount ?? 1;
-
-  // ── Count active org_users ────────────────────────────────────────────────────
-  const [usersRow] = await d
-    .select({ total: count() })
-    .from(schema.orgUsers)
-    .where(eq(schema.orgUsers.orgId, orgId));
-
   const activeUsers = Number(usersRow?.total ?? 0);
-
-  // ── Count pending invitations ─────────────────────────────────────────────────
-  const [invRow] = await d
-    .select({ total: count() })
-    .from(schema.invitations)
-    .where(
-      and(
-        eq(schema.invitations.orgId, orgId),
-        eq(schema.invitations.status, "pending"),
-      ),
-    );
-
   const pendingInvitations = Number(invRow?.total ?? 0);
 
   const used = activeUsers + pendingInvitations;

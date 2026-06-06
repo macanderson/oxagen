@@ -1,4 +1,4 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
@@ -10,19 +10,22 @@ import { logger } from "./logger";
  * subscription row at the moment a subscription is created.
  */
 export async function ensureStripeCustomer(orgId: string): Promise<string> {
-  const d = db();
-  const tenant = await d.query.organizations.findFirst({
-    where: eq(schema.organizations.id, orgId),
-    columns: { id: true, name: true, slug: true },
+  const { tenant, existing } = await withTenantDb(async (tx) => {
+    const t = await tx.query.organizations.findFirst({
+      where: eq(schema.organizations.id, orgId),
+      columns: { id: true, name: true, slug: true },
+    });
+    const e = await tx.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.orgId, orgId),
+      columns: { stripeCustomerId: true },
+    });
+    return { tenant: t, existing: e };
   });
+
   if (!tenant) throw new Error(`tenant ${orgId} not found`);
 
   // Prefer the customer id off the latest subscription, even cancelled —
   // provider customers persist beyond subscription lifecycles.
-  const existing = await d.query.subscriptions.findFirst({
-    where: eq(schema.subscriptions.orgId, orgId),
-    columns: { stripeCustomerId: true },
-  });
   if (existing?.stripeCustomerId) return existing.stripeCustomerId;
 
   const provider = billingProvider();

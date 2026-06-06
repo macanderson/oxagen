@@ -6,7 +6,7 @@
  * so callers never deal with a missing row.
  */
 
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -76,28 +76,29 @@ export async function getOrgBillingSettings(
   orgId: string,
 ): Promise<OrgBillingSettings> {
   const start = Date.now();
-  const d = db();
 
-  // Attempt to create a default row; silently no-ops if one already exists.
-  await d
-    .insert(schema.orgBillingSettings)
-    .values({
-      orgId,
-      autoReloadEnabled: false,
-      autoReloadThresholdCents: BigInt(DEFAULT_THRESHOLD_CENTS),
-      autoReloadAmountCents: BigInt(DEFAULT_AMOUNT_CENTS),
-      autoReloadPaymentMethodId: null,
-      lowBalanceThresholdCents: BigInt(DEFAULT_LOW_BALANCE_THRESHOLD_CENTS),
-      dunningState: "active",
-      delinquentSince: null,
-      graceEndsAt: null,
-      suspendedAt: null,
-      lastDunningNotifiedAt: null,
-    })
-    .onConflictDoNothing();
+  const row = await withTenantDb(async (tx) => {
+    // Attempt to create a default row; silently no-ops if one already exists.
+    await tx
+      .insert(schema.orgBillingSettings)
+      .values({
+        orgId,
+        autoReloadEnabled: false,
+        autoReloadThresholdCents: BigInt(DEFAULT_THRESHOLD_CENTS),
+        autoReloadAmountCents: BigInt(DEFAULT_AMOUNT_CENTS),
+        autoReloadPaymentMethodId: null,
+        lowBalanceThresholdCents: BigInt(DEFAULT_LOW_BALANCE_THRESHOLD_CENTS),
+        dunningState: "active",
+        delinquentSince: null,
+        graceEndsAt: null,
+        suspendedAt: null,
+        lastDunningNotifiedAt: null,
+      })
+      .onConflictDoNothing();
 
-  const row = await d.query.orgBillingSettings.findFirst({
-    where: eq(schema.orgBillingSettings.orgId, orgId),
+    return tx.query.orgBillingSettings.findFirst({
+      where: eq(schema.orgBillingSettings.orgId, orgId),
+    });
   });
 
   if (!row) {
@@ -154,8 +155,6 @@ export async function updateAutoReloadSettings(
   // Ensure a settings row exists before updating.
   await getOrgBillingSettings(orgId);
 
-  const d = db();
-
   // Build the partial update object — only include keys that were supplied.
   const patch: Record<string, unknown> = { updatedAt: new Date() };
   if (input.enabled !== undefined) patch.autoReloadEnabled = input.enabled;
@@ -166,10 +165,12 @@ export async function updateAutoReloadSettings(
   if ("paymentMethodId" in input)
     patch.autoReloadPaymentMethodId = input.paymentMethodId ?? null;
 
-  await d
-    .update(schema.orgBillingSettings)
-    .set(patch)
-    .where(eq(schema.orgBillingSettings.orgId, orgId));
+  await withTenantDb((tx) =>
+    tx
+      .update(schema.orgBillingSettings)
+      .set(patch)
+      .where(eq(schema.orgBillingSettings.orgId, orgId)),
+  );
 
   // Re-read the updated row.
   const updated = await getOrgBillingSettings(orgId);

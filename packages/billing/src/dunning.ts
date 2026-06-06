@@ -1,4 +1,4 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, db, schema } from "@oxagen/database";
 import { and, eq, lt, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import type { BillingInvoice } from "./provider";
@@ -49,26 +49,26 @@ export interface OrgBillingStatus {
  * subscription row. The subscription's `past_due` status drives `pastDue`.
  */
 export async function getOrgBillingStatus(orgId: string): Promise<OrgBillingStatus> {
-  const d = db();
-
-  const [settings, sub] = await Promise.all([
-    d.query.orgBillingSettings.findFirst({
-      where: eq(schema.orgBillingSettings.orgId, orgId),
-      columns: {
-        dunningState: true,
-        delinquentSince: true,
-        graceEndsAt: true,
-        suspendedAt: true,
-      },
-    }),
-    d.query.subscriptions.findFirst({
-      where: and(
-        eq(schema.subscriptions.orgId, orgId),
-        sql`${schema.subscriptions.status} IN ('active','trialing','past_due')`,
-      ),
-      columns: { status: true },
-    }),
-  ]);
+  const [settings, sub] = await withTenantDb(async (tx) =>
+    Promise.all([
+      tx.query.orgBillingSettings.findFirst({
+        where: eq(schema.orgBillingSettings.orgId, orgId),
+        columns: {
+          dunningState: true,
+          delinquentSince: true,
+          graceEndsAt: true,
+          suspendedAt: true,
+        },
+      }),
+      tx.query.subscriptions.findFirst({
+        where: and(
+          eq(schema.subscriptions.orgId, orgId),
+          sql`${schema.subscriptions.status} IN ('active','trialing','past_due')`,
+        ),
+        columns: { status: true },
+      }),
+    ]),
+  );
 
   const state = (settings?.dunningState ?? "active") as "active" | "grace" | "suspended";
   return {
@@ -102,11 +102,15 @@ export async function assertOrgCanConsume(orgId: string): Promise<void> {
 /**
  * Resolve the orgId from an invoice (via orgId field or subscription lookup).
  * Returns null when it cannot be resolved.
+ *
+ * tenancy: unscoped seam (resolves org from external Stripe invoice id before a
+ * tenant scope exists) — OXA-1515.
  */
 async function resolveOrgFromInvoice(invoice: BillingInvoice): Promise<string | null> {
   if (invoice.orgId) return invoice.orgId;
 
   if (invoice.subscriptionId) {
+    // tenancy: unscoped seam (resolves org from external Stripe id before a tenant scope exists) — OXA-1515
     const row = await db().query.subscriptions.findFirst({
       where: eq(schema.subscriptions.stripeSubscriptionId, invoice.subscriptionId),
       columns: { orgId: true },
@@ -134,6 +138,7 @@ export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<v
   const now = new Date();
   const graceEndsAt = new Date(now.getTime() + DUNNING_GRACE_DAYS * 24 * 60 * 60 * 1000);
 
+  // tenancy: unscoped seam — org resolved from Stripe invoice, no workspace context; billing is org_only — OXA-1515
   const d = db();
 
   // Upsert settings row: set grace state idempotently. Only set delinquentSince
@@ -189,6 +194,7 @@ export async function onInvoiceRecovered(invoice: BillingInvoice): Promise<void>
   }
 
   const now = new Date();
+  // tenancy: unscoped seam — org resolved from Stripe invoice, no workspace context; billing is org_only — OXA-1515
   const d = db();
 
   const existing = await d.query.orgBillingSettings.findFirst({
@@ -231,6 +237,7 @@ export async function onInvoiceRecovered(invoice: BillingInvoice): Promise<void>
 export async function sweepDunning(): Promise<{ suspended: number }> {
   const start = Date.now();
   const now = new Date();
+  // tenancy: unscoped seam — scheduled job sweeps all orgs, no per-org scope; billing is org_only — OXA-1515
   const d = db();
 
   const toSuspend = await d.query.orgBillingSettings.findMany({

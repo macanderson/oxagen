@@ -1,4 +1,4 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { sumTokenUsage } from "@oxagen/telemetry";
 
@@ -17,17 +17,18 @@ export interface CurrentPeriodUsageRow {
 export async function getCurrentPeriodUsage(
   orgId: string,
 ): Promise<CurrentPeriodUsageRow[]> {
-  const d = db();
-  const sub = await d.query.subscriptions.findFirst({
-    where: and(
-      eq(schema.subscriptions.orgId, orgId),
-      eq(schema.subscriptions.status, "active"),
-    ),
-    columns: {
-      currentPeriodStart: true,
-      currentPeriodEnd: true,
-    },
-  });
+  const sub = await withTenantDb((tx) =>
+    tx.query.subscriptions.findFirst({
+      where: and(
+        eq(schema.subscriptions.orgId, orgId),
+        eq(schema.subscriptions.status, "active"),
+      ),
+      columns: {
+        currentPeriodStart: true,
+        currentPeriodEnd: true,
+      },
+    }),
+  );
   if (!sub) return [];
 
   return await sumTokenUsage({

@@ -69,13 +69,16 @@ vi.mock("../client", () => ({
 const dbPlansFindFirst = vi.fn();
 const dbSubscriptionsFindFirst = vi.fn().mockResolvedValue(null); // no active sub by default
 
+const checkoutDbObj = {
+  query: {
+    plans: { findFirst: dbPlansFindFirst },
+    subscriptions: { findFirst: dbSubscriptionsFindFirst },
+  },
+};
+
 vi.mock("@oxagen/database", () => ({
-  db: () => ({
-    query: {
-      plans: { findFirst: dbPlansFindFirst },
-      subscriptions: { findFirst: dbSubscriptionsFindFirst },
-    },
-  }),
+  db: () => checkoutDbObj,
+  withTenantDb: async (fn: (tx: typeof checkoutDbObj) => unknown) => fn(checkoutDbObj),
   schema: {
     plans: { slug: "plans.slug" },
     subscriptions: { orgId: "subscriptions.orgId", status: "subscriptions.status" },

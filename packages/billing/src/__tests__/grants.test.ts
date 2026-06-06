@@ -113,6 +113,7 @@ const dbState: { instance: ReturnType<typeof makeDb> | null } = { instance: null
 
 vi.mock("@oxagen/database", () => ({
   db: () => dbState.instance,
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => dbState.instance?.transaction(fn),
   schema: {
     creditLedger: {
       orgId: "creditLedger.orgId",

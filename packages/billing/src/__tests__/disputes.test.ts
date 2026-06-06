@@ -80,6 +80,7 @@ const dbHolder: { instance: ReturnType<typeof makeDb> | null } = { instance: nul
 
 vi.mock("@oxagen/database", () => ({
   db: () => dbHolder.instance,
+  withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbHolder.instance),
   schema: {
     billingDisputes: {
       stripeDisputeId: "billingDisputes.stripeDisputeId",

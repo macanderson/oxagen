@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, db, schema, type Tx } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { syncSubscriptionFromStripe } from "./subscriptions";
@@ -40,8 +40,8 @@ function deterministicUuid(seed: string): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
 
-/** Drizzle transaction type alias (avoids importing internal types). */
-type DbTx = Parameters<Parameters<ReturnType<typeof db>["transaction"]>[0]>[0];
+/** Drizzle transaction type alias — uses the Tx type from @oxagen/database. */
+type DbTx = Tx;
 
 /**
  * Attempt to insert the grant ledger row atomically.
@@ -146,7 +146,7 @@ export async function grantFreeCredits(orgId: string): Promise<void> {
   const start = Date.now();
   let granted = false;
 
-  await db().transaction(async (tx) => {
+  await withTenantDb(async (tx) => {
     granted = await tryInsertGrantLedger(
       tx,
       orgId,
@@ -191,6 +191,8 @@ export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): P
   // Make sure our subscriptions row exists before resolving the plan.
   await syncSubscriptionFromStripe(invoice.subscriptionId);
 
+  // tenancy: unscoped seam — invoice.paid webhook has no org scope yet; org resolved
+  // from Stripe subscription id before a tenant scope exists. Billing is org_only — OXA-1515.
   const d = db();
   const sub = await d.query.subscriptions.findFirst({
     where: eq(schema.subscriptions.stripeSubscriptionId, invoice.subscriptionId),

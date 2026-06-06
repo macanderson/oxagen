@@ -1,3 +1,7 @@
+// tenancy: unscoped seam — webhook arrives with a Stripe event id, no org scope yet.
+// stripe_events / stripe_event_processing are global audit tables (no org_id).
+// upsertPaymentMethod resolves orgId from a subscription lookup before writing.
+// All DB access here keeps raw db() intentionally per OXA-1515 unscoped-seam rules.
 import { db, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { billingProvider } from "./client";

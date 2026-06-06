@@ -81,6 +81,7 @@ const dbStateHolder: { instance: ReturnType<typeof makeDb> | null } = { instance
 
 vi.mock("@oxagen/database", () => ({
   db: () => dbStateHolder.instance,
+  withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbStateHolder.instance),
   schema: {
     orgBillingSettings: {
       orgId: "orgBillingSettings.orgId",

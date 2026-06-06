@@ -1,4 +1,4 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { and, asc, eq, isNull, or, sql, gt } from "drizzle-orm";
 import { CREDIT_REASONS } from "./constants";
 
@@ -47,8 +47,7 @@ export async function createCreditLot(args: CreateCreditLotArgs): Promise<Create
     throw new Error("amountCents must be greater than zero");
   }
 
-  const d = db();
-  return await d.transaction(async (tx) => {
+  return await withTenantDb(async (tx) => {
     // 1. Insert the lot.
     const [lot] = await tx
       .insert(schema.creditLots)
@@ -180,15 +179,17 @@ export async function grantCredits(args: GrantCreditsArgs): Promise<{ balanceCen
  */
 export async function effectiveBalance(orgId: string): Promise<bigint> {
   const now = new Date();
-  const rows = await db()
-    .select({ remaining: schema.creditLots.remainingCents })
-    .from(schema.creditLots)
-    .where(
-      and(
-        eq(schema.creditLots.orgId, orgId),
-        or(isNull(schema.creditLots.expiresAt), gt(schema.creditLots.expiresAt, now)),
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({ remaining: schema.creditLots.remainingCents })
+      .from(schema.creditLots)
+      .where(
+        and(
+          eq(schema.creditLots.orgId, orgId),
+          or(isNull(schema.creditLots.expiresAt), gt(schema.creditLots.expiresAt, now)),
+        ),
       ),
-    );
+  );
 
   return rows.reduce(
     (acc, r) => acc + (typeof r.remaining === "bigint" ? r.remaining : BigInt(r.remaining)),
@@ -236,8 +237,7 @@ export async function consumeCredits(args: ConsumeCreditsArgs): Promise<ConsumeC
     return { chargedCents: 0n, shortfallCents: 0n, balanceCents: 0n };
   }
 
-  const d = db();
-  return await d.transaction(async (tx) => {
+  return await withTenantDb(async (tx) => {
     const now = new Date();
 
     // Lock and read all non-expired lots for this org, soonest-expiring first.

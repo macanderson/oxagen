@@ -1,3 +1,8 @@
+// tenancy: unscoped seam — dispute.created / dispute.closed / charge.refunded
+// webhooks arrive with external Stripe ids; orgId is resolved from charge
+// metadata or prior billing_disputes rows before any tenant scope exists.
+// Billing is org_only (no workspace_id). All DB access here keeps raw db()
+// intentionally per OXA-1515 unscoped-seam rules.
 import { createHash } from "node:crypto";
 import { db, schema } from "@oxagen/database";
 import { and, eq, isNotNull } from "drizzle-orm";
