@@ -61,7 +61,7 @@ async function ensureDatabase(): Promise<void> {
   }
 }
 
-function splitStatements(sql: string): string[] {
+export function splitStatements(sql: string): string[] {
   // Strip leading comment lines per chunk so a statement preceded by
   // commentary still executes.
   return sql

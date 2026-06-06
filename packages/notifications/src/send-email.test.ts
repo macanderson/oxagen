@@ -66,4 +66,37 @@ describe("sendEmail", () => {
     await expect(sendEmail({ to: [], subject: "s", text: "t" })).rejects.toThrow();
     expect(sendMock).not.toHaveBeenCalled();
   });
+
+  // ── Additional negative assertions ─────────────────────────────────────────
+
+  it("rejects to:[\"not-an-email\"] (array with invalid address)", async () => {
+    await expect(sendEmail({ to: ["not-an-email"], subject: "s", text: "t" })).rejects.toThrow();
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects replyTo:\"not-an-email\" (invalid replyTo address)", async () => {
+    await expect(
+      sendEmail({ to: "a@x.com", subject: "s", text: "t", replyTo: "not-an-email" }),
+    ).rejects.toThrow();
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects html:\"\" (empty html with text present — fails min(1) on html)", async () => {
+    await expect(sendEmail({ to: "a@x.com", subject: "s", text: "t", html: "" })).rejects.toThrow();
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects bcc:[] (empty bcc array — fails min(1) on the array union branch)", async () => {
+    await expect(sendEmail({ to: "a@x.com", subject: "s", text: "t", bcc: [] })).rejects.toThrow();
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts html:\" \" (whitespace — passes min(1) since length=1)", async () => {
+    // z.string().min(1) checks .length >= 1; a single space has length 1, so
+    // it passes the Zod validator. The real behaviour is documented here rather
+    // than normalised away — if a future trimmed() is added this test will catch it.
+    sendMock.mockResolvedValue({ id: "<id>", accepted: ["a@x.com"], rejected: [] });
+    await expect(sendEmail({ to: "a@x.com", subject: "s", html: " " })).resolves.toBeDefined();
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
 });

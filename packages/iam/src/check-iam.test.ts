@@ -227,4 +227,84 @@ describe("checkIAM()", () => {
 
     expect(result.result.outcome).toBe("allow");
   });
+
+  // ── isAclCapability boundary cases ──────────────────────────────────────
+
+  it('billing.acl.manage (enterprise ACL prefix) on non-enterprise → allow, resolver skipped', async () => {
+    // "billing.acl." prefix matches isAclCapability → non-enterprise bypass
+    mocks.canAccessACL.mockReturnValue(false);
+    mocks.resolveOrgTier.mockResolvedValue("scale");
+
+    const result = await checkIAM({
+      capability: "billing.acl.manage",
+      ctx: CTX,
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(result.result.outcome).toBe("allow");
+    expect(mocks.resolve).not.toHaveBeenCalled();
+    expect(mocks.fetchAuthz).not.toHaveBeenCalled();
+  });
+
+  it('exact "iam" capability on non-enterprise → allow, resolver skipped', async () => {
+    // capability === "iam" matches the third branch of isAclCapability
+    mocks.canAccessACL.mockReturnValue(false);
+    mocks.resolveOrgTier.mockResolvedValue("build");
+
+    const result = await checkIAM({
+      capability: "iam",
+      ctx: CTX,
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(result.result.outcome).toBe("allow");
+    expect(mocks.resolve).not.toHaveBeenCalled();
+    expect(mocks.fetchAuthz).not.toHaveBeenCalled();
+  });
+
+  it('"iam_audit.read" (near-miss — no "iam." dot) falls through to fetchAuthz', async () => {
+    // "iam_audit.read" does NOT start with "iam." and is not === "iam",
+    // so isAclCapability returns false and the resolver IS invoked.
+    mocks.fetchAuthz.mockResolvedValue({ ...EMPTY_AUTHZ, principal: PRINCIPAL });
+    mocks.resolve.mockReturnValue({ outcome: "allow", trace: ALLOW_TRACE });
+
+    const result = await checkIAM({
+      capability: "iam_audit.read",
+      ctx: CTX,
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(mocks.fetchAuthz).toHaveBeenCalledTimes(1);
+    expect(mocks.resolve).toHaveBeenCalledTimes(1);
+    expect(result.result.outcome).toBe("allow");
+    // resolveOrgTier / canAccessACL must NOT have been consulted (not an ACL cap)
+    expect(mocks.resolveOrgTier).not.toHaveBeenCalled();
+    expect(mocks.canAccessACL).not.toHaveBeenCalled();
+  });
+
+  it('"billing.acl" (no trailing dot) falls through to resolver — proves prefix uses the dot', async () => {
+    // "billing.acl" does NOT match "billing.acl." (startsWith requires the dot).
+    // This is the real bypass-attack boundary: an attacker cannot grant themselves
+    // ACL access by using the bare prefix without the trailing dot.
+    mocks.fetchAuthz.mockResolvedValue({ ...EMPTY_AUTHZ, principal: PRINCIPAL });
+    mocks.resolve.mockReturnValue({ outcome: "deny", reason: "no_grant", trace: DENY_TRACE });
+
+    const result = await checkIAM({
+      capability: "billing.acl",
+      ctx: CTX,
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    // resolver was called (not bypassed)
+    expect(mocks.fetchAuthz).toHaveBeenCalledTimes(1);
+    expect(mocks.resolve).toHaveBeenCalledTimes(1);
+    expect(result.result.outcome).toBe("deny");
+    // tier gate was NOT consulted
+    expect(mocks.resolveOrgTier).not.toHaveBeenCalled();
+    expect(mocks.canAccessACL).not.toHaveBeenCalled();
+  });
 });

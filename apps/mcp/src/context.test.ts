@@ -5,6 +5,9 @@
 //   - extractBearerToken: valid / invalid / missing / edge-case inputs
 //   - resolveMcpContext: unauthenticated, API key path, session token path
 //     (now rejected at edge — OXA-1515), expired and invalid token errors
+//   - buildContext: header extraction, UUID fallback, clientIp from xff,
+//     authorization-as-array, throws McpUnauthorizedError on auth failure
+//   - firstHeader / extractClientIp behaviour exercised indirectly via buildContext
 //
 // resolveApiKey is vi.mock()'d so no network / DB hits occur.
 // resolveSession is intentionally no longer called by context.ts (session
@@ -22,6 +25,7 @@ import {
   McpUnauthorizedError,
   extractBearerToken,
   resolveMcpContext,
+  buildContext,
 } from "./context";
 
 // ── McpUnauthorizedError ───────────────────────────────────────────────────────
@@ -162,5 +166,248 @@ describe("resolveMcpContext", () => {
   it("rejects any token without an underscore as invalid_token regardless of content", async () => {
     const result = await resolveMcpContext("Bearer anothersessiontoken", requestId);
     expect(result).toEqual({ ok: false, reason: "invalid_token" });
+  });
+});
+
+// ── firstHeader (exercised via buildContext) ──────────────────────────────────
+//
+// firstHeader is not exported; its behaviour is verified indirectly through
+// buildContext which calls it on hdrs["authorization"] and hdrs["x-request-id"].
+
+describe("firstHeader (via buildContext header extraction)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("uses a plain-string authorization header correctly", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+    const ctx = await buildContext({
+      authorization: "Bearer oxk_plainstring",
+      "x-request-id": "req-plain",
+    });
+    expect(ctx.requestId).toBe("req-plain");
+    expect(resolveApiKey).toHaveBeenCalledWith("oxk_plainstring");
+  });
+
+  it("uses the first element when authorization is delivered as an array", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-2",
+      workspaceId: "ws-2",
+      apiKeyId: "key-2",
+    });
+    const ctx = await buildContext({
+      // xmcp headers() repeats a header as an array; firstHeader() picks [0]
+      authorization: ["Bearer oxk_fromarray", "Bearer oxk_ignored"],
+      "x-request-id": "req-array",
+    });
+    expect(ctx.requestId).toBe("req-array");
+    expect(resolveApiKey).toHaveBeenCalledWith("oxk_fromarray");
+  });
+
+  it("uses the first element when x-request-id is an array", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+    const ctx = await buildContext({
+      authorization: "Bearer oxk_valid",
+      "x-request-id": ["req-first", "req-second"],
+    });
+    expect(ctx.requestId).toBe("req-first");
+  });
+
+  it("firstHeader(undefined) → undefined: missing x-request-id falls back to UUID", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+    const ctx = await buildContext({ authorization: "Bearer oxk_valid" });
+    // requestId should be a UUID (no x-request-id supplied)
+    expect(ctx.requestId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+  });
+});
+
+// ── extractClientIp (exercised via buildContext) ───────────────────────────────
+//
+// extractClientIp is not exported; its behaviour is verified indirectly through
+// buildContext which calls it and stamps the result onto ctx.clientIp.
+
+describe("extractClientIp (via buildContext clientIp extraction)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+  });
+
+  it("extracts the first IP from a comma-separated x-forwarded-for", async () => {
+    const ctx = await buildContext({
+      authorization: "Bearer oxk_valid",
+      "x-forwarded-for": "1.2.3.4, 5.6.7.8",
+    });
+    expect(ctx.clientIp).toBe("1.2.3.4");
+  });
+
+  it("trims whitespace from the extracted x-forwarded-for IP", async () => {
+    const ctx = await buildContext({
+      authorization: "Bearer oxk_valid",
+      "x-forwarded-for": " 1.2.3.4 , 5.6.7.8",
+    });
+    expect(ctx.clientIp).toBe("1.2.3.4");
+  });
+
+  it("falls back to x-real-ip when x-forwarded-for is absent", async () => {
+    const ctx = await buildContext({
+      authorization: "Bearer oxk_valid",
+      "x-real-ip": "9.9.9.9",
+    });
+    expect(ctx.clientIp).toBe("9.9.9.9");
+  });
+
+  it("returns null when neither x-forwarded-for nor x-real-ip is present", async () => {
+    const ctx = await buildContext({ authorization: "Bearer oxk_valid" });
+    expect(ctx.clientIp).toBeNull();
+  });
+
+  it("handles x-forwarded-for as an array — uses first element", async () => {
+    const ctx = await buildContext({
+      authorization: "Bearer oxk_valid",
+      "x-forwarded-for": ["1.2.3.4, 5.6.7.8", "irrelevant"],
+    });
+    expect(ctx.clientIp).toBe("1.2.3.4");
+  });
+});
+
+// ── buildContext ──────────────────────────────────────────────────────────────
+
+describe("buildContext", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns a context with surface 'mcp'", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+    const ctx = await buildContext({
+      authorization: "Bearer oxk_valid",
+      "x-request-id": "req-123",
+    });
+    expect(ctx.surface).toBe("mcp");
+  });
+
+  it("stamps the x-request-id header onto ctx.requestId", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+    const ctx = await buildContext({
+      authorization: "Bearer oxk_valid",
+      "x-request-id": "trace-abc-123",
+    });
+    expect(ctx.requestId).toBe("trace-abc-123");
+  });
+
+  it("generates a fresh UUID for requestId when x-request-id is absent", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+    const ctx = await buildContext({ authorization: "Bearer oxk_valid" });
+    expect(ctx.requestId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+  });
+
+  it("stamps clientIp from x-forwarded-for onto the context", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+    const ctx = await buildContext({
+      authorization: "Bearer oxk_valid",
+      "x-forwarded-for": "203.0.113.5",
+    });
+    expect(ctx.clientIp).toBe("203.0.113.5");
+  });
+
+  it("throws McpUnauthorizedError with reason 'unauthenticated' when no auth header", async () => {
+    await expect(buildContext({})).rejects.toThrow(McpUnauthorizedError);
+    await expect(buildContext({})).rejects.toMatchObject({ reason: "unauthenticated" });
+  });
+
+  it("throws McpUnauthorizedError with reason 'invalid_token' for a session token (no underscore)", async () => {
+    await expect(
+      buildContext({ authorization: "Bearer sessiontokennounder" }),
+    ).rejects.toThrow(McpUnauthorizedError);
+    await expect(
+      buildContext({ authorization: "Bearer sessiontokennounder" }),
+    ).rejects.toMatchObject({ reason: "invalid_token" });
+  });
+
+  it("throws McpUnauthorizedError with reason 'expired_token' when resolveApiKey returns expired", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({ ok: false, kind: "expired" });
+    await expect(
+      buildContext({ authorization: "Bearer oxk_expired" }),
+    ).rejects.toThrow(McpUnauthorizedError);
+    await expect(
+      buildContext({ authorization: "Bearer oxk_expired" }),
+    ).rejects.toMatchObject({ reason: "expired_token" });
+  });
+
+  it("throws McpUnauthorizedError with reason 'invalid_token' when resolveApiKey returns invalid", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({ ok: false, kind: "invalid" });
+    await expect(
+      buildContext({ authorization: "Bearer oxk_bad" }),
+    ).rejects.toThrow(McpUnauthorizedError);
+    await expect(
+      buildContext({ authorization: "Bearer oxk_bad" }),
+    ).rejects.toMatchObject({ reason: "invalid_token" });
+  });
+
+  it("sets userId to null (MCP only uses API keys, not session users)", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+    const ctx = await buildContext({ authorization: "Bearer oxk_valid" });
+    expect(ctx.userId).toBeNull();
+  });
+
+  it("sets messageId to null (not applicable at auth time)", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+    const ctx = await buildContext({ authorization: "Bearer oxk_valid" });
+    expect(ctx.messageId).toBeNull();
   });
 });

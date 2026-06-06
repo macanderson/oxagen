@@ -108,6 +108,83 @@ vi.mock("@oxagen/config/env", () => ({
   }),
 }));
 
+// ---------------------------------------------------------------------------
+// providerFromModelId — extended cases
+// (covers image/video/gateway/slash/uppercase-prefix forms)
+// ---------------------------------------------------------------------------
+
+describe("providerFromModelId — image model ids", () => {
+  it("gpt-image-1 → 'openai'", () => {
+    expect(providerFromModelId("gpt-image-1")).toBe("openai");
+  });
+
+  it("dall-e-3 → 'openai'", () => {
+    expect(providerFromModelId("dall-e-3")).toBe("openai");
+  });
+
+  it("chatgpt-4o-latest → 'openai'", () => {
+    expect(providerFromModelId("chatgpt-4o-latest")).toBe("openai");
+  });
+
+  it("davinci-003 → 'openai'", () => {
+    expect(providerFromModelId("davinci-003")).toBe("openai");
+  });
+});
+
+describe("providerFromModelId — Google model ids", () => {
+  it("gemini-1.5-pro → 'google'", () => {
+    expect(providerFromModelId("gemini-1.5-pro")).toBe("google");
+  });
+
+  it("veo-3.0-fast-generate-001 → 'google' (bare form)", () => {
+    expect(providerFromModelId("veo-3.0-fast-generate-001")).toBe("google");
+  });
+
+  it("imagen-3 → 'google'", () => {
+    expect(providerFromModelId("imagen-3")).toBe("google");
+  });
+});
+
+describe("providerFromModelId — Black Forest Labs (bfl) model ids", () => {
+  it("flux-1-dev → 'bfl' (bare flux prefix)", () => {
+    expect(providerFromModelId("flux-1-dev")).toBe("bfl");
+  });
+
+  it("bfl/flux-2-max → 'bfl' (slash gateway form: 'bfl' head)", () => {
+    expect(providerFromModelId("bfl/flux-2-max")).toBe("bfl");
+  });
+});
+
+describe("providerFromModelId — xAI model ids", () => {
+  it("grok-2 → 'xai'", () => {
+    expect(providerFromModelId("grok-2")).toBe("xai");
+  });
+});
+
+describe("providerFromModelId — slash gateway / colon-prefix forms", () => {
+  it("google/veo-3.0-generate-001 → 'google' (slash gateway form)", () => {
+    expect(providerFromModelId("google/veo-3.0-generate-001")).toBe("google");
+  });
+
+  it("bfl/flux-2-max → 'bfl' (slash gateway form)", () => {
+    expect(providerFromModelId("bfl/flux-2-max")).toBe("bfl");
+  });
+
+  it("leading-slash '/claude-3' → '' (no known head)", () => {
+    // The split is on /[:/]/, so the first chunk is empty string ("").
+    // Empty string doesn't match any known prefix in the switch.
+    // "claude" prefix check: id.startsWith("claude") = false (starts with "/").
+    expect(providerFromModelId("/claude-3")).toBe("");
+  });
+});
+
+describe("providerFromModelId — uppercase prefix forms", () => {
+  it("ANTHROPIC/claude-3 → 'anthropic' (uppercase prefix matched case-insensitively)", () => {
+    // head = "ANTHROPIC".toLowerCase() = "anthropic" → matched in switch
+    expect(providerFromModelId("ANTHROPIC/claude-3")).toBe("anthropic");
+  });
+});
+
 describe("clickhouse client construction", () => {
   afterEach(() => {
     vi.resetModules();

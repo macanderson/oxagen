@@ -4,18 +4,22 @@ const mocks = vi.hoisted(() => ({
   execute: vi.fn(async () => undefined),
   transaction: vi.fn(),
   rlsEnforced: vi.fn(() => false),
+  // For assertRlsConnectionSafe — db().execute returns rows directly (no .transaction).
+  dbExecute: vi.fn(async () => [] as unknown[]),
 }));
 
 mocks.transaction.mockImplementation(
   async (cb: (tx: unknown) => Promise<unknown>) => cb({ execute: mocks.execute }),
 );
 
-vi.mock("./client", () => ({ db: () => ({ transaction: mocks.transaction }) }));
+vi.mock("./client", () => ({
+  db: () => ({ transaction: mocks.transaction, execute: mocks.dbExecute }),
+}));
 // rlsEnforced reads env; stub it so the test controls the branch.
 vi.mock("./tenant-flag", () => ({ rlsEnforced: mocks.rlsEnforced }));
 
 import { runInTenantScope } from "@oxagen/tenancy";
-import { withTenantDb, withSystemDb } from "./tenant";
+import { withTenantDb, withSystemDb, assertRlsConnectionSafe } from "./tenant";
 
 const ORG = "00000000-0000-0000-0000-00000000a111";
 const WS = "00000000-0000-0000-0000-00000000b222";
@@ -27,6 +31,7 @@ function sqlText(call: unknown): string {
 
 beforeEach(() => {
   mocks.execute.mockClear();
+  mocks.dbExecute.mockClear();
   mocks.rlsEnforced.mockReturnValue(false);
 });
 
@@ -88,5 +93,51 @@ describe("withSystemDb", () => {
     expect(arg).toContain("'on'");
     // It is a pure bypass — it must NOT set tenant scope GUCs.
     expect(arg).not.toContain("app.current_org_id");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// assertRlsConnectionSafe
+// ---------------------------------------------------------------------------
+
+describe("assertRlsConnectionSafe", () => {
+  it("is a no-op (does not query db) when enforcement is off", async () => {
+    mocks.rlsEnforced.mockReturnValue(false);
+    await expect(assertRlsConnectionSafe()).resolves.toBeUndefined();
+    // enforcement off → early return, never calls db().execute
+    expect(mocks.dbExecute).not.toHaveBeenCalled();
+  });
+
+  it("throws when enforcement is on and the role is a superuser", async () => {
+    mocks.rlsEnforced.mockReturnValue(true);
+    mocks.dbExecute.mockResolvedValueOnce([
+      { is_superuser: "on", bypassrls: false },
+    ] as unknown[]);
+    await expect(assertRlsConnectionSafe()).rejects.toThrow(/superuser/i);
+  });
+
+  it("throws when enforcement is on and the role has BYPASSRLS", async () => {
+    mocks.rlsEnforced.mockReturnValue(true);
+    mocks.dbExecute.mockResolvedValueOnce([
+      { is_superuser: "off", bypassrls: true },
+    ] as unknown[]);
+    await expect(assertRlsConnectionSafe()).rejects.toThrow(/BYPASSRLS/);
+  });
+
+  it("resolves (no throw) when enforcement is on and role is a non-superuser non-BYPASSRLS role", async () => {
+    mocks.rlsEnforced.mockReturnValue(true);
+    mocks.dbExecute.mockResolvedValueOnce([
+      { is_superuser: "off", bypassrls: false },
+    ] as unknown[]);
+    await expect(assertRlsConnectionSafe()).resolves.toBeUndefined();
+  });
+
+  it("queries the db when enforcement is on", async () => {
+    mocks.rlsEnforced.mockReturnValue(true);
+    mocks.dbExecute.mockResolvedValueOnce([
+      { is_superuser: "off", bypassrls: false },
+    ] as unknown[]);
+    await assertRlsConnectionSafe();
+    expect(mocks.dbExecute).toHaveBeenCalledTimes(1);
   });
 });
