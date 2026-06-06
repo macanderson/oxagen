@@ -2,6 +2,7 @@
 // if they want to keep bundle size predictable.
 export * from "./components/badge";
 export * from "./components/brand";
+export * from "./components/combobox";
 export * from "./components/button";
 export * from "./components/card";
 export * from "./components/alert";

@@ -18,12 +18,12 @@ import { APIProvider, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectPopup,
-  SelectItem,
-} from "@/components/ui/select";
+  Combobox,
+  ComboboxTrigger,
+  ComboboxValue,
+  ComboboxPopup,
+  ComboboxItem,
+} from "@/components/ui/combobox";
 import { COUNTRY_OPTIONS, US_STATE_OPTIONS } from "@oxagen/config";
 
 // ---------------------------------------------------------------------------
@@ -172,24 +172,24 @@ export function BillingAddressFields() {
     <div className="flex flex-col gap-3">
       <p className="text-sm font-medium">Billing address</p>
 
-      {/* Country */}
+      {/* Country — 249 options: searchable combobox (>20 option rule) */}
       <div className="space-y-1.5">
         <Label htmlFor="addressCountry">Country</Label>
-        <Select
-          value={addr.country || undefined}
+        <Combobox
+          value={addr.country}
           onValueChange={(v) => patch({ country: v ?? "", region: "" })}
         >
-          <SelectTrigger id="addressCountry" size="lg" className="w-full">
-            <SelectValue placeholder="Select country" />
-          </SelectTrigger>
-          <SelectPopup>
+          <ComboboxTrigger id="addressCountry" size="lg" className="w-full">
+            <ComboboxValue placeholder="Select country" />
+          </ComboboxTrigger>
+          <ComboboxPopup searchPlaceholder="Search countries…">
             {COUNTRY_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
+              <ComboboxItem key={opt.value} value={opt.value}>
                 {opt.label}
-              </SelectItem>
+              </ComboboxItem>
             ))}
-          </SelectPopup>
-        </Select>
+          </ComboboxPopup>
+        </Combobox>
         {/* Hidden input so FormData always carries the value */}
         <input type="hidden" name="addressCountry" value={addr.country} readOnly />
       </div>
@@ -240,21 +240,22 @@ export function BillingAddressFields() {
           <Label htmlFor="addressRegion">{isUS ? "State" : "Region"}</Label>
           {isUS ? (
             <>
-              <Select
-                value={addr.region || undefined}
+              {/* 51 states: searchable combobox (>20 option rule) */}
+              <Combobox
+                value={addr.region}
                 onValueChange={(v) => patch({ region: v ?? "" })}
               >
-                <SelectTrigger id="addressRegion" size="lg" className="w-full">
-                  <SelectValue placeholder="State" />
-                </SelectTrigger>
-                <SelectPopup>
+                <ComboboxTrigger id="addressRegion" size="lg" className="w-full">
+                  <ComboboxValue placeholder="State" />
+                </ComboboxTrigger>
+                <ComboboxPopup searchPlaceholder="Search states…">
                   {US_STATE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
+                    <ComboboxItem key={opt.value} value={opt.value}>
                       {opt.label}
-                    </SelectItem>
+                    </ComboboxItem>
                   ))}
-                </SelectPopup>
-              </Select>
+                </ComboboxPopup>
+              </Combobox>
               <input type="hidden" name="addressRegion" value={addr.region} readOnly />
             </>
           ) : (

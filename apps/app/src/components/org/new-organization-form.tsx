@@ -10,6 +10,13 @@ import {
   SelectPopup,
   SelectItem,
 } from "@/components/ui/select";
+import {
+  Combobox,
+  ComboboxTrigger,
+  ComboboxValue,
+  ComboboxPopup,
+  ComboboxItem,
+} from "@/components/ui/combobox";
 import { BillingAddressFields } from "@/components/billing/billing-address-fields";
 import { AvatarUpload } from "@/components/media/avatar-upload";
 import { slugify } from "@/lib/slug";
@@ -227,26 +234,28 @@ export function NewOrgForm({
             />
           </div>
 
+          {/* Industry — 24 options: searchable combobox (>20 option rule) */}
           <div className="space-y-1.5">
             <Label htmlFor="industry">Industry <span className="text-muted-foreground font-normal">(optional)</span></Label>
-            <Select
-              value={industry || undefined}
+            <Combobox
+              value={industry}
               onValueChange={(v) => setIndustry(v ?? "")}
             >
-              <SelectTrigger id="industry" size="lg" className="w-full">
-                <SelectValue placeholder="Select industry" />
-              </SelectTrigger>
-              <SelectPopup>
+              <ComboboxTrigger id="industry" size="lg" className="w-full">
+                <ComboboxValue placeholder="Select industry" />
+              </ComboboxTrigger>
+              <ComboboxPopup searchPlaceholder="Search industries…">
                 {INDUSTRY_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
+                  <ComboboxItem key={opt.value} value={opt.value}>
                     {opt.label}
-                  </SelectItem>
+                  </ComboboxItem>
                 ))}
-              </SelectPopup>
-            </Select>
+              </ComboboxPopup>
+            </Combobox>
             <input type="hidden" name="industry" value={industry} readOnly />
           </div>
 
+          {/* Team size — 9 options: plain select (≤20 option rule) */}
           <div className="space-y-1.5">
             <Label htmlFor="employeeSize">Team size <span className="text-muted-foreground font-normal">(optional)</span></Label>
             <Select
