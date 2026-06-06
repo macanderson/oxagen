@@ -20,3 +20,17 @@ export type {
   SendEmailResult,
   SmtpTransportConfig,
 } from "./types";
+
+// Notification service (in-app feed + email mirror)
+export { createNotification } from "./notifications/create-notification";
+export { notifyOrgManagers } from "./notifications/notify-org-managers";
+export { reauthEmailTemplate } from "./notifications/email-templates";
+export type {
+  NotificationKind,
+  NotificationRow,
+  CreateNotificationInput,
+} from "./notifications/types";
+export type {
+  NotificationRecipient,
+  NotifyOrgManagersInput,
+} from "./notifications/notify-org-managers";
