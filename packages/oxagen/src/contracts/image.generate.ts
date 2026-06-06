@@ -11,8 +11,8 @@ export const imageGenerate = registerCapability({
   domain: "image",
   description:
     "Generate an image from a natural-language prompt using the OpenAI image generation API " +
-    "(DALL-E 3 via @ai-sdk/openai experimental_generateImage). " +
-    "When OPENAI_API_KEY is not configured, returns a typed placeholder result with a render " +
+    "(via the Vercel AI Gateway, default model openai/gpt-image-1). " +
+    "When AI_GATEWAY_API_KEY is not configured, returns a typed placeholder result with a render " +
     "directive that shows an empty-state in chat — never throws. " +
     "Returns the image URL or data URI, alt text, and a render directive for the image-preview " +
     "chat component.",
@@ -54,7 +54,7 @@ export const imageGenerate = registerCapability({
     /** Accessible alt text for the image. */
     alt: z.string(),
     /**
-     * True when OPENAI_API_KEY is not configured or generation failed.
+     * True when AI_GATEWAY_API_KEY is not configured or generation failed.
      * The render directive will show an empty-state component.
      */
     placeholder: z.boolean(),

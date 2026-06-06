@@ -26,12 +26,10 @@
  *   --yes         (reserved) non-interactive; this script is already non-interactive
  *
  * Release notes are AI-generated from the commit log + diffstat between the last
- * release tag and the release commit. Source order: (1) the Anthropic Messages
- * API directly (ANTHROPIC_API_KEY, model = RELEASE_NOTES_MODEL, default
- * claude-sonnet-4-6); (2) the Vercel AI Gateway (AI_GATEWAY_API_KEY,
- * model = OXAGEN_LLM_BALANCED) — still an Anthropic Claude model, the repo's
- * sanctioned AI path; (3) a plain commit-log changelog if no AI source is
- * reachable, so a release never blocks on AI availability. No SDK dependency.
+ * release tag and the release commit, 100% through the Vercel AI Gateway
+ * (AI_GATEWAY_API_KEY, model = OXAGEN_LLM_BALANCED, an Anthropic Claude model).
+ * If no gateway key is reachable it falls back to a plain commit-log changelog
+ * so a release never blocks on AI availability. No SDK dependency.
  *
  * Vercel sync uses the REST API (VERCEL_TOKEN + VERCEL_TEAM_ID) because the
  * Vercel CLI can't set "all preview branches" non-interactively. PLATFORM_VERSION
@@ -49,7 +47,6 @@ const ROOT = resolve(import.meta.dirname, "../..");
 const DEFAULT_TEAM_ID = "team_DiMizWNDHKFFU5ajKe2ZVKl9";
 const VERCEL_PROJECT_PREFIX = "oxagen-v2-"; // the live v2 stack; v1 projects are left alone
 const PLATFORM_ENVS = ["development", "preview", "production"] as const;
-const NOTES_MODEL = deQuote(env.RELEASE_NOTES_MODEL) || "claude-sonnet-4-6";
 const NOTES_MAX_TOKENS = 8192; // headroom so large releases don't truncate mid-section
 
 type Bump = "patch" | "minor" | "major";
@@ -216,25 +213,9 @@ function notesPrompt(h: NotesInput): string {
   ].join("\n");
 }
 
-/** Direct Anthropic Messages API (ANTHROPIC_API_KEY). Honors a first-party key. */
-async function notesViaAnthropic(prompt: string): Promise<string | null> {
-  const key = deQuote(env.ANTHROPIC_API_KEY);
-  if (!key) return null;
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: NOTES_MODEL, max_tokens: NOTES_MAX_TOKENS, messages: [{ role: "user", content: prompt }] }),
-  });
-  if (!res.ok) throw new Error(`anthropic ${res.status} ${await res.text()}`);
-  const json = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
-  const text = (json.content ?? []).filter((b) => b.type === "text" && b.text).map((b) => b.text).join("\n").trim();
-  if (!text) throw new Error("anthropic empty completion");
-  return text;
-}
-
-/** Vercel AI Gateway (AI_GATEWAY_API_KEY), OpenAI-compatible, hitting an
- * Anthropic Claude model — the repo's sanctioned AI path and the credential that
- * actually works in CI/local. Same provider as the direct call, different transport. */
+/** Vercel AI Gateway (AI_GATEWAY_API_KEY) — the platform's single AI path. Hits
+ * an Anthropic Claude model (OXAGEN_LLM_BALANCED) via the gateway's
+ * OpenAI-compatible endpoint. Returns null when no gateway key is configured. */
 async function notesViaGateway(prompt: string): Promise<string | null> {
   const key = deQuote(env.AI_GATEWAY_API_KEY);
   if (!key) return null;
@@ -254,24 +235,18 @@ async function notesViaGateway(prompt: string): Promise<string | null> {
 
 async function generateNotes(h: NotesInput): Promise<string> {
   const prompt = notesPrompt(h);
-  // Prefer a first-party Anthropic key; fall back to the AI Gateway (still an
-  // Anthropic model); finally fall back to a plain commit-log changelog so a
-  // release never blocks on AI availability.
-  for (const [label, fn] of [
-    ["Anthropic API", notesViaAnthropic],
-    ["AI Gateway", notesViaGateway],
-  ] as const) {
-    try {
-      const text = await fn(prompt);
-      if (text) {
-        console.log(kleur.green(`[release] release notes generated via ${label}.`));
-        return `${text}\n`;
-      }
-    } catch (err) {
-      console.log(kleur.yellow(`[release] ${label} failed (${err instanceof Error ? err.message : err}); trying next source.`));
+  // AI notes come 100% through the Vercel AI Gateway; a plain commit-log
+  // changelog is the only fallback so a release never blocks on AI availability.
+  try {
+    const text = await notesViaGateway(prompt);
+    if (text) {
+      console.log(kleur.green("[release] release notes generated via AI Gateway."));
+      return `${text}\n`;
     }
+    console.log(kleur.yellow("[release] AI_GATEWAY_API_KEY not set — using plain commit-log notes."));
+  } catch (err) {
+    console.log(kleur.yellow(`[release] AI Gateway failed (${err instanceof Error ? err.message : err}) — using plain commit-log notes.`));
   }
-  console.log(kleur.yellow("[release] no AI source available — using plain commit-log notes."));
   return fallbackNotes(h);
 }
 

@@ -1,12 +1,8 @@
-import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
-import { openai, createOpenAI } from "@ai-sdk/openai";
 import { gateway } from "@ai-sdk/gateway";
 import type { ImageModel, LanguageModel } from "ai";
 import type { Experimental_VideoModelV3 } from "@ai-sdk/provider";
 import { requireEnv } from "@oxagen/config/env";
 import type { MediaTier, ResolvedTierCatalog } from "./catalog";
-
-export type ProviderName = "anthropic" | "openai";
 
 /**
  * White-labeled Oxagen model tiers. Each resolves to a concrete Vercel AI
@@ -42,24 +38,7 @@ export interface ModelSelector {
   model?: string;
   /** White-labeled tier; resolves to a gateway id from the `OXAGEN_LLM_*` env. */
   tier?: OxagenTier;
-  /**
-   * Direct-provider hint used ONLY on the no-gateway fallback path (when
-   * AI_GATEWAY_API_KEY is absent). Ignored when the gateway is configured.
-   */
-  provider?: ProviderName;
 }
-
-/**
- * Vercel AI Gateway OpenAI-compatible endpoint. The gateway authenticates with
- * AI_GATEWAY_API_KEY and accepts `creator/model` ids, so a single seam reaches
- * every vendor (Anthropic, OpenAI, Google, xAI, …) without per-provider SDKs.
- * Using the already-installed @ai-sdk/openai client against this base URL keeps
- * the gateway a config change rather than a new pinned dependency.
- */
-const GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh/v1";
-
-/** Provider name surfaced to the AI SDK for the gateway client. */
-const GATEWAY_PROVIDER_NAME = "vercel-ai-gateway";
 
 const TIER_ENV_KEY = {
   fast: "OXAGEN_LLM_FAST",
@@ -153,69 +132,25 @@ export function resolvedTierCatalog(): ResolvedTierCatalog {
   };
 }
 
-// Direct-provider fallback model ids (used only when AI_GATEWAY_API_KEY is
-// absent). The gateway path never reads these.
-const DIRECT_DEFAULTS = {
-  anthropic: "claude-sonnet-4-6",
-  openai: "gpt-4o",
-} as const satisfies Record<ProviderName, string>;
-
 /**
- * Map a (possibly gateway-form) model id to a bare provider model id and infer
- * the owning provider, for the no-gateway fallback path only. A gateway id like
- * "anthropic/claude-sonnet-4.6" can't address a direct provider endpoint, so we
- * strip the `creator/` prefix and normalise the dotted version back to dashes.
- */
-function directFallback(
-  selector: ModelSelector,
-): { provider: ProviderName; model: string } {
-  const raw = selector.model;
-  if (raw && raw.includes("/")) {
-    const [creator, rest] = raw.split("/", 2);
-    const provider: ProviderName = creator === "openai" ? "openai" : "anthropic";
-    return { provider, model: (rest ?? "").replace(/\./g, "-") };
-  }
-  const provider = selector.provider ?? "anthropic";
-  return { provider, model: raw ?? DIRECT_DEFAULTS[provider] };
-}
-
-/**
- * Build the language model for a request. The Vercel AI Gateway is the primary
- * path: when AI_GATEWAY_API_KEY is set, every call routes through it using the
- * requested explicit model id, else the tier (defaulting to the balanced tier).
- * When no gateway token is configured we fall back to talking to a provider SDK
- * directly so local dev / tests without a gateway still work.
+ * Build the language model for a request. Every call routes through the Vercel
+ * AI Gateway (`@ai-sdk/gateway`), the platform's single AI auth boundary: the
+ * gateway client reads `AI_GATEWAY_API_KEY` from the environment and accepts
+ * `creator/model` ids, so one seam reaches every vendor (Anthropic, OpenAI,
+ * Google, xAI, …) with no per-provider SDK or key. The model id is the explicit
+ * `selector.model`, else the tier (defaulting to the balanced tier). If the
+ * gateway key is missing the client still builds and surfaces an auth error at
+ * call time — there is no direct-provider fallback.
  */
 export function selectModel(selector: ModelSelector = {}): LanguageModel {
   const env = requireEnv([
-    "AI_GATEWAY_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "OPENAI_API_KEY",
     "OXAGEN_LLM_FAST",
     "OXAGEN_LLM_BALANCED",
     "OXAGEN_LLM_PRECISE",
   ] as const);
-
-  // ── Primary: Vercel AI Gateway ──────────────────────────────────────────
-  if (env.AI_GATEWAY_API_KEY) {
-    const modelId =
-      selector.model ?? tierFromEnv(env, selector.tier ?? DEFAULT_TIER);
-    const gateway = createOpenAI({
-      apiKey: env.AI_GATEWAY_API_KEY,
-      baseURL: GATEWAY_BASE_URL,
-      name: GATEWAY_PROVIDER_NAME,
-    });
-    return gateway(modelId);
-  }
-
-  // ── Fallback: direct provider SDKs ──────────────────────────────────────
-  const { provider, model } = directFallback(selector);
-  if (provider === "anthropic") {
-    if (!env.ANTHROPIC_API_KEY) return anthropic(model);
-    return createAnthropic({ apiKey: env.ANTHROPIC_API_KEY })(model);
-  }
-  if (!env.OPENAI_API_KEY) return openai(model);
-  return createOpenAI({ apiKey: env.OPENAI_API_KEY })(model);
+  const modelId =
+    selector.model ?? tierFromEnv(env, selector.tier ?? DEFAULT_TIER);
+  return gateway.languageModel(modelId);
 }
 
 /** The platform default model — the balanced tier through the gateway. */
@@ -223,57 +158,31 @@ export const defaultModel = () => selectModel();
 
 // ── Image model selection ─────────────────────────────────────────────────────
 //
-// Single chokepoint for all image model construction. Like selectModel(), the
-// Vercel AI Gateway is the primary path so packages outside @oxagen/ai never
-// import a provider SDK directly. The gateway exposes image models in the same
-// `creator/model` form (e.g. "openai/gpt-image-1", "bfl/flux-2-max",
-// "google/gemini-3.1-flash-image-preview"); without a gateway token we fall
-// back to OpenAI's image API directly.
+// Single chokepoint for all image model construction. Like selectModel(), every
+// call routes through the Vercel AI Gateway (`@ai-sdk/gateway`) so packages
+// outside @oxagen/ai never import a provider SDK directly. The gateway exposes
+// image models in `creator/model` form (e.g. "openai/gpt-image-1",
+// "bfl/flux-2-max", "google/gemini-3.1-flash-image-preview").
 
 export interface ImageModelSelector {
   /**
-   * Gateway image model id, e.g. "openai/gpt-image-1" or "bfl/flux-2-max". On
-   * the no-gateway fallback path a bare OpenAI image model id (e.g.
-   * "gpt-image-1") is used instead. Defaults to GPT Image 1.
+   * Gateway image model id, e.g. "openai/gpt-image-1" or "bfl/flux-2-max".
+   * Defaults to GPT Image 1.
    */
   model?: string;
-  /**
-   * Direct-provider hint for the fallback path. Currently only "openai" is a
-   * supported direct image provider; ignored when the gateway is configured.
-   */
-  provider?: "openai";
 }
 
 const IMAGE_DEFAULT_GATEWAY = "openai/gpt-image-1";
-const IMAGE_DEFAULT_DIRECT = "gpt-image-1";
 
 /**
- * Build and return the AI SDK `ImageModel` for the requested model. Routes
- * through the Vercel AI Gateway when AI_GATEWAY_API_KEY is present, else through
- * the OpenAI image API directly. Callers handle the no-key / failure case
- * (placeholder) as `image.generate.ts` does — this never throws on a missing
- * key, it simply builds a client that will surface the error at call time.
+ * Build and return the AI SDK `ImageModel` for the requested model, always
+ * through the Vercel AI Gateway. The gateway client reads `AI_GATEWAY_API_KEY`
+ * from the environment; callers handle the no-key / failure case (placeholder)
+ * as `image.generate.ts` does — this never throws on a missing key, it builds a
+ * client that surfaces the error at call time.
  */
 export function selectImageModel(selector: ImageModelSelector = {}): ImageModel {
-  const env = requireEnv(["AI_GATEWAY_API_KEY", "OPENAI_API_KEY"] as const);
-
-  if (env.AI_GATEWAY_API_KEY) {
-    const gatewayClient = createOpenAI({
-      apiKey: env.AI_GATEWAY_API_KEY,
-      baseURL: GATEWAY_BASE_URL,
-      name: GATEWAY_PROVIDER_NAME,
-    });
-    return gatewayClient.image(selector.model ?? IMAGE_DEFAULT_GATEWAY);
-  }
-
-  // Fallback: strip any `creator/` prefix to a bare OpenAI image model id.
-  const raw = selector.model;
-  const modelId =
-    raw && raw.includes("/")
-      ? (raw.split("/", 2)[1] ?? IMAGE_DEFAULT_DIRECT)
-      : (raw ?? IMAGE_DEFAULT_DIRECT);
-  if (!env.OPENAI_API_KEY) return openai.image(modelId);
-  return createOpenAI({ apiKey: env.OPENAI_API_KEY }).image(modelId);
+  return gateway.imageModel(selector.model ?? IMAGE_DEFAULT_GATEWAY);
 }
 
 // ── Video model selection ─────────────────────────────────────────────────────

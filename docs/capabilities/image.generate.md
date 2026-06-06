@@ -6,10 +6,10 @@
 
 ## Intent
 
-Generate an image from a natural-language prompt using the OpenAI DALL-E 3
-model via the Vercel AI SDK `experimental_generateImage` primitive.
+Generate an image from a natural-language prompt via the Vercel AI Gateway
+(default model `openai/gpt-image-1`).
 
-When `OPENAI_API_KEY` is not configured, the handler returns a typed
+When `AI_GATEWAY_API_KEY` is not configured, the handler returns a typed
 placeholder result with a render directive that shows an empty-state in
 the `image-preview` chat component — it never throws (policy §0.5).
 
@@ -22,7 +22,7 @@ render directive for the `image-preview` chat component.
 | -------- | ----------------------------------------------------------------- | -------------------------------------------------- |
 | `prompt` | `string` (min 1)                                                  | Natural-language description of the image.        |
 | `alt`    | `string` (optional)                                               | Accessible alt text. Derived from prompt if omitted. |
-| `size`   | `"1024x1024" \| "1792x1024" \| "1024x1792"` (default `1024x1024`) | Image dimensions — DALL-E 3 supported sizes only. |
+| `size`   | `"1024x1024" \| "1792x1024" \| "1024x1792"` (default `1024x1024`) | Image dimensions supported by the gateway default model. |
 
 ## Output
 
@@ -34,7 +34,7 @@ render directive for the `image-preview` chat component.
 | `placeholder` | `boolean`        | `true` when generation was skipped (no key) or failed.                       |
 | `render`   | `RenderDirective`   | `{ componentId: "image-preview", props: { url?, dataUri?, alt, placeholder } }` |
 
-## Behaviour without OPENAI_API_KEY
+## Behaviour without AI_GATEWAY_API_KEY
 
 When the key is absent (or `requireEnv` throws), the handler returns:
 
@@ -50,7 +50,7 @@ When the key is absent (or `requireEnv` throws), the handler returns:
 ```
 
 The `image-preview` component renders an empty-state card with the message
-"Set OPENAI_API_KEY to enable image generation."
+"Image generation is not enabled."
 
 ## Side effects
 
