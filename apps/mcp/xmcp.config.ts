@@ -24,16 +24,6 @@ const config: XmcpConfig = {
       ".mjs": [".mts", ".mjs"],
       ".cjs": [".cts", ".cjs"],
     };
-    // Prevent the dev watch loop: rspack emits its compiled output to
-    // dist/ (and xmcp scaffolds .xmcp/), both of which sit inside the
-    // watched project root. Without ignoring them, every emit re-fires
-    // the watcher → recompile → emit → "Restarting http server" forever,
-    // even when no source file has changed. Ignore build outputs and
-    // node_modules so only real source edits trigger a rebuild.
-    config.watchOptions = {
-      ...(config.watchOptions ?? {}),
-      ignored: ["**/dist/**", "**/.xmcp/**", "**/node_modules/**"],
-    };
     return config;
   },
   typescript: {
