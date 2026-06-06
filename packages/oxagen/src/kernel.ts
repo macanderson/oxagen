@@ -110,6 +110,12 @@ export type HandlerLoader = () => Promise<CapabilityHandlerFn>;
 
 const loaders = new Map<string, HandlerLoader>();
 const cache = new Map<string, CapabilityHandlerFn>();
+// Tracks which side-effect register modules have already run against THIS
+// kernel-module instance. Lives in the same module scope as `loaders` so the
+// two always reset together: when a dev bundler (Turbopack HMR) invalidates the
+// kernel it invalidates its importers too, so a fresh `loaders` always comes
+// with a fresh `registeredTokens`. See `registerHandlersOnce`.
+const registeredTokens = new Set<string>();
 
 export type CapabilityErrorCode =
   | "unknown_capability"
@@ -214,6 +220,24 @@ export function registerHandler(name: string, loader: HandlerLoader): void {
 
 export function hasHandler(name: string): boolean {
   return loaders.has(name);
+}
+
+/**
+ * Run a side-effect register block exactly once per kernel-module instance.
+ *
+ * Side-effect register modules (`@oxagen/handlers/register`,
+ * `@oxagen/agent/register`) call `registerHandler` at module-eval time. Under a
+ * dev bundler these modules can be re-evaluated on hot reload while the kernel
+ * module's `loaders` Map survives — re-running the registrations would then trip
+ * the duplicate guard in `registerHandler` and crash the surface. Wrapping a
+ * register module's body in this helper makes re-evaluation a no-op while
+ * keeping `registerHandler` strict (genuine in-file/cross-module duplicates
+ * still throw on the first, real registration pass).
+ */
+export function registerHandlersOnce(token: string, register: () => void): void {
+  if (registeredTokens.has(token)) return;
+  registeredTokens.add(token);
+  register();
 }
 
 async function resolveHandler(name: string): Promise<CapabilityHandlerFn> {
@@ -650,4 +674,5 @@ export function capabilitiesForSurface(
 export function clearHandlersForTests(): void {
   loaders.clear();
   cache.clear();
+  registeredTokens.clear();
 }
