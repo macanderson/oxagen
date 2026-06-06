@@ -36,6 +36,16 @@ function checksumOf(body: string): string {
   return createHash("sha256").update(body, "utf8").digest("hex");
 }
 
+/**
+ * The baseline is the `0000_*` ordinal — a regenerated full-schema pg_dump
+ * snapshot rather than an incremental migration. It is exempt from the
+ * edit-immutability guard (its checksum is re-stamped, never re-run); every
+ * incremental migration (0001+) remains strictly immutable.
+ */
+function isBaselineSnapshot(filename: string): boolean {
+  return filename.startsWith("0000_");
+}
+
 async function migratePostgres(): Promise<void> {
   const env = loadEnv();
   const sql = postgres(env.DATABASE_URL, { max: 1, prepare: false });
@@ -71,14 +81,36 @@ async function migratePostgres(): Promise<void> {
           `;
           console.log(kleur.gray(`[pg] skip ${file} (already applied; backfilled checksum)`));
         } else if (stored !== checksum) {
-          // A shipped migration was edited after it was applied. This is the one
-          // thing the immutability rule (engineering policy §5) forbids: edits
-          // never re-run, so the DB and the file silently diverge. Fail loudly.
-          throw new Error(
-            `[pg] checksum mismatch for ${file}: the file was edited after it was ` +
-              `applied (stored ${stored.slice(0, 12)}…, now ${checksum.slice(0, 12)}…). ` +
-              `Shipped migrations are immutable — revert the edit and add a NEW migration instead.`,
-          );
+          if (isBaselineSnapshot(file)) {
+            // The baseline (0000_*) is NOT an incremental migration — it is a
+            // regenerated full-schema pg_dump snapshot, re-baselined as the
+            // schema evolves (see `db: re-baseline migrations`). Its body (and
+            // thus checksum) changes when regenerated even though databases that
+            // already have it applied are unaffected: the snapshot is never
+            // re-run once applied, and the only edits it receives are idempotent
+            // (`CREATE SCHEMA IF NOT EXISTS`, stripped pg_dump meta-commands).
+            // Re-stamp the stored checksum to the canonical snapshot rather than
+            // failing — the immutability guard below still applies to every
+            // incremental migration (0001+).
+            await sql/* sql */`
+              UPDATE public._migrations SET checksum = ${checksum} WHERE filename = ${file}
+            `;
+            console.log(
+              kleur.yellow(
+                `[pg] re-stamped baseline ${file} (regenerated snapshot; ` +
+                  `${stored.slice(0, 12)}… → ${checksum.slice(0, 12)}…; schema unchanged, not re-run)`,
+              ),
+            );
+          } else {
+            // A shipped migration was edited after it was applied. This is the one
+            // thing the immutability rule (engineering policy §5) forbids: edits
+            // never re-run, so the DB and the file silently diverge. Fail loudly.
+            throw new Error(
+              `[pg] checksum mismatch for ${file}: the file was edited after it was ` +
+                `applied (stored ${stored.slice(0, 12)}…, now ${checksum.slice(0, 12)}…). ` +
+                `Shipped migrations are immutable — revert the edit and add a NEW migration instead.`,
+            );
+          }
         } else {
           console.log(kleur.gray(`[pg] skip ${file} (already applied)`));
         }
