@@ -1,27 +1,30 @@
 -- 0000_baseline.sql
 --
--- Single squashed baseline of the Oxagen Postgres schema (foundations through
--- OXA child-table org-scope). Rebaselined from the prior 18 incremental
--- migrations (0000_init … 0016_child_table_org_scope) into one final-state
--- migration. Safe because no environment was live at rebaseline time.
+-- Single squashed baseline of the Oxagen Postgres schema. Rebaselined from the
+-- prior incremental migrations (0000_baseline … 0009_conversation_archive_soft_delete)
+-- into one final-state migration. Safe because no environment was live with
+-- customer data at rebaseline time (prod was reset from this file).
 --
--- Represents the FINAL schema state: org tables already named `org.*` (not the
--- pre-rename `tenant.*`), orphaned tables already removed, and OAuth token
--- columns already in their encrypted (*_enc) contract form. Includes the
+-- Represents the FINAL schema state: the dead `organization` schema already
+-- dropped (0006), reconciled columns (0005), content + conversation soft-delete
+-- (0007/0009), org type + billing profile (0003), generated assets (0002), and
+-- user/workspace model & UX preferences (0004) all folded in. Includes the
 -- required extensions (citext, ltree, pgcrypto, uuid-ossp), the
--- public.uuid_generate_v7() fallback function, and all schemas, tables,
--- constraints, and indexes.
+-- public.uuid_generate_v7() fallback function, and all 14 schemas, 65 tables,
+-- enums, constraints, and indexes.
 --
--- Generated via pg_dump --schema-only of a database built by applying every
--- prior migration in order, then verified to provision a fresh database and to
--- support the full Better Auth sign-up / sign-in flow.
+-- Generated via `pg_dump --schema-only --no-owner --no-privileges` of a database
+-- built by applying every prior migration in order, then verified to provision a
+-- fresh database with zero errors.
+--
 --
 -- PostgreSQL database dump
 --
 
+\restrict 5EwAe2qizevbKg8963qd5163T7TB0LePehj6EmKobAHaKPzSiEvHGeFLsJfwARw
 
--- Dumped from database version 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1)
--- Dumped by pg_dump version 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1)
+-- Dumped from database version 16.14
+-- Dumped by pg_dump version 16.14
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -38,98 +41,98 @@ SET row_security = off;
 -- Name: agent; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS agent;
+CREATE SCHEMA agent;
 
 
 --
 -- Name: auth; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA auth;
 
 
 --
 -- Name: billing; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS billing;
+CREATE SCHEMA billing;
 
 
 --
 -- Name: chat; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS chat;
+CREATE SCHEMA chat;
 
 
 --
 -- Name: content; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS content;
+CREATE SCHEMA content;
 
 
 --
 -- Name: evaluation; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS evaluation;
+CREATE SCHEMA evaluation;
 
 
 --
 -- Name: event; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS event;
+CREATE SCHEMA event;
 
 
 --
 -- Name: execution; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS execution;
+CREATE SCHEMA execution;
 
 
 --
 -- Name: graph; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS graph;
+CREATE SCHEMA graph;
 
 
 --
 -- Name: integration; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS integration;
+CREATE SCHEMA integration;
 
 
 --
 -- Name: org; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS org;
+CREATE SCHEMA org;
 
 
 --
 -- Name: security; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS security;
+CREATE SCHEMA security;
 
 
 --
 -- Name: workflow; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS workflow;
+CREATE SCHEMA workflow;
 
 
 --
 -- Name: workspace; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS workspace;
+CREATE SCHEMA workspace;
 
 
 --
@@ -140,10 +143,24 @@ CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;
 
 
 --
+-- Name: EXTENSION citext; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION citext IS 'data type for case-insensitive character strings';
+
+
+--
 -- Name: ltree; Type: EXTENSION; Schema: -; Owner: -
 --
 
 CREATE EXTENSION IF NOT EXISTS ltree WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION ltree; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION ltree IS 'data type for hierarchical tree-like structures';
 
 
 --
@@ -154,6 +171,13 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
 
 --
+-- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
+
+
+--
 -- Name: uuid-ossp; Type: EXTENSION; Schema: -; Owner: -
 --
 
@@ -161,25 +185,62 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
 
 --
+-- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
+
+
+--
+-- Name: density; Type: TYPE; Schema: auth; Owner: -
+--
+
+CREATE TYPE auth.density AS ENUM (
+    'compact',
+    'comfortable',
+    'spacious'
+);
+
+
+--
+-- Name: font_size; Type: TYPE; Schema: auth; Owner: -
+--
+
+CREATE TYPE auth.font_size AS ENUM (
+    'small',
+    'medium',
+    'large'
+);
+
+
+--
+-- Name: model_tier; Type: TYPE; Schema: auth; Owner: -
+--
+
+CREATE TYPE auth.model_tier AS ENUM (
+    'fast',
+    'balanced',
+    'precise'
+);
+
+
+--
+-- Name: pending_prompt_behavior; Type: TYPE; Schema: auth; Owner: -
+--
+
+CREATE TYPE auth.pending_prompt_behavior AS ENUM (
+    'queue',
+    'interrupt'
+);
+
+
+--
 -- Name: uuid_generate_v7(); Type: FUNCTION; Schema: public; Owner: -
 --
 
--- uuid_generate_v7(): created ONLY when a zero-arg uuid_generate_v7 is not
--- already provided (e.g. by the pg_uuidv7 extension, which init-postgres.sql
--- installs when available). Guarding the create keeps this baseline idempotent
--- and extension-safe: a plain CREATE FUNCTION would fail against a Postgres
--- where pg_uuidv7 already owns the symbol (e.g. Neon).
-DO $uuidv7_guard$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_proc p
-    WHERE p.proname = 'uuid_generate_v7' AND p.pronargs = 0
-  ) THEN
-    EXECUTE $fn$
-      CREATE FUNCTION public.uuid_generate_v7() RETURNS uuid
-      LANGUAGE plpgsql
-      VOLATILE
-      AS $body$
+CREATE FUNCTION public.uuid_generate_v7() RETURNS uuid
+    LANGUAGE plpgsql
+    AS $$
       declare
         unix_ts_ms bytea;
         uuid_bytes bytea;
@@ -194,11 +255,7 @@ BEGIN
         uuid_bytes := set_byte(uuid_bytes, 8, (b'10' || get_byte(uuid_bytes, 8)::bit(6))::bit(8)::int);
         return encode(uuid_bytes, 'hex')::uuid;
       end
-      $body$;
-    $fn$;
-  END IF;
-END
-$uuidv7_guard$;
+      $$;
 
 
 SET default_tablespace = '';
@@ -544,7 +601,9 @@ CREATE TABLE auth.accounts (
     access_token_enc bytea,
     refresh_token_enc bytea,
     id_token_enc bytea,
-    token_kms_key_id text
+    token_kms_key_id text,
+    access_token text,
+    refresh_token text
 );
 
 
@@ -613,6 +672,35 @@ CREATE TABLE auth.sessions (
 
 
 --
+-- Name: user_preferences; Type: TABLE; Schema: auth; Owner: -
+--
+
+CREATE TABLE auth.user_preferences (
+    id uuid DEFAULT COALESCE(
+CASE
+    WHEN (to_regprocedure('public.uuid_generate_v7()'::text) IS NOT NULL) THEN public.uuid_generate_v7()
+    ELSE public.uuid_generate_v4()
+END, public.uuid_generate_v4()) NOT NULL,
+    public_id public.citext NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_user_id uuid,
+    updated_by_user_id uuid,
+    deleted_at timestamp with time zone,
+    deleted_by_user_id uuid,
+    user_id uuid NOT NULL,
+    font_size auth.font_size DEFAULT 'medium'::auth.font_size NOT NULL,
+    density auth.density DEFAULT 'comfortable'::auth.density NOT NULL,
+    enter_to_submit boolean DEFAULT false NOT NULL,
+    pending_prompt_behavior auth.pending_prompt_behavior DEFAULT 'queue'::auth.pending_prompt_behavior NOT NULL,
+    default_text_tier auth.model_tier,
+    default_text_model text,
+    default_image_model text,
+    default_video_model text
+);
+
+
+--
 -- Name: users; Type: TABLE; Schema: auth; Owner: -
 --
 
@@ -647,6 +735,34 @@ CREATE TABLE auth.verifications (
     expires_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: billing_disputes; Type: TABLE; Schema: billing; Owner: -
+--
+
+CREATE TABLE billing.billing_disputes (
+    id uuid DEFAULT COALESCE(
+CASE
+    WHEN (to_regprocedure('public.uuid_generate_v7()'::text) IS NOT NULL) THEN public.uuid_generate_v7()
+    ELSE public.uuid_generate_v4()
+END, public.uuid_generate_v4()) NOT NULL,
+    public_id public.citext NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_user_id uuid,
+    updated_by_user_id uuid,
+    org_id uuid NOT NULL,
+    stripe_dispute_id text NOT NULL,
+    stripe_charge_id text,
+    payment_intent_id text,
+    amount_cents integer NOT NULL,
+    currency text DEFAULT 'usd'::text NOT NULL,
+    reason text,
+    status text NOT NULL,
+    clawed_back_cents bigint DEFAULT 0 NOT NULL,
+    resolved_at timestamp with time zone
 );
 
 
@@ -757,6 +873,62 @@ CREATE TABLE billing.invoices (
     hosted_invoice_url text,
     invoice_pdf_url text,
     CONSTRAINT invoices_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'open'::text, 'paid'::text, 'void'::text, 'uncollectible'::text])))
+);
+
+
+--
+-- Name: org_billing_profiles; Type: TABLE; Schema: billing; Owner: -
+--
+
+CREATE TABLE billing.org_billing_profiles (
+    id uuid DEFAULT COALESCE(
+CASE
+    WHEN (to_regprocedure('public.uuid_generate_v7()'::text) IS NOT NULL) THEN public.uuid_generate_v7()
+    ELSE public.uuid_generate_v4()
+END, public.uuid_generate_v4()) NOT NULL,
+    org_id uuid NOT NULL,
+    billing_email public.citext,
+    address_line1 text,
+    address_line2 text,
+    address_city text,
+    address_region text,
+    address_postal_code text,
+    address_country text,
+    address_place_id text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_user_id uuid,
+    updated_by_user_id uuid
+);
+
+
+--
+-- Name: org_billing_settings; Type: TABLE; Schema: billing; Owner: -
+--
+
+CREATE TABLE billing.org_billing_settings (
+    id uuid DEFAULT COALESCE(
+CASE
+    WHEN (to_regprocedure('public.uuid_generate_v7()'::text) IS NOT NULL) THEN public.uuid_generate_v7()
+    ELSE public.uuid_generate_v4()
+END, public.uuid_generate_v4()) NOT NULL,
+    org_id uuid NOT NULL,
+    auto_reload_enabled boolean DEFAULT false NOT NULL,
+    auto_reload_threshold_cents bigint DEFAULT 500 NOT NULL,
+    auto_reload_amount_cents bigint DEFAULT 2000 NOT NULL,
+    auto_reload_payment_method_id text,
+    last_auto_reload_at timestamp with time zone,
+    low_balance_threshold_cents bigint DEFAULT 500 NOT NULL,
+    dunning_state text DEFAULT 'active'::text NOT NULL,
+    delinquent_since timestamp with time zone,
+    grace_ends_at timestamp with time zone,
+    suspended_at timestamp with time zone,
+    last_dunning_notified_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_user_id uuid,
+    updated_by_user_id uuid,
+    CONSTRAINT org_billing_settings_dunning_state_check CHECK ((dunning_state = ANY (ARRAY['active'::text, 'grace'::text, 'suspended'::text])))
 );
 
 
@@ -908,7 +1080,11 @@ CREATE TABLE chat.conversations (
     agent_version_id uuid,
     title text,
     status text NOT NULL,
-    active_leaf_message_id uuid
+    active_leaf_message_id uuid,
+    archived_at timestamp with time zone,
+    archived_by_user_id uuid,
+    deleted_at timestamp with time zone,
+    deleted_by_user_id uuid
 );
 
 
@@ -953,7 +1129,9 @@ CREATE TABLE content.documents (
     folder_id uuid,
     title text NOT NULL,
     document_type text NOT NULL,
-    embedding_status text NOT NULL
+    embedding_status text NOT NULL,
+    deleted_at timestamp with time zone,
+    deleted_by_user_id uuid
 );
 
 
@@ -976,7 +1154,48 @@ CREATE TABLE content.files (
     mime_type text NOT NULL,
     size_bytes bigint NOT NULL,
     checksum_sha256 text NOT NULL,
-    uploaded_at timestamp with time zone NOT NULL
+    uploaded_at timestamp with time zone NOT NULL,
+    deleted_at timestamp with time zone,
+    deleted_by_user_id uuid
+);
+
+
+--
+-- Name: generated_assets; Type: TABLE; Schema: content; Owner: -
+--
+
+CREATE TABLE content.generated_assets (
+    id uuid DEFAULT COALESCE(
+CASE
+    WHEN (to_regprocedure('public.uuid_generate_v7()'::text) IS NOT NULL) THEN public.uuid_generate_v7()
+    ELSE public.uuid_generate_v4()
+END, public.uuid_generate_v4()) NOT NULL,
+    public_id public.citext NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_user_id uuid,
+    updated_by_user_id uuid,
+    org_id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    deleted_at timestamp with time zone,
+    deleted_by_user_id uuid,
+    user_id uuid NOT NULL,
+    kind text NOT NULL,
+    access_policy text DEFAULT 'user'::text NOT NULL,
+    status text DEFAULT 'ready'::text NOT NULL,
+    storage_provider text NOT NULL,
+    storage_key text NOT NULL,
+    storage_url text,
+    mime_type text NOT NULL,
+    size_bytes bigint,
+    prompt text NOT NULL,
+    model text NOT NULL,
+    conversation_id uuid,
+    message_id uuid,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT generated_assets_access_policy_check CHECK ((access_policy = ANY (ARRAY['user'::text, 'org'::text, 'public'::text]))),
+    CONSTRAINT generated_assets_kind_check CHECK ((kind = ANY (ARRAY['image'::text, 'video'::text]))),
+    CONSTRAINT generated_assets_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'ready'::text, 'failed'::text])))
 );
 
 
@@ -1220,6 +1439,32 @@ END, public.uuid_generate_v4()) NOT NULL,
 
 
 --
+-- Name: invitations; Type: TABLE; Schema: org; Owner: -
+--
+
+CREATE TABLE org.invitations (
+    id uuid DEFAULT COALESCE(
+CASE
+    WHEN (to_regprocedure('public.uuid_generate_v7()'::text) IS NOT NULL) THEN public.uuid_generate_v7()
+    ELSE public.uuid_generate_v4()
+END, public.uuid_generate_v4()) NOT NULL,
+    public_id public.citext NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_user_id uuid,
+    updated_by_user_id uuid,
+    org_id uuid NOT NULL,
+    email public.citext NOT NULL,
+    role text NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    invited_by_user_id uuid NOT NULL,
+    accepted_user_id uuid,
+    expires_at timestamp with time zone,
+    CONSTRAINT invitations_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'declined'::text, 'revoked'::text, 'expired'::text])))
+);
+
+
+--
 -- Name: org_users; Type: TABLE; Schema: org; Owner: -
 --
 
@@ -1253,7 +1498,14 @@ CREATE TABLE org.organizations (
     slug public.citext NOT NULL,
     plan_type text NOT NULL,
     status text NOT NULL,
-    settings jsonb DEFAULT '{}'::jsonb NOT NULL
+    settings jsonb DEFAULT '{}'::jsonb NOT NULL,
+    type text DEFAULT 'business'::text NOT NULL,
+    website text,
+    industry text,
+    employee_size text,
+    avatar_url text,
+    CONSTRAINT organizations_employee_size_check CHECK (((employee_size IS NULL) OR (employee_size = ANY (ARRAY['1'::text, '2-10'::text, '11-50'::text, '51-200'::text, '201-500'::text, '501-1000'::text, '1001-5000'::text, '5001-10000'::text, '10000+'::text])))),
+    CONSTRAINT organizations_type_check CHECK ((type = ANY (ARRAY['personal'::text, 'business'::text])))
 );
 
 
@@ -1554,7 +1806,11 @@ CREATE TABLE workspace.workspaces (
     name text NOT NULL,
     slug public.citext NOT NULL,
     default_graph_id uuid,
-    settings jsonb DEFAULT '{}'::jsonb NOT NULL
+    settings jsonb DEFAULT '{}'::jsonb NOT NULL,
+    default_text_tier auth.model_tier,
+    default_text_model text,
+    default_image_model text,
+    default_video_model text
 );
 
 
@@ -1823,6 +2079,22 @@ ALTER TABLE ONLY auth.sessions
 
 
 --
+-- Name: user_preferences user_preferences_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
+--
+
+ALTER TABLE ONLY auth.user_preferences
+    ADD CONSTRAINT user_preferences_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_preferences user_preferences_public_id_unique; Type: CONSTRAINT; Schema: auth; Owner: -
+--
+
+ALTER TABLE ONLY auth.user_preferences
+    ADD CONSTRAINT user_preferences_public_id_unique UNIQUE (public_id);
+
+
+--
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
 --
 
@@ -1844,6 +2116,22 @@ ALTER TABLE ONLY auth.users
 
 ALTER TABLE ONLY auth.verifications
     ADD CONSTRAINT verifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: billing_disputes billing_disputes_pkey; Type: CONSTRAINT; Schema: billing; Owner: -
+--
+
+ALTER TABLE ONLY billing.billing_disputes
+    ADD CONSTRAINT billing_disputes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: billing_disputes billing_disputes_public_id_unique; Type: CONSTRAINT; Schema: billing; Owner: -
+--
+
+ALTER TABLE ONLY billing.billing_disputes
+    ADD CONSTRAINT billing_disputes_public_id_unique UNIQUE (public_id);
 
 
 --
@@ -1908,6 +2196,22 @@ ALTER TABLE ONLY billing.invoices
 
 ALTER TABLE ONLY billing.invoices
     ADD CONSTRAINT invoices_public_id_key UNIQUE (public_id);
+
+
+--
+-- Name: org_billing_profiles org_billing_profiles_pkey; Type: CONSTRAINT; Schema: billing; Owner: -
+--
+
+ALTER TABLE ONLY billing.org_billing_profiles
+    ADD CONSTRAINT org_billing_profiles_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_billing_settings org_billing_settings_pkey; Type: CONSTRAINT; Schema: billing; Owner: -
+--
+
+ALTER TABLE ONLY billing.org_billing_settings
+    ADD CONSTRAINT org_billing_settings_pkey PRIMARY KEY (id);
 
 
 --
@@ -2052,6 +2356,22 @@ ALTER TABLE ONLY content.files
 
 ALTER TABLE ONLY content.files
     ADD CONSTRAINT files_public_id_key UNIQUE (public_id);
+
+
+--
+-- Name: generated_assets generated_assets_pkey; Type: CONSTRAINT; Schema: content; Owner: -
+--
+
+ALTER TABLE ONLY content.generated_assets
+    ADD CONSTRAINT generated_assets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: generated_assets generated_assets_public_id_unique; Type: CONSTRAINT; Schema: content; Owner: -
+--
+
+ALTER TABLE ONLY content.generated_assets
+    ADD CONSTRAINT generated_assets_public_id_unique UNIQUE (public_id);
 
 
 --
@@ -2212,6 +2532,22 @@ ALTER TABLE ONLY org.iam_sessions
 
 ALTER TABLE ONLY org.iam_sessions
     ADD CONSTRAINT iam_sessions_public_id_key UNIQUE (public_id);
+
+
+--
+-- Name: invitations invitations_pkey; Type: CONSTRAINT; Schema: org; Owner: -
+--
+
+ALTER TABLE ONLY org.invitations
+    ADD CONSTRAINT invitations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: invitations invitations_public_id_unique; Type: CONSTRAINT; Schema: org; Owner: -
+--
+
+ALTER TABLE ONLY org.invitations
+    ADD CONSTRAINT invitations_public_id_unique UNIQUE (public_id);
 
 
 --
@@ -2762,6 +3098,13 @@ CREATE INDEX sessions_user_idx ON auth.sessions USING btree (user_id);
 
 
 --
+-- Name: user_preferences_user_id_idx; Type: INDEX; Schema: auth; Owner: -
+--
+
+CREATE UNIQUE INDEX user_preferences_user_id_idx ON auth.user_preferences USING btree (user_id);
+
+
+--
 -- Name: users_email_idx; Type: INDEX; Schema: auth; Owner: -
 --
 
@@ -2780,6 +3123,20 @@ CREATE UNIQUE INDEX users_username_idx ON auth.users USING btree (username);
 --
 
 CREATE INDEX verifications_identifier_idx ON auth.verifications USING btree (identifier);
+
+
+--
+-- Name: billing_disputes_org_idx; Type: INDEX; Schema: billing; Owner: -
+--
+
+CREATE INDEX billing_disputes_org_idx ON billing.billing_disputes USING btree (org_id, status);
+
+
+--
+-- Name: billing_disputes_stripe_dispute_idx; Type: INDEX; Schema: billing; Owner: -
+--
+
+CREATE UNIQUE INDEX billing_disputes_stripe_dispute_idx ON billing.billing_disputes USING btree (stripe_dispute_id);
 
 
 --
@@ -2836,6 +3193,20 @@ CREATE INDEX invoices_org_idx ON billing.invoices USING btree (org_id, status);
 --
 
 CREATE UNIQUE INDEX invoices_stripe_inv_idx ON billing.invoices USING btree (stripe_invoice_id);
+
+
+--
+-- Name: org_billing_profiles_org_idx; Type: INDEX; Schema: billing; Owner: -
+--
+
+CREATE UNIQUE INDEX org_billing_profiles_org_idx ON billing.org_billing_profiles USING btree (org_id);
+
+
+--
+-- Name: org_billing_settings_org_idx; Type: INDEX; Schema: billing; Owner: -
+--
+
+CREATE UNIQUE INDEX org_billing_settings_org_idx ON billing.org_billing_settings USING btree (org_id);
 
 
 --
@@ -2923,6 +3294,13 @@ CREATE UNIQUE INDEX usage_records_sub_metric_period_idx ON billing.usage_records
 
 
 --
+-- Name: conversations_list_idx; Type: INDEX; Schema: chat; Owner: -
+--
+
+CREATE INDEX conversations_list_idx ON chat.conversations USING btree (workspace_id, user_id, deleted_at, archived_at, updated_at);
+
+
+--
 -- Name: conversations_org_idx; Type: INDEX; Schema: chat; Owner: -
 --
 
@@ -2997,6 +3375,27 @@ CREATE INDEX files_org_idx ON content.files USING btree (org_id, workspace_id);
 --
 
 CREATE UNIQUE INDEX files_storage_idx ON content.files USING btree (storage_provider, storage_bucket, storage_key);
+
+
+--
+-- Name: generated_assets_conversation_idx; Type: INDEX; Schema: content; Owner: -
+--
+
+CREATE INDEX generated_assets_conversation_idx ON content.generated_assets USING btree (conversation_id);
+
+
+--
+-- Name: generated_assets_org_idx; Type: INDEX; Schema: content; Owner: -
+--
+
+CREATE INDEX generated_assets_org_idx ON content.generated_assets USING btree (org_id, workspace_id);
+
+
+--
+-- Name: generated_assets_user_idx; Type: INDEX; Schema: content; Owner: -
+--
+
+CREATE INDEX generated_assets_user_idx ON content.generated_assets USING btree (user_id);
 
 
 --
@@ -3214,6 +3613,20 @@ CREATE INDEX iam_sessions_org_idx ON org.iam_sessions USING btree (org_id);
 --
 
 CREATE INDEX iam_sessions_principal_idx ON org.iam_sessions USING btree (principal_id);
+
+
+--
+-- Name: invitations_org_email_pending_idx; Type: INDEX; Schema: org; Owner: -
+--
+
+CREATE UNIQUE INDEX invitations_org_email_pending_idx ON org.invitations USING btree (org_id, email) WHERE (status = 'pending'::text);
+
+
+--
+-- Name: invitations_org_status_idx; Type: INDEX; Schema: org; Owner: -
+--
+
+CREATE INDEX invitations_org_status_idx ON org.invitations USING btree (org_id, status);
 
 
 --
@@ -3543,6 +3956,22 @@ ALTER TABLE ONLY auth.sessions
 
 
 --
+-- Name: user_preferences user_preferences_user_id_users_id_fk; Type: FK CONSTRAINT; Schema: auth; Owner: -
+--
+
+ALTER TABLE ONLY auth.user_preferences
+    ADD CONSTRAINT user_preferences_user_id_users_id_fk FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: billing_disputes billing_disputes_org_id_organizations_id_fk; Type: FK CONSTRAINT; Schema: billing; Owner: -
+--
+
+ALTER TABLE ONLY billing.billing_disputes
+    ADD CONSTRAINT billing_disputes_org_id_organizations_id_fk FOREIGN KEY (org_id) REFERENCES org.organizations(id);
+
+
+--
 -- Name: credit_balances credit_balances_org_id_org_organizations_id_fk; Type: FK CONSTRAINT; Schema: billing; Owner: -
 --
 
@@ -3628,6 +4057,22 @@ ALTER TABLE ONLY billing.invoices
 
 ALTER TABLE ONLY billing.invoices
     ADD CONSTRAINT invoices_tenant_id_fkey FOREIGN KEY (org_id) REFERENCES org.organizations(id);
+
+
+--
+-- Name: org_billing_profiles org_billing_profiles_org_id_organizations_id_fk; Type: FK CONSTRAINT; Schema: billing; Owner: -
+--
+
+ALTER TABLE ONLY billing.org_billing_profiles
+    ADD CONSTRAINT org_billing_profiles_org_id_organizations_id_fk FOREIGN KEY (org_id) REFERENCES org.organizations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_billing_settings org_billing_settings_org_id_organizations_id_fk; Type: FK CONSTRAINT; Schema: billing; Owner: -
+--
+
+ALTER TABLE ONLY billing.org_billing_settings
+    ADD CONSTRAINT org_billing_settings_org_id_organizations_id_fk FOREIGN KEY (org_id) REFERENCES org.organizations(id) ON DELETE CASCADE;
 
 
 --
@@ -3946,4 +4391,5 @@ ALTER TABLE ONLY workspace.workspace_users
 -- PostgreSQL database dump complete
 --
 
+\unrestrict 5EwAe2qizevbKg8963qd5163T7TB0LePehj6EmKobAHaKPzSiEvHGeFLsJfwARw
 
