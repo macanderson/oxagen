@@ -144,20 +144,35 @@ where `SHORT_SHA` is `git rev-parse --short HEAD` captured in Phase 0, and
 `UTC_TIMESTAMP` is the audit *request* time as `YYYYMMDDTHHMMSSZ`.
 Example: docs/audits/release-audits/a1b9f3c_20260601T174500Z_release-audit.html
 
-`mkdir -p docs/audits/release-audits` first. The report must contain:
-- A header with repo, branch, full commit SHA, and request timestamp.
-- A summary table: check # · name · PASS/WARN/FAIL · one-line finding,
-  with status cells color-coded (green/amber/red).
-- **Blockers** (all FAILs) ranked by severity.
-- **Actions taken** (PRs marked ready, conflicts resolved, deploy result).
-- **Needs human** (unaddressed review threads, ambiguous conflicts, infra cost calls).
-Embed all CSS inline so the file renders standalone when opened from disk.
+`mkdir -p docs/audits/release-audits` first. The report must contain, in order:
+1. A header with repo, branch, full commit SHA, and request timestamp.
+2. A **hero readiness band** — the single 0–100 composite grade in a large, bold,
+   color-coded font, with a GO / NO-GO verdict pill and a PASS / WARN / FAIL badge.
+3. A **score grid** of stat boxes — one box per required score (maintainability,
+   security, SOC 2, GDPR, PCI, ops/CI, observability, end-user docs, internal docs,
+   platform stability), each showing the number, a colored band, and confidence.
+4. **Two maturity tables** — one row per `apps/*` directory and one row per
+   `packages/*` project, each with its score, band, and one-line finding.
+5. A summary table: check # · name · PASS/WARN/FAIL · one-line finding, color-coded.
+6. **Blockers** (all FAILs) ranked by severity.
+7. **Actions taken** (PRs marked ready, conflicts resolved, deploy result).
+8. **Needs human** (unaddressed review threads, ambiguous conflicts, infra cost calls).
+9. A **scoring methodology** footnote explaining the deduction model and bands.
+
+Embed all CSS **and** the renderer JS inline so the file renders standalone when
+opened from disk. **The template is data-driven:** you fill exactly one `DATA`
+object and the inline renderer paints the hero, every stat box, both maturity
+tables, the checks table, and the lists. **Do not hand-write rows** — push apps,
+packages, scores, and checks into `DATA` arrays and let the renderer loop. Adding
+an app or package later means adding one array entry (or, since the renderer just
+loops, the Phase 0 enumeration can emit it programmatically); the template markup
+never changes. Leave the `DATA` shape and the renderer intact.
 
 ### Output HTML Template
 
 ```html
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -165,7 +180,9 @@ Embed all CSS inline so the file renders standalone when opened from disk.
 <style>
   :root {
     --bg:#0B1020; --panel:rgba(255,255,255,.04); --border:rgba(255,255,255,.08);
-    --fg:#E8EAF2; --muted:#9aa3b2; --pass:#3CFF52; --warn:#FFC53C; --fail:#FF5C7A;
+    --fg:#E8EAF2; --muted:#9aa3b2;
+    --pass:#3CFF52; --warn:#FFC53C; --fail:#FF5C7A;
+    --good:#3CFF52; --fair:#9BE15D; --mid:#FFC53C; --poor:#FF9F45; --crit:#FF5C7A;
     --grad:linear-gradient(135deg,#7182FF,#3CFF52);
   }
   @media (prefers-color-scheme:light){
@@ -173,55 +190,198 @@ Embed all CSS inline so the file renders standalone when opened from disk.
   }
   *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);
     font:15px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;padding:40px}
-  .wrap{max-width:1080px;margin:0 auto}
-  h1{font-size:24px;margin:0 0 4px} .sub{color:var(--muted);font-size:13px;margin-bottom:28px}
+  .wrap{max-width:1120px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px} .sub{color:var(--muted);font-size:13px;margin-bottom:24px}
   .grad{height:3px;background:var(--grad);border-radius:3px;margin:18px 0 28px}
+  h2{font-size:16px;margin:38px 0 14px}
+  .meta{font-family:ui-monospace,monospace;font-size:12px;color:var(--muted)}
+
+  /* hero readiness band — big, bold, color-coded overall grade */
+  .hero{display:flex;align-items:center;gap:30px;flex-wrap:wrap;
+    background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:26px 32px}
+  .hero .score{font-size:88px;font-weight:800;line-height:.95;letter-spacing:-.03em}
+  .hero .score small{font-size:28px;font-weight:600;color:var(--muted);margin-left:4px}
+  .hero .verdict{display:flex;flex-direction:column;gap:10px}
+  .hero .pill{font-size:22px;font-weight:800;padding:8px 22px;border-radius:999px;
+    letter-spacing:.02em;text-transform:uppercase}
+  .hero .label{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .hero .badge{align-self:flex-start;font-size:14px;padding:5px 14px}
+
+  /* score stat-box grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+  .stat{background:var(--panel);border:1px solid var(--border);border-radius:14px;
+    padding:16px 18px;position:relative;overflow:hidden}
+  .stat::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--bar,var(--muted))}
+  .stat .name{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px}
+  .stat .val{font-size:38px;font-weight:800;line-height:1}
+  .stat .val small{font-size:15px;font-weight:600;color:var(--muted)}
+  .stat .track{height:6px;border-radius:999px;background:rgba(127,127,127,.18);margin-top:12px;overflow:hidden}
+  .stat .fill{height:100%;border-radius:999px}
+  .stat .conf{font-size:11px;color:var(--muted);margin-top:8px;text-transform:uppercase;letter-spacing:.04em}
+
   table{width:100%;border-collapse:collapse;background:var(--panel);
     border:1px solid var(--border);border-radius:12px;overflow:hidden}
   th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:top}
   th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
   tr:last-child td{border-bottom:none}
+  td.num{font-weight:800;font-size:18px;white-space:nowrap}
   .badge{font-weight:600;font-size:12px;padding:3px 9px;border-radius:999px;white-space:nowrap}
   .PASS{color:var(--pass);background:color-mix(in srgb,var(--pass) 14%,transparent)}
   .WARN{color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
   .FAIL{color:var(--fail);background:color-mix(in srgb,var(--fail) 14%,transparent)}
-  h2{font-size:16px;margin:34px 0 12px} .meta{font-family:ui-monospace,monospace;font-size:12px;color:var(--muted)}
   ul{margin:0;padding-left:20px} li{margin:4px 0}
+  .foot{color:var(--muted);font-size:12px;margin-top:10px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Oxagen Release Audit</h1>
-  <div class="sub">
-    <span class="meta">{{REPO}} · {{BRANCH}} · {{FULL_SHA}}</span><br>
-    Requested {{TIMESTAMP}}
-  </div>
-
-
+  <div class="sub"><span class="meta" id="meta"></span><br><span id="reqAt"></span></div>
   <div class="grad"></div>
 
-  
+  <section id="hero"></section>
 
-  <h2>Summary</h2>
-  <table>
-    <thead><tr><th>#</th><th>Check</th><th>Status</th><th>Finding</th></tr></thead>
-    <tbody>
-      <!-- repeat per check -->
-      <tr><td>{{N}}</td><td>{{NAME}}</td>
-          <td><span class="badge {{STATUS}}">{{STATUS}}</span></td>
-          <td>{{FINDING}}</td></tr>
-    </tbody>
-  </table>
+  <h2>Readiness scores</h2>
+  <div class="grid" id="scores"></div>
 
-  <h2>Blockers</h2>
-  <ul>{{#FAILS}}<li><strong>{{NAME}}:</strong> {{DETAIL}}</li>{{/FAILS}}</ul>
+  <h2>App maturity</h2>
+  <table id="appsTbl"><thead><tr><th>App</th><th>Score</th><th>Band</th><th>Finding</th></tr></thead><tbody></tbody></table>
 
-  <h2>Actions taken</h2>
-  <ul>{{#ACTIONS}}<li>{{TEXT}}</li>{{/ACTIONS}}</ul>
+  <h2>Package maturity</h2>
+  <table id="pkgsTbl"><thead><tr><th>Package</th><th>Score</th><th>Band</th><th>Finding</th></tr></thead><tbody></tbody></table>
 
-  <h2>Needs human</h2>
-  <ul>{{#HUMAN}}<li>{{TEXT}}</li>{{/HUMAN}}</ul>
+  <h2>Checks</h2>
+  <table id="checksTbl"><thead><tr><th>#</th><th>Check</th><th>Status</th><th>Finding</th></tr></thead><tbody></tbody></table>
+
+  <h2>Blockers</h2><ul id="blockers"></ul>
+  <h2>Actions taken</h2><ul id="actions"></ul>
+  <h2>Needs human</h2><ul id="human"></ul>
+
+  <p class="foot" id="method"></p>
 </div>
+
+<script>
+/* ===========================================================================
+ * Fill ONLY this DATA object. The renderer below paints everything from it.
+ * apps / packages / scores / checks are arrays — add entries, never markup.
+ * A new app or package = one more array item; the template never changes.
+ * =========================================================================*/
+const DATA = {
+  repo: "{{REPO}}", branch: "{{BRANCH}}", sha: "{{FULL_SHA}}", requestedAt: "{{TIMESTAMP}}",
+  composite: 0,                 // 0-100 overall release-readiness grade
+  verdict: "NO-GO",             // "GO" | "NO-GO"
+  status: "FAIL",               // overall "PASS" | "WARN" | "FAIL"
+  // one stat box per required score; value 0-100; conf: "high"|"med"|"low"
+  scores: [
+    { name: "Maintainability",     value: 0, conf: "med" },
+    { name: "Security",            value: 0, conf: "med" },
+    { name: "SOC 2 compliance",    value: 0, conf: "med" },
+    { name: "GDPR compliance",     value: 0, conf: "med" },
+    { name: "PCI compliance",      value: 0, conf: "med" },
+    { name: "Ops / CI maturity",   value: 0, conf: "med" },
+    { name: "Observability",       value: 0, conf: "med" },
+    { name: "Docs — end-user",     value: 0, conf: "med" },
+    { name: "Docs — internal",     value: 0, conf: "med" },
+    { name: "Platform stability",  value: 0, conf: "med" }
+  ],
+  // one row per apps/* dir enumerated in Phase 0 — generated, not hand-listed
+  apps: [
+    // { name: "app", value: 0, finding: "…" }
+  ],
+  // one row per packages/* project enumerated in Phase 0
+  packages: [
+    // { name: "ui", value: 0, finding: "…" }
+  ],
+  checks: [
+    // { n: 1, name: "Overengineering", status: "PASS", finding: "…" }
+  ],
+  blockers: [],   // ["<strong>Name:</strong> detail", …]
+  actions:  [],   // ["text", …]
+  human:    []    // ["text", …]
+};
+
+/* band + color from a 0-100 value */
+function band(v){
+  if(v>=90) return {label:"Excellent", col:"var(--good)"};
+  if(v>=75) return {label:"Good",      col:"var(--fair)"};
+  if(v>=60) return {label:"Fair",      col:"var(--mid)"};
+  if(v>=40) return {label:"Poor",      col:"var(--poor)"};
+  return        {label:"Critical",  col:"var(--crit)"};
+}
+const el = (t,c,h)=>{const e=document.createElement(t); if(c)e.className=c; if(h!=null)e.innerHTML=h; return e;};
+
+/* header */
+document.getElementById("meta").textContent = `${DATA.repo} · ${DATA.branch} · ${DATA.sha}`;
+document.getElementById("reqAt").textContent = `Requested ${DATA.requestedAt}`;
+
+/* hero — big bold colorful overall grade + verdict + PASS/WARN/FAIL */
+(function(){
+  const b = band(DATA.composite);
+  const vcol = DATA.verdict==="GO" ? "var(--pass)" : "var(--fail)";
+  document.getElementById("hero").innerHTML = `
+    <div class="hero">
+      <div>
+        <div class="label">Release readiness</div>
+        <div class="score" style="color:${b.col}">${DATA.composite}<small>/100</small></div>
+      </div>
+      <div class="verdict">
+        <span class="pill" style="color:${vcol};background:color-mix(in srgb,${vcol} 16%,transparent)">${DATA.verdict}</span>
+        <span class="badge ${DATA.status}">${DATA.status}</span>
+        <span class="label">${b.label}</span>
+      </div>
+    </div>`;
+})();
+
+/* score stat boxes */
+document.getElementById("scores").append(...DATA.scores.map(s=>{
+  const b = band(s.value);
+  const box = el("div","stat");
+  box.style.setProperty("--bar", b.col);
+  box.append(
+    el("div","name", s.name),
+    el("div","val", `${s.value}<small>/100</small>`),
+    (()=>{const t=el("div","track"),f=el("div","fill"); f.style.width=s.value+"%"; f.style.background=b.col; t.append(f); return t;})(),
+    el("div","conf", `${b.label} · confidence ${s.conf}`)
+  );
+  return box;
+}));
+
+/* maturity tables — apps and packages share one renderer */
+function fillMaturity(tblId, rows){
+  const tb = document.querySelector(`#${tblId} tbody`);
+  if(!rows.length){ tb.append(el("tr",null,`<td colspan="4" style="color:var(--muted)">No projects found.</td>`)); return; }
+  rows.forEach(r=>{
+    const b = band(r.value);
+    tb.append(el("tr",null,
+      `<td><span class="meta">${r.name}</span></td>`+
+      `<td class="num" style="color:${b.col}">${r.value}</td>`+
+      `<td>${b.label}</td><td>${r.finding||""}</td>`));
+  });
+}
+fillMaturity("appsTbl", DATA.apps);
+fillMaturity("pkgsTbl", DATA.packages);
+
+/* checks table */
+(function(){
+  const tb = document.querySelector("#checksTbl tbody");
+  DATA.checks.forEach(c=> tb.append(el("tr",null,
+    `<td>${c.n}</td><td>${c.name}</td>`+
+    `<td><span class="badge ${c.status}">${c.status}</span></td><td>${c.finding||""}</td>`)));
+})();
+
+/* lists */
+const li = (id,items,fallback)=>{
+  const ul=document.getElementById(id);
+  if(!items.length){ ul.append(el("li",null,`<span style="color:var(--muted)">${fallback}</span>`)); return; }
+  items.forEach(t=> ul.append(el("li",null,t)));
+};
+li("blockers", DATA.blockers, "No blockers.");
+li("actions",  DATA.actions,  "No actions taken.");
+li("human",    DATA.human,    "Nothing pending.");
+
+document.getElementById("method").textContent =
+  "Scoring: each score starts at 100 and deducts per finding (FAIL −15…−25 by blast radius, WARN −5), floored at 0, with hard caps for blocker-class findings. Bands: ≥90 Excellent · 75–89 Good · 60–74 Fair · 40–59 Poor · <40 Critical. Composite is the severity-weighted roll-up; any unresolved blocker forces NO-GO.";
+</script>
 </body>
 </html>
 ```
