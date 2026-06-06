@@ -20,6 +20,7 @@
     "@dnd-kit/utilities": "3.2.2",
     "@oxagen/agent": "workspace:*",
     "@oxagen/ai": "workspace:*",
+    "@oxagen/plugins": "workspace:*",
     "@oxagen/auth": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
