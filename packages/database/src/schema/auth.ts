@@ -202,7 +202,7 @@ export const verifications = authSchema.table(
 //   count       — integer: request count within the current window.
 //   lastRequest — bigint: Date.now() milliseconds since epoch of the last hit.
 //
-// Migration: 0009_soc2_auth_hardening.sql
+// Migration: 0003_soc2_auth_hardening.sql
 export const rateLimitTable = authSchema.table(
   "rate_limit",
   {
