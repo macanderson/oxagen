@@ -19,7 +19,8 @@
  *   agent.mcp_servers       → packages/database/src/schema/agent.ts
  */
 import postgres from "postgres";
-import { randomBytes } from "node:crypto";
+import { randomBytes, scrypt } from "node:crypto";
+import { E2E_TEST_PASSWORD } from "./auth";
 
 function deQuote(raw: string | undefined, fallback: string): string {
   if (!raw) return fallback;
@@ -36,6 +37,25 @@ function uid(): string {
   return randomBytes(6).toString("hex");
 }
 
+// Compute a Better Auth-compatible scrypt password hash.
+// Matches @better-auth/utils/dist/password.node.mjs: N=16384, r=16, p=1, dkLen=64.
+async function hashE2ePassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString("hex");
+  const key = await new Promise<Buffer>((resolve, reject) => {
+    scrypt(
+      password.normalize("NFKC"),
+      salt,
+      64,
+      { N: 16384, r: 16, p: 1, maxmem: 128 * 16384 * 16 * 2 },
+      (err, derivedKey) => {
+        if (err) reject(err);
+        else resolve(derivedKey);
+      },
+    );
+  });
+  return `${salt}:${key.toString("hex")}`;
+}
+
 export interface PluginFixtureOptions {
   orgSlug: string;
   workspaceSlug: string;
@@ -49,6 +69,10 @@ export interface PluginFixture {
   workspaceId: string;
   userId: string;
   sessionToken: string;
+  /** Email address for the seeded user — use with `loginAs(context, email, password)`. */
+  userEmail: string;
+  /** Plain-text password for the seeded user — use with `loginAs(context, email, password)`. */
+  password: string;
   orgSlug: string;
   workspaceSlug: string;
   /**

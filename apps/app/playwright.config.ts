@@ -1,4 +1,68 @@
 import { defineConfig, devices } from "@playwright/test";
+import { readFileSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// ---------------------------------------------------------------------------
+// Load .env.local into process.env before Playwright config is evaluated.
+//
+// The test process (playwright runner) inherits the shell environment, which
+// may have stale / mis-quoted values for BETTER_AUTH_SECRET and other keys.
+// Next.js dotenv-parsing strips surrounding double-quotes from values like
+// `KEY="value"` → value. We replicate that strip here so the auth helper
+// (e2e/helpers/auth.ts) sees the same secret the running app uses, letting
+// the seeded Better-Auth session cookie verify correctly.
+//
+// Priority: shell env wins over .env.local (same as Next.js), EXCEPT for
+// known-bad patterns (value starts with `"` but doesn't end with `"`, which
+// indicates a partially-stripped double-quote from the shell). In that case
+// we replace from .env.local so signing works.
+// ---------------------------------------------------------------------------
+function loadEnvLocal(): void {
+  // Resolve the directory of this config file — compatible with ESM and CJS.
+  const configDir = dirname(fileURLToPath(import.meta.url));
+
+  // Walk from the current file up to the monorepo root looking for .env.local.
+  // In normal operation cwd is apps/app; fall back to the monorepo root too.
+  const candidates = [
+    resolve(configDir, ".env.local"),
+    resolve(configDir, "../../.env.local"),
+  ];
+
+  for (const envPath of candidates) {
+    if (!existsSync(envPath)) continue;
+    const raw = readFileSync(envPath, "utf8");
+    for (const line of raw.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIdx = trimmed.indexOf("=");
+      if (eqIdx < 1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      let val = trimmed.slice(eqIdx + 1).trim();
+      // Strip one balanced surrounding double-quote pair (same as normalizeEnv).
+      if (val.length >= 2 && val.startsWith('"') && val.endsWith('"')) {
+        val = val.slice(1, -1);
+      }
+      // Override the shell value when:
+      //  (a) the key is not set at all in the shell, OR
+      //  (b) the shell value looks corrupted (starts with `"` without matching
+      //      end quote — a known artifact of how zsh exports double-quoted env
+      //      vars that contain `=` characters).
+      const current = process.env[key];
+      const corrupted =
+        typeof current === "string" &&
+        current.startsWith('"') &&
+        !current.endsWith('"');
+      if (current === undefined || corrupted) {
+        process.env[key] = val;
+      }
+    }
+    // Use the first .env.local found.
+    break;
+  }
+}
+
+loadEnvLocal();
 
 export default defineConfig({
   globalSetup: "./e2e/fixtures/global-setup.ts",
