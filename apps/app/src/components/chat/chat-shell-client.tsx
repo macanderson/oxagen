@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { Suspense } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { MessageTree } from "./message-tree";
 import { MessageComposer, type ComposerAction } from "./message-composer";
@@ -81,8 +82,33 @@ export function ChatShellClient({
     signalApprovalResolved,
   } = useToolStream();
 
+  const router = useRouter();
+  const pathname = usePathname();
+
   // Track whether the current turn is streaming (to show live events).
   const [isStreaming, setIsStreaming] = React.useState(false);
+  const isStreamingValueRef = React.useRef(isStreaming);
+  React.useEffect(() => { isStreamingValueRef.current = isStreaming; }, [isStreaming]);
+
+  // Latest conversationId, read inside the send callback (whose deps don't
+  // include it) to tell whether THIS turn created the conversation.
+  const conversationIdRef = React.useRef(conversationId);
+  React.useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
+
+  // Set after a completed turn triggers router.refresh(). When the server then
+  // re-renders `messages` (now including the just-persisted assistant reply),
+  // we clear the live SSE state so the streamed bubbles are replaced by their
+  // persisted equivalents — no duplicate, no flash, and they survive the next
+  // submit's reset because they now live in the immutable `messages` prop.
+  // Deferred while a new turn is mid-stream so a concurrent submit's revalidate
+  // can't wipe the in-flight live text; the flag carries to that turn's end.
+  const awaitingReconcileRef = React.useRef(false);
+  React.useEffect(() => {
+    if (awaitingReconcileRef.current && !isStreamingValueRef.current) {
+      awaitingReconcileRef.current = false;
+      reset();
+    }
+  }, [messages, reset]);
 
   // Stable refs so useCallback deps don't change on every render.
   const consumeRef = React.useRef(consume);
@@ -157,12 +183,21 @@ export function ChatShellClient({
       resetRef.current();
       setIsStreamingRef.current(true);
 
+      const wasNewConversation = !conversationIdRef.current;
       const result = await sendAction(formData);
       if (!result.ok || !result.conversationId) {
         // Persistence failed (or yielded no conversation): don't stream; the
         // result drives the composer's error state.
         setIsStreamingRef.current(false);
         return result;
+      }
+
+      // If this turn created the conversation, pin the browser URL to its
+      // public id. Without `?c=<publicId>` the bare /ask|/chat URL resolves to
+      // a blank slate, so the new conversation's persisted history would never
+      // render (and the next turn would spawn yet another conversation).
+      if (wasNewConversation && result.conversationPublicId) {
+        router.replace(`${pathname}?c=${result.conversationPublicId}`);
       }
 
       void (async () => {
@@ -202,6 +237,15 @@ export function ChatShellClient({
           const decoder = new TextDecoder();
 
           await consumeRef.current(sseToEvents(reader, decoder, signal));
+
+          // Turn finished cleanly: pull the now-persisted assistant reply into
+          // the RSC `messages` prop. The [messages] effect above then clears
+          // the live state once the refreshed prop lands, so the reply becomes
+          // a durable persisted bubble instead of vanishing on the next submit.
+          if (abortControllerRef.current === controller) {
+            awaitingReconcileRef.current = true;
+            router.refresh();
+          }
         } catch (err) {
           // AbortError is expected on interrupt or unmount — not a warning.
           if (err instanceof Error && err.name !== "AbortError") {
@@ -220,7 +264,7 @@ export function ChatShellClient({
 
       return result;
     },
-    [sendAction],
+    [sendAction, router, pathname],
   );
 
   // Called by the composer when the user wants to interrupt the in-flight stream.

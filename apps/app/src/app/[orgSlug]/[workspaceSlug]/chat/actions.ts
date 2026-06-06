@@ -1,7 +1,7 @@
 "use server";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "@oxagen/database";
 import type { DbMessageRow, ConversationRow } from "@oxagen/database";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
@@ -36,7 +36,7 @@ export async function sendMessageAction(
   ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
   formData: FormData,
 ): Promise<
-  | { ok: true; conversationId: string; userMessageId: string }
+  | { ok: true; conversationId: string; conversationPublicId: string; userMessageId: string }
   | { ok: false; error: string }
 > {
   const session = await getSessionOrRedirect();
@@ -60,25 +60,64 @@ export async function sendMessageAction(
   if (!capabilityInput.success) return { ok: false, error: capabilityInput.error.issues[0]?.message ?? "Invalid" };
 
   try {
-    const { conversationId, userMessageId } = await db().transaction(async (tx) => {
-      // Resolve or create the conversation, yielding a non-null string id.
-      const convId: string = capabilityInput.data.conversationId
-        ? capabilityInput.data.conversationId
-        : await (async () => {
-            const [conv] = await tx
-              .insert(schema.conversations)
-              .values({
-                orgId: ctx.orgId,
-                workspaceId: ctx.workspaceId,
-                userId: session.user.id,
-                status: "active",
-                createdByUserId: session.user.id,
-                updatedByUserId: session.user.id,
-              })
-              .returning();
-            if (!conv) throw new Error("Conversation insert failed");
-            return (conv as ConversationRow).id;
-          })();
+    const { conversationId, conversationPublicId, userMessageId } = await db().transaction(async (tx) => {
+      // Resolve or create the conversation. For an existing conversation we
+      // also read its CURRENT active leaf (server-authoritative threading) and
+      // verify it belongs to this org/workspace (no cross-tenant IDOR).
+      let convId: string;
+      let convPublicId: string;
+      let currentLeaf: string | null;
+      if (capabilityInput.data.conversationId) {
+        const [existing] = await tx
+          .select({
+            id: schema.conversations.id,
+            publicId: schema.conversations.publicId,
+            leaf: schema.conversations.activeLeafMessageId,
+          })
+          .from(schema.conversations)
+          .where(
+            and(
+              eq(schema.conversations.id, capabilityInput.data.conversationId),
+              eq(schema.conversations.orgId, ctx.orgId),
+              eq(schema.conversations.workspaceId, ctx.workspaceId),
+            ),
+          )
+          .limit(1);
+        if (!existing) throw new Error("Conversation not found");
+        convId = existing.id;
+        convPublicId = existing.publicId;
+        currentLeaf = existing.leaf ?? null;
+      } else {
+        const [conv] = await tx
+          .insert(schema.conversations)
+          .values({
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            userId: session.user.id,
+            status: "active",
+            createdByUserId: session.user.id,
+            updatedByUserId: session.user.id,
+          })
+          .returning();
+        if (!conv) throw new Error("Conversation insert failed");
+        const typedConv = conv as ConversationRow;
+        convId = typedConv.id;
+        convPublicId = typedConv.publicId;
+        currentLeaf = null;
+      }
+
+      // Thread the user message onto the conversation's CURRENT active leaf
+      // (read fresh above) — NOT the client-supplied parentMessageId, which
+      // lags the DB across turns: the composer's parent prop trails the user
+      // message while the real leaf has already advanced to the assistant
+      // reply, so mis-parenting silently drops every assistant reply from the
+      // visible branch (walkActiveBranch walks parent links from the leaf). An
+      // explicit branch op (edit/regenerate/…) is the only case that overrides
+      // the parent with a client-chosen branch point.
+      const parentMessageId =
+        parsed.data.branchReason && capabilityInput.data.parentMessageId
+          ? capabilityInput.data.parentMessageId
+          : currentLeaf;
 
       const [userMsg] = await tx
         .insert(schema.messages)
@@ -86,7 +125,7 @@ export async function sendMessageAction(
           orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
           conversationId: convId,
-          parentMessageId: capabilityInput.data.parentMessageId ?? undefined,
+          parentMessageId: parentMessageId ?? undefined,
           role: "user",
           content: capabilityInput.data.content,
           contentBlocks: capabilityInput.data.contentBlocks,
@@ -105,11 +144,11 @@ export async function sendMessageAction(
         .set({ activeLeafMessageId: typedMsg.id, updatedAt: new Date() })
         .where(eq(schema.conversations.id, convId));
 
-      return { conversationId: convId, userMessageId: typedMsg.id };
+      return { conversationId: convId, conversationPublicId: convPublicId, userMessageId: typedMsg.id };
     });
 
     revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/chat`);
-    return { ok: true, conversationId, userMessageId };
+    return { ok: true, conversationId, conversationPublicId, userMessageId };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to send message";
     return { ok: false, error: message };

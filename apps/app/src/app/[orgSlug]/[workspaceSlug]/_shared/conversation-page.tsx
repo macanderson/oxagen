@@ -32,7 +32,10 @@ export interface ConversationPageActions {
   sendMessageAction: (
     ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
     formData: FormData,
-  ) => Promise<{ ok: true; conversationId: string; userMessageId: string } | { ok: false; error: string }>;
+  ) => Promise<
+    | { ok: true; conversationId: string; conversationPublicId: string; userMessageId: string }
+    | { ok: false; error: string }
+  >;
   resolveApprovalAction: (
     ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
     approvalId: string,
@@ -100,6 +103,13 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
   let conversationId: string | null = null;
   let activeLeafMessageId: string | null = null;
 
+  // A `?c=<publicId>` param selects a specific conversation; its absence is a
+  // deliberate blank slate (the "New conversation" affordance and the default
+  // landing state), NOT a cue to auto-resume the most recent thread — that
+  // fallback hijacked the new-conversation button so it could never reach an
+  // empty composer. History lives in the conversation nav; a fresh load starts
+  // a new turn. The first sent message creates the row and the client pins the
+  // URL to its `?c=`, so reloads mid-conversation resolve correctly.
   const conv: ConversationRow | undefined = conversationPublicId
     ? (
         await db()
@@ -114,19 +124,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
           )
           .limit(1)
       )[0]
-    : (
-        await db()
-          .select()
-          .from(schema.conversations)
-          .where(
-            and(
-              eq(schema.conversations.userId, session.user.id),
-              eq(schema.conversations.workspaceId, workspace.id),
-            ),
-          )
-          .orderBy(desc(schema.conversations.createdAt))
-          .limit(1)
-      )[0];
+    : undefined;
 
   if (conv) {
     conversationId = conv.id;
