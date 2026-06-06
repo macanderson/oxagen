@@ -6,6 +6,7 @@
 import nextPlugin from "eslint-config-next";
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
+import { tenancySeamRestrictedImports } from "./eslint.tenancy-seams.mjs";
 
 /** @type {import("eslint").Linter.Config[]} */
 const config = [
@@ -29,6 +30,9 @@ const config = [
           destructuredArrayIgnorePattern: "^_",
         },
       ],
+      // OXA-1515: Next apps must route DB access through withTenantDb /
+      // withSystemDb — never the raw db() seam.
+      "no-restricted-imports": ["error", tenancySeamRestrictedImports],
     },
   },
 ];

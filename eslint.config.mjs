@@ -5,6 +5,7 @@
 // node_modules and points --config at this file (or lets flat-config
 // discovery walk up to it).
 import tseslint from "typescript-eslint";
+import { tenancySeamRestrictedImports } from "./eslint.tenancy-seams.mjs";
 
 export default tseslint.config(
   // Global ignores — applied to every package that uses this config.
@@ -59,6 +60,26 @@ export default tseslint.config(
 
       // Allow empty catch blocks with a comment.
       "@typescript-eslint/no-empty-object-type": "error",
+
+      // OXA-1515: forbid raw data-store seam clients outside their owning
+      // packages so tenant RLS scoping can't be bypassed by accident.
+      "no-restricted-imports": ["error", tenancySeamRestrictedImports],
     },
+  },
+  // The seam-owning packages legitimately use their own raw clients.
+  {
+    files: [
+      "packages/database/**",
+      "packages/ontology/**",
+      "packages/telemetry/**",
+    ],
+    rules: { "no-restricted-imports": "off" },
+  },
+  // The Better Auth Drizzle adapter needs a persistent raw db() connection
+  // handle (it only touches non-RLS-policied global auth tables). This is the
+  // single authorized raw-db() consumer outside @oxagen/database.
+  {
+    files: ["packages/auth/src/auth.ts"],
+    rules: { "no-restricted-imports": "off" },
   },
 );
