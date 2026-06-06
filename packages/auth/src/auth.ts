@@ -18,13 +18,14 @@ const env = requireEnv([
   "BETTER_AUTH_SECRET",
   "BETTER_AUTH_URL",
   "NODE_ENV",
-  // LOGIN client — social sign-in. The DATA client (GOOGLE_DATA_CLIENT_ID/
-  // SECRET) is reserved for the future google-workspace data connection and is
+  // LOGIN client — social sign-in. The DATA clients (GOOGLE_DATA_CLIENT_ID/
+  // SECRET, GITHUB_DATA_CLIENT_ID/SECRET) are reserved for future data
+  // connections (google-workspace, github repo ingestion) and are
   // intentionally NOT wired into social login.
   "GOOGLE_LOGIN_CLIENT_ID",
   "GOOGLE_LOGIN_CLIENT_SECRET",
-  "GITHUB_CLIENT_ID",
-  "GITHUB_CLIENT_SECRET",
+  "GITHUB_LOGIN_CLIENT_ID",
+  "GITHUB_LOGIN_CLIENT_SECRET",
 ] as const);
 
 // ---------------------------------------------------------------------------
@@ -260,8 +261,8 @@ export const auth = betterAuth({
           }
         : undefined,
     github:
-      env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET
-        ? { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET }
+      env.GITHUB_LOGIN_CLIENT_ID && env.GITHUB_LOGIN_CLIENT_SECRET
+        ? { clientId: env.GITHUB_LOGIN_CLIENT_ID, clientSecret: env.GITHUB_LOGIN_CLIENT_SECRET }
         : undefined,
   },
   // Account linking — never create a duplicate user. Google and GitHub both

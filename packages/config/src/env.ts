@@ -21,17 +21,19 @@ export const baseEnvSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
 
-  // Google OAuth is split into two distinct clients (same Google Cloud
-  // project) so the broad data-scope client never gates plain login:
-  //  - LOGIN: minimal openid/profile/email — social sign-in (in use).
-  //  - DATA:  Workspace data-source scopes (Drive/Sheets/Gmail/…) — reserved
-  //           for the genericOAuth `google-workspace` connection (future).
+  // OAuth providers are each split into two distinct clients (same provider
+  // app/project) so a broad data-scope client never gates plain login:
+  //  - LOGIN: minimal sign-in scopes — social sign-in (in use).
+  //  - DATA:  data-source scopes — reserved for the future data connection.
+  // Google → google-workspace (Drive/Sheets/Gmail/…); GitHub → repo ingestion.
   GOOGLE_LOGIN_CLIENT_ID: z.string().optional(),
   GOOGLE_LOGIN_CLIENT_SECRET: z.string().optional(),
   GOOGLE_DATA_CLIENT_ID: z.string().optional(),
   GOOGLE_DATA_CLIENT_SECRET: z.string().optional(),
-  GITHUB_CLIENT_ID: z.string().optional(),
-  GITHUB_CLIENT_SECRET: z.string().optional(),
+  GITHUB_LOGIN_CLIENT_ID: z.string().optional(),
+  GITHUB_LOGIN_CLIENT_SECRET: z.string().optional(),
+  GITHUB_DATA_CLIENT_ID: z.string().optional(),
+  GITHUB_DATA_CLIENT_SECRET: z.string().optional(),
 
   STRIPE_SECRET_KEY: z.string().startsWith("sk_"),
   STRIPE_PUBLISHABLE_KEY: z.string().startsWith("pk_"),

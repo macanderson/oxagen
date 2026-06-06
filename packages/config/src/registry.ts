@@ -272,18 +272,39 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
-  GITHUB_CLIENT_ID: {
+  // GitHub mirrors the Google split: a LOGIN client (social sign-in, in use)
+  // and a DATA client (repo-ingestion scopes, reserved for the future
+  // github connection — keeps repo-access scopes off the plain-login client).
+  GITHUB_LOGIN_CLIENT_ID: {
     group: "OAuth providers",
-    description: "GitHub OAuth client id.",
+    description: "GitHub LOGIN OAuth client id (social sign-in; minimal scopes).",
     secret: false,
     clientExposed: false,
     services: ["api", "app"],
     requiredIn: [],
     valueOrigin: "manual",
   },
-  GITHUB_CLIENT_SECRET: {
+  GITHUB_LOGIN_CLIENT_SECRET: {
     group: "OAuth providers",
-    description: "GitHub OAuth client secret.",
+    description: "GitHub LOGIN OAuth client secret.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  GITHUB_DATA_CLIENT_ID: {
+    group: "OAuth providers",
+    description: "GitHub DATA OAuth client id (repo-ingestion scopes; future connection).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  GITHUB_DATA_CLIENT_SECRET: {
+    group: "OAuth providers",
+    description: "GitHub DATA OAuth client secret.",
     secret: true,
     clientExposed: false,
     services: ["api", "app"],
