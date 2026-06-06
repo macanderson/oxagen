@@ -12,3 +12,4 @@ export type {
 } from "./credentials/credential-service";
 export { resolveCredentialKms } from "./credentials/kms";
 export type { ResolvedKms } from "./credentials/kms";
+export * from "./registry";
