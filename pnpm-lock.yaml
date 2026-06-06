@@ -1007,15 +1007,9 @@ importers:
 
   packages/plugins:
     dependencies:
-      '@oxagen/config':
-        specifier: workspace:*
-        version: link:../config
       '@oxagen/crypto':
         specifier: workspace:*
         version: link:../crypto
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: 25.9.1

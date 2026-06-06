@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   jsonb,
   text,
@@ -31,6 +32,10 @@ export const mcpRegistries = mcpSchema.table(
   },
   (t) => ({
     orgIdx: index("registries_org_idx").on(t.orgId),
+    // NOTE: the unique constraint on (org_id, base_url) is expressed in the SQL
+    // migration as a COALESCE-on-org_id unique index (so the global seed row,
+    // org_id NULL, still dedupes). Drizzle's index builder can't express the
+    // COALESCE, so it lives in 0008_installable_plugins.sql only.
   }),
 );
 
@@ -75,6 +80,16 @@ export const mcpCatalogServers = mcpSchema.table(
       t.version,
     ),
     registryNameIdx: index("catalog_servers_registry_name_idx").on(t.registryId, t.name),
+    categoriesGin: index("catalog_servers_categories_gin").using("gin", t.categories),
+    transportGin: index("catalog_servers_transport_gin").using("gin", t.transportTypes),
+    statusCheck: check(
+      "catalog_servers_status_check",
+      sql`${t.status} IN ('active','deprecated','deleted')`,
+    ),
+    authKindCheck: check(
+      "catalog_servers_auth_kind_check",
+      sql`${t.authKind} IN ('oauth','secret','none')`,
+    ),
   }),
 );
 
@@ -109,5 +124,13 @@ export const mcpCredentials = mcpSchema.table(
       t.orgListingId,
     ),
     orgIdx: index("credentials_org_idx").on(t.orgId),
+    authKindCheck: check(
+      "credentials_auth_kind_check",
+      sql`${t.authKind} IN ('oauth','secret')`,
+    ),
+    statusCheck: check(
+      "credentials_status_check",
+      sql`${t.status} IN ('active','needs_reauth','revoked')`,
+    ),
   }),
 );

@@ -1,4 +1,4 @@
--- 0007_installable_plugins.sql
+-- 0008_installable_plugins.sql
 -- Installable plugins foundation: registries, catalog, org governance,
 -- workspace install link, encrypted credentials, notifications.
 -- Forward migration (immutable after merge). See spec
@@ -67,8 +67,8 @@ CREATE TABLE mcp.catalog_servers (
   upstream_updated_at timestamptz,
   status_changed_at   timestamptz,
   meta                jsonb NOT NULL DEFAULT '{}'::jsonb,
-  CONSTRAINT catalog_servers_status_chk CHECK (status IN ('active','deprecated','deleted')),
-  CONSTRAINT catalog_servers_auth_kind_chk CHECK (auth_kind IN ('oauth','secret','none'))
+  CONSTRAINT catalog_servers_status_check CHECK (status IN ('active','deprecated','deleted')),
+  CONSTRAINT catalog_servers_auth_kind_check CHECK (auth_kind IN ('oauth','secret','none'))
 );
 CREATE UNIQUE INDEX catalog_servers_name_version_uniq ON mcp.catalog_servers (registry_id, name, version);
 CREATE INDEX catalog_servers_registry_name_idx ON mcp.catalog_servers (registry_id, name);
@@ -104,9 +104,9 @@ CREATE TABLE plugin.org_listings (
   auth_config        jsonb NOT NULL DEFAULT '{}'::jsonb,
   enabled            boolean NOT NULL DEFAULT false,
   config             jsonb NOT NULL DEFAULT '{}'::jsonb,
-  CONSTRAINT org_listings_type_chk CHECK (plugin_type IN ('mcp_server','integration','content_tool')),
-  CONSTRAINT org_listings_source_chk CHECK (source IN ('registry','custom')),
-  CONSTRAINT org_listings_auth_kind_chk CHECK (auth_kind IN ('oauth','secret','none'))
+  CONSTRAINT org_listings_type_check CHECK (plugin_type IN ('mcp_server','integration','content_tool')),
+  CONSTRAINT org_listings_source_check CHECK (source IN ('registry','custom')),
+  CONSTRAINT org_listings_auth_kind_check CHECK (auth_kind IN ('oauth','secret','none'))
 );
 CREATE UNIQUE INDEX org_listings_org_type_name_uniq ON plugin.org_listings (org_id, plugin_type, name);
 CREATE INDEX org_listings_org_type_idx ON plugin.org_listings (org_id, plugin_type);
@@ -128,7 +128,7 @@ CREATE TABLE plugin.org_denylist (
   plugin_type        text NOT NULL,
   server_name        text NOT NULL,
   reason             text,
-  CONSTRAINT org_denylist_type_chk CHECK (plugin_type IN ('mcp_server','integration','content_tool'))
+  CONSTRAINT org_denylist_type_check CHECK (plugin_type IN ('mcp_server','integration','content_tool'))
 );
 CREATE UNIQUE INDEX org_denylist_org_type_name_uniq ON plugin.org_denylist (org_id, plugin_type, server_name);
 
@@ -159,8 +159,8 @@ CREATE TABLE mcp.credentials (
   expires_at              timestamptz,
   status                  text NOT NULL DEFAULT 'active',
   last_refreshed_at       timestamptz,
-  CONSTRAINT credentials_auth_kind_chk CHECK (auth_kind IN ('oauth','secret')),
-  CONSTRAINT credentials_status_chk CHECK (status IN ('active','needs_reauth','revoked'))
+  CONSTRAINT credentials_auth_kind_check CHECK (auth_kind IN ('oauth','secret')),
+  CONSTRAINT credentials_status_check CHECK (status IN ('active','needs_reauth','revoked'))
 );
 CREATE UNIQUE INDEX credentials_workspace_listing_uniq ON mcp.credentials (workspace_id, org_listing_id);
 CREATE INDEX credentials_org_idx ON mcp.credentials (org_id);
@@ -194,9 +194,9 @@ CREATE TABLE notification.notifications (
   unread             boolean NOT NULL DEFAULT true,
   archived           boolean NOT NULL DEFAULT false,
   emailed_at         timestamptz,
-  CONSTRAINT notifications_kind_chk CHECK (kind IN ('system','approval','run','member','security'))
+  CONSTRAINT notifications_kind_check CHECK (kind IN ('system','approval','run','member','security'))
 );
-CREATE INDEX notifications_user_unread_idx ON notification.notifications (user_id, unread);
+CREATE INDEX notifications_user_unread_idx ON notification.notifications (user_id, unread) WHERE archived = false;
 CREATE INDEX notifications_org_idx ON notification.notifications (org_id);
 
 -- ---------------------------------------------------------------------------
@@ -211,4 +211,5 @@ VALUES (
   'https://registry.modelcontextprotocol.io',
   true,
   true
-);
+)
+ON CONFLICT (public_id) DO NOTHING;

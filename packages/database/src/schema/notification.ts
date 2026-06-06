@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   text,
   timestamp,
@@ -30,7 +32,15 @@ export const notifications = notificationSchema.table(
     emailedAt: timestamp("emailed_at", { withTimezone: true, mode: "date" }),
   },
   (t) => ({
-    userUnreadIdx: index("notifications_user_unread_idx").on(t.userId, t.unread),
+    // Partial index for the unread-feed query — excludes archived rows so the
+    // index stays small and matches the feed's WHERE NOT archived predicate.
+    userUnreadIdx: index("notifications_user_unread_idx")
+      .on(t.userId, t.unread)
+      .where(sql`${t.archived} = false`),
     orgIdx: index("notifications_org_idx").on(t.orgId),
+    kindCheck: check(
+      "notifications_kind_check",
+      sql`${t.kind} IN ('system','approval','run','member','security')`,
+    ),
   }),
 );

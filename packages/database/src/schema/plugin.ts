@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   jsonb,
   text,
@@ -44,6 +45,18 @@ export const pluginOrgListings = pluginSchema.table(
       t.name,
     ),
     orgTypeIdx: index("org_listings_org_type_idx").on(t.orgId, t.pluginType),
+    typeCheck: check(
+      "org_listings_type_check",
+      sql`${t.pluginType} IN ('mcp_server','integration','content_tool')`,
+    ),
+    sourceCheck: check(
+      "org_listings_source_check",
+      sql`${t.source} IN ('registry','custom')`,
+    ),
+    authKindCheck: check(
+      "org_listings_auth_kind_check",
+      sql`${t.authKind} IN ('oauth','secret','none')`,
+    ),
   }),
 );
 
@@ -68,6 +81,10 @@ export const pluginOrgDenylist = pluginSchema.table(
       t.orgId,
       t.pluginType,
       t.serverName,
+    ),
+    typeCheck: check(
+      "org_denylist_type_check",
+      sql`${t.pluginType} IN ('mcp_server','integration','content_tool')`,
     ),
   }),
 );

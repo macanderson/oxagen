@@ -263,6 +263,10 @@ export const mcpServers = agentSchema.table(
     ...idMixin("mcs"),
     ...auditMixin(),
     ...orgScopeMixin(),
+    // Links a workspace install back to its org allow-list row
+    // (plugin.org_listings). Nullable only because the column was added to an
+    // existing table with no rows to backfill; the plugin install handler
+    // (Plan 3) requires it on every insert. Treat as required when querying.
     orgListingId: uuid("org_listing_id"),
     name: text("name").notNull(),
     transportType: text("transport_type").notNull(),

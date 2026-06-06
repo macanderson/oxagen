@@ -16,9 +16,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@oxagen/config": "workspace:*",
-    "@oxagen/crypto": "workspace:*",
-    "zod": "3.25.76"
+    "@oxagen/crypto": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
