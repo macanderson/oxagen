@@ -76,7 +76,10 @@ const AuthAlertsSchema = z.object({
 });
 
 export async function setAuthAlertsAction(
-  input: z.infer<typeof AuthAlertsSchema>,
+  // Param typed with `roles: string[]` to match the client panel prop; the Zod
+  // schema below still validates each role against the capability's enum at
+  // runtime (invalid roles are rejected before invoke()).
+  input: { orgSlug: string; sendEmail: boolean; roles: string[] },
 ): Promise<{ ok: boolean; error?: string }> {
   const parsed = AuthAlertsSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
