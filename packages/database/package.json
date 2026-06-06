@@ -21,7 +21,8 @@
     "migrate": "echo 'drizzle-kit migrate is disabled. Run: pnpm db:migrate (from repo root) — the canonical multi-store runner. The drizzle journal is NOT the source of truth.' && exit 1",
     "studio": "drizzle-kit studio",
     "test:unit": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
