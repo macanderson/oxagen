@@ -10,7 +10,7 @@ export const notificationsMark = registerCapability({
   domain: "notifications",
   description: "Mark a notification as read and/or archived for the calling user.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["api", "mcp", "unit"],
   scoped: true,
   sensitivity: "low",
