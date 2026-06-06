@@ -31,7 +31,7 @@ vi.mock("@oxagen/database", () => ({
       userPreferences: { findFirst: mocks.prefsFindFirst },
     },
   }),
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       insert: (_table: unknown) => ({ values: mocks.insertValues }),
       query: {

@@ -1,6 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { userPreferencesWrite } from "@oxagen/oxagen/contracts/user.preferences.write";
-import { schema, withTenantDb } from "@oxagen/database";
+// user_preferences is user-global (no org_id, no RLS policy) — withSystemDb is correct.
+import { schema, withSystemDb } from "@oxagen/database";
 import type { NewUserPreferences } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
@@ -50,7 +51,7 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
   if ("defaultImageModel" in input) updateSet.defaultImageModel = input.defaultImageModel;
   if ("defaultVideoModel" in input) updateSet.defaultVideoModel = input.defaultVideoModel;
 
-  await withTenantDb((tx) =>
+  await withSystemDb((tx) =>
     tx
       .insert(schema.userPreferences)
       .values(insertValues)
@@ -61,7 +62,7 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
   );
 
   // Re-read the full row to return canonical post-upsert state.
-  const row = await withTenantDb((tx) =>
+  const row = await withSystemDb((tx) =>
     tx.query.userPreferences.findFirst({
       where: eq(schema.userPreferences.userId, userId),
       columns: {

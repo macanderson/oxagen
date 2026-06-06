@@ -43,6 +43,36 @@ export const fetchPublicPlans = (): Promise<PlanRow[]> =>
   );
 
 /**
+ * Build Plan[] from SUBSCRIPTION_PLANS constant as a local-dev fallback.
+ * 1 credit = 1¢, so includedCreditCents = includedCredits.
+ * publicId uses slug (unique, stable; only used as React key in PlansGrid).
+ */
+function plansFromConstant(): Plan[] {
+  return SUBSCRIPTION_PLANS.map((p) => ({
+    publicId: p.slug,
+    slug: p.slug,
+    name: p.displayName,
+    tier: p.tier,
+    monthlyCents: p.monthlyCents,
+    annualCents: p.annualCents,
+    includedCreditCents: p.includedCredits,
+    includedSeats: p.seats,
+    features: p.features.list.map((label) => ({ label })),
+  }));
+}
+
+/**
+ * Returns Plan[] for the billing grid. Uses DB rows when the stripe-sync has
+ * been run (prod / staging); falls back to SUBSCRIPTION_PLANS when the table
+ * is empty (local dev without stripe-sync). Always returns the three paid tiers.
+ */
+export async function fetchPlanCards(): Promise<Plan[]> {
+  const rows = await fetchPublicPlans();
+  if (rows.length > 0) return toPlanCards(rows);
+  return plansFromConstant();
+}
+
+/**
  * Map `billing.plans` rows to the `PlanCard` prop shape — shared by both billing
  * tabs so the parsing lives in one place. The `features` jsonb is written by
  * stripe-sync from `SUBSCRIPTION_PLANS[].features` as `{ list: string[] }` (see

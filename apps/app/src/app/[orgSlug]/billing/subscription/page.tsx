@@ -15,7 +15,7 @@ import { AutoReloadSettings } from "@/components/billing/auto-reload-settings";
 import { LowBalanceBanner } from "@/components/billing/low-balance-banner";
 import { DunningBanner } from "@/components/billing/dunning-banner";
 import { PlansGrid } from "../plans-grid";
-import { fetchPublicPlans, toPlanCards } from "../public-plans";
+import { fetchPlanCards } from "../public-plans";
 import { safeQuery } from "../safe-query";
 import {
   listOrgPaymentMethods,
@@ -119,7 +119,7 @@ export default async function BillingSubscriptionPage({
         ),
       [] as CreditLedgerRow[],
     ),
-    fetchPublicPlans(),
+    fetchPlanCards(),
   ]);
 
   const viewerRole = viewerRoleRow?.role ?? "member";
@@ -151,12 +151,24 @@ export default async function BillingSubscriptionPage({
           null as PlanRow | null,
         )
       : Promise.resolve(null),
-    safeQuery(() => listOrgPaymentMethods(tenant.id), []),
+    safeQuery(
+      () => runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () => listOrgPaymentMethods(tenant.id)),
+      [],
+    ),
     canManageBilling
-      ? safeQuery(() => getOrgBillingSettings(tenant.id), null)
+      ? safeQuery(
+          () => runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () => getOrgBillingSettings(tenant.id)),
+          null,
+        )
       : Promise.resolve(null),
-    safeQuery(() => getOrgBillingStatus(tenant.id), null),
-    safeQuery(() => isLowBalance(tenant.id), null),
+    safeQuery(
+      () => runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () => getOrgBillingStatus(tenant.id)),
+      null,
+    ),
+    safeQuery(
+      () => runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () => isLowBalance(tenant.id)),
+      null,
+    ),
   ]);
 
   const subscription = subscriptionRow
@@ -173,10 +185,8 @@ export default async function BillingSubscriptionPage({
       }
     : null;
 
-  const currentPlanSlug =
-    subscriptionRow
-      ? (publicPlans.find((p) => p.id === subscriptionRow.planId)?.slug ?? null)
-      : null;
+  // planForSub already resolved the plan row by subscriptionRow.planId — reuse its slug.
+  const currentPlanSlug = planForSub?.slug ?? null;
 
   // Default card for display inside SubscriptionSummary.
   const defaultCard = paymentMethods.find((pm) => pm.isDefault) ?? null;
@@ -240,7 +250,7 @@ export default async function BillingSubscriptionPage({
       <PlansGrid
         orgSlug={orgSlug}
         currentPlanSlug={currentPlanSlug}
-        plans={toPlanCards(publicPlans)}
+        plans={publicPlans}
       />
 
       {/* Payment methods management */}

@@ -1,6 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { userPreferencesRead } from "@oxagen/oxagen/contracts/user.preferences.read";
-import { schema, withTenantDb } from "@oxagen/database";
+// user_preferences is user-global (no org_id, no RLS policy) — withSystemDb is correct.
+import { schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -27,7 +28,7 @@ export const userPreferencesReadHandler: CapabilityHandler<typeof userPreference
 
   const userId = ctx.userId;
 
-  const row = await withTenantDb((tx) =>
+  const row = await withSystemDb((tx) =>
     tx.query.userPreferences.findFirst({
       where: eq(schema.userPreferences.userId, userId),
       columns: {

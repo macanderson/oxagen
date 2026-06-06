@@ -110,7 +110,9 @@ export async function cancelSubscriptionAction(input: {
   const managed = await resolveManagedOrg(input.orgSlug);
   if (!managed) return { ok: false, error: NOT_AUTHORIZED };
   try {
-    await cancelOrgSubscription(managed.orgId);
+    await runInTenantScope({ orgId: managed.orgId, workspaceId: ORG_ONLY_WS }, () =>
+      cancelOrgSubscription(managed.orgId),
+    );
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Cancel failed" };
   }
@@ -138,7 +140,9 @@ export async function reactivateSubscriptionAction(input: {
   const managed = await resolveManagedOrg(input.orgSlug);
   if (!managed) return { ok: false, error: NOT_AUTHORIZED };
   try {
-    await reactivateOrgSubscription(managed.orgId);
+    await runInTenantScope({ orgId: managed.orgId, workspaceId: ORG_ONLY_WS }, () =>
+      reactivateOrgSubscription(managed.orgId),
+    );
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Reactivate failed" };
   }
@@ -183,10 +187,12 @@ export async function changePlanAction(
   const env = loadEnv();
 
   try {
-    const result = await changeOrgPlan(managed.orgId, targetPlanSlug, interval, {
-      successUrl: `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/billing/subscription?status=success`,
-      cancelUrl: `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/billing/subscription?status=canceled`,
-    });
+    const result = await runInTenantScope({ orgId: managed.orgId, workspaceId: ORG_ONLY_WS }, () =>
+      changeOrgPlan(managed.orgId, targetPlanSlug, interval, {
+        successUrl: `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/billing/subscription?status=success`,
+        cancelUrl: `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/billing/subscription?status=canceled`,
+      }),
+    );
 
     if (result === null) {
       // In-place swap — revalidate and let the client know no redirect is needed.
@@ -255,7 +261,9 @@ export async function setSeatsAction(
   if (!managed) return { ok: false, code: "internal", error: NOT_AUTHORIZED };
 
   try {
-    await setSubscriptionSeats(managed.orgId, seats);
+    await runInTenantScope({ orgId: managed.orgId, workspaceId: ORG_ONLY_WS }, () =>
+      setSubscriptionSeats(managed.orgId, seats),
+    );
     revalidatePath(`/${orgSlug}/billing`);
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug, seats }, "billing: seats updated");
@@ -359,7 +367,9 @@ export async function previewSeatsAction(
   if (!managed) return { error: NOT_AUTHORIZED };
 
   try {
-    const preview = await previewSeatChange(managed.orgId, seats);
+    const preview = await runInTenantScope({ orgId: managed.orgId, workspaceId: ORG_ONLY_WS }, () =>
+      previewSeatChange(managed.orgId, seats),
+    );
     logger.info({ orgSlug, seats }, "billing: previewSeatsAction");
     return preview;
   } catch (err) {
@@ -388,7 +398,9 @@ export async function previewPlanAction(
   if (!managed) return { error: NOT_AUTHORIZED };
 
   try {
-    const preview = await previewPlanChange(managed.orgId, targetPlanSlug, interval);
+    const preview = await runInTenantScope({ orgId: managed.orgId, workspaceId: ORG_ONLY_WS }, () =>
+      previewPlanChange(managed.orgId, targetPlanSlug, interval),
+    );
     logger.info({ orgSlug, targetPlanSlug, interval }, "billing: previewPlanAction");
     return preview;
   } catch (err) {
@@ -413,7 +425,9 @@ export async function createSetupIntentAction(input: {
   if (!managed) return { ok: false, error: NOT_AUTHORIZED };
 
   try {
-    const { clientSecret } = await createPaymentMethodSetupIntent(managed.orgId);
+    const { clientSecret } = await runInTenantScope({ orgId: managed.orgId, workspaceId: ORG_ONLY_WS }, () =>
+      createPaymentMethodSetupIntent(managed.orgId),
+    );
     logger.info({ orgSlug }, "billing: createSetupIntentAction");
     recordSecurityEvent(auditInsert(), {
       eventType: "billing.payment_method_added",
@@ -447,7 +461,9 @@ export async function syncPaymentMethodsAction(input: {
   if (!managed) return { ok: false };
 
   try {
-    await syncPaymentMethodsFromStripe(managed.orgId);
+    await runInTenantScope({ orgId: managed.orgId, workspaceId: ORG_ONLY_WS }, () =>
+      syncPaymentMethodsFromStripe(managed.orgId),
+    );
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug }, "billing: syncPaymentMethodsAction");
     return { ok: true };
@@ -476,7 +492,9 @@ export async function setDefaultPaymentMethodAction(input: {
   if (!managed) return { error: NOT_AUTHORIZED };
 
   try {
-    await setOrgDefaultPaymentMethod(managed.orgId, paymentMethodId);
+    await runInTenantScope({ orgId: managed.orgId, workspaceId: ORG_ONLY_WS }, () =>
+      setOrgDefaultPaymentMethod(managed.orgId, paymentMethodId),
+    );
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug, paymentMethodId }, "billing: setDefaultPaymentMethodAction");
     recordSecurityEvent(auditInsert(), {
@@ -512,7 +530,9 @@ export async function removePaymentMethodAction(input: {
   if (!managed) return { error: NOT_AUTHORIZED };
 
   try {
-    await removeOrgPaymentMethod(managed.orgId, paymentMethodId);
+    await runInTenantScope({ orgId: managed.orgId, workspaceId: ORG_ONLY_WS }, () =>
+      removeOrgPaymentMethod(managed.orgId, paymentMethodId),
+    );
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug, paymentMethodId }, "billing: removePaymentMethodAction");
     recordSecurityEvent(auditInsert(), {
@@ -559,7 +579,9 @@ export async function updateAutoReloadAction(input: {
   if (!managed) return { error: NOT_AUTHORIZED };
 
   try {
-    const settings = await updateAutoReloadSettings(managed.orgId, updates);
+    const settings = await runInTenantScope({ orgId: managed.orgId, workspaceId: ORG_ONLY_WS }, () =>
+      updateAutoReloadSettings(managed.orgId, updates),
+    );
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug }, "billing: updateAutoReloadAction");
     recordSecurityEvent(auditInsert(), {
