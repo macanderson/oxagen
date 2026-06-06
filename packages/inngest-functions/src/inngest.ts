@@ -67,6 +67,9 @@ type Events = {
       aspectRatio?: string;
     };
   };
+  "plugin/registry.sync": {
+    data: { registryId: string; mode: "full" | "incremental" };
+  };
 };
 
 // OXA-1349: INNGEST keys are optional in the base schema (not every service

@@ -23,6 +23,7 @@
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
+    "@oxagen/plugins": "workspace:*",
     "@oxagen/storage": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",

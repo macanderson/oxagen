@@ -7,6 +7,8 @@ import { agentExecuteSubagent } from "./functions/agent.execute-subagent";
 import { agentBackgroundTaskExecute } from "./functions/agent.background-task.execute";
 import { agentVideoRender, agentVideoRenderOnFailure } from "./functions/agent.video-render";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
+import { pluginCatalogSyncCron } from "./functions/plugin.catalog-sync-cron";
+import { pluginRegistrySync } from "./functions/plugin.registry-sync";
 
 export const functions = [
   billingRollupUsage,
@@ -19,4 +21,6 @@ export const functions = [
   agentVideoRender,
   agentVideoRenderOnFailure,
   securityAuditPartitionRollover,
+  pluginCatalogSyncCron,
+  pluginRegistrySync,
 ];
