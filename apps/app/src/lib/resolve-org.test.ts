@@ -16,18 +16,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // so any variables they reference must be declared with vi.hoisted() first.
 // ---------------------------------------------------------------------------
 
-const { notFoundMock, mockRows, mockDb } = vi.hoisted(() => {
+const { notFoundMock, mockRows, mockWithSystemDb } = vi.hoisted(() => {
   const mockRows: unknown[] = [];
   const mockLimit = vi.fn(() => Promise.resolve(mockRows));
   const mockWhere = vi.fn(() => ({ limit: mockLimit }));
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
-  const mockDb = vi.fn(() => ({ select: mockSelect }));
+  // withSystemDb passes a tx to its callback; the tx has the same Drizzle
+  // query-builder shape. We invoke the callback immediately with a mock tx.
+  const mockTx = { select: mockSelect };
+  const mockWithSystemDb = vi.fn((fn: (tx: unknown) => Promise<unknown>) =>
+    fn(mockTx),
+  );
   const notFoundMock = vi.fn(() => {
     throw new Error("NEXT_NOT_FOUND");
   });
 
-  return { notFoundMock, mockRows, mockDb };
+  return { notFoundMock, mockRows, mockWithSystemDb };
 });
 
 // ---------------------------------------------------------------------------
@@ -40,15 +45,12 @@ vi.mock("next/navigation", () => ({
   notFound: notFoundMock,
 }));
 
-// Drizzle query builder mock — returns a chainable object that resolves to rows.
-vi.mock("@oxagen/database/client", () => ({
-  db: mockDb,
-}));
-
 vi.mock("@oxagen/database", () => ({
+  withSystemDb: mockWithSystemDb,
   schema: {
     organizations: { slug: "slug_col", id: "id_col" },
     workspaces: { orgId: "org_id_col", slug: "ws_slug_col", id: "ws_id_col" },
+    orgUsers: { orgId: "org_id_col", userId: "user_id_col", id: "id_col", role: "role_col" },
   },
 }));
 

@@ -10,6 +10,7 @@ import { bootstrap } from "./bootstrap";
 //
 // Wire env validation + IAM enforcement + the SOC2 audit emitter once per cold
 // start, before any request is handled. Idempotent.
-bootstrap();
+// bootstrap() is async (awaits assertRlsConnectionSafe before accepting traffic).
+await bootstrap();
 
 export default handle(app);

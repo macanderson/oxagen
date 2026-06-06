@@ -1,10 +1,10 @@
 "use server";
 import { z } from "zod";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
 // tenancy: unscoped seam (org creation bootstrap — no org or workspace exists
 // yet at call time; this action IS what creates the first tenant identity, so
-// a scope cannot be entered before the org row exists) — OXA-1515
+// a scope cannot be entered before the org row exists; withSystemDb bypasses
+// RLS deliberately) — OXA-1515
 import { grantFreeCredits } from "@oxagen/billing";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
@@ -128,7 +128,7 @@ export async function createOrgAction(
       : null;
 
   try {
-    const result = await db().transaction(async (tx) => {
+    const result = await withSystemDb(async (tx) => {
       const [tenant] = await tx
         .insert(schema.organizations)
         .values({

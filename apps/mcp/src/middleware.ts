@@ -4,8 +4,13 @@ import { bootstrapBillingRuntime } from "@oxagen/billing";
 import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
-import { db } from "@oxagen/database/client";
+import { assertRlsConnectionSafe } from "@oxagen/database";
 import { extractBearerToken } from "./context";
+
+// Refuse to boot if TENANT_RLS_ENFORCEMENT_ENABLED=true but the DB role
+// silently bypasses RLS (superuser or BYPASSRLS), which would make all
+// tenant isolation policies dead weight.
+await assertRlsConnectionSafe();
 
 // Wire the real IAM enforcement runtime at MCP surface startup.
 // xmcp has no lifecycle hook — this module-level call runs once when the
@@ -19,10 +24,8 @@ bootstrapBillingRuntime();
 // Wire the Postgres security event emitter (SOC2 CC6/CC7 audit trail).
 // Registered ONCE, immediately after bootstrapIAMRuntime(), so the db
 // client is available before any tool invocation can emit a kernel event.
-// tenancy: unscoped seam (module-level init — no request context; raw db()
-// is required so the inserter can write no_tenant_scope deny events that fire
-// before any scope is established). — OXA-1515
-const _securityInsert = makeSecurityEventInserter(db());
+// makeSecurityEventInserter() now uses withSystemDb internally — no db() arg needed.
+const _securityInsert = makeSecurityEventInserter();
 setSecurityEventEmitter((kernelEvent) => {
   recordSecurityEvent(_securityInsert, {
     eventType:

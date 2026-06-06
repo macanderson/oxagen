@@ -1,7 +1,6 @@
 "use server";
 import { and, eq } from "drizzle-orm";
-import { withTenantDb } from "@oxagen/database";
-import { schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { getSessionOrRedirect } from "@/lib/session";
@@ -80,7 +79,15 @@ export async function createWorkspaceAction(
     }
 
     try {
-      const workspaceSlug = await withTenantDb(async (tx) => {
+      // tenancy: unscoped seam for workspace + membership creation. The
+      // workspace_only RLS policy on workspace_users checks WITH CHECK
+      // (workspace_id = current_setting('app.workspace_id')::uuid). When the
+      // scope is set to the sentinel (ORG_ONLY_WS) and the INSERT carries the
+      // real new workspace id, Postgres rejects the write. Using withSystemDb
+      // (RLS bypass) for this bootstrap creation is the correct fix — the
+      // workspace and its creator's membership row ARE the objects being
+      // created, so there is no prior scope to derive from. — OXA-1515
+      const workspaceSlug = await withSystemDb(async (tx) => {
         const [ws] = await tx
           .insert(schema.workspaces)
           .values({

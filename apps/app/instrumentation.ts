@@ -44,7 +44,12 @@ export async function register(): Promise<void> {
     const { setSecurityEventEmitter } = await import("@oxagen/oxagen/kernel");
     const { recordSecurityEvent } = await import("@oxagen/telemetry");
     const { makeSecurityEventInserter } = await import("@oxagen/database/security");
-    const { db } = await import("@oxagen/database/client");
+    const { assertRlsConnectionSafe } = await import("@oxagen/database");
+
+    // Refuse to boot if TENANT_RLS_ENFORCEMENT_ENABLED=true but the DB role
+    // silently bypasses RLS (superuser or BYPASSRLS), which would make all
+    // tenant isolation policies dead weight.
+    await assertRlsConnectionSafe();
 
     bootstrapIAMRuntime();
     // Wire the billing admission gate (suspended / zero-balance refusal +
@@ -54,10 +59,8 @@ export async function register(): Promise<void> {
     // Wire the Postgres security event emitter (SOC2 CC6/CC7 audit trail).
     // Registered once per server process, immediately after bootstrapIAMRuntime()
     // so the kernel runtime is initialised before any capability can be invoked.
-    // tenancy: unscoped seam (process startup — no tenant context exists at
-    // bootstrap time; the security event emitter is wired once before any
-    // request runs) — OXA-1515
-    const insert = makeSecurityEventInserter(db());
+    // makeSecurityEventInserter() now uses withSystemDb internally — no db() arg needed.
+    const insert = makeSecurityEventInserter();
     setSecurityEventEmitter((kernelEvent) => {
       recordSecurityEvent(insert, {
         eventType:

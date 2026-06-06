@@ -2,11 +2,12 @@ import "server-only";
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { eq, and } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
 // tenancy: unscoped seam (resolves the active org/workspace from slugs/session
 // before a tenant scope exists — this is the canonical bootstrap step that
-// PRODUCES the orgId/workspaceId used by runInTenantScope in callers) — OXA-1515
+// PRODUCES the orgId/workspaceId used by runInTenantScope in callers;
+// withSystemDb bypasses RLS deliberately; tables read: org.organizations,
+// workspace.workspaces, org.org_users) — OXA-1515
 
 export interface ResolvedOrg {
   id: string;
@@ -26,11 +27,13 @@ export interface ResolvedWorkspace {
 // Per-request memoization keeps slug → row resolution at one query per
 // boundary, even when several RSCs in the same render need the tenant.
 export const resolveOrg = cache(async (slug: string): Promise<ResolvedOrg> => {
-  const rows = await db()
-    .select()
-    .from(schema.organizations)
-    .where(eq(schema.organizations.slug, slug))
-    .limit(1);
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select()
+      .from(schema.organizations)
+      .where(eq(schema.organizations.slug, slug))
+      .limit(1),
+  );
   const row = rows[0];
   if (!row) notFound();
   return {
@@ -43,11 +46,13 @@ export const resolveOrg = cache(async (slug: string): Promise<ResolvedOrg> => {
 
 export const resolveWorkspace = cache(
   async (orgId: string, slug: string): Promise<ResolvedWorkspace> => {
-    const rows = await db()
-      .select()
-      .from(schema.workspaces)
-      .where(and(eq(schema.workspaces.orgId, orgId), eq(schema.workspaces.slug, slug)))
-      .limit(1);
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select()
+        .from(schema.workspaces)
+        .where(and(eq(schema.workspaces.orgId, orgId), eq(schema.workspaces.slug, slug)))
+        .limit(1),
+    );
     const row = rows[0];
     if (!row) notFound();
     return {
@@ -80,16 +85,18 @@ export const resolveWorkspace = cache(
  */
 export const assertOrgMember = cache(
   async (orgId: string, userId: string): Promise<void> => {
-    const rows = await db()
-      .select({ id: schema.orgUsers.id })
-      .from(schema.orgUsers)
-      .where(
-        and(
-          eq(schema.orgUsers.orgId, orgId),
-          eq(schema.orgUsers.userId, userId),
-        ),
-      )
-      .limit(1);
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({ id: schema.orgUsers.id })
+        .from(schema.orgUsers)
+        .where(
+          and(
+            eq(schema.orgUsers.orgId, orgId),
+            eq(schema.orgUsers.userId, userId),
+          ),
+        )
+        .limit(1),
+    );
     if (rows.length === 0) {
       notFound();
     }
@@ -110,16 +117,18 @@ const BILLING_MANAGER_ROLES = new Set(["owner", "admin", "billing"]);
  */
 export const assertBillingManager = cache(
   async (orgId: string, userId: string): Promise<void> => {
-    const rows = await db()
-      .select({ role: schema.orgUsers.role })
-      .from(schema.orgUsers)
-      .where(
-        and(
-          eq(schema.orgUsers.orgId, orgId),
-          eq(schema.orgUsers.userId, userId),
-        ),
-      )
-      .limit(1);
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({ role: schema.orgUsers.role })
+        .from(schema.orgUsers)
+        .where(
+          and(
+            eq(schema.orgUsers.orgId, orgId),
+            eq(schema.orgUsers.userId, userId),
+          ),
+        )
+        .limit(1),
+    );
     const role = rows[0]?.role;
     if (!role || !BILLING_MANAGER_ROLES.has(role)) {
       notFound();
