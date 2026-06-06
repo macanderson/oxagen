@@ -215,3 +215,11 @@ registerHandler(
   "plugin.credential.reauth",
   async () => (await import("./plugin.credential.reauth")).handler as CapabilityHandlerFn,
 );
+registerHandler(
+  "notifications.list",
+  async () => (await import("./notifications.list")).handler as CapabilityHandlerFn,
+);
+registerHandler(
+  "notifications.mark",
+  async () => (await import("./notifications.mark")).handler as CapabilityHandlerFn,
+);

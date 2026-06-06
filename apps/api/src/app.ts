@@ -64,6 +64,8 @@ import { pluginDenylistRemoveRoute } from "./routes/v1/plugin.denylist.remove";
 import { pluginWorkspaceSetEnabledRoute } from "./routes/v1/plugin.workspace.set_enabled";
 import { pluginCredentialSetSecretRoute } from "./routes/v1/plugin.credential.set_secret";
 import { pluginCredentialReauthRoute } from "./routes/v1/plugin.credential.reauth";
+import { notificationsListRoute } from "./routes/v1/notifications.list";
+import { notificationsMarkRoute } from "./routes/v1/notifications.mark";
 
 export type AppEnv = {
   Variables: {
@@ -157,4 +159,6 @@ orgScoped.route("/plugin/denylist/remove", pluginDenylistRemoveRoute);
 orgScoped.route("/plugin/workspace/set-enabled", pluginWorkspaceSetEnabledRoute);
 orgScoped.route("/plugin/credential/set-secret", pluginCredentialSetSecretRoute);
 orgScoped.route("/plugin/credential/reauth", pluginCredentialReauthRoute);
+orgScoped.route("/notifications", notificationsListRoute);
+orgScoped.route("/notifications/mark", notificationsMarkRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

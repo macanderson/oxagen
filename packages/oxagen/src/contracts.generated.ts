@@ -34,6 +34,8 @@ import "./contracts/documents.generate";
 import "./contracts/documents.pdf.create";
 import "./contracts/form.fill";
 import "./contracts/image.generate";
+import "./contracts/notifications.list";
+import "./contracts/notifications.mark";
 import "./contracts/org.member.add";
 import "./contracts/org.member.invite.accept";
 import "./contracts/org.member.invite.decline";

@@ -552,6 +552,36 @@
       }
     },
     {
+      "name": "notifications.list",
+      "file": "notifications.list.ts",
+      "domain": "notifications",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "notifications.mark",
+      "file": "notifications.mark.ts",
+      "domain": "notifications",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
       "name": "org.member.add",
       "file": "org.member.add.ts",
       "domain": "organization",
