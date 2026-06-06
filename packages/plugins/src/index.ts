@@ -12,4 +12,12 @@ export type {
 } from "./credentials/credential-service";
 export { resolveCredentialKms } from "./credentials/kms";
 export type { ResolvedKms } from "./credentials/kms";
+export {
+  setWorkspaceSecret,
+  getWorkspaceSecret,
+} from "./credentials/workspace-credential";
+export type {
+  SetWorkspaceSecretInput,
+  WorkspaceSecret,
+} from "./credentials/workspace-credential";
 export * from "./registry";
