@@ -29,8 +29,22 @@ await build({
   target: "node22",
   // Optional native bindings — required lazily; the DB drivers fall back to
   // pure JS when the native module is absent.
-  external: ["pg-native", "better-sqlite3"],
+  //
+  // `dockerode` (→ docker-modem → ssh2, which ships native .node files esbuild
+  // can't load) reaches this bundle via @oxagen/sandbox, imported by the agent
+  // handlers. The docker driver only runs in local dev / self-hosted, never in
+  // this serverless function (SANDBOX_DRIVER=vercel|modal in prod), and
+  // createDockerSandbox loads dockerode lazily — so the external require is
+  // never resolved at runtime here. Externalizing it keeps the native bindings
+  // out of the bundle.
+  external: ["pg-native", "better-sqlite3", "dockerode"],
   logLevel: "info",
+  // createDockerSandbox (packages/sandbox) uses createRequire(import.meta.url)
+  // to lazily load the externalized `dockerode`. esbuild warns that import.meta
+  // is empty in CJS output — true, but that code path only runs under the docker
+  // sandbox driver (local dev / self-hosted), never in this serverless function,
+  // so the shimmed value is never read here. Silence the false-positive.
+  logOverride: { "empty-import-meta": "silent" },
 });
 
 await writeFile(

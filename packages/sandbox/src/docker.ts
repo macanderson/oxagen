@@ -1,4 +1,12 @@
-import Dockerode from "dockerode";
+// Type-only import: dockerode (→ docker-modem → ssh2, which ships native .node
+// bindings) must NOT be pulled into the module-init path. @oxagen/sandbox is
+// imported by the agent handlers that the serverless api/mcp bundles include
+// (for isSandboxAvailable / getSandbox), and a static value import of dockerode
+// drags the native modules into esbuild/rspack and breaks the bundle. The
+// runtime ctor is loaded lazily inside createDockerSandbox() instead, and the
+// serverless builds mark `dockerode` external. (OXA-1515 merge: sandbox in bundle)
+import type Dockerode from "dockerode";
+import { createRequire } from "node:module";
 import { PassThrough } from "node:stream";
 import { Buffer } from "node:buffer";
 import * as tar from "tar-stream";
@@ -146,7 +154,13 @@ async function createAndLoad(
 }
 
 export function createDockerSandbox(): SandboxDriver {
-  const docker = new Dockerode();
+  // Lazy runtime load of the dockerode value (see the type-only import note at
+  // the top of the file). This require only executes when the docker driver is
+  // actually selected — never in serverless prod, where SANDBOX_DRIVER is
+  // vercel/modal — so the externalized `dockerode` is never resolved there.
+  const require = createRequire(import.meta.url);
+  const DockerodeCtor = require("dockerode") as typeof import("dockerode");
+  const docker: Dockerode = new DockerodeCtor();
 
   async function run(req: SandboxRequest): Promise<SandboxResult> {
     const start = Date.now();
