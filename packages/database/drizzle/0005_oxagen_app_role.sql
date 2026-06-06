@@ -42,6 +42,11 @@ ALTER ROLE oxagen_app NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
 DO $$
 DECLARE
   s text;
+  -- ALTER DEFAULT PRIVILEGES without FOR ROLE only affects objects created by
+  -- THIS session's role. Pin it to the role actually running the migration so a
+  -- future migrator (CI user rotation, managed-DB IAM change) doesn't silently
+  -- create tables oxagen_app can't see — which would break RLS with no error.
+  migrator text := current_user;
 BEGIN
   FOREACH s IN ARRAY ARRAY[
     'org','auth','workspace','integration','agent','workflow',
@@ -54,8 +59,8 @@ BEGIN
     EXECUTE format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA %I TO oxagen_app', s);
     -- Future objects created by the migrating role inherit these grants, so new
     -- tables/sequences don't silently become unreachable for the app role.
-    EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO oxagen_app', s);
-    EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT USAGE, SELECT ON SEQUENCES TO oxagen_app', s);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO oxagen_app', migrator, s);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT USAGE, SELECT ON SEQUENCES TO oxagen_app', migrator, s);
   END LOOP;
 END $$;
 
@@ -64,4 +69,7 @@ END $$;
 --    _migrations, which belongs to the migrate runner, not the app role.
 GRANT USAGE ON SCHEMA public TO oxagen_app;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO oxagen_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO oxagen_app;
+-- FOR ROLE current_user for the same reason as the loop above (see §2).
+DO $$ BEGIN
+  EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO oxagen_app', current_user);
+END $$;
