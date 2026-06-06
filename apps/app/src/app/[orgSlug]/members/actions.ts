@@ -9,7 +9,7 @@ import { recordSecurityEvent } from "@oxagen/telemetry";
 import { isSeatLimitError, assertSeatAvailable } from "@oxagen/billing";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
-import { logger } from "@oxagen/handlers/logger";
+import { logger, maskEmail } from "@oxagen/handlers/logger";
 
 // Sentinel workspaceId for org-only actions (no workspace context). — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
@@ -84,7 +84,7 @@ export async function inviteMemberAction(
           }),
       );
 
-      logger.info({ orgSlug, email, role }, "members: invitation created");
+      logger.info({ orgSlug, email: maskEmail(email), role }, "members: invitation created");
 
       // Emit org.member_invited audit event (fire-and-forget).
       recordSecurityEvent(auditInsert(), {
@@ -107,7 +107,7 @@ export async function inviteMemberAction(
       if (msg.includes("invitations_org_email_pending_idx") || msg.includes("unique")) {
         return { ok: false, code: "already_invited", error: `${email} already has a pending invitation.` };
       }
-      logger.error({ err, orgSlug, email }, "members: inviteMemberAction failed");
+      logger.error({ err, orgSlug, email: maskEmail(email) }, "members: inviteMemberAction failed");
       return { ok: false, code: "internal", error: "Failed to create invitation" };
     }
   });

@@ -16,7 +16,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 import { assertSeatAvailable, isSeatLimitError } from "@oxagen/billing";
-import { logger } from "./logger";
+import { logger, maskEmail } from "./logger";
 
 // Lazy singleton — avoids constructing the inserter until first call.
 let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
@@ -91,19 +91,19 @@ export const orgMemberAddHandler: CapabilityHandler<typeof orgMemberAdd> = async
     // Unique violation (code 23505) → duplicate pending invite.
     if (typeof err === "object" && err !== null && (err as { code?: string }).code === "23505") {
       logger.warn(
-        { orgId: ctx.orgId, email: input.email },
+        { orgId: ctx.orgId, email: maskEmail(input.email) },
         "org.member.add: duplicate pending invitation for this email",
       );
       throw new Error(
         `A pending invitation for ${input.email} already exists in this org. Revoke or wait for it to expire before resending.`,
       );
     }
-    logger.error({ err, orgId: ctx.orgId, email: input.email }, "org.member.add: invitation insert failed");
+    logger.error({ err, orgId: ctx.orgId, email: maskEmail(input.email) }, "org.member.add: invitation insert failed");
     throw err;
   }
 
   logger.info(
-    { orgId: ctx.orgId, email: input.email, role: input.role, invitationId: invitation.publicId, surface: ctx.surface },
+    { orgId: ctx.orgId, email: maskEmail(input.email), role: input.role, invitationId: invitation.publicId, surface: ctx.surface },
     "org.member.add: invitation created",
   );
 
