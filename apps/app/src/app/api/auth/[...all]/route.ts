@@ -2,7 +2,6 @@
 // Node.js built-ins. Keep it out of Edge; do NOT add `export const runtime`.
 import { toNextJsHandler } from "better-auth/next-js";
 import { auth } from "@/lib/auth";
-import { db } from "@oxagen/database/client";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 import type { NextRequest } from "next/server";
@@ -11,11 +10,12 @@ import type { NextRequest } from "next/server";
 // failed sign-in with unknown email). Mirrors the value in packages/auth/src/auth.ts.
 const NO_ORG_SENTINEL = "00000000-0000-0000-0000-000000000000";
 
-// Lazy singleton — same pattern as auth.ts so we never call db() at module
-// load time (DATABASE_URL may not be present during Next.js build).
+// Lazy singleton — same pattern as auth.ts so we never construct the inserter
+// at module load time. makeSecurityEventInserter() resolves its own db handle
+// (withSystemDb for the no-scope audit write), so it takes no argument.
 let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
 function auditInsert(): ReturnType<typeof makeSecurityEventInserter> {
-  if (!_auditInsert) _auditInsert = makeSecurityEventInserter(db());
+  if (!_auditInsert) _auditInsert = makeSecurityEventInserter();
   return _auditInsert;
 }
 

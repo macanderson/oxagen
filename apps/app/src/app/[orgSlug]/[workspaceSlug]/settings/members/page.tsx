@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { getSession } from "@/lib/session";
 
@@ -27,30 +27,43 @@ export default async function WorkspaceSettingsMembersPage({
   const workspace = await resolveWorkspace(org.id, workspaceSlug);
 
   // Workspace membership with user info. Join workspace_users → users.
-  const members = await db()
-    .select({
-      publicId: schema.workspaceUsers.publicId,
-      userId: schema.workspaceUsers.userId,
-      wsRole: schema.workspaceUsers.role,
-      joinedAt: schema.workspaceUsers.joinedAt,
-      email: schema.users.email,
-      displayName: schema.users.displayName,
-    })
-    .from(schema.workspaceUsers)
-    .innerJoin(schema.users, eq(schema.users.id, schema.workspaceUsers.userId))
-    .where(eq(schema.workspaceUsers.workspaceId, workspace.id));
+  // Tenant-scoped read (RLS): org + workspace scope established explicitly.
+  const members = await runInTenantScope(
+    { orgId: org.id, workspaceId: workspace.id },
+    () =>
+      withTenantDb((tx) =>
+        tx
+          .select({
+            publicId: schema.workspaceUsers.publicId,
+            userId: schema.workspaceUsers.userId,
+            wsRole: schema.workspaceUsers.role,
+            joinedAt: schema.workspaceUsers.joinedAt,
+            email: schema.users.email,
+            displayName: schema.users.displayName,
+          })
+          .from(schema.workspaceUsers)
+          .innerJoin(schema.users, eq(schema.users.id, schema.workspaceUsers.userId))
+          .where(eq(schema.workspaceUsers.workspaceId, workspace.id)),
+      ),
+  );
 
   // Org roles for each member (for contextual display).
   const orgMemberIds = members.map((m) => m.userId);
   const orgRoles =
     orgMemberIds.length > 0
-      ? await db()
-          .select({
-            userId: schema.orgUsers.userId,
-            orgRole: schema.orgUsers.role,
-          })
-          .from(schema.orgUsers)
-          .where(eq(schema.orgUsers.orgId, org.id))
+      ? await runInTenantScope(
+          { orgId: org.id, workspaceId: workspace.id },
+          () =>
+            withTenantDb((tx) =>
+              tx
+                .select({
+                  userId: schema.orgUsers.userId,
+                  orgRole: schema.orgUsers.role,
+                })
+                .from(schema.orgUsers)
+                .where(eq(schema.orgUsers.orgId, org.id)),
+            ),
+        )
       : [];
 
   const orgRoleByUserId = new Map(orgRoles.map((r) => [r.userId, r.orgRole]));

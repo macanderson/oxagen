@@ -52,6 +52,8 @@ const dbMocks = {
 
 vi.mock("@oxagen/database", () => ({
   db: () => dbMocks,
+  withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
+  withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   schema: {
     plans: { slug: "plans.slug", stripeProductId: "plans.stripeProductId" },
     subscriptions: {

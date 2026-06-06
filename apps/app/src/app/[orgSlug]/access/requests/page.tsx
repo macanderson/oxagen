@@ -1,7 +1,10 @@
 import { desc, eq } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg } from "@/lib/resolve-org";
+
+// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { Clock, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,23 +29,30 @@ export default async function AccessRequestsPage({
   const { orgSlug } = await params;
   const tenant = await resolveOrg(orgSlug);
 
+  // Org-only route — sentinel workspaceId. — OXA-1515
   const requests = await (async () => {
     try {
-      return await db()
-        .select({
-          publicId: schema.accessRequests.publicId,
-          capabilityId: schema.accessRequests.capabilityId,
-          scopeKind: schema.accessRequests.scopeKind,
-          status: schema.accessRequests.status,
-          justification: schema.accessRequests.justification,
-          approvedAt: schema.accessRequests.approvedAt,
-          ttlSeconds: schema.accessRequests.ttlSeconds,
-          createdAt: schema.accessRequests.createdAt,
-        })
-        .from(schema.accessRequests)
-        .where(eq(schema.accessRequests.orgId, tenant.id))
-        .orderBy(desc(schema.accessRequests.createdAt))
-        .limit(50);
+      return await runInTenantScope(
+        { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+        () =>
+          withTenantDb((tx) =>
+            tx
+              .select({
+                publicId: schema.accessRequests.publicId,
+                capabilityId: schema.accessRequests.capabilityId,
+                scopeKind: schema.accessRequests.scopeKind,
+                status: schema.accessRequests.status,
+                justification: schema.accessRequests.justification,
+                approvedAt: schema.accessRequests.approvedAt,
+                ttlSeconds: schema.accessRequests.ttlSeconds,
+                createdAt: schema.accessRequests.createdAt,
+              })
+              .from(schema.accessRequests)
+              .where(eq(schema.accessRequests.orgId, tenant.id))
+              .orderBy(desc(schema.accessRequests.createdAt))
+              .limit(50),
+          ),
+      );
     } catch {
       return [];
     }

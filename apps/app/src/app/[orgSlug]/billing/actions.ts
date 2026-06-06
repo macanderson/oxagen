@@ -15,6 +15,7 @@ import {
   removeOrgPaymentMethod,
   updateAutoReloadSettings,
 } from "@oxagen/billing";
+import { runInTenantScope } from "@oxagen/tenancy";
 import type {
   SeatChangePreview,
   PlanChangePreview,
@@ -40,23 +41,32 @@ const CAN_MANAGE_BILLING = new Set(["owner", "admin", "billing"]);
  * non-member yields no row). `getSessionOrRedirect` still redirects an
  * unauthenticated caller before we get here.
  */
+// Sentinel workspaceId for org-only billing actions (no workspace context).
+// Billing tables use an org_only policy class — the workspace GUC is set but
+// not evaluated by RLS. — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
+
 async function resolveManagedOrg(orgSlug: string): Promise<{ orgId: string } | null> {
   const session = await getSessionOrRedirect();
   const tenant = await resolveOrg(orgSlug);
   if (!session.user) return null;
 
-  const { db, schema } = await import("@oxagen/database");
+  const { withTenantDb, schema } = await import("@oxagen/database");
   const { eq, and } = await import("drizzle-orm");
-  const [row] = await db()
-    .select({ role: schema.orgUsers.role })
-    .from(schema.orgUsers)
-    .where(
-      and(
-        eq(schema.orgUsers.orgId, tenant.id),
-        eq(schema.orgUsers.userId, session.user.id),
-      ),
-    )
-    .limit(1);
+  const [row] = await runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () =>
+    withTenantDb((tx) =>
+      tx
+        .select({ role: schema.orgUsers.role })
+        .from(schema.orgUsers)
+        .where(
+          and(
+            eq(schema.orgUsers.orgId, tenant.id),
+            eq(schema.orgUsers.userId, session.user.id),
+          ),
+        )
+        .limit(1),
+    ),
+  );
   const role = row?.role ?? null;
   if (!role || !CAN_MANAGE_BILLING.has(role)) {
     logger.warn({ orgSlug, userId: session.user.id, role }, "billing: action denied — not a billing manager");

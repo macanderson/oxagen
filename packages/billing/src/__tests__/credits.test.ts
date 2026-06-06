@@ -122,6 +122,8 @@ function buildDb() {
 
 vi.mock("@oxagen/database", () => ({
   db: () => dbState.instance,
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => dbState.instance?.transaction(fn),
+  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => dbState.instance?.transaction(fn),
   schema: {
     creditLots: {
       orgId: "cl.orgId",

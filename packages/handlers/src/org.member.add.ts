@@ -12,7 +12,7 @@
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberAdd } from "@oxagen/oxagen/contracts/org.member.add";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 import { assertSeatAvailable, isSeatLimitError } from "@oxagen/billing";
@@ -21,7 +21,7 @@ import { logger } from "./logger";
 // Lazy singleton — avoids constructing the inserter until first call.
 let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
 function auditInsert() {
-  if (!_auditInsert) _auditInsert = makeSecurityEventInserter(db());
+  if (!_auditInsert) _auditInsert = makeSecurityEventInserter();
   return _auditInsert;
 }
 
@@ -59,7 +59,6 @@ export const orgMemberAddHandler: CapabilityHandler<typeof orgMemberAdd> = async
 
   // ── Create pending invitation ────────────────────────────────────────────────
   const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
-  const d = db();
 
   // The partial unique index on (org_id, email) WHERE status='pending' makes
   // this idempotent: a second invite to the same email fails at the DB level.
@@ -67,22 +66,24 @@ export const orgMemberAddHandler: CapabilityHandler<typeof orgMemberAdd> = async
   let invitation: { publicId: string; expiresAt: Date | null };
 
   try {
-    const [row] = await d
-      .insert(schema.invitations)
-      .values({
-        orgId: ctx.orgId,
-        email: input.email,
-        role: input.role,
-        status: "pending",
-        invitedByUserId: actorId,
-        expiresAt,
-        createdByUserId: actorId,
-        updatedByUserId: actorId,
-      })
-      .returning({
-        publicId: schema.invitations.publicId,
-        expiresAt: schema.invitations.expiresAt,
-      });
+    const [row] = await withTenantDb((tx) =>
+      tx
+        .insert(schema.invitations)
+        .values({
+          orgId: ctx.orgId,
+          email: input.email,
+          role: input.role,
+          status: "pending",
+          invitedByUserId: actorId,
+          expiresAt,
+          createdByUserId: actorId,
+          updatedByUserId: actorId,
+        })
+        .returning({
+          publicId: schema.invitations.publicId,
+          expiresAt: schema.invitations.expiresAt,
+        }),
+    );
 
     if (!row) throw new Error("invitation insert returned no row");
     invitation = row;

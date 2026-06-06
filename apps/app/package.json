@@ -30,6 +30,7 @@
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/storage": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
+    "@oxagen/tenancy": "workspace:*",
     "@oxagen/ui": "workspace:*",
     "@streamdown/code": "1.1.1",
     "@streamdown/mermaid": "1.0.2",

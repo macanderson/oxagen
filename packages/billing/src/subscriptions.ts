@@ -1,29 +1,21 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { eq, and, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
 import { getOrgSeatUsage, SeatLimitError } from "./seats";
-
-async function resolvePlanId(stripeProductId: string | null): Promise<string | null> {
-  if (!stripeProductId) return null;
-  const d = db();
-  const plan = await d.query.plans.findFirst({
-    where: eq(schema.plans.stripeProductId, stripeProductId),
-    columns: { id: true },
-  });
-  return plan?.id ?? null;
-}
 
 /**
  * Pulls the canonical subscription record from the billing provider and
  * upserts into billing.subscriptions. Idempotent on stripe_subscription_id.
  * The webhook handler invokes this for every subscription.* event so our
  * table mirrors the provider within one round trip.
+ *
+ * tenancy: system bypass via withSystemDb (called from webhook dispatch, no tenant
+ * scope; org resolved from Stripe subscription metadata) — OXA-1515.
  */
 export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<void> {
   const start = Date.now();
   const sub = await billingProvider().getSubscription(stripeSubId);
-  const d = db();
 
   const orgId = sub.metadata?.org_id ?? null;
   if (!orgId) {
@@ -33,49 +25,58 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
     return;
   }
 
-  const planId = await resolvePlanId(sub.productId);
-  if (!planId) {
-    logger.warn({ stripeSubId, productId: sub.productId }, "billing: unknown product id, cannot sync subscription");
-    return; // Unknown plan; cannot upsert without referential integrity.
-  }
-
-  const row = {
-    orgId,
-    planId,
-    stripeSubscriptionId: sub.id,
-    stripeCustomerId: sub.customerId,
-    status: sub.status,
-    billingInterval: sub.billingInterval,
-    currentPeriodStart: sub.currentPeriodStart,
-    currentPeriodEnd: sub.currentPeriodEnd,
-    cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
-    canceledAt: sub.canceledAt,
-    trialEnd: sub.trialEnd,
-    seatCount: sub.seatCount,
-  };
-
-  await d
-    .insert(schema.subscriptions)
-    .values(row)
-    .onConflictDoUpdate({
-      target: schema.subscriptions.stripeSubscriptionId,
-      set: {
-        status: row.status,
-        billingInterval: row.billingInterval,
-        currentPeriodStart: row.currentPeriodStart,
-        currentPeriodEnd: row.currentPeriodEnd,
-        cancelAtPeriodEnd: row.cancelAtPeriodEnd,
-        canceledAt: row.canceledAt,
-        trialEnd: row.trialEnd,
-        seatCount: row.seatCount,
-        updatedAt: new Date(),
-      },
+  await withSystemDb(async (tx) => {
+    // tenancy: system bypass via withSystemDb (webhook path, resolves plan from Stripe
+    // product id before a tenant scope exists; billing tables are org_only) — OXA-1515
+    const plan = await tx.query.plans.findFirst({
+      where: eq(schema.plans.stripeProductId, sub.productId ?? ""),
+      columns: { id: true },
     });
+    const planId = plan?.id ?? null;
 
-  logger.info(
-    { orgId, stripeSubId, status: sub.status, durationMs: Date.now() - start },
-    "billing: subscription synced",
-  );
+    if (!planId) {
+      logger.warn({ stripeSubId, productId: sub.productId }, "billing: unknown product id, cannot sync subscription");
+      return; // Unknown plan; cannot upsert without referential integrity.
+    }
+
+    const row = {
+      orgId,
+      planId,
+      stripeSubscriptionId: sub.id,
+      stripeCustomerId: sub.customerId,
+      status: sub.status,
+      billingInterval: sub.billingInterval,
+      currentPeriodStart: sub.currentPeriodStart,
+      currentPeriodEnd: sub.currentPeriodEnd,
+      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      canceledAt: sub.canceledAt,
+      trialEnd: sub.trialEnd,
+      seatCount: sub.seatCount,
+    };
+
+    await tx
+      .insert(schema.subscriptions)
+      .values(row)
+      .onConflictDoUpdate({
+        target: schema.subscriptions.stripeSubscriptionId,
+        set: {
+          status: row.status,
+          billingInterval: row.billingInterval,
+          currentPeriodStart: row.currentPeriodStart,
+          currentPeriodEnd: row.currentPeriodEnd,
+          cancelAtPeriodEnd: row.cancelAtPeriodEnd,
+          canceledAt: row.canceledAt,
+          trialEnd: row.trialEnd,
+          seatCount: row.seatCount,
+          updatedAt: new Date(),
+        },
+      });
+
+    logger.info(
+      { orgId, stripeSubId, status: sub.status, durationMs: Date.now() - start },
+      "billing: subscription synced",
+    );
+  });
 }
 
 export async function cancelSubscription(stripeSubId: string, atPeriodEnd = true): Promise<void> {
@@ -99,14 +100,15 @@ export async function reactivateSubscription(stripeSubId: string): Promise<void>
  * {@link cancelSubscription}. Raises if no active subscription is found.
  */
 export async function cancelOrgSubscription(orgId: string): Promise<void> {
-  const d = db();
-  const row = await d.query.subscriptions.findFirst({
-    where: and(
-      eq(schema.subscriptions.orgId, orgId),
-      sql`${schema.subscriptions.status} in ('active','trialing')`,
-    ),
-    columns: { stripeSubscriptionId: true },
-  });
+  const row = await withTenantDb((tx) =>
+    tx.query.subscriptions.findFirst({
+      where: and(
+        eq(schema.subscriptions.orgId, orgId),
+        sql`${schema.subscriptions.status} in ('active','trialing')`,
+      ),
+      columns: { stripeSubscriptionId: true },
+    }),
+  );
   if (!row) throw new Error(`No active subscription found for org ${orgId}`);
   logger.info({ orgId, stripeSubId: row.stripeSubscriptionId }, "billing: cancelling org subscription at period end");
   await cancelSubscription(row.stripeSubscriptionId, true);
@@ -118,14 +120,15 @@ export async function cancelOrgSubscription(orgId: string): Promise<void> {
  * {@link reactivateSubscription}.
  */
 export async function reactivateOrgSubscription(orgId: string): Promise<void> {
-  const d = db();
-  const row = await d.query.subscriptions.findFirst({
-    where: and(
-      eq(schema.subscriptions.orgId, orgId),
-      sql`${schema.subscriptions.status} in ('active','trialing','past_due')`,
-    ),
-    columns: { stripeSubscriptionId: true },
-  });
+  const row = await withTenantDb((tx) =>
+    tx.query.subscriptions.findFirst({
+      where: and(
+        eq(schema.subscriptions.orgId, orgId),
+        sql`${schema.subscriptions.status} in ('active','trialing','past_due')`,
+      ),
+      columns: { stripeSubscriptionId: true },
+    }),
+  );
   if (!row) throw new Error(`No cancellable subscription found for org ${orgId}`);
   logger.info({ orgId, stripeSubId: row.stripeSubscriptionId }, "billing: reactivating org subscription");
   await reactivateSubscription(row.stripeSubscriptionId);
@@ -163,14 +166,15 @@ export async function upgradeSubscription(
 export async function setSubscriptionSeats(orgId: string, seats: number): Promise<void> {
   if (seats < 1) throw new Error("seats must be >= 1");
 
-  const d = db();
-  const row = await d.query.subscriptions.findFirst({
-    where: and(
-      eq(schema.subscriptions.orgId, orgId),
-      sql`${schema.subscriptions.status} IN ('active','trialing')`,
-    ),
-    columns: { stripeSubscriptionId: true, seatCount: true },
-  });
+  const row = await withTenantDb((tx) =>
+    tx.query.subscriptions.findFirst({
+      where: and(
+        eq(schema.subscriptions.orgId, orgId),
+        sql`${schema.subscriptions.status} IN ('active','trialing')`,
+      ),
+      columns: { stripeSubscriptionId: true, seatCount: true },
+    }),
+  );
   if (!row) throw new Error(`No active subscription found for org ${orgId}`);
 
   // Guard: cannot drop below current usage.
@@ -218,31 +222,32 @@ export async function changeOrgPlan(
   interval: "month" | "year",
   opts?: { successUrl?: string; cancelUrl?: string },
 ): Promise<{ checkoutUrl: string } | null> {
-  const d = db();
+  const { targetPlan, activeSubRow } = await withTenantDb(async (tx) => {
+    const tp = await tx.query.plans.findFirst({
+      where: eq(schema.plans.slug, targetPlanSlug),
+      columns: { id: true, tier: true, stripePriceIdMonthly: true, stripePriceIdAnnual: true },
+    });
 
-  // Resolve target plan
-  const targetPlan = await d.query.plans.findFirst({
-    where: eq(schema.plans.slug, targetPlanSlug),
-    columns: { id: true, tier: true, stripePriceIdMonthly: true, stripePriceIdAnnual: true },
+    const asr = await tx.query.subscriptions.findFirst({
+      where: and(
+        eq(schema.subscriptions.orgId, orgId),
+        sql`${schema.subscriptions.status} IN ('active','trialing')`,
+      ),
+      columns: {
+        stripeSubscriptionId: true,
+        seatCount: true,
+        planId: true,
+      },
+    });
+
+    return { targetPlan: tp, activeSubRow: asr };
   });
+
   if (!targetPlan) throw new Error(`Plan '${targetPlanSlug}' not found`);
 
   const newPriceId =
     interval === "year" ? targetPlan.stripePriceIdAnnual : targetPlan.stripePriceIdMonthly;
   if (!newPriceId) throw new Error(`Plan '${targetPlanSlug}' has no ${interval} price`);
-
-  // Check for active subscription (two queries to avoid `with` inference issues).
-  const activeSubRow = await d.query.subscriptions.findFirst({
-    where: and(
-      eq(schema.subscriptions.orgId, orgId),
-      sql`${schema.subscriptions.status} IN ('active','trialing')`,
-    ),
-    columns: {
-      stripeSubscriptionId: true,
-      seatCount: true,
-      planId: true,
-    },
-  });
 
   if (!activeSubRow) {
     // No active subscription — start a Checkout session.
@@ -262,10 +267,12 @@ export async function changeOrgPlan(
   }
 
   // Resolve current plan tier for proration decision.
-  const currentPlanRow = await d.query.plans.findFirst({
-    where: eq(schema.plans.id, activeSubRow.planId),
-    columns: { tier: true },
-  });
+  const currentPlanRow = await withTenantDb((tx) =>
+    tx.query.plans.findFirst({
+      where: eq(schema.plans.id, activeSubRow.planId),
+      columns: { tier: true },
+    }),
+  );
 
   // Active subscription — swap the price in-place.
   // Determine proration behavior by comparing tier order.
@@ -351,18 +358,19 @@ export async function previewSeatChange(
   const start = Date.now();
   if (seats < 1) throw new Error("seats must be >= 1");
 
-  const d = db();
-  const row = await d.query.subscriptions.findFirst({
-    where: and(
-      eq(schema.subscriptions.orgId, orgId),
-      sql`${schema.subscriptions.status} IN ('active','trialing')`,
-    ),
-    columns: {
-      stripeSubscriptionId: true,
-      stripeCustomerId: true,
-      seatCount: true,
-    },
-  });
+  const row = await withTenantDb((tx) =>
+    tx.query.subscriptions.findFirst({
+      where: and(
+        eq(schema.subscriptions.orgId, orgId),
+        sql`${schema.subscriptions.status} IN ('active','trialing')`,
+      ),
+      columns: {
+        stripeSubscriptionId: true,
+        stripeCustomerId: true,
+        seatCount: true,
+      },
+    }),
+  );
   if (!row) throw new Error(`No active subscription found for org ${orgId}`);
 
   const currentSeats = row.seatCount;
@@ -499,20 +507,35 @@ export async function previewPlanChange(
   interval: "month" | "year",
 ): Promise<PlanChangePreview> {
   const start = Date.now();
-  const d = db();
 
-  // Resolve target plan from DB.
-  const targetPlan = await d.query.plans.findFirst({
-    where: eq(schema.plans.slug, targetPlanSlug),
-    columns: {
-      id: true,
-      tier: true,
-      stripePriceIdMonthly: true,
-      stripePriceIdAnnual: true,
-      monthlyCents: true,
-      annualCents: true,
-    },
+  const { targetPlan, activeSub } = await withTenantDb(async (tx) => {
+    const tp = await tx.query.plans.findFirst({
+      where: eq(schema.plans.slug, targetPlanSlug),
+      columns: {
+        id: true,
+        tier: true,
+        stripePriceIdMonthly: true,
+        stripePriceIdAnnual: true,
+        monthlyCents: true,
+        annualCents: true,
+      },
+    });
+
+    const as = await tx.query.subscriptions.findFirst({
+      where: and(
+        eq(schema.subscriptions.orgId, orgId),
+        sql`${schema.subscriptions.status} IN ('active','trialing')`,
+      ),
+      columns: {
+        stripeSubscriptionId: true,
+        stripeCustomerId: true,
+        planId: true,
+      },
+    });
+
+    return { targetPlan: tp, activeSub: as };
   });
+
   if (!targetPlan) throw new Error(`Plan '${targetPlanSlug}' not found`);
 
   const newPriceId =
@@ -528,19 +551,6 @@ export async function previewPlanChange(
     interval === "year"
       ? (targetPlan.annualCents ?? targetPlan.monthlyCents)
       : targetPlan.monthlyCents;
-
-  // Check for an active subscription.
-  const activeSub = await d.query.subscriptions.findFirst({
-    where: and(
-      eq(schema.subscriptions.orgId, orgId),
-      sql`${schema.subscriptions.status} IN ('active','trialing')`,
-    ),
-    columns: {
-      stripeSubscriptionId: true,
-      stripeCustomerId: true,
-      planId: true,
-    },
-  });
 
   // Helper: resolve default card.
   async function resolveDefaultCard(
@@ -590,10 +600,12 @@ export async function previewPlanChange(
   }
 
   // Active subscription — in-place swap preview.
-  const currentPlanRow = await d.query.plans.findFirst({
-    where: eq(schema.plans.id, activeSub.planId),
-    columns: { tier: true },
-  });
+  const currentPlanRow = await withTenantDb((tx) =>
+    tx.query.plans.findFirst({
+      where: eq(schema.plans.id, activeSub.planId),
+      columns: { tier: true },
+    }),
+  );
 
   const currentTierOrder = TIER_ORDER[currentPlanRow?.tier ?? "free"] ?? 0;
   const targetTierOrder = TIER_ORDER[targetPlan.tier] ?? 0;
@@ -637,11 +649,12 @@ export async function previewPlanChange(
 // ── Internal helper used by previewPlanChange ────────────────────────────────
 
 async function resolveCustomerId(orgId: string): Promise<string> {
-  const d = db();
-  const sub = await d.query.subscriptions.findFirst({
-    where: eq(schema.subscriptions.orgId, orgId),
-    columns: { stripeCustomerId: true },
-  });
+  const sub = await withTenantDb((tx) =>
+    tx.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.orgId, orgId),
+      columns: { stripeCustomerId: true },
+    }),
+  );
   if (sub?.stripeCustomerId) return sub.stripeCustomerId;
   const { ensureStripeCustomer } = await import("./customers");
   return ensureStripeCustomer(orgId);

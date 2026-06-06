@@ -1,4 +1,4 @@
-import { session as neo4jSession } from "@oxagen/ontology";
+import { scopedSession } from "@oxagen/ontology";
 
 export interface MemoryRow {
   id: string;
@@ -16,15 +16,15 @@ const WEIGHT_RANK: Record<string, number> = { low: 0, high: 1, critical: 2 };
 // Vector recall over AgentMemory. The 1536-dim index is provisioned by
 // the foundation migration; we filter by tenant + workspace + weight at
 // query time so the result set is already scoped before we score it.
+// orgId/workspaceId are injected automatically by scopedSession() from the
+// active tenant scope — no need to thread them through the function args.
 export async function recallMemories(args: {
-  orgId: string;
-  workspaceId: string;
   embedding: number[];
   minWeight: "low" | "high" | "critical";
   limit: number;
   nodeRef?: string;
 }): Promise<MemoryRow[]> {
-  const s = neo4jSession();
+  const s = scopedSession();
   try {
     const minRank = WEIGHT_RANK[args.minWeight];
     const result = await s.run(
@@ -48,8 +48,6 @@ export async function recallMemories(args: {
         LIMIT $limit
       `,
       {
-        orgId: args.orgId,
-        workspaceId: args.workspaceId,
         embedding: args.embedding,
         minRank,
         nodeRef: args.nodeRef ?? null,
@@ -74,8 +72,6 @@ export async function recallMemories(args: {
 }
 
 export interface WriteMemoryArgs {
-  orgId: string;
-  workspaceId: string;
   nodeRef: string;
   embedding: number[];
   weight: "low" | "high" | "critical";
@@ -86,8 +82,10 @@ export interface WriteMemoryArgs {
 
 // MERGE on (orgId, workspaceId, nodeRef, lesson) so identical writes
 // from repeated reflection don't accumulate duplicates.
+// orgId/workspaceId are injected automatically by scopedSession() from the
+// active tenant scope — no need to thread them through the function args.
 export async function writeMemory(args: WriteMemoryArgs): Promise<{ memoryId: string }> {
-  const s = neo4jSession();
+  const s = scopedSession();
   try {
     const result = await s.run(
       /* cypher */ `
@@ -118,8 +116,6 @@ export async function writeMemory(args: WriteMemoryArgs): Promise<{ memoryId: st
         RETURN m.id AS id
       `,
       {
-        orgId: args.orgId,
-        workspaceId: args.workspaceId,
         nodeRef: args.nodeRef,
         lesson: args.lesson,
         weight: args.weight,

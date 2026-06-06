@@ -8,7 +8,7 @@
  * fresh view.
  */
 
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { ensureStripeCustomer } from "./customers";
@@ -54,11 +54,12 @@ export function isLastPaymentMethodError(
 /** Resolve or create a Stripe customer id for the org. */
 async function resolveCustomerId(orgId: string): Promise<string> {
   // Prefer the customer id already recorded on a subscription row (fastest path).
-  const d = db();
-  const sub = await d.query.subscriptions.findFirst({
-    where: eq(schema.subscriptions.orgId, orgId),
-    columns: { stripeCustomerId: true },
-  });
+  const sub = await withTenantDb((tx) =>
+    tx.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.orgId, orgId),
+      columns: { stripeCustomerId: true },
+    }),
+  );
   if (sub?.stripeCustomerId) return sub.stripeCustomerId;
   // Fall back to ensureStripeCustomer which may create the customer.
   return ensureStripeCustomer(orgId);
@@ -75,22 +76,23 @@ export async function listOrgPaymentMethods(
   orgId: string,
 ): Promise<PaymentMethodView[]> {
   const start = Date.now();
-  const d = db();
 
-  const rows = await d.query.paymentMethods.findMany({
-    where: and(
-      eq(schema.paymentMethods.orgId, orgId),
-      isNull(schema.paymentMethods.deletedAt),
-    ),
-    columns: {
-      stripePaymentMethodId: true,
-      brand: true,
-      last4: true,
-      expMonth: true,
-      expYear: true,
-      isDefault: true,
-    },
-  });
+  const rows = await withTenantDb((tx) =>
+    tx.query.paymentMethods.findMany({
+      where: and(
+        eq(schema.paymentMethods.orgId, orgId),
+        isNull(schema.paymentMethods.deletedAt),
+      ),
+      columns: {
+        stripePaymentMethodId: true,
+        brand: true,
+        last4: true,
+        expMonth: true,
+        expYear: true,
+        isDefault: true,
+      },
+    }),
+  );
 
   logger.debug(
     { orgId, count: rows.length, durationMs: Date.now() - start },
@@ -150,7 +152,6 @@ export async function syncPaymentMethodsFromStripe(orgId: string): Promise<void>
   const start = Date.now();
   const customerId = await resolveCustomerId(orgId);
   const provider = billingProvider();
-  const d = db();
 
   const [providerMethods, defaultPmId] = await Promise.all([
     provider.listPaymentMethods(customerId),
@@ -162,41 +163,43 @@ export async function syncPaymentMethodsFromStripe(orgId: string): Promise<void>
   // Upsert each active card from Stripe.
   for (const pm of providerMethods) {
     const isDefault = pm.id === defaultPmId;
-    await d
-      .insert(schema.paymentMethods)
-      .values({
-        orgId,
-        stripeCustomerId: customerId,
-        stripePaymentMethodId: pm.id,
-        type: pm.type,
-        brand: pm.brand,
-        last4: pm.last4,
-        expMonth: pm.expMonth,
-        expYear: pm.expYear,
-        isDefault,
-        deletedAt: null,
-        deletedByUserId: null,
-      })
-      .onConflictDoUpdate({
-        target: schema.paymentMethods.stripePaymentMethodId,
-        set: {
+    await withTenantDb((tx) =>
+      tx
+        .insert(schema.paymentMethods)
+        .values({
+          orgId,
+          stripeCustomerId: customerId,
+          stripePaymentMethodId: pm.id,
           type: pm.type,
           brand: pm.brand,
           last4: pm.last4,
           expMonth: pm.expMonth,
           expYear: pm.expYear,
           isDefault,
-          deletedAt: null, // Un-soft-delete if it re-appears.
+          deletedAt: null,
           deletedByUserId: null,
-          updatedAt: new Date(),
-        },
-      });
+        })
+        .onConflictDoUpdate({
+          target: schema.paymentMethods.stripePaymentMethodId,
+          set: {
+            type: pm.type,
+            brand: pm.brand,
+            last4: pm.last4,
+            expMonth: pm.expMonth,
+            expYear: pm.expYear,
+            isDefault,
+            deletedAt: null, // Un-soft-delete if it re-appears.
+            deletedByUserId: null,
+            updatedAt: new Date(),
+          },
+        }),
+    );
   }
 
   // Ensure exactly one default row per org. Both writes run in ONE transaction
   // so a concurrent read never observes a window with zero defaults.
   if (defaultPmId) {
-    await d.transaction(async (tx) => {
+    await withTenantDb(async (tx) => {
       await tx
         .update(schema.paymentMethods)
         .set({ isDefault: false, updatedAt: new Date() })
@@ -215,21 +218,25 @@ export async function syncPaymentMethodsFromStripe(orgId: string): Promise<void>
   }
 
   // Soft-delete rows for cards no longer returned by Stripe.
-  const existingRows = await d.query.paymentMethods.findMany({
-    where: and(
-      eq(schema.paymentMethods.orgId, orgId),
-      isNull(schema.paymentMethods.deletedAt),
-    ),
-    columns: { id: true, stripePaymentMethodId: true },
-  });
+  const existingRows = await withTenantDb((tx) =>
+    tx.query.paymentMethods.findMany({
+      where: and(
+        eq(schema.paymentMethods.orgId, orgId),
+        isNull(schema.paymentMethods.deletedAt),
+      ),
+      columns: { id: true, stripePaymentMethodId: true },
+    }),
+  );
 
   const now = new Date();
   for (const row of existingRows) {
     if (!providerIds.has(row.stripePaymentMethodId)) {
-      await d
-        .update(schema.paymentMethods)
-        .set({ deletedAt: now, updatedAt: now })
-        .where(eq(schema.paymentMethods.id, row.id));
+      await withTenantDb((tx) =>
+        tx
+          .update(schema.paymentMethods)
+          .set({ deletedAt: now, updatedAt: now })
+          .where(eq(schema.paymentMethods.id, row.id)),
+      );
     }
   }
 
@@ -261,7 +268,6 @@ export async function setOrgDefaultPaymentMethod(
 ): Promise<void> {
   const start = Date.now();
   const customerId = await resolveCustomerId(orgId);
-  const d = db();
 
   await billingProvider().setDefaultPaymentMethod(
     customerId,
@@ -270,7 +276,7 @@ export async function setOrgDefaultPaymentMethod(
 
   // Flip the flags in ONE transaction so a concurrent read never observes a
   // window with zero defaults.
-  await d.transaction(async (tx) => {
+  await withTenantDb(async (tx) => {
     await tx
       .update(schema.paymentMethods)
       .set({ isDefault: false, updatedAt: new Date() })
@@ -317,20 +323,21 @@ export async function removeOrgPaymentMethod(
   stripePaymentMethodId: string,
 ): Promise<void> {
   const start = Date.now();
-  const d = db();
 
   // Load current non-deleted rows for this org.
-  const allRows = await d.query.paymentMethods.findMany({
-    where: and(
-      eq(schema.paymentMethods.orgId, orgId),
-      isNull(schema.paymentMethods.deletedAt),
-    ),
-    columns: {
-      id: true,
-      stripePaymentMethodId: true,
-      isDefault: true,
-    },
-  });
+  const allRows = await withTenantDb((tx) =>
+    tx.query.paymentMethods.findMany({
+      where: and(
+        eq(schema.paymentMethods.orgId, orgId),
+        isNull(schema.paymentMethods.deletedAt),
+      ),
+      columns: {
+        id: true,
+        stripePaymentMethodId: true,
+        isDefault: true,
+      },
+    }),
+  );
 
   // Verify the card belongs to this org.
   const target = allRows.find(
@@ -344,23 +351,26 @@ export async function removeOrgPaymentMethod(
 
   // Guard: refuse to remove the last card when an active subscription exists.
   if (allRows.length <= 1) {
-    const activeSub = await d.query.subscriptions.findFirst({
-      where: and(
-        eq(schema.subscriptions.orgId, orgId),
-        eq(schema.subscriptions.status, "active"),
-      ),
-      columns: { id: true },
+    const { activeSub, trialSub } = await withTenantDb(async (tx) => {
+      const active = await tx.query.subscriptions.findFirst({
+        where: and(
+          eq(schema.subscriptions.orgId, orgId),
+          eq(schema.subscriptions.status, "active"),
+        ),
+        columns: { id: true },
+      });
+      // Also check trialing.
+      const trial = active
+        ? null
+        : await tx.query.subscriptions.findFirst({
+            where: and(
+              eq(schema.subscriptions.orgId, orgId),
+              eq(schema.subscriptions.status, "trialing"),
+            ),
+            columns: { id: true },
+          });
+      return { activeSub: active, trialSub: trial };
     });
-    // Also check trialing.
-    const trialSub = activeSub
-      ? null
-      : await d.query.subscriptions.findFirst({
-          where: and(
-            eq(schema.subscriptions.orgId, orgId),
-            eq(schema.subscriptions.status, "trialing"),
-          ),
-          columns: { id: true },
-        });
 
     if (activeSub ?? trialSub) {
       throw new LastPaymentMethodError();
@@ -374,15 +384,17 @@ export async function removeOrgPaymentMethod(
 
   // Soft-delete the DB row.
   const now = new Date();
-  await d
-    .update(schema.paymentMethods)
-    .set({ deletedAt: now, isDefault: false, updatedAt: now })
-    .where(
-      and(
-        eq(schema.paymentMethods.stripePaymentMethodId, stripePaymentMethodId),
-        eq(schema.paymentMethods.orgId, orgId),
+  await withTenantDb((tx) =>
+    tx
+      .update(schema.paymentMethods)
+      .set({ deletedAt: now, isDefault: false, updatedAt: now })
+      .where(
+        and(
+          eq(schema.paymentMethods.stripePaymentMethodId, stripePaymentMethodId),
+          eq(schema.paymentMethods.orgId, orgId),
+        ),
       ),
-    );
+  );
 
   // If this was the default, promote another card.
   if (wasDefault) {
@@ -398,10 +410,12 @@ export async function removeOrgPaymentMethod(
           customerId,
           next.stripePaymentMethodId,
         );
-        await d
-          .update(schema.paymentMethods)
-          .set({ isDefault: true, updatedAt: new Date() })
-          .where(eq(schema.paymentMethods.id, next.id));
+        await withTenantDb((tx) =>
+          tx
+            .update(schema.paymentMethods)
+            .set({ isDefault: true, updatedAt: new Date() })
+            .where(eq(schema.paymentMethods.id, next.id)),
+        );
         logger.info(
           {
             orgId,

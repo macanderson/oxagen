@@ -1,4 +1,4 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
 import type { AgentMcpListInput, AgentMcpListOutput } from "@oxagen/oxagen/contracts/agent.mcp.list";
@@ -9,23 +9,25 @@ export async function agentMcpListHandler(
   _input: AgentMcpListInput,
   ctx: CapabilityContext,
 ): Promise<AgentMcpListOutput> {
-  const rows = await db()
-    .select({
-      publicId: schema.mcpServers.publicId,
-      name: schema.mcpServers.name,
-      transportType: schema.mcpServers.transportType,
-      endpointUrl: schema.mcpServers.endpointUrl,
-      healthStatus: schema.mcpServers.healthStatus,
-      lastHealthcheckAt: schema.mcpServers.lastHealthcheckAt,
-      discoveredTools: schema.mcpServers.discoveredTools,
-    })
-    .from(schema.mcpServers)
-    .where(
-      and(
-        eq(schema.mcpServers.orgId, ctx.orgId),
-        eq(schema.mcpServers.workspaceId, ctx.workspaceId),
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({
+        publicId: schema.mcpServers.publicId,
+        name: schema.mcpServers.name,
+        transportType: schema.mcpServers.transportType,
+        endpointUrl: schema.mcpServers.endpointUrl,
+        healthStatus: schema.mcpServers.healthStatus,
+        lastHealthcheckAt: schema.mcpServers.lastHealthcheckAt,
+        discoveredTools: schema.mcpServers.discoveredTools,
+      })
+      .from(schema.mcpServers)
+      .where(
+        and(
+          eq(schema.mcpServers.orgId, ctx.orgId),
+          eq(schema.mcpServers.workspaceId, ctx.workspaceId),
+        ),
       ),
-    );
+  );
   return {
     servers: rows.map((r) => ({
       publicId: r.publicId,

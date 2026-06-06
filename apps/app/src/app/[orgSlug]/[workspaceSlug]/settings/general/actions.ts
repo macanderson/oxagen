@@ -3,8 +3,9 @@
 import { z } from "zod";
 import { eq, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { db } from "@oxagen/database/client";
+import { withTenantDb } from "@oxagen/database";
 import { schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 
@@ -64,57 +65,63 @@ export async function updateWorkspaceGeneralAction(
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
 
-  // Guard the per-org slug uniqueness before writing so we can return a clean
-  // error instead of surfacing a raw unique-constraint violation. Only check
-  // when the slug actually changed.
-  if (slug !== workspaceSlug) {
-    const conflict = await db()
-      .select({ id: schema.workspaces.id })
-      .from(schema.workspaces)
-      .where(
-        and(
-          eq(schema.workspaces.orgId, org.id),
-          eq(schema.workspaces.slug, slug),
-        ),
-      )
-      .limit(1);
-    if (conflict.length > 0) {
-      return { ok: false, error: "That slug is already taken in this organization." };
+  return await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
+    // Guard the per-org slug uniqueness before writing so we can return a clean
+    // error instead of surfacing a raw unique-constraint violation. Only check
+    // when the slug actually changed.
+    if (slug !== workspaceSlug) {
+      const conflict = await withTenantDb((tx) =>
+        tx
+          .select({ id: schema.workspaces.id })
+          .from(schema.workspaces)
+          .where(
+            and(
+              eq(schema.workspaces.orgId, org.id),
+              eq(schema.workspaces.slug, slug),
+            ),
+          )
+          .limit(1),
+      );
+      if (conflict.length > 0) {
+        return { ok: false, error: "That slug is already taken in this organization." };
+      }
     }
-  }
 
-  // Merge description into the JSONB settings column. We use a Postgres
-  // JSONB concatenation (`||`) to preserve existing keys while updating
-  // only the 'description' key. The coalesce guards against NULL settings
-  // (the schema defaults to '{}', but defensive code never hurts).
-  const descriptionValue = description ?? "";
-  const newSettings = sql`
-    coalesce(${schema.workspaces.settings}, '{}'::jsonb)
-    || jsonb_build_object('description', ${descriptionValue}::text)
-  `;
+    // Merge description into the JSONB settings column. We use a Postgres
+    // JSONB concatenation (`||`) to preserve existing keys while updating
+    // only the 'description' key. The coalesce guards against NULL settings
+    // (the schema defaults to '{}', but defensive code never hurts).
+    const descriptionValue = description ?? "";
+    const newSettings = sql`
+      coalesce(${schema.workspaces.settings}, '{}'::jsonb)
+      || jsonb_build_object('description', ${descriptionValue}::text)
+    `;
 
-  await db()
-    .update(schema.workspaces)
-    .set({
-      name,
-      slug,
-      settings: newSettings,
-    })
-    .where(
-      and(
-        eq(schema.workspaces.id, ws.id),
-        eq(schema.workspaces.orgId, org.id),
-      ),
+    await withTenantDb((tx) =>
+      tx
+        .update(schema.workspaces)
+        .set({
+          name,
+          slug,
+          settings: newSettings,
+        })
+        .where(
+          and(
+            eq(schema.workspaces.id, ws.id),
+            eq(schema.workspaces.orgId, org.id),
+          ),
+        ),
     );
 
-  // Revalidate both the old and (if changed) the new slug paths so the cache
-  // is correct regardless of which URL the client lands on next.
-  revalidatePath(`/${orgSlug}/${workspaceSlug}/settings/general`);
-  revalidatePath(`/${orgSlug}/${workspaceSlug}/settings`);
-  if (slug !== workspaceSlug) {
-    revalidatePath(`/${orgSlug}/${slug}/settings/general`);
-    revalidatePath(`/${orgSlug}/${slug}/settings`);
-  }
+    // Revalidate both the old and (if changed) the new slug paths so the cache
+    // is correct regardless of which URL the client lands on next.
+    revalidatePath(`/${orgSlug}/${workspaceSlug}/settings/general`);
+    revalidatePath(`/${orgSlug}/${workspaceSlug}/settings`);
+    if (slug !== workspaceSlug) {
+      revalidatePath(`/${orgSlug}/${slug}/settings/general`);
+      revalidatePath(`/${orgSlug}/${slug}/settings`);
+    }
 
-  return { ok: true, slug };
+    return { ok: true, slug };
+  });
 }

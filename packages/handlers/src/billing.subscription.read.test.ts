@@ -15,14 +15,16 @@ const { subFindFirst, planFindFirst, balanceFindFirst } = vi.hoisted(() => ({
 // blowing up — the findFirst mock ignores the where arg entirely.
 vi.mock("@oxagen/database", () => {
   const stubCol = { _: {} };
+  const fakeDb = {
+    query: {
+      subscriptions: { findFirst: subFindFirst },
+      plans: { findFirst: planFindFirst },
+      creditBalances: { findFirst: balanceFindFirst },
+    },
+  };
   return {
-    db: () => ({
-      query: {
-        subscriptions: { findFirst: subFindFirst },
-        plans: { findFirst: planFindFirst },
-        creditBalances: { findFirst: balanceFindFirst },
-      },
-    }),
+    db: () => fakeDb,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
     schema: {
       subscriptions: { orgId: stubCol, status: stubCol },
       plans: { id: stubCol },

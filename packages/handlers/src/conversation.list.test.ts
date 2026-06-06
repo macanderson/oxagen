@@ -21,6 +21,18 @@ vi.mock("@oxagen/database", () => ({
       }),
     }),
   }),
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({
+              limit: mocks.selectFrom,
+            }),
+          }),
+        }),
+      }),
+    }),
   schema: {
     conversations: {
       publicId: "publicId",

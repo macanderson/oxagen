@@ -62,8 +62,9 @@ describe("agent.memory.recall handler", () => {
     });
     expect(mocks.recallMemoriesMock).toHaveBeenCalledTimes(1);
     const arg = mocks.recallMemoriesMock.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(arg.orgId).toBe("ten_1");
-    expect(arg.workspaceId).toBe("ws_1");
+    // orgId/workspaceId are no longer passed directly — scopedSession reads them from the ALS scope
+    expect(arg.orgId).toBeUndefined();
+    expect(arg.workspaceId).toBeUndefined();
     expect(arg.minWeight).toBe("high");
     expect(arg.limit).toBe(5);
     expect(Array.isArray(arg.embedding)).toBe(true);

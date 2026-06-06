@@ -12,7 +12,7 @@
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
-import { db, schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
 
 export interface ApiKeyResult {
   apiKeyId: string;
@@ -45,16 +45,23 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
   const prefix = rawKey.slice(0, sep);
   const hash = createHash("sha256").update(rawKey).digest("hex");
 
-  const row = await db().query.apiKeys.findFirst({
-    where: and(eq(schema.apiKeys.keyPrefix, prefix), isNull(schema.apiKeys.deletedAt)),
-    columns: {
-      id: true,
-      keyHash: true,
-      orgId: true,
-      workspaceId: true,
-      expiresAt: true,
-    },
-  });
+  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists) — OXA-1515
+  // Resolves a raw API key → (apiKeyId, orgId, workspaceId). This IS the
+  // resolution step: the apiKeys table carries the pre-bound tenant scope for
+  // every machine-auth request. No tenant scope can exist before this lookup
+  // completes — the result is used to construct one.
+  const row = await withSystemDb((tx) =>
+    tx.query.apiKeys.findFirst({
+      where: and(eq(schema.apiKeys.keyPrefix, prefix), isNull(schema.apiKeys.deletedAt)),
+      columns: {
+        id: true,
+        keyHash: true,
+        orgId: true,
+        workspaceId: true,
+        expiresAt: true,
+      },
+    }),
+  );
 
   if (!row) return { ok: false, kind: "invalid" };
   const storedHashBuf = Buffer.from(row.keyHash, "hex");

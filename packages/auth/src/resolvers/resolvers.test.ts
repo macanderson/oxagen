@@ -23,8 +23,11 @@ const mockQuery = {
   workspaces: { findFirst: vi.fn() },
 };
 
+const fakeTx = { query: mockQuery };
+
 vi.mock("@oxagen/database", () => ({
-  db: () => ({ query: mockQuery }),
+  db: () => fakeTx,
+  withSystemDb: async (fn: (tx: typeof fakeTx) => Promise<unknown>) => fn(fakeTx),
   schema: {
     sessions: { token: "sessions.token" },
     apiKeys: { keyPrefix: "apiKeys.keyPrefix", deletedAt: "apiKeys.deletedAt" },

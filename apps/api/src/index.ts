@@ -8,7 +8,8 @@ import { logger } from "./middleware/logger";
 // On Vercel the same Hono `app` is served as a serverless function — see
 // `api/index.ts`. Both share `bootstrap()` so env validation, IAM wiring, and
 // the security-event emitter are identical across surfaces (no drift).
-bootstrap();
+// bootstrap() is async (awaits assertRlsConnectionSafe before accepting traffic).
+await bootstrap();
 
 const port = PORTS.api;
 serve({ fetch: app.fetch, port }, (info) => {

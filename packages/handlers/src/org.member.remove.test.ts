@@ -56,16 +56,11 @@ const mockTx = {
   insert: vi.fn(),
 };
 
-const mockDb = {
-  select: vi.fn(),
-  update: vi.fn(),
-  delete: vi.fn(),
-  insert: vi.fn(),
-  transaction: vi.fn(async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
-};
-
 vi.mock("@oxagen/database", () => ({
-  db: () => mockDb,
+  // The handler runs all reads + writes inside a single withTenantDb (one
+  // RLS-scoped transaction); resolveActorPrincipalAndRole uses its own. Both
+  // route to the same fluent tx mock so the call sequence is continuous.
+  withTenantDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
   schema: {
     principals: {
       id: "principals.id",
@@ -146,7 +141,7 @@ describe("orgMemberRemoveHandler", () => {
   it("actor has no principal (not IAM-provisioned) → throws Forbidden", async () => {
     // select chain for resolveActorPrincipalAndRole — principal not found
     const sc = selectChain([]);
-    mockDb.select = sc.select;
+    mockTx.select = sc.select;
 
     const ctx = makeCtx();
     await expect(
@@ -158,7 +153,7 @@ describe("orgMemberRemoveHandler", () => {
     // Call 1: principal found for actor
     // Call 2: PRA → Member role
     let callCount = 0;
-    mockDb.select = vi.fn().mockImplementation(() => {
+    mockTx.select = vi.fn().mockImplementation(() => {
       callCount++;
       if (callCount === 1) {
         // actor principal
@@ -183,7 +178,7 @@ describe("orgMemberRemoveHandler", () => {
 
   it("target not a member of the org → throws Not found (IDOR guard)", async () => {
     let callCount = 0;
-    mockDb.select = vi.fn().mockImplementation(() => {
+    mockTx.select = vi.fn().mockImplementation(() => {
       callCount++;
       const buildChain = (result: unknown[]) => {
         const limit = vi.fn().mockResolvedValue(result);
@@ -206,7 +201,7 @@ describe("orgMemberRemoveHandler", () => {
 
   it("target is the last owner → throws with lockout message", async () => {
     let callCount = 0;
-    mockDb.select = vi.fn().mockImplementation(() => {
+    mockTx.select = vi.fn().mockImplementation(() => {
       callCount++;
       const build = (result: unknown[]) => {
         const limit = vi.fn().mockResolvedValue(result);
@@ -233,8 +228,10 @@ describe("orgMemberRemoveHandler", () => {
   });
 
   it("happy path → removes member, emits audit event, returns removed:true", async () => {
+    // All reads run inside withTenantDb on the same tx, so the call sequence is
+    // continuous: 1-2 resolveActor, 3-7 main guards, 8 mutation principal lookup.
     let callCount = 0;
-    mockDb.select = vi.fn().mockImplementation(() => {
+    mockTx.select = vi.fn().mockImplementation(() => {
       callCount++;
       const build = (result: unknown[]) => {
         const limit = vi.fn().mockResolvedValue(result);
@@ -249,20 +246,8 @@ describe("orgMemberRemoveHandler", () => {
       if (callCount === 4) return build([{ id: "owner-role-id" }]);               // Owner role row
       if (callCount === 5) return build([{ n: 2 }]);                             // 2 owners — no lockout
       if (callCount === 6) return build([{ id: "target-principal-id" }]);         // target principal (last owner check)
-      return build([]);                                                           // target has no Owner PRA
-    });
-
-    // tx select calls
-    let txCallCount = 0;
-    mockTx.select = vi.fn().mockImplementation(() => {
-      txCallCount++;
-      const build = (result: unknown[]) => {
-        const limit = vi.fn().mockResolvedValue(result);
-        const where = vi.fn().mockReturnValue({ limit });
-        const from = vi.fn().mockReturnValue({ where });
-        return { from };
-      };
-      if (txCallCount === 1) return build([{ id: "target-principal-id" }]); // target principal in tx
+      if (callCount === 7) return build([]);                                      // target has no Owner PRA → no lockout
+      if (callCount === 8) return build([{ id: "target-principal-id" }]);         // mutation: existing principal
       return build([]);
     });
 

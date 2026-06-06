@@ -5,7 +5,7 @@
 // This is what the chat shell + stream route calls to get the effective model
 // config for a session. It must not be imported by client components.
 
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { resolveModelDefaults } from "./resolve-model-defaults";
 import type { ResolvedModelDefaults, ModelDefaultsInput } from "./resolve-model-defaults";
@@ -31,31 +31,31 @@ export interface LoadEffectiveModelDefaultsArgs {
 export async function loadEffectiveModelDefaults(
   args: LoadEffectiveModelDefaultsArgs,
 ): Promise<ResolvedModelDefaults> {
-  const d = db();
-
-  // Run both queries in parallel when a workspaceId is provided.
-  const [userPrefsRow, workspaceRow] = await Promise.all([
-    d.query.userPreferences.findFirst({
-      where: eq(schema.userPreferences.userId, args.userId),
-      columns: {
-        defaultTextTier: true,
-        defaultTextModel: true,
-        defaultImageModel: true,
-        defaultVideoModel: true,
-      },
-    }),
-    args.workspaceId
-      ? d.query.workspaces.findFirst({
-          where: eq(schema.workspaces.id, args.workspaceId),
-          columns: {
-            defaultTextTier: true,
-            defaultTextModel: true,
-            defaultImageModel: true,
-            defaultVideoModel: true,
-          },
-        })
-      : Promise.resolve(null),
-  ]);
+  // Run both queries in parallel inside a single tenant-scoped transaction.
+  const [userPrefsRow, workspaceRow] = await withTenantDb(async (tx) =>
+    Promise.all([
+      tx.query.userPreferences.findFirst({
+        where: eq(schema.userPreferences.userId, args.userId),
+        columns: {
+          defaultTextTier: true,
+          defaultTextModel: true,
+          defaultImageModel: true,
+          defaultVideoModel: true,
+        },
+      }),
+      args.workspaceId
+        ? tx.query.workspaces.findFirst({
+            where: eq(schema.workspaces.id, args.workspaceId),
+            columns: {
+              defaultTextTier: true,
+              defaultTextModel: true,
+              defaultImageModel: true,
+              defaultVideoModel: true,
+            },
+          })
+        : Promise.resolve(null),
+    ]),
+  );
 
   const userInput: ModelDefaultsInput["user"] = userPrefsRow
     ? {

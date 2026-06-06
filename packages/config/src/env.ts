@@ -154,6 +154,18 @@ export const baseEnvSchema = z.object({
     .optional()
     .transform((v) => v !== "false"),
 
+  // OXA-1515: Row-Level Security enforcement gate. Default OFF during the
+  // seeding window: withTenantDb always sets the scope GUCs, but additionally
+  // sets app.rls_bypass='on' while this is false so the bypass-aware policies
+  // do not yet filter. During seeding, isolation is still enforced by the
+  // manual eq(orgId) predicates kept in every query. Flip to true per env
+  // once db.query.unscoped telemetry reads zero. Reversible via env (no
+  // migration needed).
+  TENANT_RLS_ENFORCEMENT_ENABLED: z
+    .union([z.literal("true"), z.literal("false")])
+    .optional()
+    .transform((v) => v === "true"),
+
   // ── Billing / usage-meter tuning (see @oxagen/billing pricing.ts) ──
   // Target *blended* gross margin across all products, in (0,1). When set,
   // it overrides DEFAULT_TARGET_MARGIN and re-derives the meter markup.

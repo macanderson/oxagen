@@ -234,6 +234,61 @@ jobs:
         run: pnpm turbo run test:coverage --filter="...[${TURBO_BASE}]"
 
   # ──────────────────────────────────────────────────────────────────────
+  # rls-integration — the single proof that tenant Row-Level Security actually
+  # isolates (OXA-1515). Spins up a real Postgres, applies the schema + the
+  # generated RLS policy migration, and runs the integration suite with
+  # enforcement ON. PR-gated only (per the CI-gate-on-PRs rule) — it is the
+  # gate that must be green before RLS ships. The suite drops to a non-superuser
+  # role via SET LOCAL ROLE so policies are actually evaluated even though the
+  # CI postgres connects as a superuser.
+  # ──────────────────────────────────────────────────────────────────────
+  rls-integration:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: oxagen
+          POSTGRES_PASSWORD: oxagen
+          POSTGRES_DB: oxagen
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oxagen -d oxagen"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Enforcement ON so the RLS policies are load-bearing for the proof.
+      TENANT_RLS_ENFORCEMENT_ENABLED: "true"
+      # Only Postgres is needed for the isolation suite.
+      DB_MIGRATE_STORES: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply Postgres init schemas
+        run: |
+          sudo apt-get install -y postgresql-client
+          psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Apply baseline + the generated 0001_rls_policies.sql (ENABLE/FORCE RLS).
+      - name: Migrate (postgres — includes RLS policies)
+        run: pnpm db:migrate
+
+      - name: RLS isolation proof + manifest coverage
+        run: pnpm --filter @oxagen/database test:integration
+
+  # ──────────────────────────────────────────────────────────────────────
   # migrate — apply DB migrations to a PERSISTENT environment database.
   #   pull_request  → PREVIEW  database (PREVIEW_* secrets) so the per-PR Vercel
   #                   preview deployment runs against the new schema, and the

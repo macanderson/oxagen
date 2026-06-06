@@ -18,16 +18,18 @@
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRemove } from "@oxagen/oxagen/contracts/org.member.remove";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 import { and, eq, isNull, count } from "drizzle-orm";
 import { logger } from "./logger";
 
 // Lazy singleton — avoids constructing the inserter until first call.
+// makeSecurityEventInserter() resolves its own db handle (withSystemDb for the
+// no-scope audit write), so it takes no argument.
 let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
 function auditInsert() {
-  if (!_auditInsert) _auditInsert = makeSecurityEventInserter(db());
+  if (!_auditInsert) _auditInsert = makeSecurityEventInserter();
   return _auditInsert;
 }
 
@@ -39,41 +41,41 @@ async function resolveActorPrincipalAndRole(
   orgId: string,
   userId: string,
 ): Promise<{ principalId: string; roleName: string | null }> {
-  const d = db();
+  return withTenantDb(async (tx) => {
+    // Find the principal for this (orgId, userId) pair.
+    const [principalRow] = await tx
+      .select({ id: schema.principals.id })
+      .from(schema.principals)
+      .where(
+        and(
+          eq(schema.principals.orgId, orgId),
+          eq(schema.principals.parentUserId, userId),
+          eq(schema.principals.status, "active"),
+        ),
+      )
+      .limit(1);
 
-  // Find the principal for this (orgId, userId) pair.
-  const [principalRow] = await d
-    .select({ id: schema.principals.id })
-    .from(schema.principals)
-    .where(
-      and(
-        eq(schema.principals.orgId, orgId),
-        eq(schema.principals.parentUserId, userId),
-        eq(schema.principals.status, "active"),
-      ),
-    )
-    .limit(1);
+    if (!principalRow) return { principalId: "", roleName: null };
 
-  if (!principalRow) return { principalId: "", roleName: null };
+    // Resolve their highest-precedence org role via principal_role_assignments → roles.
+    // We only check org-scoped (workspaceId IS NULL) roles.
+    const [praRow] = await tx
+      .select({ roleName: schema.roles.name })
+      .from(schema.principalRoleAssignments)
+      .innerJoin(schema.roles, eq(schema.roles.id, schema.principalRoleAssignments.roleId))
+      .where(
+        and(
+          eq(schema.principalRoleAssignments.principalId, principalRow.id),
+          eq(schema.principalRoleAssignments.orgId, orgId),
+          eq(schema.roles.scopeKind, "org"),
+          isNull(schema.principalRoleAssignments.workspaceId),
+          isNull(schema.principalRoleAssignments.deletedAt),
+        ),
+      )
+      .limit(1);
 
-  // Resolve their highest-precedence org role via principal_role_assignments → roles.
-  // We only check org-scoped (workspaceId IS NULL) roles.
-  const [praRow] = await d
-    .select({ roleName: schema.roles.name })
-    .from(schema.principalRoleAssignments)
-    .innerJoin(schema.roles, eq(schema.roles.id, schema.principalRoleAssignments.roleId))
-    .where(
-      and(
-        eq(schema.principalRoleAssignments.principalId, principalRow.id),
-        eq(schema.principalRoleAssignments.orgId, orgId),
-        eq(schema.roles.scopeKind, "org"),
-        isNull(schema.principalRoleAssignments.workspaceId),
-        isNull(schema.principalRoleAssignments.deletedAt),
-      ),
-    )
-    .limit(1);
-
-  return { principalId: principalRow.id, roleName: praRow?.roleName ?? null };
+    return { principalId: principalRow.id, roleName: praRow?.roleName ?? null };
+  });
 }
 
 const AUTHORIZED_ROLES = new Set(["Owner", "Admin"]);
@@ -107,101 +109,104 @@ export const orgMemberRemoveHandler: CapabilityHandler<typeof orgMemberRemove> =
     throw new Error("Forbidden: only org Owners and Admins can remove members");
   }
 
-  const d = db();
-
-  // ── Resolve target membership (IDOR guard) ────────────────────────────────────
-  // Verify the target userId belongs to THIS org. 404 on mismatch — if the
-  // target is not a member of this org, confirm nothing about their existence.
-  const [targetOrgUser] = await d
-    .select({ id: schema.orgUsers.id, role: schema.orgUsers.role })
-    .from(schema.orgUsers)
-    .where(
-      and(
-        eq(schema.orgUsers.orgId, ctx.orgId),
-        eq(schema.orgUsers.userId, input.targetUserId),
-      ),
-    )
-    .limit(1);
-
-  if (!targetOrgUser) {
-    logger.warn(
-      { orgId: ctx.orgId, targetUserId: input.targetUserId },
-      "org.member.remove: target not a member of this org",
-    );
-    throw new Error("Not found: target user is not a member of this org");
-  }
-
-  // ── Last-owner guard ─────────────────────────────────────────────────────────
-  // Prevent removing the final Owner to avoid org lockout. Count active
-  // principal_role_assignments for the "Owner" org role within this org.
-  const [ownerRoleRow] = await d
-    .select({ id: schema.roles.id })
-    .from(schema.roles)
-    .where(
-      and(
-        eq(schema.roles.orgId, ctx.orgId),
-        eq(schema.roles.scopeKind, "org"),
-        eq(schema.roles.name, OWNER_ROLE_NAME),
-      ),
-    )
-    .limit(1);
-
-  if (ownerRoleRow) {
-    // Count non-deleted active owner assignments in this org.
-    const ownerCountResult = await d
-      .select({ n: count() })
-      .from(schema.principalRoleAssignments)
+  // ── Scoped reads + mutation (single tenant-scoped transaction) ────────────────
+  // withTenantDb opens one RLS-scoped transaction for the current org. All
+  // reads (IDOR + last-owner guards) and the membership/IAM writes run inside
+  // it so they are atomic and RLS-policied. A guard throw rolls the (so-far
+  // read-only) transaction back and propagates a 403/404 to the surface.
+  await withTenantDb(async (tx) => {
+    // ── Resolve target membership (IDOR guard) ──────────────────────────────────
+    // Verify the target userId belongs to THIS org. 404 on mismatch — if the
+    // target is not a member of this org, confirm nothing about their existence.
+    const [targetOrgUser] = await tx
+      .select({ id: schema.orgUsers.id, role: schema.orgUsers.role })
+      .from(schema.orgUsers)
       .where(
         and(
-          eq(schema.principalRoleAssignments.orgId, ctx.orgId),
-          eq(schema.principalRoleAssignments.roleId, ownerRoleRow.id),
-          isNull(schema.principalRoleAssignments.workspaceId),
-          isNull(schema.principalRoleAssignments.deletedAt),
-        ),
-      );
-
-    const ownerCount = ownerCountResult[0]?.n ?? 0;
-
-    // Determine if the target is an Owner.
-    const [targetPrincipalRow] = await d
-      .select({ id: schema.principals.id })
-      .from(schema.principals)
-      .where(
-        and(
-          eq(schema.principals.orgId, ctx.orgId),
-          eq(schema.principals.parentUserId, input.targetUserId),
+          eq(schema.orgUsers.orgId, ctx.orgId),
+          eq(schema.orgUsers.userId, input.targetUserId),
         ),
       )
       .limit(1);
 
-    if (targetPrincipalRow) {
-      const [targetPra] = await d
-        .select({ id: schema.principalRoleAssignments.id })
+    if (!targetOrgUser) {
+      logger.warn(
+        { orgId: ctx.orgId, targetUserId: input.targetUserId },
+        "org.member.remove: target not a member of this org",
+      );
+      throw new Error("Not found: target user is not a member of this org");
+    }
+
+    // ── Last-owner guard ───────────────────────────────────────────────────────
+    // Prevent removing the final Owner to avoid org lockout. Count active
+    // principal_role_assignments for the "Owner" org role within this org.
+    const [ownerRoleRow] = await tx
+      .select({ id: schema.roles.id })
+      .from(schema.roles)
+      .where(
+        and(
+          eq(schema.roles.orgId, ctx.orgId),
+          eq(schema.roles.scopeKind, "org"),
+          eq(schema.roles.name, OWNER_ROLE_NAME),
+        ),
+      )
+      .limit(1);
+
+    if (ownerRoleRow) {
+      // Count non-deleted active owner assignments in this org.
+      const ownerCountResult = await tx
+        .select({ n: count() })
         .from(schema.principalRoleAssignments)
         .where(
           and(
-            eq(schema.principalRoleAssignments.principalId, targetPrincipalRow.id),
+            eq(schema.principalRoleAssignments.orgId, ctx.orgId),
             eq(schema.principalRoleAssignments.roleId, ownerRoleRow.id),
             isNull(schema.principalRoleAssignments.workspaceId),
             isNull(schema.principalRoleAssignments.deletedAt),
           ),
+        );
+
+      const ownerCount = ownerCountResult[0]?.n ?? 0;
+
+      // Determine if the target is an Owner.
+      const [targetPrincipalRow] = await tx
+        .select({ id: schema.principals.id })
+        .from(schema.principals)
+        .where(
+          and(
+            eq(schema.principals.orgId, ctx.orgId),
+            eq(schema.principals.parentUserId, input.targetUserId),
+          ),
         )
         .limit(1);
 
-      if (targetPra && ownerCount <= 1) {
-        logger.warn(
-          { orgId: ctx.orgId, targetUserId: input.targetUserId },
-          "org.member.remove: blocked — would remove last org owner",
-        );
-        throw new Error(
-          "Cannot remove the last org owner. Transfer ownership first or promote another member to Owner.",
-        );
+      if (targetPrincipalRow) {
+        const [targetPra] = await tx
+          .select({ id: schema.principalRoleAssignments.id })
+          .from(schema.principalRoleAssignments)
+          .where(
+            and(
+              eq(schema.principalRoleAssignments.principalId, targetPrincipalRow.id),
+              eq(schema.principalRoleAssignments.roleId, ownerRoleRow.id),
+              isNull(schema.principalRoleAssignments.workspaceId),
+              isNull(schema.principalRoleAssignments.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (targetPra && ownerCount <= 1) {
+          logger.warn(
+            { orgId: ctx.orgId, targetUserId: input.targetUserId },
+            "org.member.remove: blocked — would remove last org owner",
+          );
+          throw new Error(
+            "Cannot remove the last org owner. Transfer ownership first or promote another member to Owner.",
+          );
+        }
       }
     }
-  }
 
-  // ── Transaction: remove membership + IAM cleanup ──────────────────────────────
-  await d.transaction(async (tx) => {
+    // ── Remove membership + IAM cleanup ─────────────────────────────────────────
     // (a) Resolve target principal (may not exist for pre-IAM members).
     const [targetPrincipal] = await tx
       .select({ id: schema.principals.id })

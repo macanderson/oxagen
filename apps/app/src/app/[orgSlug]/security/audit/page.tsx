@@ -1,7 +1,10 @@
 import { desc, eq } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg } from "@/lib/resolve-org";
+
+// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { ScrollText, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,22 +35,29 @@ export default async function SecurityAuditPage({
   const { orgSlug } = await params;
   const tenant = await resolveOrg(orgSlug);
 
+  // Org-only route — sentinel workspaceId. — OXA-1515
   const events = await (async () => {
     try {
-      return await db()
-        .select({
-          id: schema.securityEvents.id,
-          eventType: schema.securityEvents.eventType,
-          outcome: schema.securityEvents.outcome,
-          capability: schema.securityEvents.capability,
-          actorUserId: schema.securityEvents.actorUserId,
-          ip: schema.securityEvents.ip,
-          occurredAt: schema.securityEvents.occurredAt,
-        })
-        .from(schema.securityEvents)
-        .where(eq(schema.securityEvents.orgId, tenant.id))
-        .orderBy(desc(schema.securityEvents.occurredAt))
-        .limit(50);
+      return await runInTenantScope(
+        { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+        () =>
+          withTenantDb((tx) =>
+            tx
+              .select({
+                id: schema.securityEvents.id,
+                eventType: schema.securityEvents.eventType,
+                outcome: schema.securityEvents.outcome,
+                capability: schema.securityEvents.capability,
+                actorUserId: schema.securityEvents.actorUserId,
+                ip: schema.securityEvents.ip,
+                occurredAt: schema.securityEvents.occurredAt,
+              })
+              .from(schema.securityEvents)
+              .where(eq(schema.securityEvents.orgId, tenant.id))
+              .orderBy(desc(schema.securityEvents.occurredAt))
+              .limit(50),
+          ),
+      );
     } catch {
       return [];
     }

@@ -14,7 +14,7 @@
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member.invite.accept";
-import { db, schema } from "@oxagen/database";
+import { schema, withSystemDb } from "@oxagen/database";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 import { and, eq } from "drizzle-orm";
@@ -24,7 +24,7 @@ import { logger } from "./logger";
 // Lazy singleton inserter.
 let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
 function auditInsert() {
-  if (!_auditInsert) _auditInsert = makeSecurityEventInserter(db());
+  if (!_auditInsert) _auditInsert = makeSecurityEventInserter();
   return _auditInsert;
 }
 
@@ -38,21 +38,25 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<typeof orgMemberInv
     throw new Error("Unauthorized: must be authenticated to accept an invitation");
   }
 
-  const d = db();
+  // tenancy: system bypass via withSystemDb (cross-org lookup — the invitee's
+  // ctx.orgId may differ from the invitation's orgId; the writes below go to the
+  // invitation's org, which cannot satisfy RLS under the caller's scope) — OXA-1515
 
   // ── Resolve invitation ───────────────────────────────────────────────────────
-  const invitation = await d.query.invitations.findFirst({
-    where: eq(schema.invitations.publicId, input.invitationPublicId),
-    columns: {
-      id: true,
-      publicId: true,
-      orgId: true,
-      email: true,
-      role: true,
-      status: true,
-      expiresAt: true,
-    },
-  });
+  const invitation = await withSystemDb((tx) =>
+    tx.query.invitations.findFirst({
+      where: eq(schema.invitations.publicId, input.invitationPublicId),
+      columns: {
+        id: true,
+        publicId: true,
+        orgId: true,
+        email: true,
+        role: true,
+        status: true,
+        expiresAt: true,
+      },
+    }),
+  );
 
   if (!invitation) {
     throw new Error(`Invitation '${input.invitationPublicId}' not found`);
@@ -64,20 +68,23 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<typeof orgMemberInv
   }
   if (invitation.expiresAt && invitation.expiresAt < new Date()) {
     // Mark expired to keep state consistent; don't block on failure.
-    await d
-      .update(schema.invitations)
-      .set({ status: "expired", updatedAt: new Date(), updatedByUserId: ctx.userId })
-      .where(eq(schema.invitations.id, invitation.id))
-      .catch(() => undefined);
+    await withSystemDb((tx) =>
+      tx
+        .update(schema.invitations)
+        .set({ status: "expired", updatedAt: new Date(), updatedByUserId: ctx.userId })
+        .where(eq(schema.invitations.id, invitation.id)),
+    ).catch(() => undefined);
     throw new Error(`Invitation '${input.invitationPublicId}' has expired`);
   }
 
   // ── Verify email matches ──────────────────────────────────────────────────────
-  const [userRow] = await d
-    .select({ email: schema.users.email })
-    .from(schema.users)
-    .where(eq(schema.users.id, ctx.userId))
-    .limit(1);
+  const [userRow] = await withSystemDb((tx) =>
+    tx
+      .select({ email: schema.users.email })
+      .from(schema.users)
+      .where(eq(schema.users.id, ctx.userId!))
+      .limit(1),
+  );
 
   if (!userRow) throw new Error("Authenticated user not found");
   // Case-insensitive comparison — email is citext in the DB.
@@ -90,9 +97,11 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<typeof orgMemberInv
   }
 
   // ── Transaction: accept + create membership + provision IAM ──────────────────
+  // All writes go to the invitation's org via withSystemDb (cross-org write;
+  // the invitee's ctx.orgId may differ from invitation.orgId).
   const joinedAt = new Date();
 
-  const result = await d.transaction(async (tx) => {
+  const result = await withSystemDb(async (tx) => {
     // (a) Mark invitation accepted.
     await tx
       .update(schema.invitations)

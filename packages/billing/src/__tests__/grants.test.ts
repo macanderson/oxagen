@@ -99,6 +99,9 @@ function makeDb(
   }> = {},
 ) {
   return {
+    // withSystemDb mock passes dbState.instance as tx; expose insert so the
+    // functions under test can call tx.insert(...) when withSystemDb is used.
+    insert: txMock.insert,
     transaction: vi.fn((fn: (tx: TxMock) => Promise<unknown>) => fn(txMock)),
     query: {
       creditLedger: { findFirst: queryOverrides.creditLedger ?? vi.fn().mockResolvedValue(undefined) },
@@ -113,6 +116,8 @@ const dbState: { instance: ReturnType<typeof makeDb> | null } = { instance: null
 
 vi.mock("@oxagen/database", () => ({
   db: () => dbState.instance,
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => dbState.instance?.transaction(fn),
+  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(dbState.instance),
   schema: {
     creditLedger: {
       orgId: "creditLedger.orgId",
@@ -225,7 +230,7 @@ describe("grantPlanCreditsForInvoicePaid", () => {
     syncSubscriptionMock.mockResolvedValue(undefined);
   });
 
-  it("subscription_create billing reason — grants plan credits in transaction", async () => {
+  it("subscription_create billing reason — grants plan credits via withSystemDb", async () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock, {
       subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
@@ -236,7 +241,8 @@ describe("grantPlanCreditsForInvoicePaid", () => {
     await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "subscription_create" }));
 
     expect(syncSubscriptionMock).toHaveBeenCalledWith("sub_test_001");
-    expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
+    // withSystemDb passes dbState.instance as tx; insert is called directly on it.
+    expect(txMock.insert).toHaveBeenCalled();
     expect(txMock._lotInsertCalled).toBe(true);
     expect(txMock._balanceUpsertCalled).toBe(true);
   });
@@ -267,7 +273,7 @@ describe("grantPlanCreditsForInvoicePaid", () => {
     expect(txMock._lotInsertCalled).toBe(false);
   });
 
-  it("missing invoice row — transaction not entered (referenceId undefined)", async () => {
+  it("missing invoice row — grant not applied (referenceId undefined)", async () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock, {
       subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
@@ -277,17 +283,18 @@ describe("grantPlanCreditsForInvoicePaid", () => {
 
     await grantPlanCreditsForInvoicePaid(makeInvoice());
 
-    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
+    // No inserts because referenceId is undefined — early return inside withSystemDb.
+    expect(txMock._lotInsertCalled).toBe(false);
   });
 
-  it("non-subscription billing reason (manual) — returns early, no transaction", async () => {
+  it("non-subscription billing reason (manual) — returns early, no grant", async () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock);
 
     await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "manual" }));
 
     expect(syncSubscriptionMock).not.toHaveBeenCalled();
-    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
+    expect(txMock.insert).not.toHaveBeenCalled();
   });
 
   it("no subscriptionId on invoice — returns early", async () => {
@@ -310,7 +317,7 @@ describe("grantCreditPackForCheckout", () => {
     getCheckoutSessionCreditPacksMock.mockResolvedValue([]);
   });
 
-  it("happy path — line items with credits → grants correct total in transaction", async () => {
+  it("happy path — line items with credits → grants correct total via withSystemDb", async () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock);
 
@@ -322,7 +329,8 @@ describe("grantCreditPackForCheckout", () => {
     await grantCreditPackForCheckout(makeSession());
 
     expect(getCheckoutSessionCreditPacksMock).toHaveBeenCalledWith("cs_test_001");
-    expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
+    // withSystemDb passes dbState.instance as tx; insert called directly on it.
+    expect(txMock.insert).toHaveBeenCalled();
     expect(txMock._lotInsertCalled).toBe(true);
     expect(txMock._balanceUpsertCalled).toBe(true);
   });
@@ -340,41 +348,41 @@ describe("grantCreditPackForCheckout", () => {
     expect(txMock._lotInsertCalled).toBe(false);
   });
 
-  it("zero credits from line items — transaction not entered", async () => {
+  it("zero credits from line items — no insert", async () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock);
     getCheckoutSessionCreditPacksMock.mockResolvedValue([]); // no credit line items
 
     await grantCreditPackForCheckout(makeSession());
 
-    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
+    expect(txMock.insert).not.toHaveBeenCalled();
   });
 
-  it("session mode is not payment — returns early, no transaction", async () => {
+  it("session mode is not payment — returns early, no insert", async () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock);
 
     await grantCreditPackForCheckout(makeSession({ mode: "subscription" }));
 
-    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
+    expect(txMock.insert).not.toHaveBeenCalled();
   });
 
-  it("paymentStatus is not paid — returns early, no transaction", async () => {
+  it("paymentStatus is not paid — returns early, no insert", async () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock);
 
     await grantCreditPackForCheckout(makeSession({ paymentStatus: "unpaid" }));
 
-    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
+    expect(txMock.insert).not.toHaveBeenCalled();
   });
 
-  it("no org_id on session metadata — returns early, no transaction", async () => {
+  it("no org_id on session metadata — returns early, no insert", async () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock);
 
     await grantCreditPackForCheckout(makeSession({ metadata: {} }));
 
-    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
+    expect(txMock.insert).not.toHaveBeenCalled();
   });
 
   it("dynamic purchase — no price metadata credits but session metadata has credits → grants face value", async () => {
@@ -392,13 +400,13 @@ describe("grantCreditPackForCheckout", () => {
       makeSession({ metadata: { org_id: "org-abc", credits: "25000" } }),
     );
 
-    // Transaction should have run and granted 25000 cents (face value, not paid amount)
-    expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
+    // withSystemDb ran and granted 25000 cents (face value, not paid amount)
+    expect(txMock.insert).toHaveBeenCalled();
     expect(txMock._lotInsertCalled).toBe(true);
     expect(txMock._balanceUpsertCalled).toBe(true);
   });
 
-  it("dynamic purchase — session metadata credits is non-numeric → no transaction", async () => {
+  it("dynamic purchase — session metadata credits is non-numeric → no insert", async () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock);
 
@@ -408,10 +416,10 @@ describe("grantCreditPackForCheckout", () => {
       makeSession({ metadata: { org_id: "org-abc", credits: "not-a-number" } }),
     );
 
-    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
+    expect(txMock.insert).not.toHaveBeenCalled();
   });
 
-  it("dynamic purchase — session metadata credits is zero → no transaction", async () => {
+  it("dynamic purchase — session metadata credits is zero → no insert", async () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock);
 
@@ -421,7 +429,7 @@ describe("grantCreditPackForCheckout", () => {
       makeSession({ metadata: { org_id: "org-abc", credits: "0" } }),
     );
 
-    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
+    expect(txMock.insert).not.toHaveBeenCalled();
   });
 
   it("dynamic purchase — already granted (ledger conflict) → lot NOT inserted", async () => {

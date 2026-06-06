@@ -39,6 +39,8 @@ vi.mock("@oxagen/database", () => ({
   db: () => ({
     insert: mockInsert,
   }),
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({ insert: mockInsert }),
   schema: {
     invitations: {
       publicId: "invitations.publicId",

@@ -11,7 +11,7 @@
  * has no HTTP dependency and can be called from CLI, MCP, or tests equally.
  */
 import { eq } from "drizzle-orm";
-import { db, schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
 
 export interface SessionResult {
   userId: string;
@@ -89,10 +89,17 @@ export function stripCookieSignature(signedValue: string): string {
 export async function resolveSession(token: string): Promise<SessionResult | null> {
   if (!token) return null;
 
-  const row = await db().query.sessions.findFirst({
-    where: eq(schema.sessions.token, token),
-    columns: { userId: true, expiresAt: true },
-  });
+  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists) — OXA-1515
+  // Resolves a session token → userId. This IS the resolution step: the
+  // sessions table is a global auth table (no RLS) and the userId produced here
+  // is the input to every downstream scope resolver. No tenant context exists
+  // until after this function returns.
+  const row = await withSystemDb((tx) =>
+    tx.query.sessions.findFirst({
+      where: eq(schema.sessions.token, token),
+      columns: { userId: true, expiresAt: true },
+    }),
+  );
 
   if (!row) return null;
   if (row.expiresAt.getTime() < Date.now()) return null;

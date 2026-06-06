@@ -20,6 +20,12 @@ vi.mock("@oxagen/database", () => ({
       workspaces: { findFirst: mocks.workspaceFindFirst },
     },
   }),
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      query: {
+        workspaces: { findFirst: mocks.workspaceFindFirst },
+      },
+    }),
   schema: {
     workspaces: { id: "id" },
   },

@@ -23,6 +23,7 @@
     "@oxagen/inngest-functions": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
+    "@oxagen/tenancy": "workspace:*",
     "drizzle-orm": "0.45.2",
     "hono": "4.12.23",
     "pino": "9.14.0",

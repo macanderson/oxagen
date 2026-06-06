@@ -1,8 +1,11 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
+
+// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { planLabelFrom } from "@/lib/plan-label";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageContextProvider } from "@/lib/page-context";
@@ -33,39 +36,45 @@ export default async function OrgLayout({
   await assertOrgMember(org.id, session.user.id);
 
   const [orgRows, workspacesRows] = await Promise.all([
-    // Orgs the user belongs to, enriched for the org picker: avatar + the
-    // active subscription's plan tier (LEFT JOINed, so a single query covers all
-    // the user's orgs — no per-org billing round-trip). At most one active
-    // subscription per org (partial unique index), so the join can't multiply
-    // rows. Tier falls back to the legacy plan_type, then "free", in plan-label.
-    db()
-      .select({
-        publicId: schema.organizations.publicId,
-        slug: schema.organizations.slug,
-        name: schema.organizations.name,
-        avatarUrl: schema.organizations.avatarUrl,
-        planType: schema.organizations.planType,
-        subscriptionTier: schema.plans.tier,
-      })
-      .from(schema.orgUsers)
-      .innerJoin(schema.organizations, eq(schema.organizations.id, schema.orgUsers.orgId))
-      .leftJoin(
-        schema.subscriptions,
-        and(
-          eq(schema.subscriptions.orgId, schema.organizations.id),
-          eq(schema.subscriptions.status, "active"),
+    // Cross-tenant read: the user's full org list (pre-scope, identity resolution).
+    // withSystemDb bypasses RLS deliberately — OXA-1515.
+    withSystemDb((tx) =>
+      tx
+        .select({
+          publicId: schema.organizations.publicId,
+          slug: schema.organizations.slug,
+          name: schema.organizations.name,
+          avatarUrl: schema.organizations.avatarUrl,
+          planType: schema.organizations.planType,
+          subscriptionTier: schema.plans.tier,
+        })
+        .from(schema.orgUsers)
+        .innerJoin(schema.organizations, eq(schema.organizations.id, schema.orgUsers.orgId))
+        .leftJoin(
+          schema.subscriptions,
+          and(
+            eq(schema.subscriptions.orgId, schema.organizations.id),
+            eq(schema.subscriptions.status, "active"),
+          ),
+        )
+        .leftJoin(schema.plans, eq(schema.plans.id, schema.subscriptions.planId))
+        .where(eq(schema.orgUsers.userId, session.user.id)),
+    ),
+    // Org-scoped workspace list — sentinel workspace id (org_only table). — OXA-1515
+    runInTenantScope(
+      { orgId: org.id, workspaceId: ORG_ONLY_WS },
+      () =>
+        withTenantDb((tx) =>
+          tx
+            .select({
+              publicId: schema.workspaces.publicId,
+              slug: schema.workspaces.slug,
+              name: schema.workspaces.name,
+            })
+            .from(schema.workspaces)
+            .where(eq(schema.workspaces.orgId, org.id)),
         ),
-      )
-      .leftJoin(schema.plans, eq(schema.plans.id, schema.subscriptions.planId))
-      .where(eq(schema.orgUsers.userId, session.user.id)),
-    db()
-      .select({
-        publicId: schema.workspaces.publicId,
-        slug: schema.workspaces.slug,
-        name: schema.workspaces.name,
-      })
-      .from(schema.workspaces)
-      .where(eq(schema.workspaces.orgId, org.id)),
+    ),
   ]);
 
   // Shape the org rows for the picker: a flat { …identity, avatarUrl, planLabel }.

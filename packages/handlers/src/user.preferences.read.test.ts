@@ -11,6 +11,12 @@ vi.mock("@oxagen/database", () => ({
       userPreferences: { findFirst: mocks.prefsFindFirst },
     },
   }),
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      query: {
+        userPreferences: { findFirst: mocks.prefsFindFirst },
+      },
+    }),
   schema: {
     userPreferences: { userId: "userId" },
   },

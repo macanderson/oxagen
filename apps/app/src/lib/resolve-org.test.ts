@@ -16,18 +16,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // so any variables they reference must be declared with vi.hoisted() first.
 // ---------------------------------------------------------------------------
 
-const { notFoundMock, mockRows, mockDb } = vi.hoisted(() => {
+const { notFoundMock, mockRows, mockWithSystemDb } = vi.hoisted(() => {
   const mockRows: unknown[] = [];
   const mockLimit = vi.fn(() => Promise.resolve(mockRows));
   const mockWhere = vi.fn(() => ({ limit: mockLimit }));
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
-  const mockDb = vi.fn(() => ({ select: mockSelect }));
+  // withSystemDb passes a tx to its callback; the tx has the same Drizzle
+  // query-builder shape. We invoke the callback immediately with a mock tx.
+  const mockTx = { select: mockSelect };
+  const mockWithSystemDb = vi.fn((fn: (tx: unknown) => Promise<unknown>) =>
+    fn(mockTx),
+  );
   const notFoundMock = vi.fn(() => {
     throw new Error("NEXT_NOT_FOUND");
   });
 
-  return { notFoundMock, mockRows, mockDb };
+  return { notFoundMock, mockRows, mockWithSystemDb };
 });
 
 // ---------------------------------------------------------------------------
@@ -40,15 +45,12 @@ vi.mock("next/navigation", () => ({
   notFound: notFoundMock,
 }));
 
-// Drizzle query builder mock — returns a chainable object that resolves to rows.
-vi.mock("@oxagen/database/client", () => ({
-  db: mockDb,
-}));
-
 vi.mock("@oxagen/database", () => ({
+  withSystemDb: mockWithSystemDb,
   schema: {
     organizations: { slug: "slug_col", id: "id_col" },
     workspaces: { orgId: "org_id_col", slug: "ws_slug_col", id: "ws_id_col" },
+    orgUsers: { orgId: "org_id_col", userId: "user_id_col", id: "id_col", role: "role_col" },
   },
 }));
 
@@ -137,5 +139,51 @@ describe("resolveWorkspace", () => {
     const { eq, and } = await import("drizzle-orm");
     expect(eq).toHaveBeenCalledTimes(2);
     expect(and).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// assertBillingManager
+// ---------------------------------------------------------------------------
+
+// The canonical set of roles allowed to manage billing.
+// Mirrors BILLING_MANAGER_ROLES in resolve-org.ts — any drift causes a test failure.
+const BILLING_MANAGER_ROLES = new Set(["owner", "admin", "billing"]);
+const NON_MANAGER_ROLES = ["member", "viewer", "guest", "unknown"];
+
+import { assertBillingManager } from "./resolve-org";
+
+describe("assertBillingManager", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Derive iteration from the imported set so this test never drifts.
+  for (const role of BILLING_MANAGER_ROLES) {
+    it(`role '${role}' passes without calling notFound()`, async () => {
+      setMockRows([{ role }]);
+      await expect(assertBillingManager("org-1", "user-1")).resolves.toBeUndefined();
+      expect(notFoundMock).not.toHaveBeenCalled();
+    });
+  }
+
+  for (const role of NON_MANAGER_ROLES) {
+    it(`role '${role}' → notFound()`, async () => {
+      setMockRows([{ role }]);
+      await expect(assertBillingManager("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(notFoundMock).toHaveBeenCalledOnce();
+    });
+  }
+
+  it("no row (non-member) → notFound()", async () => {
+    setMockRows([]);
+    await expect(assertBillingManager("org-1", "user-x")).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(notFoundMock).toHaveBeenCalledOnce();
+  });
+
+  it("null role field → notFound()", async () => {
+    setMockRows([{ role: null }]);
+    await expect(assertBillingManager("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(notFoundMock).toHaveBeenCalledOnce();
   });
 });

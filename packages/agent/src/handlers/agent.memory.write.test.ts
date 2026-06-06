@@ -58,8 +58,9 @@ describe("agent.memory.write handler", () => {
     });
     expect(mocks.writeMemoryMock).toHaveBeenCalledTimes(1);
     const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(arg.orgId).toBe("ten_1");
-    expect(arg.workspaceId).toBe("ws_1");
+    // orgId/workspaceId are no longer passed directly — scopedSession reads them from the ALS scope
+    expect(arg.orgId).toBeUndefined();
+    expect(arg.workspaceId).toBeUndefined();
     expect(arg.nodeRef).toBe("Function:foo");
     expect(arg.weight).toBe("high");
     expect(arg.kind).toBe("constraint");

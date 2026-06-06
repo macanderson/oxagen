@@ -1,7 +1,10 @@
 import { desc, eq } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg } from "@/lib/resolve-org";
+
+// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { MonitorDot, Globe, CircleSlash } from "lucide-react";
 import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,23 +22,30 @@ export default async function AccessSessionsPage({
   const { orgSlug } = await params;
   const tenant = await resolveOrg(orgSlug);
 
+  // Org-only route — sentinel workspaceId. — OXA-1515
   const sessions = await (async () => {
     try {
-      return await db()
-        .select({
-          publicId: schema.iamSessions.publicId,
-          principalId: schema.iamSessions.principalId,
-          startedAt: schema.iamSessions.startedAt,
-          expiresAt: schema.iamSessions.expiresAt,
-          ip: schema.iamSessions.ip,
-          userAgent: schema.iamSessions.userAgent,
-          revokedAt: schema.iamSessions.revokedAt,
-          revokeReason: schema.iamSessions.revokeReason,
-        })
-        .from(schema.iamSessions)
-        .where(eq(schema.iamSessions.orgId, tenant.id))
-        .orderBy(desc(schema.iamSessions.startedAt))
-        .limit(50);
+      return await runInTenantScope(
+        { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+        () =>
+          withTenantDb((tx) =>
+            tx
+              .select({
+                publicId: schema.iamSessions.publicId,
+                principalId: schema.iamSessions.principalId,
+                startedAt: schema.iamSessions.startedAt,
+                expiresAt: schema.iamSessions.expiresAt,
+                ip: schema.iamSessions.ip,
+                userAgent: schema.iamSessions.userAgent,
+                revokedAt: schema.iamSessions.revokedAt,
+                revokeReason: schema.iamSessions.revokeReason,
+              })
+              .from(schema.iamSessions)
+              .where(eq(schema.iamSessions.orgId, tenant.id))
+              .orderBy(desc(schema.iamSessions.startedAt))
+              .limit(50),
+          ),
+      );
     } catch {
       return [];
     }

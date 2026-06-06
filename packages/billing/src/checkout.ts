@@ -1,4 +1,4 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import { billingProvider } from "./client";
@@ -53,23 +53,26 @@ export async function createCheckoutSession(
   input: CreateCheckoutSessionInput,
 ): Promise<{ url: string; sessionId: string }> {
   const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
-  const d = db();
 
   // Guard: refuse to create a second subscription when one is active.
-  const existingActive = await d.query.subscriptions.findFirst({
-    where: and(
-      eq(schema.subscriptions.orgId, input.orgId),
-      sql`${schema.subscriptions.status} IN ('active','trialing')`,
-    ),
-    columns: { stripeSubscriptionId: true },
+  const { existingActive, plan } = await withTenantDb(async (tx) => {
+    const active = await tx.query.subscriptions.findFirst({
+      where: and(
+        eq(schema.subscriptions.orgId, input.orgId),
+        sql`${schema.subscriptions.status} IN ('active','trialing')`,
+      ),
+      columns: { stripeSubscriptionId: true },
+    });
+    const p = await tx.query.plans.findFirst({
+      where: eq(schema.plans.slug, input.planSlug),
+    });
+    return { existingActive: active, plan: p };
   });
+
   if (existingActive) {
     throw new ActiveSubscriptionError(existingActive.stripeSubscriptionId);
   }
 
-  const plan = await d.query.plans.findFirst({
-    where: eq(schema.plans.slug, input.planSlug),
-  });
   if (!plan) throw new Error(`plan ${input.planSlug} not found`);
 
   const priceId =

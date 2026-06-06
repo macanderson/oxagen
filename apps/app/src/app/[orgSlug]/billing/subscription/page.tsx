@@ -1,7 +1,11 @@
 import { eq, and, desc, sql } from "drizzle-orm";
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import type { CreditLedgerRow, PlanRow, SubscriptionRow, CreditBalanceRow } from "@oxagen/database";
 import { resolveOrg } from "@/lib/resolve-org";
+
+// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { getSession } from "@/lib/session";
 import { SubscriptionSummary } from "@/components/billing/subscription-summary";
 import { CreditBalance } from "@/components/billing/credit-balance";
@@ -31,6 +35,7 @@ export default async function BillingSubscriptionPage({
   const [tenant, session] = await Promise.all([resolveOrg(orgSlug), getSession()]);
 
   // Batch 1: all queries keyed solely on tenant/session ids — run concurrently.
+  // All org-scoped reads use sentinel workspaceId (org-only tables). — OXA-1515
   const [
     viewerRoleRow,
     subscriptionRow,
@@ -40,54 +45,78 @@ export default async function BillingSubscriptionPage({
   ] = await Promise.all([
     // Viewer's role for billing-control gating.
     session?.user
-      ? db()
-          .select({ role: schema.orgUsers.role })
-          .from(schema.orgUsers)
-          .where(
-            and(
-              eq(schema.orgUsers.orgId, tenant.id),
-              eq(schema.orgUsers.userId, session.user.id),
+      ? runInTenantScope(
+          { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+          () =>
+            withTenantDb((tx) =>
+              tx
+                .select({ role: schema.orgUsers.role })
+                .from(schema.orgUsers)
+                .where(
+                  and(
+                    eq(schema.orgUsers.orgId, tenant.id),
+                    eq(schema.orgUsers.userId, session.user.id),
+                  ),
+                )
+                .limit(1)
+                .then((rows) => rows[0] ?? null),
             ),
-          )
-          .limit(1)
-          .then((rows) => rows[0] ?? null)
+        )
       : Promise.resolve(null),
     safeQuery(
       async () =>
         (
-          await db()
-            .select()
-            .from(schema.subscriptions)
-            .where(
-              and(
-                eq(schema.subscriptions.orgId, tenant.id),
-                sql`${schema.subscriptions.status} in ('active','trialing','past_due')`,
+          await runInTenantScope(
+            { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+            () =>
+              withTenantDb((tx) =>
+                tx
+                  .select()
+                  .from(schema.subscriptions)
+                  .where(
+                    and(
+                      eq(schema.subscriptions.orgId, tenant.id),
+                      sql`${schema.subscriptions.status} in ('active','trialing','past_due')`,
+                    ),
+                  )
+                  .orderBy(desc(schema.subscriptions.createdAt))
+                  .limit(1),
               ),
-            )
-            .orderBy(desc(schema.subscriptions.createdAt))
-            .limit(1)
+          )
         )[0] ?? null,
       null as SubscriptionRow | null,
     ),
     safeQuery(
       async () =>
         (
-          await db()
-            .select()
-            .from(schema.creditBalances)
-            .where(eq(schema.creditBalances.orgId, tenant.id))
-            .limit(1)
+          await runInTenantScope(
+            { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+            () =>
+              withTenantDb((tx) =>
+                tx
+                  .select()
+                  .from(schema.creditBalances)
+                  .where(eq(schema.creditBalances.orgId, tenant.id))
+                  .limit(1),
+              ),
+          )
         )[0] ?? null,
       null as CreditBalanceRow | null,
     ),
     safeQuery(
       () =>
-        db()
-          .select()
-          .from(schema.creditLedger)
-          .where(eq(schema.creditLedger.orgId, tenant.id))
-          .orderBy(desc(schema.creditLedger.createdAt))
-          .limit(10),
+        runInTenantScope(
+          { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+          () =>
+            withTenantDb((tx) =>
+              tx
+                .select()
+                .from(schema.creditLedger)
+                .where(eq(schema.creditLedger.orgId, tenant.id))
+                .orderBy(desc(schema.creditLedger.createdAt))
+                .limit(10),
+            ),
+        ),
       [] as CreditLedgerRow[],
     ),
     fetchPublicPlans(),
@@ -107,13 +136,17 @@ export default async function BillingSubscriptionPage({
   ] = await Promise.all([
     subscriptionRow
       ? safeQuery(
+          // billing.plans is a shared platform catalog (no per-tenant rows);
+          // withSystemDb bypasses RLS deliberately. — OXA-1515
           async () =>
             (
-              await db()
-                .select()
-                .from(schema.plans)
-                .where(eq(schema.plans.id, subscriptionRow.planId))
-                .limit(1)
+              await withSystemDb((tx) =>
+                tx
+                  .select()
+                  .from(schema.plans)
+                  .where(eq(schema.plans.id, subscriptionRow.planId))
+                  .limit(1),
+              )
             )[0] ?? null,
           null as PlanRow | null,
         )

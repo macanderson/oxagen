@@ -81,6 +81,8 @@ const dbStateHolder: { instance: ReturnType<typeof makeDb> | null } = { instance
 
 vi.mock("@oxagen/database", () => ({
   db: () => dbStateHolder.instance,
+  withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbStateHolder.instance),
+  withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbStateHolder.instance),
   schema: {
     orgBillingSettings: {
       orgId: "orgBillingSettings.orgId",
@@ -91,6 +93,7 @@ vi.mock("@oxagen/database", () => ({
     subscriptions: {
       orgId: "subscriptions.orgId",
       status: "subscriptions.status",
+      stripeSubscriptionId: "subscriptions.stripeSubscriptionId",
     },
   },
 }));

@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
 import { getSessionOrRedirect } from "@/lib/session";
 import { ProfileForm } from "./profile-form";
 import { fetchConnectedAccountsState } from "./security-action";
@@ -10,17 +9,21 @@ export default async function AccountProfilePage() {
   const session = await getSessionOrRedirect();
 
   // Fetch profile data and linked accounts in parallel.
+  // auth.users is global (no tenant scope) — withSystemDb bypasses RLS
+  // deliberately. — OXA-1515
   const reqHeaders = await headers();
   const [rows, connectedAccountsState] = await Promise.all([
-    db()
-      .select({
-        email: schema.users.email,
-        displayName: schema.users.displayName,
-        avatarUrl: schema.users.avatarUrl,
-      })
-      .from(schema.users)
-      .where(eq(schema.users.id, session.user.id))
-      .limit(1),
+    withSystemDb((tx) =>
+      tx
+        .select({
+          email: schema.users.email,
+          displayName: schema.users.displayName,
+          avatarUrl: schema.users.avatarUrl,
+        })
+        .from(schema.users)
+        .where(eq(schema.users.id, session.user.id))
+        .limit(1),
+    ),
     fetchConnectedAccountsState(session.user.id, reqHeaders),
   ]);
 

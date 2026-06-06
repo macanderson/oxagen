@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { conversationList } from "@oxagen/oxagen/contracts/conversation.list";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { and, desc, eq, isNotNull, isNull, lt } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -12,8 +12,6 @@ export const conversationListHandler: CapabilityHandler<typeof conversationList>
     logger.warn({ orgId: ctx.orgId }, "conversation.list: rejected — no authenticated user");
     throw new Error("conversation.list requires an authenticated user");
   }
-
-  const d = db();
 
   const conditions = [
     eq(schema.conversations.orgId, ctx.orgId),
@@ -34,19 +32,21 @@ export const conversationListHandler: CapabilityHandler<typeof conversationList>
 
   const fetchLimit = input.limit + 1;
 
-  const rows = await d
-    .select({
-      publicId: schema.conversations.publicId,
-      title: schema.conversations.title,
-      status: schema.conversations.status,
-      archivedAt: schema.conversations.archivedAt,
-      createdAt: schema.conversations.createdAt,
-      updatedAt: schema.conversations.updatedAt,
-    })
-    .from(schema.conversations)
-    .where(and(...conditions))
-    .orderBy(desc(schema.conversations.updatedAt))
-    .limit(fetchLimit);
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({
+        publicId: schema.conversations.publicId,
+        title: schema.conversations.title,
+        status: schema.conversations.status,
+        archivedAt: schema.conversations.archivedAt,
+        createdAt: schema.conversations.createdAt,
+        updatedAt: schema.conversations.updatedAt,
+      })
+      .from(schema.conversations)
+      .where(and(...conditions))
+      .orderBy(desc(schema.conversations.updatedAt))
+      .limit(fetchLimit),
+  );
 
   let nextCursor: string | null = null;
   let conversations = rows;

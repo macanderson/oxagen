@@ -699,6 +699,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     staticValue: { "*": "true" },
   },
 
+  // ── Security / RLS enforcement ───────────────────────────────────────────────
+  TENANT_RLS_ENFORCEMENT_ENABLED: {
+    group: "Security",
+    description:
+      "When true, Postgres RLS policies filter by org/workspace. Default off " +
+      "during seeding; withTenantDb sets app.rls_bypass while off. Flip to true " +
+      "per env after db.query.unscoped telemetry reads zero.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "false",
+  },
+
   // ── Sandbox runtime ───────────────────────────────────────────────────────────
   SANDBOX_ENABLED: {
     group: "Sandbox",

@@ -24,6 +24,21 @@ const config: XmcpConfig = {
       ".mjs": [".mts", ".mjs"],
       ".cjs": [".cts", ".cjs"],
     };
+
+    // Keep `dockerode` (→ docker-modem → ssh2, which ships native .node files
+    // rspack can't parse) out of the bundle. It reaches here via @oxagen/sandbox
+    // (imported by the agent handlers), but the docker sandbox driver never runs
+    // in the deployed MCP server — SANDBOX_DRIVER is vercel/modal in prod — and
+    // createDockerSandbox loads dockerode lazily, so this external is never
+    // resolved at runtime. Merge with any externals xmcp already configured.
+    const dockerExternal = { dockerode: "commonjs dockerode" };
+    const existing = config.externals;
+    config.externals = Array.isArray(existing)
+      ? [...existing, dockerExternal]
+      : existing
+        ? [existing, dockerExternal]
+        : [dockerExternal];
+
     return config;
   },
   typescript: {

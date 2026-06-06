@@ -1,9 +1,12 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { getOrgSeatUsage } from "@oxagen/billing";
 import { resolveOrg } from "@/lib/resolve-org";
 import { getSession } from "@/lib/session";
+
+// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { MembersPanel } from "@/components/workspace/members-panel";
 
 export default async function MembersPage({
@@ -14,53 +17,72 @@ export default async function MembersPage({
   const { orgSlug } = await params;
   const [tenant, session] = await Promise.all([resolveOrg(orgSlug), getSession()]);
 
+  // All queries below are org-only — sentinel workspaceId. — OXA-1515
   // Viewer's role in this org — for UI gating of mutating controls.
   const viewerRow = session?.user
     ? (
-        await db()
-          .select({ role: schema.orgUsers.role })
-          .from(schema.orgUsers)
-          .where(
-            and(
-              eq(schema.orgUsers.orgId, tenant.id),
-              eq(schema.orgUsers.userId, session.user.id),
+        await runInTenantScope(
+          { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+          () =>
+            withTenantDb((tx) =>
+              tx
+                .select({ role: schema.orgUsers.role })
+                .from(schema.orgUsers)
+                .where(
+                  and(
+                    eq(schema.orgUsers.orgId, tenant.id),
+                    eq(schema.orgUsers.userId, session.user.id),
+                  ),
+                )
+                .limit(1),
             ),
-          )
-          .limit(1)
+        )
       )[0] ?? null
     : null;
 
   const viewerRole = viewerRow?.role ?? "member";
 
   const [memberRows, pendingInvitations, seatUsage] = await Promise.all([
-    db()
-      .select({
-        publicId: schema.orgUsers.publicId,
-        userId: schema.orgUsers.userId,
-        role: schema.orgUsers.role,
-        joinedAt: schema.orgUsers.joinedAt,
-        email: schema.users.email,
-        displayName: schema.users.displayName,
-      })
-      .from(schema.orgUsers)
-      .innerJoin(schema.users, eq(schema.users.id, schema.orgUsers.userId))
-      .where(eq(schema.orgUsers.orgId, tenant.id)),
-
-    db()
-      .select({
-        publicId: schema.invitations.publicId,
-        email: schema.invitations.email,
-        role: schema.invitations.role,
-        createdAt: schema.invitations.createdAt,
-        expiresAt: schema.invitations.expiresAt,
-      })
-      .from(schema.invitations)
-      .where(
-        and(
-          eq(schema.invitations.orgId, tenant.id),
-          eq(schema.invitations.status, "pending"),
+    runInTenantScope(
+      { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+      () =>
+        withTenantDb((tx) =>
+          tx
+            .select({
+              publicId: schema.orgUsers.publicId,
+              userId: schema.orgUsers.userId,
+              role: schema.orgUsers.role,
+              joinedAt: schema.orgUsers.joinedAt,
+              email: schema.users.email,
+              displayName: schema.users.displayName,
+            })
+            .from(schema.orgUsers)
+            .innerJoin(schema.users, eq(schema.users.id, schema.orgUsers.userId))
+            .where(eq(schema.orgUsers.orgId, tenant.id)),
         ),
-      ),
+    ),
+
+    runInTenantScope(
+      { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+      () =>
+        withTenantDb((tx) =>
+          tx
+            .select({
+              publicId: schema.invitations.publicId,
+              email: schema.invitations.email,
+              role: schema.invitations.role,
+              createdAt: schema.invitations.createdAt,
+              expiresAt: schema.invitations.expiresAt,
+            })
+            .from(schema.invitations)
+            .where(
+              and(
+                eq(schema.invitations.orgId, tenant.id),
+                eq(schema.invitations.status, "pending"),
+              ),
+            ),
+        ),
+    ),
 
     getOrgSeatUsage(tenant.id),
   ]);

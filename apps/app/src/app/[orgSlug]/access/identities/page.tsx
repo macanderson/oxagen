@@ -1,7 +1,10 @@
 import { desc, eq } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg } from "@/lib/resolve-org";
+
+// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import type { LucideIcon } from "lucide-react";
 import { Fingerprint, Bot, User, Cpu } from "lucide-react";
 import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,22 +30,29 @@ export default async function AccessIdentitiesPage({
   const { orgSlug } = await params;
   const tenant = await resolveOrg(orgSlug);
 
+  // Org-only route — sentinel workspaceId. — OXA-1515
   const principals = await (async () => {
     try {
-      return await db()
-        .select({
-          publicId: schema.principals.publicId,
-          kind: schema.principals.kind,
-          displayName: schema.principals.displayName,
-          status: schema.principals.status,
-          mfaStatus: schema.principals.mfaStatus,
-          idpSubject: schema.principals.idpSubject,
-          createdAt: schema.principals.createdAt,
-        })
-        .from(schema.principals)
-        .where(eq(schema.principals.orgId, tenant.id))
-        .orderBy(desc(schema.principals.createdAt))
-        .limit(50);
+      return await runInTenantScope(
+        { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+        () =>
+          withTenantDb((tx) =>
+            tx
+              .select({
+                publicId: schema.principals.publicId,
+                kind: schema.principals.kind,
+                displayName: schema.principals.displayName,
+                status: schema.principals.status,
+                mfaStatus: schema.principals.mfaStatus,
+                idpSubject: schema.principals.idpSubject,
+                createdAt: schema.principals.createdAt,
+              })
+              .from(schema.principals)
+              .where(eq(schema.principals.orgId, tenant.id))
+              .orderBy(desc(schema.principals.createdAt))
+              .limit(50),
+          ),
+      );
     } catch {
       return [];
     }

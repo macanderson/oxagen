@@ -25,18 +25,28 @@ const fakeTx = {
   },
 };
 
+// readFanout uses a tx with .select(); dispatchFanout uses a tx with .insert().
+// We compose a unified fake tx so withTenantDb can serve both code paths.
+const fakeSelectDb = {
+  from: (tbl: { _name: string }) => {
+    if (tbl._name === "subagentRuns") {
+      return { where: async () => mocks.runsRows };
+    }
+    return { where: () => ({ limit: mocks.limitFanout }) };
+  },
+};
+const fakeUnifiedTx = {
+  insert: fakeTx.insert.bind(fakeTx),
+  select: () => fakeSelectDb,
+};
+
 vi.mock("@oxagen/database", () => ({
   db: () => ({
     transaction: async (fn: (tx: typeof fakeTx) => Promise<unknown>) => fn(fakeTx),
-    select: () => ({
-      from: (tbl: { _name: string }) => {
-        if (tbl._name === "subagentRuns") {
-          return { where: async () => mocks.runsRows };
-        }
-        return { where: () => ({ limit: mocks.limitFanout }) };
-      },
-    }),
+    select: () => fakeSelectDb,
   }),
+  withTenantDb: async (fn: (tx: typeof fakeUnifiedTx) => Promise<unknown>) =>
+    fn(fakeUnifiedTx),
   schema: {
     subagentFanouts: { _name: "subagentFanouts", id: "id", orgId: "orgId" },
     subagentRuns: { _name: "subagentRuns", fanoutId: "fanoutId" },

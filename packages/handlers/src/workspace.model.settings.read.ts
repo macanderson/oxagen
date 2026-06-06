@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceModelSettingsRead } from "@oxagen/oxagen/contracts/workspace.model.settings.read";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -12,17 +12,17 @@ export const workspaceModelSettingsReadHandler: CapabilityHandler<
     throw new Error("workspace.model.settings.read requires a workspace context");
   }
 
-  const d = db();
-
-  const row = await d.query.workspaces.findFirst({
-    where: eq(schema.workspaces.id, ctx.workspaceId),
-    columns: {
-      defaultTextTier: true,
-      defaultTextModel: true,
-      defaultImageModel: true,
-      defaultVideoModel: true,
-    },
-  });
+  const row = await withTenantDb((tx) =>
+    tx.query.workspaces.findFirst({
+      where: eq(schema.workspaces.id, ctx.workspaceId),
+      columns: {
+        defaultTextTier: true,
+        defaultTextModel: true,
+        defaultImageModel: true,
+        defaultVideoModel: true,
+      },
+    }),
+  );
 
   if (!row) {
     logger.info(

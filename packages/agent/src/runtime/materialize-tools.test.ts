@@ -39,6 +39,28 @@ vi.mock("@oxagen/oxagen", () => ({
   getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
 }));
 
+// Stub @oxagen/database so the MCP server row query — run through withTenantDb
+// inside materialize-tools — returns no rows by default without a real DB.
+// db() is a hoisted vi.fn that withTenantDb routes its tx through, so individual
+// tests can inject rows via vi.mocked(db).mockReturnValue(...).
+const dbMocks = vi.hoisted(() => {
+  const emptyDb = {
+    select: () => ({ from: () => ({ where: async () => [] }) }),
+  };
+  return { db: vi.fn((): unknown => emptyDb) };
+});
+vi.mock("@oxagen/database", () => ({
+  db: dbMocks.db,
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(dbMocks.db()),
+  schema: {
+    mcpServers: {
+      orgId: "orgId",
+      workspaceId: "workspaceId",
+      healthStatus: "healthStatus",
+    },
+  },
+}));
+
 vi.mock("@oxagen/oxagen/kernel", () => ({
   invoke: vi.fn(async () => ({ ok: true })),
   authorizeExternalCapability: vi.fn(async () => ({ allowed: true, outcome: "allow", reason: null })),
@@ -49,25 +71,6 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
 vi.mock("@oxagen/sandbox", () => ({
   isSandboxAvailable: vi.fn(() => false),
 }));
-
-// Stub the database so MCP server rows can be returned without a real DB.
-vi.mock("@oxagen/database", () => {
-  const mockSelect = vi.fn();
-  const mockFrom = vi.fn(() => ({ where: vi.fn(async () => []) }));
-  mockSelect.mockReturnValue({ from: mockFrom });
-  return {
-    db: vi.fn(() => ({ select: mockSelect })),
-    schema: {
-      mcpServers: {
-        orgId: "orgId",
-        workspaceId: "workspaceId",
-        healthStatus: "healthStatus",
-      },
-    },
-    eq: vi.fn((_a: unknown, _b: unknown) => `eq_${String(_b)}`),
-    and: vi.fn((...args: unknown[]) => args),
-  };
-});
 
 // Stub the MCP client so tests can inject fake tool executes.
 vi.mock("../dispatch/mcp-client", () => ({
@@ -108,7 +111,8 @@ vi.mock("@oxagen/telemetry", () => ({
 import { materializeTools } from "./materialize-tools";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
 import { connectMcp, materializeMcpTools } from "../dispatch/mcp-client";
-import { db } from "@oxagen/database";
+// Note: the @oxagen/database `db` is driven via `dbMocks.db` (hoisted above) —
+// we do not import the banned raw `db` symbol directly into the test.
 
 const CTX = {
   orgId: "ten_1",
@@ -342,7 +346,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     // Return one healthy MCP server row.
     const mockWhere = vi.fn(async () => [MCP_SERVER]);
     const mockFrom = vi.fn(() => ({ where: mockWhere }));
-    vi.mocked(db).mockReturnValue({ select: vi.fn(() => ({ from: mockFrom })) } as unknown as ReturnType<typeof db>);
+    dbMocks.db.mockReturnValue({ select: vi.fn(() => ({ from: mockFrom })) });
 
     // connectMcp returns a stub client; materializeMcpTools returns one tool.
     vi.mocked(connectMcp).mockResolvedValue({} as Awaited<ReturnType<typeof connectMcp>>);

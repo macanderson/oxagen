@@ -1,5 +1,15 @@
 import { inngest } from "../inngest";
-import { db, schema } from "@oxagen/database";
+// tenancy: system bypass via withSystemDb (no tenant on payload) — OXA-1515
+// This is a global cron that iterates ALL active subscriptions across all orgs.
+// There is no orgId/workspaceId on the event.data payload (the event is a
+// scheduled trigger, not a tenant-originated event). The subscription reads and
+// usage-record inserts must therefore run under withSystemDb — both are cross-org
+// operations that cannot be scoped to a single tenant scope.
+// Billing tables are org-only (no workspaceId column) so even the per-subscription
+// inserts cannot enter a full TenantScope. The manual eq(orgId) predicates on
+// the inserts and the inArray(status) filter on the load keep isolation correct
+// for this cron path.
+import { withSystemDb, schema } from "@oxagen/database";
 import { and, gt, inArray } from "drizzle-orm";
 import { sumTokenUsage } from "@oxagen/telemetry";
 import { logger } from "../logger";
@@ -36,36 +46,37 @@ export const billingRollupUsage = inngest.createFunction(
     // Drizzle keyset pagination on subscriptions.id (UUIDv7 ⇒ sortable).
     while (true) {
       const batchRaw = await step.run(`load-batch-${cursor ?? "first"}`, async () => {
-        const d = db();
-        const rows = await d.query.subscriptions.findMany({
-          where: cursor
-            ? and(
-                inArray(schema.subscriptions.status, ACTIVE_STATUSES),
-                // Keyset: only rows after the last id processed. Paired with the
-                // id ordering below this advances every batch — a no-op
-                // predicate here re-fetches page 1 forever (infinite loop).
-                gt(schema.subscriptions.id, cursor),
-              )
-            : inArray(schema.subscriptions.status, ACTIVE_STATUSES),
-          columns: {
-            id: true,
-            orgId: true,
-            currentPeriodStart: true,
-            currentPeriodEnd: true,
-          },
-          // Keyset pagination needs a deterministic order on the cursor column;
-          // without it `cursor = last.id` is meaningless and pages can repeat.
-          orderBy: (subscriptions, { asc }) => [asc(subscriptions.id)],
-          limit: batchSize,
+        return withSystemDb(async (tx) => {
+          const rows = await tx.query.subscriptions.findMany({
+            where: cursor
+              ? and(
+                  inArray(schema.subscriptions.status, ACTIVE_STATUSES),
+                  // Keyset: only rows after the last id processed. Paired with the
+                  // id ordering below this advances every batch — a no-op
+                  // predicate here re-fetches page 1 forever (infinite loop).
+                  gt(schema.subscriptions.id, cursor),
+                )
+              : inArray(schema.subscriptions.status, ACTIVE_STATUSES),
+            columns: {
+              id: true,
+              orgId: true,
+              currentPeriodStart: true,
+              currentPeriodEnd: true,
+            },
+            // Keyset pagination needs a deterministic order on the cursor column;
+            // without it `cursor = last.id` is meaningless and pages can repeat.
+            orderBy: (subscriptions, { asc }) => [asc(subscriptions.id)],
+            limit: batchSize,
+          });
+          // Columns are NOT NULL in the schema (billing.ts:34-41); the ?? guards
+          // only bridge Drizzle's select-result optionality.
+          return rows.map((row) => ({
+            id: row.id ?? "",
+            orgId: row.orgId ?? "",
+            currentPeriodStart: row.currentPeriodStart?.toISOString() ?? "",
+            currentPeriodEnd: row.currentPeriodEnd?.toISOString() ?? "",
+          }));
         });
-        // Columns are NOT NULL in the schema (billing.ts:34-41); the ?? guards
-        // only bridge Drizzle's select-result optionality.
-        return rows.map((row) => ({
-          id: row.id ?? "",
-          orgId: row.orgId ?? "",
-          currentPeriodStart: row.currentPeriodStart?.toISOString() ?? "",
-          currentPeriodEnd: row.currentPeriodEnd?.toISOString() ?? "",
-        }));
       });
       // step.run wraps its result in Inngest's JsonifyObject, which Vercel's
       // declaration-emit tsc infers with all properties optional (local tsc keeps
@@ -90,36 +101,37 @@ export const billingRollupUsage = inngest.createFunction(
             periodEnd,
           });
           if (usage.length === 0) return;
-          const d = db();
-          await d
-            .insert(schema.usageRecords)
-            .values(
-              usage.map((u) => ({
-                orgId: sub.orgId,
-                subscriptionId: sub.id,
-                metric: u.metric,
-                quantity: String(u.quantity),
-                unitCostMicros: 0n,
-                totalCostMicros: u.costMicros,
-                periodStart,
-                periodEnd,
-              })),
-            )
-            // The (subscription_id, metric, period_start, period_end)
-            // unique index makes this rollup idempotent even if the cron
-            // double-fires.
-            .onConflictDoUpdate({
-              target: [
-                schema.usageRecords.subscriptionId,
-                schema.usageRecords.metric,
-                schema.usageRecords.periodStart,
-                schema.usageRecords.periodEnd,
-              ],
-              set: {
-                quantity: schema.usageRecords.quantity,
-                totalCostMicros: schema.usageRecords.totalCostMicros,
-              },
-            });
+          await withSystemDb(async (tx) => {
+            await tx
+              .insert(schema.usageRecords)
+              .values(
+                usage.map((u) => ({
+                  orgId: sub.orgId,
+                  subscriptionId: sub.id,
+                  metric: u.metric,
+                  quantity: String(u.quantity),
+                  unitCostMicros: 0n,
+                  totalCostMicros: u.costMicros,
+                  periodStart,
+                  periodEnd,
+                })),
+              )
+              // The (subscription_id, metric, period_start, period_end)
+              // unique index makes this rollup idempotent even if the cron
+              // double-fires.
+              .onConflictDoUpdate({
+                target: [
+                  schema.usageRecords.subscriptionId,
+                  schema.usageRecords.metric,
+                  schema.usageRecords.periodStart,
+                  schema.usageRecords.periodEnd,
+                ],
+                set: {
+                  quantity: schema.usageRecords.quantity,
+                  totalCostMicros: schema.usageRecords.totalCostMicros,
+                },
+              });
+          });
         });
       }
 

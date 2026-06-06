@@ -23,6 +23,9 @@ const fakeDb = { update: mocks.dbUpdate };
 
 vi.mock("@oxagen/database", () => ({
   db: () => fakeDb,
+  // withTenantDb pass-through: invokes the callback with the same fake tx so
+  // handler assertions keep working without a real transaction or GUC.
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
   schema: {
     backgroundTasks: {
       publicId: "publicId",
@@ -30,6 +33,12 @@ vi.mock("@oxagen/database", () => ({
       id: "id",
     },
   },
+}));
+
+vi.mock("@oxagen/tenancy", () => ({
+  // runInTenantScope pass-through: executes fn() directly in unit tests so
+  // the tenant scope is satisfied without a real ALS entry.
+  runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),
 }));
 
 vi.mock("drizzle-orm", async (importOriginal) => {

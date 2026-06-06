@@ -1,8 +1,11 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
+
+// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { OrgGeneralForm } from "./general-form";
 import { updateOrgGeneralAction } from "./general-action";
 
@@ -20,23 +23,30 @@ export default async function OrgGeneralSettingsPage({
   await assertOrgMember(org.id, session.user.id);
 
   // Fetch the org's mutable fields and the caller's role in a single query.
-  const rows = await db()
-    .select({
-      name: schema.organizations.name,
-      slug: schema.organizations.slug,
-      avatarUrl: schema.organizations.avatarUrl,
-      role: schema.orgUsers.role,
-    })
-    .from(schema.organizations)
-    .innerJoin(
-      schema.orgUsers,
-      and(
-        eq(schema.orgUsers.orgId, schema.organizations.id),
-        eq(schema.orgUsers.userId, session.user.id),
+  // Org-only route — sentinel workspaceId. — OXA-1515
+  const rows = await runInTenantScope(
+    { orgId: org.id, workspaceId: ORG_ONLY_WS },
+    () =>
+      withTenantDb((tx) =>
+        tx
+          .select({
+            name: schema.organizations.name,
+            slug: schema.organizations.slug,
+            avatarUrl: schema.organizations.avatarUrl,
+            role: schema.orgUsers.role,
+          })
+          .from(schema.organizations)
+          .innerJoin(
+            schema.orgUsers,
+            and(
+              eq(schema.orgUsers.orgId, schema.organizations.id),
+              eq(schema.orgUsers.userId, session.user.id),
+            ),
+          )
+          .where(eq(schema.organizations.id, org.id))
+          .limit(1),
       ),
-    )
-    .where(eq(schema.organizations.id, org.id))
-    .limit(1);
+  );
 
   const row = rows[0];
   if (!row) {

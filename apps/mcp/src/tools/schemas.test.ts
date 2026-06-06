@@ -6,13 +6,7 @@
 // runtime is involved — pure schema logic.
 
 import { describe, it, expect } from "vitest";
-import { z } from "zod";
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-function obj(schema: Record<string, z.ZodTypeAny>) {
-  return z.object(schema);
-}
+import { obj } from "./_schema-test-helpers";
 
 // ── organization.create ───────────────────────────────────────────────────────
 

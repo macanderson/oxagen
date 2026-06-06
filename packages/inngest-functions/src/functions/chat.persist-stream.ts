@@ -1,7 +1,8 @@
 import { inngest } from "../inngest";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { insertTokenUsage } from "@oxagen/telemetry";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "../logger";
 
 /**
@@ -19,17 +20,20 @@ export const chatPersistStream = inngest.createFunction(
   async ({ event, step }) => {
     const { orgId, workspaceId, assistantMessageId, content, tokenUsage } = event.data;
 
-    await step.run("update-message", async () => {
-      const d = db();
-      await d
-        .update(schema.messages)
-        .set({
-          content,
-          metadata: { status: "complete" },
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.messages.id, assistantMessageId));
-    });
+    await step.run("update-message", () =>
+      runInTenantScope({ orgId, workspaceId }, () =>
+        withTenantDb((tx) =>
+          tx
+            .update(schema.messages)
+            .set({
+              content,
+              metadata: { status: "complete" },
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.messages.id, assistantMessageId)),
+        ),
+      ),
+    );
 
     if (tokenUsage) {
       await step.run("insert-token-usage", async () => {

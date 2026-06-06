@@ -95,6 +95,79 @@ describe("derivation helpers", () => {
   });
 });
 
+describe("staticValueFor — extended cases", () => {
+  it("wildcard '*' key returns its value for every env", () => {
+    // CLICKHOUSE_DATABASE has staticValue: { "*": "oxagen" }
+    expect(staticValueFor("CLICKHOUSE_DATABASE", "development")).toBe("oxagen");
+    expect(staticValueFor("CLICKHOUSE_DATABASE", "preview")).toBe("oxagen");
+    expect(staticValueFor("CLICKHOUSE_DATABASE", "production")).toBe("oxagen");
+  });
+
+  it("env-specific override: NODE_ENV → 'development' in development, 'production' in production", () => {
+    expect(staticValueFor("NODE_ENV", "development")).toBe("development");
+    expect(staticValueFor("NODE_ENV", "production")).toBe("production");
+  });
+
+  it("env-specific override: NODE_ENV preview → 'production' (preview bakes production value)", () => {
+    expect(staticValueFor("NODE_ENV", "preview")).toBe("production");
+  });
+
+  it("non-static key (valueOrigin='manual') → returns undefined", () => {
+    // DATABASE_URL is manual — no staticValue
+    expect(staticValueFor("DATABASE_URL", "development")).toBeUndefined();
+    expect(staticValueFor("DATABASE_URL", "production")).toBeUndefined();
+  });
+
+  it("unknown key → returns undefined", () => {
+    expect(staticValueFor("__TOTALLY_UNKNOWN_KEY__", "development")).toBeUndefined();
+  });
+});
+
+describe("requiredKeysFor — boundary cases", () => {
+  it("a key scoped services:['api'] must NOT appear for service 'website'", () => {
+    // DATABASE_URL services: ["api", "app", "mcp", "admin"] — not website
+    const websiteProd = requiredKeysFor("website", "production");
+    expect(websiteProd).not.toContain("DATABASE_URL");
+  });
+
+  it("a key scoped services:['api'] must NOT appear for service 'docs'", () => {
+    const docsProd = requiredKeysFor("docs", "production");
+    expect(docsProd).not.toContain("DATABASE_URL");
+  });
+
+  it("BETTER_AUTH_SECRET appears for api+production but not website+production", () => {
+    // Derives from the actual registry — not hardcoded booleans.
+    const apiProd = requiredKeysFor("api", "production");
+    const websiteProd = requiredKeysFor("website", "production");
+    expect(apiProd).toContain("BETTER_AUTH_SECRET");
+    expect(websiteProd).not.toContain("BETTER_AUTH_SECRET");
+  });
+
+  it("result contains only keys whose services include the requested service", () => {
+    for (const svc of SERVICE_NAMES) {
+      const keys = requiredKeysFor(svc, "production");
+      for (const k of keys) {
+        expect(
+          ENV_REGISTRY[k]?.services,
+          `${k} returned for ${svc} but its services array doesn't include it`,
+        ).toContain(svc);
+      }
+    }
+  });
+
+  it("result contains only keys whose requiredIn includes the requested env", () => {
+    for (const svc of SERVICE_NAMES) {
+      const keys = requiredKeysFor(svc, "production");
+      for (const k of keys) {
+        expect(
+          ENV_REGISTRY[k]?.requiredIn,
+          `${k} returned for production but its requiredIn doesn't include production`,
+        ).toContain("production");
+      }
+    }
+  });
+});
+
 describe("renderEnvExample", () => {
   const example = renderEnvExample();
 

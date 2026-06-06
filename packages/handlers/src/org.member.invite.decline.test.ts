@@ -31,6 +31,9 @@ const mockDb = {
 
 vi.mock("@oxagen/database", () => ({
   db: () => mockDb,
+  // withSystemDb passthrough: forward each call to mockDb so existing mock
+  // chains (query.invitations.findFirst, update) apply (OXA-1515).
+  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb),
   schema: {
     invitations: {
       publicId: "invitations.publicId",

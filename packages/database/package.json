@@ -10,7 +10,9 @@
     "./schema": "./src/schema/index.ts",
     "./client": "./src/client.ts",
     "./security": "./src/security.ts",
-    "./seed": "./src/seed.ts"
+    "./seed": "./src/seed.ts",
+    "./tenant": "./src/tenant.ts",
+    "./tenant.mock": "./src/tenant.mock.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -19,10 +21,12 @@
     "migrate": "echo 'drizzle-kit migrate is disabled. Run: pnpm db:migrate (from repo root) — the canonical multi-store runner. The drizzle journal is NOT the source of truth.' && exit 1",
     "studio": "drizzle-kit studio",
     "test:unit": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
+    "@oxagen/tenancy": "workspace:*",
     "drizzle-orm": "0.45.2",
     "postgres": "3.4.9",
     "zod": "3.25.76"

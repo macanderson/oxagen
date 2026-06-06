@@ -16,16 +16,18 @@
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member.role.change";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 import { and, eq, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
 // Lazy singleton inserter — avoids constructing until first invocation.
+// makeSecurityEventInserter() resolves its own db handle (withSystemDb for the
+// no-scope audit write), so it takes no argument.
 let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
 function auditInsert() {
-  if (!_auditInsert) _auditInsert = makeSecurityEventInserter(db());
+  if (!_auditInsert) _auditInsert = makeSecurityEventInserter();
   return _auditInsert;
 }
 
@@ -37,38 +39,38 @@ async function resolveActorPrincipalAndRole(
   orgId: string,
   userId: string,
 ): Promise<{ principalId: string; roleName: string | null }> {
-  const d = db();
+  return withTenantDb(async (tx) => {
+    const [principalRow] = await tx
+      .select({ id: schema.principals.id })
+      .from(schema.principals)
+      .where(
+        and(
+          eq(schema.principals.orgId, orgId),
+          eq(schema.principals.parentUserId, userId),
+          eq(schema.principals.status, "active"),
+        ),
+      )
+      .limit(1);
 
-  const [principalRow] = await d
-    .select({ id: schema.principals.id })
-    .from(schema.principals)
-    .where(
-      and(
-        eq(schema.principals.orgId, orgId),
-        eq(schema.principals.parentUserId, userId),
-        eq(schema.principals.status, "active"),
-      ),
-    )
-    .limit(1);
+    if (!principalRow) return { principalId: "", roleName: null };
 
-  if (!principalRow) return { principalId: "", roleName: null };
+    const [praRow] = await tx
+      .select({ roleName: schema.roles.name })
+      .from(schema.principalRoleAssignments)
+      .innerJoin(schema.roles, eq(schema.roles.id, schema.principalRoleAssignments.roleId))
+      .where(
+        and(
+          eq(schema.principalRoleAssignments.principalId, principalRow.id),
+          eq(schema.principalRoleAssignments.orgId, orgId),
+          eq(schema.roles.scopeKind, "org"),
+          isNull(schema.principalRoleAssignments.workspaceId),
+          isNull(schema.principalRoleAssignments.deletedAt),
+        ),
+      )
+      .limit(1);
 
-  const [praRow] = await d
-    .select({ roleName: schema.roles.name })
-    .from(schema.principalRoleAssignments)
-    .innerJoin(schema.roles, eq(schema.roles.id, schema.principalRoleAssignments.roleId))
-    .where(
-      and(
-        eq(schema.principalRoleAssignments.principalId, principalRow.id),
-        eq(schema.principalRoleAssignments.orgId, orgId),
-        eq(schema.roles.scopeKind, "org"),
-        isNull(schema.principalRoleAssignments.workspaceId),
-        isNull(schema.principalRoleAssignments.deletedAt),
-      ),
-    )
-    .limit(1);
-
-  return { principalId: principalRow.id, roleName: praRow?.roleName ?? null };
+    return { principalId: principalRow.id, roleName: praRow?.roleName ?? null };
+  });
 }
 
 export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleChange> = async (
@@ -97,129 +99,128 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleC
     throw new Error("Forbidden: only org Owners and Admins can change member roles");
   }
 
-  const d = db();
+  // ── Scoped reads + mutation (single tenant-scoped transaction) ────────────────
+  // withTenantDb opens one RLS-scoped transaction for the current org. The IDOR
+  // and last-owner guards plus the role swap all run inside it so they are
+  // atomic and RLS-policied; a guard throw rolls back and propagates a 403/404.
+  // Returns the target's previous role for the audit event below.
+  const previousRole = await withTenantDb(async (tx) => {
+    // ── Resolve target membership (IDOR guard) ──────────────────────────────────
+    const [targetOrgUser] = await tx
+      .select({ id: schema.orgUsers.id, role: schema.orgUsers.role })
+      .from(schema.orgUsers)
+      .where(
+        and(
+          eq(schema.orgUsers.orgId, ctx.orgId),
+          eq(schema.orgUsers.userId, input.targetUserId),
+        ),
+      )
+      .limit(1);
 
-  // ── Resolve target membership (IDOR guard) ────────────────────────────────────
-  const [targetOrgUser] = await d
-    .select({ id: schema.orgUsers.id, role: schema.orgUsers.role })
-    .from(schema.orgUsers)
-    .where(
-      and(
-        eq(schema.orgUsers.orgId, ctx.orgId),
-        eq(schema.orgUsers.userId, input.targetUserId),
-      ),
-    )
-    .limit(1);
+    if (!targetOrgUser) {
+      logger.warn(
+        { orgId: ctx.orgId, targetUserId: input.targetUserId },
+        "org.member.role.change: target not a member of this org",
+      );
+      throw new Error("Not found: target user is not a member of this org");
+    }
 
-  if (!targetOrgUser) {
-    logger.warn(
-      { orgId: ctx.orgId, targetUserId: input.targetUserId },
-      "org.member.role.change: target not a member of this org",
-    );
-    throw new Error("Not found: target user is not a member of this org");
-  }
-
-  const previousRole = targetOrgUser.role;
-
-  // ── Resolve new role row ──────────────────────────────────────────────────────
-  const [newRoleRow] = await d
-    .select({ id: schema.roles.id, name: schema.roles.name })
-    .from(schema.roles)
-    .where(
-      and(
-        eq(schema.roles.orgId, ctx.orgId),
-        eq(schema.roles.scopeKind, "org"),
-        eq(schema.roles.name, input.newRole),
-      ),
-    )
-    .limit(1);
-
-  if (!newRoleRow) {
-    logger.warn(
-      { orgId: ctx.orgId, newRole: input.newRole },
-      "org.member.role.change: requested role does not exist in this org",
-    );
-    throw new Error(
-      `Role '${input.newRole}' does not exist in this org. Valid roles: Owner, Admin, Member, Billing, Compliance.`,
-    );
-  }
-
-  // ── Last-owner guard ─────────────────────────────────────────────────────────
-  // Block demoting the last Owner to prevent org lockout.
-  if (input.newRole !== OWNER_ROLE_NAME) {
-    const [ownerRoleRow] = await d
-      .select({ id: schema.roles.id })
+    // ── Resolve new role row ────────────────────────────────────────────────────
+    const [newRoleRow] = await tx
+      .select({ id: schema.roles.id, name: schema.roles.name })
       .from(schema.roles)
       .where(
         and(
           eq(schema.roles.orgId, ctx.orgId),
           eq(schema.roles.scopeKind, "org"),
-          eq(schema.roles.name, OWNER_ROLE_NAME),
+          eq(schema.roles.name, input.newRole),
         ),
       )
       .limit(1);
 
-    if (ownerRoleRow) {
-      // Find target's principal.
-      const [targetPrincipalRow] = await d
-        .select({ id: schema.principals.id })
-        .from(schema.principals)
+    if (!newRoleRow) {
+      logger.warn(
+        { orgId: ctx.orgId, newRole: input.newRole },
+        "org.member.role.change: requested role does not exist in this org",
+      );
+      throw new Error(
+        `Role '${input.newRole}' does not exist in this org. Valid roles: Owner, Admin, Member, Billing, Compliance.`,
+      );
+    }
+
+    // ── Last-owner guard ──────────────────────────────────────────────────────
+    // Block demoting the last Owner to prevent org lockout.
+    if (input.newRole !== OWNER_ROLE_NAME) {
+      const [ownerRoleRow] = await tx
+        .select({ id: schema.roles.id })
+        .from(schema.roles)
         .where(
           and(
-            eq(schema.principals.orgId, ctx.orgId),
-            eq(schema.principals.parentUserId, input.targetUserId),
+            eq(schema.roles.orgId, ctx.orgId),
+            eq(schema.roles.scopeKind, "org"),
+            eq(schema.roles.name, OWNER_ROLE_NAME),
           ),
         )
         .limit(1);
 
-      if (targetPrincipalRow) {
-        // Check if target currently holds Owner role.
-        const [targetOwnerPra] = await d
-          .select({ id: schema.principalRoleAssignments.id })
-          .from(schema.principalRoleAssignments)
+      if (ownerRoleRow) {
+        // Find target's principal.
+        const [targetPrincipalRow] = await tx
+          .select({ id: schema.principals.id })
+          .from(schema.principals)
           .where(
             and(
-              eq(schema.principalRoleAssignments.principalId, targetPrincipalRow.id),
-              eq(schema.principalRoleAssignments.roleId, ownerRoleRow.id),
-              isNull(schema.principalRoleAssignments.workspaceId),
-              isNull(schema.principalRoleAssignments.deletedAt),
+              eq(schema.principals.orgId, ctx.orgId),
+              eq(schema.principals.parentUserId, input.targetUserId),
             ),
           )
           .limit(1);
 
-        if (targetOwnerPra) {
-          // Count total active owners.
-          const allOwnerPras = await d
+        if (targetPrincipalRow) {
+          // Check if target currently holds Owner role.
+          const [targetOwnerPra] = await tx
             .select({ id: schema.principalRoleAssignments.id })
             .from(schema.principalRoleAssignments)
             .where(
               and(
-                eq(schema.principalRoleAssignments.orgId, ctx.orgId),
+                eq(schema.principalRoleAssignments.principalId, targetPrincipalRow.id),
                 eq(schema.principalRoleAssignments.roleId, ownerRoleRow.id),
                 isNull(schema.principalRoleAssignments.workspaceId),
                 isNull(schema.principalRoleAssignments.deletedAt),
               ),
-            );
+            )
+            .limit(1);
 
-          if (allOwnerPras.length <= 1) {
-            logger.warn(
-              { orgId: ctx.orgId, targetUserId: input.targetUserId, newRole: input.newRole },
-              "org.member.role.change: blocked — would demote last org owner",
-            );
-            throw new Error(
-              "Cannot demote the last org owner. Promote another member to Owner first.",
-            );
+          if (targetOwnerPra) {
+            // Count total active owners.
+            const allOwnerPras = await tx
+              .select({ id: schema.principalRoleAssignments.id })
+              .from(schema.principalRoleAssignments)
+              .where(
+                and(
+                  eq(schema.principalRoleAssignments.orgId, ctx.orgId),
+                  eq(schema.principalRoleAssignments.roleId, ownerRoleRow.id),
+                  isNull(schema.principalRoleAssignments.workspaceId),
+                  isNull(schema.principalRoleAssignments.deletedAt),
+                ),
+              );
+
+            if (allOwnerPras.length <= 1) {
+              logger.warn(
+                { orgId: ctx.orgId, targetUserId: input.targetUserId, newRole: input.newRole },
+                "org.member.role.change: blocked — would demote last org owner",
+              );
+              throw new Error(
+                "Cannot demote the last org owner. Promote another member to Owner first.",
+              );
+            }
           }
         }
       }
     }
-  }
 
-  // ── Transaction: swap role assignment + update legacy column ─────────────────
-  await d.transaction(async (tx) => {
-    // Resolve (or create) the target's principal.
-    let targetPrincipalId: string | null = null;
-
+    // ── Swap role assignment + update legacy column ─────────────────────────────
+    // Resolve the target's principal.
     const [existingPrincipal] = await tx
       .select({ id: schema.principals.id })
       .from(schema.principals)
@@ -231,7 +232,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleC
       )
       .limit(1);
 
-    targetPrincipalId = existingPrincipal?.id ?? null;
+    const targetPrincipalId: string | null = existingPrincipal?.id ?? null;
 
     if (targetPrincipalId) {
       // (a) Soft-delete all existing org-scoped role assignments for this principal.
@@ -285,6 +286,8 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleC
           eq(schema.orgUsers.userId, input.targetUserId),
         ),
       );
+
+    return targetOrgUser.role;
   });
 
   // ── Emit audit event (fire-and-forget; must not fail the capability) ──────────

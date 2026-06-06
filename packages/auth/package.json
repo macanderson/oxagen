@@ -22,6 +22,7 @@
     "@oxagen/database": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
+    "@oxagen/tenancy": "workspace:*",
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {

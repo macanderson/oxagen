@@ -11,14 +11,14 @@ import type { PlanTier } from "@oxagen/oxagen/types";
  * `@oxagen/billing` `SUBSCRIPTION_PLANS`. Keep this the single source for the
  * tier→label mapping so the picker and settings never drift.
  */
-const TIER_LABELS: Record<PlanTier, string> = {
+export const TIER_LABELS: Record<PlanTier, string> = {
   free: "Free",
   build: "Build",
   scale: "Scale",
   enterprise: "Enterprise",
 };
 
-const VALID_TIERS = new Set<PlanTier>(["free", "build", "scale", "enterprise"]);
+export const VALID_TIERS = new Set<PlanTier>(["free", "build", "scale", "enterprise"]);
 
 function isTier(value: string | null | undefined): value is PlanTier {
   return value != null && VALID_TIERS.has(value as PlanTier);

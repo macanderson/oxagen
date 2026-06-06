@@ -519,3 +519,48 @@ isolation and stay pure/fast.
    a source of truth. No per-tenant CH users or row policies (§7.2).
 3. **Manual `eq(orgId)` predicates — DECIDED: keep permanently.** Belt-and-
    suspenders + planner hints; no contract phase that removes them (§8).
+
+## 16. Implementation notes (deltas resolved during build)
+
+Corrections and additions made while implementing this spec — each preserves the
+design intent (one seam, three enforcers, fail-closed):
+
+1. **`withSystemDb` — explicit RLS-bypass wrapper (new).** `FORCE ROW LEVEL
+   SECURITY` is applied unconditionally by the migration, so a raw `db()` call
+   (no GUC) returns zero rows / rejects inserts on policied tables **regardless**
+   of the enforcement flag. The plan's "keep identity-resolution/cron code on raw
+   `db()`" would therefore break auth (api-key/membership resolution), Stripe
+   webhooks, the usage-rollup cron, and the no-scope audit write the moment the
+   migration lands. `withSystemDb` (sets `app.rls_bypass='on'`, no scope required)
+   is the audited, greppable escape hatch for those legitimately cross-/pre-scope
+   operations. Raw `db()` is now ESLint-banned everywhere except the Better Auth
+   adapter, so all access is either `withTenantDb` (scoped) or `withSystemDb`
+   (bypass) — no fragile per-callsite allowlist.
+
+2. **`workspace_only` policy class (new).** `workspace.workspace_users` carries
+   `workspace_id` + `user_id` but **no `org_id`**, so the org-keyed classes can't
+   cover it. Without a policy it had NO RLS → membership rows leak across tenants.
+   Added a `workspace_only` class keyed on `app.current_workspace_id`. The manifest
+   coverage test now also asserts every `workspace_id`-only table is covered.
+
+3. **Superuser/`BYPASSRLS` connection guard (new).** `FORCE` does not subject
+   superusers or `BYPASSRLS` roles to policies — if the app connects as one, RLS
+   silently does nothing. The app must connect as a non-superuser role (e.g.
+   `oxagen_app`); migrations run as the owner. `assertRlsConnectionSafe()` is
+   called at `api`/`app`/`mcp` startup and refuses to boot when enforcing while
+   the role can bypass RLS. The integration suite drops to a non-superuser role
+   via `SET LOCAL ROLE` so policies are actually exercised in CI.
+
+4. **Manifest schema corrections.** IAM tables live in the **`org`** Postgres
+   schema (not `iam.*`). Added `content.generated_assets`, `billing.org_billing_*`,
+   `billing.billing_disputes`, `org.invitations`; removed entries lacking `org_id`
+   (`billing.stripe_event_processing`). 55 tables total.
+
+5. **`.tsx` Server Components covered.** The Postgres callsite sweep also covers
+   `apps/app` RSC pages/layouts (`.tsx`), which read tenant data and were migrated
+   to `runInTenantScope` + `withTenantDb` (workspace routes use the real
+   `{orgId, workspaceId}`; org-only routes use a neutral sentinel workspaceId).
+
+6. **MCP `orgId:""` fix.** Session-token auth that produced an empty org is
+   removed; MCP session tokens are rejected at the edge with `invalid_token`
+   (API-key auth carries the real org/workspace scope).

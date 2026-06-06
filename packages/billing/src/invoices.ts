@@ -1,13 +1,15 @@
-import { db, schema } from "@oxagen/database";
+// tenancy: system bypass via withSystemDb (resolves org from external Stripe invoice id
+// before a tenant scope exists; webhook path, no per-org scope available) — OXA-1515
+import { withSystemDb, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
 import type { BillingInvoice } from "./provider";
+import type { Tx } from "@oxagen/database";
 
-async function resolveOrgIdFromSubscription(invoice: BillingInvoice): Promise<string | null> {
+async function resolveOrgIdFromSubscription(tx: Tx, invoice: BillingInvoice): Promise<string | null> {
   if (!invoice.subscriptionId) return null;
-  const d = db();
-  const row = await d.query.subscriptions.findFirst({
+  const row = await tx.query.subscriptions.findFirst({
     where: eq(schema.subscriptions.stripeSubscriptionId, invoice.subscriptionId),
     columns: { orgId: true, id: true },
   });
@@ -22,24 +24,23 @@ export async function syncInvoiceFromStripe(stripeInvoiceId: string): Promise<vo
   const start = Date.now();
   const invoice = await billingProvider().getInvoice(stripeInvoiceId);
 
-  const orgId = invoice.orgId ?? (await resolveOrgIdFromSubscription(invoice));
-  if (!orgId) {
-    logger.warn({ stripeInvoiceId }, "billing: cannot resolve org_id for invoice, skipping");
-    return; // Can't bind to a tenant yet; skip.
-  }
+  await withSystemDb(async (tx) => {
+    const orgId = invoice.orgId ?? (await resolveOrgIdFromSubscription(tx, invoice));
+    if (!orgId) {
+      logger.warn({ stripeInvoiceId }, "billing: cannot resolve org_id for invoice, skipping");
+      return; // Can't bind to a tenant yet; skip.
+    }
 
-  const d = db();
-  const sub = invoice.subscriptionId
-    ? await d.query.subscriptions.findFirst({
-        where: eq(schema.subscriptions.stripeSubscriptionId, invoice.subscriptionId),
-        columns: { id: true },
-      })
-    : null;
+    const sub = invoice.subscriptionId
+      ? await tx.query.subscriptions.findFirst({
+          where: eq(schema.subscriptions.stripeSubscriptionId, invoice.subscriptionId),
+          columns: { id: true },
+        })
+      : null;
 
-  // Single row upsert + bulk line-item replace inside one transaction; the
-  // line-item delete/insert pair is acceptable because invoices are mirrored
-  // wholesale per event, not partially mutated.
-  await d.transaction(async (tx) => {
+    // Single row upsert + bulk line-item replace inside one transaction; the
+    // line-item delete/insert pair is acceptable because invoices are mirrored
+    // wholesale per event, not partially mutated.
     const inserted = await tx
       .insert(schema.invoices)
       .values({
@@ -99,10 +100,10 @@ export async function syncInvoiceFromStripe(stripeInvoiceId: string): Promise<vo
         })),
       );
     }
-  });
 
-  logger.info(
-    { orgId, stripeInvoiceId, status: invoice.status, amountDueCents: invoice.amountDueCents, durationMs: Date.now() - start },
-    "billing: invoice synced",
-  );
+    logger.info(
+      { orgId, stripeInvoiceId, status: invoice.status, amountDueCents: invoice.amountDueCents, durationMs: Date.now() - start },
+      "billing: invoice synced",
+    );
+  });
 }

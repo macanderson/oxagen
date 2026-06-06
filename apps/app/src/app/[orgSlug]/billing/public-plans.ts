@@ -1,5 +1,8 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { db, schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
+// tenancy: unscoped seam (shared catalog — billing.plans is a platform-wide
+// plan catalog with no per-tenant rows; no org/workspace filter applies;
+// withSystemDb bypasses RLS deliberately) — OXA-1515
 import type { PlanRow } from "@oxagen/database";
 import { SUBSCRIPTION_PLANS } from "@oxagen/billing";
 import type { Plan } from "@/components/billing/plan-card";
@@ -29,11 +32,13 @@ const PUBLIC_PLAN_SLUGS = SUBSCRIPTION_PLANS.map((p) => p.slug);
 export const fetchPublicPlans = (): Promise<PlanRow[]> =>
   safeQuery(
     () =>
-      db()
-        .select()
-        .from(schema.plans)
-        .where(and(eq(schema.plans.isPublic, true), inArray(schema.plans.slug, PUBLIC_PLAN_SLUGS)))
-        .orderBy(asc(schema.plans.monthlyCents)),
+      withSystemDb((tx) =>
+        tx
+          .select()
+          .from(schema.plans)
+          .where(and(eq(schema.plans.isPublic, true), inArray(schema.plans.slug, PUBLIC_PLAN_SLUGS)))
+          .orderBy(asc(schema.plans.monthlyCents)),
+      ),
     [] as PlanRow[],
   );
 

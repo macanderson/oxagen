@@ -291,7 +291,7 @@ const accountConfig: SidebarConfig = {
 // tree under apps/app/src/app/[orgSlug]/.
 // ---------------------------------------------------------------------------
 
-const ORG_SCOPE_ROUTES = new Set([
+export const ORG_SCOPE_ROUTES = new Set([
   "members",
   "access",
   "security",

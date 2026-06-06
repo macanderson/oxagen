@@ -1,4 +1,4 @@
--- 0009_soc2_auth_hardening.sql
+-- 0003_soc2_auth_hardening.sql
 --
 -- SOC2 auth hardening — three independent gap-fills:
 --

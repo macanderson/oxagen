@@ -1,7 +1,10 @@
 import { desc, eq } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg } from "@/lib/resolve-org";
+
+// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { FileText, Shield, XCircle, AlertTriangle, Lock } from "lucide-react";
 import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,23 +23,30 @@ export default async function AccessPoliciesPage({
   const { orgSlug } = await params;
   const tenant = await resolveOrg(orgSlug);
 
+  // Org-only route — sentinel workspaceId. — OXA-1515
   const policies = await (async () => {
     try {
-      return await db()
-        .select({
-          publicId: schema.policies.publicId,
-          name: schema.policies.name,
-          capabilityId: schema.policies.capabilityId,
-          effect: schema.policies.effect,
-          enforced: schema.policies.enforced,
-          scopeKind: schema.policies.scopeKind,
-          sensitivityTag: schema.policies.sensitivityTag,
-          createdAt: schema.policies.createdAt,
-        })
-        .from(schema.policies)
-        .where(eq(schema.policies.orgId, tenant.id))
-        .orderBy(desc(schema.policies.createdAt))
-        .limit(50);
+      return await runInTenantScope(
+        { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+        () =>
+          withTenantDb((tx) =>
+            tx
+              .select({
+                publicId: schema.policies.publicId,
+                name: schema.policies.name,
+                capabilityId: schema.policies.capabilityId,
+                effect: schema.policies.effect,
+                enforced: schema.policies.enforced,
+                scopeKind: schema.policies.scopeKind,
+                sensitivityTag: schema.policies.sensitivityTag,
+                createdAt: schema.policies.createdAt,
+              })
+              .from(schema.policies)
+              .where(eq(schema.policies.orgId, tenant.id))
+              .orderBy(desc(schema.policies.createdAt))
+              .limit(50),
+          ),
+      );
     } catch {
       return [];
     }

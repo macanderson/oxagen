@@ -23,6 +23,7 @@ const fakeDb = {
 
 vi.mock("@oxagen/database", () => ({
   db: () => fakeDb,
+  withSystemDb: async (fn: (tx: typeof fakeDb) => unknown) => fn(fakeDb),
   schema: {
     subscriptions: { status: "status", id: "id" },
     usageRecords: {

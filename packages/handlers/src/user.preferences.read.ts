@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { userPreferencesRead } from "@oxagen/oxagen/contracts/user.preferences.read";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -25,21 +25,23 @@ export const userPreferencesReadHandler: CapabilityHandler<typeof userPreference
     throw new Error("user.preferences.read requires an authenticated user");
   }
 
-  const d = db();
+  const userId = ctx.userId;
 
-  const row = await d.query.userPreferences.findFirst({
-    where: eq(schema.userPreferences.userId, ctx.userId),
-    columns: {
-      fontSize: true,
-      density: true,
-      enterToSubmit: true,
-      pendingPromptBehavior: true,
-      defaultTextTier: true,
-      defaultTextModel: true,
-      defaultImageModel: true,
-      defaultVideoModel: true,
-    },
-  });
+  const row = await withTenantDb((tx) =>
+    tx.query.userPreferences.findFirst({
+      where: eq(schema.userPreferences.userId, userId),
+      columns: {
+        fontSize: true,
+        density: true,
+        enterToSubmit: true,
+        pendingPromptBehavior: true,
+        defaultTextTier: true,
+        defaultTextModel: true,
+        defaultImageModel: true,
+        defaultVideoModel: true,
+      },
+    }),
+  );
 
   if (!row) {
     logger.info(

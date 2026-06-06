@@ -15,6 +15,7 @@ import {
   activeHrefFor,
   getSidebarConfig,
   enumerateNavTargets,
+  ORG_SCOPE_ROUTES,
   type SidebarMode,
 } from "./sidebar";
 import type { ScopeContext } from "./scope";
@@ -334,5 +335,51 @@ describe("activeHrefFor", () => {
 
   it("returns null when nothing matches", () => {
     expect(activeHrefFor("/other", ["/acme", "/acme/members"])).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. ORG_SCOPE_ROUTES — config-derived iteration + resolveSidebarMode integration
+// ---------------------------------------------------------------------------
+
+describe("ORG_SCOPE_ROUTES", () => {
+  it("every reserved route → resolveSidebarMode 'org' (derived from the set itself)", () => {
+    const ctx: ScopeContext = { orgSlug: "acme" };
+    for (const route of ORG_SCOPE_ROUTES) {
+      const mode = resolveSidebarMode(`/acme/${route}`, ctx);
+      expect(mode).toBe("org");
+    }
+  });
+
+  it("a workspace-slug-shaped second segment → resolveSidebarMode 'workspace'", () => {
+    const ctx: ScopeContext = { orgSlug: "acme" };
+    // A slug that is NOT in ORG_SCOPE_ROUTES must resolve to workspace mode.
+    const wsSlug = "my-workspace";
+    expect(ORG_SCOPE_ROUTES.has(wsSlug)).toBe(false);
+    expect(resolveSidebarMode(`/acme/${wsSlug}/ask`, ctx)).toBe("workspace");
+  });
+
+  it("contains at least one reserved route (guards against accidental empty set)", () => {
+    expect(ORG_SCOPE_ROUTES.size).toBeGreaterThan(0);
+  });
+
+  it("every entry is a non-empty lowercase string with no slashes", () => {
+    for (const route of ORG_SCOPE_ROUTES) {
+      expect(route.length).toBeGreaterThan(0);
+      expect(route).toBe(route.toLowerCase());
+      expect(route).not.toContain("/");
+    }
+  });
+
+  it("'members' is in the reserved set", () => {
+    expect(ORG_SCOPE_ROUTES.has("members")).toBe(true);
+  });
+
+  it("'billing' is in the reserved set", () => {
+    expect(ORG_SCOPE_ROUTES.has("billing")).toBe(true);
+  });
+
+  it("a workspace slug like 'production' is NOT in the reserved set", () => {
+    expect(ORG_SCOPE_ROUTES.has("production")).toBe(false);
   });
 });

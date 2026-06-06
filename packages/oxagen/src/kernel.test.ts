@@ -5,18 +5,23 @@ import { clearRegistryForTests, registerCapability } from "./registry";
 import {
   CapabilityError,
   assertHandlersComplete,
+  authorizeExternalCapability,
   capabilitiesForSurface,
   clearHandlersForTests,
+  clearKernelIAMRuntime,
   clearSecurityEventEmitter,
   hasHandler,
   invoke,
   registerHandler,
+  setKernelIAMRuntime,
   setSecurityEventEmitter,
+  type KernelIAMCheckFn,
+  type KernelSecurityEvent,
 } from "./kernel";
 
 const ctx: CapabilityContext = {
-  orgId: "t",
-  workspaceId: "w",
+  orgId: "00000000-0000-0000-0000-000000000001",
+  workspaceId: "00000000-0000-0000-0000-000000000002",
   userId: "u",
   apiKeyId: null,
   requestId: "r",
@@ -244,5 +249,97 @@ describe("kernel security event emitter", () => {
 
     // The capability should still succeed even though the emitter threw.
     await expect(invoke("test.echo", { value: "hi" }, ctx)).resolves.toEqual({ value: "hi" });
+  });
+});
+
+// ── authorizeExternalCapability ───────────────────────────────────────────────
+// The non-contract authz seam used for MCP-passthrough / external tools. It
+// resolves authz via the registered IAM runtime, emits a security event, and
+// honours the enforcement flag (fail-open when off, fail-closed when on).
+describe("authorizeExternalCapability", () => {
+  const extCtx: CapabilityContext = { ...ctx, surface: "mcp" };
+
+  afterEach(() => {
+    clearKernelIAMRuntime();
+    clearSecurityEventEmitter();
+  });
+
+  const allowFn: KernelIAMCheckFn = async () => ({ outcome: "allow", principal: null });
+  const denyFn: KernelIAMCheckFn = async () => ({
+    outcome: "deny",
+    reason: "policy_block",
+    principal: null,
+  });
+  const throwFn: KernelIAMCheckFn = async () => {
+    throw new Error("resolver exploded");
+  };
+
+  it("allows unconditionally when no IAM runtime is registered (and emits nothing)", async () => {
+    const events: KernelSecurityEvent[] = [];
+    setSecurityEventEmitter((e) => events.push(e));
+
+    const res = await authorizeExternalCapability("mcp.github.list", extCtx, "deny");
+
+    expect(res).toEqual({ allowed: true, outcome: "allow", reason: null });
+    expect(events).toHaveLength(0);
+  });
+
+  it("allows and emits an allow event when the resolver returns allow", async () => {
+    const events: KernelSecurityEvent[] = [];
+    setSecurityEventEmitter((e) => events.push(e));
+    setKernelIAMRuntime(allowFn, true);
+
+    const res = await authorizeExternalCapability("mcp.github.list", extCtx, "deny");
+
+    expect(res).toEqual({ allowed: true, outcome: "allow", reason: null });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ outcome: "allow", errorCode: null, capability: "mcp.github.list" });
+  });
+
+  it("blocks (fail-closed) and emits a deny event when the resolver denies AND enforcement is on", async () => {
+    const events: KernelSecurityEvent[] = [];
+    setSecurityEventEmitter((e) => events.push(e));
+    setKernelIAMRuntime(denyFn, true);
+
+    const res = await authorizeExternalCapability("mcp.github.delete", extCtx, "deny");
+
+    expect(res).toEqual({ allowed: false, outcome: "deny", reason: "policy_block" });
+    expect(events[0]).toMatchObject({ outcome: "deny", errorCode: "authz_denied" });
+  });
+
+  it("allows (fail-open) but still emits a deny event when the resolver denies AND enforcement is off", async () => {
+    const events: KernelSecurityEvent[] = [];
+    setSecurityEventEmitter((e) => events.push(e));
+    setKernelIAMRuntime(denyFn, false);
+
+    const res = await authorizeExternalCapability("mcp.github.delete", extCtx, "deny");
+
+    // Would-deny is logged-and-allowed when the enforcement flag is off.
+    expect(res.allowed).toBe(true);
+    expect(res.outcome).toBe("deny");
+    expect(events[0]).toMatchObject({ outcome: "deny" });
+  });
+
+  it("fails closed (deny + emit) when the resolver throws AND enforcement is on", async () => {
+    const events: KernelSecurityEvent[] = [];
+    setSecurityEventEmitter((e) => events.push(e));
+    setKernelIAMRuntime(throwFn, true);
+
+    const res = await authorizeExternalCapability("mcp.github.delete", extCtx, "deny");
+
+    expect(res).toEqual({ allowed: false, outcome: "deny", reason: "iam_check_error" });
+    expect(events[0]).toMatchObject({ outcome: "deny", errorCode: "authz_denied" });
+  });
+
+  it("fails open (allow, no event) when the resolver throws AND enforcement is off", async () => {
+    const events: KernelSecurityEvent[] = [];
+    setSecurityEventEmitter((e) => events.push(e));
+    setKernelIAMRuntime(throwFn, false);
+
+    const res = await authorizeExternalCapability("mcp.github.delete", extCtx, "deny");
+
+    expect(res).toEqual({ allowed: true, outcome: "allow", reason: null });
+    // The throw+enforcement-off branch returns before emitting a security event.
+    expect(events).toHaveLength(0);
   });
 });

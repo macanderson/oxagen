@@ -1,4 +1,7 @@
-import { db, schema } from "@oxagen/database";
+// tenancy: system bypass via withSystemDb (webhook arrives with a Stripe event id, no org
+// scope yet; stripe_events/stripe_event_processing are global audit tables; upsertPaymentMethod
+// resolves orgId from a subscription lookup before writing) — OXA-1515
+import { withSystemDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { syncSubscriptionFromStripe } from "./subscriptions";
@@ -33,59 +36,67 @@ export async function processStripeEvent(
   event: BillingWebhookEvent,
 ): Promise<{ status: "applied" | "duplicate" }> {
   const start = Date.now();
-  const d = db();
-  const inserted = await d
-    .insert(schema.stripeEvents)
-    .values({
-      stripeEventId: event.providerEventId,
-      eventType: event.type,
-      apiVersion: event.apiVersion ?? null,
-      payload: event.rawPayload,
-    })
-    .onConflictDoNothing({ target: schema.stripeEvents.stripeEventId })
-    .returning({ id: schema.stripeEvents.id });
 
-  let stripeEventRowId: string;
-  if (inserted.length > 0) {
-    stripeEventRowId = inserted[0]!.id;
-  } else {
+  const { stripeEventRowId, isDuplicate } = await withSystemDb(async (tx) => {
+    const inserted = await tx
+      .insert(schema.stripeEvents)
+      .values({
+        stripeEventId: event.providerEventId,
+        eventType: event.type,
+        apiVersion: event.apiVersion ?? null,
+        payload: event.rawPayload,
+      })
+      .onConflictDoNothing({ target: schema.stripeEvents.stripeEventId })
+      .returning({ id: schema.stripeEvents.id });
+
+    if (inserted.length > 0) {
+      return { stripeEventRowId: inserted[0]!.id, isDuplicate: false };
+    }
+
     // Already logged. Resolve its id and check whether a prior dispatch
     // succeeded; only then is this a real duplicate.
-    const existing = await d.query.stripeEvents.findFirst({
+    const existing = await tx.query.stripeEvents.findFirst({
       where: eq(schema.stripeEvents.stripeEventId, event.providerEventId),
       columns: { id: true },
     });
-    if (!existing) return { status: "duplicate" };
-    stripeEventRowId = existing.id;
-    const processed = await d.query.stripeEventProcessing.findFirst({
-      where: eq(schema.stripeEventProcessing.stripeEventId, stripeEventRowId),
+    if (!existing) return { stripeEventRowId: "", isDuplicate: true };
+    const processed = await tx.query.stripeEventProcessing.findFirst({
+      where: eq(schema.stripeEventProcessing.stripeEventId, existing.id),
       columns: { processedAt: true },
     });
-    if (processed?.processedAt) return { status: "duplicate" };
-    // No successful processing yet — fall through and (re-)dispatch.
-  }
+    return {
+      stripeEventRowId: existing.id,
+      isDuplicate: processed?.processedAt != null,
+    };
+  });
+
+  if (isDuplicate) return { status: "duplicate" };
 
   try {
     await dispatch(event);
     // Record successful processing — upsert in case a prior attempt recorded
     // an error before we retried.
-    await d
-      .insert(schema.stripeEventProcessing)
-      .values({ stripeEventId: stripeEventRowId, processedAt: new Date() })
-      .onConflictDoUpdate({
-        target: schema.stripeEventProcessing.stripeEventId,
-        set: { processedAt: new Date(), processingError: null },
-      });
+    await withSystemDb(async (tx) => {
+      await tx
+        .insert(schema.stripeEventProcessing)
+        .values({ stripeEventId: stripeEventRowId, processedAt: new Date() })
+        .onConflictDoUpdate({
+          target: schema.stripeEventProcessing.stripeEventId,
+          set: { processedAt: new Date(), processingError: null },
+        });
+    });
     logger.info({ eventId: event.providerEventId, type: event.type, durationMs: Date.now() - start }, "billing: webhook event applied");
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await d
-      .insert(schema.stripeEventProcessing)
-      .values({ stripeEventId: stripeEventRowId, processingError: message })
-      .onConflictDoUpdate({
-        target: schema.stripeEventProcessing.stripeEventId,
-        set: { processingError: message },
-      });
+    await withSystemDb(async (tx) => {
+      await tx
+        .insert(schema.stripeEventProcessing)
+        .values({ stripeEventId: stripeEventRowId, processingError: message })
+        .onConflictDoUpdate({
+          target: schema.stripeEventProcessing.stripeEventId,
+          set: { processingError: message },
+        });
+    });
     logger.error({ eventId: event.providerEventId, type: event.type, err: message, durationMs: Date.now() - start }, "billing: webhook event dispatch failed");
     throw err;
   }
@@ -195,47 +206,51 @@ async function upsertPaymentMethod(
 ): Promise<void> {
   if (!pm.customerId) return;
 
-  // Org resolution: locate any subscription tied to this customer to get
-  // the org id. New customers may not have a subscription yet; in that
-  // case skip — the subsequent subscription.created event will backfill.
-  const d = db();
-  const sub = await d.query.subscriptions.findFirst({
-    where: eq(schema.subscriptions.stripeCustomerId, pm.customerId),
-    columns: { orgId: true },
-  });
-  if (!sub) return;
+  await withSystemDb(async (tx) => {
+    // tenancy: system bypass via withSystemDb (org resolved from Stripe customer id before
+    // a tenant scope exists; payment_method events precede subscription scope) — OXA-1515
+    //
+    // Org resolution: locate any subscription tied to this customer to get
+    // the org id. New customers may not have a subscription yet; in that
+    // case skip — the subsequent subscription.created event will backfill.
+    const sub = await tx.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.stripeCustomerId, pm.customerId!),
+      columns: { orgId: true },
+    });
+    if (!sub) return;
 
-  if (kind === "detached") {
-    await d
-      .update(schema.paymentMethods)
-      .set({ deletedAt: new Date() })
-      .where(eq(schema.paymentMethods.stripePaymentMethodId, pm.id));
-    logger.info({ customerId: pm.customerId, paymentMethodId: pm.id }, "billing: payment method detached");
-    return;
-  }
+    if (kind === "detached") {
+      await tx
+        .update(schema.paymentMethods)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.paymentMethods.stripePaymentMethodId, pm.id));
+      logger.info({ customerId: pm.customerId, paymentMethodId: pm.id }, "billing: payment method detached");
+      return;
+    }
 
-  await d
-    .insert(schema.paymentMethods)
-    .values({
-      orgId: sub.orgId,
-      stripeCustomerId: pm.customerId,
-      stripePaymentMethodId: pm.id,
-      type: pm.type,
-      brand: pm.brand ?? null,
-      last4: pm.last4 ?? null,
-      expMonth: pm.expMonth ?? null,
-      expYear: pm.expYear ?? null,
-      isDefault: false,
-    })
-    .onConflictDoUpdate({
-      target: schema.paymentMethods.stripePaymentMethodId,
-      set: {
+    await tx
+      .insert(schema.paymentMethods)
+      .values({
+        orgId: sub.orgId,
+        stripeCustomerId: pm.customerId!,
+        stripePaymentMethodId: pm.id,
+        type: pm.type,
         brand: pm.brand ?? null,
         last4: pm.last4 ?? null,
         expMonth: pm.expMonth ?? null,
         expYear: pm.expYear ?? null,
-        updatedAt: new Date(),
-      },
-    });
-  logger.info({ orgId: sub.orgId, paymentMethodId: pm.id }, "billing: payment method upserted");
+        isDefault: false,
+      })
+      .onConflictDoUpdate({
+        target: schema.paymentMethods.stripePaymentMethodId,
+        set: {
+          brand: pm.brand ?? null,
+          last4: pm.last4 ?? null,
+          expMonth: pm.expMonth ?? null,
+          expYear: pm.expYear ?? null,
+          updatedAt: new Date(),
+        },
+      });
+    logger.info({ orgId: sub.orgId, paymentMethodId: pm.id }, "billing: payment method upserted");
+  });
 }

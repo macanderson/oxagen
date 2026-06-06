@@ -95,7 +95,7 @@ export interface ToolStreamState {
   turnUsage: TurnUsage | undefined;
 }
 
-const INITIAL_STATE: ToolStreamState = {
+export const INITIAL_STATE: ToolStreamState = {
   messages: {},
   toolCalls: {},
   pendingApprovals: {},
@@ -107,9 +107,9 @@ const INITIAL_STATE: ToolStreamState = {
   turnUsage: undefined,
 };
 
-type Action = { type: "event"; event: StreamEvent } | { type: "reset" };
+export type Action = { type: "event"; event: StreamEvent } | { type: "reset" };
 
-function reducer(state: ToolStreamState, action: Action): ToolStreamState {
+export function reducer(state: ToolStreamState, action: Action): ToolStreamState {
   if (action.type === "reset") return INITIAL_STATE;
   const e = action.event;
   switch (e.type) {

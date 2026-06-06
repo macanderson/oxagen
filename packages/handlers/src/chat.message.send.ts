@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -23,9 +23,8 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
     logger.warn({ orgId: ctx.orgId }, "chat.message.send: rejected — no authenticated user");
     throw new Error("chat.message.send requires an authenticated user");
   }
-  const d = db();
 
-  return await d.transaction(async (tx) => {
+  return await withTenantDb(async (tx) => {
     // 1. Resolve or create the conversation.
     let conversationId = input.conversationId;
     if (!conversationId) {

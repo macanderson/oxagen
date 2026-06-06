@@ -40,98 +40,98 @@ SET row_security = off;
 -- Name: agent; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA agent;
+CREATE SCHEMA IF NOT EXISTS agent;
 
 
 --
 -- Name: auth; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA auth;
+CREATE SCHEMA IF NOT EXISTS auth;
 
 
 --
 -- Name: billing; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA billing;
+CREATE SCHEMA IF NOT EXISTS billing;
 
 
 --
 -- Name: chat; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA chat;
+CREATE SCHEMA IF NOT EXISTS chat;
 
 
 --
 -- Name: content; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA content;
+CREATE SCHEMA IF NOT EXISTS content;
 
 
 --
 -- Name: evaluation; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA evaluation;
+CREATE SCHEMA IF NOT EXISTS evaluation;
 
 
 --
 -- Name: event; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA event;
+CREATE SCHEMA IF NOT EXISTS event;
 
 
 --
 -- Name: execution; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA execution;
+CREATE SCHEMA IF NOT EXISTS execution;
 
 
 --
 -- Name: graph; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA graph;
+CREATE SCHEMA IF NOT EXISTS graph;
 
 
 --
 -- Name: integration; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA integration;
+CREATE SCHEMA IF NOT EXISTS integration;
 
 
 --
 -- Name: org; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA org;
+CREATE SCHEMA IF NOT EXISTS org;
 
 
 --
 -- Name: security; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA security;
+CREATE SCHEMA IF NOT EXISTS security;
 
 
 --
 -- Name: workflow; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA workflow;
+CREATE SCHEMA IF NOT EXISTS workflow;
 
 
 --
 -- Name: workspace; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA workspace;
+CREATE SCHEMA IF NOT EXISTS workspace;
 
 
 --

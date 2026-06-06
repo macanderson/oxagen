@@ -588,6 +588,38 @@
       }
     },
     {
+      "name": "org.member.remove",
+      "file": "org.member.remove.ts",
+      "domain": "organization",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": false
+      }
+    },
+    {
+      "name": "org.member.role.change",
+      "file": "org.member.role.change.ts",
+      "domain": "organization",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": false
+      }
+    },
+    {
       "name": "organization.create",
       "file": "organization.create.ts",
       "domain": "organization",

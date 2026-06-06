@@ -24,6 +24,7 @@
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
+    "@oxagen/tenancy": "workspace:*",
     "drizzle-orm": "0.45.2",
     "zod": "3.25.76",
     "@oxagen/billing": "workspace:*"

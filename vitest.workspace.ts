@@ -3,6 +3,7 @@
 // `pnpm vitest` at the root uses this workspace file for IDE / CLI runs.
 export default [
   "packages/*/vitest.config.ts",
+  "apps/api/vitest.config.ts",
   "apps/app/vitest.config.ts",
   "tools/scripts/vitest.config.ts",
 ];

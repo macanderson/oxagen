@@ -44,6 +44,7 @@ const fakeDb = {
 
 vi.mock("@oxagen/database", () => ({
   db: () => fakeDb,
+  withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) => fn(fakeDb),
   schema: {
     backgroundTasks: {
       publicId: "publicId",

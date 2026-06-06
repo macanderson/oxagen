@@ -7,7 +7,7 @@ import { beforeTool, afterTool, onError } from "../hooks/runtime";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { connectMcp, materializeMcpTools } from "../dispatch/mcp-client";
 import { isSandboxAvailable } from "@oxagen/sandbox";
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 
 function byteSize(v: unknown): number {
@@ -234,16 +234,18 @@ export async function materializeTools(
   if (ctx.workspaceId) {
     let mcpServerRows: (typeof schema.mcpServers.$inferSelect)[] = [];
     try {
-      mcpServerRows = await db()
-        .select()
-        .from(schema.mcpServers)
-        .where(
-          and(
-            eq(schema.mcpServers.orgId, ctx.orgId),
-            eq(schema.mcpServers.workspaceId, ctx.workspaceId),
-            eq(schema.mcpServers.healthStatus, "healthy"),
+      mcpServerRows = await withTenantDb((tx) =>
+        tx
+          .select()
+          .from(schema.mcpServers)
+          .where(
+            and(
+              eq(schema.mcpServers.orgId, ctx.orgId),
+              eq(schema.mcpServers.workspaceId, ctx.workspaceId),
+              eq(schema.mcpServers.healthStatus, "healthy"),
+            ),
           ),
-        );
+      );
     } catch (err) {
       // DB failure must never block the model from receiving built-in tools.
       console.error("[materialize-tools] Failed to load MCP server rows:", err);

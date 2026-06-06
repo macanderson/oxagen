@@ -45,15 +45,11 @@ const mockTx = {
   insert: vi.fn(),
 };
 
-const mockDb = {
-  select: vi.fn(),
-  update: vi.fn(),
-  insert: vi.fn(),
-  transaction: vi.fn(async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
-};
-
 vi.mock("@oxagen/database", () => ({
-  db: () => mockDb,
+  // The handler runs all reads + writes inside a single withTenantDb (one
+  // RLS-scoped transaction); resolveActorPrincipalAndRole uses its own. Both
+  // route to the same fluent tx mock so the call sequence is continuous.
+  withTenantDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
   schema: {
     principals: {
       id: "principals.id",
@@ -136,7 +132,7 @@ describe("orgMemberRoleChangeHandler", () => {
   });
 
   it("actor has Member role → throws Forbidden", async () => {
-    mockDb.select = buildSelectMock([
+    mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // actor principal
       [{ roleName: "Member" }],        // actor PRA = Member
     ]);
@@ -148,7 +144,7 @@ describe("orgMemberRoleChangeHandler", () => {
   });
 
   it("target not a member → throws Not found (IDOR guard)", async () => {
-    mockDb.select = buildSelectMock([
+    mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // actor principal
       [{ roleName: "Admin" }],         // actor PRA = Admin
       [],                              // target orgUser — NOT found
@@ -161,7 +157,7 @@ describe("orgMemberRoleChangeHandler", () => {
   });
 
   it("newRole does not exist in org → throws with descriptive message", async () => {
-    mockDb.select = buildSelectMock([
+    mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }],               // actor principal
       [{ roleName: "Owner" }],                       // actor PRA = Owner
       [{ id: "target-ou", role: "member" }],         // target orgUser found
@@ -194,7 +190,7 @@ describe("orgMemberRoleChangeHandler", () => {
     ];
     let callCount = 0;
 
-    mockDb.select = vi.fn().mockImplementation(() => {
+    mockTx.select = vi.fn().mockImplementation(() => {
       const idx = callCount++;
       const result = callResults[idx] ?? [];
 
@@ -215,31 +211,19 @@ describe("orgMemberRoleChangeHandler", () => {
   });
 
   it("happy path → changes role, emits org.role_changed, returns changed:true", async () => {
-    mockDb.select = buildSelectMock([
-      [{ id: "actor-principal-id" }],                       // actor principal
-      [{ roleName: "Owner" }],                               // actor PRA = Owner
-      [{ id: "target-ou-id", role: "member" }],             // target orgUser (role=member)
-      [{ id: "admin-role-id", name: "Admin" }],             // new role 'Admin' found
-      // newRole !== OWNER_ROLE_NAME — skip last-owner check (only if current role was Owner)
-      // target orgUser.role is "member", not "owner", so Owner role check would still run
-      [{ id: "owner-role-id" }],                            // Owner role row exists
-      [{ id: "target-principal-id" }],                      // target principal
-      [],                                                   // target does NOT hold Owner PRA → skip guard
+    // All reads run inside withTenantDb on the same tx → continuous sequence:
+    // 1-2 resolveActor, 3-7 main guards, 8 mutation principal lookup.
+    mockTx.select = buildSelectMock([
+      [{ id: "actor-principal-id" }],                       // 1: actor principal
+      [{ roleName: "Owner" }],                               // 2: actor PRA = Owner
+      [{ id: "target-ou-id", role: "member" }],             // 3: target orgUser (role=member)
+      [{ id: "admin-role-id", name: "Admin" }],             // 4: new role 'Admin' found
+      // newRole !== OWNER_ROLE_NAME → last-owner guard runs:
+      [{ id: "owner-role-id" }],                            // 5: Owner role row exists
+      [{ id: "target-principal-id" }],                      // 6: target principal
+      [],                                                   // 7: target does NOT hold Owner PRA → skip guard
+      [{ id: "target-principal-id" }],                      // 8: mutation existing principal
     ]);
-
-    // tx selects
-    let txCall = 0;
-    mockTx.select = vi.fn().mockImplementation(() => {
-      txCall++;
-      const build = (result: unknown[]) => {
-        const limit = vi.fn().mockResolvedValue(result);
-        const where = vi.fn().mockReturnValue({ limit });
-        const from = vi.fn().mockReturnValue({ where });
-        return { from };
-      };
-      if (txCall === 1) return build([{ id: "target-principal-id" }]);
-      return build([]);
-    });
 
     const txUpdateWhere = vi.fn().mockResolvedValue([]);
     const txUpdateSet = vi.fn().mockReturnValue({ where: txUpdateWhere });

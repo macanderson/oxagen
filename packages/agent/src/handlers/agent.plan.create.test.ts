@@ -12,8 +12,11 @@ mocks.insertValues.mockReturnValue({ returning: mocks.insertReturning });
 mocks.insertSpy.mockReturnValue({ values: mocks.insertValues });
 mocks.createApprovalRequestMock.mockResolvedValue({ approvalId: "appr_1" });
 
+const fakePlanCreateDb = { insert: mocks.insertSpy };
 vi.mock("@oxagen/database", () => ({
-  db: () => ({ insert: mocks.insertSpy }),
+  db: () => fakePlanCreateDb,
+  withTenantDb: async (fn: (tx: typeof fakePlanCreateDb) => Promise<unknown>) =>
+    fn(fakePlanCreateDb),
   schema: {
     planSteps: {
       id: "id",

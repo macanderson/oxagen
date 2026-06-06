@@ -1,7 +1,10 @@
 import { desc, eq } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg } from "@/lib/resolve-org";
+
+// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { KeySquare, Clock, Layers } from "lucide-react";
 import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,23 +26,30 @@ export default async function DeveloperTokensPage({
   const { orgSlug } = await params;
   const tenant = await resolveOrg(orgSlug);
 
+  // Org-only route — sentinel workspaceId. — OXA-1515
   const keys = await (async () => {
     try {
-      return await db()
-        .select({
-          publicId: schema.apiKeys.publicId,
-          name: schema.apiKeys.name,
-          keyPrefix: schema.apiKeys.keyPrefix,
-          scope: schema.apiKeys.scope,
-          expiresAt: schema.apiKeys.expiresAt,
-          lastUsedAt: schema.apiKeys.lastUsedAt,
-          createdAt: schema.apiKeys.createdAt,
-          deletedAt: schema.apiKeys.deletedAt,
-        })
-        .from(schema.apiKeys)
-        .where(eq(schema.apiKeys.orgId, tenant.id))
-        .orderBy(desc(schema.apiKeys.createdAt))
-        .limit(50);
+      return await runInTenantScope(
+        { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+        () =>
+          withTenantDb((tx) =>
+            tx
+              .select({
+                publicId: schema.apiKeys.publicId,
+                name: schema.apiKeys.name,
+                keyPrefix: schema.apiKeys.keyPrefix,
+                scope: schema.apiKeys.scope,
+                expiresAt: schema.apiKeys.expiresAt,
+                lastUsedAt: schema.apiKeys.lastUsedAt,
+                createdAt: schema.apiKeys.createdAt,
+                deletedAt: schema.apiKeys.deletedAt,
+              })
+              .from(schema.apiKeys)
+              .where(eq(schema.apiKeys.orgId, tenant.id))
+              .orderBy(desc(schema.apiKeys.createdAt))
+              .limit(50),
+          ),
+      );
     } catch {
       return [];
     }

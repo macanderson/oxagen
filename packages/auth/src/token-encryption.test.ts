@@ -234,6 +234,70 @@ describe("buildAccountTokenHooks", () => {
     expect(result.data).toBe(account);
     expect(mockEncrypt).not.toHaveBeenCalled();
   });
+
+  // ── update.before: individual token fields encrypt and strip plaintext ────
+
+  it("update.before with only accessToken → accessTokenEnc set, accessToken stripped", async () => {
+    const encBuf = Buffer.from("enc_access");
+    mockEncrypt.mockResolvedValue(encBuf);
+
+    const adapter = makeMockAdapter();
+    const hooks = buildAccountTokenHooks(adapter, KEY_ID);
+    const result = await hooks.update.before({ accessToken: "ya29.access", userId: "u1" });
+
+    expect(result.data.accessTokenEnc).toBe(encBuf);
+    expect(result.data).not.toHaveProperty("accessToken");
+    // refreshToken / idToken not in input: their enc columns will be null (encryptToken returns null for undefined)
+    expect(result.data.refreshTokenEnc).toBeNull();
+    expect(result.data.idTokenEnc).toBeNull();
+    // Non-token field passes through
+    expect(result.data.userId).toBe("u1");
+  });
+
+  it("update.before with only refreshToken → refreshTokenEnc set, refreshToken stripped", async () => {
+    const encBuf = Buffer.from("enc_refresh");
+    mockEncrypt.mockResolvedValue(encBuf);
+
+    const adapter = makeMockAdapter();
+    const hooks = buildAccountTokenHooks(adapter, KEY_ID);
+    const result = await hooks.update.before({ refreshToken: "1//refresh.secret", userId: "u2" });
+
+    expect(result.data.refreshTokenEnc).toBe(encBuf);
+    expect(result.data).not.toHaveProperty("refreshToken");
+    expect(result.data.accessTokenEnc).toBeNull();
+    expect(result.data.idTokenEnc).toBeNull();
+  });
+
+  it("update.before with only idToken → idTokenEnc set, idToken stripped", async () => {
+    const encBuf = Buffer.from("enc_id");
+    mockEncrypt.mockResolvedValue(encBuf);
+
+    const adapter = makeMockAdapter();
+    const hooks = buildAccountTokenHooks(adapter, KEY_ID);
+    const result = await hooks.update.before({ idToken: "id.jwt.value", userId: "u3" });
+
+    expect(result.data.idTokenEnc).toBe(encBuf);
+    expect(result.data).not.toHaveProperty("idToken");
+    expect(result.data.accessTokenEnc).toBeNull();
+    expect(result.data.refreshTokenEnc).toBeNull();
+  });
+
+  it("update.before with { accessToken: null } → key present but encryptToken(null) → accessTokenEnc: null, plaintext stripped", async () => {
+    // encryptToken skips encryption for null/undefined and returns null;
+    // the plaintext key must still be stripped from the output.
+    const adapter = makeMockAdapter();
+    const hooks = buildAccountTokenHooks(adapter, KEY_ID);
+    const result = await hooks.update.before({ accessToken: null, userId: "u4" });
+
+    // Key "accessToken" triggered the hasTokenField branch — encrypt was called
+    // on null and returned null (no actual encrypt call).
+    expect(mockEncrypt).not.toHaveBeenCalled();
+    expect(result.data.accessTokenEnc).toBeNull();
+    // plaintext must be stripped even when the value was null
+    expect(result.data).not.toHaveProperty("accessToken");
+    // Non-token fields pass through
+    expect(result.data.userId).toBe("u4");
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", () => ({
   db: mocks.dbFn,
+  // withTenantDb: pass-through — invokes the callback with the same fake tx
+  // the handler expects. No scope GUC overhead in unit tests (OXA-1515).
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mocks.dbFn()),
   schema: {
     accessRequests: { publicId: "accessRequests.publicId" },
   },
@@ -162,6 +165,34 @@ describe("createAccessRequest()", () => {
     await createAccessRequest({
       capability: "chat.message.send",
       ctx: { ...CTX, workspaceId: "" },
+      principal: PRINCIPAL,
+    });
+
+    expect(capturedValues?.scopeKind).toBe("org");
+    expect(capturedValues?.scopeId).toBe("org_ar_test");
+  });
+
+  it("uses org scope when workspaceId is null — distinct from the empty-string case", async () => {
+    // ctx.workspaceId = null (not "") — the falsy check `ctx.workspaceId ? "workspace" : "org"`
+    // resolves to "org" and scopeId must equal orgId.
+    let capturedValues: Record<string, unknown> | undefined;
+
+    mocks.insertFn.mockReturnValue({
+      values: (vals: Record<string, unknown>) => {
+        capturedValues = vals;
+        return {
+          returning: () => Promise.resolve([{ publicId: "arq_null_ws_scope" }]),
+        };
+      },
+    });
+    mocks.dbFn.mockReturnValue({ insert: mocks.insertFn });
+
+    // TypeScript's CapabilityContext types workspaceId as string | null.
+    const ctxNullWs: CapabilityContext = { ...CTX, workspaceId: null as unknown as string };
+
+    await createAccessRequest({
+      capability: "chat.message.send",
+      ctx: ctxNullWs,
       principal: PRINCIPAL,
     });
 

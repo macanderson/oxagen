@@ -12,6 +12,30 @@
 //     field. `ip` and `user_agent` are allowed (network metadata), but
 //     do NOT store email addresses or usernames in `SecurityEventInput`.
 //
+// OXA-1515 tenancy analysis: this file contains NO direct db() call. All
+// writes are performed by the AuditInsertFn injected at call time. The
+// real inserter (makeSecurityEventInserter in @oxagen/database/security) uses
+// a raw Database instance on purpose:
+//
+//   tenancy: unscoped seam (audit write must succeed even on a no_tenant_scope
+//   deny — the kernel emits capability.invoke_denied for orgId:"" paths before
+//   a scope is ever established; requiring withTenantDb here would lose that
+//   audit record). — OXA-1515
+//
+// Do NOT wrap the AuditInsertFn or makeSecurityEventInserter in withTenantDb.
+//
+// OXA-1515 tenancy analysis: this file contains NO direct db() call. All
+// writes are performed by the AuditInsertFn injected at call time. The
+// real inserter (makeSecurityEventInserter in @oxagen/database/security) uses
+// a raw Database instance on purpose:
+//
+//   tenancy: unscoped seam (audit write must succeed even on a no_tenant_scope
+//   deny — the kernel emits capability.invoke_denied for orgId:"" paths before
+//   a scope is ever established; requiring withTenantDb here would lose that
+//   audit record). — OXA-1515
+//
+// Do NOT wrap the AuditInsertFn or makeSecurityEventInserter in withTenantDb.
+//
 // Shared type: SecurityEventType and SECURITY_EVENT_TYPES also live in
 // packages/database/src/schema/security.ts. They are re-exported here so
 // callers that only depend on @oxagen/telemetry don't need to import from

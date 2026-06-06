@@ -1,6 +1,6 @@
 import type { CapabilityContext } from "../types";
 import type { AgentToolListInput, AgentToolListOutput } from "@oxagen/oxagen/contracts/agent.tool.list";
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 
 export type { AgentToolListInput, AgentToolListOutput };
@@ -42,18 +42,20 @@ export async function agentToolListHandler(
 
   // Single tenant-scoped query; no per-server tool fanout. The discoveredTools
   // jsonb column is the cached snapshot from the last health check.
-  const servers = await db()
-    .select({
-      name: schema.mcpServers.name,
-      discoveredTools: schema.mcpServers.discoveredTools,
-    })
-    .from(schema.mcpServers)
-    .where(
-      and(
-        eq(schema.mcpServers.orgId, ctx.orgId),
-        eq(schema.mcpServers.workspaceId, ctx.workspaceId),
+  const servers = await withTenantDb((tx) =>
+    tx
+      .select({
+        name: schema.mcpServers.name,
+        discoveredTools: schema.mcpServers.discoveredTools,
+      })
+      .from(schema.mcpServers)
+      .where(
+        and(
+          eq(schema.mcpServers.orgId, ctx.orgId),
+          eq(schema.mcpServers.workspaceId, ctx.workspaceId),
+        ),
       ),
-    );
+  );
 
   const external = servers.flatMap((s) =>
     (Array.isArray(s.discoveredTools) ? (s.discoveredTools as string[]) : []).map((t) => ({

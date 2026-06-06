@@ -45,13 +45,13 @@ function makeDb(opts: {
   const invoiceInsertedId =
     opts.invoiceInsertedId !== undefined ? opts.invoiceInsertedId : "invoice-uuid-1";
 
-  const txDeleteChain = {
+  const deleteChain = {
     where: vi.fn().mockResolvedValue(undefined),
   };
-  const txInsertLineItemsChain = {
+  const insertLineItemsChain = {
     values: vi.fn().mockResolvedValue(undefined),
   };
-  const txInsertInvoiceChain = {
+  const insertInvoiceChain = {
     values: vi.fn().mockReturnValue({
       onConflictDoUpdate: vi.fn().mockReturnValue({
         returning: vi.fn().mockResolvedValue(
@@ -61,25 +61,23 @@ function makeDb(opts: {
     }),
   };
 
-  const txCallLog: string[] = [];
-  let txInsertCallIdx = 0;
+  const callLog: string[] = [];
+  let insertCallIdx = 0;
 
-  const txInsert = vi.fn(() => {
-    txInsertCallIdx++;
-    if (txInsertCallIdx === 1) {
-      txCallLog.push("invoice-insert");
-      return txInsertInvoiceChain;
+  const insertFn = vi.fn(() => {
+    insertCallIdx++;
+    if (insertCallIdx === 1) {
+      callLog.push("invoice-insert");
+      return insertInvoiceChain;
     }
-    txCallLog.push("line-item-insert");
-    return txInsertLineItemsChain;
+    callLog.push("line-item-insert");
+    return insertLineItemsChain;
   });
 
-  const txDelete = vi.fn(() => {
-    txCallLog.push("line-item-delete");
-    return txDeleteChain;
+  const deleteFn = vi.fn(() => {
+    callLog.push("line-item-delete");
+    return deleteChain;
   });
-
-  const txProxy = { insert: txInsert, delete: txDelete };
 
   return {
     query: {
@@ -87,10 +85,15 @@ function makeDb(opts: {
         findFirst: vi.fn().mockResolvedValue(subscriptionRow ?? undefined),
       },
     },
-    transaction: vi.fn((cb: (tx: typeof txProxy) => Promise<void>) => cb(txProxy)),
-    _txInsert: txInsert,
-    _txDelete: txDelete,
-    _callLog: txCallLog,
+    // withSystemDb passes the instance as tx; syncInvoiceFromStripe calls
+    // insert/delete directly on tx (no nested transaction anymore).
+    insert: insertFn,
+    delete: deleteFn,
+    // Keep a no-op transaction stub so any stray calls don't hard-fail.
+    transaction: vi.fn((cb: (tx: unknown) => Promise<void>) => cb({ insert: insertFn, delete: deleteFn })),
+    _txInsert: insertFn,
+    _txDelete: deleteFn,
+    _callLog: callLog,
   };
 }
 
@@ -98,6 +101,8 @@ const dbState: { instance: ReturnType<typeof makeDb> | null } = { instance: null
 
 vi.mock("@oxagen/database", () => ({
   db: () => dbState.instance,
+  withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
+  withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
   schema: {
     invoices: {
       stripeInvoiceId: "invoices.stripeInvoiceId",
@@ -160,13 +165,13 @@ describe("syncInvoiceFromStripe", () => {
     vi.clearAllMocks();
   });
 
-  it("happy path — upserts invoice row and inserts line items inside transaction", async () => {
+  it("happy path — upserts invoice row and inserts line items inside withSystemDb", async () => {
     dbState.instance = makeDb();
     getInvoiceMock.mockResolvedValue(makeInvoice());
 
     await syncInvoiceFromStripe("in_test_001");
 
-    expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
+    // withSystemDb mock passes instance as tx; insert is called twice (invoice + line items)
     expect(dbState.instance!._txInsert).toHaveBeenCalledTimes(2);
     expect(dbState.instance!._txDelete).toHaveBeenCalledOnce();
   });
@@ -179,11 +184,10 @@ describe("syncInvoiceFromStripe", () => {
     dbState.instance = makeDb();
     await syncInvoiceFromStripe("in_test_001");
 
-    expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
     expect(dbState.instance!._txInsert).toHaveBeenCalledTimes(2);
   });
 
-  it("no org_id and no subscription row — returns early, no transaction", async () => {
+  it("no org_id and no subscription row — returns early, no insert", async () => {
     dbState.instance = makeDb({ subscriptionRow: null });
     getInvoiceMock.mockResolvedValue(
       makeInvoice({ orgId: null, subscriptionId: "sub_orphan" }),
@@ -192,7 +196,7 @@ describe("syncInvoiceFromStripe", () => {
 
     await syncInvoiceFromStripe("in_test_001");
 
-    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
+    expect(dbState.instance!._txInsert).not.toHaveBeenCalled();
   });
 
   it("empty line items — delete runs but line-item insert is skipped", async () => {
