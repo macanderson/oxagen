@@ -25,8 +25,6 @@ export async function agentMemoryWriteHandler(
     },
   });
   const { memoryId } = await writeMemory({
-    orgId: ctx.orgId,
-    workspaceId: ctx.workspaceId,
     nodeRef: input.nodeRef,
     embedding,
     weight: input.weight,

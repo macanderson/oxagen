@@ -22,8 +22,6 @@ export async function agentMemoryRecallHandler(
     },
   });
   const memories = await recallMemories({
-    orgId: ctx.orgId,
-    workspaceId: ctx.workspaceId,
     embedding,
     minWeight: input.minWeight,
     limit: input.limit,

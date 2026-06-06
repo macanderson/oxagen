@@ -1,10 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { withTestScope } from "@oxagen/tenancy/testing";
 
 const sessionRun = vi.fn();
 const sessionClose = vi.fn(async () => undefined);
 
 vi.mock("@oxagen/ontology", () => ({
-  session: () => ({ run: sessionRun, close: sessionClose }),
+  scopedSession: () => ({ run: sessionRun, close: sessionClose }),
 }));
 
 import { recallMemories, writeMemory } from "./neo4j";
@@ -34,22 +35,26 @@ describe("memory neo4j", () => {
         }),
       ],
     });
-    const rows = await recallMemories({
-      orgId: "ten_1",
-      workspaceId: "ws_1",
-      embedding: new Array<number>(1536).fill(0.1),
-      minWeight: "high",
-      limit: 10,
-    });
+    const rows = await withTestScope(() =>
+      recallMemories({
+        embedding: new Array<number>(1536).fill(0.1),
+        minWeight: "high",
+        limit: 10,
+      }),
+    );
     expect(sessionRun).toHaveBeenCalledTimes(1);
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    // Cypher must reference $orgId (guard) and workspaceId filter
     expect(cypher).toContain("agent_memory_embedding");
-    expect(cypher).toContain("orgId");
+    expect(cypher).toContain("node.orgId = $orgId");
     expect(cypher).toContain("workspaceId");
     expect(cypher).toContain("$minRank");
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(params.orgId).toBe("ten_1");
-    expect(params.workspaceId).toBe("ws_1");
+    // orgId/workspaceId are injected by scopedSession (real impl), not threaded
+    // through the function args; the mock here bypasses injection, so params
+    // does not contain them — that is the correct test surface for this layer.
+    expect(params.orgId).toBeUndefined();
+    expect(params.workspaceId).toBeUndefined();
     expect(params.minRank).toBe(1);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.id).toBe("m_1");
@@ -61,18 +66,19 @@ describe("memory neo4j", () => {
     sessionRun.mockResolvedValueOnce({
       records: [fakeRecord({ id: "m_new" })],
     });
-    const res = await writeMemory({
-      orgId: "ten_1",
-      workspaceId: "ws_1",
-      nodeRef: "Function:foo",
-      embedding: new Array<number>(1536).fill(0.2),
-      weight: "high",
-      kind: "constraint",
-      lesson: "be careful",
-      source: "feature",
-    });
+    const res = await withTestScope(() =>
+      writeMemory({
+        nodeRef: "Function:foo",
+        embedding: new Array<number>(1536).fill(0.2),
+        weight: "high",
+        kind: "constraint",
+        lesson: "be careful",
+        source: "feature",
+      }),
+    );
     expect(res.memoryId).toBe("m_new");
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    // Cypher must contain MERGE key with orgId (guard) and nodeRef
     expect(cypher).toContain("MERGE (m:AgentMemory");
     expect(cypher).toContain("orgId: $orgId");
     expect(cypher).toContain("nodeRef: $nodeRef");
