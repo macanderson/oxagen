@@ -4,13 +4,14 @@
  * Reads the user's preferences via the `user.preferences.read` capability
  * handler and renders the <PreferencesForm> client component.
  */
+import type { Metadata } from "next";
 import { getSessionOrRedirect } from "@/lib/session";
 import { PageHeader } from "@/components/ui/page-header";
 import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { PreferencesForm } from "./preferences-form";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Preferences — Oxagen",
 };
 
