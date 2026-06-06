@@ -1005,6 +1005,31 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0)
 
+  packages/plugins:
+    dependencies:
+      '@oxagen/config':
+        specifier: workspace:*
+        version: link:../config
+      '@oxagen/crypto':
+        specifier: workspace:*
+        version: link:../crypto
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.1
+        version: 25.9.1
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0))
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0)
+
   packages/sandbox:
     dependencies:
       '@oxagen/config':
