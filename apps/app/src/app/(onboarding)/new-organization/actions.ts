@@ -2,6 +2,9 @@
 import { z } from "zod";
 import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
+// tenancy: unscoped seam (org creation bootstrap — no org or workspace exists
+// yet at call time; this action IS what creates the first tenant identity, so
+// a scope cannot be entered before the org row exists) — OXA-1515
 import { grantFreeCredits } from "@oxagen/billing";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";

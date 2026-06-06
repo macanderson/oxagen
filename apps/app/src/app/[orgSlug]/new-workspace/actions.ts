@@ -1,7 +1,8 @@
 "use server";
 import { and, eq } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
+import { withTenantDb } from "@oxagen/database";
 import { schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
@@ -14,6 +15,11 @@ const WORKSPACE_CREATE_ROLES = new Set(["owner", "admin"]);
 // of these slugs would be shadowed by the route and unreachable. "new-workspace"
 // is this very page; "settings" is the org settings subtree.
 const RESERVED_WORKSPACE_SLUGS = new Set(["new-workspace", "settings"]);
+
+// Sentinel workspaceId for org-only scope (workspace does not exist yet at
+// pre-check time; withTenantDb sets both GUCs but org_only-classed tables
+// only evaluate the org_id GUC) — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 /** Postgres unique_violation — the (org_id, slug) index lost a create race. */
 function isSlugConflict(err: unknown): boolean {
@@ -36,67 +42,73 @@ export async function createWorkspaceAction(
   const org = await resolveOrg(orgSlug);
   await assertOrgMember(org.id, session.user.id);
 
-  // Authorization: only org owners/admins may create workspaces.
-  const [membership] = await db()
-    .select({ role: schema.orgUsers.role })
-    .from(schema.orgUsers)
-    .where(and(eq(schema.orgUsers.orgId, org.id), eq(schema.orgUsers.userId, session.user.id)))
-    .limit(1);
-  if (!membership || !WORKSPACE_CREATE_ROLES.has(membership.role.toLowerCase())) {
-    return { ok: false, error: "Only organization owners and admins can create workspaces" };
-  }
+  return await runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, async () => {
+    // Authorization: only org owners/admins may create workspaces.
+    const [membership] = await withTenantDb((tx) =>
+      tx
+        .select({ role: schema.orgUsers.role })
+        .from(schema.orgUsers)
+        .where(and(eq(schema.orgUsers.orgId, org.id), eq(schema.orgUsers.userId, session.user.id)))
+        .limit(1),
+    );
+    if (!membership || !WORKSPACE_CREATE_ROLES.has(membership.role.toLowerCase())) {
+      return { ok: false, error: "Only organization owners and admins can create workspaces" };
+    }
 
-  const parsed = workspaceCreate.input.safeParse({
-    name: formData.get("name"),
-    slug: formData.get("slug"),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid workspace" };
-  }
-  if (RESERVED_WORKSPACE_SLUGS.has(parsed.data.slug)) {
-    return { ok: false, error: `"${parsed.data.slug}" is a reserved slug — choose another` };
-  }
-
-  // Pre-check slug uniqueness for a friendly error; the composite unique index
-  // is the hard guard that handles the concurrent-create race below.
-  const existing = await db()
-    .select({ id: schema.workspaces.id })
-    .from(schema.workspaces)
-    .where(and(eq(schema.workspaces.orgId, org.id), eq(schema.workspaces.slug, parsed.data.slug)))
-    .limit(1);
-  if (existing[0]) {
-    return { ok: false, error: `Slug "${parsed.data.slug}" is already taken in this organization` };
-  }
-
-  try {
-    const workspaceSlug = await db().transaction(async (tx) => {
-      const [ws] = await tx
-        .insert(schema.workspaces)
-        .values({
-          orgId: org.id,
-          name: parsed.data.name,
-          slug: parsed.data.slug,
-          createdByUserId: session.user.id,
-          updatedByUserId: session.user.id,
-        })
-        .returning({ id: schema.workspaces.id, slug: schema.workspaces.slug });
-      if (!ws) throw new Error("Workspace insert returned no row");
-
-      await tx.insert(schema.workspaceUsers).values({
-        workspaceId: ws.id,
-        userId: session.user.id,
-        role: "owner",
-        joinedAt: new Date(),
-        createdByUserId: session.user.id,
-        updatedByUserId: session.user.id,
-      });
-      return ws.slug;
+    const parsed = workspaceCreate.input.safeParse({
+      name: formData.get("name"),
+      slug: formData.get("slug"),
     });
-    return { ok: true, workspaceSlug };
-  } catch (err) {
-    if (isSlugConflict(err)) {
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid workspace" };
+    }
+    if (RESERVED_WORKSPACE_SLUGS.has(parsed.data.slug)) {
+      return { ok: false, error: `"${parsed.data.slug}" is a reserved slug — choose another` };
+    }
+
+    // Pre-check slug uniqueness for a friendly error; the composite unique index
+    // is the hard guard that handles the concurrent-create race below.
+    const existing = await withTenantDb((tx) =>
+      tx
+        .select({ id: schema.workspaces.id })
+        .from(schema.workspaces)
+        .where(and(eq(schema.workspaces.orgId, org.id), eq(schema.workspaces.slug, parsed.data.slug)))
+        .limit(1),
+    );
+    if (existing[0]) {
       return { ok: false, error: `Slug "${parsed.data.slug}" is already taken in this organization` };
     }
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to create workspace" };
-  }
+
+    try {
+      const workspaceSlug = await withTenantDb(async (tx) => {
+        const [ws] = await tx
+          .insert(schema.workspaces)
+          .values({
+            orgId: org.id,
+            name: parsed.data.name,
+            slug: parsed.data.slug,
+            createdByUserId: session.user.id,
+            updatedByUserId: session.user.id,
+          })
+          .returning({ id: schema.workspaces.id, slug: schema.workspaces.slug });
+        if (!ws) throw new Error("Workspace insert returned no row");
+
+        await tx.insert(schema.workspaceUsers).values({
+          workspaceId: ws.id,
+          userId: session.user.id,
+          role: "owner",
+          joinedAt: new Date(),
+          createdByUserId: session.user.id,
+          updatedByUserId: session.user.id,
+        });
+        return ws.slug;
+      });
+      return { ok: true, workspaceSlug };
+    } catch (err) {
+      if (isSlugConflict(err)) {
+        return { ok: false, error: `Slug "${parsed.data.slug}" is already taken in this organization` };
+      }
+      return { ok: false, error: err instanceof Error ? err.message : "Failed to create workspace" };
+    }
+  });
 }

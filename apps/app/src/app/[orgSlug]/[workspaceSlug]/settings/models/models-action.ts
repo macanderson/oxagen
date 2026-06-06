@@ -9,7 +9,8 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind every foundation handler into the shared kernel so
 // invoke("workspace.model.settings.write", …) can resolve its handler. Without
@@ -87,48 +88,55 @@ export async function updateWorkspaceModelsAction(
   // Assert the caller is an org member first (IDOR guard).
   await assertOrgMember(org.id, session.user.id);
 
-  // Re-read the caller's workspace role server-side — never trust the client flag.
-  const wsRoleRows = await db()
-    .select({ role: schema.workspaceUsers.role })
-    .from(schema.workspaceUsers)
-    .where(
-      and(
-        eq(schema.workspaceUsers.workspaceId, ws.id),
-        eq(schema.workspaceUsers.userId, session.user.id),
-      ),
-    )
-    .limit(1);
-
-  const wsRole = wsRoleRows[0]?.role ?? "";
-  if (!["owner", "admin"].includes(wsRole.toLowerCase())) {
-    return { ok: false, error: "Only workspace owners and admins can edit model defaults." };
-  }
-
-  const ctx = buildCapabilityContext({
-    orgId: org.id,
-    workspaceId: ws.id,
-    userId: session.user.id,
-  });
-
-  try {
-    await invoke(
-      "workspace.model.settings.write",
-      {
-        defaultTextTier,
-        defaultTextModel,
-        defaultImageModel,
-        defaultVideoModel,
-      },
-      ctx,
-      { surface: "agent" },
+  return await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
+    // Re-read the caller's workspace role server-side — never trust the client flag.
+    const wsRoleRows = await withTenantDb((tx) =>
+      tx
+        .select({ role: schema.workspaceUsers.role })
+        .from(schema.workspaceUsers)
+        .where(
+          and(
+            eq(schema.workspaceUsers.workspaceId, ws.id),
+            eq(schema.workspaceUsers.userId, session.user.id),
+          ),
+        )
+        .limit(1),
     );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to save model defaults.";
-    return { ok: false, error: message };
-  }
 
-  const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-  revalidatePath(workspace.settings.models(routeCtx));
+    const wsRole = wsRoleRows[0]?.role ?? "";
+    if (!["owner", "admin"].includes(wsRole.toLowerCase())) {
+      return { ok: false, error: "Only workspace owners and admins can edit model defaults." };
+    }
 
-  return { ok: true };
+    const ctx = buildCapabilityContext({
+      orgId: org.id,
+      workspaceId: ws.id,
+      userId: session.user.id,
+    });
+
+    try {
+      // invoke() goes through kernel.invoke() which enters its own
+      // runInTenantScope — the outer scope here is belt-and-suspenders
+      // for any direct withTenantDb calls in this action.
+      await invoke(
+        "workspace.model.settings.write",
+        {
+          defaultTextTier,
+          defaultTextModel,
+          defaultImageModel,
+          defaultVideoModel,
+        },
+        ctx,
+        { surface: "agent" },
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to save model defaults.";
+      return { ok: false, error: message };
+    }
+
+    const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+    revalidatePath(workspace.settings.models(routeCtx));
+
+    return { ok: true };
+  });
 }

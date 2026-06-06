@@ -1,5 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@oxagen/database";
+// tenancy: unscoped seam (shared catalog — billing.plans is a platform-wide
+// plan catalog with no per-tenant rows; no org/workspace filter applies) — OXA-1515
 import type { PlanRow } from "@oxagen/database";
 import { SUBSCRIPTION_PLANS } from "@oxagen/billing";
 import type { Plan } from "@/components/billing/plan-card";

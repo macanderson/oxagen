@@ -4,6 +4,9 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
+// tenancy: unscoped seam (auth.users is a global identity table managed by
+// Better Auth with no org_id/workspace_id columns; RLS is not applied to it
+// per spec §6.3 — OXA-1515)
 import { getSessionOrRedirect } from "@/lib/session";
 
 const ProfileSchema = z.object({

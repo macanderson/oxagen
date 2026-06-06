@@ -2,11 +2,15 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { eq, and } from "drizzle-orm";
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { isSeatLimitError, assertSeatAvailable } from "@oxagen/billing";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
+
+// Sentinel workspaceId for org-only actions (no workspace context). — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -52,32 +56,36 @@ export async function inviteMemberAction(
     return { ok: false, code: "internal", error: "Could not verify seat availability" };
   }
 
-  try {
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  return await runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, async () => {
+    try {
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    await db()
-      .insert(schema.invitations)
-      .values({
-        orgId: tenant.id,
-        email,
-        role,
-        status: "pending",
-        invitedByUserId: session.user.id,
-        expiresAt,
-      });
+      await withTenantDb((tx) =>
+        tx
+          .insert(schema.invitations)
+          .values({
+            orgId: tenant.id,
+            email,
+            role,
+            status: "pending",
+            invitedByUserId: session.user.id,
+            expiresAt,
+          }),
+      );
 
-    logger.info({ orgSlug, email, role }, "members: invitation created");
-    revalidatePath(`/${orgSlug}/members`);
-    return { ok: true };
-  } catch (err) {
-    // Unique violation on (orgId, email) for pending invitations.
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("invitations_org_email_pending_idx") || msg.includes("unique")) {
-      return { ok: false, code: "already_invited", error: `${email} already has a pending invitation.` };
+      logger.info({ orgSlug, email, role }, "members: invitation created");
+      revalidatePath(`/${orgSlug}/members`);
+      return { ok: true };
+    } catch (err) {
+      // Unique violation on (orgId, email) for pending invitations.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("invitations_org_email_pending_idx") || msg.includes("unique")) {
+        return { ok: false, code: "already_invited", error: `${email} already has a pending invitation.` };
+      }
+      logger.error({ err, orgSlug, email }, "members: inviteMemberAction failed");
+      return { ok: false, code: "internal", error: "Failed to create invitation" };
     }
-    logger.error({ err, orgSlug, email }, "members: inviteMemberAction failed");
-    return { ok: false, code: "internal", error: "Failed to create invitation" };
-  }
+  });
 }
 
 // ── declineInvitationAction ───────────────────────────────────────────────────
@@ -91,31 +99,35 @@ export async function declineInvitationAction(input: {
   await getSessionOrRedirect();
   const tenant = await resolveOrg(input.orgSlug);
 
-  try {
-    const updated = await db()
-      .update(schema.invitations)
-      .set({ status: "declined", updatedAt: new Date() })
-      .where(
-        and(
-          eq(schema.invitations.orgId, tenant.id),
-          eq(schema.invitations.publicId, input.invitationPublicId),
-          eq(schema.invitations.status, "pending"),
-        ),
-      )
-      .returning({ id: schema.invitations.id });
+  return await runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, async () => {
+    try {
+      const updated = await withTenantDb((tx) =>
+        tx
+          .update(schema.invitations)
+          .set({ status: "declined", updatedAt: new Date() })
+          .where(
+            and(
+              eq(schema.invitations.orgId, tenant.id),
+              eq(schema.invitations.publicId, input.invitationPublicId),
+              eq(schema.invitations.status, "pending"),
+            ),
+          )
+          .returning({ id: schema.invitations.id }),
+      );
 
-    if (updated.length === 0) {
-      return { ok: false, error: "Invitation not found or already resolved." };
+      if (updated.length === 0) {
+        return { ok: false, error: "Invitation not found or already resolved." };
+      }
+
+      logger.info(
+        { orgSlug: input.orgSlug, invitationPublicId: input.invitationPublicId },
+        "members: invitation declined",
+      );
+      revalidatePath(`/${input.orgSlug}/members`);
+      return { ok: true };
+    } catch (err) {
+      logger.error({ err }, "members: declineInvitationAction failed");
+      return { ok: false, error: "Failed to decline invitation" };
     }
-
-    logger.info(
-      { orgSlug: input.orgSlug, invitationPublicId: input.invitationPublicId },
-      "members: invitation declined",
-    );
-    revalidatePath(`/${input.orgSlug}/members`);
-    return { ok: true };
-  } catch (err) {
-    logger.error({ err }, "members: declineInvitationAction failed");
-    return { ok: false, error: "Failed to decline invitation" };
-  }
+  });
 }

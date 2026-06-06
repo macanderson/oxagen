@@ -17,7 +17,8 @@ import {
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
 import { persistGeneratedAsset, createPendingGeneratedAsset } from "@oxagen/handlers";
 import { inngest } from "@oxagen/inngest-functions/client";
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { randomUUID } from "node:crypto";
 import type { ModelMessage } from "ai";
 import type { RenderDirective, StreamEvent } from "@/components/chat/stream-event-types";
@@ -254,40 +255,38 @@ export async function POST(request: NextRequest): Promise<Response> {
     // Fetch the most-recent HISTORY_LIMIT rows by ordering DESC + LIMIT,
     // then reverse in JS so they end up chronological (oldest→newest). This
     // keeps the prompt size predictable while always retaining recent context.
-    const rows = await db()
-      .select({
-        role: schema.messages.role,
-        content: schema.messages.content,
-      })
-      .from(schema.messages)
-      .where(
-        and(
-          eq(schema.messages.conversationId, conversationId),
-          // Tenant isolation (IDOR guard): conversationId arrives in the
-          // request body, so scope the read to the resolved workspace — a
-          // member of org A must not be able to pass a conversationId from
-          // org B and read its history.
-          //
-          // INTERIM defense-in-depth. The durable, uniform tenant boundary is
-          // Postgres RLS (OXA-1515: ENABLE/FORCE ROW LEVEL SECURITY + policies
-          // keyed on current_setting('app.current_org_id'), applied via a
-          // withTenant() GUC wrapper). Once RLS lands this predicate is
-          // redundant rather than load-bearing; it is kept until then so this
-          // path is never conversationId-only in the meantime.
-          //
-          // Scope on BOTH org and workspace, not workspace alone: a messages
-          // row carries its own (org_id, workspace_id); pinning both closes the
-          // gap where a leaked/guessed workspace id could be paired with a
-          // foreign org context to read another tenant's history.
-          eq(schema.messages.orgId, tenant.id),
-          eq(schema.messages.workspaceId, workspace.id),
+    //
+    // Tenant isolation: this read is wrapped in runInTenantScope + withTenantDb
+    // so the Postgres RLS policies (spec §6.3, OXA-1515) enforce isolation at
+    // the DB layer. The eq(orgId) / eq(workspaceId) predicates below are kept
+    // as belt-and-suspenders planner hints (decided permanently, spec §8 §15.3).
+    // This supersedes the interim defense-in-depth comment that previously lived
+    // here — RLS is now the load-bearing boundary once TENANT_RLS_ENFORCEMENT_ENABLED
+    // is flipped; the manual predicates remain non-load-bearing and redundant.
+    const rows = await runInTenantScope(
+      { orgId: tenant.id, workspaceId: workspace.id },
+      () =>
+        withTenantDb((tx) =>
+          tx
+            .select({
+              role: schema.messages.role,
+              content: schema.messages.content,
+            })
+            .from(schema.messages)
+            .where(
+              and(
+                eq(schema.messages.conversationId, conversationId),
+                eq(schema.messages.orgId, tenant.id),
+                eq(schema.messages.workspaceId, workspace.id),
+              ),
+            )
+            // Take the most-recent HISTORY_LIMIT rows (DESC + LIMIT), then reverse to
+            // chronological order so the model reads them oldest→newest. Ordering ASC
+            // with LIMIT would return the OLDEST N rows and drop all recent context.
+            .orderBy(desc(schema.messages.createdAt))
+            .limit(HISTORY_LIMIT),
         ),
-      )
-      // Take the most-recent HISTORY_LIMIT rows (DESC + LIMIT), then reverse to
-      // chronological order so the model reads them oldest→newest. Ordering ASC
-      // with LIMIT would return the OLDEST N rows and drop all recent context.
-      .orderBy(desc(schema.messages.createdAt))
-      .limit(HISTORY_LIMIT);
+    );
 
     historyMessages = rows
       .filter((r) => VALID_ROLES.has(r.role))
@@ -464,30 +463,36 @@ export async function POST(request: NextRequest): Promise<Response> {
         // client already consumed, so it is isolated and only logged.
         if (conversationId && assistantText.length > 0) {
           try {
-            const [assistantMsg] = await db()
-              .insert(schema.messages)
-              .values({
-                orgId: tenant.id,
-                workspaceId: workspace.id,
-                conversationId,
-                parentMessageId: parentMessageId ?? undefined,
-                role: "assistant",
-                content: assistantText,
-                contentBlocks: [],
-                isActiveInBranch: true,
-                metadata: { status: "complete" },
-                createdByUserId: session.user.id,
-                updatedByUserId: session.user.id,
-              })
-              .returning({ id: schema.messages.id });
-            if (assistantMsg) {
-              // Advance the conversation's active leaf to the assistant reply
-              // so the next turn threads from here.
-              await db()
-                .update(schema.conversations)
-                .set({ activeLeafMessageId: assistantMsg.id, updatedAt: new Date() })
-                .where(eq(schema.conversations.id, conversationId));
-            }
+            await runInTenantScope(
+              { orgId: tenant.id, workspaceId: workspace.id },
+              () =>
+                withTenantDb(async (tx) => {
+                  const [assistantMsg] = await tx
+                    .insert(schema.messages)
+                    .values({
+                      orgId: tenant.id,
+                      workspaceId: workspace.id,
+                      conversationId,
+                      parentMessageId: parentMessageId ?? undefined,
+                      role: "assistant",
+                      content: assistantText,
+                      contentBlocks: [],
+                      isActiveInBranch: true,
+                      metadata: { status: "complete" },
+                      createdByUserId: session.user.id,
+                      updatedByUserId: session.user.id,
+                    })
+                    .returning({ id: schema.messages.id });
+                  if (assistantMsg) {
+                    // Advance the conversation's active leaf to the assistant reply
+                    // so the next turn threads from here.
+                    await tx
+                      .update(schema.conversations)
+                      .set({ activeLeafMessageId: assistantMsg.id, updatedAt: new Date() })
+                      .where(eq(schema.conversations.id, conversationId));
+                  }
+                }),
+            );
           } catch (persistErr) {
             console.error("[chat/stream] failed to persist assistant reply:", persistErr);
           }

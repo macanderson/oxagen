@@ -4,6 +4,9 @@ import { notFound } from "next/navigation";
 import { eq, and } from "drizzle-orm";
 import { db } from "@oxagen/database/client";
 import { schema } from "@oxagen/database";
+// tenancy: unscoped seam (resolves the active org/workspace from slugs/session
+// before a tenant scope exists — this is the canonical bootstrap step that
+// PRODUCES the orgId/workspaceId used by runInTenantScope in callers) — OXA-1515
 
 export interface ResolvedOrg {
   id: string;

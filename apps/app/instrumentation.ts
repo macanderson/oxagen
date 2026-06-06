@@ -54,6 +54,9 @@ export async function register(): Promise<void> {
     // Wire the Postgres security event emitter (SOC2 CC6/CC7 audit trail).
     // Registered once per server process, immediately after bootstrapIAMRuntime()
     // so the kernel runtime is initialised before any capability can be invoked.
+    // tenancy: unscoped seam (process startup — no tenant context exists at
+    // bootstrap time; the security event emitter is wired once before any
+    // request runs) — OXA-1515
     const insert = makeSecurityEventInserter(db());
     setSecurityEventEmitter((kernelEvent) => {
       recordSecurityEvent(insert, {
