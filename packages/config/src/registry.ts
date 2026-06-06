@@ -362,16 +362,16 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "",
   },
-  NEXT_PUBLIC_GOOGLE_MAPS_API_SECRET: {
+  GOOGLE_MAPS_URL_SIGNING_SECRET: {
     group: "Google Maps",
     description:
-      "Google Maps URL-signing secret. WARNING: the NEXT_PUBLIC_ prefix makes Next.js inline " +
-      "this into the browser bundle, so it is PUBLIC. A signing secret should NOT be public — " +
-      "if you actually use URL signing, move it to a server-only var without the NEXT_PUBLIC_ " +
-      "prefix. Not referenced by any Oxagen client or server code today.",
-    secret: false,
-    clientExposed: true,
-    services: ["app"],
+      "Google Maps URL-signing secret. Server-side only — must never be inlined into the " +
+      "browser bundle. Renamed from NEXT_PUBLIC_GOOGLE_MAPS_API_SECRET (which would have " +
+      "caused Next.js to expose it client-side). Consumed server-side only when URL signing " +
+      "is enabled.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "",
