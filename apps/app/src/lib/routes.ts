@@ -81,6 +81,7 @@ export const org = {
   settings: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,
     general: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,
+    plugins: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/plugins`,
   },
 } as const;
 
