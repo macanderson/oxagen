@@ -544,7 +544,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -563,7 +563,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -582,7 +582,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -600,7 +600,7 @@
       "layers": {
         "api": true,
         "mcp": true,
-        "unit": false
+        "unit": true
       }
     },
     {
@@ -616,7 +616,7 @@
       "layers": {
         "api": true,
         "mcp": true,
-        "unit": false
+        "unit": true
       }
     },
     {
