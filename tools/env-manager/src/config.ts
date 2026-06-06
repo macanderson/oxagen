@@ -8,8 +8,8 @@ const DEFAULT_PROJECTS: Record<ServiceName, string> = {
   app: "prj_i68xfa3ZjEtCzNfqWvHfEsgtjZud", // oxagen-v2-app
   website: "prj_wNAmlrwkJxpfeIVcO2LaZAibHJDA", // oxagen-v2-website
   mcp: "prj_0AQJiFXku3YUAi4TnQoR6KCvps2r", // oxagen-v2-mcp
-  admin: "prj_8FzVACqAogrA24srokBWKxaDn1JQ", // oxagen-admin (confirm if v2)
-  docs: "prj_dhqanD0vewekv46HT5HlbnrfngmO", // oxagen-docs (confirm if v2)
+  admin: "prj_ytvtJwY1BLMniqKHi9X0MMyom7cN", // oxagen-v2-admin
+  docs: "prj_N3jISq90j0bctb6MbpEvUZxgxtp8", // oxagen-v2-docs
 };
 
 const DEFAULT_TEAM_ID = "team_DiMizWNDHKFFU5ajKe2ZVKl9";

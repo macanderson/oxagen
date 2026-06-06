@@ -1,6 +1,6 @@
 {
   "name": "oxagen-monorepo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "packageManager": "pnpm@10.34.1",
   "engines": {
@@ -30,9 +30,10 @@
     "check:contracts": "node tools/scripts/check-contracts.mjs",
     "env:check": "tsx tools/scripts/env-check.ts",
     "gate": "turbo run lint typecheck test:unit build --filter=...[origin/main] && pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations",
-    "release:patch": "changeset version --type patch && pnpm install && git add -A && git commit -m 'chore: release patch' && pnpm changeset tag",
-    "release:minor": "changeset version --type minor && pnpm install && git add -A && git commit -m 'chore: release minor' && pnpm changeset tag",
-    "release:major": "changeset version --type major && pnpm install && git add -A && git commit -m 'chore: release major' && pnpm changeset tag",
+    "release": "tsx --env-file-if-exists=.env.local tools/scripts/release.ts",
+    "release:patch": "tsx --env-file-if-exists=.env.local tools/scripts/release.ts patch",
+    "release:minor": "tsx --env-file-if-exists=.env.local tools/scripts/release.ts minor",
+    "release:major": "tsx --env-file-if-exists=.env.local tools/scripts/release.ts major",
     "billing:stripe-sync": "tsx --env-file-if-exists=.env.local tools/scripts/stripe-sync.ts",
     "db:seed-skills": "tsx --env-file-if-exists=.env.local tools/scripts/seed-skills.ts",
     "db:backfill-iam": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-org-iam.ts"

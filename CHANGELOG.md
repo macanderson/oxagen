@@ -1,0 +1,84 @@
+# Changelog
+
+## v0.2.0
+
+_Changes since v0.0.1-pre._
+
+- chore: refresh capabilities manifest unit-test coverage flags (10a7bb5) — Mac Anderson
+- checkpoint (902a0aa) — Mac Anderson
+- checkpoint (3bfd979) — Mac Anderson
+- (chore): increase test coverage (12b8876) — Mac Anderson
+- test(inngest): cover security.audit-partition-rollover (CI coverage gate) (16ed6e3) — Mac Anderson
+- checkpoint (79bd1a6) — Mac Anderson
+- checkpoint (753983a) — Mac Anderson
+- checkpoint (87d7252) — Mac Anderson
+- checkpoint (719f7e0) — Mac Anderson
+- checkpoint (9a61fb2) — Mac Anderson
+- checkpoint (75a3438) — Mac Anderson
+- checkpoint (9810c86) — Mac Anderson
+- checkpoint (8802874) — Mac Anderson
+- fix(release-audit): turbo/env hygiene, drop dead defineContract, docs + test hardening (c0dae4d) — Mac Anderson
+- fix: close parity, ACL, and SOC2 gaps across surfaces (61ded41) — Mac Anderson
+- checkpoint (ce1cec3) — Mac Anderson
+- checkpoint (b595ee8) — Mac Anderson
+- fix(mcp): drop watchOptions ignore that prevented xmcp dev from starting the HTTP server (3d9f0f3) — Mac Anderson
+- test(agent,oxagen): floor functions coverage at measured values (pre-existing, OXA-1553) (620e7d0) — Mac Anderson
+- fix(telemetry): retry ClickHouse ensureDatabase on cold-start (Cloud auto-pause) (OXA-1515) (583e78a) — Mac Anderson
+- checkpoint (bc3e1c2) — Mac Anderson
+- checkpoint (184f2f3) — Mac Anderson
+- checkpoint (ef12678) — Mac Anderson
+- fix(ci): idempotent baseline schemas, CJS-safe api bootstrap, regen .env.example (OXA-1515) (072239e) — Mac Anderson
+- feat(ci,lint,docs): ban raw db()/session()/clickhouse() seams; RLS integration job; tenancy docs (OXA-1515) (a28bb11) — Mac Anderson
+- refactor(app): scope RSC page/layout DB reads via withTenantDb/withSystemDb (OXA-1515) (cd99c94) — Mac Anderson
+- fix(app,api,mcp): seams→withSystemDb; arg-less audit inserter; assertRlsConnectionSafe at startup; new-workspace bootstrap fix (OXA-1515) (42169ac) — Mac Anderson
+- fix(inngest): rollup cron + video-render fallback use withSystemDb (OXA-1515) (f404042) — Mac Anderson
+- fix(billing): webhook/dispute/cron seams use withSystemDb; prorated-grant uses withTenantDb (OXA-1515) (8824034) — Mac Anderson
+- fix(handlers): bootstrap/cross-org/serve seams use withSystemDb; persist via withSystemDb (OXA-1515) (12ae6f1) — Mac Anderson
+- fix(auth): resolvers use withSystemDb (RLS bypass for pre-scope identity resolution) (OXA-1515) (44f37e8) — Mac Anderson
+- feat(database): withSystemDb explicit RLS-bypass + superuser startup guard; audit inserter always lands (OXA-1515) (f3c3cda) — Mac Anderson
+- test(database): RLS isolation proof + manifest coverage integration suite (OXA-1515) (ce235ac) — Mac Anderson
+- refactor(api,telemetry): annotate startup/audit db() seams (OXA-1515) (c275bf2) — Mac Anderson
+- fix(mcp): reject session tokens (close orgId:'' fail-open); scope db access (OXA-1515) (8d45512) — Mac Anderson
+- refactor(app): scope server actions + supersede interim chat-stream comment (OXA-1515) (dcd842c) — Mac Anderson
+- refactor(inngest): scope step bodies via runInTenantScope + withTenantDb (OXA-1515) (60b386b) — Mac Anderson
+- refactor(auth): annotate identity-resolution db() seams (OXA-1515) (e8186d8) — Mac Anderson
+- refactor(iam,ai): route scoped DB access through withTenantDb (OXA-1515) (98b1f19) — Mac Anderson
+- refactor(agent): route scoped DB access through withTenantDb (OXA-1515) (9353da8) — Mac Anderson
+- refactor(billing): route scoped DB access through withTenantDb (OXA-1515) (086ed65) — Mac Anderson
+- refactor(handlers): route scoped DB access through withTenantDb (OXA-1515) (c1ef926) — Mac Anderson
+- feat(telemetry): chInsert/chSelect tenant seam with org_id guard (OXA-1515) (9950db3) — Mac Anderson
+- feat(ontology): scopedSession tenant seam; route graph memory through it (OXA-1515) (b93d05b) — Mac Anderson
+- feat(database): withTenantDb wrapper + bypass-aware RLS policy generator (OXA-1515) (1ad20ed) — Mac Anderson
+- (fix): fixed the release-audit slash command (7ef654e) — Mac Anderson
+- feat(tenancy): add @oxagen/tenancy ALS seam + kernel scope wiring; fail closed on empty org (OXA-1515) (bf13734) — Mac Anderson
+- fix(app): persist chat history across turns + working new-conversation (ff7caf4) — Mac Anderson
+- release audit complete (05f2604) — Mac Anderson
+- checkpoint (0eecb1c) — Mac Anderson
+- fix(telemetry): execution_logs.step_id must be Nullable(UUID) (9f284a9) — Mac Anderson
+- docs(billing): comprehensive Stripe integration reference (docs/stripe-integration.html) (6e7c7e8) — Mac Anderson
+- checkpoint (a5d0adf) — Mac Anderson
+- db: strip pg_dump 16 \restrict meta-commands from baseline (e928d70) — Mac Anderson
+- db: re-baseline migrations into a single 0000_baseline.sql (19e59fd) — Mac Anderson
+- checkpoint (5ec1d60) — Mac Anderson
+- fix(billing): address audit findings — idempotency, auto-reload safety, refund reconciliation, API role gates (b4c4385) — Mac Anderson
+- feat(conversations): workspace conversation history nav with archive, delete, and purge (5a51ff9) — Mac Anderson
+- fix(billing): enforce billing-manage role on all mutating actions + lint (a403a14) — Mac Anderson
+- checkpoint (01764d8) — Mac Anderson
+- (feat):stripe billing hardening (8dce75c) — Mac Anderson
+- feat(app): real workspace-creation flow (OXA-1463) (6fd6d5d) — Mac Anderson
+- feat(db): soft-delete columns on content.files + content.documents (0007) (adaec92) — Mac Anderson
+- fix(preferences): apply image/video model defaults + fix runtime wiring (75b54e9) — Mac Anderson
+- fix(app): account sidebar test expects 7 items (privacy added) (7566c48) — Mac Anderson
+- fix(db): journal the orphaned drop-dead-organization-schema migration as 0006 (7956223) — Mac Anderson
+- checkpoint (6a82f90) — Mac Anderson
+- fix(ci): regenerate .env.example + fix @oxagen/config/env mock (fa21773) — Mac Anderson
+- checkpoint (4d18aeb) — Mac Anderson
+- checkpoint (4fdb763) — Mac Anderson
+- fix(db-migrate): reset search_path before each migration file (f216464) — Mac Anderson
+- checkpoint (c13d377) — Mac Anderson
+- checkpoint (ac9db08) — Mac Anderson
+- checkpoint (1d5ca49) — Mac Anderson
+- docs: release audit report 52455cd (2026-06-05) (bcd0325) — Claude
+- checkpoint (3e10d0c) — Mac Anderson
+- fix(handlers): add Authorization header to claude-code MCP install command (856a131) — Claude
+
