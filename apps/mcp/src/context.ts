@@ -1,10 +1,15 @@
 /**
  * MCP capability-context resolution.
  *
- * Real per-request identity is resolved from the inbound Authorization header
- * via @oxagen/auth's transport-agnostic resolvers:
- *   - API key   `<prefix>_<secret>`  → resolveApiKey  → org / workspace scope
- *   - Session token (Better Auth)    → resolveSession → userId (unscoped)
+ * Real per-request identity is resolved from the inbound Authorization header.
+ * Only API keys are accepted:
+ *   - API key   `<prefix>_<secret>`  -> resolveApiKey  -> org / workspace scope
+ *
+ * Session tokens (Better Auth opaque tokens -- no underscore) are rejected at
+ * the edge with `invalid_token`. Session tokens carry no org/workspace scope;
+ * accepting them would produce orgId:"" which fails closed in the kernel but
+ * gives a confusing error. MCP clients must always authenticate with API keys.
+ * See OXA-1515 for the tenancy-scope rationale.
  *
  * Token classification: an API key always contains an underscore in the format
  * `<prefix>_<secret>`. A session token (Better Auth opaque token) never does.
@@ -12,7 +17,7 @@
  * SECURITY: tenant identity (orgId / workspaceId / userId / apiKeyId) is NEVER
  * read from client-controlled identity headers (`x-oxagen-org-id` & friends).
  * It is derived solely from the validated credential. Only `x-request-id` is
- * read from headers — a trace-correlation id, not a security boundary — and it
+ * read from headers -- a trace-correlation id, not a security boundary -- and it
  * falls back to a fresh UUID when absent.
  *
  * `buildContext` is the single auth entrypoint for xmcp tools: each tool calls
@@ -20,7 +25,7 @@
  * failure so the tool invocation fails closed (xmcp surfaces it as an error).
  */
 import type { CapabilityContext } from "@oxagen/oxagen";
-import { resolveApiKey, resolveSession } from "@oxagen/auth";
+import { resolveApiKey } from "@oxagen/auth";
 
 /** xmcp's headers() helper returns this shape (array when a header repeats). */
 type HttpHeaders = Record<string, string | string[] | undefined>;
@@ -102,25 +107,23 @@ export async function resolveMcpContext(
     };
   }
 
-  // Session token path — resolves to a userId; orgId/workspaceId are left empty
-  // (capability handlers that require scoped access enforce ctx.orgId non-empty
-  // via their own guards). Empty strings — not nil-UUIDs — honestly signal
-  // "not resolved" rather than faking a tenant boundary.
-  const sessionResult = await resolveSession(token);
-  if (!sessionResult) return { ok: false, reason: "invalid_token" };
-
-  return {
-    ok: true,
-    ctx: {
-      orgId: "",
-      workspaceId: "",
-      userId: sessionResult.userId,
-      apiKeyId: null,
-      requestId,
-      surface: "mcp",
-      messageId: null,
-    },
-  };
+  // Session token path -- MCP requires an API key to carry a fully-resolved
+  // org/workspace scope. Session tokens (Better Auth opaque tokens) only
+  // provide a userId; they carry no org/workspace context at all. Emitting
+  // an empty orgId ("") would cause the kernel's runInTenantScope to throw
+  // TenantScopeError (fail-closed, OXA-1515 Task 3 Step 4), but that gives
+  // a confusing generic denial. Reject here at the edge with invalid_token so
+  // the caller gets a clear 401 rather than a cryptic 500/deny downstream.
+  //
+  // Rationale: MCP clients authenticate with API keys (org+workspace scope
+  // baked into the key). Browser sessions (app surface) use a different
+  // transport (the /api/v1/chat/stream SSE route) where the session cookie
+  // is resolved server-side with full tenant context. There is no legitimate
+  // MCP use case for session-token auth.
+  //
+  // tenancy: unscoped seam -- session tokens have no org scope; reject before
+  // any data access so the kernel never receives an empty orgId. -- OXA-1515
+  return { ok: false, reason: "invalid_token" };
 }
 
 /**

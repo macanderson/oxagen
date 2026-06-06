@@ -19,6 +19,9 @@ bootstrapBillingRuntime();
 // Wire the Postgres security event emitter (SOC2 CC6/CC7 audit trail).
 // Registered ONCE, immediately after bootstrapIAMRuntime(), so the db
 // client is available before any tool invocation can emit a kernel event.
+// tenancy: unscoped seam (module-level init — no request context; raw db()
+// is required so the inserter can write no_tenant_scope deny events that fire
+// before any scope is established). — OXA-1515
 const _securityInsert = makeSecurityEventInserter(db());
 setSecurityEventEmitter((kernelEvent) => {
   recordSecurityEvent(_securityInsert, {

@@ -3,20 +3,21 @@
 // Tests cover:
 //   - McpUnauthorizedError construction and reason field
 //   - extractBearerToken: valid / invalid / missing / edge-case inputs
-//   - resolveMcpContext: unauthenticated, API key path, session token path,
-//     expired and invalid token error propagation
+//   - resolveMcpContext: unauthenticated, API key path, session token path
+//     (now rejected at edge — OXA-1515), expired and invalid token errors
 //
-// resolveApiKey and resolveSession are vi.mock()'d so no network / DB hits occur.
+// resolveApiKey is vi.mock()'d so no network / DB hits occur.
+// resolveSession is intentionally no longer called by context.ts (session
+// tokens are rejected at the MCP edge before any resolver is invoked).
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock the auth resolvers before importing context.ts, which references them.
+// Mock the auth resolver before importing context.ts.
 vi.mock("@oxagen/auth", () => ({
   resolveApiKey: vi.fn(),
-  resolveSession: vi.fn(),
 }));
 
-import { resolveApiKey, resolveSession } from "@oxagen/auth";
+import { resolveApiKey } from "@oxagen/auth";
 import {
   McpUnauthorizedError,
   extractBearerToken,
@@ -143,29 +144,22 @@ describe("resolveMcpContext", () => {
     expect(result).toEqual({ ok: false, reason: "expired_token" });
   });
 
-  it("resolves a session token (no underscore) via resolveSession", async () => {
-    vi.mocked(resolveSession).mockResolvedValue({ userId: "user-abc" });
+  // ── Session token path (OXA-1515): rejected at edge with invalid_token ────
+  //
+  // Session tokens (Better Auth opaque tokens, no underscore) carry no
+  // org/workspace scope. Accepting them would produce orgId:"" which the
+  // kernel's runInTenantScope rejects with TenantScopeError. We reject at
+  // the edge instead so the caller receives a clean 401.
 
+  it("rejects a session token (no underscore) with invalid_token — MCP requires API keys", async () => {
     const result = await resolveMcpContext("Bearer sessiontoken", requestId);
-    expect(result).toEqual({
-      ok: true,
-      ctx: {
-        orgId: "",
-        workspaceId: "",
-        userId: "user-abc",
-        apiKeyId: null,
-        requestId,
-        surface: "mcp",
-        messageId: null,
-      },
-    });
-    expect(resolveSession).toHaveBeenCalledWith("sessiontoken");
+    expect(result).toEqual({ ok: false, reason: "invalid_token" });
+    // resolveApiKey must NOT have been called (token has no underscore → not an API key).
+    expect(resolveApiKey).not.toHaveBeenCalled();
   });
 
-  it("returns invalid_token when resolveSession returns null (unknown session)", async () => {
-    vi.mocked(resolveSession).mockResolvedValue(null);
-
-    const result = await resolveMcpContext("Bearer badsession", requestId);
+  it("rejects any token without an underscore as invalid_token regardless of content", async () => {
+    const result = await resolveMcpContext("Bearer anothersessiontoken", requestId);
     expect(result).toEqual({ ok: false, reason: "invalid_token" });
   });
 });
