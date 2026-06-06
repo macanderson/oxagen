@@ -72,21 +72,5 @@ export const playbookSteps = workflowSchema.table(
   }),
 );
 
-export const playbookStepAssignments = workflowSchema.table(
-  "playbook_step_assignments",
-  {
-    ...idMixin("psa"),
-    ...orgScopeMixin(),
-    playbookStepId: uuid("playbook_step_id").notNull(),
-    agentVersionId: uuid("agent_version_id").notNull(),
-    modelOverride: text("model_override"),
-    maxRetries: integer("max_retries").notNull().default(0),
-    timeoutSeconds: integer("timeout_seconds"),
-  },
-  (t) => ({
-    stepIdx: index("playbook_step_assignments_step_idx").on(t.playbookStepId),
-    agentVersionIdx: index("playbook_step_assignments_agent_version_idx").on(t.agentVersionId),
-    orgIdx: index("playbook_step_assignments_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
+
 

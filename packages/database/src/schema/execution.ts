@@ -1,7 +1,7 @@
 import { bigint, index, integer, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { executionSchema } from "./_schemas";
-import { auditMixin, executionStatusMixin, idMixin, orgScopeMixin } from "./_mixins";
+import { executionStatusMixin, idMixin, orgScopeMixin } from "./_mixins";
 
 export const executions = executionSchema.table(
   "executions",
@@ -79,21 +79,3 @@ export const toolCalls = executionSchema.table(
   }),
 );
 
-export const executionArtifacts = executionSchema.table(
-  "execution_artifacts",
-  {
-    ...idMixin("arf"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    executionId: uuid("execution_id").notNull(),
-    artifactType: text("artifact_type").notNull(),
-    documentId: uuid("document_id"),
-    storageUri: text("storage_uri"),
-    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
-  },
-  (t) => ({
-    executionIdx: index("execution_artifacts_execution_idx").on(t.executionId),
-    orgIdx: index("execution_artifacts_org_idx").on(t.orgId, t.workspaceId),
-    documentIdx: index("execution_artifacts_document_idx").on(t.documentId),
-  }),
-);

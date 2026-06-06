@@ -15,8 +15,6 @@ import {
   agents,
   agentVersions,
   tools,
-  toolVersions,
-  toolAssignments,
   mcpServers,
   skills,
   skillVersions,
@@ -30,10 +28,9 @@ import {
   playbooks,
   playbookVersions,
   playbookSteps,
-  playbookStepAssignments,
 } from "./schema/workflow";
-import { triggers, workflowTriggers } from "./schema/event";
-import { executions, executionSteps, toolCalls, executionArtifacts } from "./schema/execution";
+import { triggers } from "./schema/event";
+import { executions, executionSteps, toolCalls } from "./schema/execution";
 import { conversations, messages } from "./schema/chat";
 import { files, documents } from "./schema/content";
 import {
@@ -121,33 +118,12 @@ export const agentsRelations = relations(agents, ({ many }) => ({
   versions: many(agentVersions),
 }));
 
-export const agentVersionsRelations = relations(agentVersions, ({ one, many }) => ({
+export const agentVersionsRelations = relations(agentVersions, ({ one }) => ({
   agent: one(agents, { fields: [agentVersions.agentId], references: [agents.id] }),
   parentVersion: one(agentVersions, {
     fields: [agentVersions.parentVersionId],
     references: [agentVersions.id],
     relationName: "agent_version_parent",
-  }),
-  toolAssignments: many(toolAssignments),
-}));
-
-export const toolsRelations = relations(tools, ({ many }) => ({
-  versions: many(toolVersions),
-}));
-
-export const toolVersionsRelations = relations(toolVersions, ({ one, many }) => ({
-  tool: one(tools, { fields: [toolVersions.toolId], references: [tools.id] }),
-  assignments: many(toolAssignments),
-}));
-
-export const toolAssignmentsRelations = relations(toolAssignments, ({ one }) => ({
-  agentVersion: one(agentVersions, {
-    fields: [toolAssignments.agentVersionId],
-    references: [agentVersions.id],
-  }),
-  toolVersion: one(toolVersions, {
-    fields: [toolAssignments.toolVersionId],
-    references: [toolVersions.id],
   }),
 }));
 
@@ -215,39 +191,18 @@ export const playbooksRelations = relations(playbooks, ({ many }) => ({
 export const playbookVersionsRelations = relations(playbookVersions, ({ one, many }) => ({
   playbook: one(playbooks, { fields: [playbookVersions.playbookId], references: [playbooks.id] }),
   steps: many(playbookSteps),
-  triggers: many(workflowTriggers),
 }));
 
-export const playbookStepsRelations = relations(playbookSteps, ({ one, many }) => ({
+export const playbookStepsRelations = relations(playbookSteps, ({ one }) => ({
   version: one(playbookVersions, {
     fields: [playbookSteps.playbookVersionId],
     references: [playbookVersions.id],
   }),
-  assignments: many(playbookStepAssignments),
 }));
 
-export const playbookStepAssignmentsRelations = relations(playbookStepAssignments, ({ one }) => ({
-  step: one(playbookSteps, {
-    fields: [playbookStepAssignments.playbookStepId],
-    references: [playbookSteps.id],
-  }),
-  agentVersion: one(agentVersions, {
-    fields: [playbookStepAssignments.agentVersionId],
-    references: [agentVersions.id],
-  }),
-}));
-
-export const triggersRelations = relations(triggers, ({ many }) => ({
-  workflowTriggers: many(workflowTriggers),
-}));
-
-export const workflowTriggersRelations = relations(workflowTriggers, ({ one }) => ({
-  trigger: one(triggers, { fields: [workflowTriggers.triggerId], references: [triggers.id] }),
-  playbookVersion: one(playbookVersions, {
-    fields: [workflowTriggers.playbookVersionId],
-    references: [playbookVersions.id],
-  }),
-}));
+// triggers has no Drizzle relations after workflow_triggers was dropped
+// (release-audit Check 4). The table is retained for its own CRUD surface.
+export const triggersRelations = relations(triggers, () => ({}));
 
 export const executionsRelations = relations(executions, ({ one, many }) => ({
   playbookVersion: one(playbookVersions, {
@@ -259,7 +214,6 @@ export const executionsRelations = relations(executions, ({ one, many }) => ({
     references: [messages.id],
   }),
   steps: many(executionSteps),
-  artifacts: many(executionArtifacts),
 }));
 
 export const executionStepsRelations = relations(executionSteps, ({ one, many }) => ({
@@ -279,21 +233,6 @@ export const toolCallsRelations = relations(toolCalls, ({ one }) => ({
   step: one(executionSteps, {
     fields: [toolCalls.executionStepId],
     references: [executionSteps.id],
-  }),
-  toolVersion: one(toolVersions, {
-    fields: [toolCalls.toolVersionId],
-    references: [toolVersions.id],
-  }),
-}));
-
-export const executionArtifactsRelations = relations(executionArtifacts, ({ one }) => ({
-  execution: one(executions, {
-    fields: [executionArtifacts.executionId],
-    references: [executions.id],
-  }),
-  document: one(documents, {
-    fields: [executionArtifacts.documentId],
-    references: [documents.id],
   }),
 }));
 

@@ -79,49 +79,6 @@ export const tools = agentSchema.table(
   }),
 );
 
-export const toolVersions = agentSchema.table(
-  "tool_versions",
-  {
-    ...idMixin("tav"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...versionMixin(),
-    toolId: uuid("tool_id").notNull(),
-    inputSchema: jsonb("input_schema").notNull(),
-    outputSchema: jsonb("output_schema").notNull(),
-    runtimeConfig: jsonb("runtime_config").notNull().default(sql`'{}'::jsonb`),
-    executionHandler: text("execution_handler").notNull(),
-    executionMode: text("execution_mode").notNull(),
-    timeoutSeconds: integer("timeout_seconds").notNull(),
-  },
-  (t) => ({
-    toolIdx: index("tool_versions_tool_idx").on(t.toolId),
-    toolLatestIdx: uniqueIndex("tool_versions_tool_latest_idx")
-      .on(t.toolId)
-      .where(sql`is_latest = true`),
-    toolVersionIdx: uniqueIndex("tool_versions_tool_version_idx").on(t.toolId, t.versionNumber),
-    orgIdx: index("tool_versions_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
-export const toolAssignments = agentSchema.table(
-  "tool_assignments",
-  {
-    ...idMixin("tas"),
-    ...orgScopeMixin(),
-    agentVersionId: uuid("agent_version_id").notNull(),
-    toolVersionId: uuid("tool_version_id").notNull(),
-    policyConfig: jsonb("policy_config").notNull(),
-    isEnabledInWorkspace: boolean("is_enabled_in_workspace").notNull().default(true),
-  },
-  (t) => ({
-    agentVersionIdx: index("tool_assignments_agent_version_idx").on(t.agentVersionId),
-    toolVersionIdx: index("tool_assignments_tool_version_idx").on(t.toolVersionId),
-    pairIdx: uniqueIndex("tool_assignments_pair_idx").on(t.agentVersionId, t.toolVersionId),
-    orgIdx: index("tool_assignments_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
 // Skills (spec §6, agent-runtime epic). Logical identity + immutable
 // versions, mirroring the agents/tools/playbooks versioning pattern.
 export const skills = agentSchema.table(
