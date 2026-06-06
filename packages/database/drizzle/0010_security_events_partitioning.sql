@@ -17,16 +17,16 @@
 -- • pg_partman / pg_cron are NOT assumed — the application-level Inngest cron
 --   (packages/inngest-functions) handles partition rollover. See
 --   security.audit-partition-rollover Inngest function.
--- • Row-level security is intentionally NOT enabled on this table here. The
---   baseline ships zero RLS, and the audit inserter (makeSecurityEventInserter
---   over a raw db() connection) sets no tenant GUC and no rls_bypass. Enabling
---   FORCE RLS on this one table in isolation — with a policy keyed on
---   app.current_org_id / app.rls_bypass that nothing sets — would reject every
---   audit INSERT in prod (a superuser dev connection masks it locally) and
---   silently empty the audit trail. RLS is a holistic rollout tracked under
---   OXA-1515 (build @oxagen/tenancy + withTenantDb + GUC plumbing, migrate all
---   db() callsites, then ENABLE/FORCE across all tenant tables at once). This
---   migration only changes the table's physical layout, not its access model.
+-- • Row-level security MUST be re-applied on the recreated parent. 0001_rls_policies
+--   enabled + FORCED RLS and installed the `tenant_isolation` policy on the
+--   original heap; the DROP TABLE below wipes that, so step 5 reinstalls the
+--   identical workspace_nullable policy on the new partitioned parent. RLS on a
+--   partitioned parent enforces on every child partition when rows are accessed
+--   through the parent (which is the only path row-level code takes — the audit
+--   inserter writes via withSystemDb, an explicit, audited bypass that sets
+--   app.rls_bypass='on'). Child partitions therefore need no policy of their own.
+--   Skipping step 5 would leave security_events as the one tenant table in the
+--   schema without RLS — a SOC2 isolation hole the manifest-coverage test catches.
 --
 -- Retention: partitions whose entire range is older than 7 years from the
 -- application cron run date are eligible for DROP. The cron function enforces
@@ -140,3 +140,20 @@ CREATE TABLE security.security_events_2026_12
 -- DEFAULT partition — permanent safety net for any out-of-window rows.
 CREATE TABLE security.security_events_default
     PARTITION OF security.security_events DEFAULT;
+
+-- ── 5. Re-apply Row-Level Security on the recreated parent ───────────────────
+--
+-- The DROP TABLE in step 1 wiped the ENABLE/FORCE RLS + tenant_isolation policy
+-- that 0001_rls_policies installed on the original heap. Reinstall the identical
+-- workspace_nullable policy on the new partitioned parent so security_events
+-- stays tenant-isolated. Enforcement on the parent covers all child partitions
+-- when accessed through the parent (the only path row-level code takes); the
+-- audit inserter writes via withSystemDb (app.rls_bypass='on'). Child partitions
+-- inherit enforcement and need no policy of their own.
+
+ALTER TABLE security.security_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE security.security_events FORCE  ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON security.security_events;
+CREATE POLICY tenant_isolation ON security.security_events
+  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND (workspace_id IS NULL OR workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid)))
+  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND (workspace_id IS NULL OR workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid)));

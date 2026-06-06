@@ -37,12 +37,24 @@ const WS_ONLY_ALLOWLIST = new Set<string>([]);
 
 describe("RLS manifest coverage", () => {
   it("every table with an org_id column is in the manifest or allowlist", async () => {
+    // Exclude child partitions (relispartition = true): they inherit their
+    // parent's RLS policy when accessed through the parent and are never
+    // independently policied. The partitioned parent itself (relispartition =
+    // false) is still required to be in the manifest. — OXA-1515
     const rows = await sql<{ schema_name: string; table_name: string }[]>`
-      SELECT table_schema AS schema_name, table_name
-      FROM information_schema.columns
-      WHERE column_name = 'org_id'
-        AND table_schema NOT IN ('public', 'information_schema', 'pg_catalog')
-      ORDER BY table_schema, table_name
+      SELECT col.table_schema AS schema_name, col.table_name
+      FROM information_schema.columns col
+      WHERE col.column_name = 'org_id'
+        AND col.table_schema NOT IN ('public', 'information_schema', 'pg_catalog')
+        AND NOT EXISTS (
+          SELECT 1
+          FROM pg_class pc
+          JOIN pg_namespace pn ON pn.oid = pc.relnamespace
+          WHERE pn.nspname = col.table_schema
+            AND pc.relname = col.table_name
+            AND pc.relispartition = true
+        )
+      ORDER BY col.table_schema, col.table_name
     `;
 
     const owned = rows.map((r) => `${r.schema_name}.${r.table_name}`);
@@ -90,11 +102,14 @@ describe("RLS manifest coverage", () => {
   });
 
   it("every manifest table actually has RLS forced (relforcerowsecurity = true)", async () => {
+    // relkind 'r' = ordinary table, 'p' = partitioned parent. A partitioned
+    // table (e.g. security.security_events) carries relforcerowsecurity on the
+    // parent; its children inherit enforcement, so the parent is what we check.
     const rows = await sql<{ rel: string }[]>`
       SELECT (n.nspname || '.' || c.relname) AS rel
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE c.relkind = 'r'
+      WHERE c.relkind IN ('r', 'p')
         AND c.relforcerowsecurity = true
     `;
 
