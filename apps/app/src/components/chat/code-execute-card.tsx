@@ -1,8 +1,12 @@
 "use client";
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
+<<<<<<< Updated upstream
 import { Tabs, TabsPanel, TabsList, TabsTab } from "@/components/ui/tabs";
 import { StatusIcon } from "./status-icon";
+=======
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+>>>>>>> Stashed changes
 import { formatDuration } from "./tool-call-card";
 import type { ToolCallStatus } from "./stream-event-types";
 

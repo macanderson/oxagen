@@ -2,6 +2,10 @@
 import * as React from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+<<<<<<< Updated upstream
+=======
+import { cn } from "@/lib/utils";
+>>>>>>> Stashed changes
 import { RiskBadge } from "./risk-badge";
 import { StatusIcon } from "./status-icon";
 import type { RiskLevel, ToolCallStatus } from "./stream-event-types";

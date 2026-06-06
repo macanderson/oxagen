@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Oxagen Platform — Internal Architecture Guide</title>
+<meta name="description" content="Internal architecture documentation for the Oxagen platform: surface parity, access control, row-level security, SOC 2 posture, and information architecture. Honest about gaps." />
+<style>
+  /* ----------------------------------------------------------------------
+     Oxagen internal docs. Single file, no server, no external assets.
+     Palette mirrors the product's current neutral reset (achromatic
+     black / white / gray). Status colors are functional signals only.
+     ---------------------------------------------------------------------- */
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f7f7f8;
+    --bg-sunk: #f0f0f1;
+    --fg: #18181b;
+    --fg-muted: #6b6b72;
+    --fg-faint: #9a9aa2;
+    --border: #e4e4e7;
+    --border-strong: #d4d4d8;
+    --accent: #18181b;
+    --code-bg: #f4f4f5;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.04);
+
+    --live: #15803d;   --live-bg: #f0fdf4;   --live-bd: #bbf7d0;
+    --partial: #b45309; --partial-bg: #fffbeb; --partial-bd: #fde68a;
+    --stub: #52525b;   --stub-bg: #f4f4f5;   --stub-bd: #e4e4e7;
+    --planned: #1d4ed8; --planned-bg: #eff6ff; --planned-bd: #bfdbfe;
+    --flagoff: #7c3aed; --flagoff-bg: #f5f3ff; --flagoff-bd: #ddd6fe;
+    --gap: #b91c1c;    --gap-bg: #fef2f2;    --gap-bd: #fecaca;
+
+    --maxw: 880px;
+    --nav-w: 290px;
+  }
+  @media (prefers-color-scheme: dark) {
+    html[data-theme="system"] {
+      --bg: #0e0e10;
+      --bg-soft: #161618;
+      --bg-sunk: #1c1c1f;
+      --fg: #fafafa;
+      --fg-muted: #a1a1aa;
+      --fg-faint: #71717a;
+      --border: #27272a;
+      --border-strong: #3f3f46;
+      --accent: #fafafa;
+      --code-bg: #1c1c1f;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+
+      --live: #4ade80;   --live-bg: #0f2417;   --live-bd: #1f4429;
+      --partial: #fbbf24; --partial-bg: #2a2008; --partial-bd: #4a3a10;
+      --stub: #a1a1aa;   --stub-bg: #1c1c1f;   --stub-bd: #2f2f33;
+      --planned: #60a5fa; --planned-bg: #0f1d33; --planned-bd: #1e3a5f;
+      --flagoff: #a78bfa; --flagoff-bg: #1c1433; --flagoff-bd: #34285c;
+      --gap: #f87171;    --gap-bg: #2a1212;    --gap-bd: #4a1f1f;
+    }
+  }
+  html[data-theme="dark"] {
+    --bg: #0e0e10; --bg-soft: #161618; --bg-sunk: #1c1c1f;
+    --fg: #fafafa; --fg-muted: #a1a1aa; --fg-faint: #71717a;
+    --border: #27272a; --border-strong: #3f3f46; --accent: #fafafa;
+    --code-bg: #1c1c1f; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+    --live: #4ade80; --live-bg: #0f2417; --live-bd: #1f4429;
+    --partial: #fbbf24; --partial-bg: #2a2008; --partial-bd: #4a3a10;
+    --stub: #a1a1aa; --stub-bg: #1c1c1f; --stub-bd: #2f2f33;
+    --planned: #60a5fa; --planned-bg: #0f1d33; --planned-bd: #1e3a5f;
+    --flagoff: #a78bfa; --flagoff-bg: #1c1433; --flagoff-bd: #34285c;
+    --gap: #f87171; --gap-bg: #2a1212; --gap-bd: #4a1f1f;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  a { color: inherit; text-decoration: none; }
+  .content a.inline { border-bottom: 1px solid var(--border-strong); }
+  .content a.inline:hover { border-color: var(--fg); }
+
+  /* layout ---------------------------------------------------------------- */
+  .wrap { display: grid; grid-template-columns: var(--nav-w) 1fr; }
+  nav.toc {
+    position: sticky; top: 0; align-self: start;
+    height: 100dvh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+    background: var(--bg-soft);
+    padding: 28px 18px 60px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .brand .ring {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: conic-gradient(from 220deg, var(--fg), var(--fg-faint), var(--fg));
+    mask: radial-gradient(circle 7px at center, transparent 98%, #000 100%);
+    -webkit-mask: radial-gradient(circle 7px at center, transparent 98%, #000 100%);
+  }
+  .brand b { font-size: 15px; letter-spacing: -.01em; }
+  .brand span { color: var(--fg-faint); font-size: 12px; }
+  nav.toc .kicker { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--fg-faint); margin: 22px 8px 6px; }
+  nav.toc a {
+    display: block; padding: 5px 9px; border-radius: 7px;
+    color: var(--fg-muted); font-size: 13.5px; line-height: 1.4;
+  }
+  nav.toc a:hover { background: var(--bg-sunk); color: var(--fg); }
+  nav.toc a.active { background: var(--accent); color: var(--bg); }
+  nav.toc a.sub { padding-left: 22px; font-size: 12.5px; }
+
+  main { min-width: 0; }
+  .content { max-width: var(--maxw); margin: 0 auto; padding: 64px 32px 140px; }
+
+  /* typography ------------------------------------------------------------ */
+  h1 { font-size: 34px; line-height: 1.15; letter-spacing: -.02em; margin: 0 0 8px; }
+  h2 { font-size: 25px; line-height: 1.2; letter-spacing: -.015em; margin: 64px 0 4px; padding-top: 14px; }
+  h3 { font-size: 18px; letter-spacing: -.01em; margin: 34px 0 4px; }
+  h4 { font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-muted); margin: 26px 0 8px; }
+  section { scroll-margin-top: 20px; }
+  p { margin: 12px 0; }
+  .lead { font-size: 18px; color: var(--fg-muted); }
+  .muted { color: var(--fg-muted); }
+  .section-sub { color: var(--fg-faint); font-size: 14px; margin-top: 0; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 56px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 5px 0; }
+  strong { font-weight: 650; }
+  code { background: var(--code-bg); padding: 1.5px 5px; border-radius: 5px; font-size: 13px; border: 1px solid var(--border); }
+
+  /* analogy callout ------------------------------------------------------- */
+  .analogy {
+    background: var(--bg-soft); border: 1px solid var(--border);
+    border-left: 3px solid var(--fg-faint);
+    border-radius: 10px; padding: 14px 18px; margin: 20px 0;
+  }
+  .analogy .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-faint); font-weight: 600; }
+  .analogy p { margin: 4px 0 0; }
+
+  .note { border-radius: 10px; padding: 14px 18px; margin: 20px 0; border: 1px solid var(--border); background: var(--bg-soft); }
+  .note.gap { background: var(--gap-bg); border-color: var(--gap-bd); }
+  .note.gap .tag { color: var(--gap); }
+  .note .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+  .note p { margin: 4px 0 0; }
+  .note ul { margin: 6px 0 0; }
+
+  /* status pills ---------------------------------------------------------- */
+  .pill {
+    display: inline-block; font-size: 11px; font-weight: 650; line-height: 1;
+    padding: 4px 8px; border-radius: 999px; border: 1px solid; white-space: nowrap;
+    vertical-align: middle;
+  }
+  .pill.live { color: var(--live); background: var(--live-bg); border-color: var(--live-bd); }
+  .pill.partial { color: var(--partial); background: var(--partial-bg); border-color: var(--partial-bd); }
+  .pill.stub { color: var(--stub); background: var(--stub-bg); border-color: var(--stub-bd); }
+  .pill.planned { color: var(--planned); background: var(--planned-bg); border-color: var(--planned-bd); }
+  .pill.flagoff { color: var(--flagoff); background: var(--flagoff-bg); border-color: var(--flagoff-bd); }
+
+  /* tables ---------------------------------------------------------------- */
+  .tablewrap { overflow-x: auto; margin: 18px 0; border: 1px solid var(--border); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--bg-soft); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--fg-muted); }
+  tr:last-child td { border-bottom: 0; }
+  td code { font-size: 12px; }
+
+  /* card grid ------------------------------------------------------------- */
+  .grid { display: grid; gap: 14px; margin: 20px 0; }
+  .grid.two { grid-template-columns: 1fr 1fr; }
+  .grid.four { grid-template-columns: repeat(2, 1fr); }
+  .card { border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; background: var(--bg-soft); box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 6px; color: var(--fg); text-transform: none; letter-spacing: -.01em; font-size: 15px; }
+  .card p { margin: 0; font-size: 13.5px; color: var(--fg-muted); }
+  .card .mono.k { font-size: 11.5px; color: var(--fg-faint); }
+
+  /* diagram blocks -------------------------------------------------------- */
+  .diagram { border: 1px solid var(--border); border-radius: 12px; padding: 22px; margin: 22px 0; background: var(--bg-soft); }
+  .flowrow { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+  .node {
+    flex: 1 1 120px; min-width: 110px; text-align: center;
+    border: 1px solid var(--border-strong); border-radius: 10px;
+    background: var(--bg); padding: 11px 8px; font-size: 12.5px;
+  }
+  .node b { display: block; font-size: 13px; }
+  .node small { color: var(--fg-faint); font-size: 11px; }
+  .arrow { display: flex; align-items: center; justify-content: center; color: var(--fg-faint); font-size: 18px; padding: 0 6px; }
+  .stack { display: flex; flex-direction: column; gap: 8px; }
+  .layer { border: 1px solid var(--border-strong); border-radius: 10px; padding: 12px 16px; background: var(--bg); display: flex; gap: 14px; align-items: baseline; }
+  .layer .n { font-size: 12px; font-weight: 700; color: var(--bg); background: var(--fg); border-radius: 6px; padding: 2px 8px; }
+  .layer b { font-size: 14px; }
+  .layer span { color: var(--fg-muted); font-size: 13px; }
+
+  pre.tree { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 18px 0; }
+
+  /* legend / topbar ------------------------------------------------------- */
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 18px 0 8px; font-size: 12.5px; color: var(--fg-muted); align-items: center; }
+  .legend .item { display: inline-flex; align-items: center; gap: 6px; }
+
+  .themebtn {
+    position: fixed; top: 16px; right: 18px; z-index: 50;
+    border: 1px solid var(--border); background: var(--bg-soft); color: var(--fg-muted);
+    border-radius: 8px; padding: 6px 11px; font-size: 12px; cursor: pointer; box-shadow: var(--shadow);
+  }
+  .themebtn:hover { color: var(--fg); }
+
+  .meta-row { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--fg-faint); font-size: 13px; margin-top: 14px; }
+  .meta-row b { color: var(--fg-muted); font-weight: 600; }
+
+  footer { border-top: 1px solid var(--border); color: var(--fg-faint); font-size: 13px; padding: 26px 0 0; margin-top: 70px; }
+
+  .toggle-nav { display: none; }
+
+  @media (max-width: 960px) {
+    .wrap { grid-template-columns: 1fr; }
+    nav.toc {
+      position: fixed; z-index: 40; width: 280px; left: 0; top: 0;
+      transform: translateX(-100%); transition: transform .2s ease;
+      box-shadow: var(--shadow);
+    }
+    #navtoggle:checked ~ nav.toc { transform: translateX(0); }
+    .toggle-nav {
+      display: inline-flex; position: fixed; top: 16px; left: 16px; z-index: 45;
+      border: 1px solid var(--border); background: var(--bg-soft); color: var(--fg);
+      border-radius: 8px; padding: 8px 12px; font-size: 13px; cursor: pointer; box-shadow: var(--shadow);
+    }
+    .content { padding: 72px 20px 120px; }
+    .grid.two, .grid.four { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<input type="checkbox" id="navtoggle" hidden />
+<label for="navtoggle" class="toggle-nav" aria-label="Toggle navigation">☰ Contents</label>
+<button class="themebtn" id="themebtn" type="button" title="Toggle light / dark">◐ Theme</button>
+
+<div class="wrap">
+  <nav class="toc" aria-label="Table of contents">
+    <div class="brand">
+      <span class="ring" aria-hidden="true"></span>
+      <span><b>Oxagen</b><br><span>Internal Architecture</span></span>
+    </div>
+    <a href="#overview">Platform overview</a>
+    <a href="#datastores" class="sub">The four data stores</a>
+    <a href="#surfaces" class="sub">The four surfaces</a>
+
+    <div class="kicker">Parity</div>
+    <a href="#spine">The contract spine</a>
+    <a href="#chokepoint" class="sub">The single doorway</a>
+    <a href="#surface-detail" class="sub">How each surface re-exposes it</a>
+    <a href="#parity-enforce" class="sub">Enforced or conventional?</a>
+
+    <div class="kicker">Security model</div>
+    <a href="#acl">Access control (ACL / IAM)</a>
+    <a href="#rls">Row-level security</a>
+    <a href="#defense" class="sub">Defense in depth</a>
+    <a href="#soc2">SOC 2 &amp; security posture</a>
+
+    <div class="kicker">Product</div>
+    <a href="#ia">Information architecture</a>
+    <a href="#ia-routes" class="sub">Route status map</a>
+
+    <div class="kicker">Honesty</div>
+    <a href="#roadmap">Gaps &amp; roadmap</a>
+  </nav>
+
+  <main>
+  <div class="content">
+
+  <!-- ================================================================= -->
+  <header>
+    <h1>Oxagen Platform — Internal Architecture Guide</h1>
+    <p class="lead">How the platform is wired today: one capability definition fanned out across four surfaces, who is allowed to do what, how tenants are kept apart, what SOC&nbsp;2 controls exist, and how the app is laid out. Written for engineers, security, and anyone onboarding. It is honest about what is half-built.</p>
+    <div class="meta-row">
+      <span><b>Status:</b> pre-launch build mode — no live customers</span>
+      <span><b>Snapshot:</b> 2026-06-05</span>
+      <span><b>Source:</b> the working tree, not the marketing</span>
+    </div>
+
+    <div class="legend" aria-label="Status legend">
+      <span class="item"><span class="pill live">Live</span> wired &amp; working</span>
+      <span class="item"><span class="pill partial">Partial</span> some layers wired</span>
+      <span class="item"><span class="pill stub">Stub</span> placeholder only</span>
+      <span class="item"><span class="pill planned">Planned</span> spec&rsquo;d, not built</span>
+      <span class="item"><span class="pill flagoff">Flag&nbsp;off</span> built but switched off</span>
+    </div>
+  </header>
+
+  <hr />
+
+  <!-- ================================================================= -->
+  <section id="overview">
+    <h2>Platform overview</h2>
+    <p>Oxagen is a place where <strong>AI agents do real work inside a company&rsquo;s walls</strong> — answering questions, generating content, running playbooks — while staying metered, governed, and logged. The same set of abilities is reachable however you knock on the door: a chat window, a REST API, or an MCP client like Claude or Cursor.</p>
+
+    <div class="analogy">
+      <span class="tag">Analogy</span>
+      <p>Think of Oxagen as an <strong>office building</strong>. The lobby is the chat. The workers are AI agents. Behind the scenes there&rsquo;s a records room, a corkboard of who-knows-what, a security-camera tape that can never be erased, and a supply closet for big files. A front desk checks everyone&rsquo;s badge before they do anything. The rest of this guide is a tour of that building.</p>
+    </div>
+
+    <h3 id="datastores">The four data stores</h3>
+    <p>Oxagen uses four different databases on purpose. Each one holds exactly one <em>kind</em> of thing, and nothing else. This isn&rsquo;t just tidiness — it&rsquo;s a security control. Keeping money, camera tape, and big files in separate cabinets means a mistake in one place can&rsquo;t leak the others.</p>
+
+    <div class="analogy">
+      <span class="tag">Analogy — four filing cabinets</span>
+      <p>A <strong>records room</strong> for official paperwork, a <strong>corkboard with string</strong> for connections, a <strong>locked camera-tape archive</strong> you can add to but never edit, and a <strong>supply closet</strong> for bulky items. Put a thing in the wrong cabinet and the whole system gets confusing and unsafe — so the rule is one-thing-per-cabinet.</p>
+    </div>
+
+    <div class="grid four">
+      <div class="card">
+        <h4>PostgreSQL <span class="pill live">Live</span></h4>
+        <p class="mono k">@oxagen/database</p>
+        <p>The records room — the single source of truth. Users, orgs, workspaces, permissions, billing, chat, config. Anything that must be <em>correct</em> and <em>changeable</em>.</p>
+      </div>
+      <div class="card">
+        <h4>Neo4j <span class="pill partial">Partial</span></h4>
+        <p class="mono k">@oxagen/ontology</p>
+        <p>The corkboard — graph relationships, agent memory, ontology, lineage. &ldquo;What connects to what&rdquo; and &ldquo;what does this agent know.&rdquo;</p>
+      </div>
+      <div class="card">
+        <h4>ClickHouse <span class="pill live">Live</span></h4>
+        <p class="mono k">@oxagen/telemetry</p>
+        <p>The camera tape — append-only runtime events, logs, traces, token usage, and the tamper-evident audit trail. Write once, never edit.</p>
+      </div>
+      <div class="card">
+        <h4>Blob storage <span class="pill partial">Partial</span></h4>
+        <p class="mono k">@oxagen/storage → Vercel Blob</p>
+        <p>The supply closet — avatars, generated images/video, documents. The big file lives here; its reference row lives in Postgres.</p>
+      </div>
+    </div>
+    <p class="muted"><strong>The hard rule:</strong> never put analytics in Neo4j, never put graph relationships in Postgres, never put transactional state in ClickHouse, and never put a binary blob in any of the three databases. Each store has one job.</p>
+
+    <h3 id="surfaces">The four surfaces</h3>
+    <p>There are four &ldquo;doors&rdquo; into the building. Three of them serve the same set of platform abilities; the fourth is just a developer convenience.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Surface</th><th>What it is</th><th>Who uses it</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td><b>In-app agent</b><br><code>apps/app</code></td><td>Next.js chat UI. The agent calls platform abilities as tool-calls, streamed over SSE.</td><td>End users in the browser</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td><b>REST API</b><br><code>apps/api</code></td><td>Hono service. One <code>/v1</code> route per ability. No UI.</td><td>Programmatic / server-to-server</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td><b>MCP server</b><br><code>apps/mcp</code></td><td>xmcp server at <code>/mcp</code>. Each ability is an MCP tool. Auth by API key.</td><td>Claude, Cursor, Windsurf, etc.</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td><b>CLI</b><br><code>apps/cli</code></td><td>Ink/Commander dev tool. One command (<code>oxagen dev</code>) that shows local stack status.</td><td>Engineers locally</td><td><span class="pill stub">Dev-only</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <span class="tag muted">Clarification</span>
+      <p>The CLI is <strong>not a capability surface</strong> today. It does not call the platform kernel and exposes none of the abilities below — it only probes ports to report dev-stack health. When this guide says &ldquo;the surfaces stay in parity,&rdquo; it means <strong>API + MCP + in-app agent</strong>. A customer-facing CLI is a roadmap item.</p>
+    </div>
+  </section>
+
+  <hr />
+
+  <!-- ================================================================= -->
+  <section id="spine">
+    <h2>The contract spine: how the surfaces stay in sync</h2>
+    <p class="section-sub">The single most important idea in the platform.</p>
+
+    <p>Every governable action the platform can take is written down <strong>exactly once</strong> as a <em>capability contract</em> in the <code>@oxagen/oxagen</code> package. There is no path to action that bypasses it. That one definition is what keeps the API, MCP, and the in-app agent from drifting apart — they don&rsquo;t each implement the feature, they all <em>point at the same definition</em>.</p>
+
+    <div class="analogy">
+      <span class="tag">Analogy — one recipe, many kitchens</span>
+      <p>Imagine a restaurant with three kitchens (API, MCP, app). Instead of letting each kitchen invent its own version of a dish, there&rsquo;s <strong>one recipe box</strong>. Every kitchen cooks from the same card. If a dish isn&rsquo;t on a card, nobody is allowed to make it. Change the card once and all three kitchens serve the new version. That recipe box is the <strong>capability registry</strong>.</p>
+    </div>
+
+    <h3>What a capability is</h3>
+    <p>Each capability is one file in <code>packages/oxagen/src/contracts/</code> registered with <code>registerCapability()</code>. The fields are checked by TypeScript at compile time, so you can&rsquo;t register a half-defined ability:</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Field</th><th>Meaning (plain English)</th></tr></thead>
+        <tbody>
+          <tr><td><code>name</code></td><td>The dotted id, e.g. <code>image.generate</code>.</td></tr>
+          <tr><td><code>surfaces</code></td><td>Which doors expose it: <code>"api"</code>, <code>"mcp"</code>, <code>"agent"</code>. A wrong-door call is rejected.</td></tr>
+          <tr><td><code>input</code> / <code>output</code></td><td>Zod schemas. Inputs are validated before the work runs; outputs after.</td></tr>
+          <tr><td><code>sensitivity</code></td><td><code>low → destructive</code>. Feeds the access rules.</td></tr>
+          <tr><td><code>defaultEffect</code></td><td>The fallback answer when no rule matches — almost always <code>"deny"</code>.</td></tr>
+          <tr><td><code>defaultRoles</code></td><td>Which roles get this ability out of the box.</td></tr>
+          <tr><td><code>agent</code></td><td>For agent-exposed abilities: risk level + whether a human must approve first.</td></tr>
+          <tr><td><code>layers</code></td><td>Which artifacts should exist: <code>schema, api, mcp, unit, e2e, docs</code> — used by the parity checker.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>There are <strong>~42 capabilities</strong> registered today — 4 foundation, 16 agent-runtime, plus chat, billing, conversation, org-member, and media abilities. Each has a one-page contract in <code>docs/capabilities/</code> generated from the same source, so the docs cannot drift from the code.</p>
+
+    <h3 id="chokepoint">The single doorway: <code>kernel.invoke()</code></h3>
+    <p>No surface cooks the dish itself. Each one hands the request to <strong>one function</strong> — <code>invoke()</code> in <code>packages/oxagen/src/kernel.ts</code> — and that function is the inspection window every request passes through, in this order:</p>
+
+    <div class="diagram">
+      <div class="stack">
+        <div class="layer"><span class="n">1</span><b>Right door?</b><span>Is this surface even allowed to call this capability? (<code>surface_denied</code> if not.)</span></div>
+        <div class="layer"><span class="n">2</span><b>Right ingredients?</b><span>Validate the input against the Zod schema.</span></div>
+        <div class="layer"><span class="n">3</span><b>Allowed to?</b><span>Run the IAM check — allow, deny, or require-approval.</span></div>
+        <div class="layer"><span class="n">4</span><b>Can you afford it?</b><span>Billing admission gate — enough credits / not suspended.</span></div>
+        <div class="layer"><span class="n">5</span><b>Right room.</b><span>Run the handler inside the tenant scope so the database isolates rows.</span></div>
+        <div class="layer"><span class="n">6</span><b>Right plate.</b><span>Validate the output schema.</span></div>
+        <div class="layer"><span class="n">7</span><b>Stamp the logbook.</b><span>Emit a security audit event — for allow, deny, <em>and</em> error.</span></div>
+      </div>
+    </div>
+
+    <p>Because all three real surfaces funnel through this one window, metering, permissions, tenant isolation, and the audit trail are applied <strong>identically</strong> no matter which door you used. That is what &ldquo;parity&rdquo; really means here: not three copies of a feature, but three thin doors onto one governed core. A second, narrower chokepoint exists for the AI itself — <code>streamAgentReply()</code>, <code>generateImageFor()</code>, and the video path in <code>@oxagen/ai</code> are the only places that actually call a model, so every token is counted and billed in one spot.</p>
+
+    <h3 id="surface-detail">How each surface re-exposes the same capability</h3>
+    <div class="grid two">
+      <div class="card">
+        <h4>REST API — <span class="pill live">Live</span></h4>
+        <p>Hono. One hand-written file per capability under <code>apps/api/src/routes/v1/</code>. It parses the body with the contract&rsquo;s own schema, builds the context, and calls <code>invoke(name, body, ctx, {surface:"api"})</code>. No code generation — the route is glue.</p>
+      </div>
+      <div class="card">
+        <h4>MCP server — <span class="pill live">Live</span></h4>
+        <p>xmcp. One tool file per capability under <code>apps/mcp/src/tools/</code>, each calling the same <code>invoke(..., {surface:"mcp"})</code>. Context comes from an <code>Authorization: Bearer</code> API key — the key carries the org + workspace scope, so no org/workspace path segment is needed.</p>
+      </div>
+      <div class="card">
+        <h4>In-app agent — <span class="pill live">Live</span></h4>
+        <p>The chat stream route asks <code>materializeTools()</code> for every capability whose <code>surfaces</code> include <code>"agent"</code>, hands them to the model as tools, and routes each tool-call back through <code>invoke()</code>. Token-by-token output is streamed to the browser as typed SSE events.</p>
+      </div>
+      <div class="card">
+        <h4>CLI — <span class="pill stub">Dev-only</span></h4>
+        <p>Not a capability surface. <code>oxagen dev</code> renders a status panel. It never touches the kernel. Listed here only so the &ldquo;four surfaces&rdquo; framing is honest.</p>
+      </div>
+    </div>
+
+    <h3 id="parity-enforce">Is parity enforced, or just convention?</h3>
+    <p>Mostly convention, backed by one hard check and one soft check. Worth being clear-eyed about:</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Mechanism</th><th>What it guarantees</th><th>Strength</th></tr></thead>
+        <tbody>
+          <tr><td><code>check:contracts</code></td><td>Every contract file is wired into the exports barrel.</td><td><span class="pill live">Hard fail</span></td></tr>
+          <tr><td><code>check:manifest</code></td><td>Each capability&rsquo;s declared <code>layers</code> (api route, docs, tests…) actually exist on disk.</td><td><span class="pill partial">Warn-only</span></td></tr>
+          <tr><td>Surface allowlist in <code>invoke()</code></td><td>A capability can&rsquo;t be served through a door it didn&rsquo;t opt into.</td><td><span class="pill live">Runtime</span></td></tr>
+          <tr><td>MCP tool-file existence</td><td>&mdash; not checked; the manifest only verifies the <code>mcp</code> surface flag.</td><td><span class="pill stub">None</span></td></tr>
+          <tr><td><code>assertHandlersComplete()</code></td><td>Exists, would catch a capability with no handler — but isn&rsquo;t called in the boot path or CI.</td><td><span class="pill stub">Dormant</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note gap">
+      <span class="tag">Known parity gaps — fix these</span>
+      <ul>
+        <li><strong>Missing <code>register</code> import on API &amp; MCP.</strong> Only the in-app agent imports <code>@oxagen/handlers/register</code> + <code>@oxagen/agent/register</code>. Without it, <code>invoke()</code> throws <code>no_handler</code> at runtime. This is a latent boot bug on two of the three surfaces.</li>
+        <li><strong>Two server actions in <code>apps/app</code> call handlers directly</strong> (user-preferences write, video generate), skipping the IAM check, billing gate, and audit stamp that <code>invoke()</code> provides.</li>
+        <li><strong>MCP tool schemas are hand-duplicated</strong> rather than imported from the contract — they can silently drift from the source schema.</li>
+        <li><strong>Tools from user-registered MCP servers skip IAM.</strong> They are metered but not policy-checked even when enforcement is on.</li>
+        <li><strong><code>agent.code.execute</code></strong> is hidden from the model unless <code>SANDBOX_ENABLED=true</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <hr />
+
+  <!-- ================================================================= -->
+  <section id="acl">
+    <h2>Access control — who is allowed to do what</h2>
+    <p class="section-sub">ACL / IAM &mdash; <code>packages/iam</code>, <code>packages/oxagen/src/iam</code></p>
+
+    <div class="analogy">
+      <span class="tag">Analogy — a bouncer with a rulebook</span>
+      <p>Every time someone tries to use a capability, a <strong>bouncer</strong> checks a <strong>rulebook</strong>. The rulebook is read top to bottom, most-specific and most-restrictive first. If nothing in the book says &ldquo;yes,&rdquo; the answer is &ldquo;no.&rdquo; The bouncer stands inside the same doorway as everything else — <code>kernel.invoke()</code> — so you can&rsquo;t sneak past.</p>
+    </div>
+
+    <h3>One badge for everyone: principals</h3>
+    <p>Humans, AI agents, and service accounts (API keys) are all <strong>principals</strong> — the same shape, governed by the same rules. That&rsquo;s why an agent can be given exactly the abilities a junior teammate has, no more. Principals live in <code>org.principals</code> with a <code>kind</code> of <code>human</code>, <code>agent</code>, or <code>service</code>.</p>
+
+    <h3>Three scopes</h3>
+    <div class="diagram">
+      <div class="flowrow">
+        <div class="node"><b>Personal</b><small>the human</small></div>
+        <div class="arrow">→</div>
+        <div class="node"><b>Org</b><small>the customer — billing &amp; governance</small></div>
+        <div class="arrow">→</div>
+        <div class="node"><b>Workspace</b><small>the team room where agents work</small></div>
+      </div>
+    </div>
+    <p>Permissions follow an <strong>inherit-with-override</strong> rule: the org sets the rails, a workspace owner can <em>tighten</em> within them but can never <em>loosen</em> what the org locked. The URL shows the scope you&rsquo;re in: <code>/{org}/{workspace}/…</code>.</p>
+
+    <h3>The four kinds of rule</h3>
+    <div class="grid two">
+      <div class="card"><h4>Roles</h4><p>Job titles. Org: <code>Owner</code>, <code>Admin</code>, <code>Compliance</code>, <code>Billing</code>. Workspace: <code>Owner</code>, <code>Member</code>, <code>Viewer</code>. Custom roles are supported in the schema.</p></div>
+      <div class="card"><h4>Grants</h4><p>A specific yes/no/ask sticker on one capability for one principal, at org or workspace scope.</p></div>
+      <div class="card"><h4>Policies</h4><p>Org-wide rules that can be marked <code>enforced</code> — these win over workspace grants, so an org can hard-block something everywhere.</p></div>
+      <div class="card"><h4>Access requests</h4><p>Just-in-time &ldquo;please grant me X&rdquo; flow, with an approval step. The plumbing exists; the editor UI is still stubbed.</p></div>
+    </div>
+
+    <h3>How the bouncer decides — 8 rules, in order</h3>
+    <p>The resolver in <code>resolve.ts</code> checks these top to bottom and stops at the first match. Notice the most restrictive wins, and the very last fallback is the capability&rsquo;s own <code>defaultEffect</code> — which is <code>deny</code> for everything. <strong>Default answer: no.</strong></p>
+    <pre class="tree">1  Workspace explicit DENY        ← a flat no here ends it
+2  Org enforced DENY
+3  Workspace explicit ALLOW
+4  Org enforced ALLOW
+5  Workspace REQUIRE-APPROVAL     ← pause for a human
+6  Org default grant (allow → require-approval → deny)
+7  Role-inherited grant           ← "because you're an Admin"
+8  Contract defaultEffect         ← almost always DENY</pre>
+
+    <h3>Is it actually on?</h3>
+    <p><span class="pill live">Wired</span> Both the API and MCP run <code>bootstrapIAMRuntime()</code> at startup, which injects the check into the kernel. <code>IAM_ENFORCEMENT_ENABLED</code> <strong>defaults to on</strong> — a denied call throws; with the flag off it would only log. So unlike RLS (next section), the permission layer is live, not dormant.</p>
+
+    <div class="note">
+      <span class="tag muted">Important nuance — the full rulebook is an Enterprise feature today</span>
+      <p>The fine-grained grant/role/policy resolver fully engages for <strong>Enterprise</strong>-tier orgs (<code>canAccessACL</code>). Lower tiers fall back to simple <strong>role membership</strong> plus each capability&rsquo;s <code>defaultEffect</code>. So smaller orgs get coarse role checks; the matrix-style ACL is the paid, advanced control.</p>
+    </div>
+
+    <div class="note gap">
+      <span class="tag">Known ACL gaps</span>
+      <ul>
+        <li><strong>Condition language not built.</strong> The <code>conditions</code> column exists, but anything non-empty currently <em>fails closed</em> — time-windows and IP-ranges aren&rsquo;t evaluated yet.</li>
+        <li><strong>Old orgs aren&rsquo;t seeded.</strong> Orgs created before <code>bootstrapOrgIAM()</code> have no IAM rows; with enforcement on they fall to <code>deny</code> on everything. New orgs are seeded correctly.</li>
+        <li><strong>New members get no role by default</strong> (least-privilege) — role assignment is a separate explicit step, and the assignment UI is still a stub.</li>
+        <li><strong>Permission-change events aren&rsquo;t logged</strong> (see SOC 2 below) — a real audit hole for CC6.</li>
+      </ul>
+    </div>
+  </section>
+
+  <hr />
+
+  <!-- ================================================================= -->
+  <section id="rls">
+    <h2>Row-level security — keeping tenants apart</h2>
+    <p class="section-sub">RLS &mdash; <code>packages/tenancy</code>, <code>packages/database</code></p>
+
+    <div class="analogy">
+      <span class="tag">Analogy — tinted glass on every drawer</span>
+      <p>The bouncer (ACL) decides <em>whether</em> you may open a drawer. Row-level security is <strong>tinted glass on the drawer itself</strong>: even with it open, you only see your own company&rsquo;s papers. The other tenants&rsquo; rows are physically hidden by the database — so even if app code forgets a &ldquo;WHERE my-company&rdquo; filter, the leak can&rsquo;t happen.</p>
+    </div>
+
+    <h3>The three seams</h3>
+    <p>There are exactly three sanctioned ways to touch tenant data. Using the raw database handle is <strong>banned by ESLint</strong> so nobody opens a drawer without the glass.</p>
+    <div class="grid two">
+      <div class="card">
+        <h4><code>withTenantDb()</code> — the normal way</h4>
+        <p>Stamps each transaction with your <code>org_id</code> + <code>workspace_id</code> (Postgres <code>SET LOCAL</code> session variables) so the glass knows who you are. <strong>Fails closed</strong> if you have no scope.</p>
+      </div>
+      <div class="card">
+        <h4><code>withSystemDb()</code> — the master key</h4>
+        <p>An <em>audited</em> bypass for jobs that run <em>before</em> we know who you are: login, API-key lookup, Stripe webhooks, writing the audit log, org bootstrap. Every use carries a <code>// tenancy: system bypass</code> comment.</p>
+      </div>
+      <div class="card">
+        <h4><code>scopedSession()</code> — the graph version</h4>
+        <p>The same idea for Neo4j. The raw <code>session()</code> is banned; callers must scope. Spec&rsquo;d; landing in the ontology package is still in progress.</p>
+      </div>
+      <div class="card">
+        <h4><code>oxagen_app</code> — a deliberately weak login</h4>
+        <p>The database role the app connects as is <strong>not</strong> a superuser — superusers see <em>through</em> tinted glass. A startup guard refuses to boot if it detects a superuser while enforcement is on. Provisioned by infra, not by a migration.</p>
+      </div>
+    </div>
+
+    <h3>The policies</h3>
+    <p><code>FORCE ROW LEVEL SECURITY</code> is declared on ~55 tenant-owned tables. A <strong>policy manifest</strong> lists every table and its isolation class, and a CI test asserts that <em>any</em> table with an <code>org_id</code> column appears in that manifest — so a new tenant table can&rsquo;t silently escape the glass. Global identity tables (<code>auth.users</code>, <code>auth.sessions</code>) have no <code>org_id</code> and are intentionally excluded; they&rsquo;re protected by the login resolvers instead.</p>
+
+    <div class="note gap">
+      <span class="tag">The big honest caveat — the glass is installed but transparent</span>
+      <p><span class="pill flagoff">Flag off</span> <code>TENANT_RLS_ENFORCEMENT_ENABLED</code> <strong>defaults to false in every environment today.</strong> When off, <code>withTenantDb</code> still stamps the org/workspace ids but also sets <code>rls_bypass = on</code>, so the policies exist and are correct but do not yet filter rows. Until the flag is flipped, tenant isolation rests entirely on the hand-written <code>org_id</code> filters in queries plus the scope seams. The flip is gated on telemetry (the <code>db.query.unscoped</code> counter) reading zero, and is tracked as <strong>OXA-1515</strong>.</p>
+    </div>
+
+    <h3 id="defense">Defense in depth — three layers, not one</h3>
+    <p>ACL and RLS aren&rsquo;t alternatives; they stack. Each layer assumes the one above it might fail.</p>
+    <div class="diagram">
+      <div class="stack">
+        <div class="layer"><span class="n">1</span><b>IAM / bouncer</b><span>app layer — <em>may</em> this principal call this capability?</span> <span class="pill live">On</span></div>
+        <div class="layer"><span class="n">2</span><b>Tenant scope seam</b><span>middleware layer — is there a valid org+workspace badge before any DB call? Fails closed.</span> <span class="pill live">On</span></div>
+        <div class="layer"><span class="n">3</span><b>RLS glass</b><span>database layer — the DB itself hides other tenants&rsquo; rows, even on a buggy query.</span> <span class="pill flagoff">Built, off</span></div>
+      </div>
+    </div>
+    <p class="muted">Today layers 1 and 2 are doing the real isolation work. Layer 3 is the belt-and-suspenders that becomes a hard wall the moment the flag flips.</p>
+  </section>
+
+  <hr />
+
+  <!-- ================================================================= -->
+  <section id="soc2">
+    <h2>SOC 2 &amp; security posture</h2>
+    <p class="section-sub">What auditors care about — and where we honestly stand.</p>
+
+    <div class="analogy">
+      <span class="tag">Analogy — a report card you have to <em>earn</em></span>
+      <p>SOC 2 isn&rsquo;t a feature you install; it&rsquo;s a <strong>report card</strong> that says &ldquo;this company actually does the safe things it claims, and here&rsquo;s a year of proof.&rdquo; That means two things: the controls have to <em>exist</em> (mostly built) <em>and</em> there has to be <em>evidence they ran over time</em> (we have almost none yet, because there are no live customers). Both halves matter.</p>
+    </div>
+
+    <h3>The audit trail — a tape you can&rsquo;t rewind</h3>
+    <p>There are two complementary audit surfaces, both append-only:</p>
+    <div class="grid two">
+      <div class="card">
+        <h4>Postgres <code>security.security_events</code> <span class="pill live">Live</span></h4>
+        <p>The primary SOC 2 trail. The schema forbids edit/delete columns outright. Every capability call (allowed / denied / error) plus sign-in and sign-out are recorded. Written via the master key so the log succeeds even before a tenant scope exists.</p>
+      </div>
+      <div class="card">
+        <h4>ClickHouse <code>audit_events</code> <span class="pill live">Live</span></h4>
+        <p>A second, <strong>tamper-evident</strong> copy: each event carries a SHA-256 <em>hash chain</em> linking it to the previous one, kept for <strong>7 years</strong>. Inputs are hashed, never stored raw, so no PII lands in the tape.</p>
+      </div>
+    </div>
+
+    <h3>Secrets &amp; encryption — <code>packages/crypto</code></h3>
+    <p>Sensitive secrets (OAuth tokens, integration credentials) are sealed with <strong>AES-256-GCM envelope encryption</strong> — a fresh data key per value, wrapped by a master key, with a version byte so keys can rotate without re-encrypting old rows. Production refuses to boot without the master key set.</p>
+    <p class="muted">Today the master key is a &ldquo;local KEK&rdquo; held in an encrypted environment variable, not a cloud HSM/KMS. The adapter interface is built so swapping to a real cloud KMS needs no application change — but that swap is required before SOC 2 GA.</p>
+
+    <h3>Auth hardening — <code>packages/auth</code> (Better Auth)</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Control</th><th>State</th></tr></thead>
+        <tbody>
+          <tr><td>Sessions: 30-day expiry, 5-min cookie cache</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>Cookies: <code>httpOnly</code>, <code>sameSite=lax</code>, <code>secure</code> in prod, <code>oxagen</code> prefix</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>CSRF: hardcoded trusted-origins list + env extension</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>Password minimum length 8</td><td><span class="pill partial">Basic</span></td></tr>
+          <tr><td>Two-factor authentication (2FA / MFA)</td><td><span class="pill planned">Planned (Wave 5)</span></td></tr>
+          <tr><td>Rate limiting / brute-force lockout</td><td><span class="pill stub">Absent</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note gap">
+      <span class="tag">SOC 2 gap register — the honest list</span>
+      <ul>
+        <li><strong>RLS enforcement is off</strong> (OXA-1515) — the confidentiality control exists in SQL but isn&rsquo;t the hard wall yet.</li>
+        <li><strong>Permission-change events never fire.</strong> <code>org.member_invited / removed / role_changed</code> are typed but no handler emits them — breaks CC6.2/CC6.3 evidence for privileged mutations.</li>
+        <li><strong>Failed sign-ins aren&rsquo;t recorded.</strong> <code>auth.sign_in_failed</code> is declared but never emitted — brute-force attempts are invisible to the trail (and there&rsquo;s no rate limiting to stop them).</li>
+        <li><strong>Plaintext OAuth tokens persist beside the encrypted copies</strong> — Better Auth&rsquo;s adapter rewrites the plaintext columns on each callback. Low-scope login tokens, but still plaintext-at-rest.</li>
+        <li><strong>The Postgres audit table has no partitioning or retention policy</strong> — a cost/perf problem once traffic starts (the ClickHouse tables do have TTLs).</li>
+        <li><strong>No audit-viewing UI and no SIEM export</strong> — the tapes exist but there&rsquo;s no read path (deferred to Wave 6).</li>
+        <li><strong>Blob storage is public-URL only</strong> — fine for avatars today, must be hardened before user documents land.</li>
+        <li><strong>Admin app is a stub</strong> — SOC 2 usually expects an admin surface for access reviews and incident investigation.</li>
+        <li><strong>No operating evidence yet</strong> — pre-launch, so the time-based proof an auditor needs hasn&rsquo;t accumulated.</li>
+      </ul>
+    </div>
+  </section>
+
+  <hr />
+
+  <!-- ================================================================= -->
+  <section id="ia">
+    <h2>Information architecture of the app</h2>
+    <p class="section-sub"><code>apps/app</code> — the interactive agent UI.</p>
+
+    <p>The whole app is auth-gated. <code>proxy.ts</code> (Next 16&rsquo;s renamed middleware, running at the edge) bounces any request without a session cookie to <code>/login</code>, and also rewrites a few legacy v1 URLs to their v2 homes. Everything else lives under one of three scopes, visible right in the URL.</p>
+
+    <h3>Three scopes, one URL shape</h3>
+    <pre class="tree">/(auth)/{login,signup,verify}        public — no session
+/(onboarding)/new-organization       signed in, no org yet
+/account/…                           personal scope (via avatar menu)
+/{orgSlug}/…                         org scope     (governance)
+/{orgSlug}/{workspaceSlug}/…         workspace scope (daily work)</pre>
+
+    <div class="analogy">
+      <span class="tag">Analogy — building, floor, room</span>
+      <p>The <strong>org</strong> is the company that rents the building (billing, governance). A <strong>workspace</strong> is a room on a floor where a team and its agents actually work. Your <strong>account</strong> is your personal locker, reached from the avatar menu — never from the sidebar. The two dropdowns at the top let you walk between buildings and rooms.</p>
+    </div>
+
+    <h3>The shell &amp; sidebar</h3>
+    <p>A floating, collapsible left sidebar (no glass, neutral styling) plus a content panel whose header carries the org switcher <code>/</code> workspace switcher, the universal <strong>Ask bar</strong>, and a notifications bell. The sidebar swaps between three modes automatically based on the URL: <em>workspace</em>, <em>org</em>, and <em>account</em>.</p>
+    <pre class="tree">Workspace mode                      Org mode
+├─ Ask            (front door)      ├─ Members
+├─ Knowledge                        ├─ Access     (grants/roles/…)
+├─ Automation                       ├─ Security   (audit + stubs)
+├─ Activity                         ├─ Billing
+├─ Studio  (tools)                  ├─ Developer  (tokens, MCP)
+└─ Settings                         └─ Settings</pre>
+
+    <h3>The Ask bar &amp; the conversation surface</h3>
+    <p>The Ask bar is the universal input. It <em>classifies intent</em>: a navigation phrase pushes a route, a &ldquo;fill this form&rdquo; phrase triggers generative form-fill over the current page, and a question opens the chat drawer. <code>/ask</code> and <code>/chat</code> render the same shared conversation component; <code>?c=&lt;id&gt;</code> selects a thread, its absence starts a blank one.</p>
+    <p>Under the hood, one endpoint — <code>POST /api/v1/chat/stream</code> — is the single LLM caller per turn. It streams typed SSE events (<code>text</code>, <code>tool-call-*</code>, <code>approval-required</code>, <code>plan-proposed</code>, <code>component</code>, <code>usage</code>…) which the hand-rolled <code>use-tool-stream.ts</code> hook turns into live UI. <strong>Generative UI</strong> works without React Server Components: a tool result names a component id, and a client-side registry maps it to a lazy-loaded React component (image preview, install steps, video form, etc.). The model streams <em>data</em>, never server-rendered React.</p>
+
+    <h3 id="ia-routes">Route status map — what&rsquo;s actually built</h3>
+    <p>Being honest about the front-end: the skeleton and tenancy are real and working; many leaf pages are still empty-state placeholders or redirects.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Area</th><th>State</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Auth / onboarding / org+workspace creation</td><td><span class="pill live">Live</span></td><td>Signup auto-signs-in; new-org flow creates a default workspace.</td></tr>
+          <tr><td>Ask / Chat conversation surface</td><td><span class="pill live">Live</span></td><td>Streaming, branching, archive/delete/rename history.</td></tr>
+          <tr><td>Workspace settings: general, members, models</td><td><span class="pill live">Live</span></td><td>Real forms + server actions.</td></tr>
+          <tr><td>Org: Members, Access (6 tabs), Billing, Developer (tokens, MCP)</td><td><span class="pill live">Live</span></td><td>Live DB reads.</td></tr>
+          <tr><td>Org Security → Audit</td><td><span class="pill live">Live</span></td><td>Real audit-log table.</td></tr>
+          <tr><td>Billing → Usage</td><td><span class="pill partial">Partial</span></td><td>Chart renders empty; ClickHouse wiring is Phase 3.</td></tr>
+          <tr><td>Knowledge, Automation, Activity, Studio leaf pages</td><td><span class="pill stub">Stub</span></td><td>Icon + description placeholders, no data yet.</td></tr>
+          <tr><td>Security → SSO / SCIM / MFA / Compliance / Incidents</td><td><span class="pill stub">Stub</span></td><td>All redirect to <code>/security/audit</code>.</td></tr>
+          <tr><td>BYOK model-keys, Brand Kits, Integrations, Account security/privacy</td><td><span class="pill planned">Planned</span></td><td>Redirects or empty states.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted">The other apps in one line each: <strong>website</strong> — static marketing landing; <strong>admin</strong> — stub landing card only; <strong>docs</strong> — Fumadocs/MDX site; <strong>api</strong> — Hono REST, no UI; <strong>mcp</strong> — xmcp server at <code>/mcp</code>; <strong>cli</strong> — one dev command.</p>
+  </section>
+
+  <hr />
+
+  <!-- ================================================================= -->
+  <section id="roadmap">
+    <h2>Gaps &amp; roadmap — consolidated</h2>
+    <p>Everything flagged above, in one place, so nothing hides. Pre-launch is the right time to carry these openly.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Item</th><th>State</th><th>Track</th></tr></thead>
+        <tbody>
+          <tr><td>Postgres RLS enforcement (flip <code>TENANT_RLS_ENFORCEMENT_ENABLED</code>)</td><td><span class="pill flagoff">Built, off</span></td><td>OXA-1515 · gated on zero unscoped queries</td></tr>
+          <tr><td><code>@oxagen/handlers/register</code> import on API + MCP</td><td><span class="pill stub">Latent bug</span></td><td>Fix before either surface serves traffic</td></tr>
+          <tr><td>Two app server actions bypass <code>invoke()</code></td><td><span class="pill stub">Bypass</span></td><td>Route through the kernel</td></tr>
+          <tr><td>Member / role-change audit events</td><td><span class="pill stub">Not emitted</span></td><td>SOC 2 CC6 evidence</td></tr>
+          <tr><td>Failed-sign-in events + rate limiting</td><td><span class="pill stub">Absent</span></td><td>Brute-force visibility &amp; defense</td></tr>
+          <tr><td>Plaintext OAuth token columns</td><td><span class="pill stub">Co-exist</span></td><td>Drop once hook coverage confirmed</td></tr>
+          <tr><td><code>security_events</code> partition + retention</td><td><span class="pill stub">Missing</span></td><td>Cost/perf before traffic</td></tr>
+          <tr><td>ACL condition language (time/IP)</td><td><span class="pill planned">Planned</span></td><td>Currently fails closed</td></tr>
+          <tr><td>Cloud KMS (replace local KEK)</td><td><span class="pill planned">Planned</span></td><td>Required for SOC 2 GA</td></tr>
+          <tr><td>2FA / MFA</td><td><span class="pill planned">Planned</span></td><td>IAM Wave 5</td></tr>
+          <tr><td>Access editor UI, audit-feed UI, SIEM export</td><td><span class="pill planned">Planned</span></td><td>IAM Waves 5–6</td></tr>
+          <tr><td>Knowledge / Automation / Activity / Studio pages</td><td><span class="pill stub">Stub</span></td><td>Front-end build-out</td></tr>
+          <tr><td>Private/signed blob access</td><td><span class="pill planned">Planned</span></td><td>Before user documents</td></tr>
+          <tr><td>Customer-facing CLI as a real surface</td><td><span class="pill planned">Planned</span></td><td>Dev-only today</td></tr>
+          <tr><td>Admin app (access reviews, incidents)</td><td><span class="pill stub">Stub</span></td><td>Operator dashboard</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <span class="tag muted">The one-paragraph takeaway</span>
+      <p>The platform&rsquo;s spine is solid and real: one capability registry, one governed doorway (<code>invoke()</code>), three thin surfaces onto it, an active permission layer, an installed (if not yet switched-on) tenant-isolation wall, and a working tamper-evident audit tape. The work that remains is mostly <strong>turning built things on</strong> (RLS), <strong>closing audit holes</strong> (member events, failed logins), and <strong>filling in leaf UI</strong> — not re-architecting. Knowing exactly which is which is the point of this document.</p>
+    </div>
+  </section>
+
+  <footer>
+    <p>Internal documentation · generated from the working tree on 2026-06-05 · static, no server required.<br>
+    Source of truth lives in <code>docs/architecture/</code>, <code>docs/capabilities/</code>, and the latest release audit under <code>docs/audits/</code>. When code and this page disagree, the code wins — update this page.</p>
+  </footer>
+
+  </div>
+  </main>
+</div>
+
+<script>
+  // Active-section highlighting for the TOC. Progressive enhancement only —
+  // every anchor still works with JS disabled.
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a[href^="#"]'));
+    var map = {};
+    links.forEach(function (a) {
+      var id = a.getAttribute('href').slice(1);
+      var el = document.getElementById(id);
+      if (el) map[id] = a;
+    });
+    var targets = Object.keys(map).map(function (id) { return document.getElementById(id); });
+    if ('IntersectionObserver' in window && targets.length) {
+      var current = null;
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) current = e.target.id;
+        });
+        links.forEach(function (a) { a.classList.remove('active'); });
+        if (current && map[current]) map[current].classList.add('active');
+      }, { rootMargin: '-10% 0px -80% 0px', threshold: 0 });
+      targets.forEach(function (t) { io.observe(t); });
+    }
+    // Close the mobile nav when a link is tapped.
+    var toggle = document.getElementById('navtoggle');
+    links.forEach(function (a) {
+      a.addEventListener('click', function () { if (toggle) toggle.checked = false; });
+    });
+  })();
+
+  // Theme cycle: system → light → dark → system. Persisted in localStorage.
+  (function () {
+    var btn = document.getElementById('themebtn');
+    var root = document.documentElement;
+    var order = ['system', 'light', 'dark'];
+    var label = { system: '◐ System', light: '☀ Light', dark: '☾ Dark' };
+    var saved = null;
+    try { saved = localStorage.getItem('oxagen-docs-theme'); } catch (e) {}
+    if (saved && order.indexOf(saved) !== -1) root.setAttribute('data-theme', saved);
+    function render() { btn.textContent = label[root.getAttribute('data-theme')] || '◐ Theme'; }
+    render();
+    btn.addEventListener('click', function () {
+      var cur = root.getAttribute('data-theme') || 'system';
+      var next = order[(order.indexOf(cur) + 1) % order.length];
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('oxagen-docs-theme', next); } catch (e) {}
+      render();
+    });
+  })();
+</script>
+</body>
+</html>
