@@ -4,7 +4,7 @@
 // createAccessRequest() to create a row in org.access_requests and returns the
 // publicId in the DenialResponse so the caller can poll / display status.
 
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { ResolvedPrincipal } from "@oxagen/oxagen";
 
@@ -40,21 +40,22 @@ export async function createAccessRequest(
   const scopeId = scopeKind === "workspace" ? ctx.workspaceId : ctx.orgId;
 
   try {
-    const d = db();
-    const [row] = await d
-      .insert(schema.accessRequests)
-      .values({
-        orgId: ctx.orgId,
-        requesterId: principal.id,
-        capabilityId: capability,
-        scopeKind,
-        scopeId,
-        status: "pending",
-        justification: justification ?? null,
-        createdByUserId: ctx.userId,
-        updatedByUserId: ctx.userId,
-      })
-      .returning({ publicId: schema.accessRequests.publicId });
+    const [row] = await withTenantDb((tx) =>
+      tx
+        .insert(schema.accessRequests)
+        .values({
+          orgId: ctx.orgId,
+          requesterId: principal.id,
+          capabilityId: capability,
+          scopeKind,
+          scopeId,
+          status: "pending",
+          justification: justification ?? null,
+          createdByUserId: ctx.userId,
+          updatedByUserId: ctx.userId,
+        })
+        .returning({ publicId: schema.accessRequests.publicId }),
+    );
 
     return row?.publicId ?? null;
   } catch (err) {

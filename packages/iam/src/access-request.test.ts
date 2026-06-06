@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", () => ({
   db: mocks.dbFn,
+  // withTenantDb: pass-through — invokes the callback with the same fake tx
+  // the handler expects. No scope GUC overhead in unit tests (OXA-1515).
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mocks.dbFn()),
   schema: {
     accessRequests: { publicId: "accessRequests.publicId" },
   },
