@@ -8,4 +8,7 @@ export {
 export type {
   CredentialPlaintext,
   CredentialCiphertext,
+  CredentialCiphertextRead,
 } from "./credentials/credential-service";
+export { resolveCredentialKms } from "./credentials/kms";
+export type { ResolvedKms } from "./credentials/kms";
