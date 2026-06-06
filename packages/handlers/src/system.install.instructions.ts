@@ -31,7 +31,7 @@ function stepsForClaudeCode(wsSlug: string | undefined): InstallStep[] {
     },
     {
       label: "Add the Oxagen MCP server to Claude Code",
-      command: `claude mcp add oxagen --transport http --url "${mcpUrl}"`,
+      command: `claude mcp add oxagen --transport http --url "${mcpUrl}" --header "Authorization: Bearer $OXAGEN_API_KEY"`,
     },
     {
       label: "Verify the server appears in the tool list",
