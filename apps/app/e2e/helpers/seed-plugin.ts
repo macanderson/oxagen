@@ -145,6 +145,25 @@ export async function seedPlugin(opts: PluginFixtureOptions): Promise<PluginFixt
     ON CONFLICT (id) DO NOTHING
   `;
 
+  // ── Auth account (email+password) ─────────────────────────────────────────────
+  // Seed a Better Auth credential account so loginAs can call the real sign-in
+  // API instead of replicating the HMAC-signed cookie manually. The password
+  // hash uses the same scrypt params as @better-auth/utils/password.node.mjs.
+  const passwordHash = await hashE2ePassword(E2E_TEST_PASSWORD);
+  await sql`
+    INSERT INTO auth.accounts (id, user_id, account_id, provider_id, password, created_at, updated_at)
+    VALUES (
+      ${"e2e-account-" + id},
+      ${userId},
+      ${opts.userEmail},
+      'credential',
+      ${passwordHash},
+      now(),
+      now()
+    )
+    ON CONFLICT (provider_id, account_id) DO NOTHING
+  `;
+
   // ── MCP registry (mock, org-scoped) ─────────────────────────────────────────
   // mcp.registries: (public_id citext, org_id uuid nullable, name text, base_url text, enabled bool, is_default_seed bool)
   const registryPubId = `mreg_e2e_${id}`;
@@ -265,6 +284,7 @@ export async function seedPlugin(opts: PluginFixtureOptions): Promise<PluginFixt
       await csql`DELETE FROM mcp.catalog_servers WHERE public_id = ${catalogPubId}`;
       await csql`DELETE FROM mcp.registries WHERE public_id = ${registryPubId}`;
       await csql`DELETE FROM auth.sessions WHERE id = ${sessionToken}`;
+      await csql`DELETE FROM auth.accounts WHERE id = ${"e2e-account-" + id}`;
       await csql`DELETE FROM workspace.workspace_users WHERE workspace_id = ${workspaceId}`;
       await csql`DELETE FROM workspace.workspaces WHERE id = ${workspaceId}`;
       await csql`DELETE FROM org.org_users WHERE org_id = ${orgId}`;
@@ -282,6 +302,8 @@ export async function seedPlugin(opts: PluginFixtureOptions): Promise<PluginFixt
     workspaceId,
     userId,
     sessionToken,
+    userEmail: opts.userEmail,
+    password: E2E_TEST_PASSWORD,
     orgSlug: opts.orgSlug,
     workspaceSlug: opts.workspaceSlug,
     orgListingId,
