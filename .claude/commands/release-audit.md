@@ -11,9 +11,30 @@ Run a full release-readiness sweep on the current branch and open PRs. Work top 
 
 **Fix all non-destructive issues in one pull request.**
 
-**Produce a single html report at the end with PASS / WARN / FAIL per check and a prioritized fix list.**
+**Produce a single HTML report at the end** with PASS / WARN / FAIL per check, a
+prioritized fix list, **and a readiness scorecard.** Every score is a 0–100 number
+(100 = flawless, 0 = worst possible) computed by the **Scoring** rubric below —
+deterministic deductions from concrete evidence, never a vibe. Each score must
+carry the evidence that produced it (which checks/counts/ratios drove the
+deductions) and a **confidence** flag (`high` = measured, `med` = partially
+measured, `low` = inferred). Required scores:
 
-The `Output` and `Execution Model` sections define how to accomplish the task and what artifact to produce when finished. All phases are to be done in paralell after `Phase 0 - Load context` completes.
+- **Maintainability**, **Security**, **SOC 2 compliance**, **GDPR compliance**,
+  **PCI compliance**
+- **App maturity** — one score per directory under `apps/`, enumerated live in
+  Phase 0 (never hard-code the list)
+- **Package maturity** — one score per project under `packages/`, enumerated live
+  in Phase 0 (never hard-code the list)
+- **Ops / CI maturity**, **Observability / logging / telemetry**
+- **Documentation — end-user docs** and **Documentation — internal docs** (two
+  separate scores)
+- **Overall platform stability**, plus one top-line **Release-readiness composite**
+  with a **GO / NO-GO** verdict
+
+The `Scoring`, `Output`, and `Execution model` sections define how to compute the
+scores, what artifact to produce, and how to parallelize. All audit phases run in
+parallel after `Phase 0 — Load context` completes; the **Scoring** synthesis runs
+once every auditor has returned.
 
 
 ## Phase 0 — Load context
@@ -175,7 +196,11 @@ Embed all CSS inline so the file renders standalone when opened from disk.
     <span class="meta">{{REPO}} · {{BRANCH}} · {{FULL_SHA}}</span><br>
     Requested {{TIMESTAMP}}
   </div>
+
+
   <div class="grad"></div>
+
+  
 
   <h2>Summary</h2>
   <table>
