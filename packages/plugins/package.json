@@ -19,6 +19,7 @@
   "dependencies": {
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/notifications": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "zod": "3.25.76",
     "unified": "11.0.5",

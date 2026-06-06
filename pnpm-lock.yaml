@@ -1031,6 +1031,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/notifications':
+        specifier: workspace:*
+        version: link:../notifications
       '@oxagen/tenancy':
         specifier: workspace:*
         version: link:../tenancy
