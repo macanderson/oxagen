@@ -5,10 +5,14 @@ import type { CapabilityContext } from "../types";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
 import { beforeTool, afterTool, onError } from "../hooks/runtime";
 import { createApprovalRequest, waitForApproval } from "./approval";
-import { connectMcp, materializeMcpTools } from "../dispatch/mcp-client";
 import { isSandboxAvailable } from "@oxagen/sandbox";
-import { withTenantDb, schema } from "@oxagen/database";
-import { eq, and } from "drizzle-orm";
+import {
+  getPluginTypeContributors,
+  type ContributedRawTool,
+} from "./plugin-type";
+// Side-effect imports register the plugin-type contributors.
+import "./plugin-types/mcp";
+import "./plugin-types/placeholders";
 
 function byteSize(v: unknown): number {
   try {
@@ -231,181 +235,133 @@ export async function materializeTools(
   //      ([[instrument-everything]]).
   // Failures per-server are isolated — a degraded server never blocks the
   // model from receiving other tools.
-  if (ctx.workspaceId) {
-    let mcpServerRows: (typeof schema.mcpServers.$inferSelect)[] = [];
+  // The PluginType spine yields the per-tool work (governance query, connect,
+  // credential decrypt, list); the wrapping below applies the IAM gate +
+  // metering uniformly to every contributed tool, keyed by externalServerId.
+  for (const contributor of getPluginTypeContributors()) {
+    let contributed: ContributedRawTool[] = [];
     try {
-      mcpServerRows = await withTenantDb((tx) =>
-        tx
-          .select()
-          .from(schema.mcpServers)
-          .where(
-            and(
-              eq(schema.mcpServers.orgId, ctx.orgId),
-              eq(schema.mcpServers.workspaceId, ctx.workspaceId),
-              eq(schema.mcpServers.healthStatus, "healthy"),
-            ),
-          ),
-      );
+      contributed = await contributor.contributeTools(ctx);
     } catch (err) {
-      // DB failure must never block the model from receiving built-in tools.
-      console.error("[materialize-tools] Failed to load MCP server rows:", err);
+      console.error(`[materialize-tools] plugin type ${contributor.type} failed:`, err);
     }
+    for (const raw of contributed) {
+      const capturedKey = raw.realName;
+      const externalServerId = raw.externalServerId;
+      const capturedExecute = raw.execute;
+      register(capturedKey, tool({
+        description: raw.description,
+        inputSchema: z.record(z.string(), z.unknown()),
+        execute: async (input: unknown) => {
+          const invocationId = crypto.randomUUID();
+          const startedAt = Date.now();
 
-    for (const server of mcpServerRows) {
-      try {
-        const authConfig = (server.authConfig ?? {}) as Record<string, string>;
-        const client = await connectMcp({
-          endpointUrl: server.endpointUrl,
-          authStrategy: server.authStrategy as "none" | "bearer" | "header",
-          authConfig,
-        });
-        const mcpTools = await materializeMcpTools(client, `mcp.${server.id}`);
-        for (const [rawKey, rawTool] of Object.entries(mcpTools)) {
-          // Wrap each MCP tool so every execution is metered with insertToolInvocation.
-          const capturedKey = rawKey;
-          const capturedExecute = rawTool.execute;
-          if (typeof capturedExecute !== "function") continue;
-          register(capturedKey, tool({
-            description: rawTool.description,
-            inputSchema: z.record(z.string(), z.unknown()),
-            execute: async (input: unknown) => {
-              const invocationId = crypto.randomUUID();
-              const startedAt = Date.now();
+          // ── IAM gate (GAP-4) ────────────────────────────────────────────
+          // capturedKey is the synthetic capability id, e.g.
+          // `mcp.<serverId>.<toolName>`. Same IAM gate as invoke();
+          // defaultEffect="allow" — the admin intentionally installed +
+          // enabled this plugin, but an explicit deny/require_approval policy
+          // against the synthetic id is honoured when IAM is enforced.
+          const iamResult = await authorizeExternalCapability(
+            capturedKey,
+            ctx,
+            "allow",
+          );
+          if (!iamResult.allowed) {
+            try {
+              await insertToolInvocation({
+                invocation_id: invocationId,
+                org_id: ctx.orgId,
+                workspace_id: ctx.workspaceId,
+                capability_name: capturedKey,
+                message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
+                parent_message_id: null,
+                execution_step_id: null,
+                status: "failed",
+                input_size_bytes: byteSize(input),
+                output_size_bytes: 0,
+                latency_ms: Date.now() - startedAt,
+                error_class: "IamDenied",
+                external_provider: "",
+                external_server_id: externalServerId,
+                risk_level: "low",
+                required_approval: 0,
+                surface: ctx.surface,
+                provider: "",
+                created_at: new Date().toISOString(),
+              });
+            } catch {
+              /* telemetry must never fail the call */
+            }
+            const reason = iamResult.reason ?? iamResult.outcome;
+            return `Tool blocked by workspace policy: ${reason}`;
+          }
+          // ── End IAM gate ────────────────────────────────────────────────
 
-              // ── IAM gate (GAP-4) ────────────────────────────────────────────
-              // capturedKey is the synthetic capability id for this tool:
-              // `mcp.<serverId>.<toolName>`. Run the same IAM gate as invoke()
-              // so an explicit deny/require_approval policy against the
-              // synthetic id is honoured when IAM_ENFORCEMENT_ENABLED=true.
-              // defaultEffect="allow" — the user intentionally registered this
-              // server; absent any explicit policy the call is permitted.
-              const iamResult = await authorizeExternalCapability(
-                capturedKey,
-                ctx,
-                "allow",
-              );
-              if (!iamResult.allowed) {
-                // Record the blocked invocation in the audit trail.
-                try {
-                  await insertToolInvocation({
-                    invocation_id: invocationId,
-                    org_id: ctx.orgId,
-                    workspace_id: ctx.workspaceId,
-                    capability_name: capturedKey,
-                    message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
-                    parent_message_id: null,
-                    execution_step_id: null,
-                    // ToolInvocationRow has no "denied" status; encode IAM
-                    // denial as "failed" + error_class="IamDenied" — the same
-                    // information, queryable in ClickHouse the same way.
-                    status: "failed",
-                    input_size_bytes: byteSize(input),
-                    output_size_bytes: 0,
-                    latency_ms: Date.now() - startedAt,
-                    error_class: "IamDenied",
-                    external_provider: "",
-                    external_server_id: server.id,
-                    risk_level: "low",
-                    required_approval: 0,
-                    surface: ctx.surface,
-                    provider: "",
-                    created_at: new Date().toISOString(),
-                  });
-                } catch {
-                  /* telemetry must never fail the call */
-                }
-                // Return a structured error the model can read and surface to
-                // the user. Do NOT throw — a thrown error would cause the AI SDK
-                // to mark the turn as failed; a returned string lets the model
-                // reason about the denial and stop gracefully.
-                const reason = iamResult.reason ?? iamResult.outcome;
-                return `Tool blocked by workspace policy: ${reason}`;
-              }
-              // ── End IAM gate ────────────────────────────────────────────────
-
-              try {
-                // capturedExecute is the AI SDK Tool execute fn (input: T, options) => Promise<R>.
-                // The MCP wrapper in mcp-client.ts returns a Tool whose execute takes one arg;
-                // cast to the compatible double-arg form so TypeScript is satisfied.
-                const result = await (capturedExecute as (
-                  i: unknown,
-                  o: { toolCallId: string; messages: unknown[] },
-                ) => Promise<unknown>)(input, { toolCallId: invocationId, messages: [] });
-                try {
-                  await insertToolInvocation({
-                    invocation_id: invocationId,
-                    org_id: ctx.orgId,
-                    workspace_id: ctx.workspaceId,
-                    capability_name: capturedKey,
-                    message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
-                    parent_message_id: null,
-                    execution_step_id: null,
-                    status: "completed",
-                    input_size_bytes: byteSize(input),
-                    output_size_bytes: byteSize(result),
-                    latency_ms: Date.now() - startedAt,
-                    error_class: null,
-                    external_provider: "",
-                    external_server_id: server.id,
-                    risk_level: "low",
-                    required_approval: 0,
-                    surface: ctx.surface,
-                    provider: "",
-                    created_at: new Date().toISOString(),
-                  });
-                } catch {
-                  /* telemetry must never fail the call */
-                }
-                return result;
-              } catch (err) {
-                try {
-                  await insertToolInvocation({
-                    invocation_id: invocationId,
-                    org_id: ctx.orgId,
-                    workspace_id: ctx.workspaceId,
-                    capability_name: capturedKey,
-                    message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
-                    parent_message_id: null,
-                    execution_step_id: null,
-                    status: "failed",
-                    input_size_bytes: byteSize(input),
-                    output_size_bytes: 0,
-                    latency_ms: Date.now() - startedAt,
-                    error_class: err instanceof Error ? err.name : "UnknownError",
-                    external_provider: "",
-                    external_server_id: server.id,
-                    risk_level: "low",
-                    required_approval: 0,
-                    surface: ctx.surface,
-                    provider: "",
-                    created_at: new Date().toISOString(),
-                  });
-                } catch {
-                  /* swallow */
-                }
-                throw err;
-              }
-            },
-          }));
-        }
-        // Do NOT close the connection here. Every materialized tool's
-        // `execute` closure (via materializeMcpTools) calls `client.callTool`
-        // on THIS client, and those calls happen later, while the model
-        // streams. Closing now would terminate the transport before any MCP
-        // tool runs, so every MCP tool call would throw. The StreamableHTTP
-        // connection is request-scoped and is torn down when the streaming
-        // request/runtime context ends; keeping it open also preserves any
-        // MCP session state across multiple tool calls within the turn.
-      } catch (err) {
-        // Per-server failure is isolated — log and continue.
-        console.error(
-          `[materialize-tools] Failed to load MCP tools from server ${server.id} (${server.name}):`,
-          err,
-        );
-      }
+          try {
+            const result = await capturedExecute(input, {
+              toolCallId: invocationId,
+              messages: [],
+            });
+            try {
+              await insertToolInvocation({
+                invocation_id: invocationId,
+                org_id: ctx.orgId,
+                workspace_id: ctx.workspaceId,
+                capability_name: capturedKey,
+                message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
+                parent_message_id: null,
+                execution_step_id: null,
+                status: "completed",
+                input_size_bytes: byteSize(input),
+                output_size_bytes: byteSize(result),
+                latency_ms: Date.now() - startedAt,
+                error_class: null,
+                external_provider: "",
+                external_server_id: externalServerId,
+                risk_level: "low",
+                required_approval: 0,
+                surface: ctx.surface,
+                provider: "",
+                created_at: new Date().toISOString(),
+              });
+            } catch {
+              /* telemetry must never fail the call */
+            }
+            return result;
+          } catch (err) {
+            try {
+              await insertToolInvocation({
+                invocation_id: invocationId,
+                org_id: ctx.orgId,
+                workspace_id: ctx.workspaceId,
+                capability_name: capturedKey,
+                message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
+                parent_message_id: null,
+                execution_step_id: null,
+                status: "failed",
+                input_size_bytes: byteSize(input),
+                output_size_bytes: 0,
+                latency_ms: Date.now() - startedAt,
+                error_class: err instanceof Error ? err.name : "UnknownError",
+                external_provider: "",
+                external_server_id: externalServerId,
+                risk_level: "low",
+                required_approval: 0,
+                surface: ctx.surface,
+                provider: "",
+                created_at: new Date().toISOString(),
+              });
+            } catch {
+              /* swallow */
+            }
+            throw err;
+          }
+        },
+      }));
     }
   }
-  // ── End MCP tools ─────────────────────────────────────────────────────────
+  // ── End installable-plugin tools ────────────────────────────────────────────
 
   return { tools: out, nameMap };
 }

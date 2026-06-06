@@ -39,26 +39,48 @@ vi.mock("@oxagen/oxagen", () => ({
   getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
 }));
 
-// Stub @oxagen/database so the MCP server row query — run through withTenantDb
-// inside materialize-tools — returns no rows by default without a real DB.
-// db() is a hoisted vi.fn that withTenantDb routes its tx through, so individual
-// tests can inject rows via vi.mocked(db).mockReturnValue(...).
+// Stub @oxagen/database. The MCP plugin-type contributor runs two queries via
+// withTenantDb: (1) denylisted server names, (2) the enabled installs joined to
+// their enabled org listing. The builder returns rows keyed by the `from` table
+// sentinel, so tests inject install rows via dbMocks.rowsByTable.set(schema.mcpServers, [...]).
 const dbMocks = vi.hoisted(() => {
-  const emptyDb = {
-    select: () => ({ from: () => ({ where: async () => [] }) }),
+  const schema = {
+    mcpServers: {
+      orgId: "mcp.orgId",
+      workspaceId: "mcp.workspaceId",
+      enabled: "mcp.enabled",
+      healthStatus: "mcp.healthStatus",
+      orgListingId: "mcp.orgListingId",
+      id: "mcp.id",
+      name: "mcp.name",
+      endpointUrl: "mcp.endpointUrl",
+      authStrategy: "mcp.authStrategy",
+      authConfig: "mcp.authConfig",
+    },
+    pluginOrgListings: { id: "listing.id", enabled: "listing.enabled", deletedAt: "listing.deletedAt" },
+    pluginOrgDenylist: { orgId: "deny.orgId", serverName: "deny.serverName" },
   };
-  return { db: vi.fn((): unknown => emptyDb) };
+  const rowsByTable = new Map<unknown, unknown[]>();
+  const builder = {
+    select: () => ({
+      from: (t: unknown) => {
+        const result = rowsByTable.get(t) ?? [];
+        const chain = { innerJoin: () => chain, where: async () => result };
+        return chain;
+      },
+    }),
+  };
+  return { schema, rowsByTable, db: vi.fn((): unknown => builder) };
 });
 vi.mock("@oxagen/database", () => ({
   db: dbMocks.db,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(dbMocks.db()),
-  schema: {
-    mcpServers: {
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      healthStatus: "healthStatus",
-    },
-  },
+  schema: dbMocks.schema,
+}));
+
+// The MCP contributor decrypts per-workspace credentials via @oxagen/plugins.
+vi.mock("@oxagen/plugins", () => ({
+  getWorkspaceSecret: vi.fn(async () => null),
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
@@ -124,6 +146,7 @@ const CTX = {
 
 describe("materializeTools", () => {
   beforeEach(() => {
+    dbMocks.rowsByTable.clear();
     vi.mocked(invoke).mockClear();
     vi.mocked(authorizeExternalCapability).mockClear();
     vi.mocked(authorizeExternalCapability).mockResolvedValue({ allowed: true, outcome: "allow", reason: null });
@@ -343,10 +366,9 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     mocks.insertToolInvocation.mockClear();
     mocks.insertToolInvocation.mockResolvedValue(undefined);
 
-    // Return one healthy MCP server row.
-    const mockWhere = vi.fn(async () => [MCP_SERVER]);
-    const mockFrom = vi.fn(() => ({ where: mockWhere }));
-    dbMocks.db.mockReturnValue({ select: vi.fn(() => ({ from: mockFrom })) });
+    // Inject one healthy install row for the join query; denylist stays empty.
+    dbMocks.rowsByTable.clear();
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [MCP_SERVER]);
 
     // connectMcp returns a stub client; materializeMcpTools returns one tool.
     vi.mocked(connectMcp).mockResolvedValue({} as Awaited<ReturnType<typeof connectMcp>>);
