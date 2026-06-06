@@ -356,7 +356,7 @@ export function WorkspaceIntegrationsPanel({
                             size="sm"
                             render={
                               <a
-                                href={`/api/v1/plugins/oauth/start?orgListingId=${listing.id}&workspaceId=${listing.orgId}`}
+                                href={`/api/v1/mcp/oauth/authorize?orgSlug=${orgSlug}&workspaceSlug=${workspaceSlug}&orgListingId=${listing.id}`}
                                 rel="noopener noreferrer"
                               />
                             }

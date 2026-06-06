@@ -52,13 +52,18 @@ export function NotificationsBell() {
     }
   }, [orgSlug, workspaceSlug]);
 
-  // Load when sheet opens; also poll on mount for the badge count.
+  // Load when sheet opens; also poll on mount for the badge count. The load is
+  // deferred a tick so the setState calls inside it don't run synchronously
+  // within the effect (react-hooks/set-state-in-effect).
   React.useEffect(() => {
-    void load();
+    const t = setTimeout(() => void load(), 0);
+    return () => clearTimeout(t);
   }, [load]);
 
   React.useEffect(() => {
-    if (open) void load();
+    if (!open) return;
+    const t = setTimeout(() => void load(), 0);
+    return () => clearTimeout(t);
   }, [open, load]);
 
   const handleMarkRead = async (notification: Notification) => {

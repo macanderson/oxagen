@@ -21,7 +21,8 @@ export default async function ReauthPage({
   const { orgSlug, workspaceSlug, listingId } = await params;
   const session = await getSessionOrRedirect();
   const org = await resolveOrg(orgSlug);
-  const ws = await resolveWorkspace(org.id, workspaceSlug);
+  // Validates the workspace exists under this org (404s otherwise).
+  await resolveWorkspace(org.id, workspaceSlug);
   await assertOrgMember(org.id, session.user.id);
 
   // Resolve the listing by publicId (the listingId param from the URL).
@@ -45,9 +46,9 @@ export default async function ReauthPage({
 
   if (!listing) notFound();
 
-  // OAuth start route — Plan 4 ships /api/v1/plugins/oauth/start.
-  // The workspaceId is passed so the credential row is scoped to this workspace.
-  const oauthStartUrl = `/api/v1/plugins/oauth/start?orgListingId=${listing.id}&workspaceId=${ws.id}`;
+  // OAuth authorize route (Plan 4): /api/v1/mcp/oauth/authorize. It resolves the
+  // workspace from orgSlug+workspaceSlug and scopes the credential to it.
+  const oauthStartUrl = `/api/v1/mcp/oauth/authorize?orgSlug=${orgSlug}&workspaceSlug=${workspaceSlug}&orgListingId=${listing.id}`;
 
   return (
     <div
