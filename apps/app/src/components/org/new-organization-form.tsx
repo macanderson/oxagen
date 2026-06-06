@@ -93,6 +93,13 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
         <input type="hidden" name="type" value={orgType} />
       </div>
 
+      {/* Two-column body so the form gains horizontal width instead of running
+          off the top/bottom of the page: identity + business + billing email on
+          the left, billing address on the right. Collapses to one column on
+          mobile. */}
+      <div className="grid gap-x-6 gap-y-4 md:grid-cols-2 md:items-start">
+        {/* Left column — identity, business, billing email */}
+        <div className="flex flex-col gap-4">
       {/* ── Name ─────────────────────────────────────────────────────── */}
       <div className="space-y-1.5">
         <Label htmlFor="name">
@@ -219,9 +226,11 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
           autoComplete="email"
         />
       </div>
+        </div>{/* end left column */}
 
-      {/* ── Billing address ───────────────────────────────────────────── */}
-      <BillingAddressFields />
+        {/* Right column — billing address */}
+        <BillingAddressFields />
+      </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 

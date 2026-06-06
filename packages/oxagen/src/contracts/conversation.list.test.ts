@@ -111,7 +111,7 @@ describe("conversation.list capability", () => {
       ],
       nextCursor: null,
     });
-    expect(parsed.conversations[0].title).toBeNull();
+    expect(parsed.conversations[0]?.title).toBeNull();
   });
 
   // ── registry ──────────────────────────────────────────────────────────────

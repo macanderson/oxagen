@@ -6,8 +6,8 @@ import { createOrgAction } from "./actions";
 export default async function NewTenantPage() {
   await getSessionOrRedirect();
   return (
-    <div className="grid min-h-dvh place-items-center p-4">
-      <Card className="w-full max-w-lg">
+    <div className="flex min-h-dvh items-start justify-center p-4 py-8">
+      <Card className="w-full max-w-3xl">
         <CardHeader>
           <CardTitle>Create organization</CardTitle>
           <CardDescription>
