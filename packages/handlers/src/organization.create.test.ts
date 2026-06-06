@@ -6,7 +6,9 @@ const mocks = vi.hoisted(() => ({
   txInsertOrg: vi.fn(),
   txInsertOrgReturning: vi.fn(),
   txInsertOrgUsers: vi.fn(),
-  txFn: vi.fn(),
+  // withSystemDbFn tracks each withSystemDb call so tests can assert the org
+  // creation wraps its writes in the system-bypass transaction (OXA-1515).
+  withSystemDbFn: vi.fn(),
   grantFreeCredits: vi.fn(),
   bootstrapOrgIAM: vi.fn(),
 }));
@@ -30,27 +32,36 @@ mocks.txInsertOrg.mockReturnValue({ values: () => orgValuesStub });
 // Stub orgUsers insert: insert().values() (no returning)
 mocks.txInsertOrgUsers.mockReturnValue({ values: vi.fn(async () => undefined) });
 
-// Transaction mock: runs the callback with a tx object
-mocks.txFn.mockImplementation(async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
-  // Use a plain counter outside the tx object to avoid self-referential casts.
-  let insertCount = 0;
-  const tx = {
-    insert: (table: unknown): unknown => {
-      insertCount++;
-      if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
-      return mocks.txInsertOrgUsers(table) as unknown;
-    },
-  };
-  return cb(tx as unknown as Parameters<typeof cb>[0]);
-});
+// withSystemDb passthrough: runs the callback with a fake tx.
+// The handler calls withSystemDb twice:
+//   1. slug check → tx.query.organizations.findFirst
+//   2. main body  → tx.insert (org + orgUsers) + bootstrapOrgIAM (stubbed)
+// A per-call insert counter keeps the org/orgUsers routing correct.
+mocks.withSystemDbFn.mockImplementation(
+  async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+    let insertCount = 0;
+    const tx = {
+      query: {
+        organizations: { findFirst: mocks.orgFindFirst },
+      },
+      insert: (table: unknown): unknown => {
+        insertCount++;
+        if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
+        return mocks.txInsertOrgUsers(table) as unknown;
+      },
+    };
+    return fn(tx as unknown as Parameters<typeof fn>[0]);
+  },
+);
 
 vi.mock("@oxagen/database", () => ({
+  // db() is no longer called by organization.create — kept for safety in case
+  // any transitive dep still references it in tests.
   db: () => ({
-    query: {
-      organizations: { findFirst: mocks.orgFindFirst },
-    },
-    transaction: mocks.txFn,
+    query: { organizations: { findFirst: mocks.orgFindFirst } },
   }),
+  withSystemDb: async (fn: (tx: Record<string, unknown>) => Promise<unknown>): Promise<unknown> =>
+    mocks.withSystemDbFn(fn) as Promise<unknown>,
   schema: {
     organizations: {
       slug: "slug",
@@ -103,7 +114,6 @@ const CTX: CapabilityContext = {
 describe("organizationCreateHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
     mocks.orgFindFirst.mockClear();
-    mocks.txFn.mockClear();
     mocks.txInsertOrg.mockClear();
     mocks.txInsertOrgReturning.mockClear();
     mocks.txInsertOrgUsers.mockClear();
@@ -123,6 +133,25 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     ]);
     mocks.grantFreeCredits.mockResolvedValue(undefined);
     mocks.bootstrapOrgIAM.mockResolvedValue(undefined);
+    // Reset call count + restore default implementation (clears any one-time
+    // overrides set by individual test cases).
+    mocks.withSystemDbFn.mockReset();
+    mocks.withSystemDbFn.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        let insertCount = 0;
+        const tx = {
+          query: {
+            organizations: { findFirst: mocks.orgFindFirst },
+          },
+          insert: (table: unknown): unknown => {
+            insertCount++;
+            if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
+            return mocks.txInsertOrgUsers(table) as unknown;
+          },
+        };
+        return fn(tx as unknown as Parameters<typeof fn>[0]);
+      },
+    );
   });
 
   // ── auth guard ───────────────────────────────────────────────────────────
@@ -145,12 +174,23 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
   });
 
   it("throws a friendly error on unique_violation (race condition path)", async () => {
-    // Pre-check passes (no row), but the insert races and hits the unique index
+    // Pre-check passes (no row), but the second withSystemDb call (main body)
+    // races and hits the unique index.
     mocks.orgFindFirst.mockResolvedValueOnce(null);
-    mocks.txFn.mockImplementationOnce(async () => {
-      const err = Object.assign(new Error("dup"), { code: "23505" });
-      throw err;
-    });
+    // Override: first call (slug check) resolves null; second call (main body) throws.
+    let callIdx = 0;
+    mocks.withSystemDbFn.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        callIdx++;
+        if (callIdx === 1) {
+          // slug check — simulate no match
+          return fn({ query: { organizations: { findFirst: async () => null } } } as unknown as Parameters<typeof fn>[0]);
+        }
+        // main body — simulate unique_violation
+        const err = Object.assign(new Error("dup"), { code: "23505" });
+        throw err;
+      },
+    );
 
     await expect(
       organizationCreateHandler({ name: "Race", slug: "race-slug", planSlug: "free", type: "business" as const }, CTX),
@@ -158,9 +198,16 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
   });
 
   it("re-throws non-slug database errors unchanged", async () => {
-    mocks.txFn.mockImplementationOnce(async () => {
-      throw new Error("connection refused");
-    });
+    let callIdx = 0;
+    mocks.withSystemDbFn.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        callIdx++;
+        if (callIdx === 1) {
+          return fn({ query: { organizations: { findFirst: async () => null } } } as unknown as Parameters<typeof fn>[0]);
+        }
+        throw new Error("connection refused");
+      },
+    );
 
     await expect(
       organizationCreateHandler({ name: "Bad", slug: "bad-slug", planSlug: "free", type: "business" as const }, CTX),
@@ -182,11 +229,13 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     expect(result.createdAt).toBe("2026-05-01T00:00:00.000Z");
   });
 
-  it("runs the org insert inside a transaction and then calls grantFreeCredits", async () => {
+  it("runs the org insert inside a withSystemDb bypass and then calls grantFreeCredits", async () => {
     await organizationCreateHandler({ name: "Tx Test", slug: "tx-test", planSlug: "free", type: "business" as const }, CTX);
-    // The org creation (orgs + orgUsers) must happen inside exactly one db
-    // transaction so membership is never visible without the org row.
-    expect(mocks.txFn).toHaveBeenCalledTimes(1);
+    // The org creation (orgs + orgUsers) must happen inside withSystemDb so the
+    // bootstrap writes succeed without an active tenant scope (RLS bypass) and
+    // membership is never visible without the org row.
+    // withSystemDb is called twice: once for the slug check, once for the main body.
+    expect(mocks.withSystemDbFn).toHaveBeenCalledTimes(2);
     // grantFreeCredits must be called after the org tx commits (billing runs
     // in its own isolated transaction so a billing failure cannot roll back
     // the org creation).

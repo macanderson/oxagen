@@ -19,7 +19,7 @@
 // 403 vs 404 difference (IDOR defence, same pattern as assertOrgMember).
 
 import { eq, and } from "drizzle-orm";
-import { db, schema } from "@oxagen/database";
+import { schema, withSystemDb } from "@oxagen/database";
 import { storage, StorageNotFoundError } from "@oxagen/storage";
 import { insertEvents } from "@oxagen/telemetry";
 import { randomUUID } from "node:crypto";
@@ -115,14 +115,13 @@ export async function serveFile(
   principal: FileServePrincipal,
 ): Promise<FileServeResult> {
   // ── 1. Load the file row ─────────────────────────────────────────────────
-  // tenancy: unscoped seam (not a kernel capability — called directly from the
-  // route layer without a kernel invocation; no ALS tenant scope is present;
-  // authz is enforced via the principal's orgId/userId fields below) — OXA-1515
-  const rows = await db()
-    .select()
-    .from(schema.files)
-    .where(eq(schema.files.publicId, fileId))
-    .limit(1);
+  // tenancy: system bypass via withSystemDb (not a kernel capability — called
+  // directly from the route layer without a kernel invocation; no ALS tenant
+  // scope is present; authz is enforced in-code via principal's orgId/userId
+  // fields below, not by RLS) — OXA-1515
+  const rows = await withSystemDb((tx) =>
+    tx.select().from(schema.files).where(eq(schema.files.publicId, fileId)).limit(1),
+  );
 
   const file = rows[0];
   if (!file) {
@@ -155,17 +154,20 @@ export async function serveFile(
     // Direct query (not imported from apps/app) — same logic as
     // assertOrgMember() in resolve-org.ts, replicated here to keep
     // packages/handlers free of app-layer imports.
-    // tenancy: unscoped seam (same as above — no kernel scope) — OXA-1515
-    const membership = await db()
-      .select({ id: schema.orgUsers.id })
-      .from(schema.orgUsers)
-      .where(
-        and(
-          eq(schema.orgUsers.orgId, file.orgId),
-          eq(schema.orgUsers.userId, principal.userId),
-        ),
-      )
-      .limit(1);
+    // tenancy: system bypass via withSystemDb (same rationale as above — no
+    // kernel scope; authz enforced in-code by userId match) — OXA-1515
+    const membership = await withSystemDb((tx) =>
+      tx
+        .select({ id: schema.orgUsers.id })
+        .from(schema.orgUsers)
+        .where(
+          and(
+            eq(schema.orgUsers.orgId, file.orgId),
+            eq(schema.orgUsers.userId, principal.userId!),
+          ),
+        )
+        .limit(1),
+    );
 
     if (membership.length === 0) {
       logger.warn(

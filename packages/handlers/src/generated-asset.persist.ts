@@ -9,7 +9,7 @@
 // identically by apps/app, apps/api, and the inngest workers.
 
 import { randomUUID } from "node:crypto";
-import { db, schema } from "@oxagen/database";
+import { schema, withSystemDb } from "@oxagen/database";
 import { storage } from "@oxagen/storage";
 
 export type AssetKind = "image" | "video";
@@ -88,33 +88,35 @@ export async function persistGeneratedAsset(
     access: "public",
   });
 
-  // tenancy: unscoped seam (shared utility called from both kernel handlers and
-  // Inngest workers; Inngest workers run outside kernel.invoke() and have no ALS
-  // scope — migrating to withTenantDb requires each callsite to establish scope
-  // first; orgId/workspaceId are carried explicitly in args as defense-in-depth)
-  // — OXA-1515
-  const [row] = await db()
-    .insert(schema.generatedAssets)
-    .values({
-      orgId: args.orgId,
-      workspaceId: args.workspaceId,
-      userId: args.userId,
-      createdByUserId: args.userId,
-      updatedByUserId: args.userId,
-      kind: args.kind,
-      accessPolicy: args.accessPolicy ?? "user",
-      status: "ready",
-      storageProvider: store.driver,
-      storageKey,
-      storageUrl: url,
-      mimeType: args.mimeType,
-      sizeBytes: BigInt(bytes),
-      prompt: args.prompt,
-      model: args.model,
-      conversationId: args.conversationId ?? undefined,
-      messageId: args.messageId ?? undefined,
-    })
-    .returning({ id: schema.generatedAssets.id, publicId: schema.generatedAssets.publicId });
+  // tenancy: system bypass via withSystemDb (shared utility called from both
+  // kernel handlers and apps/app chat stream route; the chat stream route calls
+  // this OUTSIDE any runInTenantScope — the image/video generation happens in a
+  // ReadableStream callback that is not wrapped by the kernel or tenant scope;
+  // orgId/workspaceId are carried explicitly in args as defense-in-depth) — OXA-1515
+  const [row] = await withSystemDb((tx) =>
+    tx
+      .insert(schema.generatedAssets)
+      .values({
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+        userId: args.userId,
+        createdByUserId: args.userId,
+        updatedByUserId: args.userId,
+        kind: args.kind,
+        accessPolicy: args.accessPolicy ?? "user",
+        status: "ready",
+        storageProvider: store.driver,
+        storageKey,
+        storageUrl: url,
+        mimeType: args.mimeType,
+        sizeBytes: BigInt(bytes),
+        prompt: args.prompt,
+        model: args.model,
+        conversationId: args.conversationId ?? undefined,
+        messageId: args.messageId ?? undefined,
+      })
+      .returning({ id: schema.generatedAssets.id, publicId: schema.generatedAssets.publicId }),
+  );
 
   if (!row) throw new Error("generated_assets insert failed");
 
@@ -163,27 +165,31 @@ export interface PendingGeneratedAsset {
 export async function createPendingGeneratedAsset(
   args: CreatePendingGeneratedAssetArgs,
 ): Promise<PendingGeneratedAsset> {
-  // tenancy: unscoped seam (same as persistGeneratedAsset above) — OXA-1515
-  const [row] = await db()
-    .insert(schema.generatedAssets)
-    .values({
-      orgId: args.orgId,
-      workspaceId: args.workspaceId,
-      userId: args.userId,
-      createdByUserId: args.userId,
-      updatedByUserId: args.userId,
-      kind: args.kind,
-      accessPolicy: args.accessPolicy ?? "user",
-      status: "pending",
-      storageProvider: storage().driver,
-      storageKey: "",
-      mimeType: args.mimeType,
-      prompt: args.prompt,
-      model: args.model,
-      conversationId: args.conversationId ?? undefined,
-      messageId: args.messageId ?? undefined,
-    })
-    .returning({ id: schema.generatedAssets.id, publicId: schema.generatedAssets.publicId });
+  // tenancy: system bypass via withSystemDb (same rationale as
+  // persistGeneratedAsset — called from the chat stream route outside any
+  // runInTenantScope; orgId/workspaceId are explicit in args) — OXA-1515
+  const [row] = await withSystemDb((tx) =>
+    tx
+      .insert(schema.generatedAssets)
+      .values({
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+        userId: args.userId,
+        createdByUserId: args.userId,
+        updatedByUserId: args.userId,
+        kind: args.kind,
+        accessPolicy: args.accessPolicy ?? "user",
+        status: "pending",
+        storageProvider: storage().driver,
+        storageKey: "",
+        mimeType: args.mimeType,
+        prompt: args.prompt,
+        model: args.model,
+        conversationId: args.conversationId ?? undefined,
+        messageId: args.messageId ?? undefined,
+      })
+      .returning({ id: schema.generatedAssets.id, publicId: schema.generatedAssets.publicId }),
+  );
 
   if (!row) throw new Error("generated_assets pending insert failed");
 

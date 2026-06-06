@@ -12,7 +12,7 @@
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member.invite.decline";
-import { db, schema } from "@oxagen/database";
+import { schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -26,23 +26,23 @@ export const orgMemberInviteDeclineHandler: CapabilityHandler<typeof orgMemberIn
     throw new Error("Unauthorized: must be authenticated to decline an invitation");
   }
 
-  // tenancy: unscoped seam (resolves an invitation by publicId with NO orgId filter;
-  // the decliner's ctx.orgId may differ from the invitation's orgId — cross-org
-  // lookup is intentional; the update below writes to the invitation's org which
-  // cannot satisfy RLS for the caller's scope) — OXA-1515
-  const d = db();
+  // tenancy: system bypass via withSystemDb (cross-org lookup — the decliner's
+  // ctx.orgId may differ from the invitation's orgId; the update below writes to
+  // the invitation's org which cannot satisfy RLS under the caller's scope) — OXA-1515
 
   // ── Resolve invitation ───────────────────────────────────────────────────────
-  const invitation = await d.query.invitations.findFirst({
-    where: eq(schema.invitations.publicId, input.invitationPublicId),
-    columns: {
-      id: true,
-      publicId: true,
-      orgId: true,
-      email: true,
-      status: true,
-    },
-  });
+  const invitation = await withSystemDb((tx) =>
+    tx.query.invitations.findFirst({
+      where: eq(schema.invitations.publicId, input.invitationPublicId),
+      columns: {
+        id: true,
+        publicId: true,
+        orgId: true,
+        email: true,
+        status: true,
+      },
+    }),
+  );
 
   if (!invitation) {
     throw new Error(`Invitation '${input.invitationPublicId}' not found`);
@@ -55,10 +55,12 @@ export const orgMemberInviteDeclineHandler: CapabilityHandler<typeof orgMemberIn
 
   // ── Mark declined ─────────────────────────────────────────────────────────────
   const actorId = ctx.userId ?? ctx.apiKeyId ?? "system";
-  await d
-    .update(schema.invitations)
-    .set({ status: "declined", updatedAt: new Date(), updatedByUserId: actorId })
-    .where(eq(schema.invitations.id, invitation.id));
+  await withSystemDb((tx) =>
+    tx
+      .update(schema.invitations)
+      .set({ status: "declined", updatedAt: new Date(), updatedByUserId: actorId })
+      .where(eq(schema.invitations.id, invitation.id)),
+  );
 
   logger.info(
     {

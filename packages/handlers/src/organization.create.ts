@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
-import { db, schema } from "@oxagen/database";
+import { schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { grantFreeCredits } from "@oxagen/billing";
 import { logger } from "./logger";
@@ -18,15 +18,17 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
     logger.warn({ orgId: ctx.orgId }, "organization.create: rejected — no authenticated user");
     throw new Error("organization.create requires an authenticated user");
   }
-  // tenancy: unscoped seam (creates the org's own root row — the new org does not
-  // exist yet and ctx.orgId is the caller's current org, not the new one) — OXA-1515
-  const d = db();
+  // tenancy: system bypass via withSystemDb (bootstrap — creates the org's own root
+  // rows; no tenant scope exists yet because the new org does not exist yet, and
+  // ctx.orgId is the caller's current org, not the one being created) — OXA-1515
   // Fast-path friendly error for the common (non-racing) case; the unique
   // index + the catch below are the authoritative guard against the race.
-  const existing = await d.query.organizations.findFirst({
-    where: eq(schema.organizations.slug, input.slug),
-    columns: { id: true },
-  });
+  const existing = await withSystemDb((tx) =>
+    tx.query.organizations.findFirst({
+      where: eq(schema.organizations.slug, input.slug),
+      columns: { id: true },
+    }),
+  );
   if (existing) {
     throw new Error(`slug "${input.slug}" already in use`);
   }
@@ -35,7 +37,7 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
   let result: { publicId: string; name: string; slug: string; type: string; createdAt: string };
 
   try {
-    const txResult = await d.transaction(async (tx) => {
+    const txResult = await withSystemDb(async (tx) => {
       const [org] = await tx
         .insert(schema.organizations)
         .values({

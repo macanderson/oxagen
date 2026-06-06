@@ -45,6 +45,11 @@ function makeSelectBuilder(rows: unknown[]): unknown {
 
 vi.mock("@oxagen/database", () => ({
   db: () => ({ select: mocks.dbSelect }),
+  // withSystemDb passthrough: the handler uses withSystemDb for file row
+  // lookup and membership check (OXA-1515). Forward fn to a fake tx that
+  // exposes the same select mock so existing test chains apply.
+  withSystemDb: async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
+    fn({ select: mocks.dbSelect } as unknown as Record<string, unknown>),
   schema: {
     files: {
       publicId: "files.publicId",

@@ -21,9 +21,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // Column references used by drizzle-orm are mocked as plain strings.
-// db() itself is not called in tests — tests pass the db/tx via the tx param.
+// All tests pass an explicit tx param — neither db() nor withSystemDb should
+// be called when tx is provided.
 vi.mock("@oxagen/database", () => ({
   db: () => { throw new Error("[test] db() should not be called directly — pass tx param"); },
+  withSystemDb: async (_fn: unknown) => {
+    throw new Error("[test] withSystemDb() should not be called when tx param is provided");
+  },
   schema: {
     roles: {
       id: "roles.id",

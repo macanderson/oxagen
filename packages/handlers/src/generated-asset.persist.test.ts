@@ -19,6 +19,11 @@ vi.mock("@oxagen/storage", () => ({
 
 vi.mock("@oxagen/database", () => ({
   db: () => ({ insert: mocks.insert }),
+  // withSystemDb passthrough: the handler uses withSystemDb for both
+  // persistGeneratedAsset and createPendingGeneratedAsset inserts (OXA-1515).
+  // Forward fn to a fake tx that exposes the same insert mock.
+  withSystemDb: async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
+    fn({ insert: mocks.insert } as unknown as Record<string, unknown>),
   schema: { generatedAssets: { id: "ga.id", publicId: "ga.publicId" } },
 }));
 

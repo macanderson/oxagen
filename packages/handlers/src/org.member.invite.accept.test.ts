@@ -56,6 +56,10 @@ const mockDb = {
 
 vi.mock("@oxagen/database", () => ({
   db: () => mockDb,
+  // withSystemDb passthrough: the handler uses withSystemDb for all DB access
+  // (invitation lookup, user lookup, expiry update, and the main tx). We
+  // forward each call to the same mockDb so existing mock chains apply.
+  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb),
   schema: {
     invitations: {
       publicId: "invitations.publicId",

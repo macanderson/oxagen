@@ -20,18 +20,19 @@
 // provisioning is a no-op.
 
 import { createHash } from "node:crypto";
-import { db as getDb, schema } from "@oxagen/database";
-import type { Database } from "@oxagen/database";
+import { schema, withSystemDb } from "@oxagen/database";
+import type { Tx } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
 import { listCapabilities } from "@oxagen/oxagen";
 import { logger } from "./logger";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-// Drizzle transactions carry the same query methods as Database but have a
-// different class type. We extract the transaction argument type so callers
-// can pass either db() or the tx object from a transaction callback.
-type DbOrTx = Database | Parameters<Parameters<Database["transaction"]>[0]>[0];
+// Callers may pass the active Drizzle transaction handle to run inside an
+// existing transaction. When no tx is supplied the function opens a new
+// system-bypass transaction via withSystemDb.
+// Re-export the Tx alias so callers can type the optional param correctly.
+export type { Tx as DbOrTx };
 
 // System role definitions. Mirrored from seed-iam-defaults.ts.
 const ORG_ROLES = ["Owner", "Admin", "Compliance", "Billing"] as const;
@@ -68,7 +69,7 @@ export interface BootstrapOrgIAMArgs {
   ownerUserId: string;
   actorUserId: string;
   /** Pass the active Drizzle transaction to run inside the org-create tx. */
-  tx?: DbOrTx;
+  tx?: Tx;
 }
 
 /**
@@ -84,11 +85,22 @@ export interface BootstrapOrgIAMArgs {
  */
 export async function bootstrapOrgIAM(args: BootstrapOrgIAMArgs): Promise<void> {
   const { orgId, ownerUserId, actorUserId, tx } = args;
-  // tenancy: unscoped seam (bootstraps IAM for a new org; always called with
-  // an explicit tx from the org/workspace creation transaction — the tx param
-  // path is always used in practice; the raw db() fallback is a safety valve
-  // for direct seeding calls outside the kernel scope) — OXA-1515
-  const d = (tx ?? getDb()) as ReturnType<typeof getDb>;
+  // tenancy: system bypass via withSystemDb (bootstrap — always called with an
+  // explicit tx from the org/workspace creation transaction in normal kernel
+  // flow; the withSystemDb fallback covers direct seeding calls outside the
+  // kernel scope where no ALS scope exists) — OXA-1515
+  if (tx) {
+    return bootstrapOrgIAMWithTx(orgId, ownerUserId, actorUserId, tx);
+  }
+  return withSystemDb((sysTx) => bootstrapOrgIAMWithTx(orgId, ownerUserId, actorUserId, sysTx));
+}
+
+async function bootstrapOrgIAMWithTx(
+  orgId: string,
+  ownerUserId: string,
+  actorUserId: string,
+  d: Tx,
+): Promise<void> {
 
   // ── (a) Upsert 7 system roles ─────────────────────────────────────────────
   // Build the full set: 4 org-level + 3 workspace-level.
@@ -330,7 +342,7 @@ export interface ProvisionMemberPrincipalArgs {
   userId: string;
   actorUserId: string;
   /** Pass the active Drizzle transaction to run atomically. */
-  tx?: DbOrTx;
+  tx?: Tx;
 }
 
 /**
@@ -344,11 +356,21 @@ export async function provisionMemberPrincipal(
   args: ProvisionMemberPrincipalArgs,
 ): Promise<string> {
   const { orgId, userId, actorUserId, tx } = args;
-  // tenancy: unscoped seam (always called with an explicit tx from the
-  // invite-accept transaction; the raw db() fallback is a safety valve for
-  // direct seeding calls outside the kernel scope) — OXA-1515
-  const d = (tx ?? getDb()) as ReturnType<typeof getDb>;
+  // tenancy: system bypass via withSystemDb (always called with an explicit tx
+  // from the invite-accept transaction in normal kernel flow; the withSystemDb
+  // fallback covers direct seeding calls outside the kernel scope) — OXA-1515
+  if (tx) {
+    return provisionMemberPrincipalWithTx(orgId, userId, actorUserId, tx);
+  }
+  return withSystemDb((sysTx) => provisionMemberPrincipalWithTx(orgId, userId, actorUserId, sysTx));
+}
 
+async function provisionMemberPrincipalWithTx(
+  orgId: string,
+  userId: string,
+  actorUserId: string,
+  d: Tx,
+): Promise<string> {
   // Check if principal already exists.
   const existing = await d
     .select({ id: schema.principals.id })
