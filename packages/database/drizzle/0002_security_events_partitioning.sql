@@ -1,4 +1,4 @@
--- 0010_security_events_partitioning.sql
+-- 0002_security_events_partitioning.sql
 --
 -- SOC2 / retention: Convert security.security_events from a plain heap to a
 -- declarative RANGE-partitioned table (monthly, on occurred_at) with a 7-year
