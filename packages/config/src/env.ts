@@ -108,6 +108,16 @@ export const baseEnvSchema = z.object({
 
   NEXT_PUBLIC_APP_URL: z.string().url(),
   NEXT_PUBLIC_API_URL: z.string().url(),
+  // Server-side app origin for plugin OAuth authorize/callback URLs
+  // (falls back to NEXT_PUBLIC_APP_URL at the call site).
+  APP_URL: z.string().url().optional(),
+
+  // Observability / feature flags — read raw via process.env in services and
+  // libraries; declared here so env-check validates them against the registry.
+  BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
+  LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).optional(),
+  KNOWLEDGE_GRAPH_ENABLED: z.enum(["true", "false"]).optional(),
+  MCP_PORT: z.string().optional(),
 
   // OXA-1348: when true (default off in prod), agent.code.execute is
   // materialized as an agent tool. Set true on Vercel once the Modal

@@ -210,8 +210,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   BETTER_AUTH_TRUSTED_ORIGINS: {
     group: "Better Auth",
     description:
-      "Space-separated origins allowed cross-origin access to the auth API. " +
-      "NOTE: read via raw process.env in @oxagen/auth — not yet in baseEnvSchema (tracked).",
+      "Space-separated origins allowed cross-origin access to the auth API.",
     secret: false,
     clientExposed: false,
     services: ["api", "app"],
@@ -687,6 +686,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { development: "http://localhost:4000", production: API_PROD_URL },
   },
+  APP_URL: {
+    group: "Public URLs",
+    description:
+      "Server-side app origin used to build plugin OAuth authorize/callback URLs " +
+      "(falls back to NEXT_PUBLIC_APP_URL). Not browser-exposed.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:3000", production: APP_PROD_URL },
+  },
 
   // ── IAM enforcement ─────────────────────────────────────────────────────────
   IAM_ENFORCEMENT_ENABLED: {
@@ -784,12 +795,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
   },
 
-  // ── Observability / feature flags (read raw via process.env — not yet in baseEnvSchema) ──
+  // ── Observability / feature flags ───────────────────────────────────────────
   LOG_LEVEL: {
     group: "Observability",
-    description:
-      "Pino log level for service loggers. NOTE: read via raw process.env in 5 packages — " +
-      "not yet in baseEnvSchema (tracked).",
+    description: "Pino log level for service loggers.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -800,8 +809,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   KNOWLEDGE_GRAPH_ENABLED: {
     group: "Observability",
     description:
-      'Feature flag — set "false" to disable the Neo4j knowledge-graph writes. ' +
-      "NOTE: read via raw process.env in @oxagen/agent — not yet in baseEnvSchema (tracked).",
+      'Feature flag — set "false" to disable the Neo4j knowledge-graph writes.',
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -811,9 +819,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   MCP_PORT: {
     group: "Observability",
-    description:
-      "HTTP port for the xmcp server. NOTE: read via raw process.env in apps/mcp — " +
-      "not yet in baseEnvSchema (tracked).",
+    description: "HTTP port for the xmcp server.",
     secret: false,
     clientExposed: false,
     services: ["mcp"],
