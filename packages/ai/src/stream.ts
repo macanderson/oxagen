@@ -66,10 +66,9 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
     system: args.system,
     temperature: args.temperature ?? 0.7,
     // Reasoning effort is expressed via the OpenAI-style `reasoningEffort`
-    // provider option. The gateway client is built with @ai-sdk/openai, which
-    // reads provider options under the `openai` namespace; the Vercel AI
-    // Gateway forwards `reasoning_effort` to whichever vendor backs the model.
-    // Only set when the caller passed `effort` (already gated to
+    // provider option under the `openai` namespace; the Vercel AI Gateway
+    // (@ai-sdk/gateway) forwards `reasoning_effort` to whichever vendor backs
+    // the model. Only set when the caller passed `effort` (already gated to
     // reasoning-capable models by the route via supportsReasoning).
     ...(args.effort
       ? { providerOptions: { openai: { reasoningEffort: args.effort } } }

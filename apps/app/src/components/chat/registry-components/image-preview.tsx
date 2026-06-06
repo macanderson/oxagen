@@ -24,7 +24,7 @@ export interface ImagePreviewProps {
 
 /**
  * Renders a generated image in a card, or an empty-state when no image is
- * available (missing OPENAI_API_KEY or generation failure).
+ * available (image generation not configured, or generation failed).
  *
  * Data URIs are rendered with next/image unoptimized=true because the
  * image optimisation pipeline cannot process inline data URIs.
@@ -59,7 +59,7 @@ export default function ImagePreview({
             <p className="text-xs text-muted-foreground max-w-xs">
               {errorReason
                 ? `Generation failed: ${errorReason}`
-                : "Set OPENAI_API_KEY to enable image generation."}
+                : "Image generation is not enabled."}
             </p>
             {prompt && (
               <p className="text-xs text-muted-foreground/70 italic mt-1 max-w-xs truncate">

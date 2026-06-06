@@ -11,7 +11,7 @@ import { logger } from "./logger";
 // telemetry (duration_ms, surface, provider, model, image_count) and charges
 // credits via the billing gate.
 //
-// When OPENAI_API_KEY is absent this handler returns a typed placeholder —
+// When AI_GATEWAY_API_KEY is absent this handler returns a typed placeholder —
 // it never throws (policy §0.5).
 
 export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = async (
@@ -20,14 +20,13 @@ export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = asy
 ) => {
   const alt = input.alt ?? input.prompt.slice(0, 120);
 
-  // We can generate as long as SOME image path is reachable: the Vercel AI
-  // Gateway (preferred) or a direct OpenAI key. Read both without throwing —
-  // keys are optional in the base schema. selectImageModel() picks the gateway
-  // when AI_GATEWAY_API_KEY is present, else the direct OpenAI client.
+  // Image generation routes 100% through the Vercel AI Gateway. Read the gateway
+  // key without throwing (it's optional in the base schema); selectImageModel()
+  // builds the gateway client from it.
   let hasImagePath = false;
   try {
-    const env = requireEnv(["AI_GATEWAY_API_KEY", "OPENAI_API_KEY"] as const);
-    hasImagePath = Boolean(env.AI_GATEWAY_API_KEY ?? env.OPENAI_API_KEY);
+    const env = requireEnv(["AI_GATEWAY_API_KEY"] as const);
+    hasImagePath = Boolean(env.AI_GATEWAY_API_KEY);
   } catch {
     // requireEnv throws if a value fails Zod validation; treat as no path.
     hasImagePath = false;
@@ -36,7 +35,7 @@ export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = asy
   if (!hasImagePath) {
     logger.info(
       { orgId: ctx.orgId, workspaceId: ctx.workspaceId, prompt: input.prompt },
-      "image.generate: neither AI_GATEWAY_API_KEY nor OPENAI_API_KEY configured — returning placeholder",
+      "image.generate: AI_GATEWAY_API_KEY not configured — returning placeholder",
     );
     return {
       alt,
@@ -50,8 +49,8 @@ export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = asy
 
   try {
     // selectImageModel() is the single chokepoint for image model construction —
-    // it wraps @ai-sdk/openai internally so this handler never imports the
-    // provider SDK directly. DALL-E 3 remains the backing model.
+    // it builds the Vercel AI Gateway client internally so this handler never
+    // imports a provider SDK directly. Default model: openai/gpt-image-1.
     const imageModel = selectImageModel();
 
     const { images, durationMs } = await generateImageFor({

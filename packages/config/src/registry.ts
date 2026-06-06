@@ -459,15 +459,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
 
   // ── AI providers ──────────────────────────────────────────────────────────────
-  ANTHROPIC_API_KEY: {
-    group: "AI providers",
-    description: "Anthropic API key (direct-provider fallback; primary path is the gateway).",
-    secret: true,
-    clientExposed: false,
-    services: ["api", "app", "mcp"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
   BLOB_READ_WRITE_TOKEN: {
     group: "File storage",
     description:
@@ -479,25 +470,16 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "vercel_blob_rw_xxxxxxxxxxxxxxxx",
   },
-  OPENAI_API_KEY: {
-    group: "AI providers",
-    description: "OpenAI API key (embeddings + image generation).",
-    secret: true,
-    clientExposed: false,
-    services: ["api", "app", "mcp"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
   AI_GATEWAY_API_KEY: {
     group: "AI providers",
     description:
-      "Vercel AI Gateway token — the primary AI auth. When set, @oxagen/ai routes " +
-      "every model call (text, image) through the gateway; absent, it falls back to " +
-      "the direct-provider keys above.",
+      "Vercel AI Gateway token — the platform's single AI auth. @oxagen/ai routes " +
+      "every model call (text, image, embeddings, video) through the gateway; there " +
+      "is no direct-provider fallback, so this is required wherever AI runs.",
     secret: true,
     clientExposed: false,
     services: ["api", "app", "mcp"],
-    requiredIn: [],
+    requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
   OXAGEN_LLM_FAST: {

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // OXA-1425: agent/memory/embed.ts is a thin re-export of @oxagen/ai embedText.
-// Mock at the @oxagen/ai seam — do NOT mock @ai-sdk/openai here; the vendor
+// Mock at the @oxagen/ai seam — do NOT mock the gateway SDK here; the vendor
 // SDK is an implementation detail of @oxagen/ai, not of this module.
 const mocks = vi.hoisted(() => ({
   embedTextAI: vi.fn(),

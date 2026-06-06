@@ -48,21 +48,19 @@ export const baseEnvSchema = z.object({
   INNGEST_EVENT_KEY: z.string().optional(),
   INNGEST_SIGNING_KEY: z.string().optional(),
 
-  ANTHROPIC_API_KEY: z.string().optional(),
-  OPENAI_API_KEY: z.string().optional(),
-
   // File/blob storage (avatars, uploaded images). Authenticates the Vercel Blob
   // driver behind @oxagen/storage. Optional in the base schema (not every
   // service uploads); the upload route enforces presence via requireEnv at call
   // time. Swapping to S3/R2 is a driver+env change — keep it isolated to config.
   BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
 
-  // Vercel AI Gateway. AI_GATEWAY_API_KEY authenticates every model call routed
-  // through the gateway (the primary AI path); when absent, @oxagen/ai falls back
-  // to the direct-provider keys above. The OXAGEN_LLM_* tiers are white-labeled
-  // model handles ("Oxagen Mini/Plus/Max") that resolve to concrete gateway
-  // model ids in `creator/model` form. Defaults mirror the registry staticValues
-  // so local dev and tests resolve a tier without extra configuration.
+  // Vercel AI Gateway — the platform's single AI auth boundary. AI_GATEWAY_API_KEY
+  // authenticates every model call (text, image, embeddings, video); @oxagen/ai
+  // routes 100% through the gateway with no direct-provider fallback. The
+  // OXAGEN_LLM_* tiers are white-labeled model handles ("Oxagen Mini/Plus/Max")
+  // that resolve to concrete gateway model ids in `creator/model` form. Defaults
+  // mirror the registry staticValues so local dev and tests resolve a tier
+  // without extra configuration.
   AI_GATEWAY_API_KEY: z.string().optional(),
   OXAGEN_LLM_FAST: z.string().default("anthropic/claude-haiku-4.5"),
   OXAGEN_LLM_BALANCED: z.string().default("anthropic/claude-sonnet-4.6"),

@@ -10,7 +10,7 @@ export {
   modelIdOf,
   DEFAULT_TIER,
 } from "./models";
-export type { ModelSelector, ProviderName, ImageModelSelector, VideoModelSelector, OxagenTier } from "./models";
+export type { ModelSelector, ImageModelSelector, VideoModelSelector, OxagenTier } from "./models";
 
 // Re-export the client-safe catalog from the package root for server callers
 // (route guards, RSC). Client components should import from "@oxagen/ai/catalog"

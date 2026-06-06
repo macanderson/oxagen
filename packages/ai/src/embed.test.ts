@@ -1,11 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-// Mock at the vendor-SDK + telemetry seam — embedText must not expose
-// @ai-sdk/openai or ClickHouse internals to callers (OXA-1425).
+// Mock at the gateway + telemetry seam — embedText routes 100% through the
+// Vercel AI Gateway (@ai-sdk/gateway) and must not expose vendor SDKs or
+// ClickHouse internals to callers (OXA-1425).
 const mocks = vi.hoisted(() => ({
   embed: vi.fn(),
   embeddingModel: vi.fn(),
-  createOpenAI: vi.fn(),
   insertTokenUsage: vi.fn(),
   hashPrompt: vi.fn(),
 }));
@@ -15,17 +15,13 @@ mocks.embed.mockImplementation(async () => ({
   embedding: new Array(1536).fill(0).map((_, i) => i / 1536),
   usage: { tokens: 7 },
 }));
-mocks.embeddingModel.mockReturnValue({ modelId: "text-embedding-3-small" });
-mocks.createOpenAI.mockReturnValue({ embedding: mocks.embeddingModel });
+mocks.embeddingModel.mockReturnValue({ modelId: "openai/text-embedding-3-small" });
 // Telemetry stubs.
 mocks.insertTokenUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("deadbeefdeadbeef");
 
 vi.mock("ai", () => ({ embed: mocks.embed }));
-vi.mock("@ai-sdk/openai", () => ({ createOpenAI: mocks.createOpenAI }));
-vi.mock("@oxagen/config/env", () => ({
-  requireEnv: () => ({ OPENAI_API_KEY: "sk-test" }),
-}));
+vi.mock("@ai-sdk/gateway", () => ({ gateway: { embeddingModel: mocks.embeddingModel } }));
 vi.mock("@oxagen/telemetry", () => ({
   insertTokenUsage: mocks.insertTokenUsage,
   hashPrompt: mocks.hashPrompt,
@@ -51,10 +47,10 @@ describe("embedText (@oxagen/ai)", () => {
     mocks.hashPrompt.mockClear();
   });
 
-  it("calls the OpenAI embedding model with the correct model id and returns a 1536-d vector", async () => {
+  it("calls the gateway embedding model with the correct model id and returns a 1536-d vector", async () => {
     const v = await embedText("hello", { telemetry: BASE_TELEMETRY });
     expect(v).toHaveLength(1536);
-    expect(mocks.embeddingModel).toHaveBeenCalledWith("text-embedding-3-small");
+    expect(mocks.embeddingModel).toHaveBeenCalledWith("openai/text-embedding-3-small");
     expect(mocks.embed).toHaveBeenCalledTimes(1);
     const args = mocks.embed.mock.calls[0]?.[0] as { value: string };
     expect(args.value).toBe("hello");
