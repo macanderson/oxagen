@@ -48,9 +48,13 @@ export interface PersistedGeneratedAsset {
   kind: AssetKind;
   mimeType: string;
   sizeBytes: number;
-  /** Raw public blob URL (storageUrl). Prefer `serveUrl` for access-controlled display. */
+  /**
+   * The storage URL (Vercel Blob URL or private access URL) as returned by the
+   * adapter. For private assets this is NOT a publicly-guessable CDN URL.
+   * Always prefer `serveUrl` for rendering in the UI.
+   */
   url: string;
-  /** App serving path that enforces the asset's access policy. */
+  /** App serving path that enforces the asset's access policy. Always use this for display. */
   serveUrl: string;
 }
 
@@ -81,11 +85,14 @@ export async function persistGeneratedAsset(
 ): Promise<PersistedGeneratedAsset> {
   const key = `generated/${args.kind}s/${args.orgId}/${randomUUID()}.${extFor(args.mimeType)}`;
   const store = storage();
+  // Store generated assets as private blobs — the CDN URL must never be
+  // publicly guessable. Bytes are served exclusively through the auth-gated
+  // /api/v1/assets/[publicId] proxy (serveGeneratedAsset enforces access policy).
   const { url, key: storageKey, bytes } = await store.put({
     key,
     body: args.bytes,
     contentType: args.mimeType,
-    access: "public",
+    access: "private",
   });
 
   // tenancy: system bypass via withSystemDb (shared utility called from both

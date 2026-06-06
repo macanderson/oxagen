@@ -1,7 +1,6 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
-import { systemInstallInstructions, installClientSchema } from "@oxagen/oxagen/contracts/system.install.instructions";
+import { systemInstallInstructions } from "@oxagen/oxagen/contracts/system.install.instructions";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
@@ -10,13 +9,13 @@ import { buildContext } from "../context";
 // chat component.
 
 export const schema = {
-  client: installClientSchema.describe(
+  ...systemInstallInstructions.input.shape,
+  client: systemInstallInstructions.input.shape.client.describe(
     "AI client to generate installation instructions for (claude-code, cursor, claude-desktop, codex, vscode)",
   ),
-  workspaceSlug: z
-    .string()
-    .optional()
-    .describe("Optional workspace slug for personalised config snippets"),
+  workspaceSlug: systemInstallInstructions.input.shape.workspaceSlug.describe(
+    "Optional workspace slug for personalised config snippets",
+  ),
 };
 
 export const metadata: ToolMetadata = {

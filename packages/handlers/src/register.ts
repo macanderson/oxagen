@@ -94,6 +94,16 @@ registerHandler(
     (await import("./org.member.invite.decline")).orgMemberInviteDeclineHandler as CapabilityHandlerFn,
 );
 registerHandler(
+  "org.member.remove",
+  async () =>
+    (await import("./org.member.remove")).orgMemberRemoveHandler as CapabilityHandlerFn,
+);
+registerHandler(
+  "org.member.role.change",
+  async () =>
+    (await import("./org.member.role.change")).orgMemberRoleChangeHandler as CapabilityHandlerFn,
+);
+registerHandler(
   "user.preferences.read",
   async () =>
     (await import("./user.preferences.read")).userPreferencesReadHandler as CapabilityHandlerFn,

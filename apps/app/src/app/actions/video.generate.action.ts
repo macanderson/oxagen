@@ -2,23 +2,27 @@
 
 // ── Server action: video.generate ─────────────────────────────────────────────
 //
-// STUB — video rendering pipeline is deferred. This action validates the
-// form submission and delegates to the videoGenerateHandler, returning a typed
-// queued result. It NEVER throws; on any error it returns ok: false with a
-// human-readable message.
-//
-// The action is intentionally inert beyond logging: no DB write, no job queue,
-// no billing charge. A Linear follow-up ticket tracks the real wiring.
+// Routes video generation requests through the single invoke() chokepoint so
+// IAM, billing, and audit run on every call. The capability is scoped: true,
+// so real org + workspace context is required — no stub placeholders.
 
-import { videoGenerateHandler } from "@oxagen/handlers/video.generate";
-import { videoGenerate, type VideoGenerateInput } from "@oxagen/oxagen/contracts/video.generate";
-import { randomUUID } from "node:crypto";
+import { invoke } from "@oxagen/oxagen";
+// Side-effect import: bind every foundation handler into the shared kernel so
+// invoke("video.generate", …) can resolve its handler at runtime.
+import "@oxagen/handlers/register";
+import { videoGenerate } from "@oxagen/oxagen/contracts/video.generate";
+import { getSessionOrRedirect } from "@/lib/session";
+import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 
 export interface VideoGenerateFormData {
   prompt: string;
   durationSeconds?: number;
   aspectRatio?: "16:9" | "9:16" | "1:1";
   style?: string;
+  /** Org slug from the current URL route segment — required for real IAM context. */
+  orgSlug: string;
+  /** Workspace slug from the current URL route segment — required for real IAM context. */
+  workspaceSlug: string;
 }
 
 export type VideoGenerateActionResult =
@@ -28,9 +32,13 @@ export type VideoGenerateActionResult =
 export async function videoGenerateAction(
   data: VideoGenerateFormData,
 ): Promise<VideoGenerateActionResult> {
-  // Validate with the capability's own Zod schema so the action never drifts
-  // from the contract definition.
-  const parsed = videoGenerate.input.safeParse(data);
+  // Validate the capability input fields (excludes slug params).
+  const parsed = videoGenerate.input.safeParse({
+    prompt: data.prompt,
+    durationSeconds: data.durationSeconds,
+    aspectRatio: data.aspectRatio,
+    style: data.style,
+  });
   if (!parsed.success) {
     return {
       ok: false,
@@ -38,29 +46,43 @@ export async function videoGenerateAction(
     };
   }
 
-  // Stub capability context — no real org/workspace scope when invoked from
-  // the chat component (the form is pre-populated by the agent turn that
-  // already ran in the org scope). The action is inert so this is safe.
-  const stubCtx = {
-    orgId: "stub",
-    workspaceId: "stub",
-    userId: "stub",
+  // Resolve real org + workspace from slugs and assert membership (IDOR guard).
+  let session: Awaited<ReturnType<typeof getSessionOrRedirect>>;
+  try {
+    session = await getSessionOrRedirect();
+  } catch {
+    return { ok: false, error: "Not authenticated." };
+  }
+
+  let orgId: string;
+  let workspaceId: string;
+  try {
+    const org = await resolveOrg(data.orgSlug);
+    const ws = await resolveWorkspace(org.id, data.workspaceSlug);
+    await assertOrgMember(org.id, session.user.id);
+    orgId = org.id;
+    workspaceId = ws.id;
+  } catch {
+    return { ok: false, error: "Org or workspace not found." };
+  }
+
+  const ctx = {
+    orgId,
+    workspaceId,
+    userId: session.user.id,
     apiKeyId: null as string | null,
-    requestId: randomUUID(),
+    requestId: crypto.randomUUID(),
     surface: "app" as const,
     messageId: null as string | null,
   };
 
-  const input: VideoGenerateInput = parsed.data;
-
   try {
-    const result = await videoGenerateHandler(input, stubCtx);
-    console.log(
-      `[stub] videoGenerateAction — queued jobId=${result.jobId} for prompt="${input.prompt}"`,
-    );
+    const result = (await invoke("video.generate", parsed.data, ctx, { surface: "agent" })) as {
+      jobId: string;
+    };
     return { ok: true, queued: true, jobId: result.jobId };
-  } catch {
-    // Handler never throws by policy, but guard regardless.
-    return { ok: false, error: "Video generation could not be queued. Please try again." };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Video generation could not be queued.";
+    return { ok: false, error: message };
   }
 }

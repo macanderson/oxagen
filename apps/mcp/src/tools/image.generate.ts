@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { imageGenerate } from "@oxagen/oxagen/contracts/image.generate";
@@ -9,12 +8,16 @@ import { buildContext } from "../context";
 // typed placeholder with an empty-state render directive otherwise. Never throws.
 
 export const schema = {
-  prompt: z.string().min(1).describe("Natural-language description of the image to generate"),
-  alt: z.string().optional().describe("Accessible alt text. Derived from prompt if omitted."),
-  size: z
-    .enum(["1024x1024", "1792x1024", "1024x1792"])
-    .optional()
-    .describe("Image dimensions — DALL-E 3 supported sizes only"),
+  ...imageGenerate.input.shape,
+  prompt: imageGenerate.input.shape.prompt.describe(
+    "Natural-language description of the image to generate",
+  ),
+  alt: imageGenerate.input.shape.alt.describe(
+    "Accessible alt text. Derived from prompt if omitted.",
+  ),
+  size: imageGenerate.input.shape.size.describe(
+    "Image dimensions — DALL-E 3 supported sizes only",
+  ),
 };
 
 export const metadata: ToolMetadata = {

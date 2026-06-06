@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { conversationList } from "@oxagen/oxagen/contracts/conversation.list";
@@ -6,26 +5,16 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
 export const schema = {
-  filter: z
-    .enum(["active", "archived"])
-    .default("active")
-    .describe(
-      'Which conversations to return: "active" (not archived) or "archived". Defaults to "active".',
-    ),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(100)
-    .default(50)
-    .describe("Maximum number of conversations to return (1–100). Defaults to 50."),
-  cursor: z
-    .string()
-    .nullable()
-    .default(null)
-    .describe(
-      "Keyset pagination cursor (ISO updated_at of the last row from the previous page). Null starts at the newest row.",
-    ),
+  ...conversationList.input.shape,
+  filter: conversationList.input.shape.filter.describe(
+    'Which conversations to return: "active" (not archived) or "archived". Defaults to "active".',
+  ),
+  limit: conversationList.input.shape.limit.describe(
+    "Maximum number of conversations to return (1–100). Defaults to 50.",
+  ),
+  cursor: conversationList.input.shape.cursor.describe(
+    "Keyset pagination cursor (ISO updated_at of the last row from the previous page). Null starts at the newest row.",
+  ),
 };
 
 export const metadata: ToolMetadata = {

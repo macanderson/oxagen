@@ -4,3 +4,4 @@
 // ClickHouse writes, access-request creation) lives in packages/iam.
 
 export * from "./resolve";
+export * from "./conditions";

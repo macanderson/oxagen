@@ -61,6 +61,38 @@ vi.mock("@oxagen/database", () => ({
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
   invoke: vi.fn(async () => ({ ok: true })),
+  authorizeExternalCapability: vi.fn(async () => ({ allowed: true, outcome: "allow", reason: null })),
+}));
+
+// Stub @oxagen/sandbox so isSandboxAvailable() is mockable and never tries to
+// detect a real driver.
+vi.mock("@oxagen/sandbox", () => ({
+  isSandboxAvailable: vi.fn(() => false),
+}));
+
+// Stub the database so MCP server rows can be returned without a real DB.
+vi.mock("@oxagen/database", () => {
+  const mockSelect = vi.fn();
+  const mockFrom = vi.fn(() => ({ where: vi.fn(async () => []) }));
+  mockSelect.mockReturnValue({ from: mockFrom });
+  return {
+    db: vi.fn(() => ({ select: mockSelect })),
+    schema: {
+      mcpServers: {
+        orgId: "orgId",
+        workspaceId: "workspaceId",
+        healthStatus: "healthStatus",
+      },
+    },
+    eq: vi.fn((_a: unknown, _b: unknown) => `eq_${String(_b)}`),
+    and: vi.fn((...args: unknown[]) => args),
+  };
+});
+
+// Stub the MCP client so tests can inject fake tool executes.
+vi.mock("../dispatch/mcp-client", () => ({
+  connectMcp: vi.fn(async () => ({})),
+  materializeMcpTools: vi.fn(async () => ({})),
 }));
 
 const mocks = vi.hoisted(() => ({
@@ -75,6 +107,7 @@ const mocks = vi.hoisted(() => ({
       note: null;
     }> => ({ approvalId: "appr_x", resolution: "approved", note: null }),
   ),
+  insertToolInvocation: vi.fn(async () => undefined),
 }));
 
 vi.mock("../hooks/runtime", () => ({
@@ -88,8 +121,14 @@ vi.mock("./approval", () => ({
   waitForApproval: mocks.waitForApproval,
 }));
 
+vi.mock("@oxagen/telemetry", () => ({
+  insertToolInvocation: mocks.insertToolInvocation,
+}));
+
 import { materializeTools } from "./materialize-tools";
-import { invoke } from "@oxagen/oxagen/kernel";
+import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
+import { connectMcp, materializeMcpTools } from "../dispatch/mcp-client";
+import { db } from "@oxagen/database";
 
 const CTX = {
   orgId: "ten_1",
@@ -102,6 +141,10 @@ const CTX = {
 describe("materializeTools", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockClear();
+    vi.mocked(authorizeExternalCapability).mockClear();
+    vi.mocked(authorizeExternalCapability).mockResolvedValue({ allowed: true, outcome: "allow", reason: null });
+    mocks.insertToolInvocation.mockClear();
+    mocks.insertToolInvocation.mockResolvedValue(undefined);
   });
 
   it("returns only agent-surfaced capabilities, keyed by model-safe names", async () => {
@@ -288,5 +331,124 @@ describe("materializeTools", () => {
     const { tools } = await mt({ ...CTX, messageId: null });
     await (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 });
     expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
+  });
+});
+
+// ── GAP-4: External MCP tool IAM enforcement ─────────────────────────────────
+// These tests verify that external MCP tool executes call authorizeExternalCapability
+// BEFORE the transport, block when denied, and always meter via insertToolInvocation.
+describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
+  const MCP_SERVER = {
+    id: "srv_abc",
+    name: "GitHub",
+    orgId: "ten_1",
+    workspaceId: "ws_1",
+    endpointUrl: "https://github.mcp.example.com",
+    authStrategy: "bearer",
+    authConfig: { token: "tok_test" },
+    healthStatus: "healthy",
+  };
+
+  // A fake MCP tool execute function the test can spy on.
+  const fakeExecute = vi.fn(async () => ({ data: "result" }));
+
+  beforeEach(() => {
+    vi.mocked(authorizeExternalCapability).mockClear();
+    vi.mocked(authorizeExternalCapability).mockResolvedValue({ allowed: true, outcome: "allow", reason: null });
+    fakeExecute.mockClear();
+    mocks.insertToolInvocation.mockClear();
+    mocks.insertToolInvocation.mockResolvedValue(undefined);
+
+    // Return one healthy MCP server row.
+    const mockWhere = vi.fn(async () => [MCP_SERVER]);
+    const mockFrom = vi.fn(() => ({ where: mockWhere }));
+    vi.mocked(db).mockReturnValue({ select: vi.fn(() => ({ from: mockFrom })) } as unknown as ReturnType<typeof db>);
+
+    // connectMcp returns a stub client; materializeMcpTools returns one tool.
+    vi.mocked(connectMcp).mockResolvedValue({} as Awaited<ReturnType<typeof connectMcp>>);
+    vi.mocked(materializeMcpTools).mockResolvedValue({
+      [`mcp.${MCP_SERVER.id}.list_pull_requests`]: {
+        description: "List PRs",
+        inputSchema: z.record(z.string(), z.unknown()),
+        execute: fakeExecute,
+      } as unknown as import("ai").Tool,
+    });
+  });
+
+  it("calls authorizeExternalCapability with the per-tool synthetic id before the transport (GAP-4)", async () => {
+    const { tools } = await materializeTools(CTX);
+    const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    const t = tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> };
+    expect(t).toBeDefined();
+    await t.execute!({});
+    expect(authorizeExternalCapability).toHaveBeenCalledWith(
+      `mcp.${MCP_SERVER.id}.list_pull_requests`,
+      CTX,
+      "allow",
+    );
+    // Transport must have run on allow.
+    expect(fakeExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks transport and returns tool-error string when IAM denies (GAP-4)", async () => {
+    vi.mocked(authorizeExternalCapability).mockResolvedValueOnce({
+      allowed: false,
+      outcome: "deny",
+      reason: "workspace_policy_deny",
+    });
+    const { tools } = await materializeTools(CTX);
+    const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    const t = tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> };
+    const result = await t.execute!({});
+    // Transport must NOT have run.
+    expect(fakeExecute).not.toHaveBeenCalled();
+    // The model receives a readable string, not a thrown error.
+    expect(typeof result).toBe("string");
+    expect(result as string).toMatch(/blocked by workspace policy/i);
+    expect(result as string).toContain("workspace_policy_deny");
+  });
+
+  it("meters a denied invocation as status=denied in insertToolInvocation (GAP-4 + instrument-everything)", async () => {
+    vi.mocked(authorizeExternalCapability).mockResolvedValueOnce({
+      allowed: false,
+      outcome: "deny",
+      reason: "explicit_deny",
+    });
+    const { tools } = await materializeTools(CTX);
+    const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    const t = tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> };
+    await t.execute!({});
+    expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
+    // vi.fn() mock.calls has an inferred tuple type that TypeScript tightens
+    // to [] in hoisted mocks. Cast through unknown to access the call arg.
+    const calls0 = (mocks.insertToolInvocation.mock.calls as unknown as [unknown][]);
+    const call = calls0[0]?.[0] as Record<string, unknown>;
+    expect(call.status).toBe("failed");
+    expect(call.error_class).toBe("IamDenied");
+    expect(call.capability_name).toBe(`mcp.${MCP_SERVER.id}.list_pull_requests`);
+    expect(call.external_server_id).toBe(MCP_SERVER.id);
+  });
+
+  it("meters a successful invocation as status=completed (allowed path unchanged)", async () => {
+    const { tools } = await materializeTools(CTX);
+    const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    const t = tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> };
+    await t.execute!({});
+    expect(fakeExecute).toHaveBeenCalledTimes(1);
+    expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
+    const calls0 = (mocks.insertToolInvocation.mock.calls as unknown as [unknown][]);
+    const call = calls0[0]?.[0] as Record<string, unknown>;
+    expect(call.status).toBe("completed");
+    expect(call.capability_name).toBe(`mcp.${MCP_SERVER.id}.list_pull_requests`);
+  });
+
+  it("uses defaultEffect=allow for MCP tools (user intentionally registered the server)", async () => {
+    const { tools } = await materializeTools(CTX);
+    const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    await (tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
+    const authCalls = vi.mocked(authorizeExternalCapability).mock.calls as unknown as [string, unknown, string][];
+    const [capName, , defaultEffect] = authCalls[0] ?? [];
+    expect(capName).toBe(`mcp.${MCP_SERVER.id}.list_pull_requests`);
+    expect(defaultEffect).toBe("allow");
   });
 });

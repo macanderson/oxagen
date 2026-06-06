@@ -1205,6 +1205,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@oxagen/handlers':
+        specifier: workspace:*
+        version: link:../../packages/handlers
       '@oxagen/ontology':
         specifier: workspace:*
         version: link:../../packages/ontology

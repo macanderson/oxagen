@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentToolList } from "@oxagen/oxagen/contracts/agent.tool.list";
@@ -6,10 +5,10 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
 export const schema = {
-  includeExternal: z
-    .boolean()
-    .default(true)
-    .describe("Include externally-registered tools"),
+  ...agentToolList.input.shape,
+  includeExternal: agentToolList.input.shape.includeExternal.describe(
+    "Include externally-registered tools",
+  ),
 };
 
 export const metadata: ToolMetadata = {

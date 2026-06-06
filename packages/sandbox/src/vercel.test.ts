@@ -13,7 +13,7 @@ import {
   networkPolicyFor,
   VercelSandboxUnsupportedError,
 } from "./vercel";
-import { getSandbox, setSandboxForTests } from "./index";
+import { getSandbox, isSandboxAvailable, setSandboxForTests } from "./index";
 
 // ---------------------------------------------------------------------------
 // Driver construction
@@ -215,5 +215,84 @@ describe("getSandbox() docker fallback", () => {
     delete process.env.MODAL_RUNNER_TOKEN;
 
     expect(() => getSandbox()).toThrow(/MODAL_RUNNER_TOKEN/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isSandboxAvailable — single source of truth for GAP-5
+// ---------------------------------------------------------------------------
+
+describe("isSandboxAvailable", () => {
+  // Capture originals once; restore after each test.
+  const origEnabled = process.env.SANDBOX_ENABLED;
+  const origDriver = process.env.SANDBOX_DRIVER;
+  const origModalUrl = process.env.MODAL_RUNNER_URL;
+  const origModalToken = process.env.MODAL_RUNNER_TOKEN;
+
+  afterEach(() => {
+    if (origEnabled === undefined) delete process.env.SANDBOX_ENABLED;
+    else process.env.SANDBOX_ENABLED = origEnabled;
+    if (origDriver === undefined) delete process.env.SANDBOX_DRIVER;
+    else process.env.SANDBOX_DRIVER = origDriver;
+    if (origModalUrl === undefined) delete process.env.MODAL_RUNNER_URL;
+    else process.env.MODAL_RUNNER_URL = origModalUrl;
+    if (origModalToken === undefined) delete process.env.MODAL_RUNNER_TOKEN;
+    else process.env.MODAL_RUNNER_TOKEN = origModalToken;
+  });
+
+  it("returns false when SANDBOX_ENABLED is unset", () => {
+    delete process.env.SANDBOX_ENABLED;
+    delete process.env.SANDBOX_DRIVER;
+    expect(isSandboxAvailable()).toBe(false);
+  });
+
+  it("returns false when SANDBOX_ENABLED=false", () => {
+    process.env.SANDBOX_ENABLED = "false";
+    delete process.env.SANDBOX_DRIVER;
+    expect(isSandboxAvailable()).toBe(false);
+  });
+
+  it("returns true when SANDBOX_ENABLED=true and SANDBOX_DRIVER=vercel", () => {
+    process.env.SANDBOX_ENABLED = "true";
+    process.env.SANDBOX_DRIVER = "vercel";
+    expect(isSandboxAvailable()).toBe(true);
+  });
+
+  it("returns true when SANDBOX_ENABLED=true and SANDBOX_DRIVER=docker", () => {
+    process.env.SANDBOX_ENABLED = "true";
+    process.env.SANDBOX_DRIVER = "docker";
+    expect(isSandboxAvailable()).toBe(true);
+  });
+
+  it("returns true when SANDBOX_ENABLED=true and SANDBOX_DRIVER=modal with both URL+token set", () => {
+    process.env.SANDBOX_ENABLED = "true";
+    process.env.SANDBOX_DRIVER = "modal";
+    process.env.MODAL_RUNNER_URL = "https://example.modal.run";
+    process.env.MODAL_RUNNER_TOKEN = "tok_test";
+    expect(isSandboxAvailable()).toBe(true);
+  });
+
+  it("returns false when SANDBOX_ENABLED=true and SANDBOX_DRIVER=modal but URL is missing", () => {
+    process.env.SANDBOX_ENABLED = "true";
+    process.env.SANDBOX_DRIVER = "modal";
+    delete process.env.MODAL_RUNNER_URL;
+    process.env.MODAL_RUNNER_TOKEN = "tok_test";
+    expect(isSandboxAvailable()).toBe(false);
+  });
+
+  it("returns false when SANDBOX_ENABLED=true and SANDBOX_DRIVER=modal but token is missing", () => {
+    process.env.SANDBOX_ENABLED = "true";
+    process.env.SANDBOX_DRIVER = "modal";
+    process.env.MODAL_RUNNER_URL = "https://example.modal.run";
+    delete process.env.MODAL_RUNNER_TOKEN;
+    expect(isSandboxAvailable()).toBe(false);
+  });
+
+  it("returns true when SANDBOX_ENABLED=true and no explicit driver (docker auto-fallback)", () => {
+    process.env.SANDBOX_ENABLED = "true";
+    delete process.env.SANDBOX_DRIVER;
+    delete process.env.MODAL_RUNNER_URL;
+    delete process.env.MODAL_RUNNER_TOKEN;
+    expect(isSandboxAvailable()).toBe(true);
   });
 });

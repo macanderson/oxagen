@@ -1,3 +1,10 @@
+// Side-effect imports: bind all foundation + agent capability handlers into
+// the kernel before any route can call invoke(). Must run before bootstrap()
+// logic; order is deterministic because both register modules are pure
+// side-effect files that call registerHandler() synchronously.
+import "@oxagen/handlers/register";
+import "@oxagen/agent/register";
+
 import { loadEnv } from "@oxagen/config/env";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";

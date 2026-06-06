@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { svgGenerate } from "@oxagen/oxagen/contracts/svg.generate";
@@ -9,10 +8,19 @@ import { buildContext } from "../context";
 // Script tags and inline event handlers are stripped before output is returned.
 
 export const schema = {
-  prompt: z.string().min(1).describe("Natural-language description of the SVG to generate"),
-  title: z.string().optional().describe("Optional accessible title. Derived from prompt if omitted."),
-  width: z.number().int().positive().optional().describe("Optional width hint in pixels (default 400)"),
-  height: z.number().int().positive().optional().describe("Optional height hint in pixels (default 400)"),
+  ...svgGenerate.input.shape,
+  prompt: svgGenerate.input.shape.prompt.describe(
+    "Natural-language description of the SVG to generate",
+  ),
+  title: svgGenerate.input.shape.title.describe(
+    "Optional accessible title. Derived from prompt if omitted.",
+  ),
+  width: svgGenerate.input.shape.width.describe(
+    "Optional width hint in pixels (default 400)",
+  ),
+  height: svgGenerate.input.shape.height.describe(
+    "Optional height hint in pixels (default 400)",
+  ),
 };
 
 export const metadata: ToolMetadata = {

@@ -314,6 +314,17 @@ export async function POST(request: NextRequest): Promise<Response> {
   const coreMessages: ModelMessage[] = injectContext(messagesWithCurrent, blocks);
 
   const requestId = randomUUID();
+
+  // Extract client IP for IAM ip_ranges condition evaluation.
+  // x-forwarded-for is set by Vercel and Next.js edge; take the first hop
+  // (leftmost = original client). Falls back to x-real-ip, then null.
+  // SECURITY: used only for IAM condition evaluation, never authentication.
+  const xffRaw = request.headers.get("x-forwarded-for");
+  const clientIp: string | null =
+    (xffRaw ? xffRaw.split(",")[0]?.trim() || null : null) ??
+    request.headers.get("x-real-ip")?.trim() ??
+    null;
+
   // materializeTools returns the AI SDK tool map keyed by *model-safe* names
   // (the gateway rejects the dotted capability names — see toModelToolName)
   // plus a reverse map back to the real capability name. The map translates
@@ -326,6 +337,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     requestId,
     surface: "app",
     messageId: parentMessageId ?? requestId,
+    clientIp,
   });
 
   const encoder = new TextEncoder();
@@ -412,11 +424,19 @@ export async function POST(request: NextRequest): Promise<Response> {
                 render.props !== null &&
                 typeof render.props === "object"
               ) {
+                // Merge org+workspace slugs into render props so that any
+                // registry component that needs to call a scoped server action
+                // (e.g. make-video-form → videoGenerateAction) has real tenant
+                // context and does not fall back to a stub / empty context.
                 emit({
                   type: "component",
                   toolCallId: part.toolCallId,
                   componentId: render.componentId,
-                  props: render.props,
+                  props: {
+                    ...(render.props as Record<string, unknown>),
+                    orgSlug,
+                    workspaceSlug,
+                  },
                 });
               }
             }

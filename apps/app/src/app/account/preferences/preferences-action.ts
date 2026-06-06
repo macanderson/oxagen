@@ -11,7 +11,10 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { getSessionOrRedirect } from "@/lib/session";
 import { account } from "@/lib/routes";
-import { userPreferencesWriteHandler } from "@oxagen/handlers/user.preferences.write";
+import { invoke } from "@oxagen/oxagen";
+// Side-effect import: bind every foundation handler into the shared kernel so
+// invoke("user.preferences.write", …) can resolve its handler at runtime.
+import "@oxagen/handlers/register";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── Input schema ─────────────────────────────────────────────────────────────
@@ -63,7 +66,7 @@ export async function updatePreferencesAction(
   };
 
   try {
-    await userPreferencesWriteHandler(data, ctx);
+    await invoke("user.preferences.write", data, ctx, { surface: "agent" });
   } catch {
     return { ok: false, error: "Failed to save preferences. Please try again." };
   }

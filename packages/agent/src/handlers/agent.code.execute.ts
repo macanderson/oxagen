@@ -1,4 +1,4 @@
-import { getSandbox, applyPolicy, DEFAULT_POLICY } from "@oxagen/sandbox";
+import { getSandbox, isSandboxAvailable, applyPolicy, DEFAULT_POLICY } from "@oxagen/sandbox";
 import type { CapabilityContext } from "../types";
 import type { AgentCodeExecuteInput, AgentCodeExecuteOutput } from "@oxagen/oxagen/contracts/agent.code.execute";
 
@@ -8,6 +8,22 @@ export async function agentCodeExecuteHandler(
   input: AgentCodeExecuteInput,
   ctx: CapabilityContext,
 ): Promise<AgentCodeExecuteOutput> {
+  // Defense-in-depth: the handler is reachable via direct invoke() on any
+  // surface regardless of whether materialize-tools filtered it out. If no
+  // sandbox driver is configured, return a well-formed failure output rather
+  // than letting getSandbox() fall through to Docker and throw an unhandled
+  // connection error.
+  if (!isSandboxAvailable()) {
+    return {
+      exitCode: 1,
+      stdout: "",
+      stderr: "Code execution sandbox is not configured in this environment.",
+      durationMs: 0,
+      timedOut: false,
+      oomKilled: false,
+    };
+  }
+
   // `input` is the parsed contract output (zod defaults already applied at
   // runtime), but Vercel's declaration-emit tsc infers the defaulted/required
   // fields as optional — coerce each to the SandboxRequest shape with the

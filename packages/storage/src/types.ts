@@ -24,20 +24,37 @@ export interface PutObjectInput {
   /** MIME type, e.g. `image/webp`. Stored as the object's content type. */
   contentType?: string;
   /**
-   * Visibility. Only `"public"` is supported today (avatars are world-readable
-   * by URL). The field exists so private/object-scoped access can be added
-   * without changing call sites.
+   * Visibility of the stored object.
+   *
+   * - `"public"` (default) — object is accessible via its CDN URL without
+   *   authentication. Use for avatars and any intentionally world-readable
+   *   content.
+   * - `"private"` — object requires the store's read-write token to access.
+   *   The public CDN URL is never exposed; bytes are fetched server-side via
+   *   the authenticated adapter `get()` method. Use for generated assets,
+   *   workspace files, and any user-specific content.
    */
-  access?: "public";
+  access?: "public" | "private";
 }
 
 export interface PutObjectResult {
-  /** Public, durable URL the object is served from. Persist this. */
+  /**
+   * For `access: "public"` — the public, durable CDN URL the object is served
+   * from. For `access: "private"` — the canonical pathname/key returned by the
+   * SDK (same as `key`). Never expose a private blob's URL to end-users; always
+   * route reads through the authenticated `get()` adapter method.
+   */
   url: string;
   /** Canonical key to address the object later (e.g. for deletion). */
   key: string;
   /** Byte length written, for instrumentation/quota accounting. */
   bytes: number;
+  /**
+   * Whether the object was stored with public CDN access or requires
+   * authenticated retrieval. Callers should persist this alongside `key`/`url`
+   * so the serve path knows which read strategy to use.
+   */
+  access: "public" | "private";
 }
 
 /**

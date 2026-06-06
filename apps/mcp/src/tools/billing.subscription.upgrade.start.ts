@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { billingSubscriptionUpgradeStart } from "@oxagen/oxagen/contracts/billing.subscription.upgrade.start";
@@ -6,10 +5,19 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
 export const schema = {
-  planSlug: z.string().min(1).describe("Target plan slug (e.g. 'pro', 'team')"),
-  interval: z.enum(["month", "year"]).describe("Billing interval"),
-  successUrl: z.string().url().describe("URL to redirect to after successful checkout"),
-  cancelUrl: z.string().url().describe("URL to redirect to on checkout cancellation"),
+  ...billingSubscriptionUpgradeStart.input.shape,
+  planSlug: billingSubscriptionUpgradeStart.input.shape.planSlug.describe(
+    "Target plan slug (e.g. 'pro', 'team')",
+  ),
+  interval: billingSubscriptionUpgradeStart.input.shape.interval.describe(
+    "Billing interval",
+  ),
+  successUrl: billingSubscriptionUpgradeStart.input.shape.successUrl.describe(
+    "URL to redirect to after successful checkout",
+  ),
+  cancelUrl: billingSubscriptionUpgradeStart.input.shape.cancelUrl.describe(
+    "URL to redirect to on checkout cancellation",
+  ),
 };
 
 export const metadata: ToolMetadata = {

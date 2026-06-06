@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { videoGenerate } from "@oxagen/oxagen/contracts/video.generate";
@@ -11,26 +10,22 @@ import { buildContext } from "../context";
 // job reference — no actual video rendering runs until the pipeline is wired.
 
 export const schema = {
-  prompt: z.string().min(1).describe("Natural-language description of the video to generate"),
-  durationSeconds: z
-    .number()
-    .int()
-    .min(1)
-    .max(60)
-    .optional()
-    .describe("Duration of the output video in whole seconds (1–60)"),
-  aspectRatio: z
-    .enum(["16:9", "9:16", "1:1"])
-    .optional()
-    .describe("Target aspect ratio for the output"),
-  style: z
-    .string()
-    .optional()
-    .describe("Free-text style hint for the rendering model (e.g. \"cinematic\", \"animated\")"),
-  brandKitId: z
-    .string()
-    .optional()
-    .describe("Optional brand-kit ID to apply to the generated video"),
+  ...videoGenerate.input.shape,
+  prompt: videoGenerate.input.shape.prompt.describe(
+    "Natural-language description of the video to generate",
+  ),
+  durationSeconds: videoGenerate.input.shape.durationSeconds.describe(
+    "Duration of the output video in whole seconds (1–60)",
+  ),
+  aspectRatio: videoGenerate.input.shape.aspectRatio.describe(
+    "Target aspect ratio for the output",
+  ),
+  style: videoGenerate.input.shape.style.describe(
+    'Free-text style hint for the rendering model (e.g. "cinematic", "animated")',
+  ),
+  brandKitId: videoGenerate.input.shape.brandKitId.describe(
+    "Optional brand-kit ID to apply to the generated video",
+  ),
 };
 
 export const metadata: ToolMetadata = {

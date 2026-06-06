@@ -15,6 +15,7 @@
 //   Rule 8: Default effect (contract) → use contract.defaultEffect
 
 import type { CapabilityEffect, ResolvedPrincipal } from "../types";
+import { evaluateConditions, type ConditionEvalContext } from "./conditions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -104,6 +105,18 @@ export interface ResolveInput {
    * (rule 8). Read from CapabilityDeclaration.defaultEffect.
    */
   defaultEffect: CapabilityEffect;
+  /**
+   * Wall-clock time of the invocation. Used to evaluate time_window
+   * conditions. When absent, defaults to `new Date()` inside the resolver
+   * so callers that have not yet adopted the field are not broken.
+   */
+  now?: Date;
+  /**
+   * Client IP address of the request. Used to evaluate ip_ranges / ip_allow
+   * conditions. Null / undefined means the IP is unknown — any IP-based
+   * condition will fail-closed (deny) when this is absent.
+   */
+  clientIp?: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -114,22 +127,13 @@ function isExpired(g: Grant): boolean {
 }
 
 /**
- * Evaluate conditions_jsonb against the invocation context. Currently a
- * strict equality check on each key in the conditions object. Extend this
- * function as the condition language grows.
- *
- * Returns true when all conditions are satisfied (or there are none).
+ * Evaluate conditionsJsonb on a grant or policy against the request context.
+ * Delegates to evaluateConditions (conditions.ts) which implements the full
+ * condition language (time_window, ip_ranges, ip_allow). Returns true when
+ * all conditions are satisfied; false (fail-closed) otherwise.
  */
-function conditionsMet(grant: Grant): boolean {
-  const conditions = grant.conditionsJsonb;
-  if (conditions === null || conditions === undefined) return true;
-  // Conditions must be a plain object; anything else fails closed.
-  if (typeof conditions !== "object" || Array.isArray(conditions)) return false;
-  // Future: evaluate IP ranges, time windows, etc. For now all non-empty
-  // conditions objects fail — the condition language is not yet specified.
-  // An empty conditions object means "always satisfied".
-  const keys = Object.keys(conditions as Record<string, unknown>);
-  return keys.length === 0;
+function conditionsMet(conditionsJsonb: unknown, evalCtx: ConditionEvalContext): boolean {
+  return evaluateConditions(conditionsJsonb, evalCtx);
 }
 
 // ── Main resolver ─────────────────────────────────────────────────────────────
@@ -149,6 +153,12 @@ export function resolve(input: ResolveInput): ResolveResult {
     policies,
     defaultEffect,
   } = input;
+
+  // Build the condition evaluation context once and reuse for all grants/policies.
+  const evalCtx: ConditionEvalContext = {
+    now: input.now ?? new Date(),
+    clientIp: input.clientIp ?? null,
+  };
 
   const steps: TraceStep[] = [];
 
@@ -170,13 +180,19 @@ export function resolve(input: ResolveInput): ResolveResult {
   // Org enforced policies (rules 2, 4) apply regardless of the invocation's scope_kind —
   // an org enforced deny is a hard stop that cannot be overridden by a workspace grant.
   // We therefore filter org policies separately from the scope filter.
+  //
+  // IMPORTANT: conditions are evaluated here so that a conditional enforced policy
+  // is only active when its conditions currently hold. A deny-policy whose conditions
+  // do NOT hold is NOT active — it should not deny. This closes the gap noted in
+  // OXA-1390 where org policies had no condition evaluation at all.
   const orgEnforcedDenyPolicies = policies.filter(
     (p) =>
       p.capabilityId === capability &&
       p.enforced &&
       p.effect === "deny" &&
       p.scopeKind === "org" &&
-      (p.scopeId === scope.orgId || p.scopeId === null || p.scopeId === undefined),
+      (p.scopeId === scope.orgId || p.scopeId === null || p.scopeId === undefined) &&
+      conditionsMet(p.conditionsJsonb, evalCtx),
   );
   const orgEnforcedAllowPolicies = policies.filter(
     (p) =>
@@ -184,12 +200,13 @@ export function resolve(input: ResolveInput): ResolveResult {
       p.enforced &&
       p.effect === "allow" &&
       p.scopeKind === "org" &&
-      (p.scopeId === scope.orgId || p.scopeId === null || p.scopeId === undefined),
+      (p.scopeId === scope.orgId || p.scopeId === null || p.scopeId === undefined) &&
+      conditionsMet(p.conditionsJsonb, evalCtx),
   );
 
   // ── Rule 1: Workspace explicit deny ────────────────────────────────────────
   const wsDenyGrant = scope.kind === "workspace"
-    ? workspaceGrants.find((g) => g.effect === "deny" && !isExpired(g) && conditionsMet(g))
+    ? workspaceGrants.find((g) => g.effect === "deny" && !isExpired(g) && conditionsMet(g.conditionsJsonb, evalCtx))
     : undefined;
 
   if (wsDenyGrant) {
@@ -233,7 +250,7 @@ export function resolve(input: ResolveInput): ResolveResult {
   // ── Rule 3: Workspace explicit allow ───────────────────────────────────────
   if (scope.kind === "workspace") {
     const wsAllowGrant = workspaceGrants.find(
-      (g) => g.effect === "allow" && !isExpired(g) && conditionsMet(g),
+      (g) => g.effect === "allow" && !isExpired(g) && conditionsMet(g.conditionsJsonb, evalCtx),
     );
     if (wsAllowGrant) {
       const step: TraceStep = {
@@ -258,7 +275,7 @@ export function resolve(input: ResolveInput): ResolveResult {
       return { outcome: "deny", reason: "expired", trace: { steps, decidedBy: step } };
     }
     const wsConditionFailed = workspaceGrants.find(
-      (g) => g.effect === "allow" && !isExpired(g) && !conditionsMet(g),
+      (g) => g.effect === "allow" && !isExpired(g) && !conditionsMet(g.conditionsJsonb, evalCtx),
     );
     if (wsConditionFailed) {
       const step: TraceStep = {
@@ -298,7 +315,7 @@ export function resolve(input: ResolveInput): ResolveResult {
   // ── Rule 5: Workspace require_approval ─────────────────────────────────────
   if (scope.kind === "workspace") {
     const wsApprovalGrant = workspaceGrants.find(
-      (g) => g.effect === "require_approval" && !isExpired(g) && conditionsMet(g),
+      (g) => g.effect === "require_approval" && !isExpired(g) && conditionsMet(g.conditionsJsonb, evalCtx),
     );
     if (wsApprovalGrant) {
       const step: TraceStep = {
@@ -319,7 +336,7 @@ export function resolve(input: ResolveInput): ResolveResult {
 
   // ── Rule 6: Org default grant ──────────────────────────────────────────────
   const orgAllowGrant = orgGrants.find(
-    (g) => g.effect === "allow" && !isExpired(g) && conditionsMet(g),
+    (g) => g.effect === "allow" && !isExpired(g) && conditionsMet(g.conditionsJsonb, evalCtx),
   );
   if (orgAllowGrant) {
     const step: TraceStep = {
@@ -332,7 +349,7 @@ export function resolve(input: ResolveInput): ResolveResult {
     return { outcome: "allow", trace: { steps, decidedBy: step } };
   }
   const orgApprovalGrant = orgGrants.find(
-    (g) => g.effect === "require_approval" && !isExpired(g) && conditionsMet(g),
+    (g) => g.effect === "require_approval" && !isExpired(g) && conditionsMet(g.conditionsJsonb, evalCtx),
   );
   if (orgApprovalGrant) {
     const step: TraceStep = {
@@ -345,7 +362,7 @@ export function resolve(input: ResolveInput): ResolveResult {
     return { outcome: "pending_approval", trace: { steps, decidedBy: step } };
   }
   const orgDenyGrant = orgGrants.find(
-    (g) => g.effect === "deny" && !isExpired(g) && conditionsMet(g),
+    (g) => g.effect === "deny" && !isExpired(g) && conditionsMet(g.conditionsJsonb, evalCtx),
   );
   if (orgDenyGrant) {
     const step: TraceStep = {
@@ -370,7 +387,7 @@ export function resolve(input: ResolveInput): ResolveResult {
     return { outcome: "deny", reason: "expired", trace: { steps, decidedBy: step } };
   }
   // Check condition-failed org grants.
-  const orgConditionFailed = orgGrants.find((g) => !conditionsMet(g));
+  const orgConditionFailed = orgGrants.find((g) => !conditionsMet(g.conditionsJsonb, evalCtx));
   if (orgConditionFailed) {
     const step: TraceStep = {
       rule: "6:org_grant",

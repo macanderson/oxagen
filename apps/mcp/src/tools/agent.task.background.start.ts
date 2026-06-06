@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentTaskBackgroundStart } from "@oxagen/oxagen/contracts/agent.task.background.start";
@@ -6,9 +5,16 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
 export const schema = {
-  kind: z.string().describe("Task kind identifier (e.g. 'agent.run', 'data.export')"),
-  payload: z.unknown().describe("Arbitrary task payload - must be JSON-serialisable"),
-  label: z.string().optional().describe("Human-readable label for the task tray"),
+  ...agentTaskBackgroundStart.input.shape,
+  kind: agentTaskBackgroundStart.input.shape.kind.describe(
+    "Task kind identifier (e.g. 'agent.run', 'data.export')",
+  ),
+  payload: agentTaskBackgroundStart.input.shape.payload.describe(
+    "Arbitrary task payload - must be JSON-serialisable",
+  ),
+  label: agentTaskBackgroundStart.input.shape.label.describe(
+    "Human-readable label for the task tray",
+  ),
 };
 
 export const metadata: ToolMetadata = {

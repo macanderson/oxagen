@@ -183,7 +183,8 @@ describe("agentVideoRender Inngest handler", () => {
     expect(putArg.key).toBe("generated/videos/org_1/asset_1.mp4");
     expect(putArg.body).toBe(FAKE_BYTES);
     expect(putArg.contentType).toBe("video/mp4");
-    expect(putArg.access).toBe("public");
+    // Must be private — CDN URL must never be guessable; served via auth-gated proxy.
+    expect(putArg.access).toBe("private");
   });
 
   it("updates the generated_assets row to ready with storage refs", async () => {

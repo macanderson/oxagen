@@ -44,9 +44,10 @@ const BASE = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.put.mockResolvedValue({
-    url: "https://store.public.blob.vercel-storage.com/x.png",
+    url: "https://private.blob.vercel-storage.com/x.png?token=x",
     key: "generated/images/org-1/11111111-1111-1111-1111-111111111111.png",
     bytes: 2048,
+    access: "private",
   });
   mocks.returning.mockResolvedValue([{ id: "asset-uuid", publicId: "gen_ABC" }]);
   mocks.values.mockReturnValue({ returning: mocks.returning });
@@ -54,7 +55,7 @@ beforeEach(() => {
 });
 
 describe("persistGeneratedAsset", () => {
-  it("uploads bytes to a kind/org-scoped key as a public object", async () => {
+  it("uploads bytes to a kind/org-scoped key as a PRIVATE object (SOC2 blob privacy)", async () => {
     await persistGeneratedAsset({
       ...BASE,
       kind: "image",
@@ -68,7 +69,9 @@ describe("persistGeneratedAsset", () => {
       "generated/images/org-1/11111111-1111-1111-1111-111111111111.png",
     );
     expect(putArg.contentType).toBe("image/png");
-    expect(putArg.access).toBe("public");
+    // Must be private — the CDN URL must never be publicly guessable.
+    // Bytes are served exclusively through the auth-gated /api/v1/assets proxy.
+    expect(putArg.access).toBe("private");
   });
 
   it("defaults accessPolicy to `user` (private) and status to `ready`", async () => {
@@ -87,7 +90,8 @@ describe("persistGeneratedAsset", () => {
     expect(row.createdByUserId).toBe("user-1");
     // sizeBytes is persisted as a bigint from the storage byte count.
     expect(row.sizeBytes).toBe(BigInt(2048));
-    expect(row.storageUrl).toBe("https://store.public.blob.vercel-storage.com/x.png");
+    // storageUrl is the private blob URL (not a public CDN URL).
+    expect(row.storageUrl).toBe("https://private.blob.vercel-storage.com/x.png?token=x");
   });
 
   it("opts an asset up to the `org` policy when requested (the chat path)", async () => {

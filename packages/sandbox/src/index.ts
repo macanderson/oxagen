@@ -20,9 +20,53 @@ let _instance: SandboxDriver | null = null;
 //   SANDBOX_DRIVER=docker → local Dockerode (dev + self-hosted)
 //   unset                 → modal if MODAL_RUNNER_URL is present, else docker
 //
-// The agent.code.execute capability itself is still gated by
-// SANDBOX_ENABLED in materializeTools, so an unconfigured driver never
-// gets advertised to the model.
+// The agent.code.execute capability is gated by isSandboxAvailable() in
+// materializeTools so an unconfigured driver is never advertised to the model.
+
+/**
+ * Single source of truth for whether a sandbox driver is usable.
+ *
+ * Returns true only when BOTH of the following hold:
+ *   1. SANDBOX_ENABLED=true   — opt-in flag (off by default in prod, OXA-1348)
+ *   2. A driver is actually configured with its required credentials:
+ *        vercel: SANDBOX_DRIVER=vercel (OIDC creds resolved lazily — flag alone
+ *                is enough because the token is injected by the Vercel runtime)
+ *        modal:  SANDBOX_DRIVER=modal AND MODAL_RUNNER_URL AND MODAL_RUNNER_TOKEN set
+ *        docker: explicit SANDBOX_DRIVER=docker, OR no explicit driver and no
+ *                modal env vars present (docker is the local-dev fallback)
+ *
+ * This function is intentionally side-effect-free (no singleton creation) so
+ * it can be called from materialize-tools without initialising a driver.
+ */
+export function isSandboxAvailable(): boolean {
+  if (process.env.SANDBOX_ENABLED !== "true") return false;
+
+  const explicit = process.env.SANDBOX_DRIVER?.toLowerCase();
+
+  if (explicit === "vercel") {
+    // Vercel sandbox: OIDC token is injected automatically in the Vercel
+    // runtime. Explicit driver selection is the only required precondition.
+    return true;
+  }
+
+  if (explicit === "modal") {
+    // Modal sandbox: requires both URL and auth token.
+    return Boolean(process.env.MODAL_RUNNER_URL && process.env.MODAL_RUNNER_TOKEN);
+  }
+
+  if (explicit === "docker") {
+    // Docker sandbox: no extra credentials needed — Docker socket path is
+    // always available in dev. Explicit selection is sufficient.
+    return true;
+  }
+
+  // No explicit driver: mirror the auto-detect logic in getSandbox().
+  // Modal auto-detects when both URL and token are set; otherwise docker.
+  // Docker is always available locally so return true in the unset case
+  // (the caller already verified SANDBOX_ENABLED=true above).
+  return true;
+}
+
 export function getSandbox(): SandboxDriver {
   if (_instance) return _instance;
   const explicit = process.env.SANDBOX_DRIVER?.toLowerCase();

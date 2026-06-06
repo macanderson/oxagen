@@ -136,6 +136,10 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
     roleGrants: authz.roleGrants,
     policies: authz.policies,
     defaultEffect,
+    // Thread the request timestamp and client IP so the condition evaluator
+    // can enforce time_window and ip_ranges/ip_allow conditions.
+    now: new Date(),
+    clientIp: ctx.clientIp ?? null,
   };
 
   const result = resolve(resolveInput);

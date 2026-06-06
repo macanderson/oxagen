@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { agentMcpRegister } from "@oxagen/oxagen/contracts/agent.mcp.register";
@@ -6,17 +5,18 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
 export const schema = {
-  name: z.string().min(1).max(120).describe("Human-readable name for the MCP server"),
-  transportType: z.enum(["streamable-http", "stdio"]).describe("Transport protocol"),
-  endpointUrl: z.string().url().describe("URL of the MCP server endpoint"),
-  authStrategy: z
-    .enum(["none", "bearer", "header"])
-    .default("none")
-    .describe("Authentication strategy"),
-  authConfig: z
-    .record(z.string())
-    .optional()
-    .describe("Authentication configuration key/value pairs"),
+  ...agentMcpRegister.input.shape,
+  name: agentMcpRegister.input.shape.name.describe("Human-readable name for the MCP server"),
+  transportType: agentMcpRegister.input.shape.transportType.describe("Transport protocol"),
+  endpointUrl: agentMcpRegister.input.shape.endpointUrl.describe(
+    "URL of the MCP server endpoint",
+  ),
+  authStrategy: agentMcpRegister.input.shape.authStrategy.describe(
+    "Authentication strategy",
+  ),
+  authConfig: agentMcpRegister.input.shape.authConfig.describe(
+    "Authentication configuration key/value pairs",
+  ),
 };
 
 export const metadata: ToolMetadata = {

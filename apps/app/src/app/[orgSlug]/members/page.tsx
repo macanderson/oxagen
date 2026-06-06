@@ -50,6 +50,7 @@ export default async function MembersPage({
           tx
             .select({
               publicId: schema.orgUsers.publicId,
+              userId: schema.orgUsers.userId,
               role: schema.orgUsers.role,
               joinedAt: schema.orgUsers.joinedAt,
               email: schema.users.email,
@@ -91,6 +92,7 @@ export default async function MembersPage({
       orgSlug={orgSlug}
       members={memberRows.map((r) => ({
         publicId: r.publicId,
+        userId: r.userId,
         email: r.email,
         displayName: r.displayName,
         role: r.role,
@@ -105,6 +107,7 @@ export default async function MembersPage({
       }))}
       seatUsage={seatUsage}
       viewerRole={viewerRole}
+      viewerUserId={session?.user?.id ?? ""}
     />
   );
 }

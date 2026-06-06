@@ -10,9 +10,16 @@
  * `refresh_token` columns from the `accounts` table. This module no longer
  * dual-writes plaintext — only the *_enc columns are written.
  *
- * `idToken` (OIDC identity assertion) is still stored in the DB as `id_token`
- * plaintext because it is read-only and not a bearer credential. It is also
- * encrypted into `id_token_enc` for defense-in-depth (both values are written).
+ * ENCRYPTION COVERAGE: All three token fields — access_token, refresh_token,
+ * AND id_token — are encrypted into their *_enc counterparts and their
+ * plaintext columns are stripped before any write. The previous "leave idToken
+ * plaintext" exception has been removed as part of SOC2 hardening (migration
+ * 0009): a Postgres BEFORE INSERT/UPDATE trigger on auth.accounts provides a
+ * defense-in-depth backstop, nulling any plaintext col when its *_enc
+ * counterpart is NOT NULL. Double protection:
+ *   1. Application hook (this file) strips plaintext on covered write paths.
+ *   2. DB trigger (migration 0009) strips on ANY write path, including Better
+ *      Auth internal paths that may bypass the application-layer hook.
  *
  * NEVER log plaintext token values anywhere in this module.
  */
@@ -84,8 +91,10 @@ async function decryptToken(
  * Encrypt the three token fields of an account record for database storage.
  *
  * CONTRACT PHASE (migration 0012): the plaintext `access_token` and
- * `refresh_token` columns have been dropped. This function returns ONLY the
- * encrypted columns — it does NOT write back the plaintext values.
+ * `refresh_token` columns have been dropped. `id_token` still exists as a
+ * column but is stripped by the caller's stripPlaintextTokens before writing.
+ * This function returns ONLY the encrypted columns — it does NOT write back
+ * any plaintext value.
  *
  * Returns a partial record with:
  *   - `accessTokenEnc`, `refreshTokenEnc`, `idTokenEnc`  — encrypted bytea
@@ -163,15 +172,20 @@ export async function decryptAccountTokens(
  */
 
 /**
- * Remove plaintext token fields from an account object before writing. Migration
- * 0012 dropped the `access_token` / `refresh_token` columns, so passing them to
- * the Drizzle adapter raises an "unknown column" error and the OAuth account
- * (hence the user) cannot be created. MUST run on every account write.
+ * Remove plaintext token fields from an account object before writing.
+ * - access_token / refresh_token: dropped by migration 0012; passing them to
+ *   the Drizzle adapter raises an "unknown column" error.
+ * - id_token: still a column in the schema (Better Auth reads it on some paths)
+ *   but we strip it here so the plaintext is never durably stored when the
+ *   encrypted id_token_enc counterpart exists. The DB trigger (migration 0009)
+ *   is the final backstop for any write path that bypasses this hook.
+ * MUST run on every account write.
  */
 function stripDroppedTokenColumns(account: Record<string, unknown>): Record<string, unknown> {
-  const { accessToken: _at, refreshToken: _rt, ...rest } = account;
+  const { accessToken: _at, refreshToken: _rt, idToken: _it, ...rest } = account;
   void _at;
   void _rt;
+  void _it;
   return rest;
 }
 
@@ -207,13 +221,15 @@ export function buildAccountTokenHooks(adapter: KmsAdapter, keyId: string): {
 
   /**
    * Remove plaintext token fields from the account object before writing to
-   * the DB. Migration 0012 dropped `access_token` and `refresh_token` columns;
-   * passing them to the adapter would cause an "unknown column" error.
+   * the DB. access_token and refresh_token were dropped by migration 0012;
+   * id_token is stripped here (and by the DB trigger from migration 0009) so
+   * the plaintext is never durably stored once the encrypted counterpart exists.
    */
   function stripPlaintextTokens(account: Record<string, unknown>): Record<string, unknown> {
-    const { accessToken: _at, refreshToken: _rt, ...rest } = account;
+    const { accessToken: _at, refreshToken: _rt, idToken: _it, ...rest } = account;
     void _at;
     void _rt;
+    void _it;
     return rest;
   }
 

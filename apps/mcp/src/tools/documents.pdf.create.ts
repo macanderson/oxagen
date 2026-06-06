@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { documentsPdfCreate } from "@oxagen/oxagen/contracts/documents.pdf.create";
@@ -6,16 +5,19 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
 export const schema = {
-  title: z.string().min(1).describe("Title / filename of the output PDF"),
-  sourceHtml: z.string().optional().describe("Raw HTML markup to render into a PDF"),
-  sourceFileId: z
-    .string()
-    .optional()
-    .describe("Cloud file ID of a document to export as PDF"),
-  brandKitId: z
-    .string()
-    .optional()
-    .describe("Optional brand-kit ID to apply to the PDF output"),
+  ...documentsPdfCreate.input.shape,
+  title: documentsPdfCreate.input.shape.title.describe(
+    "Title / filename of the output PDF",
+  ),
+  sourceHtml: documentsPdfCreate.input.shape.sourceHtml.describe(
+    "Raw HTML markup to render into a PDF",
+  ),
+  sourceFileId: documentsPdfCreate.input.shape.sourceFileId.describe(
+    "Cloud file ID of a document to export as PDF",
+  ),
+  brandKitId: documentsPdfCreate.input.shape.brandKitId.describe(
+    "Optional brand-kit ID to apply to the PDF output",
+  ),
 };
 
 export const metadata: ToolMetadata = {
