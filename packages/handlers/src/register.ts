@@ -155,3 +155,27 @@ registerHandler(
   async () =>
     (await import("./conversation.purge")).conversationPurgeHandler as CapabilityHandlerFn,
 );
+registerHandler(
+  "plugin.registry.list",
+  async () => (await import("./plugin.registry.list")).handler as CapabilityHandlerFn,
+);
+registerHandler(
+  "plugin.registry.add",
+  async () => (await import("./plugin.registry.add")).handler as CapabilityHandlerFn,
+);
+registerHandler(
+  "plugin.registry.remove",
+  async () => (await import("./plugin.registry.remove")).handler as CapabilityHandlerFn,
+);
+registerHandler(
+  "plugin.registry.sync",
+  async () => (await import("./plugin.registry.sync")).handler as CapabilityHandlerFn,
+);
+registerHandler(
+  "plugin.catalog.browse",
+  async () => (await import("./plugin.catalog.browse")).handler as CapabilityHandlerFn,
+);
+registerHandler(
+  "plugin.catalog.get",
+  async () => (await import("./plugin.catalog.get")).handler as CapabilityHandlerFn,
+);

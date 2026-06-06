@@ -49,6 +49,12 @@ import { conversationArchiveRoute } from "./routes/v1/conversation.archive";
 import { conversationDeleteRoute } from "./routes/v1/conversation.delete";
 import { conversationPurgeRoute } from "./routes/v1/conversation.purge";
 import { assetUploadRoute } from "./routes/v1/asset.upload";
+import { pluginRegistryListRoute } from "./routes/v1/plugin.registry.list";
+import { pluginRegistryAddRoute } from "./routes/v1/plugin.registry.add";
+import { pluginRegistryRemoveRoute } from "./routes/v1/plugin.registry.remove";
+import { pluginRegistrySyncRoute } from "./routes/v1/plugin.registry.sync";
+import { pluginCatalogBrowseRoute } from "./routes/v1/plugin.catalog.browse";
+import { pluginCatalogGetRoute } from "./routes/v1/plugin.catalog.get";
 
 export type AppEnv = {
   Variables: {
@@ -127,4 +133,10 @@ orgScoped.route("/files", filesServeRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsReadRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsWriteRoute);
 orgScoped.route("/asset/upload", assetUploadRoute);
+orgScoped.route("/plugin/registries", pluginRegistryListRoute);
+orgScoped.route("/plugin/registries/add", pluginRegistryAddRoute);
+orgScoped.route("/plugin/registries/remove", pluginRegistryRemoveRoute);
+orgScoped.route("/plugin/registries/sync", pluginRegistrySyncRoute);
+orgScoped.route("/plugin/catalog/browse", pluginCatalogBrowseRoute);
+orgScoped.route("/plugin/catalog/get", pluginCatalogGetRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
