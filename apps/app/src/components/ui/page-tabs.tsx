@@ -46,28 +46,58 @@ export function PageTabs({ tabs, className }: PageTabsProps) {
   const pathname = usePathname();
   const activeHref = resolveActiveTab(tabs, pathname);
 
+  // Edge fades are scroll affordances: each one is shown ONLY when there is
+  // actually content scrolled off that side. Rendering them unconditionally
+  // overlaid the left fade on the first tab even at rest, painting a
+  // background→transparent gradient over its active indicator — the underline
+  // looked gray→black on the first tab only.
+  const scrollerRef = React.useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = React.useState(false);
+  const [canScrollRight, setCanScrollRight] = React.useState(false);
+
+  const updateFades = React.useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 1);
+    // 1px slack absorbs sub-pixel rounding at the far edge.
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1);
+  }, []);
+
+  React.useEffect(() => {
+    updateFades();
+    const el = scrollerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(updateFades);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [updateFades, tabs]);
+
   return (
     /*
      * Outer wrapper: horizontally scrollable, edge-faded when overflowing.
      * The gradient masks are purely decorative and hidden to assistive tech.
      */
-    <div
-      className={cn("relative", className)}
-      // Fade right edge when overflow is present — pure CSS, no JS needed.
-      // We use a mask-image applied to the scroll container's pseudo-element
-      // via a wrapping div approach to keep the indicator visible at the edge.
-    >
-      {/* Left + right gradient masks */}
+    <div className={cn("relative", className)}>
+      {/* Left + right gradient masks — opacity-gated on actual overflow. */}
       <div
-        className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-background to-transparent"
+        className={cn(
+          "pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-background to-transparent transition-opacity duration-150",
+          canScrollLeft ? "opacity-100" : "opacity-0",
+        )}
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-background to-transparent"
+        className={cn(
+          "pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-background to-transparent transition-opacity duration-150",
+          canScrollRight ? "opacity-100" : "opacity-0",
+        )}
         aria-hidden="true"
       />
 
       <div
+        ref={scrollerRef}
+        onScroll={updateFades}
         role="tablist"
         aria-label="Page sections"
         className="flex items-end gap-0 overflow-x-auto scrollbar-none border-b border-border/40 pl-0"
