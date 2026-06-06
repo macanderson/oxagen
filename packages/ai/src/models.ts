@@ -1,8 +1,44 @@
 import { gateway } from "@ai-sdk/gateway";
+import { wrapLanguageModel } from "ai";
 import type { ImageModel, LanguageModel } from "ai";
-import type { Experimental_VideoModelV3 } from "@ai-sdk/provider";
+import type { Experimental_VideoModelV3, LanguageModelV3 } from "@ai-sdk/provider";
 import { requireEnv } from "@oxagen/config/env";
 import type { MediaTier, ResolvedTierCatalog } from "./catalog";
+
+/**
+ * Wrap a language model with AI SDK devtools middleware in development.
+ *
+ * Every LLM call routed through selectModel() becomes visible in the devtools
+ * inspector at http://localhost:4983 (start it with `npx @ai-sdk/devtools`).
+ * The middleware is a no-op outside development — the `process.env.NODE_ENV`
+ * check is evaluated at call time so Next.js tree-shakes it in production
+ * builds, and @ai-sdk/devtools is a devDependency so it never ships in prod.
+ *
+ * If the package is somehow missing (e.g. after `--production` install),
+ * the catch swallows the error and returns the unwrapped model so the app
+ * continues to work.
+ */
+let _devToolsMiddleware: (() => import("@ai-sdk/provider").LanguageModelV3Middleware) | null = null;
+if (process.env.NODE_ENV === "development") {
+  // Eager synchronous-style load: Next.js dev mode processes this at module
+  // evaluation time. We store the factory so selectModel() stays synchronous.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    _devToolsMiddleware = (require("@ai-sdk/devtools") as { devToolsMiddleware: () => import("@ai-sdk/provider").LanguageModelV3Middleware }).devToolsMiddleware;
+  } catch {
+    // devtools not available — silent no-op
+  }
+}
+
+/**
+ * Wrap a concrete LanguageModelV3 with devtools middleware in development.
+ * `gateway.languageModel()` always returns a LanguageModelV3 object (never the
+ * bare string arm of the LanguageModel union), so this receives the narrowed type.
+ */
+function applyDevtools(model: LanguageModelV3): LanguageModelV3 {
+  if (!_devToolsMiddleware) return model;
+  return wrapLanguageModel({ model, middleware: _devToolsMiddleware() });
+}
 
 /**
  * White-labeled Oxagen model tiers. Each resolves to a concrete Vercel AI
@@ -150,7 +186,7 @@ export function selectModel(selector: ModelSelector = {}): LanguageModel {
   ] as const);
   const modelId =
     selector.model ?? tierFromEnv(env, selector.tier ?? DEFAULT_TIER);
-  return gateway.languageModel(modelId);
+  return applyDevtools(gateway.languageModel(modelId));
 }
 
 /** The platform default model — the balanced tier through the gateway. */

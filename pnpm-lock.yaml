@@ -644,6 +644,9 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
     devDependencies:
+      '@ai-sdk/devtools':
+        specifier: ^0.0.18
+        version: 0.0.18
       '@vitest/coverage-v8':
         specifier: 2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0))
@@ -1307,6 +1310,11 @@ importers:
         version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0)
 
 packages:
+
+  '@ai-sdk/devtools@0.0.18':
+    resolution: {integrity: sha512-0J25Q7occrkMJM1MrP0KeR8XNdGGKNgzxhOLfxBe/qZBQP6yXgV4H5Gf2DnDC3UgXDBJBskH9nh23doCo2Pebw==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   '@ai-sdk/gateway@3.0.125':
     resolution: {integrity: sha512-tocl7cUDoTpmhZqeW8XVKMMznZQwwQAEunF0VyNKmf64qt8NbMIAEiet/vRMzh7Jr9WcFeb6EZjmhLTP4Qx2Og==}
@@ -8941,6 +8949,12 @@ packages:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
 snapshots:
+
+  '@ai-sdk/devtools@0.0.18':
+    dependencies:
+      '@ai-sdk/provider': 3.0.10
+      '@hono/node-server': 1.19.14(hono@4.12.23)
+      hono: 4.12.23
 
   '@ai-sdk/gateway@3.0.125(zod@3.25.76)':
     dependencies:
