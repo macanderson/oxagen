@@ -280,7 +280,13 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,
-    cookieCache: { enabled: true, maxAge: 60 * 5 },
+    // cookieCache intentionally omitted — Better Auth defaults to disabled.
+    // Enabling it caused RSC-render failures: when the 5-minute cache expired,
+    // Better Auth tried to call response.headers.set() to refresh the session
+    // cookie during an RSC render. Next.js 16 forbids cookie writes outside
+    // Server Actions / Route Handlers, producing a Runtime APIError:
+    // "Failed to get session". Session reads from the DB on each request are
+    // acceptable at this stage.
   },
   advanced: {
     cookiePrefix: "oxagen",
