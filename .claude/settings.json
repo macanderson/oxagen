@@ -259,6 +259,10 @@
     "haiku",
     "opusplan"
   ],
+  "statusLine": {
+    "type": "command",
+    "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/statusline-command.sh\""
+  },
   "enableAllProjectMcpServers": true,
   "hooks": {},
   "enabledPlugins": {
@@ -331,30 +335,18 @@
   "autoMemoryEnabled": true,
   "showThinkingSummaries": true,
   "teammateMode": "auto",
-  "worktree.symlinkDirectories": [
-    "node_modules",
-    ".cache",
-    ".turbo",
-    ".next",
-    ".venv",
-    "target",
-    "dist"
-  ],
-  "worktree.cleanupAfterDays": 7,
-  "worktree.directory": ".worktrees",
-  "worktree.autoPrune": true,
-  "worktree.pruneOnStartup": true,
-  "worktree.pruneOnShutdown": true,
-  "worktree.maxConcurrentWorktrees": 5,
-  "worktree.defaultBranch": "main",
-  "worktree.defaultRemote": "origin",
-  "worktree.gitCheckoutOptions": ["--recurse-submodules"],
-  "worktree.allowlist": [],
-  "worktree.denylist": [],
-  "worktree.cleanupMode": "prune",
-  "worktree.pruneMode": "aggressive",
-  "remote": {
-    "defaultEnvironmentId": "env_017jTfGrcdt3aa8NGS1Zy2yh"
+  "worktree": {
+    "sparsePaths": [
+      "apps",
+      "packages",
+      "tools",
+      ".agents",
+      ".claude"
+    ],
+    "symlinkDirectories": [
+      "node_modules", ".cache", ".turbo", ".next", ".venv", "target", "dist"
+    ],
+    "baseRef": "head",
+    "bgIsolation": "none"
   }
-
 }
