@@ -15,7 +15,7 @@ vi.mock("./client", () => ({ db: () => ({ transaction: mocks.transaction }) }));
 vi.mock("./tenant-flag", () => ({ rlsEnforced: mocks.rlsEnforced }));
 
 import { runInTenantScope } from "@oxagen/tenancy";
-import { withTenantDb } from "./tenant";
+import { withTenantDb, withSystemDb } from "./tenant";
 
 const ORG = "00000000-0000-0000-0000-00000000a111";
 const WS = "00000000-0000-0000-0000-00000000b222";
@@ -64,5 +64,29 @@ describe("withTenantDb", () => {
     expect(arg).toContain("app.rls_bypass");
     expect(arg).toContain('"off"');
     expect(arg).not.toContain('"on"');
+  });
+});
+
+describe("withSystemDb", () => {
+  it("runs WITHOUT an active scope (the bypass escape hatch)", async () => {
+    // No runInTenantScope wrapper — must not throw.
+    const result = await withSystemDb(async (tx) => {
+      expect(tx).toBeDefined();
+      return "ok";
+    });
+    expect(result).toBe("ok");
+  });
+
+  it("sets app.rls_bypass='on' and no scope GUCs, even when enforcement is on", async () => {
+    mocks.rlsEnforced.mockReturnValue(true);
+    await withSystemDb(async () => undefined);
+    const calls = mocks.execute.mock.calls as unknown[][];
+    const arg = sqlText((calls[0] as unknown[])[0]);
+    // 'on' is an inline SQL literal here (not a bound param), so it serializes
+    // single-quoted inside the query text.
+    expect(arg).toContain("app.rls_bypass");
+    expect(arg).toContain("'on'");
+    // It is a pure bypass — it must NOT set tenant scope GUCs.
+    expect(arg).not.toContain("app.current_org_id");
   });
 });
