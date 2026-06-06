@@ -12,8 +12,6 @@ import {
   Info,
   Zap,
   Plus,
-  CheckCircle2,
-  PauseCircle,
   Calendar,
   Webhook,
   Play,

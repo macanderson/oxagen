@@ -127,7 +127,8 @@ function AgentCard({ agent }: { agent: MockAgent }) {
           <div className="flex flex-col gap-0.5 min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-foreground">{agent.name}</span>
-              <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${status.badgeClass}`}>
+              <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${status.badgeClass}`}>
+                <StatusIcon className={`h-3 w-3 ${status.className}`} aria-hidden="true" />
                 {status.label}
               </span>
             </div>

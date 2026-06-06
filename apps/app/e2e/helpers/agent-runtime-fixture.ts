@@ -1,7 +1,5 @@
 import postgres from "postgres";
 import neo4j, { type Driver, type Session } from "neo4j-driver";
-import { randomBytes, scrypt } from "node:crypto";
-import { E2E_TEST_PASSWORD } from "./auth";
 
 // Test fixture for the agent runtime E2E. Manages a deterministic tenant +
 // workspace + user + auth session, plus the execution/approval/fanout rows
@@ -34,10 +32,6 @@ export interface AgentRuntimeFixture {
   workspaceId: string;
   userId: string;
   sessionToken: string;
-  /** Email address for the seeded user — use with `loginAs(context, email, password)`. */
-  userEmail: string;
-  /** Plain-text password for the seeded user — use with `loginAs(context, email, password)`. */
-  password: string;
   orgSlug: string;
   workspaceSlug: string;
   queryDbState(): Promise<DbState>;
