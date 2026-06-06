@@ -1,0 +1,1629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SOC2 Simplification — Oxagen</title>
+  <style>
+    /* ── Design tokens (Oxagen brand) ──────────────────────────────────────── */
+    :root {
+      --bg:          #0b0e14;
+      --bg-card:     #10141e;
+      --bg-glass:    rgba(16, 20, 30, 0.75);
+      --border:      rgba(99, 120, 180, 0.18);
+      --border-glow: rgba(99, 102, 241, 0.35);
+      --text:        #e8ecf3;
+      --text-muted:  #7b89a8;
+      --text-dim:    #4a5568;
+      --indigo:      #6366f1;
+      --indigo-light:#818cf8;
+      --teal:        #14b8a6;
+      --green:       #22c55e;
+      --amber:       #f59e0b;
+      --red:         #ef4444;
+      --grad:        linear-gradient(135deg, #6366f1 0%, #14b8a6 60%, #22c55e 100%);
+      --grad-ring:   linear-gradient(135deg, #6366f1, #14b8a6, #22c55e);
+      --font:        -apple-system, 'Inter', 'Helvetica Neue', sans-serif;
+      --mono:        'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      font-size: 15px;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────────────── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 28px; }
+
+    /* ── Header / hero ───────────────────────────────────────────────────── */
+    .hero {
+      position: relative;
+      padding: 56px 0 40px;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -120px; left: 50%; transform: translateX(-50%);
+      width: 700px; height: 400px;
+      background: radial-gradient(ellipse at center, rgba(99,102,241,0.13) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 4px 14px; border-radius: 99px;
+      border: 1px solid var(--border-glow);
+      background: rgba(99,102,241,0.08);
+      font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--indigo-light);
+      margin-bottom: 20px;
+    }
+    .hero-badge .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--grad);
+    }
+    .hero h1 {
+      font-size: 34px; font-weight: 800; letter-spacing: -0.02em;
+      background: var(--grad); -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent; background-clip: text;
+      line-height: 1.15; margin-bottom: 14px;
+    }
+    .hero-sub {
+      color: var(--text-muted); font-size: 15px; max-width: 620px;
+      line-height: 1.7;
+    }
+    .hero-meta {
+      display: flex; gap: 24px; margin-top: 20px; flex-wrap: wrap;
+    }
+    .hero-meta span {
+      font-size: 12px; color: var(--text-dim);
+    }
+    .hero-meta strong { color: var(--text-muted); }
+
+    /* ── Ring accent ─────────────────────────────────────────────────────── */
+    .ring-accent {
+      display: inline-block;
+      width: 48px; height: 48px; border-radius: 50%;
+      background: var(--grad-ring);
+      padding: 2px;
+      margin-bottom: 18px;
+    }
+    .ring-accent-inner {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: var(--bg-card);
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── Section chrome ──────────────────────────────────────────────────── */
+    section { margin-bottom: 56px; }
+
+    .section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--indigo-light);
+      margin-bottom: 8px;
+    }
+    .section-title {
+      font-size: 22px; font-weight: 700; letter-spacing: -0.015em;
+      color: var(--text); margin-bottom: 18px;
+    }
+    .section-desc {
+      color: var(--text-muted); font-size: 14px; max-width: 740px;
+      margin-bottom: 28px; line-height: 1.75;
+    }
+
+    hr.divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 48px 0;
+    }
+
+    /* ── Card / glass ────────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px 28px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(99,102,241,0.04) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+    .card-sm {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .card-title {
+      font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 6px;
+    }
+    .card-body { font-size: 13px; color: var(--text-muted); line-height: 1.65; }
+
+    /* ── Status badges ───────────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 2px 10px; border-radius: 99px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+    }
+    .badge-done    { background: rgba(34,197,94,0.12);  color: #4ade80; border: 1px solid rgba(34,197,94,0.25); }
+    .badge-open    { background: rgba(239,68,68,0.10);  color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
+    .badge-inprog  { background: rgba(245,158,11,0.10); color: #fbbf24; border: 1px solid rgba(245,158,11,0.25); }
+    .badge-planned { background: rgba(99,102,241,0.10); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.25); }
+    .badge-new     { background: rgba(20,184,166,0.10); color: #2dd4bf; border: 1px solid rgba(20,184,166,0.25); }
+
+    /* ── Priority pills ──────────────────────────────────────────────────── */
+    .prio { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .prio-p0 { background: rgba(239,68,68,0.15); color: #f87171; }
+    .prio-p1 { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .prio-p2 { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+    .prio-p3 { background: rgba(100,116,139,0.15); color: #94a3b8; }
+
+    /* ── Effort pills ────────────────────────────────────────────────────── */
+    .effort { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 4px; background: rgba(99,102,241,0.10); color: var(--indigo-light); }
+
+    /* ── Current-state map table ─────────────────────────────────────────── */
+    .map-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .map-table th {
+      text-align: left; padding: 10px 14px;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+      background: rgba(99,102,241,0.04);
+    }
+    .map-table td {
+      padding: 12px 14px; border-bottom: 1px solid rgba(99,120,180,0.10);
+      vertical-align: top; color: var(--text-muted);
+    }
+    .map-table tr:last-child td { border-bottom: none; }
+    .map-table tr:hover td { background: rgba(99,102,241,0.03); }
+    .mono { font-family: var(--mono); font-size: 12px; color: var(--teal); }
+    .file-ref { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+
+    /* ── Recommendation cards ────────────────────────────────────────────── */
+    .rec {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 18px;
+      background: var(--bg-card);
+    }
+    .rec-header {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 20px 24px; border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, transparent 80%);
+    }
+    .rec-num {
+      flex-shrink: 0;
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--grad); display: flex; align-items: center;
+      justify-content: center; font-size: 13px; font-weight: 800; color: #fff;
+    }
+    .rec-title-wrap { flex: 1; }
+    .rec-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .rec-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+    .rec-body { padding: 20px 24px; }
+    .rec-section { margin-bottom: 14px; }
+    .rec-section-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px;
+    }
+    .rec-section p { font-size: 13px; color: var(--text-muted); line-height: 1.7; }
+    .rec-section ul { font-size: 13px; color: var(--text-muted); line-height: 1.7; padding-left: 18px; }
+    .rec-section ul li { margin-bottom: 4px; }
+    .oxa-link {
+      color: var(--indigo-light); text-decoration: none; font-size: 12px;
+      font-family: var(--mono); font-weight: 600;
+    }
+    .oxa-link:hover { color: var(--teal); }
+
+    /* ── Executive summary list ──────────────────────────────────────────── */
+    .summary-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+    .summary-list li {
+      display: flex; gap: 14px; align-items: flex-start;
+      font-size: 14px; color: var(--text-muted);
+    }
+    .summary-list li .icon {
+      flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px;
+    }
+    .icon-done { background: rgba(34,197,94,0.15); }
+    .icon-warn { background: rgba(245,158,11,0.15); }
+    .icon-crit { background: rgba(239,68,68,0.15); }
+    .icon-new  { background: rgba(20,184,166,0.15); }
+
+    /* ── Stat row ────────────────────────────────────────────────────────── */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px; margin-bottom: 32px;
+    }
+    .stat-tile {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 18px;
+    }
+    .stat-value { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; }
+    .stat-green { color: var(--green); }
+    .stat-amber { color: var(--amber); }
+    .stat-red   { color: var(--red); }
+    .stat-indigo{ color: var(--indigo-light); }
+    .stat-teal  { color: var(--teal); }
+    .stat-label { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+
+    /* ── UI Mocks ────────────────────────────────────────────────────────── */
+    .mock-frame {
+      border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden;
+      background: #0d1117; margin: 28px 0;
+    }
+    .mock-titlebar {
+      background: #161b2e;
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .mock-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .mock-dot-r { background: #ff5f56; }
+    .mock-dot-y { background: #ffbd2e; }
+    .mock-dot-g { background: #27c93f; }
+    .mock-titlebar-label {
+      font-size: 12px; color: var(--text-dim);
+      font-family: var(--mono); margin-left: 6px;
+    }
+    .mock-body { padding: 20px 24px; }
+
+    /* Sidebar + content mock */
+    .mock-shell {
+      display: flex; height: 460px;
+      background: #0b0e14;
+    }
+    .mock-sidebar {
+      width: 190px; border-right: 1px solid var(--border);
+      background: #0e1220; padding: 16px 12px;
+      flex-shrink: 0;
+    }
+    .mock-sidebar-logo {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 20px; padding: 0 6px;
+    }
+    .mock-logo-ring {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--grad); display: flex;
+      align-items: center; justify-content: center;
+    }
+    .mock-logo-inner {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #0e1220;
+    }
+    .mock-sidebar-org { font-size: 12px; font-weight: 700; color: var(--text); }
+    .mock-nav-section { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin: 14px 6px 6px; }
+    .mock-nav-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px; border-radius: 8px;
+      font-size: 12px; color: var(--text-muted);
+      margin-bottom: 2px; cursor: default;
+    }
+    .mock-nav-item.active {
+      background: rgba(99,102,241,0.15);
+      color: var(--indigo-light);
+    }
+    .mock-nav-item .ni-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: currentColor; flex-shrink: 0;
+    }
+    .mock-content {
+      flex: 1; overflow: hidden; padding: 20px 24px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* Header row */
+    .mock-content-header {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .mock-content-title { font-size: 17px; font-weight: 800; color: var(--text); }
+    .mock-btn {
+      padding: 6px 14px; border-radius: 8px;
+      font-size: 12px; font-weight: 600;
+      background: rgba(99,102,241,0.18);
+      color: var(--indigo-light);
+      border: 1px solid rgba(99,102,241,0.30);
+      cursor: default; white-space: nowrap;
+    }
+    .mock-btn-sm {
+      padding: 4px 10px; border-radius: 6px;
+      font-size: 11px; font-weight: 600;
+      background: rgba(20,184,166,0.12);
+      color: var(--teal);
+      border: 1px solid rgba(20,184,166,0.25);
+      cursor: default;
+    }
+
+    /* Control posture grid */
+    .control-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    }
+    .control-tile {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 14px;
+    }
+    .control-tile .ct-label { font-size: 10px; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+    .control-tile .ct-val { font-size: 20px; font-weight: 800; margin-bottom: 2px; }
+    .ct-green  { color: var(--green); }
+    .ct-amber  { color: var(--amber); }
+    .ct-red    { color: var(--red); }
+    .ct-teal   { color: var(--teal); }
+    .control-tile .ct-sub { font-size: 10px; color: var(--text-dim); }
+
+    /* Filter bar mock */
+    .mock-filter-bar {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      padding: 10px 14px;
+      background: rgba(99,102,241,0.04);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .mock-filter-chip {
+      padding: 4px 10px; border-radius: 6px;
+      font-size: 11px; background: rgba(99,102,241,0.12);
+      border: 1px solid rgba(99,102,241,0.25);
+      color: var(--indigo-light); font-weight: 500;
+    }
+    .mock-filter-chip.active {
+      background: rgba(99,102,241,0.25);
+      color: #c7d2fe;
+    }
+    .mock-search {
+      flex: 1; background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 6px; padding: 4px 10px;
+      font-size: 11px; color: var(--text-dim);
+    }
+
+    /* Audit row */
+    .mock-audit-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px; border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+      font-size: 11px;
+    }
+    .mar-type { font-family: var(--mono); color: var(--teal); font-size: 11px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mar-actor { color: var(--text-dim); width: 90px; text-align: right; flex-shrink: 0; }
+    .mar-time  { color: var(--text-dim); width: 70px; text-align: right; flex-shrink: 0; font-size: 10px; }
+
+    /* Access review mock */
+    .mock-ar-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px; border-radius: 6px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      font-size: 11px; margin-bottom: 6px;
+    }
+    .mar-name { flex: 1; color: var(--text); font-weight: 500; }
+    .mar-role { width: 60px; color: var(--text-dim); text-align: right; }
+    .mar-last { width: 80px; color: var(--text-dim); text-align: right; font-size: 10px; }
+    .flag-stale { background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.25); padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+    .flag-ok { background: rgba(34,197,94,0.08); color: #4ade80; border: 1px solid rgba(34,197,94,0.20); padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+
+    /* Evidence timeline */
+    .mock-timeline { display: flex; flex-direction: column; gap: 0; }
+    .mock-tl-item {
+      display: flex; gap: 14px; align-items: flex-start;
+      padding: 10px 0; border-bottom: 1px solid rgba(99,120,180,0.08);
+    }
+    .mock-tl-item:last-child { border-bottom: none; }
+    .tl-icon {
+      flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px;
+    }
+    .tl-icon-g { background: rgba(34,197,94,0.12); color: var(--green); }
+    .tl-icon-a { background: rgba(245,158,11,0.12); color: var(--amber); }
+    .tl-icon-i { background: rgba(99,102,241,0.12); color: var(--indigo-light); }
+    .tl-body { flex: 1; }
+    .tl-title { font-size: 12px; font-weight: 600; color: var(--text); }
+    .tl-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+    .tl-time { font-size: 10px; color: var(--text-dim); flex-shrink: 0; width: 70px; text-align: right; }
+
+    /* Progress bar */
+    .progress-bar-wrap { margin: 8px 0 0; }
+    .progress-bar-track { height: 5px; border-radius: 99px; background: rgba(99,102,241,0.12); overflow: hidden; }
+    .progress-bar-fill { height: 100%; border-radius: 99px; background: var(--grad); }
+
+    /* ── Roadmap ─────────────────────────────────────────────────────────── */
+    .roadmap-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+    }
+    .roadmap-phase {
+      border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+    }
+    .roadmap-phase-header {
+      padding: 12px 16px;
+      font-size: 13px; font-weight: 700;
+    }
+    .rp-done   { background: rgba(34,197,94,0.10); border-bottom: 1px solid rgba(34,197,94,0.15); color: var(--green); }
+    .rp-active { background: rgba(245,158,11,0.10); border-bottom: 1px solid rgba(245,158,11,0.15); color: var(--amber); }
+    .rp-next   { background: rgba(99,102,241,0.10); border-bottom: 1px solid rgba(99,102,241,0.15); color: var(--indigo-light); }
+    .rp-future { background: rgba(100,116,139,0.08); border-bottom: 1px solid var(--border); color: var(--text-muted); }
+    .roadmap-phase ul {
+      list-style: none; padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .roadmap-phase ul li {
+      font-size: 12px; color: var(--text-muted);
+      display: flex; align-items: flex-start; gap: 6px; line-height: 1.5;
+    }
+    .roadmap-phase ul li::before { content: '·'; color: var(--text-dim); flex-shrink: 0; }
+
+    /* ── TOC ─────────────────────────────────────────────────────────────── */
+    .toc {
+      position: sticky; top: 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 18px;
+      font-size: 13px;
+    }
+    .toc-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px; }
+    .toc a { display: block; color: var(--text-muted); text-decoration: none; padding: 4px 0; font-size: 12px; }
+    .toc a:hover { color: var(--indigo-light); }
+    .toc a.sub { padding-left: 14px; color: var(--text-dim); font-size: 11px; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 260px; gap: 32px; align-items: start; }
+    @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } .toc { display: none; } }
+
+    /* ── Footer ──────────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 0;
+      color: var(--text-dim); font-size: 12px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Hero ──────────────────────────────────────────────────────────────── -->
+<div class="hero">
+  <div class="container">
+    <div class="hero-badge"><span class="dot"></span>Internal — Architecture</div>
+    <h1>SOC2 Simplification<br>Recommendations</h1>
+    <p class="hero-sub">
+      A concrete, codebase-specific analysis of how Oxagen can consolidate,
+      automate, and de-duplicate its compliance surface — covering audit logging,
+      access reviews, control monitoring, evidence collection, and the admin
+      investigation layer. Derived from live Linear tickets OXA-1414..1559
+      and direct code inspection.
+    </p>
+    <div class="hero-meta">
+      <span><strong>Generated:</strong> 2026-06-06</span>
+      <span><strong>Scope:</strong> oxagen-monorepo (oxagen-v2)</span>
+      <span><strong>Controls mapped:</strong> CC6.1, CC6.2, CC6.3, CC6.7, CC7.2, CC9.2, A1.2</span>
+      <span><strong>Status:</strong> 14/20 foundation blockers Done · 6 Open</span>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="two-col">
+    <!-- ── Main content ───────────────────────────────────────────────────── -->
+    <main>
+
+<!-- ═══ 1. EXECUTIVE SUMMARY ══════════════════════════════════════════════ -->
+<section id="exec-summary">
+  <div class="section-label">01 — Executive Summary</div>
+  <div class="section-title">Where Oxagen stands and what to simplify</div>
+
+  <div class="stat-row">
+    <div class="stat-tile">
+      <div class="stat-value stat-green">14</div>
+      <div class="stat-label">Foundation blockers Done</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-value stat-amber">3</div>
+      <div class="stat-label">Urgent / In Progress</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-value stat-red">3</div>
+      <div class="stat-label">Open (Backlog)</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-value stat-teal">5</div>
+      <div class="stat-label">Net-new simplifications</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-value stat-indigo">7yr</div>
+      <div class="stat-label">Audit retention (enforced)</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px;">
+    <ul class="summary-list">
+      <li>
+        <span class="icon icon-done">&#10003;</span>
+        <div><strong>Foundations layer is strong.</strong> All 14 OXA-1414..1433 foundation tickets are Done: deps pinned, lint real, CI split, MCP authenticated, RLS enforced (OXA-1515 Done 2026-06-06), OAuth tokens encrypted, billing schema integrity, sandbox digest-pinned, pg_notify parameterized, security_events table with 7-year partitioned retention.</div>
+      </li>
+      <li>
+        <span class="icon icon-warn">&#9888;</span>
+        <div><strong>Audit emission is incomplete.</strong> The <code class="mono">security_events</code> schema and write helper exist (OXA-1422 Done), but only 4 of ~12 required call sites are wired: <code class="mono">org.member.add/remove/role.change</code> handlers and the auth hooks. Billing credit grants and Stripe webhooks still do not emit rows (OXA-1523 Backlog).</div>
+      </li>
+      <li>
+        <span class="icon icon-warn">&#9888;</span>
+        <div><strong>Audit UI is a stub.</strong> The security/audit page renders 50 rows with no filters, no pagination, and no export. Auditors cannot use it to answer "show me all auth failures last quarter" or produce evidence exports (OXA-1558 Backlog).</div>
+      </li>
+      <li>
+        <span class="icon icon-crit">&#9888;</span>
+        <div><strong>Admin app is unbuilt.</strong> <code class="mono">apps/admin</code> is a landing-page stub — no auth gate, no access-review surface, no cross-org incident investigation (OXA-1559 Backlog). SOC2 CC6.2/CC6.3 require a dedicated operator surface for periodic access reviews.</div>
+      </li>
+      <li>
+        <span class="icon icon-crit">&#9888;</span>
+        <div><strong>No automated access-review workflow.</strong> OXA-927 (quarterly access-review email) has never shipped. Manual discovery of stale API keys, over-privileged accounts, and active MCP sessions requires direct DB queries.</div>
+      </li>
+      <li>
+        <span class="icon icon-new">&#9670;</span>
+        <div><strong>Five net-new simplifications recommended.</strong> A unified <code class="mono">useSecurityEmit()</code> call-site registry, a control-posture dashboard, automated evidence bundles via existing Inngest cron, SIEM webhook push, and a single <code class="mono">packages/compliance</code> consolidation — eliminating the current three-package spread of security logic across <code class="mono">@oxagen/telemetry</code>, <code class="mono">@oxagen/database</code>, and scattered call sites.</div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ═══ 2. CURRENT-STATE MAP ═══════════════════════════════════════════════ -->
+<section id="current-state">
+  <div class="section-label">02 — Current-State Map</div>
+  <div class="section-title">SOC2 / security / compliance surface in this repo</div>
+  <p class="section-desc">
+    Every file, package, and page that contributes to or should contribute to
+    SOC2 evidence, access control, audit logging, or compliance automation.
+  </p>
+
+  <!-- 2a. Infra layer -->
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-title" style="margin-bottom:14px; color: var(--teal);">A · Persistence layer (Postgres + ClickHouse)</div>
+    <table class="map-table">
+      <thead>
+        <tr>
+          <th style="width:42%">File / Object</th>
+          <th style="width:28%">What it covers</th>
+          <th style="width:16%">SOC2 controls</th>
+          <th style="width:14%">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="file-ref">packages/database/src/schema/security.ts</span></td>
+          <td>Append-only <code class="mono">security.security_events</code> table; RANGE-partitioned by month; 7-year retention; DB-level CHECK constraint mirrors TS union</td>
+          <td>CC7.2, CC6.1</td>
+          <td><span class="badge badge-done">Done</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">packages/database/src/schema/iam.ts</span></td>
+          <td><code class="mono">principal_role_assignments</code>, org membership, org roles</td>
+          <td>CC6.2, CC6.3</td>
+          <td><span class="badge badge-done">Done</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">packages/database/src/schema/auth.ts</span></td>
+          <td>Better Auth tables: <code class="mono">sessions</code>, <code class="mono">accounts</code> (OAuth tokens encrypted via OXA-1420), <code class="mono">rate_limit</code></td>
+          <td>CC6.1, CC6.7</td>
+          <td><span class="badge badge-done">Done</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">packages/database/src/schema/billing.ts</span></td>
+          <td>Credit ledger (append-only), subscriptions, Stripe events; FKs + CHECK constraints (OXA-1424)</td>
+          <td>CC6.1 (billing authz)</td>
+          <td><span class="badge badge-done">Done</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">Inngest cron — security.audit-partition-rollover</span><br><span class="file-ref">packages/inngest-functions/src/functions/security.audit-partition-rollover.ts</span></td>
+          <td>Creates next 2 monthly partitions; drops partitions older than 7 years; runs 1st of each month at 03:00 UTC</td>
+          <td>CC7.2 (retention)</td>
+          <td><span class="badge badge-done">Done</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">ClickHouse (telemetry) — execution_events, tool_invocations</span></td>
+          <td>Append-only runtime telemetry; 90-day retention; token usage, latency, surface origin</td>
+          <td>CC7.2 (monitoring)</td>
+          <td><span class="badge badge-done">Done</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 2b. Write helpers -->
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-title" style="margin-bottom:14px; color: var(--teal);">B · Audit write / telemetry helpers</div>
+    <table class="map-table">
+      <thead>
+        <tr>
+          <th style="width:42%">File</th>
+          <th style="width:28%">Purpose</th>
+          <th style="width:14%">Coverage</th>
+          <th style="width:16%">Gap?</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="file-ref">packages/telemetry/src/security.ts</span></td>
+          <td><code class="mono">recordSecurityEvent()</code> + async variant; <code class="mono">SecurityEventInput</code> type; fire-and-forget with stderr fallback</td>
+          <td>Emit helper</td>
+          <td><span class="badge badge-done">Complete</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">packages/database/src/security.ts</span></td>
+          <td><code class="mono">makeSecurityEventInserter()</code>; wires Drizzle insert through <code class="mono">withSystemDb</code> (RLS bypass — audit must succeed even pre-scope)</td>
+          <td>DB adapter</td>
+          <td><span class="badge badge-done">Complete</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">packages/auth/src/auth.ts</span></td>
+          <td>Better Auth hooks emit <code class="mono">auth.sign_in</code>, <code class="mono">auth.sign_out</code>, <code class="mono">auth.token_refreshed</code>, <code class="mono">auth.sign_in_failed</code>; rate limiting via DB-backed table</td>
+          <td>Auth lifecycle</td>
+          <td><span class="badge badge-done">Complete</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">packages/handlers/src/org.member.add.ts<br>org.member.remove.ts, org.member.role.change.ts</span></td>
+          <td>Emit <code class="mono">org.member_invited</code>, <code class="mono">org.member_removed</code>, <code class="mono">org.role_changed</code></td>
+          <td>Org mutations</td>
+          <td><span class="badge badge-done">Complete</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">packages/billing/src/grants.ts<br>packages/billing/src/webhooks.ts</span></td>
+          <td>Credit grants and Stripe subscription mutations — should emit billing.* security events</td>
+          <td>Billing mutations</td>
+          <td><span class="badge badge-open">Missing — OXA-1523</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">apps/api/src/routes/v1/* (API key routes)</span></td>
+          <td>API key create/revoke routes — should emit <code class="mono">api_key.created</code>, <code class="mono">api_key.revoked</code></td>
+          <td>API key lifecycle</td>
+          <td><span class="badge badge-open">Not wired</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">apps/api/src/bootstrap.ts</span></td>
+          <td>Initialises <code class="mono">makeSecurityEventInserter()</code> and registers emitter on API startup</td>
+          <td>Bootstrap</td>
+          <td><span class="badge badge-done">Complete</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">apps/mcp/src/middleware.ts</span></td>
+          <td>MCP auth middleware — should emit <code class="mono">api_key.used</code> on successful MCP calls</td>
+          <td>MCP usage</td>
+          <td><span class="badge badge-open">Not wired</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 2c. UI layer -->
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-title" style="margin-bottom:14px; color: var(--teal);">C · App UI surfaces</div>
+    <table class="map-table">
+      <thead>
+        <tr>
+          <th style="width:42%">Route / File</th>
+          <th style="width:35%">What it shows</th>
+          <th style="width:23%">State</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="file-ref">apps/app/src/app/[orgSlug]/security/audit/page.tsx</span></td>
+          <td>Last 50 security_events rows — no filter, no pagination, no export</td>
+          <td><span class="badge badge-inprog">Partial — OXA-1558</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">apps/app/src/app/[orgSlug]/security/compliance/page.tsx</span></td>
+          <td>"Coming soon" placeholder — planned control-status tracking + evidence export</td>
+          <td><span class="badge badge-open">Stub</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">apps/app/src/app/[orgSlug]/security/incidents/page.tsx</span></td>
+          <td>"Coming soon" placeholder — planned incident triage and timeline</td>
+          <td><span class="badge badge-open">Stub</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">apps/app/src/app/[orgSlug]/security/sso/page.tsx<br>mfa/page.tsx, scim/page.tsx</span></td>
+          <td>SSO / MFA / SCIM configuration surfaces (content unknown — separate from audit trail)</td>
+          <td><span class="badge badge-planned">Exists</span></td>
+        </tr>
+        <tr>
+          <td><span class="file-ref">apps/admin (entire app)</span></td>
+          <td>Operator dashboard — no auth gate, no routes beyond landing page</td>
+          <td><span class="badge badge-open">Stub — OXA-1559</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 2d. Policy / tenancy layer -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:14px; color: var(--teal);">D · Tenancy / IAM enforcement</div>
+    <table class="map-table">
+      <thead>
+        <tr>
+          <th style="width:42%">Mechanism</th>
+          <th style="width:35%">Where it lives</th>
+          <th style="width:23%">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Postgres RLS — per-tenant row isolation</td>
+          <td><span class="file-ref">packages/tenancy/src/scope.ts<br>packages/database/src/tenant.ts</span><br><code class="mono">withTenantDb / withSystemDb / scopedSession</code></td>
+          <td><span class="badge badge-done">Enforced in prod — OXA-1515</span></td>
+        </tr>
+        <tr>
+          <td>Auth rate limiting</td>
+          <td><span class="file-ref">packages/auth/src/auth.ts</span><br>DB-backed Better Auth rateLimit, migration 0009</td>
+          <td><span class="badge badge-done">Done — OXA-1555 (prod apply pending)</span></td>
+        </tr>
+        <tr>
+          <td>MCP authentication</td>
+          <td><span class="file-ref">apps/mcp/src/middleware.ts</span></td>
+          <td><span class="badge badge-done">Done — OXA-1419</span></td>
+        </tr>
+        <tr>
+          <td>Billing authz (assertBillingManager)</td>
+          <td><span class="file-ref">apps/app/src/app/[orgSlug]/billing/actions.ts</span></td>
+          <td><span class="badge badge-done">Done</span></td>
+        </tr>
+        <tr>
+          <td>Admin app auth gate</td>
+          <td><span class="file-ref">apps/admin/src/</span> (to be created)</td>
+          <td><span class="badge badge-open">Not built — OXA-1559</span></td>
+        </tr>
+        <tr>
+          <td>Subprocessor list + DPA register</td>
+          <td>External artifact (docs site / legal)</td>
+          <td><span class="badge badge-inprog">Backlog — OXA-926</span></td>
+        </tr>
+        <tr>
+          <td>Backup restore test runbook</td>
+          <td>External runbook artifact</td>
+          <td><span class="badge badge-inprog">Backlog — OXA-928</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ═══ 3. RECOMMENDATIONS ════════════════════════════════════════════════ -->
+<section id="recommendations">
+  <div class="section-label">03 — Recommendations</div>
+  <div class="section-title">Prioritised simplification opportunities</div>
+  <p class="section-desc">
+    Each recommendation addresses a concrete duplication, gap, or over-complex
+    flow identified in this codebase. Existing OXA tickets are referenced where
+    applicable; net-new tickets (N-1 through N-5) are proposed below and filed
+    as sub-issues of the parent epic.
+  </p>
+
+  <!-- REC 1 -->
+  <div class="rec" id="rec-1">
+    <div class="rec-header">
+      <div class="rec-num">1</div>
+      <div class="rec-title-wrap">
+        <div class="rec-title">Consolidate audit emit into one call-site registry</div>
+        <div class="rec-meta">
+          <span class="prio prio-p0">P0</span>
+          <span class="effort">M (3)</span>
+          <span class="badge badge-planned">New ticket: OXA-N1</span>
+          <span class="badge badge-open">Blocks OXA-1523</span>
+        </div>
+      </div>
+    </div>
+    <div class="rec-body">
+      <div class="rec-section">
+        <div class="rec-section-label">Problem</div>
+        <p>
+          <code class="mono">SECURITY_EVENT_TYPES</code> is defined identically in two files:
+          <code class="mono">packages/database/src/schema/security.ts</code> and
+          <code class="mono">packages/telemetry/src/security.ts</code>.
+          Adding a new event type requires a three-way sync: the TS union, the DB CHECK constraint DDL,
+          and now also the Inngest partition cron comment. Call sites are found via grep — there is no
+          registry, no lint rule, and no way to know which mutations are missing without reading every handler.
+          OXA-1523 enumerates 5 missing call sites; there are at least 3 more (API-key routes, MCP middleware, capability kernel denied path enrichment with IP/UA).
+        </p>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Proposed change</div>
+        <ul>
+          <li>Create <code class="mono">packages/compliance/src/audit-events.ts</code> as the single source of truth for <code class="mono">SECURITY_EVENT_TYPES</code>. Both the Drizzle schema and the telemetry helper import from here. One edit = one place.</li>
+          <li>Add an ESLint rule (or a vitest invariant test in <code class="mono">packages/compliance</code>) that enumerates all handlers registered in <code class="mono">packages/handlers</code> and <code class="mono">packages/billing</code> and asserts each calls <code class="mono">recordSecurityEvent</code> or is explicitly exempted with a reason comment.</li>
+          <li>Add a <code class="mono">useSecurityEmit()</code> wrapper in the call-site registry that injects the inserter from DI context so callers do not need to construct it manually — reducing the per-call boilerplate from 3 lines to 1.</li>
+          <li>Wire the remaining 5+ missing call sites (billing grants, Stripe webhooks, API key create/revoke, MCP middleware api_key.used) as part of this ticket, consolidating OXA-1523 into this work.</li>
+        </ul>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Risk</div>
+        <p>Low. Additive; existing emit paths are unchanged. The lint rule is warn-only until all call sites are wired.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- REC 2 -->
+  <div class="rec" id="rec-2">
+    <div class="rec-header">
+      <div class="rec-num">2</div>
+      <div class="rec-title-wrap">
+        <div class="rec-title">Replace stub audit UI with filterable viewer + signed export</div>
+        <div class="rec-meta">
+          <span class="prio prio-p0">P0</span>
+          <span class="effort">L (5)</span>
+          <span class="badge badge-open">OXA-1558 (Backlog)</span>
+        </div>
+      </div>
+    </div>
+    <div class="rec-body">
+      <div class="rec-section">
+        <div class="rec-section-label">Problem</div>
+        <p>
+          The current audit page (<code class="mono">apps/app/src/app/[orgSlug]/security/audit/page.tsx</code>)
+          renders exactly 50 rows with no filter controls, no pagination, and no export. An auditor
+          asking "show me all failed sign-ins from CIDR 10.x in Q1" cannot answer that from this UI.
+          The compliance page is a "Coming soon" badge. There is no SIEM export path.
+          This is the most visible SOC2 gap for any enterprise buyer doing due diligence.
+        </p>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Proposed change (already detailed in OXA-1558)</div>
+        <ul>
+          <li>Replace static RSC page with filterable interactive viewer: <code class="mono">event_type</code> multi-select, <code class="mono">actor_id</code> picker, date-range, free-text. Cursor pagination (100/page), URL-encoded filter state.</li>
+          <li>Row drill-down panel showing full event context including <code class="mono">ip</code>, <code class="mono">user_agent</code>, <code class="mono">request_id</code>.</li>
+          <li>Signed NDJSON/CSV export endpoint gated to owner/admin role; HMAC-SHA256 signature header enables auditors to verify export integrity without trusting the download channel.</li>
+          <li>Reuse the same filter components in the workspace-scoped audit view and in the admin cross-org view (OXA-1559).</li>
+        </ul>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Simplification angle</div>
+        <p>
+          Build the viewer components once in <code class="mono">apps/app/src/app/[orgSlug]/security/audit/_components/</code>,
+          then reuse in the admin app's audit route. Avoid duplicating the filter/pagination logic.
+          The compliance and incidents stub pages can be wired to the same event stream with different default filters
+          (e.g. compliance = billing.* events; incidents = capability.invoke_denied + auth.sign_in_failed spikes)
+          rather than building three separate data fetching paths.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- REC 3 -->
+  <div class="rec" id="rec-3">
+    <div class="rec-header">
+      <div class="rec-num">3</div>
+      <div class="rec-title-wrap">
+        <div class="rec-title">Build the admin app auth gate + access-review surface first</div>
+        <div class="rec-meta">
+          <span class="prio prio-p0">P0</span>
+          <span class="effort">XL (8)</span>
+          <span class="badge badge-open">OXA-1559 (Backlog)</span>
+        </div>
+      </div>
+    </div>
+    <div class="rec-body">
+      <div class="rec-section">
+        <div class="rec-section-label">Problem</div>
+        <p>
+          <code class="mono">apps/admin</code> is a landing-page stub with no authentication, no routes,
+          and no operator tooling. SOC2 CC6.2 / CC6.3 explicitly require periodic access reviews —
+          "who has what privileges, are any grants stale, are any accounts over-privileged?"
+          Today answering those questions requires direct Postgres queries against <code class="mono">principal_role_assignments</code>.
+          OXA-927 (quarterly access-review automation) has been in the backlog since May 2026.
+        </p>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Proposed change (already detailed in OXA-1559)</div>
+        <ul>
+          <li>Phase 1: Edge proxy + login page + <code class="mono">assertAdminUser()</code> helper gated to <code class="mono">@oxagen.ai</code> emails.</li>
+          <li>Phase 2: <code class="mono">/access-review</code> — paginated table of all orgs, per-org principal+role list, stale-grant flagging (last_active_at &gt; 90 days), CSV export as SOC2 evidence artifact. Satisfies OXA-927 without building a separate email job.</li>
+          <li>Phase 3: Admin audit viewer (uses the same components as the tenant-side viewer from Rec 2).</li>
+          <li>Phase 4: RBAC within admin (owner/editor/viewer, <code class="mono">mac@oxagen.ai</code> hardcoded owner).</li>
+        </ul>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Simplification: consolidate OXA-927 into OXA-1559</div>
+        <p>
+          The quarterly access-review email (OXA-927) can be replaced by the admin access-review page:
+          instead of generating and emailing a report, the admin app surfaces the same data on-demand and
+          the quarterly "drill" becomes "log in, export CSV, sign it, attach to the audit." One surface,
+          no email infrastructure, same evidence. Close OXA-927 as superseded by OXA-1559 Phase 2.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- REC 4 -->
+  <div class="rec" id="rec-4">
+    <div class="rec-header">
+      <div class="rec-num">4</div>
+      <div class="rec-title-wrap">
+        <div class="rec-title">Automate evidence-bundle generation via existing Inngest cron</div>
+        <div class="rec-meta">
+          <span class="prio prio-p1">P1</span>
+          <span class="effort">M (3)</span>
+          <span class="badge badge-new">New ticket: OXA-N2</span>
+        </div>
+      </div>
+    </div>
+    <div class="rec-body">
+      <div class="rec-section">
+        <div class="rec-section-label">Problem</div>
+        <p>
+          OXA-835 (<code class="mono">cap.governance.export_compliance_bundle</code>) is a Medium-priority
+          backlog ticket proposing a manual, on-demand evidence export. OXA-930 (SOC2 readiness epic)
+          has no automated evidence collection — an auditor asking for "the last 12 months of access
+          reviews, audit logs, and control-check outputs" requires manual assembly.
+          The partition rollover cron already runs monthly — it is the natural hook for automated
+          evidence snapshot generation.
+        </p>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Proposed change</div>
+        <ul>
+          <li>Extend <code class="mono">packages/inngest-functions/src/functions/security.audit-partition-rollover.ts</code> with a Step 3 that, after partition management, runs a monthly evidence snapshot: count of auth events, denied invocations, billing mutations, and access-review CSV for all active orgs.</li>
+          <li>Upload the snapshot to Vercel Blob (via <code class="mono">@oxagen/storage</code>) with a signed URL and write a reference row to a new <code class="mono">compliance_snapshots</code> table (Postgres, <code class="mono">security</code> schema, append-only).</li>
+          <li>The admin app's compliance page links to the last 12 snapshots — one-click download for auditors.</li>
+          <li>This replaces the proposed OXA-835 on-demand export with an automated one; OXA-835 can be closed as superseded.</li>
+        </ul>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Risk</div>
+        <p>Low-medium. The cron already runs monthly with <code class="mono">withSystemDb</code>; adding a Step 3 is additive. The <code class="mono">compliance_snapshots</code> table is a new append-only table — no migration risk to existing data.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- REC 5 -->
+  <div class="rec" id="rec-5">
+    <div class="rec-header">
+      <div class="rec-num">5</div>
+      <div class="rec-title-wrap">
+        <div class="rec-title">Add a control-posture dashboard as the Security section landing page</div>
+        <div class="rec-meta">
+          <span class="prio prio-p1">P1</span>
+          <span class="effort">S (2)</span>
+          <span class="badge badge-new">New ticket: OXA-N3</span>
+        </div>
+      </div>
+    </div>
+    <div class="rec-body">
+      <div class="rec-section">
+        <div class="rec-section-label">Problem</div>
+        <p>
+          The Security section of the app currently redirects immediately to the audit tab.
+          There is no top-level summary of the org's compliance posture — no at-a-glance view of
+          "MFA enabled?", "SSO configured?", "last audit export date?", "recent auth failures count?",
+          "open incidents?". The compliance page is a "Coming soon" stub.
+          Customers on enterprise plans will open this page during their own security review; a stub
+          destroys trust before a contract is signed.
+        </p>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Proposed change</div>
+        <ul>
+          <li>Replace the <code class="mono">redirect(org.security.audit)</code> in <code class="mono">security/page.tsx</code> with a real control-posture dashboard (mock shown below in Section 4).</li>
+          <li>Display: MFA status, SSO status, active API key count, last 7-day auth failure count (from security_events), last export date, open incidents (count). All data available via existing DB queries — no new schema.</li>
+          <li>Wire the compliance tab to show control framework mappings (SOC2 CC6/CC7 control table) with a "pass/partial/fail" status derived from the live data — e.g. "CC6.1 Logical Access: PASS (MFA enabled, RLS enforced, rate-limit active)".</li>
+          <li>One RSC page pulling 5 cheap COUNT queries — zero backend complexity.</li>
+        </ul>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Risk</div>
+        <p>Very low. Pure read path. No new schema. Existing security_events index on (org_id, occurred_at) makes the 7-day count query fast.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- REC 6 (was N4) -->
+  <div class="rec" id="rec-6">
+    <div class="rec-header">
+      <div class="rec-num">6</div>
+      <div class="rec-title-wrap">
+        <div class="rec-title">Consolidate dual SECURITY_EVENT_TYPES definitions into packages/compliance</div>
+        <div class="rec-meta">
+          <span class="prio prio-p2">P2</span>
+          <span class="effort">XS (1)</span>
+          <span class="badge badge-new">New ticket: OXA-N4</span>
+        </div>
+      </div>
+    </div>
+    <div class="rec-body">
+      <div class="rec-section">
+        <div class="rec-section-label">Problem</div>
+        <p>
+          <code class="mono">SECURITY_EVENT_TYPES</code> and <code class="mono">SecurityEventType</code>
+          are copy-pasted identically in two packages:
+          <code class="mono">packages/database/src/schema/security.ts:32</code> and
+          <code class="mono">packages/telemetry/src/security.ts:49</code>.
+          Adding a new event type requires editing both files AND the migration SQL CHECK constraint.
+          One of these will drift from the other under time pressure.
+          Both packages re-export the type but import from their own local definition — there is no
+          cross-package dependency that would make a mismatch a compile error.
+        </p>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Proposed change</div>
+        <ul>
+          <li>Move the const-union and type into a new <code class="mono">packages/compliance/src/security-event-types.ts</code>. Both <code class="mono">@oxagen/database</code> and <code class="mono">@oxagen/telemetry</code> import from <code class="mono">@oxagen/compliance</code>.</li>
+          <li>The migration SQL CHECK constraint is generated programmatically from the TS union via a migration helper in <code class="mono">packages/compliance/src/db-check.ts</code> — eliminates the third copy.</li>
+          <li>Add a unit test in <code class="mono">packages/compliance</code> that asserts the generated CHECK clause matches the live DB constraint — catches drift before it reaches prod.</li>
+        </ul>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Risk</div>
+        <p>Very low. Pure refactor — no behaviour change, no schema change. New package is a thin dependency of both existing packages.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- REC 7 (was N5) -->
+  <div class="rec" id="rec-7">
+    <div class="rec-header">
+      <div class="rec-num">7</div>
+      <div class="rec-title-wrap">
+        <div class="rec-title">Add structured SIEM webhook push from Inngest (Splunk / Datadog / generic)</div>
+        <div class="rec-meta">
+          <span class="prio prio-p2">P2</span>
+          <span class="effort">S (2)</span>
+          <span class="badge badge-new">New ticket: OXA-N5</span>
+        </div>
+      </div>
+    </div>
+    <div class="rec-body">
+      <div class="rec-section">
+        <div class="rec-section-label">Problem</div>
+        <p>
+          Enterprise buyers running their own SIEM (Splunk, Datadog, Chronicle, Panther) will ask for
+          a push integration — they do not want to pull CSV exports manually. OXA-1558 specifies the
+          signed NDJSON export endpoint but explicitly defers "actual Splunk/Datadog push connectors".
+          Without this, the audit trail is only useful to Oxagen operators, not to the enterprise customer's
+          own security team.
+        </p>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Proposed change</div>
+        <ul>
+          <li>Add a new Inngest function <code class="mono">security.siem-push</code> triggered by each insert to <code class="mono">security_events</code> (via Inngest event from the DB insert hook, or a micro-batch cron every 5 minutes).</li>
+          <li>Org-level config in Postgres (<code class="mono">siem_webhooks</code> table: url, format, signing_secret, enabled). The function reads the config and POSTs NDJSON batches with HMAC-SHA256 signatures.</li>
+          <li>Supported formats: generic NDJSON (default), Splunk HEC, Datadog Logs API. Config screen in the Security &gt; Compliance tab.</li>
+          <li>No external service dependency at build time — the webhook URL is user-supplied. Zero new infrastructure for Oxagen to manage.</li>
+        </ul>
+      </div>
+      <div class="rec-section">
+        <div class="rec-section-label">Risk</div>
+        <p>Medium. Outbound webhook to user-supplied URLs is an SSRF surface — must validate the URL against an allowlist of schemes (https only, no private IP ranges) using <code class="mono">new URL()</code> + CIDR check. Retry logic needed for transient failures.</p>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<hr class="divider" />
+
+<!-- ═══ 4. UI MOCKS ═══════════════════════════════════════════════════════ -->
+<section id="ui-mocks">
+  <div class="section-label">04 — Static UI Mocks</div>
+  <div class="section-title">Proposed simplified surfaces — on-brand</div>
+
+  <!-- MOCK A: Control posture dashboard -->
+  <p class="section-desc">Mock A: Unified control-posture dashboard (Rec 5 — replaces current redirect-to-audit landing).</p>
+  <div class="mock-frame">
+    <div class="mock-titlebar">
+      <div class="mock-dot mock-dot-r"></div>
+      <div class="mock-dot mock-dot-y"></div>
+      <div class="mock-dot mock-dot-g"></div>
+      <span class="mock-titlebar-label">app.oxagen.ai / acme-corp / security</span>
+    </div>
+    <div class="mock-shell">
+      <!-- Sidebar -->
+      <div class="mock-sidebar">
+        <div class="mock-sidebar-logo">
+          <div class="mock-logo-ring"><div class="mock-logo-inner"></div></div>
+          <div class="mock-sidebar-org">Acme Corp</div>
+        </div>
+        <div class="mock-nav-section">Security</div>
+        <div class="mock-nav-item active"><span class="ni-dot"></span> Overview</div>
+        <div class="mock-nav-item"><span class="ni-dot"></span> Audit Log</div>
+        <div class="mock-nav-item"><span class="ni-dot"></span> Compliance</div>
+        <div class="mock-nav-item"><span class="ni-dot"></span> Incidents</div>
+        <div class="mock-nav-item"><span class="ni-dot"></span> SSO / MFA</div>
+        <div class="mock-nav-item"><span class="ni-dot"></span> SCIM</div>
+      </div>
+      <!-- Content -->
+      <div class="mock-content">
+        <div class="mock-content-header">
+          <div class="mock-content-title">Security Overview</div>
+          <div style="display:flex;gap:8px;">
+            <div class="mock-btn-sm">Export Report</div>
+            <div class="mock-btn">Run Access Review</div>
+          </div>
+        </div>
+
+        <!-- Control grid -->
+        <div class="control-grid">
+          <div class="control-tile">
+            <div class="ct-label">MFA</div>
+            <div class="ct-val ct-green">ON</div>
+            <div class="ct-sub">Enforced org-wide</div>
+          </div>
+          <div class="control-tile">
+            <div class="ct-label">SSO</div>
+            <div class="ct-val ct-amber">Partial</div>
+            <div class="ct-sub">Configured, not enforced</div>
+          </div>
+          <div class="control-tile">
+            <div class="ct-label">Auth Failures (7d)</div>
+            <div class="ct-val ct-red">12</div>
+            <div class="ct-sub">3 unique IPs</div>
+          </div>
+          <div class="control-tile">
+            <div class="ct-label">API Keys</div>
+            <div class="ct-val ct-teal">4</div>
+            <div class="ct-sub">0 stale (&gt;90d)</div>
+          </div>
+        </div>
+
+        <!-- SOC2 control table -->
+        <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:10px; overflow:hidden;">
+          <div style="padding:10px 14px; font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-dim); border-bottom:1px solid var(--border);">SOC 2 Control Status</div>
+          <div style="display:flex;flex-direction:column;gap:0;">
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(99,120,180,0.08);font-size:11px;">
+              <span style="font-family:var(--mono);color:var(--text-dim);width:48px;">CC6.1</span>
+              <span style="flex:1;color:var(--text-muted);">Logical access controls</span>
+              <span class="badge badge-done" style="font-size:10px;">PASS</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(99,120,180,0.08);font-size:11px;">
+              <span style="font-family:var(--mono);color:var(--text-dim);width:48px;">CC6.2</span>
+              <span style="flex:1;color:var(--text-muted);">Access provisioning + review</span>
+              <span class="badge badge-inprog" style="font-size:10px;">PARTIAL</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(99,120,180,0.08);font-size:11px;">
+              <span style="font-family:var(--mono);color:var(--text-dim);width:48px;">CC7.2</span>
+              <span style="flex:1;color:var(--text-muted);">Audit trail &amp; monitoring</span>
+              <span class="badge badge-inprog" style="font-size:10px;">PARTIAL</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;font-size:11px;">
+              <span style="font-family:var(--mono);color:var(--text-dim);width:48px;">A1.2</span>
+              <span style="flex:1;color:var(--text-muted);">Backup restore tested</span>
+              <span class="badge badge-open" style="font-size:10px;">OPEN</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Last export -->
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:10px;font-size:11px;">
+          <span style="color:var(--text-dim);">Last evidence snapshot:</span>
+          <span style="font-family:var(--mono);color:var(--teal);">2026-06-01 03:00 UTC</span>
+          <div class="mock-btn-sm" style="margin-left:auto;">Download</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MOCK B: Audit log viewer -->
+  <p class="section-desc" style="margin-top:32px;">Mock B: Filterable audit log viewer with signed export (Rec 2 — replaces static 50-row table).</p>
+  <div class="mock-frame">
+    <div class="mock-titlebar">
+      <div class="mock-dot mock-dot-r"></div>
+      <div class="mock-dot mock-dot-y"></div>
+      <div class="mock-dot mock-dot-g"></div>
+      <span class="mock-titlebar-label">app.oxagen.ai / acme-corp / security / audit</span>
+    </div>
+    <div class="mock-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-size:15px;font-weight:800;color:var(--text);">Audit Log</div>
+        <div style="display:flex;gap:8px;">
+          <div class="mock-btn-sm">NDJSON</div>
+          <div class="mock-btn">Export signed CSV</div>
+        </div>
+      </div>
+
+      <div class="mock-filter-bar" style="margin-bottom:12px;">
+        <div class="mock-filter-chip active">All events</div>
+        <div class="mock-filter-chip">auth.*</div>
+        <div class="mock-filter-chip">billing.*</div>
+        <div class="mock-filter-chip">org.*</div>
+        <div class="mock-filter-chip">capability.*</div>
+        <div class="mock-search">Filter by actor, IP, request ID...</div>
+        <div class="mock-filter-chip" style="background:rgba(20,184,166,0.08);color:var(--teal);border-color:rgba(20,184,166,0.2);">2026-05-01 → 2026-06-06</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <div class="mock-audit-row">
+          <span class="badge badge-done" style="font-size:10px;flex-shrink:0;">success</span>
+          <span class="mar-type">auth.sign_in</span>
+          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">mac@oxagen.ai</span>
+          <span class="mar-actor">203.0.113.42</span>
+          <span class="mar-time">2m ago</span>
+        </div>
+        <div class="mock-audit-row">
+          <span class="badge badge-open" style="font-size:10px;flex-shrink:0;">deny</span>
+          <span class="mar-type">capability.invoke_denied · agent.code.execute</span>
+          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">user-uuid-a1b2</span>
+          <span class="mar-actor">10.0.0.1</span>
+          <span class="mar-time">14m ago</span>
+        </div>
+        <div class="mock-audit-row">
+          <span class="badge badge-done" style="font-size:10px;flex-shrink:0;">success</span>
+          <span class="mar-type">billing.credits_purchased · $50.00</span>
+          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">mac@oxagen.ai</span>
+          <span class="mar-actor">—</span>
+          <span class="mar-time">1h ago</span>
+        </div>
+        <div class="mock-audit-row">
+          <span class="badge badge-open" style="font-size:10px;flex-shrink:0;">deny</span>
+          <span class="mar-type">auth.sign_in_failed</span>
+          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">unknown</span>
+          <span class="mar-actor">198.51.100.7</span>
+          <span class="mar-time">2h ago</span>
+        </div>
+        <div class="mock-audit-row">
+          <span class="badge badge-done" style="font-size:10px;flex-shrink:0;">success</span>
+          <span class="mar-type">org.member_invited · alice@acme.com → editor</span>
+          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">mac@oxagen.ai</span>
+          <span class="mar-actor">—</span>
+          <span class="mar-time">1d ago</span>
+        </div>
+        <div class="mock-audit-row">
+          <span class="badge badge-done" style="font-size:10px;flex-shrink:0;">success</span>
+          <span class="mar-type">api_key.created · key-prod-0001</span>
+          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">mac@oxagen.ai</span>
+          <span class="mar-actor">—</span>
+          <span class="mar-time">3d ago</span>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding:8px 4px;font-size:11px;color:var(--text-dim);">
+        <span>Page 1 of 47 &nbsp;·&nbsp; 4,632 events</span>
+        <div style="display:flex;gap:6px;">
+          <div class="mock-btn" style="padding:4px 10px;font-size:11px;">&larr; Prev</div>
+          <div class="mock-btn" style="padding:4px 10px;font-size:11px;">Next &rarr;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MOCK C: Access review -->
+  <p class="section-desc" style="margin-top:32px;">Mock C: Admin access-review surface — quarterly evidence artifact (Rec 3 / OXA-1559).</p>
+  <div class="mock-frame">
+    <div class="mock-titlebar">
+      <div class="mock-dot mock-dot-r"></div>
+      <div class="mock-dot mock-dot-y"></div>
+      <div class="mock-dot mock-dot-g"></div>
+      <span class="mock-titlebar-label">admin.oxagen.ai / access-review / acme-corp</span>
+    </div>
+    <div class="mock-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div>
+          <div style="font-size:15px;font-weight:800;color:var(--text);">Access Review — Acme Corp</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">Quarterly review · 2026-Q2 · 6 principals</div>
+        </div>
+        <div class="mock-btn">Export CSV (SOC2 evidence)</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+        <div class="control-tile"><div class="ct-label">Total Principals</div><div class="ct-val ct-teal">6</div><div class="ct-sub">2 users, 4 API keys</div></div>
+        <div class="control-tile"><div class="ct-label">Stale Grants</div><div class="ct-val ct-amber">1</div><div class="ct-sub">Last active &gt;90d</div></div>
+        <div class="control-tile"><div class="ct-label">Over-privileged</div><div class="ct-val ct-green">0</div><div class="ct-sub">No excess owner grants</div></div>
+      </div>
+
+      <div class="mock-ar-row" style="background:rgba(99,102,241,0.04);font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-dim);padding:6px 10px;">
+        <span class="mar-name">Principal</span>
+        <span class="mar-role">Role</span>
+        <span class="mar-last">Last active</span>
+        <span style="width:60px;text-align:right;">Status</span>
+      </div>
+      <div class="mock-ar-row">
+        <span class="mar-name">mac@oxagen.ai</span>
+        <span class="mar-role">owner</span>
+        <span class="mar-last">2 min ago</span>
+        <span class="flag-ok">Active</span>
+      </div>
+      <div class="mock-ar-row">
+        <span class="mar-name">alice@acme.com</span>
+        <span class="mar-role">editor</span>
+        <span class="mar-last">1d ago</span>
+        <span class="flag-ok">Active</span>
+      </div>
+      <div class="mock-ar-row">
+        <span class="mar-name">key-prod-0001 (API key)</span>
+        <span class="mar-role">member</span>
+        <span class="mar-last">3h ago</span>
+        <span class="flag-ok">Active</span>
+      </div>
+      <div class="mock-ar-row">
+        <span class="mar-name">key-ci-legacy (API key)</span>
+        <span class="mar-role">member</span>
+        <span class="mar-last">98d ago</span>
+        <span class="flag-stale">Stale</span>
+      </div>
+      <div class="mock-ar-row">
+        <span class="mar-name">bob@acme.com</span>
+        <span class="mar-role">viewer</span>
+        <span class="mar-last">12d ago</span>
+        <span class="flag-ok">Active</span>
+      </div>
+
+      <div style="margin-top:14px;padding:10px 14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.20);border-radius:8px;font-size:11px;color:#fbbf24;">
+        <strong>Action required:</strong> 1 stale grant detected. Recommend revoking <code style="font-family:var(--mono);">key-ci-legacy</code> — last used 98 days ago.
+      </div>
+    </div>
+  </div>
+
+  <!-- MOCK D: Evidence timeline -->
+  <p class="section-desc" style="margin-top:32px;">Mock D: Automated evidence timeline — monthly snapshots from Inngest cron (Rec 4 / OXA-N2).</p>
+  <div class="mock-frame">
+    <div class="mock-titlebar">
+      <div class="mock-dot mock-dot-r"></div>
+      <div class="mock-dot mock-dot-y"></div>
+      <div class="mock-dot mock-dot-g"></div>
+      <span class="mock-titlebar-label">admin.oxagen.ai / compliance / evidence</span>
+    </div>
+    <div class="mock-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-size:15px;font-weight:800;color:var(--text);">Compliance Evidence Archive</div>
+        <div class="mock-btn-sm">View SOC2 mapping</div>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:14px;">Monthly evidence snapshots generated automatically by the partition rollover cron. Each snapshot contains: audit event counts, access-review CSV for all orgs, and control check outputs. Signed with HMAC-SHA256.</div>
+
+      <div class="mock-timeline">
+        <div class="mock-tl-item">
+          <div class="tl-icon tl-icon-g">&#10003;</div>
+          <div class="tl-body">
+            <div class="tl-title">June 2026 snapshot</div>
+            <div class="tl-sub">4,632 events &nbsp;·&nbsp; 3 orgs &nbsp;·&nbsp; 0 stale grants &nbsp;·&nbsp; Signed</div>
+            <div class="progress-bar-wrap" style="display:none;"></div>
+          </div>
+          <div class="tl-time">
+            <div class="mock-btn-sm" style="padding:3px 8px;font-size:10px;">Download</div>
+          </div>
+        </div>
+        <div class="mock-tl-item">
+          <div class="tl-icon tl-icon-g">&#10003;</div>
+          <div class="tl-body">
+            <div class="tl-title">May 2026 snapshot</div>
+            <div class="tl-sub">2,814 events &nbsp;·&nbsp; 2 orgs &nbsp;·&nbsp; 1 stale grant flagged &nbsp;·&nbsp; Signed</div>
+          </div>
+          <div class="tl-time">
+            <div class="mock-btn-sm" style="padding:3px 8px;font-size:10px;">Download</div>
+          </div>
+        </div>
+        <div class="mock-tl-item">
+          <div class="tl-icon tl-icon-a">&#9711;</div>
+          <div class="tl-body">
+            <div class="tl-title">April 2026 snapshot</div>
+            <div class="tl-sub">1,203 events &nbsp;·&nbsp; 1 org &nbsp;·&nbsp; Platform launch baseline</div>
+          </div>
+          <div class="tl-time">
+            <div class="mock-btn-sm" style="padding:3px 8px;font-size:10px;">Download</div>
+          </div>
+        </div>
+        <div class="mock-tl-item">
+          <div class="tl-icon tl-icon-i">+</div>
+          <div class="tl-body">
+            <div class="tl-title">July 2026 snapshot</div>
+            <div class="tl-sub">Scheduled — runs 2026-07-01 at 03:00 UTC</div>
+          </div>
+          <div class="tl-time" style="color:var(--text-dim);font-size:10px;">Pending</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<hr class="divider" />
+
+<!-- ═══ 5. ROADMAP ════════════════════════════════════════════════════════ -->
+<section id="roadmap">
+  <div class="section-label">05 — Consolidated Roadmap</div>
+  <div class="section-title">Proposed sequencing — SOC2 simplification</div>
+  <p class="section-desc">
+    Phases are parallelisable within each wave. Dependencies: Rec 1 (emit consolidation) unblocks
+    evidence quality for all downstream work. OXA-1558 and OXA-1559 share components and should
+    be built together. Rec 4 extends existing Inngest cron — zero new infra.
+  </p>
+
+  <div class="roadmap-grid">
+    <div class="roadmap-phase">
+      <div class="roadmap-phase-header rp-done">Wave 0 — Done (OXA-1414..1433)</div>
+      <ul>
+        <li>Deps pinned, lint real, CI split</li>
+        <li>MCP authenticated (OXA-1419)</li>
+        <li>RLS enforced in prod (OXA-1515)</li>
+        <li>OAuth tokens encrypted (OXA-1420)</li>
+        <li>security_events table + cron (OXA-1422)</li>
+        <li>Billing schema FKs + constraints (OXA-1424)</li>
+        <li>SQL injection fixed (OXA-1421)</li>
+        <li>Sandbox digest-pinned (OXA-1423)</li>
+        <li>Auth rate limiting + migration 0009 (OXA-1555)</li>
+      </ul>
+    </div>
+
+    <div class="roadmap-phase">
+      <div class="roadmap-phase-header rp-active">Wave 1 — Immediate (P0)</div>
+      <ul>
+        <li>Apply migration 0009 to prod (OXA-1555)</li>
+        <li>Partition + blob privacy prod apply (OXA-1556)</li>
+        <li>Emit consolidation + missing call sites (OXA-N1 supersedes OXA-1523)</li>
+        <li>Dual SECURITY_EVENT_TYPES dedup (OXA-N4 — XS)</li>
+      </ul>
+    </div>
+
+    <div class="roadmap-phase">
+      <div class="roadmap-phase-header rp-next">Wave 2 — Next (P0/P1)</div>
+      <ul>
+        <li>Filterable audit viewer + signed export (OXA-1558)</li>
+        <li>Control-posture dashboard landing page (OXA-N3)</li>
+        <li>Admin app auth gate (OXA-1559 Phase 1)</li>
+        <li>Access-review surface (OXA-1559 Phase 2, replaces OXA-927)</li>
+      </ul>
+    </div>
+
+    <div class="roadmap-phase">
+      <div class="roadmap-phase-header rp-future">Wave 3 — Next quarter (P1/P2)</div>
+      <ul>
+        <li>Automated evidence snapshots via Inngest cron (OXA-N2)</li>
+        <li>SIEM webhook push (OXA-N5)</li>
+        <li>Admin audit viewer (OXA-1559 Phase 3)</li>
+        <li>Subprocessor list + DPA register (OXA-926)</li>
+        <li>Backup restore runbook + drill (OXA-928)</li>
+        <li>OXA-835 superseded by OXA-N2 — close</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Supersession summary -->
+  <div class="card" style="margin-top:24px;">
+    <div class="card-title" style="margin-bottom:12px;">Tickets proposed to close as superseded</div>
+    <table class="map-table">
+      <thead>
+        <tr><th>Ticket</th><th>Superseded by</th><th>Reason</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a class="oxa-link" href="https://linear.app/oxagen/issue/OXA-927">OXA-927</a> Quarterly access-review email</td>
+          <td><a class="oxa-link" href="https://linear.app/oxagen/issue/OXA-1559">OXA-1559</a> Phase 2</td>
+          <td>Admin access-review page is better UX and produces the same evidence artifact on-demand without email infrastructure</td>
+        </tr>
+        <tr>
+          <td><a class="oxa-link" href="https://linear.app/oxagen/issue/OXA-835">OXA-835</a> cap.governance.export_compliance_bundle</td>
+          <td>OXA-N2</td>
+          <td>Automated monthly snapshots via Inngest cron are more reliable than on-demand export; SIEM push (OXA-N5) covers the push case</td>
+        </tr>
+        <tr>
+          <td><a class="oxa-link" href="https://linear.app/oxagen/issue/OXA-1523">OXA-1523</a> Wire security_events for privileged mutations</td>
+          <td>OXA-N1</td>
+          <td>Consolidated into the emit registry ticket which covers all missing call sites including the ones in OXA-1523</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ═══ 6. NEW TICKET SPECS ═══════════════════════════════════════════════ -->
+<section id="new-tickets">
+  <div class="section-label">06 — Net-New Ticket Specifications</div>
+  <div class="section-title">Filed as sub-issues of OXA-930 (SOC2 readiness parent)</div>
+  <p class="section-desc">
+    The following tickets cover work NOT already represented in OXA-1414..1559.
+    Each follows the Linear ticket convention: one ticket = one PR, sub-issues for chunks,
+    full description structure.
+  </p>
+
+  <div class="card-grid">
+    <div class="card-sm">
+      <div class="card-title">OXA-N1</div>
+      <div class="card-body">
+        <div style="margin-bottom:8px;"><span class="prio prio-p0">Urgent</span> <span class="effort">M (3)</span></div>
+        <strong>Consolidate audit emit — call-site registry + missing wiring</strong>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-dim);">Single-source SECURITY_EVENT_TYPES; useSecurityEmit() wrapper; ESLint/vitest coverage invariant; wire billing grants, Stripe webhooks, API key routes, MCP middleware. Supersedes OXA-1523.</p>
+        <div style="margin-top:10px;font-size:11px;color:var(--text-dim);">Labels: soc-2, security, observability, tech-debt</div>
+      </div>
+    </div>
+
+    <div class="card-sm">
+      <div class="card-title">OXA-N2</div>
+      <div class="card-body">
+        <div style="margin-bottom:8px;"><span class="prio prio-p1">High</span> <span class="effort">M (3)</span></div>
+        <strong>Automated monthly evidence snapshots via Inngest cron</strong>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-dim);">Extend partition-rollover Step 3: generate compliance snapshot (event counts, access-review CSV), upload to Vercel Blob, record in compliance_snapshots table. Admin UI links to last 12. Supersedes OXA-835.</p>
+        <div style="margin-top:10px;font-size:11px;color:var(--text-dim);">Labels: soc-2, observability, automation, database</div>
+      </div>
+    </div>
+
+    <div class="card-sm">
+      <div class="card-title">OXA-N3</div>
+      <div class="card-body">
+        <div style="margin-bottom:8px;"><span class="prio prio-p1">High</span> <span class="effort">S (2)</span></div>
+        <strong>Control-posture dashboard as Security section landing page</strong>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-dim);">Replace redirect(audit) with RSC dashboard: MFA/SSO status, auth failure 7d count, API key count, last snapshot date, SOC2 control-status table (CC6.1, CC6.2, CC7.2, A1.2). Pure read path.</p>
+        <div style="margin-top:10px;font-size:11px;color:var(--text-dim);">Labels: soc-2, web-app, security</div>
+      </div>
+    </div>
+
+    <div class="card-sm">
+      <div class="card-title">OXA-N4</div>
+      <div class="card-body">
+        <div style="margin-bottom:8px;"><span class="prio prio-p2">Medium</span> <span class="effort">XS (1)</span></div>
+        <strong>Deduplicate SECURITY_EVENT_TYPES into packages/compliance</strong>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-dim);">Extract the const-union from packages/database and packages/telemetry into a shared packages/compliance package. Programmatically generate the DB CHECK clause. Unit test asserts parity.</p>
+        <div style="margin-top:10px;font-size:11px;color:var(--text-dim);">Labels: tech-debt, soc-2, database</div>
+      </div>
+    </div>
+
+    <div class="card-sm">
+      <div class="card-title">OXA-N5</div>
+      <div class="card-body">
+        <div style="margin-bottom:8px;"><span class="prio prio-p2">Medium</span> <span class="effort">S (2)</span></div>
+        <strong>SIEM webhook push — Splunk HEC / Datadog / generic NDJSON</strong>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-dim);">Inngest function: micro-batch security_events push to org-configured webhook URL. Org-level siem_webhooks config table. HTTPS-only, private-IP allowlist. Splunk HEC + Datadog + generic formats. HMAC-signed.</p>
+        <div style="margin-top:10px;font-size:11px;color:var(--text-dim);">Labels: soc-2, security, automation, infra</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+    </main>
+
+    <!-- ── TOC sidebar ─────────────────────────────────────────────────── -->
+    <aside>
+      <div class="toc">
+        <div class="toc-title">Contents</div>
+        <a href="#exec-summary">01 Executive Summary</a>
+        <a href="#current-state">02 Current-State Map</a>
+        <a class="sub" href="#current-state">A · Persistence</a>
+        <a class="sub" href="#current-state">B · Write helpers</a>
+        <a class="sub" href="#current-state">C · App UI</a>
+        <a class="sub" href="#current-state">D · Tenancy / IAM</a>
+        <a href="#recommendations">03 Recommendations</a>
+        <a class="sub" href="#rec-1">R1 Emit registry</a>
+        <a class="sub" href="#rec-2">R2 Audit UI</a>
+        <a class="sub" href="#rec-3">R3 Admin app</a>
+        <a class="sub" href="#rec-4">R4 Evidence cron</a>
+        <a class="sub" href="#rec-5">R5 Control dashboard</a>
+        <a class="sub" href="#rec-6">R6 Type dedup</a>
+        <a class="sub" href="#rec-7">R7 SIEM push</a>
+        <a href="#ui-mocks">04 UI Mocks</a>
+        <a href="#roadmap">05 Roadmap</a>
+        <a href="#new-tickets">06 New Tickets</a>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<footer>
+  <div class="container">
+    docs/architecture/security/soc2-simplification.html &nbsp;·&nbsp; Oxagen monorepo &nbsp;·&nbsp; Generated 2026-06-06
+  </div>
+</footer>
+
+</body>
+</html>

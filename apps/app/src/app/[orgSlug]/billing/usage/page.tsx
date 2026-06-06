@@ -1,26 +1,20 @@
-import { UsageChart } from "@/components/billing/usage-chart";
+import { UsageDashboard } from "./usage-dashboard";
 
 /**
- * Usage tab — renders the usage chart with an empty placeholder.
- * Phase 3 will wire real per-metric usage data from ClickHouse.
+ * Usage tab — high-fidelity static mock of the billing analytics dashboard.
+ * ZERO server data dependencies; all data is hardcoded mock data.
+ *
+ * Phase 3 will wire real per-metric usage from ClickHouse runtime events
+ * (see Linear OXA-1585).
  */
 export default async function BillingUsagePage({
   params,
 }: {
   params: Promise<{ orgSlug: string }>;
 }) {
-  // orgSlug is not needed for the stub but received for future queries.
+  // params consumed to satisfy Next.js route contract; not used for data fetching
+  // in this static mock. Live version will use orgSlug to scope ClickHouse queries.
   await params;
 
-  const usage = {
-    periodStart: new Date().toISOString(),
-    periodEnd: new Date().toISOString(),
-    metrics: [] as { metric: string; quantity: number; totalCostMicros: number }[],
-  };
-
-  return (
-    <div className="flex flex-col gap-6">
-      <UsageChart usage={usage} />
-    </div>
-  );
+  return <UsageDashboard />;
 }
