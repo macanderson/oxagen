@@ -69,3 +69,4 @@ creds.json
 # playwright test artifacts
 .playwright-mcp*/
 .playwright*
+.superpowers/
