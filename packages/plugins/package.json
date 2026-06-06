@@ -7,7 +7,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./credentials": "./src/credentials/credential-service.ts"
+    "./credentials": "./src/credentials/credential-service.ts",
+    "./registry": "./src/registry/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -16,7 +17,16 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@oxagen/crypto": "workspace:*"
+    "@oxagen/crypto": "workspace:*",
+    "@oxagen/database": "workspace:*",
+    "@oxagen/tenancy": "workspace:*",
+    "zod": "3.25.76",
+    "unified": "11.0.5",
+    "remark-parse": "11.0.0",
+    "remark-gfm": "4.0.1",
+    "remark-rehype": "11.1.2",
+    "rehype-sanitize": "6.0.0",
+    "rehype-stringify": "10.0.1"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
