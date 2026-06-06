@@ -9,6 +9,7 @@ import { agentVideoRender, agentVideoRenderOnFailure } from "./functions/agent.v
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
 import { pluginCatalogSyncCron } from "./functions/plugin.catalog-sync-cron";
 import { pluginRegistrySync } from "./functions/plugin.registry-sync";
+import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
 
 export const functions = [
   billingRollupUsage,
@@ -23,4 +24,5 @@ export const functions = [
   securityAuditPartitionRollover,
   pluginCatalogSyncCron,
   pluginRegistrySync,
+  pluginOauthRefreshWatcher,
 ];
