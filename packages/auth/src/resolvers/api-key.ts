@@ -45,6 +45,11 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
   const prefix = rawKey.slice(0, sep);
   const hash = createHash("sha256").update(rawKey).digest("hex");
 
+  // tenancy: unscoped seam (identity resolution before a tenant scope exists) — OXA-1515
+  // Resolves a raw API key → (apiKeyId, orgId, workspaceId). This IS the
+  // resolution step: the apiKeys table carries the pre-bound tenant scope for
+  // every machine-auth request. No tenant scope can exist before this lookup
+  // completes — the result is used to construct one.
   const row = await db().query.apiKeys.findFirst({
     where: and(eq(schema.apiKeys.keyPrefix, prefix), isNull(schema.apiKeys.deletedAt)),
     columns: {

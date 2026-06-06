@@ -89,6 +89,11 @@ export function stripCookieSignature(signedValue: string): string {
 export async function resolveSession(token: string): Promise<SessionResult | null> {
   if (!token) return null;
 
+  // tenancy: unscoped seam (identity resolution before a tenant scope exists) — OXA-1515
+  // Resolves a session token → userId. This IS the resolution step: the
+  // sessions table is a global auth table (no RLS) and the userId produced here
+  // is the input to every downstream scope resolver. No tenant context exists
+  // until after this function returns.
   const row = await db().query.sessions.findFirst({
     where: eq(schema.sessions.token, token),
     columns: { userId: true, expiresAt: true },

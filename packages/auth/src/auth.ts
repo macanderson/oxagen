@@ -81,6 +81,10 @@ const kmsAdapter = tokenEncryptionKey
 
 let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
 function auditInsert(): ReturnType<typeof makeSecurityEventInserter> {
+  // tenancy: unscoped seam (identity resolution before a tenant scope exists) — OXA-1515
+  // The security-event inserter is wired to the global db() connection. It runs
+  // inside Better Auth lifecycle hooks (session.create/delete) where no tenant
+  // scope has been established yet — the session itself is the identity signal.
   if (!_auditInsert) _auditInsert = makeSecurityEventInserter(db());
   return _auditInsert;
 }
@@ -98,6 +102,11 @@ function auditInsert(): ReturnType<typeof makeSecurityEventInserter> {
 // ---------------------------------------------------------------------------
 
 async function resolveFirstOrgId(userId: string): Promise<string | null> {
+  // tenancy: unscoped seam (identity resolution before a tenant scope exists) — OXA-1515
+  // Resolves the user's first org membership so that auth lifecycle events
+  // (sign_in / sign_out) can be tagged with an orgId for the audit trail.
+  // This lookup IS the identity resolution step — a tenant scope cannot exist
+  // until after this function returns the orgId.
   const database = db();
   const rows = await database
     .select({ orgId: schema.orgUsers.orgId })
@@ -166,6 +175,12 @@ const trustedOrigins: string[] = [
 ];
 
 export const auth = betterAuth({
+  // tenancy: unscoped seam (identity resolution before a tenant scope exists) — OXA-1515
+  // The Drizzle adapter is handed the global db() connection so Better Auth can
+  // read/write the auth.users, auth.sessions, auth.accounts, and
+  // auth.verifications tables. These are global identity tables (no RLS) and
+  // this db() call is the bootstrap point for all session/user resolution —
+  // no tenant scope exists at this layer.
   database: drizzleAdapter(db(), {
     provider: "pg",
     // Better Auth resolves models by name; with usePlural=true the names

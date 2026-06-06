@@ -38,6 +38,11 @@ export async function resolveOrgScope(
   userId: string,
   slug: string,
 ): Promise<OrgScopeResolution> {
+  // tenancy: unscoped seam (identity resolution before a tenant scope exists) — OXA-1515
+  // Resolves an org slug → orgId and verifies membership. This function IS the
+  // resolution step: it runs before any tenant scope can be established, and its
+  // output (orgId) is required to construct one. Both queries (organizations +
+  // orgUsers) are global identity tables that carry no per-tenant RLS.
   const d = db();
 
   const org = await d.query.organizations.findFirst({
