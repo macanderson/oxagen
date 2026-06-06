@@ -101,6 +101,14 @@ vi.mock("@oxagen/handlers/logger", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock("@oxagen/database/security", () => ({
+  makeSecurityEventInserter: vi.fn(() => vi.fn()),
+}));
+
+vi.mock("@oxagen/telemetry", () => ({
+  recordSecurityEvent: vi.fn(),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -110,6 +118,10 @@ import {
   reactivateSubscriptionAction,
   setSeatsAction,
   buyCreditsAction,
+  updateAutoReloadAction,
+  removePaymentMethodAction,
+  setDefaultPaymentMethodAction,
+  createSetupIntentAction,
 } from "./actions";
 
 import { getSessionOrRedirect } from "@/lib/session";
@@ -119,6 +131,9 @@ import {
   setSubscriptionSeats,
   isSeatLimitError,
 } from "@oxagen/billing";
+import { recordSecurityEvent } from "@oxagen/telemetry";
+
+const mockRecordSecurityEvent = vi.mocked(recordSecurityEvent);
 
 // Import BILLING_MANAGER_ROLES for the cross-module sync assertion.
 // We import resolve-org as a module and check the exported constant's behavior
@@ -331,4 +346,154 @@ describe("CAN_MANAGE_BILLING sync with resolve-org BILLING_MANAGER_ROLES", () =>
       expect(result.ok).toBe(false);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// 7. Security event emission — SOC2 CC6.3/CC6.8
+// ---------------------------------------------------------------------------
+
+describe("security event emission — billing.access_denied on gate failure", () => {
+  beforeEach(() => {
+    setRole("member");
+  });
+
+  it("emits billing.access_denied (outcome 'deny') when caller lacks billing-manager role", async () => {
+    await cancelSubscriptionAction({ orgSlug: "acme" });
+
+    expect(mockRecordSecurityEvent).toHaveBeenCalledOnce();
+    const event = mockRecordSecurityEvent.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+    expect(event.eventType).toBe("billing.access_denied");
+    expect(event.outcome).toBe("deny");
+  });
+
+  it("emits actorUserId from session on denial", async () => {
+    await cancelSubscriptionAction({ orgSlug: "acme" });
+    const event = mockRecordSecurityEvent.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+    expect(event.actorUserId).toBe("user-1");
+  });
+
+  it("emits orgId from resolved org on denial", async () => {
+    await cancelSubscriptionAction({ orgSlug: "acme" });
+    const event = mockRecordSecurityEvent.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+    expect(event.orgId).toBe("org-1");
+  });
+});
+
+describe("security event emission — billing.subscription_canceled on success", () => {
+  beforeEach(() => {
+    setRole("owner");
+    vi.mocked(cancelOrgSubscription).mockResolvedValue(undefined);
+  });
+
+  it("emits billing.subscription_canceled (outcome 'success') after successful cancel", async () => {
+    await cancelSubscriptionAction({ orgSlug: "acme" });
+
+    expect(mockRecordSecurityEvent).toHaveBeenCalledOnce();
+    const event = mockRecordSecurityEvent.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+    expect(event.eventType).toBe("billing.subscription_canceled");
+    expect(event.outcome).toBe("success");
+    expect(event.actorUserId).toBe("user-1");
+    expect(event.orgId).toBe("org-1");
+    expect(event.workspaceId).toBeNull();
+  });
+
+  it("does NOT emit a security event when cancel throws", async () => {
+    vi.mocked(cancelOrgSubscription).mockRejectedValue(new Error("stripe down"));
+    await cancelSubscriptionAction({ orgSlug: "acme" });
+    expect(mockRecordSecurityEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("security event emission — billing.subscription_reactivated on success", () => {
+  it("emits billing.subscription_reactivated on owner success", async () => {
+    setRole("owner");
+    const { reactivateOrgSubscription } = await import("@oxagen/billing");
+    vi.mocked(reactivateOrgSubscription).mockResolvedValue(undefined);
+
+    await reactivateSubscriptionAction({ orgSlug: "acme" });
+
+    expect(mockRecordSecurityEvent).toHaveBeenCalledOnce();
+    const event = mockRecordSecurityEvent.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+    expect(event.eventType).toBe("billing.subscription_reactivated");
+    expect(event.outcome).toBe("success");
+  });
+});
+
+describe("security event emission — billing.seats_changed on success", () => {
+  it("emits billing.seats_changed when seats updated", async () => {
+    setRole("owner");
+    vi.mocked(setSubscriptionSeats).mockResolvedValue(undefined);
+
+    await setSeatsAction({ orgSlug: "acme", seats: 3 });
+
+    expect(mockRecordSecurityEvent).toHaveBeenCalledOnce();
+    const event = mockRecordSecurityEvent.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+    expect(event.eventType).toBe("billing.seats_changed");
+    expect(event.outcome).toBe("success");
+  });
+});
+
+describe("security event emission — billing.auto_reload_updated on success", () => {
+  it("emits billing.auto_reload_updated when settings saved", async () => {
+    setRole("owner");
+    const { updateAutoReloadSettings } = await import("@oxagen/billing");
+    vi.mocked(updateAutoReloadSettings).mockResolvedValue({
+      enabled: true,
+      thresholdCents: 500,
+      amountCents: 2000,
+      paymentMethodId: null,
+    } as never);
+
+    await updateAutoReloadAction({ orgSlug: "acme", enabled: true });
+
+    expect(mockRecordSecurityEvent).toHaveBeenCalledOnce();
+    const event = mockRecordSecurityEvent.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+    expect(event.eventType).toBe("billing.auto_reload_updated");
+    expect(event.outcome).toBe("success");
+  });
+});
+
+describe("security event emission — billing.payment_method_default_changed on success", () => {
+  it("emits billing.payment_method_default_changed when default PM set", async () => {
+    setRole("owner");
+    const { setOrgDefaultPaymentMethod } = await import("@oxagen/billing");
+    vi.mocked(setOrgDefaultPaymentMethod).mockResolvedValue(undefined);
+
+    await setDefaultPaymentMethodAction({ orgSlug: "acme", paymentMethodId: "pm_abc" });
+
+    expect(mockRecordSecurityEvent).toHaveBeenCalledOnce();
+    const event = mockRecordSecurityEvent.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+    expect(event.eventType).toBe("billing.payment_method_default_changed");
+    expect(event.outcome).toBe("success");
+  });
+});
+
+describe("security event emission — billing.payment_method_removed on success", () => {
+  it("emits billing.payment_method_removed when PM removed", async () => {
+    setRole("owner");
+    const { removeOrgPaymentMethod } = await import("@oxagen/billing");
+    vi.mocked(removeOrgPaymentMethod).mockResolvedValue(undefined);
+
+    await removePaymentMethodAction({ orgSlug: "acme", paymentMethodId: "pm_xyz" });
+
+    expect(mockRecordSecurityEvent).toHaveBeenCalledOnce();
+    const event = mockRecordSecurityEvent.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+    expect(event.eventType).toBe("billing.payment_method_removed");
+    expect(event.outcome).toBe("success");
+  });
+});
+
+describe("security event emission — billing.payment_method_added on setup-intent success", () => {
+  it("emits billing.payment_method_added when setup intent created", async () => {
+    setRole("owner");
+    const { createPaymentMethodSetupIntent } = await import("@oxagen/billing");
+    vi.mocked(createPaymentMethodSetupIntent).mockResolvedValue({ clientSecret: "cs_test_abc" } as never);
+
+    await createSetupIntentAction({ orgSlug: "acme" });
+
+    expect(mockRecordSecurityEvent).toHaveBeenCalledOnce();
+    const event = mockRecordSecurityEvent.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+    expect(event.eventType).toBe("billing.payment_method_added");
+    expect(event.outcome).toBe("success");
+  });
 });

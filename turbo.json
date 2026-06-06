@@ -10,6 +10,7 @@
   "globalEnv": [
     "NODE_ENV",
     "VERCEL_ENV",
+    "PLATFORM_VERSION",
     "AI_GATEWAY_API_KEY",
     "OXAGEN_LLM_FAST",
     "OXAGEN_LLM_BALANCED",

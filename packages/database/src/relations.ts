@@ -14,7 +14,6 @@ import { connections } from "./schema/integration";
 import {
   agents,
   agentVersions,
-  tools,
   mcpServers,
   skills,
   skillVersions,

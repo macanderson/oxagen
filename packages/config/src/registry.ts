@@ -800,6 +800,48 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
   },
 
+  // ── Release / build metadata ────────────────────────────────────────────────
+  PLATFORM_VERSION: {
+    group: "Release / build metadata",
+    description:
+      "Platform version string surfaced by @oxagen/config platformVersion(). Written by " +
+      "`pnpm release:*` and synced to every oxagen-v2-* Vercel project. Declared in " +
+      "turbo.json globalEnv so a version change busts the build cache. LOCAL: leave unset → " +
+      "falls back to package.json version. PROD/PREVIEW: the released semver. NOTE: read via " +
+      "raw process.env in @oxagen/config — not yet in baseEnvSchema (tracked).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
+  // ── Testing / e2e (test lanes only; never pushed to deployed projects) ───────
+  PLAYWRIGHT_BASE_URL: {
+    group: "Testing / e2e",
+    description:
+      "Base URL Playwright drives in apps/app e2e (apps/app/playwright.config.ts). LOCAL: unset → " +
+      "defaults to http://localhost:3000. CI: the booted next server URL. NOTE: read via raw " +
+      "process.env — not in baseEnvSchema (test-only).",
+    secret: false,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  E2E_TEST: {
+    group: "Testing / e2e",
+    description:
+      'Set "true" in the vitest test lanes (declared in turbo.json test:unit/test:coverage env) ' +
+      "so app code can branch to test-only behavior. Not for dev/preview/prod. NOTE: read via raw " +
+      "process.env — not in baseEnvSchema (test-only).",
+    secret: false,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
   // ── env-manager tooling (operator/local-only; never pushed to app projects) ──
   VERCEL_TOKEN: {
     group: "env-manager tooling",

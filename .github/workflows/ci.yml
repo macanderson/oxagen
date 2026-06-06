@@ -60,7 +60,7 @@ jobs:
     timeout-minutes: 20
     steps:
       # fetch-depth: 0 so the affected-diff base is reachable (shallow breaks it).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -85,7 +85,7 @@ jobs:
           fi
 
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: pnpm
@@ -172,7 +172,7 @@ jobs:
           --health-retries 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -198,7 +198,7 @@ jobs:
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: pnpm
@@ -266,7 +266,7 @@ jobs:
       # Only Postgres is needed for the isolation suite.
       DB_MIGRATE_STORES: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Apply Postgres init schemas
         run: |
@@ -274,7 +274,7 @@ jobs:
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: pnpm
@@ -326,7 +326,7 @@ jobs:
       CLICKHOUSE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_PASSWORD || secrets.PREVIEW_CLICKHOUSE_PASSWORD }}
       CLICKHOUSE_DATABASE: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_DATABASE || secrets.PREVIEW_CLICKHOUSE_DATABASE }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -360,7 +360,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         if: steps.changes.outputs.changed == 'true'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         if: steps.changes.outputs.changed == 'true'
         with:
           node-version: "24"

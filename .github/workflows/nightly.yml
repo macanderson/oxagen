@@ -90,7 +90,7 @@ jobs:
       INNGEST_SIGNING_KEY: signkey-test-ci0000000000000000000000000000000000000000000000000000000000
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
 
       - name: Apply Postgres init schemas
@@ -99,7 +99,7 @@ jobs:
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       # Apply committed Drizzle migrations on top of the init baseline.
@@ -186,7 +186,7 @@ jobs:
       E2E_TEST: "1"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
 
       - name: Apply Postgres init schemas
@@ -195,7 +195,7 @@ jobs:
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: Migrate

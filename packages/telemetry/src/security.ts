@@ -58,6 +58,17 @@ export const SECURITY_EVENT_TYPES = [
   "api_key.created",
   "api_key.revoked",
   "api_key.used",
+  // Billing mutations
+  "billing.access_denied",
+  "billing.auto_reload_updated",
+  "billing.credits_purchased",
+  "billing.payment_method_added",
+  "billing.payment_method_default_changed",
+  "billing.payment_method_removed",
+  "billing.plan_changed",
+  "billing.seats_changed",
+  "billing.subscription_canceled",
+  "billing.subscription_reactivated",
   // Capability authz
   "capability.invoke_allowed",
   "capability.invoke_denied",

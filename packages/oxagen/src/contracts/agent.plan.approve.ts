@@ -7,7 +7,7 @@ export const agentPlanApprove = registerCapability({
   description: "Approve, deny, or amend a previously-proposed plan; approval releases the agent stream to execute the plan's side-effectful steps",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "planning" },
   sensitivity: "medium",
