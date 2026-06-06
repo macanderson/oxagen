@@ -184,17 +184,20 @@ export const auth = betterAuth({
   // no tenant scope exists at this layer.
   database: drizzleAdapter(db(), {
     provider: "pg",
-    // Better Auth resolves models by name; with usePlural=true the names
-    // become "users", "sessions", etc., so the schema keys must match.
-    // "rateLimit" is the exact model name the rate-limiter uses internally
-    // when storage:"database" is configured — it must be included here so
-    // the Drizzle adapter can find the auth.rate_limit table (migration 0009).
+    // Better Auth resolves models by name; with usePlural=true EVERY model name
+    // is pluralized for schema-key lookup — user→users, session→sessions, and
+    // critically the rate-limiter's internal model rateLimit→rateLimits. The key
+    // here must therefore be the PLURAL "rateLimits" (not "rateLimit"), or the
+    // Drizzle adapter throws `model "rateLimits" was not found` on EVERY auth
+    // request when storage:"database" rate limiting is enabled (prod-only — it is
+    // disabled in dev, which is why this only ever 500'd in production). Maps to
+    // the auth.rate_limit table (migration 0009).
     schema: {
       users: schema.users,
       sessions: schema.sessions,
       accounts: schema.accounts,
       verifications: schema.verifications,
-      rateLimit: schema.rateLimitTable,
+      rateLimits: schema.rateLimitTable,
     },
     usePlural: true,
   }),
@@ -225,7 +228,8 @@ export const auth = betterAuth({
   // `storage: "database"` is the only option that survives across Vercel
   // serverless instances (memory resets on cold-start). The auth.rate_limit
   // table (migration 0009) stores (id, key, count, lastRequest). The Drizzle
-  // adapter resolves the model name "rateLimit" → schema.rateLimitTable.
+  // adapter resolves the pluralized model name "rateLimits" → schema.rateLimitTable
+  // (see the schema map above; usePlural pluralizes the model key).
   //
   // Base: 100 req / 60 s (well above normal interactive usage).
   // Sign-in email: 5 req / 60 s (SOC2-grade: 5 attempts before lockout).
