@@ -82,6 +82,8 @@ export interface WorkspaceSecret {
   accessToken: string | null;
   refreshToken: string | null;
   oauthClientSecret: string | null;
+  /** DCR client_id stored in the credential row (not encrypted). */
+  oauthClientId: string | null;
   authKind: string;
   status: string;
 }
@@ -123,6 +125,7 @@ export async function getWorkspaceSecret(key: {
     accessToken: dec.accessToken,
     refreshToken: dec.refreshToken,
     oauthClientSecret: dec.oauthClientSecret,
+    oauthClientId: row.oauthClientId ?? null,
     authKind: row.authKind,
     status: row.status,
   };

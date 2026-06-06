@@ -21,3 +21,4 @@ export type {
   WorkspaceSecret,
 } from "./credentials/workspace-credential";
 export * from "./registry";
+export * from "./oauth";
