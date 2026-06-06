@@ -274,6 +274,12 @@ export async function POST(request: NextRequest): Promise<Response> {
           // withTenant() GUC wrapper). Once RLS lands this predicate is
           // redundant rather than load-bearing; it is kept until then so this
           // path is never conversationId-only in the meantime.
+          //
+          // Scope on BOTH org and workspace, not workspace alone: a messages
+          // row carries its own (org_id, workspace_id); pinning both closes the
+          // gap where a leaked/guessed workspace id could be paired with a
+          // foreign org context to read another tenant's history.
+          eq(schema.messages.orgId, tenant.id),
           eq(schema.messages.workspaceId, workspace.id),
         ),
       )

@@ -31,6 +31,11 @@ import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription.upgrade.start";
 import { chatMessageSend } from "./chat.message.send";
+import { conversationArchive } from "./conversation.archive";
+import { conversationDelete } from "./conversation.delete";
+import { conversationList } from "./conversation.list";
+import { conversationPurge } from "./conversation.purge";
+import { conversationRename } from "./conversation.rename";
 import { formFill } from "./form.fill";
 import { organizationCreate } from "./organization.create";
 import { orgMemberAdd } from "./org.member.add";
@@ -70,6 +75,11 @@ export {
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   chatMessageSend,
+  conversationArchive,
+  conversationDelete,
+  conversationList,
+  conversationPurge,
+  conversationRename,
   formFill,
   organizationCreate,
   orgMemberAdd,
@@ -118,6 +128,11 @@ export const contracts = [
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   chatMessageSend,
+  conversationArchive,
+  conversationDelete,
+  conversationList,
+  conversationPurge,
+  conversationRename,
   formFill,
   organizationCreate,
   orgMemberAdd,
