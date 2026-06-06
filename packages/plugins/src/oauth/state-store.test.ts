@@ -68,47 +68,10 @@ beforeEach(() => {
 vi.mock("@oxagen/database", () => {
   const storeRef = store;
 
-  function where(condition: "byId", id: string, now?: number) {
-    const row = storeRef.get(id);
-    if (!row) return null;
-    if (now !== undefined && row.expiresAt.getTime() <= now) return null;
-    return row;
-  }
-
-  // Build a chainable query builder that remembers its state.
-  function selectChain(filter: { id?: string; expiredAfter?: number }) {
-    return {
-      from: () => ({
-        where: (_c: unknown) => {
-          // The actual drizzle conditions are opaque; we simulate by
-          // having the mock intercept at the limit() boundary using
-          // a closure over the filter. However, since the state-store
-          // only ever queries by PREFIX + state, we hook into the
-          // values passed to insert().values() to know the id.
-          // To avoid that complexity, we rely on the test calling
-          // saveOAuthState first (which populates `storeRef`) and
-          // expose the result to the query.
-          return {
-            limit: () => {
-              // Return matching rows based on the filter.
-              const row = filter.id ? storeRef.get(filter.id) : undefined;
-              if (!row) return Promise.resolve([]);
-              if (filter.expiredAfter !== undefined && row.expiresAt.getTime() <= filter.expiredAfter) {
-                return Promise.resolve([]);
-              }
-              return Promise.resolve([{ value: row.value }]);
-            },
-          };
-        },
-      }),
-    };
-  }
-
   // The state-store always passes `eq(schema.verifications.id, id)` — we capture
   // this by inspecting the function call structure. Since that's opaque in drizzle,
   // we instead track what the last insert wrote and return it for selects.
   let lastInsertedId: string | null = null;
-  let lastInsertedExpiresAt: Date | null = null;
 
   return {
     schema: {
@@ -126,7 +89,6 @@ vi.mock("@oxagen/database", () => {
             onConflictDoUpdate: (_o: unknown) => {
               storeRef.set(v.id, v);
               lastInsertedId = v.id;
-              lastInsertedExpiresAt = v.expiresAt;
               return Promise.resolve();
             },
           }),
@@ -186,9 +148,9 @@ describe("state-store", () => {
     await saveOAuthState("state-xyz", data, now);
     const row = store.get("mcp_oauth:state-xyz");
     expect(row).toBeDefined();
-    const parsed = JSON.parse(row!.value);
-    expect(parsed.codeVerifier).toBe("cv-abc");
-    expect(parsed.returnTo).toBe("/org/ws/settings/integrations");
+    const parsed = JSON.parse(row!.value) as Record<string, unknown>;
+    expect(parsed["codeVerifier"]).toBe("cv-abc");
+    expect(parsed["returnTo"]).toBe("/org/ws/settings/integrations");
   });
 
   it("sets TTL to 10 minutes from now", async () => {

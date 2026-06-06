@@ -19,7 +19,7 @@ vi.mock("@oxagen/database", () => {
 });
 
 import { createNotification } from "./create-notification";
-import * as db from "@oxagen/database";
+import { withSystemDb } from "@oxagen/database";
 
 describe("createNotification", () => {
   beforeEach(() => {
@@ -36,7 +36,7 @@ describe("createNotification", () => {
       deepLink: "/org/ws/settings/integrations/reauth/porg_123",
     });
 
-    expect(db.withSystemDb).toHaveBeenCalledOnce();
+    expect(withSystemDb).toHaveBeenCalledOnce();
     expect(result.id).toBe("uuid-1");
     expect(result.publicId).toBe("ntf_abc");
   });

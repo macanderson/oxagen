@@ -7,8 +7,7 @@ import type { AppEnv } from "../../app";
 export const notificationsMarkRoute = new Hono<AppEnv>();
 
 notificationsMarkRoute.post("/", async (c) => {
-  const body = await c.req.json();
-  const input = notificationsMark.input.parse(body);
+  const input = notificationsMark.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
   const out = await invoke(notificationsMark.name, input, ctx, { surface: "api" });
   return c.json(out);

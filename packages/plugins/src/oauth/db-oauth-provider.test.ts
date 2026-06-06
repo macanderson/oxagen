@@ -66,7 +66,7 @@ vi.mock("./state-store", () => ({
   loadOAuthState: async (state: string, now: number) => {
     const entry = stateStore[state];
     if (!entry || entry.expiresAt <= now) return null;
-    return JSON.parse(entry.value);
+    return JSON.parse(entry.value) as Record<string, unknown>;
   },
   deleteOAuthState: async (state: string) => {
     delete stateStore[state];
@@ -142,8 +142,8 @@ describe("DbOAuthClientProvider", () => {
     // Also confirm returnTo is persisted in the state.
     const entry = stateStore["test-state-abc"];
     expect(entry).toBeDefined();
-    const parsed = JSON.parse(entry!.value);
-    expect(parsed.returnTo).toBe("/org/ws/settings/integrations");
+    const parsed = JSON.parse(entry!.value) as Record<string, unknown>;
+    expect(parsed["returnTo"]).toBe("/org/ws/settings/integrations");
   });
 
   it("codeVerifier() throws when state is missing", async () => {
