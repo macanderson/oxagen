@@ -27,12 +27,12 @@ describe("registry-client", () => {
     });
     const res = await listServers(BASE, { limit: 50 });
     expect(res.servers).toHaveLength(1);
-    expect(res.servers[0].server.name).toBe("io.x/a");
+    expect(res.servers[0]?.server.name).toBe("io.x/a");
     expect(res.nextCursor).toBe("cur-2");
   });
 
   it("passes cursor/search/updatedSince as query params", async () => {
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn(async (_url: string) => ({
       ok: true,
       status: 200,
       json: async () => ({ servers: [] }),
@@ -40,7 +40,7 @@ describe("registry-client", () => {
     }));
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
     await listServers(BASE, { cursor: "c1", search: "git", updatedSince: "2026-01-01T00:00:00Z" });
-    const calledUrl = String(fetchMock.mock.calls[0][0]);
+    const calledUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");
     expect(calledUrl).toContain("cursor=c1");
     expect(calledUrl).toContain("search=git");
     expect(calledUrl).toContain("updated_since=2026-01-01");
