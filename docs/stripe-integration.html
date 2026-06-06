@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Oxagen — Stripe / Billing Integration</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #11151f; --panel2: #161b27; --border: #232a3a;
+    --text: #e6e9ef; --muted: #98a2b3; --indigo: #6366f1; --teal: #2dd4bf;
+    --green: #22c55e; --amber: #f59e0b; --red: #ef4444; --code: #0d1019;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans);
+         font-size: 15px; line-height: 1.65; }
+  .wrap { display: grid; grid-template-columns: 280px 1fr; max-width: 1320px; margin: 0 auto; }
+  nav { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+        padding: 28px 20px; border-right: 1px solid var(--border); background: var(--panel); }
+  nav .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  nav .ring { width: 22px; height: 22px; border-radius: 50%;
+              background: conic-gradient(from 210deg, var(--indigo), var(--teal), var(--green), var(--indigo)); }
+  nav h1 { font-size: 15px; margin: 0; letter-spacing: .2px; }
+  nav .sub { color: var(--muted); font-size: 12px; margin: 0 0 18px 32px; }
+  nav a { display: block; color: var(--muted); text-decoration: none; padding: 4px 8px;
+          border-radius: 6px; font-size: 13px; }
+  nav a:hover { color: var(--text); background: var(--panel2); }
+  nav .grp { color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: .8px;
+             margin: 16px 8px 4px; }
+  main { padding: 40px 56px 120px; max-width: 980px; }
+  h2 { font-size: 24px; margin: 48px 0 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  h2:first-of-type { border-top: none; margin-top: 8px; }
+  h3 { font-size: 17px; margin: 28px 0 8px; color: #cdd3df; }
+  p, li { color: #d7dbe4; }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--code);
+         border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; color: #c8d0e0; }
+  pre { background: var(--code); border: 1px solid var(--border); border-radius: 10px;
+        padding: 16px 18px; overflow-x: auto; font-family: var(--mono); font-size: 12.5px;
+        line-height: 1.55; color: #c8d0e0; }
+  pre .k { color: #c792ea; } pre .s { color: #c3e88d; } pre .c { color: #5c6370; font-style: italic; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 13px; }
+  th, td { border: 1px solid var(--border); padding: 8px 11px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #cdd3df; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,.012); }
+  .lead { font-size: 17px; color: var(--muted); max-width: 760px; }
+  .pill { display: inline-block; font-size: 11px; font-family: var(--mono); padding: 2px 8px;
+          border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  .ok { color: var(--green); border-color: rgba(34,197,94,.4); }
+  .warn { color: var(--amber); border-color: rgba(245,158,11,.4); }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+          padding: 18px 20px; margin: 16px 0; }
+  .note { border-left: 3px solid var(--indigo); background: rgba(99,102,241,.07);
+          padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .danger { border-left-color: var(--red); background: rgba(239,68,68,.07); }
+  .good { border-left-color: var(--green); background: rgba(34,197,94,.07); }
+  .mono { font-family: var(--mono); font-size: 12.5px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .small { color: var(--muted); font-size: 13px; }
+  a.link { color: var(--teal); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+  .flow { font-family: var(--mono); font-size: 12.5px; color: #c8d0e0; white-space: pre; overflow-x: auto;
+          background: var(--code); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } nav { position: static; height: auto; }
+    main { padding: 28px 22px 80px; } .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <div class="brand"><span class="ring"></span><h1>Oxagen Billing</h1></div>
+  <p class="sub">Stripe integration reference</p>
+  <div class="grp">Foundations</div>
+  <a href="#overview">Overview</a>
+  <a href="#architecture">Architecture &amp; vendor neutrality</a>
+  <a href="#data-model">Data model (Postgres)</a>
+  <a href="#env">Environment variables</a>
+  <div class="grp">Money flows</div>
+  <a href="#plans">Plans &amp; tiers</a>
+  <a href="#subscriptions">Subscriptions</a>
+  <a href="#seats">Seats &amp; proration</a>
+  <a href="#credits">Credits &amp; metering</a>
+  <a href="#payment-methods">Payment methods</a>
+  <a href="#autoreload">Auto-reload</a>
+  <a href="#checkout">Checkout flows</a>
+  <a href="#tax">Tax</a>
+  <div class="grp">Lifecycle &amp; recovery</div>
+  <a href="#webhooks">Webhooks</a>
+  <a href="#dunning">Dunning</a>
+  <a href="#disputes">Disputes &amp; refunds</a>
+  <div class="grp">Security &amp; ops</div>
+  <a href="#authz">Authorization</a>
+  <a href="#prod">Production setup</a>
+  <a href="#runbook">Operational runbook</a>
+  <a href="#filemap">File map</a>
+</nav>
+<main>
+
+<h1 style="font-size:34px;margin:0 0 6px;">Stripe / Billing Integration</h1>
+<p class="lead">How Oxagen turns Stripe into a hybrid <strong>subscription&nbsp;+&nbsp;usage-credit</strong> billing
+system: plans &amp; seats, prepaid usage credits, metering at the AI chokepoint, dunning, auto-reload,
+disputes, tax, and the idempotent webhook spine that keeps it all in sync.</p>
+<p class="small">Package: <code>@oxagen/billing</code> &nbsp;·&nbsp; Stripe SDK <code>17.7.0</code> &nbsp;·&nbsp;
+API version <code>2025-02-24.acacia</code> &nbsp;·&nbsp; Webhook receiver: <code>apps/api</code> &nbsp;·&nbsp;
+UI: <code>apps/app</code></p>
+
+<!-- ───────────────────────── OVERVIEW ───────────────────────── -->
+<h2 id="overview">Overview</h2>
+<p>Oxagen monetises on two axes that share one Stripe customer per organisation:</p>
+<ul>
+  <li><strong>Subscription</strong> — a per-org plan (<code>free</code> / <code>build</code> / <code>scale</code> /
+      <code>enterprise</code>) billed monthly or annually, with a seat (license) quantity.</li>
+  <li><strong>Usage credits</strong> — prepaid balance (<strong>1 credit = 1¢</strong>) that every AI/LLM/tool call
+      draws down through a single metering chokepoint. Plans grant included credits each cycle; customers top up with
+      credit packs or automatic reload.</li>
+</ul>
+<p>The customer's currency is <em>credits</em>. Plans set the floor and included allotment; real usage is metered and
+   debited from credit lots. The system is <strong>USD-only</strong> by product decision (no FX).</p>
+
+<div class="note good"><strong>Design invariant:</strong> every capability that costs money or moves Stripe state is
+reachable identically from the in-app agent, the REST API, and MCP, and is metered + authorized at exactly one place.</div>
+
+<!-- ───────────────────────── ARCHITECTURE ───────────────────────── -->
+<h2 id="architecture">Architecture &amp; vendor neutrality</h2>
+<p>All billing business logic depends on a <strong>vendor-neutral port</strong>, never on the Stripe SDK directly.</p>
+<table>
+<tr><th>Layer</th><th>File</th><th>Responsibility</th></tr>
+<tr><td>Port (interface)</td><td><code>packages/billing/src/provider.ts</code></td><td>The <code>BillingProvider</code> interface + neutral domain types (<code>BillingSubscription</code>, <code>BillingInvoice</code>, <code>BillingProrationPreview</code>, <code>BillingDispute</code>, <code>BillingWebhookEvent</code>, …). No Stripe types.</td></tr>
+<tr><td>Adapter</td><td><code>packages/billing/src/stripe-provider.ts</code></td><td><strong>The only file that imports <code>stripe</code>.</strong> Translates Stripe ⇄ neutral types; holds the API version.</td></tr>
+<tr><td>Singleton</td><td><code>packages/billing/src/client.ts</code></td><td><code>billingProvider()</code> returns the active provider; <code>setBillingProvider()</code> swaps it in tests / for a future vendor.</td></tr>
+<tr><td>Domain</td><td><code>subscriptions.ts</code>, <code>seats.ts</code>, <code>credits.ts</code>, <code>grants.ts</code>, <code>metering.ts</code>, <code>dunning.ts</code>, <code>autoreload.ts</code>, <code>disputes.ts</code>, <code>payment-methods.ts</code>, <code>billing-settings.ts</code>, <code>checkout.ts</code>, <code>entitlements.ts</code>, <code>tier.ts</code>, <code>pricing.ts</code></td><td>All business rules. Depend on the port, never on Stripe.</td></tr>
+<tr><td>Webhook spine</td><td><code>webhooks.ts</code> + <code>apps/api/src/routes/stripe.ts</code></td><td>Verify, store, dispatch, record outcome — idempotently.</td></tr>
+</table>
+<p class="small">Swapping providers means implementing <code>BillingProvider</code> and changing the singleton in
+<code>client.ts</code> — no domain code changes. The one tooling escape hatch is <code>stripeClient()</code>
+(exported for <code>billing:stripe-sync</code>, which provisions the Stripe Product/Price catalog).</p>
+
+<!-- ───────────────────────── DATA MODEL ───────────────────────── -->
+<h2 id="data-model">Data model — Postgres <code>billing</code> schema</h2>
+<p>Transactional billing state lives in Postgres only (runtime usage events go to ClickHouse; nothing billing-related
+lives in Neo4j). Tables defined in <code>packages/database/src/schema/billing.ts</code>:</p>
+<table>
+<tr><th>Table</th><th>Purpose &amp; notes</th></tr>
+<tr><td><code>plans</code></td><td>Plan catalog: tier, Stripe product/price ids (monthly+annual), <code>included_credit_cents</code>, <code>included_seats</code>, features. CHECK tier ∈ free/build/scale/enterprise.</td></tr>
+<tr><td><code>subscriptions</code></td><td>Mirror of the Stripe subscription. Partial-unique: one <code>active</code> sub per org. Carries <code>seat_count</code>, <code>status</code>, period bounds, <code>cancel_at_period_end</code>, <code>trial_end</code>.</td></tr>
+<tr><td><code>payment_methods</code></td><td>Local mirror of saved cards (brand, last4, exp, <code>is_default</code>). Soft-deleted. Source of truth is Stripe; kept fresh by <code>syncPaymentMethodsFromStripe</code>.</td></tr>
+<tr><td><code>invoices</code> / <code>invoice_line_items</code></td><td>Mirror of Stripe invoices incl. <code>hosted_invoice_url</code>, <code>invoice_pdf_url</code>. Line items are append-only.</td></tr>
+<tr><td><code>credit_lots</code></td><td><strong>Source of truth for credit holdings.</strong> Each grant = one lot with <code>source</code> (free_grant / subscription / purchase), <code>original_cents</code>, <code>remaining_cents</code>, <code>expires_at</code>. CHECK 0 ≤ remaining ≤ original.</td></tr>
+<tr><td><code>credit_balances</code></td><td>Cached mirror of the summed balance. CHECK <code>balance_cents &gt;= 0</code> (no overdraft, DB-enforced).</td></tr>
+<tr><td><code>credit_ledger</code></td><td>Immutable audit trail of every balance mutation. Partial-unique index on <code>(org_id, reason, reference_type, reference_id)</code> is the <strong>grant idempotency arbiter</strong>.</td></tr>
+<tr><td><code>usage_records</code></td><td>Append-only metered consumption events (per metric/period).</td></tr>
+<tr><td><code>org_billing_profiles</code></td><td>Billing PII (email, address) for tax/invoicing, isolated from the org row.</td></tr>
+<tr><td><code>org_billing_settings</code></td><td>Per-org <strong>auto-reload</strong> config (enabled, threshold, amount, saved PM) + <strong>dunning</strong> state (active/grace/suspended, grace deadline, suspended_at) + low-balance threshold.</td></tr>
+<tr><td><code>billing_disputes</code></td><td>One row per chargeback/dispute (idempotent on <code>stripe_dispute_id</code>); records clawed-back credits.</td></tr>
+<tr><td><code>stripe_events</code></td><td><strong>Immutable</strong> raw webhook event store — the idempotency anchor (append-only, never UPDATEd; SOC2).</td></tr>
+<tr><td><code>stripe_event_processing</code></td><td>Mutable sibling: <code>processed_at</code> / <code>processing_error</code> per event, so <code>stripe_events</code> stays append-only.</td></tr>
+</table>
+
+<!-- ───────────────────────── ENV ───────────────────────── -->
+<h2 id="env">Environment variables</h2>
+<p>Declared/validated in <code>packages/config/src/registry.ts</code> + <code>env.ts</code>.</p>
+<table>
+<tr><th>Var</th><th>Where</th><th>Notes</th></tr>
+<tr><td><code>STRIPE_SECRET_KEY</code></td><td>api, app (server)</td><td><code>sk_live</code> in prod, <code>sk_test</code> in preview/dev. Used only inside <code>stripe-provider.ts</code>.</td></tr>
+<tr><td><code>STRIPE_PUBLISHABLE_KEY</code></td><td>api, app (server)</td><td><code>pk_*</code>. Server-side reference.</td></tr>
+<tr><td><code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code></td><td>app (browser)</td><td>Inlined into the client bundle so <strong>Stripe Elements</strong> can init (add/change card).</td></tr>
+<tr><td><code>STRIPE_WEBHOOK_SECRET</code></td><td>api (must match the endpoint)</td><td><code>whsec_*</code> signing secret of the registered webhook endpoint. Verifies every inbound event.</td></tr>
+<tr><td><code>STRIPE_TAX_ENABLED</code></td><td>api, app</td><td><span class="pill warn">ships dark</span> Gates <code>automatic_tax</code> on all checkout sessions. Set <code>true</code> <strong>only after</strong> Stripe Tax is registered in the dashboard.</td></tr>
+</table>
+
+<!-- ───────────────────────── PLANS ───────────────────────── -->
+<h2 id="plans">Plans &amp; tiers</h2>
+<p>Pricing source of truth: <code>packages/billing/src/pricing.ts</code>; the Stripe catalog is provisioned/synced by the
+<code>billing:stripe-sync</code> tooling script (it is the only legitimate user of the raw <code>stripeClient()</code>).</p>
+<table>
+<tr><th>Tier</th><th>Price</th><th>Notes</th></tr>
+<tr><td><code>free</code></td><td>$0</td><td>500 non-expiring signup credits ($5). Cannot buy credit packs (must subscribe first).</td></tr>
+<tr><td><code>build</code></td><td>$20/mo</td><td>Self-serve growth tier.</td></tr>
+<tr><td><code>scale</code></td><td>$99/mo</td><td>Higher included credits + seats.</td></tr>
+<tr><td><code>enterprise</code></td><td>$500/mo</td><td>Sales-led. Gates ACLs / SSO / SCIM / immutable audit (<code>entitlements.ts</code>).</td></tr>
+</table>
+<p>Tier feature gates are pure functions of the tier in <code>entitlements.ts</code> (<code>requireTier</code>,
+<code>canBuyCredits</code>, <code>canAccessSSO</code>, …). The active tier is resolved by <code>tier.ts</code>
+(<code>resolveOrgTier</code>) — active subscription → org.plan_type → <code>free</code> fallback.</p>
+
+<!-- ───────────────────────── SUBSCRIPTIONS ───────────────────────── -->
+<h2 id="subscriptions">Subscriptions</h2>
+<p>Stripe owns the lifecycle; our <code>subscriptions</code> table mirrors it via
+<code>syncSubscriptionFromStripe(stripeSubId)</code>, invoked from every <code>subscription.*</code> webhook so our row
+matches the provider within one round-trip.</p>
+<h3>Plan changes — <code>changeOrgPlan(orgId, slug, interval)</code></h3>
+<ul>
+  <li><strong>No active subscription</strong> (free) → returns a Stripe <em>Checkout</em> URL; caller redirects.</li>
+  <li><strong>Active subscription</strong> → swaps the price in place (no second subscription). Upgrade →
+      <code>always_invoice</code> (charge the proration now) <em>and</em> a prorated grant of the new plan's extra included
+      credits (<code>grantProratedPlanUpgradeCredits</code>). Downgrade → <code>none</code> (keeps access until renewal).</li>
+</ul>
+<p><code>previewPlanChange</code> simulates the change first (see Seats — same <code>invoices.createPreview</code> mechanism),
+so the UI shows the prorated charge + card before committing.</p>
+<p>Cancel / reactivate set <code>cancel_at_period_end</code> (access continues to period end; reversible).</p>
+
+<!-- ───────────────────────── SEATS ───────────────────────── -->
+<h2 id="seats">Seats &amp; proration <span class="pill">preview → confirm</span></h2>
+<p>Seat count = subscription quantity = license count. Pending invitations consume a seat. A seat change <strong>never
+charges silently</strong> — it is a preview → confirm flow.</p>
+<div class="flow">UI "Update" ─▶ previewSeatsAction ─▶ subscriptions.previewSeatChange(orgId, seats)
+                                          │
+                                          ├─ resolve active sub + default card
+                                          ├─ provider.previewSeatChange  ── Stripe invoices.createPreview
+                                          │     proration_behavior = increase ? always_invoice : create_prorations
+                                          └─ sum proration line items ─▶ { amountCents, isCharge, card, direction }
+UI dialog:  increase ─▶ "Adding N seats will charge $X now to Visa ••4242"   [Cancel] [Change card] [Confirm & pay]
+            decrease ─▶ "Removing N seats credits $X to your next invoice"    [Cancel] [Confirm]
+On confirm ─▶ setSeatsAction ─▶ subscriptions.setSubscriptionSeats(orgId, seats)</div>
+<ul>
+  <li><strong>Increase</strong> → <code>proration_behavior: "always_invoice"</code> (invoice the proration immediately).</li>
+  <li><strong>Decrease</strong> → <code>proration_behavior: "create_prorations"</code> (a credit toward the next invoice,
+      never a surprise refund).</li>
+  <li><strong>Floor guard</strong> — <code>SeatLimitError</code> blocks dropping below provisioned headcount
+      (active members + pending invites).</li>
+  <li>All mutating Stripe calls carry an <strong>idempotency key</strong> (e.g. <code>seats:&lt;sub&gt;:&lt;n&gt;</code>,
+      <code>plan_change:&lt;sub&gt;:&lt;price&gt;:&lt;10s-bucket&gt;</code>) so a double-submit can't double-invoice.</li>
+</ul>
+<p class="small">The exact charge figure comes from summing the <code>proration</code> line items of
+<code>stripe.invoices.createPreview({ subscription, subscription_details:{ items, proration_behavior, proration_date } })</code>.</p>
+
+<!-- ───────────────────────── CREDITS ───────────────────────── -->
+<h2 id="credits">Credits &amp; metering</h2>
+<h3>Lots, expiry, consumption</h3>
+<p>Every grant creates a <strong>lot</strong>. Consumption drains <strong>soonest-expiring-first</strong> with
+row-locking and no overdraft (<code>consumeCredits</code> in <code>credits.ts</code>). Expiry by source:</p>
+<table>
+<tr><th>Source</th><th>Granted by</th><th>Expires</th></tr>
+<tr><td><code>free_grant</code></td><td>Signup (<code>grantFreeCredits</code>, 500¢)</td><td>Never</td></tr>
+<tr><td><code>subscription</code></td><td>Plan renewal on <code>invoice.paid</code> (<code>grantPlanCreditsForInvoicePaid</code>)</td><td>End of grant month (use-it-or-lose-it)</td></tr>
+<tr><td><code>purchase</code></td><td>Credit pack / auto-reload</td><td>+1 year</td></tr>
+</table>
+<p>All grants are atomic + idempotent via <code>INSERT … ON CONFLICT DO NOTHING</code> on the
+<code>credit_ledger</code> idempotency index — webhook retries never double-grant.</p>
+
+<h3>The metering chokepoint &amp; admission gate</h3>
+<p>Text, image, and video usage all funnel through one DB-charging chokepoint in <code>metering.ts</code>
+(<code>chargeUsageCredits</code> / <code>chargeImageCredits</code> / <code>chargeVideoCredits</code> → <code>chargeCostUsd</code>):
+provider cost × solved markup → credits → atomic debit. Before any model runs, the <strong>admission gate</strong>
+<code>assertCanStartTurn(orgId)</code> runs:</p>
+<div class="flow">assertCanStartTurn(orgId)
+  1. assertOrgCanConsume(orgId)   ── throws BillingSuspendedError if dunning state = suspended
+  2. maybeAutoReload(orgId)       ── best-effort: top up if low + auto-reload on  (never blocks the turn)
+  3. effectiveBalance(orgId) > 0  ── else throw InsufficientCreditsError</div>
+<div class="note"><strong>Wiring (critical):</strong> the gate is injected into the single AI boundary
+<code>kernel.invoke()</code> (<code>packages/oxagen/src/kernel.ts</code>) via <code>setBillingAdmissionGate</code>.
+Each surface calls <code>bootstrapBillingRuntime()</code> at startup —
+<code>apps/api/src/bootstrap.ts</code>, <code>apps/app/instrumentation.ts</code>, <code>apps/mcp/src/middleware.ts</code> —
+the same pattern as the IAM gate. Without that call the gate is dormant.</div>
+
+<!-- ───────────────────────── PAYMENT METHODS ───────────────────────── -->
+<h2 id="payment-methods">Payment methods <span class="pill">Stripe Elements</span></h2>
+<p>Cards are managed <strong>in-app</strong>; the PAN never touches Oxagen servers.</p>
+<div class="flow">"Add / change card" ─▶ createSetupIntentAction ─▶ payment-methods.createPaymentMethodSetupIntent
+                                                      └─ provider.createSetupIntent(customerId)  (usage: off_session)
+Browser ─▶ &lt;StripeElementsProvider clientSecret&gt; &lt;PaymentElement&gt; ─▶ stripe.confirmSetup({ redirect:"if_required" })
+On success ─▶ syncPaymentMethodsAction ─▶ syncPaymentMethodsFromStripe(orgId)  (pull list + default, upsert mirror)</div>
+<p>Backend domain (<code>payment-methods.ts</code>): <code>listOrgPaymentMethods</code>, <code>setOrgDefaultPaymentMethod</code>
+(provider default + DB flag flip, in one transaction so a reader never sees zero defaults),
+<code>removeOrgPaymentMethod</code> (detach + soft-delete; refuses to remove the <em>last</em> card on an active
+subscription — <code>LastPaymentMethodError</code>). Components: <code>payment-methods.tsx</code>,
+<code>stripe-elements-provider.tsx</code>. Deps: <code>@stripe/stripe-js</code>, <code>@stripe/react-stripe-js</code>.</p>
+
+<!-- ───────────────────────── AUTORELOAD ───────────────────────── -->
+<h2 id="autoreload">Auto-reload &amp; low-balance</h2>
+<p>Configured per org in <code>org_billing_settings</code>. <code>maybeAutoReload(orgId)</code> (in <code>autoreload.ts</code>),
+called from the admission gate:</p>
+<ol>
+  <li>Skip unless enabled AND effective balance &lt; threshold AND not reloaded in the last hour (idempotency window).</li>
+  <li>Charge <code>autoReloadAmountCents</code> off-session (<code>provider.chargeOffSession</code>, PaymentIntent
+      <code>off_session: true, confirm: true</code>) on the saved PM or customer default. Idempotency key bucketed per hour.</li>
+  <li>On success, grant a <code>purchase</code> lot (reason <code>grant_auto_reload</code>, +1yr) and stamp
+      <code>last_auto_reload_at</code>.</li>
+</ol>
+<div class="note danger"><strong>Charge-but-grant-fail safety:</strong> if the grant write fails <em>after</em> a successful
+charge, we log a critical reconcile alert (<code>alert: auto_reload_charged_but_not_granted</code>, with the
+<code>paymentIntentId</code>), do <strong>not</strong> stamp <code>last_auto_reload_at</code>, and return
+<code>grant_failed_after_charge</code> without throwing. The next turn retries the grant against the same
+idempotency-deduped charge — so a transient DB error self-heals and never crashes the user's turn.</div>
+<p>The dismissible low-balance banner (<code>low-balance-banner.tsx</code>) renders when balance &lt; the configured
+threshold; auto-reload suppresses it.</p>
+
+<!-- ───────────────────────── CHECKOUT ───────────────────────── -->
+<h2 id="checkout">Checkout flows</h2>
+<table>
+<tr><th>Flow</th><th>Route</th><th>Mode</th></tr>
+<tr><td>New subscription</td><td><code>POST /api/v1/stripe/checkout</code> → <code>createCheckoutSession</code></td><td>Stripe Checkout, <code>mode: subscription</code>. Guards against a second subscription when one is active.</td></tr>
+<tr><td>Usage credits (dynamic $)</td><td><code>POST /api/v1/stripe/credits</code> → <code>createDynamicCreditCheckout</code></td><td>Inline <code>price_data</code>, <code>mode: payment</code>; volume discount applied; credits deposited on <code>checkout.session.completed</code>.</td></tr>
+</table>
+<p>Both routes set <code>automatic_tax: { enabled: STRIPE_TAX_ENABLED }</code> and (when on) <code>customer_update: { address: "auto" }</code>,
+and both require the billing-manager role (see Authorization). Subscription credits arrive via <code>invoice.paid</code>;
+one-off pack credits via <code>checkout.session.completed</code>.</p>
+
+<!-- ───────────────────────── TAX ───────────────────────── -->
+<h2 id="tax">Tax</h2>
+<p>Stripe Tax is wired into all checkout sessions but <strong>ships dark</strong> behind <code>STRIPE_TAX_ENABLED</code>.
+The flag exists so the code path is complete and can be activated by a single env flip once Stripe Tax is registered in the
+dashboard (a true external action). With the flag off, <code>automatic_tax.enabled = false</code> and checkouts behave
+exactly as before. Addresses are collected at checkout and persisted to the customer (<code>customer_update: address: auto</code>)
+so renewals compute tax correctly.</p>
+
+<!-- ───────────────────────── WEBHOOKS ───────────────────────── -->
+<h2 id="webhooks">Webhooks <span class="pill ok">idempotent</span></h2>
+<p>Receiver: <code>apps/api/src/routes/stripe.ts</code> → <code>POST /webhooks/stripe</code>. It reads the <em>raw</em> body,
+calls <code>verifyStripeSignature(rawBody, sig)</code> (provider verifies against <code>STRIPE_WEBHOOK_SECRET</code>), then
+<code>processStripeEvent(event)</code>.</p>
+<h3>Three-phase idempotency (<code>webhooks.ts</code>)</h3>
+<div class="flow">1. INSERT raw event into stripe_events  (ON CONFLICT DO NOTHING — immutable audit anchor)
+2. A true duplicate only if stripe_event_processing.processed_at is already set;
+   a prior FAILED attempt re-dispatches (every handler is idempotent, so self-heals)
+3. dispatch(event) ─▶ upsert stripe_event_processing with the outcome (processed_at | error)</div>
+<h3>Subscribed events &amp; handlers</h3>
+<table>
+<tr><th>Stripe event</th><th>Handler effect</th></tr>
+<tr><td><code>customer.subscription.created|updated|deleted</code></td><td><code>syncSubscriptionFromStripe</code></td></tr>
+<tr><td><code>customer.subscription.trial_will_end</code></td><td>sync + reminder hook</td></tr>
+<tr><td><code>invoice.created|finalized|voided|marked_uncollectible</code></td><td><code>syncInvoiceFromStripe</code></td></tr>
+<tr><td><code>invoice.paid</code></td><td>sync + <code>grantPlanCreditsForInvoicePaid</code> + <code>onInvoiceRecovered</code> (dunning reset)</td></tr>
+<tr><td><code>invoice.payment_failed</code></td><td>sync + <code>onInvoicePaymentFailed</code> (enter dunning grace)</td></tr>
+<tr><td><code>invoice.payment_action_required</code></td><td>sync + warn (SCA/3DS needed)</td></tr>
+<tr><td><code>checkout.session.completed</code></td><td><code>grantCreditPackForCheckout</code></td></tr>
+<tr><td><code>payment_method.attached|detached|updated|automatically_updated</code></td><td>upsert / soft-delete the card mirror</td></tr>
+<tr><td><code>charge.dispute.created|closed</code></td><td><code>onDisputeCreated</code> (clawback) / <code>onDisputeClosed</code></td></tr>
+<tr><td><code>charge.refunded</code></td><td><code>onChargeRefunded</code> — proportional credit clawback (idempotent)</td></tr>
+</table>
+<div class="note"><strong>Stripe only delivers events you subscribe to.</strong> The handlers exist in code; the endpoint's
+<code>enabled_events</code> must list every row above (see Production setup).</div>
+
+<!-- ───────────────────────── DUNNING ───────────────────────── -->
+<h2 id="dunning">Dunning (failed-payment recovery)</h2>
+<p>State machine on <code>org_billing_settings.dunning_state</code> (<code>dunning.ts</code>):</p>
+<div class="flow">active ──(invoice.payment_failed)──▶ grace        delinquent_since=now, grace_ends_at=now+7d
+grace  ──(invoice.paid)────────────▶ active       cleared (onInvoiceRecovered)
+grace  ──(grace_ends_at passed)────▶ suspended     sweepDunning() daily cron, usage hard-gated
+suspended ──(invoice.paid)─────────▶ active</div>
+<ul>
+  <li><code>assertOrgCanConsume</code> throws <code>BillingSuspendedError</code> while suspended — enforced at the admission gate.</li>
+  <li><code>sweepDunning()</code> runs as a daily Inngest cron (<code>0 2 * * *</code>) —
+      <code>packages/inngest-functions</code>, function <code>billingDunningSweep</code>.</li>
+  <li>UI: <code>dunning-banner.tsx</code> surfaces grace (with deadline) and suspended states.</li>
+</ul>
+
+<!-- ───────────────────────── DISPUTES ───────────────────────── -->
+<h2 id="disputes">Disputes &amp; refunds</h2>
+<p><strong>Disputes (chargebacks):</strong> Stripe reverses the funds automatically, so we <em>do not</em> refund — we
+<strong>claw back</strong> the credits funded by the disputed charge. <code>onDisputeCreated</code> records a
+<code>billing_disputes</code> row (idempotent on <code>stripe_dispute_id</code>) and consumes credits
+(reason <code>clawback_dispute</code>); <code>onDisputeClosed</code> updates status. If the org can't be resolved from the
+charge metadata, it logs a critical <code>dispute_org_unresolved</code> alert rather than silently dropping the clawback.</p>
+<p><strong>Refunds:</strong> issued by an operator in the Stripe dashboard (or API); reconciled automatically via the
+<code>charge.refunded</code> webhook → <code>onChargeRefunded</code>, which claws back credits proportional to the refunded
+amount (reason <code>refund</code>, idempotent on the charge id). There is intentionally no unwired programmatic
+refund-issuer in domain code.</p>
+
+<!-- ───────────────────────── AUTHZ ───────────────────────── -->
+<h2 id="authz">Authorization</h2>
+<div class="note danger"><strong>Membership ≠ billing rights.</strong> Every mutating billing entrypoint enforces the
+<strong>billing-manager role</strong> (<code>owner</code> / <code>admin</code> / <code>billing</code>), not just
+authentication — closing privilege-escalation and cross-org IDOR.</div>
+<table>
+<tr><th>Surface</th><th>Gate</th></tr>
+<tr><td>Server actions (<code>billing/actions.ts</code>): cancel, reactivate, change plan, seats, buy credits, setup-intent, sync, set-default / remove PM, auto-reload, previews</td><td><code>resolveManagedOrg(orgSlug)</code> → returns <code>{orgId}</code> only for a billing-manager member, else a "not authorized" result.</td></tr>
+<tr><td>REST routes (<code>/api/v1/stripe/checkout</code>, <code>/credits</code>)</td><td><code>assertBillingManager(orgId, userId)</code> in <code>apps/app/src/lib/resolve-org.ts</code> (404s a non-manager, like <code>assertOrgMember</code>).</td></tr>
+<tr><td>Tier features (ACL/SSO/SCIM/audit)</td><td><code>entitlements.ts</code> — hard tier cap (enterprise only).</td></tr>
+</table>
+
+<!-- ───────────────────────── PROD ───────────────────────── -->
+<h2 id="prod">Production setup</h2>
+<p>The repo is pre-launch; prod runs Stripe <strong>test</strong> keys (verified: prod and local publishable keys match → same Stripe account).</p>
+<h3>Registered webhook endpoint <span class="pill ok">live</span></h3>
+<table>
+<tr><td>Endpoint id</td><td><code>we_1Tf7k6BqX8HwIjwRYZjdSzU8</code></td></tr>
+<tr><td>URL</td><td><code>https://oxagen-v2-api.vercel.app/webhooks/stripe</code></td></tr>
+<tr><td>API version</td><td><code>2025-02-24.acacia</code> (matches the SDK)</td></tr>
+<tr><td>Enabled events</td><td>20 — the full list in the Webhooks table above</td></tr>
+<tr><td>Signing secret</td><td>Stored as <code>STRIPE_WEBHOOK_SECRET</code> (Vercel <em>sensitive</em>) on <code>oxagen-v2-api</code> + <code>oxagen-v2-app</code>, production target.</td></tr>
+</table>
+<p class="small">Verified live: a missing signature returns <code>400 Missing stripe-signature</code>; a bogus signature returns
+Stripe's <code>400 "No signatures found matching…"</code> — i.e. the handler is reachable and verifying against the secret.</p>
+<p><code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code> is set on production/preview/dev. <code>STRIPE_TAX_ENABLED</code> is
+intentionally unset (tax dark).</p>
+
+<!-- ───────────────────────── RUNBOOK ───────────────────────── -->
+<h2 id="runbook">Operational runbook</h2>
+
+<h3>Recreate the webhook endpoint (e.g. for a new account)</h3>
+<pre><span class="c"># enabled_events must list EVERY event the dispatcher handles (see Webhooks table)</span>
+curl https://api.stripe.com/v1/webhook_endpoints -u "$STRIPE_SECRET_KEY:" \
+  -d url=https://oxagen-v2-api.vercel.app/webhooks/stripe \
+  -d api_version=2025-02-24.acacia \
+  -d "enabled_events[]=customer.subscription.created" \
+  <span class="c"># … through charge.refunded …</span>
+<span class="c"># Capture the returned `secret` (whsec_…) and store it as STRIPE_WEBHOOK_SECRET</span>
+<span class="c"># on the api (+ app) production env, then REDEPLOY api so the new secret loads.</span></pre>
+<p class="small">The signing secret is only returned at creation — capture it then. Env changes apply to the
+<strong>next</strong> deployment, so a redeploy of <code>oxagen-v2-api</code> is required to activate it.</p>
+
+<h3>Activate Stripe Tax</h3>
+<ol>
+  <li>Register / enable Stripe Tax in the Stripe Dashboard (set origin address, nexus). <em>No safe API path.</em></li>
+  <li>Set <code>STRIPE_TAX_ENABLED=true</code> on <code>oxagen-v2-api</code> + <code>oxagen-v2-app</code> (production); redeploy.</li>
+  <li>Verify a checkout shows tax and the address is saved to the customer.</li>
+</ol>
+
+<h3>Switch to live keys</h3>
+<ol>
+  <li>Set live <code>STRIPE_SECRET_KEY</code> / <code>STRIPE_PUBLISHABLE_KEY</code> / <code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>.</li>
+  <li>Re-provision the catalog against the live account (<code>billing:stripe-sync</code>).</li>
+  <li>Recreate the webhook endpoint on the <strong>live</strong> account + update <code>STRIPE_WEBHOOK_SECRET</code> (the steps above).</li>
+  <li>Redeploy; confirm <code>billingDunningSweep</code> appears in the Inngest dashboard (needs <code>INNGEST_*</code> keys).</li>
+</ol>
+
+<h3>Rotate the webhook secret</h3>
+<p>Roll the secret in the Stripe Dashboard (or recreate the endpoint), update <code>STRIPE_WEBHOOK_SECRET</code>, redeploy api.
+Mismatched secret ⇒ all events 400 (signature verification fails) until the deploy lands.</p>
+
+<!-- ───────────────────────── FILE MAP ───────────────────────── -->
+<h2 id="filemap">File map</h2>
+<table>
+<tr><th>Concern</th><th>Files</th></tr>
+<tr><td>Port + adapter</td><td><code>packages/billing/src/{provider,stripe-provider,client}.ts</code></td></tr>
+<tr><td>Subscriptions / seats / plans</td><td><code>subscriptions.ts</code>, <code>seats.ts</code>, <code>checkout.ts</code>, <code>customers.ts</code></td></tr>
+<tr><td>Credits / metering / grants</td><td><code>credits.ts</code>, <code>grants.ts</code>, <code>metering.ts</code>, <code>pricing.ts</code>, <code>constants.ts</code></td></tr>
+<tr><td>Payment methods / settings</td><td><code>payment-methods.ts</code>, <code>billing-settings.ts</code></td></tr>
+<tr><td>Recovery</td><td><code>dunning.ts</code>, <code>autoreload.ts</code>, <code>disputes.ts</code>, <code>invoices.ts</code></td></tr>
+<tr><td>Gates</td><td><code>entitlements.ts</code>, <code>tier.ts</code>, <code>bootstrap.ts</code> (admission gate wiring)</td></tr>
+<tr><td>Webhooks</td><td><code>webhooks.ts</code> + <code>apps/api/src/routes/stripe.ts</code></td></tr>
+<tr><td>Schema + migration</td><td><code>packages/database/src/schema/billing.ts</code>, <code>drizzle/0008_*.sql</code></td></tr>
+<tr><td>UI</td><td><code>apps/app/src/app/[orgSlug]/billing/*</code>, <code>apps/app/src/components/billing/*</code>, <code>apps/app/src/lib/billing-format.ts</code></td></tr>
+<tr><td>Scheduled jobs</td><td><code>packages/inngest-functions</code> → <code>billingDunningSweep</code></td></tr>
+</table>
+
+<hr/>
+<p class="small">Generated as billing reference documentation. The billing feature (tab consolidation, seat preview/confirm,
+in-app payment methods, dunning, auto-reload, disputes, tax, expanded webhooks) and the production webhook configuration
+are live on <code>main</code>. Tracking: Linear <strong>OXA-1550</strong> (Done).</p>
+
+</main>
+</div>
+</body>
+</html>
