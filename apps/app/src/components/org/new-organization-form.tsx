@@ -91,7 +91,7 @@ export function NewOrgForm({
 
   const providerLabel = prefill?.provider ? PROVIDER_LABEL[prefill.provider] : null;
 
-  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const onSubmit = (e: { preventDefault(): void; currentTarget: HTMLFormElement }) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     setError(null);

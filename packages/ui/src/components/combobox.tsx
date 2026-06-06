@@ -31,7 +31,7 @@
 import * as React from "react";
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
 import { cva, type VariantProps } from "class-variance-authority";
-import { Check, ChevronDown, Search, X } from "lucide-react";
+import { Check, ChevronDown, Search } from "lucide-react";
 import { cn } from "../lib/utils";
 
 // ── Root ─────────────────────────────────────────────────────────────────────
