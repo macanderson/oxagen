@@ -1,5 +1,6 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import type { ConversationRow, DbMessageRow } from "@oxagen/database";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
@@ -110,19 +111,26 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
   // empty composer. History lives in the conversation nav; a fresh load starts
   // a new turn. The first sent message creates the row and the client pins the
   // URL to its `?c=`, so reloads mid-conversation resolve correctly.
+  // Workspace-scoped read — real orgId + workspaceId. — OXA-1515
   const conv: ConversationRow | undefined = conversationPublicId
     ? (
-        await db()
-          .select()
-          .from(schema.conversations)
-          .where(
-            and(
-              eq(schema.conversations.publicId, conversationPublicId),
-              eq(schema.conversations.orgId, tenant.id),
-              eq(schema.conversations.workspaceId, workspace.id),
+        await runInTenantScope(
+          { orgId: tenant.id, workspaceId: workspace.id },
+          () =>
+            withTenantDb((tx) =>
+              tx
+                .select()
+                .from(schema.conversations)
+                .where(
+                  and(
+                    eq(schema.conversations.publicId, conversationPublicId),
+                    eq(schema.conversations.orgId, tenant.id),
+                    eq(schema.conversations.workspaceId, workspace.id),
+                  ),
+                )
+                .limit(1),
             ),
-          )
-          .limit(1)
+        )
       )[0]
     : undefined;
 
@@ -140,14 +148,21 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
 
   // Promise lifts the message query into the RSC stream — the composer
   // renders eagerly while the active-branch walk resolves.
+  // Workspace-scoped read — real orgId + workspaceId. — OXA-1515
   const messagesPromise = (async (): Promise<ChatMessage[]> => {
     if (!conversationId) return [];
-    const rows: DbMessageRow[] = await db()
-      .select()
-      .from(schema.messages)
-      .where(eq(schema.messages.conversationId, conversationId))
-      .orderBy(desc(schema.messages.createdAt))
-      .limit(200);
+    const rows: DbMessageRow[] = await runInTenantScope(
+      { orgId: tenant.id, workspaceId: workspace.id },
+      () =>
+        withTenantDb((tx) =>
+          tx
+            .select()
+            .from(schema.messages)
+            .where(eq(schema.messages.conversationId, conversationId))
+            .orderBy(desc(schema.messages.createdAt))
+            .limit(200),
+        ),
+    );
     return walkActiveBranch(rows, activeLeafMessageId);
   })();
 

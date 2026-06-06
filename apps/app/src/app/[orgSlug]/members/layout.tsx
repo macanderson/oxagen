@@ -1,10 +1,13 @@
 import { and, count, eq } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { PageHeader } from "@/components/ui/page-header";
 import { PageTabs } from "@/components/ui/page-tabs";
 import { resolveOrg } from "@/lib/resolve-org";
 import { org } from "@/lib/routes";
+
+// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 export default async function MembersLayout({
   children,
@@ -19,16 +22,23 @@ export default async function MembersLayout({
   // Drive the Pending badge from real data: invitations sent but not yet
   // accepted (status "pending"). resolveOrg is request-cached, so this shares
   // the slug→tenant lookup with the page RSC.
+  // Org-only route — sentinel workspaceId. — OXA-1515
   const tenant = await resolveOrg(orgSlug);
-  const pendingRows = await db()
-    .select({ pendingCount: count() })
-    .from(schema.invitations)
-    .where(
-      and(
-        eq(schema.invitations.orgId, tenant.id),
-        eq(schema.invitations.status, "pending"),
+  const pendingRows = await runInTenantScope(
+    { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+    () =>
+      withTenantDb((tx) =>
+        tx
+          .select({ pendingCount: count() })
+          .from(schema.invitations)
+          .where(
+            and(
+              eq(schema.invitations.orgId, tenant.id),
+              eq(schema.invitations.status, "pending"),
+            ),
+          ),
       ),
-    );
+  );
   const pendingCount = pendingRows[0]?.pendingCount ?? 0;
 
   const tabs = [

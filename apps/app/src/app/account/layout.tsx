@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
 import { getSessionOrRedirect } from "@/lib/session";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageContextProvider } from "@/lib/page-context";
@@ -25,16 +24,20 @@ export default async function AccountLayout({
   // Fetch the user's org memberships so we can:
   //   1. Give AppShell an org to render (needed for "Back to app" sidebar link).
   //   2. Populate the OrgSwitcher in the topbar.
-  const orgsRows = await db()
-    .select({
-      publicId: schema.organizations.publicId,
-      slug: schema.organizations.slug,
-      name: schema.organizations.name,
-      id: schema.organizations.id,
-    })
-    .from(schema.orgUsers)
-    .innerJoin(schema.organizations, eq(schema.organizations.id, schema.orgUsers.orgId))
-    .where(eq(schema.orgUsers.userId, session.user.id));
+  // Cross-tenant identity resolution (pre-scope) — withSystemDb bypasses RLS
+  // deliberately. — OXA-1515
+  const orgsRows = await withSystemDb((tx) =>
+    tx
+      .select({
+        publicId: schema.organizations.publicId,
+        slug: schema.organizations.slug,
+        name: schema.organizations.name,
+        id: schema.organizations.id,
+      })
+      .from(schema.orgUsers)
+      .innerJoin(schema.organizations, eq(schema.organizations.id, schema.orgUsers.orgId))
+      .where(eq(schema.orgUsers.userId, session.user.id)),
+  );
 
   // Use the first org as the shell's "home" org. If the user has no orgs,
   // provide a safe sentinel that satisfies the AppShell prop types.

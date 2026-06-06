@@ -1,7 +1,11 @@
 import { desc, eq } from "drizzle-orm";
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import type { InvoiceRow } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg } from "@/lib/resolve-org";
+
+// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { InvoiceList } from "@/components/billing/invoice-list";
 
 export default async function BillingInvoicesPage({
@@ -12,14 +16,21 @@ export default async function BillingInvoicesPage({
   const { orgSlug } = await params;
   const tenant = await resolveOrg(orgSlug);
 
+  // Org-only route — sentinel workspaceId. — OXA-1515
   const invoiceRows = await (async () => {
     try {
-      return await db()
-        .select()
-        .from(schema.invoices)
-        .where(eq(schema.invoices.orgId, tenant.id))
-        .orderBy(desc(schema.invoices.createdAt))
-        .limit(25);
+      return await runInTenantScope(
+        { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+        () =>
+          withTenantDb((tx) =>
+            tx
+              .select()
+              .from(schema.invoices)
+              .where(eq(schema.invoices.orgId, tenant.id))
+              .orderBy(desc(schema.invoices.createdAt))
+              .limit(25),
+          ),
+      );
     } catch {
       return [] as InvoiceRow[];
     }

@@ -9,7 +9,8 @@
  */
 import { and, eq } from "drizzle-orm";
 import { Info } from "lucide-react";
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import {
   resolveModelDefaults,
@@ -86,16 +87,23 @@ export default async function WorkspaceModelsPage({
   await assertOrgMember(org.id, session.user.id);
 
   // Re-read the caller's workspace role server-side.
-  const wsRoleRows = await db()
-    .select({ role: schema.workspaceUsers.role })
-    .from(schema.workspaceUsers)
-    .where(
-      and(
-        eq(schema.workspaceUsers.workspaceId, ws.id),
-        eq(schema.workspaceUsers.userId, session.user.id),
+  // Workspace-scoped read — real orgId + workspaceId. — OXA-1515
+  const wsRoleRows = await runInTenantScope(
+    { orgId: org.id, workspaceId: ws.id },
+    () =>
+      withTenantDb((tx) =>
+        tx
+          .select({ role: schema.workspaceUsers.role })
+          .from(schema.workspaceUsers)
+          .where(
+            and(
+              eq(schema.workspaceUsers.workspaceId, ws.id),
+              eq(schema.workspaceUsers.userId, session.user.id),
+            ),
+          )
+          .limit(1),
       ),
-    )
-    .limit(1);
+  );
 
   const wsRole = wsRoleRows[0]?.role ?? "";
   const canEdit = ["owner", "admin"].includes(wsRole.toLowerCase());
