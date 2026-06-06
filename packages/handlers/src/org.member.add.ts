@@ -98,12 +98,12 @@ export const orgMemberAddHandler: CapabilityHandler<typeof orgMemberAdd> = async
         `A pending invitation for ${input.email} already exists in this org. Revoke or wait for it to expire before resending.`,
       );
     }
-    logger.error({ err, orgId: ctx.orgId, email: input.email }, "org.member.add: invitation insert failed");
+    logger.error({ err, orgId: ctx.orgId, email: maskEmail(input.email) }, "org.member.add: invitation insert failed");
     throw err;
   }
 
   logger.info(
-    { orgId: ctx.orgId, email: input.email, role: input.role, invitationId: invitation.publicId, surface: ctx.surface },
+    { orgId: ctx.orgId, email: maskEmail(input.email), role: input.role, invitationId: invitation.publicId, surface: ctx.surface },
     "org.member.add: invitation created",
   );
 

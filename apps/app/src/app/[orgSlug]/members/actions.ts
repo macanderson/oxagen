@@ -9,22 +9,10 @@ import { recordSecurityEvent } from "@oxagen/telemetry";
 import { isSeatLimitError, assertSeatAvailable } from "@oxagen/billing";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
-import { logger } from "@oxagen/handlers/logger";
+import { logger, maskEmail } from "@oxagen/handlers/logger";
 
 // Sentinel workspaceId for org-only actions (no workspace context). — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
-
-// Email is PII (SOC 2 CC6 / GDPR data minimization) — never emit a raw address to
-// the log aggregator. Mask the local part, keep the domain so logs stay useful for
-// triage (`j***@acme.com`). The audit trail records the actor by userId, not email.
-function maskEmail(email: string): string {
-  const at = email.indexOf("@");
-  if (at <= 0) return "***";
-  const local = email.slice(0, at);
-  const domain = email.slice(at + 1);
-  const head = local[0] ?? "";
-  return `${head}***@${domain}`;
-}
 
 // Lazy singleton: build the audit inserter on first use. On the tenancy branch
 // makeSecurityEventInserter() resolves its own db handle (withSystemDb for the
