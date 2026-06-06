@@ -9,7 +9,7 @@
  * API middleware, MCP handler, CLI, or tests.
  */
 import { and, eq } from "drizzle-orm";
-import { db, schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
 
 export interface OrgScopeResult {
   orgId: string;
@@ -38,24 +38,26 @@ export async function resolveOrgScope(
   userId: string,
   slug: string,
 ): Promise<OrgScopeResolution> {
-  // tenancy: unscoped seam (identity resolution before a tenant scope exists) — OXA-1515
+  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists) — OXA-1515
   // Resolves an org slug → orgId and verifies membership. This function IS the
   // resolution step: it runs before any tenant scope can be established, and its
   // output (orgId) is required to construct one. Both queries (organizations +
   // orgUsers) are global identity tables that carry no per-tenant RLS.
-  const d = db();
-
-  const org = await d.query.organizations.findFirst({
-    where: eq(schema.organizations.slug, slug),
-    columns: { id: true },
-  });
+  const org = await withSystemDb((tx) =>
+    tx.query.organizations.findFirst({
+      where: eq(schema.organizations.slug, slug),
+      columns: { id: true },
+    }),
+  );
 
   if (!org) return { ok: false, kind: "not_found" };
 
-  const membership = await d.query.orgUsers.findFirst({
-    where: and(eq(schema.orgUsers.orgId, org.id), eq(schema.orgUsers.userId, userId)),
-    columns: { id: true },
-  });
+  const membership = await withSystemDb((tx) =>
+    tx.query.orgUsers.findFirst({
+      where: and(eq(schema.orgUsers.orgId, org.id), eq(schema.orgUsers.userId, userId)),
+      columns: { id: true },
+    }),
+  );
 
   if (!membership) return { ok: false, kind: "not_member" };
 

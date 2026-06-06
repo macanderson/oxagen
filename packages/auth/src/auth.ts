@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { eq } from "drizzle-orm";
 import { db } from "@oxagen/database/client";
-import { schema } from "@oxagen/database";
+import { schema, withSystemDb } from "@oxagen/database";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { requireEnv } from "@oxagen/config/env";
 import { createLocalKmsAdapter, loadMasterKey } from "@oxagen/crypto/kms";
@@ -81,11 +81,11 @@ const kmsAdapter = tokenEncryptionKey
 
 let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
 function auditInsert(): ReturnType<typeof makeSecurityEventInserter> {
-  // tenancy: unscoped seam (identity resolution before a tenant scope exists) — OXA-1515
-  // The security-event inserter is wired to the global db() connection. It runs
-  // inside Better Auth lifecycle hooks (session.create/delete) where no tenant
+  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists) — OXA-1515
+  // The security-event inserter uses withSystemDb internally (see @oxagen/database/security).
+  // It runs inside Better Auth lifecycle hooks (session.create/delete) where no tenant
   // scope has been established yet — the session itself is the identity signal.
-  if (!_auditInsert) _auditInsert = makeSecurityEventInserter(db());
+  if (!_auditInsert) _auditInsert = makeSecurityEventInserter();
   return _auditInsert;
 }
 
@@ -102,18 +102,19 @@ function auditInsert(): ReturnType<typeof makeSecurityEventInserter> {
 // ---------------------------------------------------------------------------
 
 async function resolveFirstOrgId(userId: string): Promise<string | null> {
-  // tenancy: unscoped seam (identity resolution before a tenant scope exists) — OXA-1515
+  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists) — OXA-1515
   // Resolves the user's first org membership so that auth lifecycle events
   // (sign_in / sign_out) can be tagged with an orgId for the audit trail.
   // This lookup IS the identity resolution step — a tenant scope cannot exist
   // until after this function returns the orgId.
-  const database = db();
-  const rows = await database
-    .select({ orgId: schema.orgUsers.orgId })
-    .from(schema.orgUsers)
-    .where(eq(schema.orgUsers.userId, userId))
-    .orderBy(schema.orgUsers.joinedAt)
-    .limit(1);
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select({ orgId: schema.orgUsers.orgId })
+      .from(schema.orgUsers)
+      .where(eq(schema.orgUsers.userId, userId))
+      .orderBy(schema.orgUsers.joinedAt)
+      .limit(1),
+  );
   return rows[0]?.orgId ?? null;
 }
 

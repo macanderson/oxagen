@@ -9,7 +9,7 @@
  * API middleware, MCP handler, CLI, or tests.
  */
 import { and, eq } from "drizzle-orm";
-import { db, schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
 
 export interface WorkspaceScopeResult {
   workspaceId: string;
@@ -34,15 +34,17 @@ export async function resolveWorkspaceScope(
   orgId: string,
   slug: string,
 ): Promise<WorkspaceScopeResolution> {
-  // tenancy: unscoped seam (identity resolution before a tenant scope exists) — OXA-1515
+  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists) — OXA-1515
   // Resolves (orgId, slug) → workspaceId. This is the resolution step: it
   // produces the workspaceId needed to construct a tenant scope. The workspaces
   // table is an identity/routing table queried here purely to establish which
   // tenant scope applies — no tenant-owned payload is accessed.
-  const ws = await db().query.workspaces.findFirst({
-    where: and(eq(schema.workspaces.orgId, orgId), eq(schema.workspaces.slug, slug)),
-    columns: { id: true },
-  });
+  const ws = await withSystemDb((tx) =>
+    tx.query.workspaces.findFirst({
+      where: and(eq(schema.workspaces.orgId, orgId), eq(schema.workspaces.slug, slug)),
+      columns: { id: true },
+    }),
+  );
 
   if (!ws) return { ok: false, kind: "not_found" };
 
