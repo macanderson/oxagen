@@ -179,3 +179,35 @@ registerHandler(
   "plugin.catalog.get",
   async () => (await import("./plugin.catalog.get")).handler as CapabilityHandlerFn,
 );
+registerHandler(
+  "plugin.org.install",
+  async () => (await import("./plugin.org.install")).handler as CapabilityHandlerFn,
+);
+registerHandler(
+  "plugin.org.install_bulk",
+  async () => (await import("./plugin.org.install_bulk")).handler as CapabilityHandlerFn,
+);
+registerHandler(
+  "plugin.org.uninstall",
+  async () => (await import("./plugin.org.uninstall")).handler as CapabilityHandlerFn,
+);
+registerHandler(
+  "plugin.org.set_enabled",
+  async () => (await import("./plugin.org.set_enabled")).handler as CapabilityHandlerFn,
+);
+registerHandler(
+  "plugin.denylist.add",
+  async () => (await import("./plugin.denylist.add")).handler as CapabilityHandlerFn,
+);
+registerHandler(
+  "plugin.denylist.remove",
+  async () => (await import("./plugin.denylist.remove")).handler as CapabilityHandlerFn,
+);
+registerHandler(
+  "plugin.workspace.set_enabled",
+  async () => (await import("./plugin.workspace.set_enabled")).handler as CapabilityHandlerFn,
+);
+registerHandler(
+  "plugin.credential.set_secret",
+  async () => (await import("./plugin.credential.set_secret")).handler as CapabilityHandlerFn,
+);

@@ -690,6 +690,111 @@
       }
     },
     {
+      "name": "plugin.credential.set_secret",
+      "file": "plugin.credential.set_secret.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "plugin.denylist.add",
+      "file": "plugin.denylist.add.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "plugin.denylist.remove",
+      "file": "plugin.denylist.remove.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "plugin.org.install",
+      "file": "plugin.org.install.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "plugin.org.install_bulk",
+      "file": "plugin.org.install_bulk.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "plugin.org.set_enabled",
+      "file": "plugin.org.set_enabled.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "plugin.org.uninstall",
+      "file": "plugin.org.uninstall.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
       "name": "plugin.registry.add",
       "file": "plugin.registry.add.ts",
       "domain": "plugin",
@@ -737,6 +842,21 @@
     {
       "name": "plugin.registry.sync",
       "file": "plugin.registry.sync.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "plugin.workspace.set_enabled",
+      "file": "plugin.workspace.set_enabled.ts",
       "domain": "plugin",
       "mode": "sync",
       "surfaces": [

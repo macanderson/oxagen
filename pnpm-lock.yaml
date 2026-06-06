@@ -812,6 +812,9 @@ importers:
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../oxagen
+      '@oxagen/plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@oxagen/storage':
         specifier: workspace:*
         version: link:../storage

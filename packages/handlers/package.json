@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@oxagen/ai": "workspace:*",
+    "@oxagen/plugins": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",

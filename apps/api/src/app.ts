@@ -55,6 +55,14 @@ import { pluginRegistryRemoveRoute } from "./routes/v1/plugin.registry.remove";
 import { pluginRegistrySyncRoute } from "./routes/v1/plugin.registry.sync";
 import { pluginCatalogBrowseRoute } from "./routes/v1/plugin.catalog.browse";
 import { pluginCatalogGetRoute } from "./routes/v1/plugin.catalog.get";
+import { pluginOrgInstallRoute } from "./routes/v1/plugin.org.install";
+import { pluginOrgInstallBulkRoute } from "./routes/v1/plugin.org.install_bulk";
+import { pluginOrgUninstallRoute } from "./routes/v1/plugin.org.uninstall";
+import { pluginOrgSetEnabledRoute } from "./routes/v1/plugin.org.set_enabled";
+import { pluginDenylistAddRoute } from "./routes/v1/plugin.denylist.add";
+import { pluginDenylistRemoveRoute } from "./routes/v1/plugin.denylist.remove";
+import { pluginWorkspaceSetEnabledRoute } from "./routes/v1/plugin.workspace.set_enabled";
+import { pluginCredentialSetSecretRoute } from "./routes/v1/plugin.credential.set_secret";
 
 export type AppEnv = {
   Variables: {
@@ -139,4 +147,12 @@ orgScoped.route("/plugin/registries/remove", pluginRegistryRemoveRoute);
 orgScoped.route("/plugin/registries/sync", pluginRegistrySyncRoute);
 orgScoped.route("/plugin/catalog/browse", pluginCatalogBrowseRoute);
 orgScoped.route("/plugin/catalog/get", pluginCatalogGetRoute);
+orgScoped.route("/plugin/org/install", pluginOrgInstallRoute);
+orgScoped.route("/plugin/org/install-bulk", pluginOrgInstallBulkRoute);
+orgScoped.route("/plugin/org/uninstall", pluginOrgUninstallRoute);
+orgScoped.route("/plugin/org/set-enabled", pluginOrgSetEnabledRoute);
+orgScoped.route("/plugin/denylist/add", pluginDenylistAddRoute);
+orgScoped.route("/plugin/denylist/remove", pluginDenylistRemoveRoute);
+orgScoped.route("/plugin/workspace/set-enabled", pluginWorkspaceSetEnabledRoute);
+orgScoped.route("/plugin/credential/set-secret", pluginCredentialSetSecretRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
