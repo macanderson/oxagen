@@ -50,6 +50,7 @@ import "./contracts/plugin.denylist.add";
 import "./contracts/plugin.denylist.remove";
 import "./contracts/plugin.org.install";
 import "./contracts/plugin.org.install_bulk";
+import "./contracts/plugin.org.list";
 import "./contracts/plugin.org.set_enabled";
 import "./contracts/plugin.org.uninstall";
 import "./contracts/plugin.registry.add";

@@ -1,0 +1,61 @@
+import { z } from "zod";
+import { registerCapability } from "../registry";
+
+export const pluginOrgList = registerCapability({
+  name: "plugin.org.list",
+  domain: "plugin",
+  description: "List installed plugins (org_listings) and denylisted servers for the org.",
+  mode: "sync",
+  surfaces: ["api", "mcp", "agent"],
+  agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
+  layers: ["api", "mcp", "unit"],
+  scoped: false,
+  sensitivity: "low",
+  defaultEffect: "deny",
+  defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
+  input: z.object({
+    pluginType: z.enum(["mcp_server", "integration", "content_tool"]).optional(),
+  }),
+  output: z.object({
+    listings: z.array(
+      z.object({
+        id: z.string(),
+        publicId: z.string(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+        createdByUserId: z.string().nullable(),
+        updatedByUserId: z.string().nullable(),
+        deletedAt: z.string().nullable(),
+        deletedByUserId: z.string().nullable(),
+        orgId: z.string(),
+        pluginType: z.string(),
+        catalogServerId: z.string().nullable(),
+        source: z.string(),
+        name: z.string(),
+        title: z.string().nullable(),
+        description: z.string().nullable(),
+        iconUrl: z.string().nullable(),
+        endpointUrl: z.string().nullable(),
+        transport: z.string().nullable(),
+        authKind: z.string(),
+        authConfig: z.record(z.unknown()),
+        enabled: z.boolean(),
+        config: z.record(z.unknown()),
+      }),
+    ),
+    denylist: z.array(
+      z.object({
+        id: z.string(),
+        publicId: z.string(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+        createdByUserId: z.string().nullable(),
+        updatedByUserId: z.string().nullable(),
+        orgId: z.string(),
+        pluginType: z.string(),
+        serverName: z.string(),
+        reason: z.string().nullable(),
+      }),
+    ),
+  }),
+});

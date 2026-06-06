@@ -176,6 +176,10 @@ registerHandler(
   async () => (await import("./plugin.catalog.browse")).handler as CapabilityHandlerFn,
 );
 registerHandler(
+  "plugin.org.list",
+  async () => (await import("./plugin.org.list")).handler as CapabilityHandlerFn,
+);
+registerHandler(
   "plugin.catalog.get",
   async () => (await import("./plugin.catalog.get")).handler as CapabilityHandlerFn,
 );

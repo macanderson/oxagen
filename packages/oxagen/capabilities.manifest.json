@@ -698,7 +698,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -713,7 +714,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -728,7 +730,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -743,7 +746,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -758,7 +762,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -773,7 +778,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -788,7 +794,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -803,7 +810,24 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "plugin.org.list",
+      "file": "plugin.org.list.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -818,7 +842,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -833,7 +858,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -848,7 +874,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -863,7 +890,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -878,7 +906,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -893,7 +922,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -908,7 +938,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -923,7 +954,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,

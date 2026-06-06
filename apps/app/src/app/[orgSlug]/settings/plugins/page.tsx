@@ -58,7 +58,7 @@ export default async function OrgPluginsPage({
     messageId: null as string | null,
   };
 
-  // Fetch registries via capability and org listings + denylist directly from DB.
+  // Fetch registries via capability and org listings + denylist via plugin.org.list capability.
   type RegistryItem = {
     id: string;
     name: string;
@@ -67,31 +67,26 @@ export default async function OrgPluginsPage({
     isDefaultSeed: boolean;
     lastSyncedAt: string | null;
   };
+  type OrgListResult = {
+    listings: (typeof schema.pluginOrgListings.$inferSelect)[];
+    denylist: (typeof schema.pluginOrgDenylist.$inferSelect)[];
+  };
 
-  const [registriesResult, listings, denylisted] = await Promise.all([
+  const [registriesResult, orgListResult] = await Promise.all([
     (invoke("plugin.registry.list", {}, ctx, { surface: "agent" }) as Promise<{ registries: RegistryItem[] }>).catch(() => ({
       registries: [] as RegistryItem[],
     })),
-    // plugin.org.list capability not yet shipped — read directly from DB.
-    runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
-      withTenantDb((tx) =>
-        tx
-          .select()
-          .from(schema.pluginOrgListings)
-          .where(eq(schema.pluginOrgListings.orgId, org.id))
-          .orderBy(schema.pluginOrgListings.name),
-      ),
-    ).catch(() => [] as (typeof schema.pluginOrgListings.$inferSelect)[]),
-    runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
-      withTenantDb((tx) =>
-        tx
-          .select()
-          .from(schema.pluginOrgDenylist)
-          .where(eq(schema.pluginOrgDenylist.orgId, org.id))
-          .orderBy(schema.pluginOrgDenylist.serverName),
-      ),
-    ).catch(() => [] as (typeof schema.pluginOrgDenylist.$inferSelect)[]),
+    (invoke("plugin.org.list", {}, ctx, { surface: "agent" }) as Promise<OrgListResult>).catch(() => ({
+      listings: [] as (typeof schema.pluginOrgListings.$inferSelect)[],
+      denylist: [] as (typeof schema.pluginOrgDenylist.$inferSelect)[],
+    })),
   ]);
+
+  // The capability returns ISO strings for timestamps; the panel type expects Date objects.
+  // Cast here — the panel only reads non-timestamp fields (id, name, title, etc.) so
+  // the shape is safe at runtime for all fields the UI actually accesses.
+  const listings = orgListResult.listings as unknown as (typeof schema.pluginOrgListings.$inferSelect)[];
+  const denylisted = orgListResult.denylist as unknown as (typeof schema.pluginOrgDenylist.$inferSelect)[];
 
   // Read auth-alert settings from org.settings JSONB if present.
   const [orgRow] = await withSystemDb((tx) =>
