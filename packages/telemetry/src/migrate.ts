@@ -5,11 +5,23 @@ import { createClient } from "@clickhouse/client";
 import { requireEnv } from "@oxagen/config/env";
 import { clickhouse, closeClickhouse } from "./clickhouse";
 
+/** Sleep helper for the cold-start retry loop. */
+function delay(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 /**
  * Create the target database if it doesn't exist. The local docker ClickHouse
  * auto-creates it from CLICKHOUSE_DB, but ClickHouse Cloud does not — and a
  * connection scoped to a database that doesn't exist yet is rejected, so the
  * `CREATE DATABASE` must run through a bootstrap client with no database bound.
+ *
+ * ClickHouse Cloud auto-pauses idle services; the first connection wakes the
+ * service, which can take longer than the default 30s request timeout. So this
+ * is the first CH contact of the migrate run: use a longer per-attempt timeout
+ * and retry on transient connection/timeout errors so a cold-start wake-up
+ * doesn't fail the deploy. A genuinely-unreachable service still fails after
+ * the retries (surfacing the real problem rather than hiding it).
  */
 async function ensureDatabase(): Promise<void> {
   const env = requireEnv([
@@ -22,11 +34,28 @@ async function ensureDatabase(): Promise<void> {
     url: env.CLICKHOUSE_URL,
     username: env.CLICKHOUSE_USERNAME,
     password: env.CLICKHOUSE_PASSWORD,
+    request_timeout: 60_000,
   });
+  const attempts = 5;
   try {
-    await bootstrap.command({
-      query: `CREATE DATABASE IF NOT EXISTS \`${env.CLICKHOUSE_DATABASE}\``,
-    });
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        await bootstrap.command({
+          query: `CREATE DATABASE IF NOT EXISTS \`${env.CLICKHOUSE_DATABASE}\``,
+        });
+        return;
+      } catch (err) {
+        if (attempt === attempts) throw err;
+        process.stderr.write(
+          JSON.stringify({
+            level: "warn",
+            msg: `ClickHouse not ready (attempt ${attempt}/${attempts}) — likely a Cloud cold-start; retrying`,
+            err: err instanceof Error ? err.message : String(err),
+          }) + "\n",
+        );
+        await delay(15_000);
+      }
+    }
   } finally {
     await bootstrap.close();
   }
