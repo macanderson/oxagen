@@ -8,6 +8,9 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
+      // Barrels/registries with no testable logic — exclude so the metrics
+      // reflect actual function/branch coverage of the handlers.
+      exclude: ["src/index.ts", "src/functions.ts", "src/inngest.ts", "src/logger.ts"],
       // lines floor 68 (measured 73.81); target 75 — raise in follow-up
       // branches floor 64 (measured 69.51); target 70 — raise in follow-up
       thresholds: {
