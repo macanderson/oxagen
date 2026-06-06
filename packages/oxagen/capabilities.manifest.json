@@ -13,6 +13,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "mcp": true,
         "unit": true,
         "e2e": true,
         "docs": true
@@ -120,6 +121,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "mcp": true,
         "unit": true,
         "e2e": true,
         "docs": true

@@ -174,3 +174,50 @@ describe("security_events CHECK constraints", () => {
     ).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 6. security_events: event_type CHECK constraint includes all billing.* types
+//    (SOC2 CC6.3/CC6.8 drift guard — if this fails, the TS union and/or
+//    migration SQL are out of sync with the Drizzle table definition)
+// ---------------------------------------------------------------------------
+
+import { SECURITY_EVENT_TYPES } from "../schema/security";
+
+describe("security_events event_type CHECK constraint — billing.* types present", () => {
+  const cfg = getTableConfig(securityEvents);
+  const checks = cfg.checks as DrizzleCheck[];
+
+  const eventTypeCheck = checks.find((c) => c.name.includes("event_type_check"));
+
+  it("has an event_type_check constraint", () => {
+    expect(
+      eventTypeCheck,
+      `Expected a CHECK named "..._event_type_check" but found: [${checks.map((c) => c.name).join(", ")}]`,
+    ).toBeDefined();
+  });
+
+  it("CHECK SQL includes all billing.* values from the TS union", () => {
+    const sql = flattenCheckSql(eventTypeCheck!);
+    const billingTypes = SECURITY_EVENT_TYPES.filter((t) => t.startsWith("billing."));
+    for (const t of billingTypes) {
+      expect(sql, `CHECK SQL missing billing type "${t}": got "${sql}"`).toContain(t);
+    }
+  });
+
+  it("SECURITY_EVENT_TYPES includes exactly the expected billing.* event types", () => {
+    const billingTypes = SECURITY_EVENT_TYPES.filter((t) => t.startsWith("billing."));
+    const expected = [
+      "billing.access_denied",
+      "billing.auto_reload_updated",
+      "billing.credits_purchased",
+      "billing.payment_method_added",
+      "billing.payment_method_default_changed",
+      "billing.payment_method_removed",
+      "billing.plan_changed",
+      "billing.seats_changed",
+      "billing.subscription_canceled",
+      "billing.subscription_reactivated",
+    ];
+    expect(billingTypes.sort()).toEqual(expected.sort());
+  });
+});

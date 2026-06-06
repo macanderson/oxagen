@@ -25,6 +25,15 @@ import { loadEnv } from "@oxagen/config/env";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
+import { makeSecurityEventInserter } from "@oxagen/database/security";
+import { recordSecurityEvent } from "@oxagen/telemetry";
+
+// Lazy singleton — avoids constructing the inserter until first call.
+let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
+function auditInsert() {
+  if (!_auditInsert) _auditInsert = makeSecurityEventInserter();
+  return _auditInsert;
+}
 
 const CAN_MANAGE_BILLING = new Set(["owner", "admin", "billing"]);
 
@@ -46,7 +55,9 @@ const CAN_MANAGE_BILLING = new Set(["owner", "admin", "billing"]);
 // not evaluated by RLS. — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
-async function resolveManagedOrg(orgSlug: string): Promise<{ orgId: string } | null> {
+async function resolveManagedOrg(
+  orgSlug: string,
+): Promise<{ orgId: string; actorUserId: string } | null> {
   const session = await getSessionOrRedirect();
   const tenant = await resolveOrg(orgSlug);
   if (!session.user) return null;
@@ -70,9 +81,22 @@ async function resolveManagedOrg(orgSlug: string): Promise<{ orgId: string } | n
   const role = row?.role ?? null;
   if (!role || !CAN_MANAGE_BILLING.has(role)) {
     logger.warn({ orgSlug, userId: session.user.id, role }, "billing: action denied — not a billing manager");
+    // Emit billing.access_denied audit row (fire-and-forget; must not fail the
+    // gate itself). orgId is always available at this point (resolveOrg succeeded).
+    recordSecurityEvent(auditInsert(), {
+      eventType: "billing.access_denied",
+      actorUserId: session.user.id,
+      orgId: tenant.id,
+      workspaceId: null,
+      capability: "billing.manage",
+      outcome: "deny",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
     return null;
   }
-  return { orgId: tenant.id };
+  return { orgId: tenant.id, actorUserId: session.user.id };
 }
 
 /** Standard unauthorized message for billing-management actions. */
@@ -92,6 +116,17 @@ export async function cancelSubscriptionAction(input: {
   }
   revalidatePath(`/${input.orgSlug}/billing`);
   revalidatePath(`/${input.orgSlug}/billing/subscription`);
+  recordSecurityEvent(auditInsert(), {
+    eventType: "billing.subscription_canceled",
+    actorUserId: managed.actorUserId,
+    orgId: managed.orgId,
+    workspaceId: null,
+    capability: "billing.subscription.cancel",
+    outcome: "success",
+    ip: null,
+    userAgent: null,
+    requestId: null,
+  });
   return { ok: true };
 }
 
@@ -109,6 +144,17 @@ export async function reactivateSubscriptionAction(input: {
   }
   revalidatePath(`/${input.orgSlug}/billing`);
   revalidatePath(`/${input.orgSlug}/billing/subscription`);
+  recordSecurityEvent(auditInsert(), {
+    eventType: "billing.subscription_reactivated",
+    actorUserId: managed.actorUserId,
+    orgId: managed.orgId,
+    workspaceId: null,
+    capability: "billing.subscription.reactivate",
+    outcome: "success",
+    ip: null,
+    userAgent: null,
+    requestId: null,
+  });
   return { ok: true };
 }
 
@@ -147,11 +193,35 @@ export async function changePlanAction(
       revalidatePath(`/${orgSlug}/billing`);
       revalidatePath(`/${orgSlug}/billing/subscription`);
       logger.info({ orgSlug, targetPlanSlug, interval }, "billing: plan swapped in-place");
+      recordSecurityEvent(auditInsert(), {
+        eventType: "billing.plan_changed",
+        actorUserId: managed.actorUserId,
+        orgId: managed.orgId,
+        workspaceId: null,
+        capability: "billing.plan.change",
+        outcome: "success",
+        ip: null,
+        userAgent: null,
+        requestId: null,
+      });
       return { ok: true, url: null };
     }
 
-    // New checkout session — redirect.
+    // New checkout session — redirect. Audit event emitted here too since the
+    // action was authorised and initiated (checkout URL creation = plan change
+    // intent; the Stripe webhook completes the ledger side).
     logger.info({ orgSlug, targetPlanSlug, interval }, "billing: plan change → Stripe checkout");
+    recordSecurityEvent(auditInsert(), {
+      eventType: "billing.plan_changed",
+      actorUserId: managed.actorUserId,
+      orgId: managed.orgId,
+      workspaceId: null,
+      capability: "billing.plan.change",
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
     return { ok: true, url: result.checkoutUrl };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Plan change failed";
@@ -189,6 +259,17 @@ export async function setSeatsAction(
     revalidatePath(`/${orgSlug}/billing`);
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug, seats }, "billing: seats updated");
+    recordSecurityEvent(auditInsert(), {
+      eventType: "billing.seats_changed",
+      actorUserId: managed.actorUserId,
+      orgId: managed.orgId,
+      workspaceId: null,
+      capability: "billing.seats.change",
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
     return { ok: true };
   } catch (err) {
     if (isSeatLimitError(err)) {
@@ -240,6 +321,18 @@ export async function buyCreditsAction(
       return { ok: false, error: text || "Credits checkout failed" };
     }
     const json = (await res.json()) as { url: string };
+    // Checkout URL created — credits purchase intent authorised and initiated.
+    recordSecurityEvent(auditInsert(), {
+      eventType: "billing.credits_purchased",
+      actorUserId: managed.actorUserId,
+      orgId: managed.orgId,
+      workspaceId: null,
+      capability: "billing.credits.purchase",
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
     return { ok: true, url: json.url };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Credits checkout failed";
@@ -322,6 +415,17 @@ export async function createSetupIntentAction(input: {
   try {
     const { clientSecret } = await createPaymentMethodSetupIntent(managed.orgId);
     logger.info({ orgSlug }, "billing: createSetupIntentAction");
+    recordSecurityEvent(auditInsert(), {
+      eventType: "billing.payment_method_added",
+      actorUserId: managed.actorUserId,
+      orgId: managed.orgId,
+      workspaceId: null,
+      capability: "billing.payment_method.add",
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
     return { ok: true, clientSecret };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Setup intent failed";
@@ -375,6 +479,17 @@ export async function setDefaultPaymentMethodAction(input: {
     await setOrgDefaultPaymentMethod(managed.orgId, paymentMethodId);
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug, paymentMethodId }, "billing: setDefaultPaymentMethodAction");
+    recordSecurityEvent(auditInsert(), {
+      eventType: "billing.payment_method_default_changed",
+      actorUserId: managed.actorUserId,
+      orgId: managed.orgId,
+      workspaceId: null,
+      capability: "billing.payment_method.set_default",
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
     return { ok: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to set default";
@@ -400,6 +515,17 @@ export async function removePaymentMethodAction(input: {
     await removeOrgPaymentMethod(managed.orgId, paymentMethodId);
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug, paymentMethodId }, "billing: removePaymentMethodAction");
+    recordSecurityEvent(auditInsert(), {
+      eventType: "billing.payment_method_removed",
+      actorUserId: managed.actorUserId,
+      orgId: managed.orgId,
+      workspaceId: null,
+      capability: "billing.payment_method.remove",
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
     return { ok: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to remove payment method";
@@ -436,6 +562,17 @@ export async function updateAutoReloadAction(input: {
     const settings = await updateAutoReloadSettings(managed.orgId, updates);
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug }, "billing: updateAutoReloadAction");
+    recordSecurityEvent(auditInsert(), {
+      eventType: "billing.auto_reload_updated",
+      actorUserId: managed.actorUserId,
+      orgId: managed.orgId,
+      workspaceId: null,
+      capability: "billing.auto_reload.update",
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
     return { ok: true, settings };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to update auto-reload";

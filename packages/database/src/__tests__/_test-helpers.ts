@@ -28,10 +28,20 @@ export interface DrizzleCheck {
 
 // ---------------------------------------------------------------------------
 // Helper: flatten queryChunks into a single inspectable SQL string.
+//
+// Drizzle stores CHECK SQL as a tree of queryChunk objects:
+//   - Column refs: { name: string, ... }
+//   - SQL literals: { value: string[] }
+//   - Nested SQL (e.g. sql.raw(...)): { queryChunks: QueryChunk[] }
+//
+// We recurse into nested queryChunks so that sql.raw(...) values are included.
 // ---------------------------------------------------------------------------
 
 export function flattenCheckSql(check: DrizzleCheck): string {
-  const chunks = check.value.queryChunks ?? [];
+  return flattenChunks(check.value.queryChunks ?? []);
+}
+
+function flattenChunks(chunks: QueryChunk[]): string {
   return chunks
     .map((chunk) => {
       if (chunk === null || typeof chunk !== "object") return "";
@@ -43,6 +53,10 @@ export function flattenCheckSql(check: DrizzleCheck): string {
         return (c["value"] as unknown[])
           .filter((v): v is string => typeof v === "string")
           .join("");
+      }
+      // Nested SQL object (e.g. sql.raw(...)): recurse into its queryChunks.
+      if (Array.isArray(c["queryChunks"])) {
+        return flattenChunks(c["queryChunks"] as QueryChunk[]);
       }
       return "";
     })
