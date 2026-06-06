@@ -48,6 +48,7 @@ import { conversationRenameRoute } from "./routes/v1/conversation.rename";
 import { conversationArchiveRoute } from "./routes/v1/conversation.archive";
 import { conversationDeleteRoute } from "./routes/v1/conversation.delete";
 import { conversationPurgeRoute } from "./routes/v1/conversation.purge";
+import { assetUploadRoute } from "./routes/v1/asset.upload";
 
 export type AppEnv = {
   Variables: {
@@ -125,4 +126,5 @@ orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
 orgScoped.route("/files", filesServeRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsReadRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsWriteRoute);
+orgScoped.route("/asset/upload", assetUploadRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

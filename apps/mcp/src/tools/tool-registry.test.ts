@@ -27,6 +27,7 @@ import { metadata as agentTaskBackgroundCancelMetadata } from "./agent.task.back
 import { metadata as agentTaskBackgroundReadMetadata } from "./agent.task.background.read";
 import { metadata as agentTaskBackgroundStartMetadata } from "./agent.task.background.start";
 import { metadata as agentToolListMetadata } from "./agent.tool.list";
+import { metadata as assetUploadMetadata } from "./asset.upload";
 import { metadata as billingCreditsPurchaseMetadata } from "./billing.credits.purchase";
 import { metadata as billingSubscriptionReadMetadata } from "./billing.subscription.read";
 import { metadata as billingSubscriptionUpgradeStartMetadata } from "./billing.subscription.upgrade.start";
@@ -70,6 +71,7 @@ const allToolMetadata = [
   agentTaskBackgroundReadMetadata,
   agentTaskBackgroundStartMetadata,
   agentToolListMetadata,
+  assetUploadMetadata,
   billingCreditsPurchaseMetadata,
   billingSubscriptionReadMetadata,
   billingSubscriptionUpgradeStartMetadata,

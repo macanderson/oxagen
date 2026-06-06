@@ -29,6 +29,8 @@ export const billingCreditsPurchaseHandler: CapabilityHandler<
     const result = await createUsageCreditCheckout({
       orgId: ctx.orgId,
       grantCents,
+      successUrl: input.successUrl,
+      cancelUrl: input.cancelUrl,
     });
 
     logger.info(

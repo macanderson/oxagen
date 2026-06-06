@@ -5,6 +5,11 @@
  *   storage()                  → the configured StorageAdapter (singleton)
  *   createVercelBlobAdapter()  → construct the Vercel Blob driver explicitly
  *   StorageAdapter, Put*       → the adapter contract types
+ *   AssetKind                  → "avatar" | "image" | "document"
+ *   ASSET_LIMITS               → max byte sizes per kind
+ *   ASSET_ALLOWED_TYPES        → allowed MIME types per kind
+ *   assertAllowedAssetType()   → validate MIME type or throw
+ *   deriveAssetKey()           → server-controlled storage key
  *
  * Never import `@vercel/blob` outside this package. See
  * [[storage-vercel-blob-adapter]].
@@ -18,3 +23,10 @@ export type {
   PutObjectResult,
   GetObjectResult,
 } from "./types";
+export {
+  ASSET_LIMITS,
+  ASSET_ALLOWED_TYPES,
+  assertAllowedAssetType,
+  deriveAssetKey,
+} from "./assets";
+export type { AssetKind } from "./assets";

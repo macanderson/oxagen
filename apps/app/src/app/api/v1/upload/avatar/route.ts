@@ -1,22 +1,16 @@
-import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { storage } from "@oxagen/storage";
+import {
+  ASSET_LIMITS,
+  assertAllowedAssetType,
+  deriveAssetKey,
+  storage,
+} from "@oxagen/storage";
 import { getSession } from "@/lib/session";
 
 // Avatar upload runs on the Node runtime (the storage adapter uses Node crypto
 // and the Vercel Blob SDK) and must never be cached.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// Hard limits. The client crops to a 512×512 webp (~tens of KB), so 5 MB is a
-// generous ceiling that still blocks abuse. Only raster image types the cropper
-// produces/accepts are allowed.
-const MAX_BYTES = 5 * 1024 * 1024;
-const ALLOWED_TYPES: Record<string, string> = {
-  "image/webp": "webp",
-  "image/png": "png",
-  "image/jpeg": "jpg",
-};
 
 /**
  * POST /api/v1/upload/avatar
@@ -27,8 +21,13 @@ const ALLOWED_TYPES: Record<string, string> = {
  * action) or org (org settings action) after its own authorization checks.
  *
  * Auth: any signed-in user may upload. The object key is derived server-side
- * from the user id + a random UUID, so the client can never control the storage
- * path (no traversal / overwrite of another user's object).
+ * from the user id + a random UUID via `deriveAssetKey`, so the client can
+ * never control the storage path (no traversal / overwrite of another user's
+ * object).
+ *
+ * Limits and allowed types come from `@oxagen/storage` (ASSET_LIMITS,
+ * assertAllowedAssetType) — the single source of truth shared with the
+ * asset.upload capability handler.
  */
 export async function POST(req: Request): Promise<NextResponse> {
   const session = await getSession();
@@ -48,22 +47,25 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Missing file" }, { status: 400 });
   }
 
-  const ext = ALLOWED_TYPES[file.type];
-  if (!ext) {
+  let ext: string;
+  try {
+    ext = assertAllowedAssetType("avatar", file.type);
+  } catch {
     return NextResponse.json(
       { error: "Unsupported image type. Use PNG, JPEG, or WebP." },
       { status: 415 },
     );
   }
+
   if (file.size === 0) {
     return NextResponse.json({ error: "File is empty" }, { status: 400 });
   }
-  if (file.size > MAX_BYTES) {
+  if (file.size > ASSET_LIMITS.avatar) {
     return NextResponse.json({ error: "Image exceeds the 5 MB limit" }, { status: 413 });
   }
 
   // Server-derived key — user-controlled input never reaches the storage path.
-  const key = `avatars/${session.user.id}/${randomUUID()}.${ext}`;
+  const key = deriveAssetKey("avatar", session.user.id, ext);
 
   try {
     const { url } = await storage().put({ key, body: file, contentType: file.type, access: "public" });

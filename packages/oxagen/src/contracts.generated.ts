@@ -19,6 +19,7 @@ import "./contracts/agent.task.background.cancel";
 import "./contracts/agent.task.background.read";
 import "./contracts/agent.task.background.start";
 import "./contracts/agent.tool.list";
+import "./contracts/asset.upload";
 import "./contracts/billing.credits.purchase";
 import "./contracts/billing.subscription.read";
 import "./contracts/billing.subscription.upgrade.start";

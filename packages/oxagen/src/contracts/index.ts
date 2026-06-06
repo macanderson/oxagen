@@ -8,6 +8,7 @@
 // Note: these imports trigger the registerCapability() side-effects inside
 // each file, so this barrel also serves as the registration entrypoint.
 
+import { assetUpload } from "./asset.upload";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentCodeExecute } from "./agent.code.execute";
 import { brandkitApply } from "./brandkit.apply";
@@ -54,6 +55,7 @@ import { workspaceModelSettingsRead } from "./workspace.model.settings.read";
 import { workspaceModelSettingsWrite } from "./workspace.model.settings.write";
 
 export {
+  assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
   brandkitApply,
@@ -109,6 +111,7 @@ export {
  * Add one entry here whenever a new contract file is added to this directory.
  */
 export const contracts = [
+  assetUpload,
   agentApprovalResolve,
   brandkitApply,
   documentsGenerate,

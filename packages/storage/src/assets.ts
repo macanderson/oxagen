@@ -1,0 +1,93 @@
+/**
+ * Shared asset rules — single source of truth for limits, allowed types, and
+ * server-derived key generation. Imported by both the browser multipart upload
+ * route (apps/app/src/app/api/v1/upload/avatar/route.ts) and the asset.upload
+ * capability handler (@oxagen/handlers). Keeping them in one place eliminates
+ * drift.
+ */
+import { randomUUID } from "node:crypto";
+
+// ── Asset kind ────────────────────────────────────────────────────────────────
+
+export type AssetKind = "avatar" | "image" | "document";
+
+// ── Size limits (bytes) ───────────────────────────────────────────────────────
+
+/**
+ * Maximum byte size for each asset kind.
+ * - avatar / image: 5 MiB — generous for browser-cropped images.
+ * - document: 25 MiB — covers typical PDFs and office files.
+ */
+export const ASSET_LIMITS: Record<AssetKind, number> = {
+  avatar: 5 * 1024 * 1024,
+  image: 5 * 1024 * 1024,
+  document: 25 * 1024 * 1024,
+};
+
+// ── Allowed MIME types ────────────────────────────────────────────────────────
+
+/**
+ * Allowed content-type → extension mapping per asset kind.
+ *
+ * avatar and image: raster formats only (webp / png / jpeg).
+ * document: those three plus PDF.
+ */
+export const ASSET_ALLOWED_TYPES: Record<AssetKind, Record<string, string>> = {
+  avatar: {
+    "image/webp": "webp",
+    "image/png": "png",
+    "image/jpeg": "jpg",
+  },
+  image: {
+    "image/webp": "webp",
+    "image/png": "png",
+    "image/jpeg": "jpg",
+  },
+  document: {
+    "image/webp": "webp",
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "application/pdf": "pdf",
+  },
+};
+
+// ── Validation helpers ────────────────────────────────────────────────────────
+
+/**
+ * Assert that `mime` is an allowed content type for `kind`.
+ *
+ * Returns the file extension (e.g. `"webp"`) when the type is allowed.
+ * Throws an `Error` with a user-facing message when it is not.
+ *
+ * Never throws for a valid (kind, mime) pair — callers can rely on the
+ * returned extension being a non-empty string.
+ */
+export function assertAllowedAssetType(kind: AssetKind, mime: string): string {
+  const allowed = ASSET_ALLOWED_TYPES[kind];
+  const ext = allowed[mime];
+  if (!ext) {
+    const permitted = Object.keys(allowed).join(", ");
+    throw new Error(
+      `Unsupported ${kind} type "${mime}". Permitted types: ${permitted}`,
+    );
+  }
+  return ext;
+}
+
+// ── Key derivation ────────────────────────────────────────────────────────────
+
+/**
+ * Derive a server-controlled storage key for a new asset.
+ *
+ * The key is `<kind>/<ownerId>/<uuid>.<ext>` where `ownerId` is always a
+ * server-side value (org id, user id) — never user input. The UUID is
+ * generated with `node:crypto` so the client can never predict or control
+ * the storage path (prevents traversal and overwrite attacks).
+ *
+ * @param kind     - Asset category ("avatar" | "image" | "document").
+ * @param ownerId  - Server-resolved owner identifier (org id or user id).
+ * @param ext      - File extension without a leading dot, e.g. "webp".
+ */
+export function deriveAssetKey(kind: AssetKind, ownerId: string, ext: string): string {
+  return `${kind}/${ownerId}/${randomUUID()}.${ext}`;
+}

@@ -29,6 +29,16 @@ export const billingCreditsPurchase = registerCapability({
      * 1 credit = 1¢, so amountUsd * 100 = credits granted.
      */
     amountUsd: z.number().positive().min(5, "Minimum purchase is $5"),
+    /**
+     * Optional Stripe Checkout success redirect URL. When omitted the handler
+     * falls back to the billing package default.
+     */
+    successUrl: z.string().url().optional(),
+    /**
+     * Optional Stripe Checkout cancel redirect URL. When omitted the handler
+     * falls back to the billing package default.
+     */
+    cancelUrl: z.string().url().optional(),
   }),
   output: z.object({
     /** Stripe Checkout URL to redirect the customer to. */

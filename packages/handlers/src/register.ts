@@ -6,6 +6,11 @@ import { registerHandler, type CapabilityHandlerFn } from "@oxagen/oxagen/kernel
 // in Stripe / Drizzle until a capability is actually invoked.
 
 registerHandler(
+  "asset.upload",
+  async () =>
+    (await import("./asset.upload")).assetUploadHandler as CapabilityHandlerFn,
+);
+registerHandler(
   "organization.create",
   async () => (await import("./organization.create")).organizationCreateHandler as CapabilityHandlerFn,
 );

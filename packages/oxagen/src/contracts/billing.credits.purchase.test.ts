@@ -13,6 +13,34 @@ describe("billing.credits.purchase capability", () => {
     ).not.toThrow();
   });
 
+  it("parses input with optional successUrl and cancelUrl", () => {
+    expect(() =>
+      billingCreditsPurchase.input.parse({
+        amountUsd: 50,
+        successUrl: "https://app.example.com/billing?status=success",
+        cancelUrl: "https://app.example.com/billing?status=canceled",
+      }),
+    ).not.toThrow();
+  });
+
+  it("accepts input without successUrl and cancelUrl (they are optional)", () => {
+    const result = billingCreditsPurchase.input.parse({ amountUsd: 25 });
+    expect(result.successUrl).toBeUndefined();
+    expect(result.cancelUrl).toBeUndefined();
+  });
+
+  it("rejects invalid successUrl", () => {
+    expect(() =>
+      billingCreditsPurchase.input.parse({ amountUsd: 50, successUrl: "not-a-url" }),
+    ).toThrow();
+  });
+
+  it("rejects invalid cancelUrl", () => {
+    expect(() =>
+      billingCreditsPurchase.input.parse({ amountUsd: 50, cancelUrl: "not-a-url" }),
+    ).toThrow();
+  });
+
   it("rejects amountUsd below minimum ($5)", () => {
     expect(() =>
       billingCreditsPurchase.input.parse({ amountUsd: 4 }),
