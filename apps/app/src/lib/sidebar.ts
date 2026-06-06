@@ -122,7 +122,6 @@ const workspaceConfig: SidebarConfig = {
           ? workspace.activity.root(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "primary",
-      badge: () => 3,
     },
     {
       id: "studio",

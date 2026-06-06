@@ -1,13 +1,87 @@
-import { eq, and } from "drizzle-orm";
-import { withTenantDb, schema } from "@oxagen/database";
-import { runInTenantScope } from "@oxagen/tenancy";
-import { getOrgSeatUsage } from "@oxagen/billing";
-import { resolveOrg } from "@/lib/resolve-org";
-import { getSession } from "@/lib/session";
+/**
+ * Members page — static mock UI.
+ *
+ * Renders the MembersPanel with hardcoded realistic data.
+ * ZERO server data dependencies — all data is inline mock constants.
+ * Will be wired to live member data in OXA-XXXX (see parent ticket).
+ */
 
-// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
+import type { OrgSeatUsage } from "@oxagen/billing";
 import { MembersPanel } from "@/components/workspace/members-panel";
+
+// ---------------------------------------------------------------------------
+// Mock data — realistic, hardcoded. Replace with DB query when wired.
+// ---------------------------------------------------------------------------
+
+const MOCK_MEMBERS = [
+  {
+    publicId: "mem_01j9xwua",
+    userId: "usr_01j9xwua",
+    email: "mac@oxagen.ai",
+    displayName: "Mac Anderson",
+    role: "owner",
+    joinedAt: "2026-05-28T00:00:00Z",
+  },
+  {
+    publicId: "mem_02j9xwub",
+    userId: "usr_02j9xwub",
+    email: "sarah@acme.io",
+    displayName: "Sarah Chen",
+    role: "admin",
+    joinedAt: "2026-05-29T00:00:00Z",
+  },
+  {
+    publicId: "mem_03j9xwuc",
+    userId: "usr_03j9xwuc",
+    email: "james@acme.io",
+    displayName: "James Park",
+    role: "billing",
+    joinedAt: "2026-05-30T00:00:00Z",
+  },
+  {
+    publicId: "mem_04j9xwud",
+    userId: "usr_04j9xwud",
+    email: "priya@acme.io",
+    displayName: "Priya Nair",
+    role: "member",
+    joinedAt: "2026-06-01T00:00:00Z",
+  },
+  {
+    publicId: "mem_05j9xwue",
+    userId: "usr_05j9xwue",
+    email: "lena@acme.io",
+    displayName: "Lena Brandt",
+    role: "viewer",
+    joinedAt: "2026-06-02T00:00:00Z",
+  },
+];
+
+const MOCK_PENDING_INVITATIONS = [
+  {
+    publicId: "inv_01",
+    email: "jordan.lee@acme.io",
+    role: "admin",
+    createdAt: "2026-06-05T10:00:00Z",
+    expiresAt: "2026-06-13T10:00:00Z",
+  },
+  {
+    publicId: "inv_02",
+    email: "priya.sharma@acme.io",
+    role: "member",
+    createdAt: "2026-06-04T15:30:00Z",
+    expiresAt: "2026-06-11T15:30:00Z",
+  },
+];
+
+const MOCK_SEAT_USAGE: OrgSeatUsage = {
+  licenses: 10,
+  used: 5,
+  available: 5,
+};
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default async function MembersPage({
   params,
@@ -15,99 +89,21 @@ export default async function MembersPage({
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
-  const [tenant, session] = await Promise.all([resolveOrg(orgSlug), getSession()]);
-
-  // All queries below are org-only — sentinel workspaceId. — OXA-1515
-  // Viewer's role in this org — for UI gating of mutating controls.
-  const viewerRow = session?.user
-    ? (
-        await runInTenantScope(
-          { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
-          () =>
-            withTenantDb((tx) =>
-              tx
-                .select({ role: schema.orgUsers.role })
-                .from(schema.orgUsers)
-                .where(
-                  and(
-                    eq(schema.orgUsers.orgId, tenant.id),
-                    eq(schema.orgUsers.userId, session.user.id),
-                  ),
-                )
-                .limit(1),
-            ),
-        )
-      )[0] ?? null
-    : null;
-
-  const viewerRole = viewerRow?.role ?? "member";
-
-  const [memberRows, pendingInvitations, seatUsage] = await Promise.all([
-    runInTenantScope(
-      { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
-      () =>
-        withTenantDb((tx) =>
-          tx
-            .select({
-              publicId: schema.orgUsers.publicId,
-              userId: schema.orgUsers.userId,
-              role: schema.orgUsers.role,
-              joinedAt: schema.orgUsers.joinedAt,
-              email: schema.users.email,
-              displayName: schema.users.displayName,
-            })
-            .from(schema.orgUsers)
-            .innerJoin(schema.users, eq(schema.users.id, schema.orgUsers.userId))
-            .where(eq(schema.orgUsers.orgId, tenant.id)),
-        ),
-    ),
-
-    runInTenantScope(
-      { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
-      () =>
-        withTenantDb((tx) =>
-          tx
-            .select({
-              publicId: schema.invitations.publicId,
-              email: schema.invitations.email,
-              role: schema.invitations.role,
-              createdAt: schema.invitations.createdAt,
-              expiresAt: schema.invitations.expiresAt,
-            })
-            .from(schema.invitations)
-            .where(
-              and(
-                eq(schema.invitations.orgId, tenant.id),
-                eq(schema.invitations.status, "pending"),
-              ),
-            ),
-        ),
-    ),
-
-    getOrgSeatUsage(tenant.id),
-  ]);
 
   return (
-    <MembersPanel
-      orgSlug={orgSlug}
-      members={memberRows.map((r) => ({
-        publicId: r.publicId,
-        userId: r.userId,
-        email: r.email,
-        displayName: r.displayName,
-        role: r.role,
-        joinedAt: r.joinedAt,
-      }))}
-      pendingInvitations={pendingInvitations.map((i) => ({
-        publicId: i.publicId,
-        email: i.email,
-        role: i.role,
-        createdAt: i.createdAt?.toISOString() ?? null,
-        expiresAt: i.expiresAt?.toISOString() ?? null,
-      }))}
-      seatUsage={seatUsage}
-      viewerRole={viewerRole}
-      viewerUserId={session?.user?.id ?? ""}
-    />
+    <div className="flex flex-col gap-4">
+      {/* Preview pill */}
+      <p className="text-[11px] text-muted-foreground/60 font-medium">
+        Preview &middot; not yet wired to live data
+      </p>
+      <MembersPanel
+        orgSlug={orgSlug}
+        members={MOCK_MEMBERS}
+        pendingInvitations={MOCK_PENDING_INVITATIONS}
+        seatUsage={MOCK_SEAT_USAGE}
+        viewerRole="owner"
+        viewerUserId="usr_01j9xwua"
+      />
+    </div>
   );
 }
