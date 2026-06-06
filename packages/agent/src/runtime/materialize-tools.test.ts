@@ -72,25 +72,6 @@ vi.mock("@oxagen/sandbox", () => ({
   isSandboxAvailable: vi.fn(() => false),
 }));
 
-// Stub the database so MCP server rows can be returned without a real DB.
-vi.mock("@oxagen/database", () => {
-  const mockSelect = vi.fn();
-  const mockFrom = vi.fn(() => ({ where: vi.fn(async () => []) }));
-  mockSelect.mockReturnValue({ from: mockFrom });
-  return {
-    db: vi.fn(() => ({ select: mockSelect })),
-    schema: {
-      mcpServers: {
-        orgId: "orgId",
-        workspaceId: "workspaceId",
-        healthStatus: "healthStatus",
-      },
-    },
-    eq: vi.fn((_a: unknown, _b: unknown) => `eq_${String(_b)}`),
-    and: vi.fn((...args: unknown[]) => args),
-  };
-});
-
 // Stub the MCP client so tests can inject fake tool executes.
 vi.mock("../dispatch/mcp-client", () => ({
   connectMcp: vi.fn(async () => ({})),
