@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   clearRegistryForTests,
@@ -40,14 +40,22 @@ describe("capability registry", () => {
     expect(listCapabilities().filter((c) => c.name === "test.beta")).toHaveLength(1);
   });
 
-  it("throws when a different declaration claims an already-registered name", () => {
-    registerCapability(makeCap("test.gamma"));
-    expect(() =>
-      registerCapability({
-        ...makeCap("test.gamma"),
-        description: "a conflicting redefinition",
-      }),
-    ).toThrow(/already registered/);
+  it("keeps the first registration and warns (not throws) when a different descriptor re-registers a name", () => {
+    // A clean module graph wouldn't do this, but Turbopack dev/HMR can evaluate
+    // a contract twice with a desynced descriptor. Crashing the running app over
+    // that bundler artifact is worse than the collision; genuine duplicate names
+    // are caught at build time by check:manifest. So the runtime stays resilient.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const first = registerCapability(makeCap("test.gamma"));
+    const second = registerCapability({
+      ...makeCap("test.gamma"),
+      description: "a conflicting redefinition",
+    });
+    expect(second).toBe(first); // first registration wins
+    expect(second.description).toBe("test capability"); // redefinition ignored
+    expect(listCapabilities().filter((c) => c.name === "test.gamma")).toHaveLength(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 
   it("lists all registered capabilities", () => {

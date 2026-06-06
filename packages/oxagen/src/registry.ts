@@ -54,9 +54,24 @@ export function registerCapability<C extends CapabilityDeclaration>(cap: C): C {
     if (capabilitySignature(existing) === capabilitySignature(cap)) {
       return existing as C;
     }
-    // Same name, different shape → a real collision: two contracts are fighting
-    // over one capability name. Fail loudly so the authoring mistake surfaces.
-    throw new Error(`Capability "${cap.name}" already registered`);
+    // Same name, different descriptor. In a clean module graph this would be a
+    // genuine authoring collision — but bundlers (Turbopack dev + HMR) can
+    // evaluate a contract module more than once in ways that desync the
+    // descriptor across the RSC/SSR/edge graphs (distinct zod instances, reload
+    // churn). Crashing the running app over that bundler artifact is worse than
+    // the collision we guard against, and it took down every dev-server page
+    // (and all e2e). Genuine duplicate *names* are caught deterministically at
+    // build time by tools/scripts/check_manifest.mjs (it fails on two contract
+    // files claiming one name). So warn (dev-visible) and keep the first
+    // registration instead of throwing.
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(
+        `[oxagen] Capability "${cap.name}" re-registered with a different descriptor; ` +
+          `keeping the first registration (likely a dev bundler/HMR artifact). ` +
+          `A real duplicate-name collision is failed by \`pnpm check:manifest\`.`,
+      );
+    }
+    return existing as C;
   }
   registry.set(cap.name, cap as CapabilityDeclaration);
   return cap;

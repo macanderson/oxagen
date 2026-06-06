@@ -138,6 +138,27 @@ function readCapabilities() {
 function main() {
   const caps = readCapabilities();
 
+  // Genuine duplicate-name collision gate. The runtime registry is now resilient
+  // to bundler/HMR re-registration (it keeps the first registration and warns
+  // rather than crashing the dev server), so THIS build-time check is the
+  // authoritative guard against two contract files claiming one capability name.
+  // Hard-fail (exit 2) — an authoring collision is a broken repo, not an
+  // incomplete feature.
+  const filesByName = new Map();
+  for (const cap of caps) {
+    const arr = filesByName.get(cap.name) ?? [];
+    arr.push(cap.file);
+    filesByName.set(cap.name, arr);
+  }
+  const duplicates = [...filesByName.entries()].filter(([, files]) => files.length > 1);
+  if (duplicates.length) {
+    console.error("DUPLICATE CAPABILITY NAMES — two contract files claim one name:");
+    for (const [name, files] of duplicates) {
+      console.error(`  - "${name}": ${files.join(", ")}`);
+    }
+    process.exit(2);
+  }
+
   // Auto-discovery: rewrite the contract barrel so adding a contract file is
   // the only step needed to register it.
   writeContractBarrel(caps.map((c) => c.file));
