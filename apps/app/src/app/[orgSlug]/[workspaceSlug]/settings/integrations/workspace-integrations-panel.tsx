@@ -351,23 +351,34 @@ export function WorkspaceIntegrationsPanel({
                           />
                         )}
                         {listing.authKind === "oauth" && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            render={
-                              <a
-                                href={`/api/v1/mcp/oauth/authorize?orgSlug=${orgSlug}&workspaceSlug=${workspaceSlug}&orgListingId=${listing.id}`}
-                                rel="noopener noreferrer"
+                          <span data-testid={`plugin-connect-btn-${listing.id}`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              render={
+                                <a
+                                  href={`/api/v1/mcp/oauth/authorize?orgSlug=${orgSlug}&workspaceSlug=${workspaceSlug}&orgListingId=${listing.id}`}
+                                  rel="noopener noreferrer"
+                                />
+                              }
+                              data-testid={`integrations-oauth-btn-${listing.id}`}
+                            >
+                              <ExternalLink
+                                className="mr-1 h-3.5 w-3.5"
+                                aria-hidden="true"
                               />
-                            }
-                            data-testid={`integrations-oauth-btn-${listing.id}`}
+                              {install ? "Reconnect" : "Connect"}
+                            </Button>
+                          </span>
+                        )}
+                        {/* Auth status indicator for E2E (shows "connected" when install row exists) */}
+                        {listing.authKind === "oauth" && install && (
+                          <span
+                            className="ml-2 text-xs text-success"
+                            data-testid={`plugin-auth-status-${listing.id}`}
                           >
-                            <ExternalLink
-                              className="mr-1 h-3.5 w-3.5"
-                              aria-hidden="true"
-                            />
-                            {install ? "Reconnect" : "Connect"}
-                          </Button>
+                            connected
+                          </span>
                         )}
                       </td>
                     )}

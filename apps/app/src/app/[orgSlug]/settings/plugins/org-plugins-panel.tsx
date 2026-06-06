@@ -266,6 +266,7 @@ function RegistriesSection({
               variant="outline"
               size="sm"
               onClick={() => setShowForm(true)}
+              data-testid="add-custom-registry-btn"
             >
               <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
               Add registry
@@ -282,6 +283,7 @@ function RegistriesSection({
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     disabled={pending}
+                    data-testid="custom-registry-name-input"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -293,12 +295,13 @@ function RegistriesSection({
                     value={baseUrl}
                     onChange={(e) => setBaseUrl(e.target.value)}
                     disabled={pending}
+                    data-testid="custom-registry-url-input"
                   />
                 </div>
               </div>
               {error && <p className="text-xs text-destructive">{error}</p>}
               <div className="flex items-center gap-2">
-                <Button size="sm" onClick={handleAdd} disabled={pending}>
+                <Button size="sm" onClick={handleAdd} disabled={pending} data-testid="custom-registry-submit-btn">
                   {pending ? "Adding…" : "Add registry"}
                 </Button>
                 <Button
@@ -379,6 +382,7 @@ function AllowListSection({
           variant="outline"
           size="sm"
           onClick={onBrowseMarketplace}
+          data-testid="browse-marketplace-btn"
         >
           <ShoppingBag className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           Browse marketplace
@@ -400,7 +404,10 @@ function AllowListSection({
             <tbody>
               {listings.map((listing) => (
                 <React.Fragment key={listing.id}>
-                  <tr className="border-b border-border/30 last:border-0">
+                  <tr
+                    className="border-b border-border/30 last:border-0"
+                    data-testid={`org-listing-row-${listing.id}`}
+                  >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {listing.iconUrl ? (
@@ -437,6 +444,7 @@ function AllowListSection({
                         onCheckedChange={(checked) => handleToggle(listing, checked)}
                         disabled={!canManage || pendingIds.has(listing.id)}
                         aria-label={`${listing.enabled ? "Disable" : "Enable"} ${listing.title ?? listing.name}`}
+                        data-testid={`org-listing-enable-toggle-${listing.id}`}
                       />
                     </td>
                     {canManage && (
@@ -447,6 +455,7 @@ function AllowListSection({
                           disabled={pendingIds.has(listing.id)}
                           className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
                           aria-label={`Uninstall ${listing.title ?? listing.name}`}
+                          data-testid={`org-listing-uninstall-btn-${listing.id}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -526,7 +535,7 @@ function CustomPluginSection({
       description="Connect a custom MCP server by entering its endpoint URL directly."
     >
       {!showForm ? (
-        <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+        <Button variant="outline" size="sm" onClick={() => setShowForm(true)} data-testid="add-custom-server-btn">
           <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           Add custom MCP server
         </Button>
@@ -542,6 +551,7 @@ function CustomPluginSection({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={pending}
+                data-testid="custom-server-name-input"
               />
               <p className="text-[10px] text-muted-foreground">Unique identifier, lowercase</p>
             </div>
@@ -567,6 +577,7 @@ function CustomPluginSection({
               value={endpointUrl}
               onChange={(e) => setEndpointUrl(e.target.value)}
               disabled={pending}
+              data-testid="custom-server-endpoint-input"
             />
           </div>
 
@@ -615,7 +626,7 @@ function CustomPluginSection({
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={handleSubmit} disabled={pending}>
+            <Button size="sm" onClick={handleSubmit} disabled={pending} data-testid="custom-server-submit-btn">
               {pending ? "Adding…" : "Add plugin"}
             </Button>
             <Button
@@ -735,7 +746,7 @@ function DenylistSection({
       {canManage && (
         <>
           {!showForm ? (
-            <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+            <Button variant="outline" size="sm" onClick={() => setShowForm(true)} data-testid="denylist-add-btn">
               <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
               Deny a plugin
             </Button>
@@ -751,6 +762,7 @@ function DenylistSection({
                     value={serverName}
                     onChange={(e) => setServerName(e.target.value)}
                     disabled={pending}
+                    data-testid="denylist-server-name-input"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -781,7 +793,7 @@ function DenylistSection({
               </div>
               {error && <p className="text-xs text-destructive">{error}</p>}
               <div className="flex items-center gap-2">
-                <Button size="sm" onClick={handleAdd} disabled={pending}>
+                <Button size="sm" onClick={handleAdd} disabled={pending} data-testid="denylist-submit-btn">
                   {pending ? "Adding…" : "Deny plugin"}
                 </Button>
                 <Button
