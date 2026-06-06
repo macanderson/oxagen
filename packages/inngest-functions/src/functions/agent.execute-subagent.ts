@@ -1,8 +1,9 @@
 import { inngest } from "../inngest";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { insertToolInvocation } from "@oxagen/telemetry";
+import { runInTenantScope } from "@oxagen/tenancy";
 import "@oxagen/oxagen";
 
 /** Pure helper — exported for unit testing. */
@@ -52,21 +53,29 @@ export const agentExecuteSubagent = inngest.createFunction(
       return { fanoutId, completed: 0, status: "failed", depthExceeded: true };
     }
 
-    const runs = await step.run("load-children", async () =>
-      db()
-        .select()
-        .from(schema.subagentRuns)
-        .where(
-          and(eq(schema.subagentRuns.fanoutId, fanoutId), eq(schema.subagentRuns.orgId, orgId)),
+    const runs = await step.run("load-children", () =>
+      runInTenantScope({ orgId, workspaceId }, () =>
+        withTenantDb((tx) =>
+          tx
+            .select()
+            .from(schema.subagentRuns)
+            .where(
+              and(eq(schema.subagentRuns.fanoutId, fanoutId), eq(schema.subagentRuns.orgId, orgId)),
+            ),
         ),
+      ),
     );
 
-    await step.run("mark-running", async () => {
-      await db()
-        .update(schema.subagentFanouts)
-        .set({ status: "running" })
-        .where(eq(schema.subagentFanouts.id, fanoutId));
-    });
+    await step.run("mark-running", () =>
+      runInTenantScope({ orgId, workspaceId }, () =>
+        withTenantDb((tx) =>
+          tx
+            .update(schema.subagentFanouts)
+            .set({ status: "running" })
+            .where(eq(schema.subagentFanouts.id, fanoutId)),
+        ),
+      ),
+    );
 
     let completed = 0;
     let anyFailed = false;
@@ -86,11 +95,19 @@ export const agentExecuteSubagent = inngest.createFunction(
         try {
           // Route through kernel.invoke() for IAM enforcement, audit, and
           // uniform metering (OXA-1498 — previously bypassed via invokeCapability).
+          // kernel.invoke() enters its own runInTenantScope internally (OXA-1515).
+          // Transaction-span caution (spec §6.2): invoke may run a long LLM call;
+          // keep withTenantDb blocks tight around DB-only work only.
           const output = await invoke(r.capabilityName, r.inputPayload, ctx);
-          await db()
-            .update(schema.subagentRuns)
-            .set({ status: "completed", outputPayload: (output ?? null) as object, completedAt: new Date() })
-            .where(eq(schema.subagentRuns.id, r.id));
+          // Tight DB block: runs after the invoke completes, not wrapping it.
+          await runInTenantScope({ orgId, workspaceId }, () =>
+            withTenantDb((tx) =>
+              tx
+                .update(schema.subagentRuns)
+                .set({ status: "completed", outputPayload: (output ?? null) as object, completedAt: new Date() })
+                .where(eq(schema.subagentRuns.id, r.id)),
+            ),
+          );
           // Write tool_invocations row for metering (OXA-1498).
           try {
             await insertToolInvocation({
@@ -119,14 +136,19 @@ export const agentExecuteSubagent = inngest.createFunction(
           }
           return true;
         } catch (err) {
-          await db()
-            .update(schema.subagentRuns)
-            .set({
-              status: "failed",
-              errorReason: err instanceof Error ? err.message : String(err),
-              completedAt: new Date(),
-            })
-            .where(eq(schema.subagentRuns.id, r.id));
+          // Tight DB block: runs after the invoke throws, not wrapping it.
+          await runInTenantScope({ orgId, workspaceId }, () =>
+            withTenantDb((tx) =>
+              tx
+                .update(schema.subagentRuns)
+                .set({
+                  status: "failed",
+                  errorReason: err instanceof Error ? err.message : String(err),
+                  completedAt: new Date(),
+                })
+                .where(eq(schema.subagentRuns.id, r.id)),
+            ),
+          );
           // Write failed tool_invocations row for metering.
           try {
             await insertToolInvocation({
@@ -161,14 +183,18 @@ export const agentExecuteSubagent = inngest.createFunction(
     }
 
     const finalStatus = deriveFanoutStatus(completed, runs.length, anyFailed);
-    await step.run("finalize", async () => {
-      await db()
-        .update(schema.subagentFanouts)
-        .set({ status: finalStatus, completedChildren: completed })
-        .where(
-          and(eq(schema.subagentFanouts.id, fanoutId), eq(schema.subagentFanouts.orgId, orgId)),
-        );
-    });
+    await step.run("finalize", () =>
+      runInTenantScope({ orgId, workspaceId }, () =>
+        withTenantDb((tx) =>
+          tx
+            .update(schema.subagentFanouts)
+            .set({ status: finalStatus, completedChildren: completed })
+            .where(
+              and(eq(schema.subagentFanouts.id, fanoutId), eq(schema.subagentFanouts.orgId, orgId)),
+            ),
+        ),
+      ),
+    );
 
     return { fanoutId, completed, status: finalStatus };
   },

@@ -1,8 +1,9 @@
 import { inngest } from "../inngest";
-import { db, schema } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { insertToolInvocation } from "@oxagen/telemetry";
+import { runInTenantScope } from "@oxagen/tenancy";
 import "@oxagen/oxagen";
 import { logger } from "../logger";
 
@@ -38,17 +39,21 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
     const { orgId, workspaceId, taskId, payload } = event.data;
     const p = (payload ?? {}) as BgPayload;
 
-    await step.run("mark-running", async () => {
-      await db()
-        .update(schema.backgroundTasks)
-        .set({ status: "running", startedAt: new Date() })
-        .where(
-          and(
-            eq(schema.backgroundTasks.publicId, taskId),
-            eq(schema.backgroundTasks.orgId, orgId),
-          ),
-        );
-    });
+    await step.run("mark-running", () =>
+      runInTenantScope({ orgId, workspaceId }, () =>
+        withTenantDb((tx) =>
+          tx
+            .update(schema.backgroundTasks)
+            .set({ status: "running", startedAt: new Date() })
+            .where(
+              and(
+                eq(schema.backgroundTasks.publicId, taskId),
+                eq(schema.backgroundTasks.orgId, orgId),
+              ),
+            ),
+        ),
+      ),
+    );
 
     const invocationId = crypto.randomUUID();
     const startedAt = Date.now();
@@ -70,21 +75,25 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
         // uniform metering (OXA-1498 — previously bypassed via invokeCapability).
         return invoke(capabilityName, p.input ?? p, ctx);
       });
-      await step.run("mark-completed", async () => {
-        await db()
-          .update(schema.backgroundTasks)
-          .set({
-            status: "completed",
-            resultPayload: (output ?? null) as object,
-            completedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(schema.backgroundTasks.publicId, taskId),
-              eq(schema.backgroundTasks.orgId, orgId),
-            ),
-          );
-      });
+      await step.run("mark-completed", () =>
+        runInTenantScope({ orgId, workspaceId }, () =>
+          withTenantDb((tx) =>
+            tx
+              .update(schema.backgroundTasks)
+              .set({
+                status: "completed",
+                resultPayload: (output ?? null) as object,
+                completedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(schema.backgroundTasks.publicId, taskId),
+                  eq(schema.backgroundTasks.orgId, orgId),
+                ),
+              ),
+          ),
+        ),
+      );
       // Write tool_invocations row for metering (OXA-1498).
       try {
         await insertToolInvocation({
@@ -114,21 +123,25 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
       logger.info({ taskId, orgId, workspaceId }, "agent.background-task.execute completed");
       return { taskId, status: "completed" };
     } catch (err) {
-      await step.run("mark-failed", async () => {
-        await db()
-          .update(schema.backgroundTasks)
-          .set({
-            status: "failed",
-            failureReason: err instanceof Error ? err.message : String(err),
-            completedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(schema.backgroundTasks.publicId, taskId),
-              eq(schema.backgroundTasks.orgId, orgId),
-            ),
-          );
-      });
+      await step.run("mark-failed", () =>
+        runInTenantScope({ orgId, workspaceId }, () =>
+          withTenantDb((tx) =>
+            tx
+              .update(schema.backgroundTasks)
+              .set({
+                status: "failed",
+                failureReason: err instanceof Error ? err.message : String(err),
+                completedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(schema.backgroundTasks.publicId, taskId),
+                  eq(schema.backgroundTasks.orgId, orgId),
+                ),
+              ),
+          ),
+        ),
+      );
       // Write failed metering row.
       try {
         await insertToolInvocation({

@@ -1,8 +1,9 @@
 import { inngest } from "../inngest";
-import { db, schema } from "@oxagen/database";
+import { db, schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { generateVideoFor, selectVideoModel } from "@oxagen/ai";
 import { storage } from "@oxagen/storage";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "../logger";
 
 /**
@@ -103,18 +104,24 @@ export const agentVideoRender = inngest.createFunction(
     );
 
     // ── Step 3: mark asset ready ─────────────────────────────────────────────
+    // Tight DB-only block: withTenantDb is entered here (not wrapping the long
+    // LLM/upload step above) per spec §6.2 transaction-span guidance.
     await step.run("mark-ready", async () => {
-      await db()
-        .update(schema.generatedAssets)
-        .set({
-          status: "ready",
-          storageKey,
-          storageUrl,
-          sizeBytes: BigInt(sizeBytes),
-          mimeType,
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.generatedAssets.id, assetId));
+      await runInTenantScope({ orgId, workspaceId }, () =>
+        withTenantDb((tx) =>
+          tx
+            .update(schema.generatedAssets)
+            .set({
+              status: "ready",
+              storageKey,
+              storageUrl,
+              sizeBytes: BigInt(sizeBytes),
+              mimeType,
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.generatedAssets.id, assetId)),
+        ),
+      );
     });
 
     logger.info(
@@ -135,10 +142,12 @@ export const agentVideoRenderOnFailure = inngest.createFunction(
   { event: "inngest/function.failed", if: "event.data.function_id == 'agent.video-render'" },
   async ({ event, step }) => {
     const originalData = event.data.event?.data as
-      | { assetId?: string; orgId?: string }
+      | { assetId?: string; orgId?: string; workspaceId?: string }
       | undefined;
     const assetId = originalData?.assetId;
     if (!assetId) return;
+    const orgId = originalData?.orgId;
+    const workspaceId = originalData?.workspaceId;
 
     const errorMessage =
       typeof event.data.error === "object" &&
@@ -148,14 +157,35 @@ export const agentVideoRenderOnFailure = inngest.createFunction(
         : String(event.data.error ?? "unknown error");
 
     await step.run("mark-failed", async () => {
-      await db()
-        .update(schema.generatedAssets)
-        .set({
-          status: "failed",
-          metadata: { failureReason: errorMessage },
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.generatedAssets.id, assetId));
+      // Scope tightly around the DB update only (no LLM/IO here).
+      // Fall back to raw db() when orgId/workspaceId are missing from the
+      // original event (e.g. older event schema) — these are non-null in
+      // agent/video.render events but may be absent in tests/legacy data.
+      if (orgId && workspaceId) {
+        await runInTenantScope({ orgId, workspaceId }, () =>
+          withTenantDb((tx) =>
+            tx
+              .update(schema.generatedAssets)
+              .set({
+                status: "failed",
+                metadata: { failureReason: errorMessage },
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.generatedAssets.id, assetId)),
+          ),
+        );
+      } else {
+        // tenancy: unscoped seam (no tenant on payload) — OXA-1515
+        // originalData is missing orgId/workspaceId (legacy or malformed event).
+        await db()
+          .update(schema.generatedAssets)
+          .set({
+            status: "failed",
+            metadata: { failureReason: errorMessage },
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.generatedAssets.id, assetId));
+      }
     });
 
     logger.error(

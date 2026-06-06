@@ -1,4 +1,14 @@
 import { inngest } from "../inngest";
+// tenancy: unscoped seam (no tenant on payload) — OXA-1515
+// This is a global cron that iterates ALL active subscriptions across all orgs.
+// There is no orgId/workspaceId on the event.data payload (the event is a
+// scheduled trigger, not a tenant-originated event). The subscription reads and
+// usage-record inserts must therefore run under raw db() — both are cross-org
+// operations that cannot be scoped to a single tenant scope.
+// Billing tables are org-only (no workspaceId column) so even the per-subscription
+// inserts cannot enter a full TenantScope. The manual eq(orgId) predicates on
+// the inserts and the inArray(status) filter on the load keep isolation correct
+// for this cron path.
 import { db, schema } from "@oxagen/database";
 import { and, gt, inArray } from "drizzle-orm";
 import { sumTokenUsage } from "@oxagen/telemetry";
