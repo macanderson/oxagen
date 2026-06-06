@@ -14,6 +14,7 @@ import {
   Package,
   FileText,
 } from "lucide-react";
+import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
 import type { schema } from "@oxagen/database";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -43,6 +44,13 @@ interface OrgPluginsPanelProps {
     sendEmail: boolean;
     roles: string[];
   }) => Promise<{ ok: boolean; error?: string }>;
+  /** Install a catalog-based plugin (from the marketplace modal). */
+  installCatalogAction: (input: {
+    orgSlug: string;
+    catalogServerId: string;
+    pluginType: "mcp_server" | "integration" | "content_tool";
+  }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
+  /** Install a custom MCP server (from the custom plugin form). */
   installAction: (input: {
     orgSlug: string;
     pluginType: "mcp_server" | "integration" | "content_tool";
@@ -899,6 +907,7 @@ export function OrgPluginsPanel({
   initialSendEmail,
   initialAlertRoles,
   setAuthAlertsAction,
+  installCatalogAction,
   installAction,
   installBulkAction,
   setEnabledAction,
@@ -953,28 +962,14 @@ export function OrgPluginsPanel({
         />
       )}
 
-      {/* Marketplace modal stub — wired when Task C lands. */}
-      {marketplaceOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Plugin Marketplace"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-        >
-          <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-card p-8 max-w-md w-full mx-4">
-            <div className="flex items-center gap-3">
-              <ShoppingBag className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-              <h2 className="text-lg font-semibold">Plugin Marketplace</h2>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              The marketplace modal (Task C) is implemented by a parallel agent. This stub will be replaced once that lands.
-            </p>
-            <Button variant="outline" onClick={() => setMarketplaceOpen(false)}>
-              Close
-            </Button>
-          </div>
-        </div>
-      )}
+      <MarketplaceModal
+        orgSlug={orgSlug}
+        open={marketplaceOpen}
+        onOpenChange={setMarketplaceOpen}
+        deniedNames={denylisted.map((d) => d.serverName)}
+        installAction={installCatalogAction}
+        installBulkAction={installBulkAction}
+      />
     </div>
   );
 }

@@ -123,6 +123,16 @@ export default async function OrgPluginsPage({
       initialSendEmail={authAlerts?.send_email ?? false}
       initialAlertRoles={authAlerts?.roles ?? ["Owner", "Admin"]}
       setAuthAlertsAction={setAuthAlertsAction}
+      // installCatalogAction handles catalog-based installs from the marketplace modal.
+      // The underlying server action (installPluginAction) accepts both catalogServerId
+      // and custom shapes — the type adapter here narrows to the catalog call signature.
+      installCatalogAction={(input) =>
+        installPluginAction({
+          orgSlug: input.orgSlug,
+          catalogServerId: input.catalogServerId,
+          pluginType: input.pluginType,
+        })
+      }
       installAction={installPluginAction}
       installBulkAction={installBulkPluginAction}
       setEnabledAction={setOrgPluginEnabledAction}
