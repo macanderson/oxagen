@@ -223,3 +223,8 @@ registerHandler(
   "notifications.mark",
   async () => (await import("./notifications.mark")).handler as CapabilityHandlerFn,
 );
+registerHandler(
+  "plugin.settings.set_auth_alerts",
+  async () =>
+    (await import("./plugin.settings.set_auth_alerts")).handler as CapabilityHandlerFn,
+);

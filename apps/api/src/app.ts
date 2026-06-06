@@ -66,6 +66,7 @@ import { pluginCredentialSetSecretRoute } from "./routes/v1/plugin.credential.se
 import { pluginCredentialReauthRoute } from "./routes/v1/plugin.credential.reauth";
 import { notificationsListRoute } from "./routes/v1/notifications.list";
 import { notificationsMarkRoute } from "./routes/v1/notifications.mark";
+import { pluginSettingsSetAuthAlertsRoute } from "./routes/v1/plugin.settings.set_auth_alerts";
 
 export type AppEnv = {
   Variables: {
@@ -161,4 +162,5 @@ orgScoped.route("/plugin/credential/set-secret", pluginCredentialSetSecretRoute)
 orgScoped.route("/plugin/credential/reauth", pluginCredentialReauthRoute);
 orgScoped.route("/notifications", notificationsListRoute);
 orgScoped.route("/notifications/mark", notificationsMarkRoute);
+orgScoped.route("/plugin/settings/auth-alerts", pluginSettingsSetAuthAlertsRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

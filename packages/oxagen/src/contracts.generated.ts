@@ -56,6 +56,7 @@ import "./contracts/plugin.registry.add";
 import "./contracts/plugin.registry.list";
 import "./contracts/plugin.registry.remove";
 import "./contracts/plugin.registry.sync";
+import "./contracts/plugin.settings.set_auth_alerts";
 import "./contracts/plugin.workspace.set_enabled";
 import "./contracts/svg.generate";
 import "./contracts/system.install.instructions";

@@ -558,7 +558,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -573,7 +574,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "layers": {
         "api": true,
@@ -887,6 +889,21 @@
     {
       "name": "plugin.registry.sync",
       "file": "plugin.registry.sync.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "plugin.settings.set_auth_alerts",
+      "file": "plugin.settings.set_auth_alerts.ts",
       "domain": "plugin",
       "mode": "sync",
       "surfaces": [
