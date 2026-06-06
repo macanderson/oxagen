@@ -1,10 +1,10 @@
-// tenancy: unscoped seam — dispute.created / dispute.closed / charge.refunded
-// webhooks arrive with external Stripe ids; orgId is resolved from charge
-// metadata or prior billing_disputes rows before any tenant scope exists.
-// Billing is org_only (no workspace_id). All DB access here keeps raw db()
-// intentionally per OXA-1515 unscoped-seam rules.
+// tenancy: system bypass via withSystemDb (dispute.created / dispute.closed /
+// charge.refunded webhooks arrive with external Stripe ids; orgId is resolved from charge
+// metadata or prior billing_disputes rows before any tenant scope exists;
+// billing is org_only, no workspace_id) — OXA-1515
 import { createHash } from "node:crypto";
-import { db, schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
+import type { Tx } from "@oxagen/database";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { consumeCredits } from "./credits";
 import { CREDIT_REASONS } from "./constants";
@@ -41,14 +41,12 @@ function deterministicUuid(seed: string): string {
  *
  * Falls back to null if all paths fail.
  */
-async function resolveOrgFromDispute(dispute: BillingDispute): Promise<string | null> {
+async function resolveOrgFromDispute(tx: Tx, dispute: BillingDispute): Promise<string | null> {
   if (dispute.orgId) return dispute.orgId;
-
-  const d = db();
 
   // Path 2: existing billing_disputes row (prior partial insert or re-delivery).
   if (dispute.chargeId || dispute.paymentIntentId) {
-    const existingDispute = await d.query.billingDisputes.findFirst({
+    const existingDispute = await tx.query.billingDisputes.findFirst({
       where: eq(schema.billingDisputes.stripeDisputeId, dispute.id),
       columns: { orgId: true },
     });
@@ -100,10 +98,8 @@ async function resolveOrgFromDispute(dispute: BillingDispute): Promise<string | 
  *
  * Falls back to null if unresolved.
  */
-async function resolveOrgFromCharge(charge: BillingRefundedCharge): Promise<string | null> {
+async function resolveOrgFromCharge(tx: Tx, charge: BillingRefundedCharge): Promise<string | null> {
   if (charge.orgId) return charge.orgId;
-
-  const d = db();
 
   // Attempt to resolve via subscriptions by paymentIntentId stored in the
   // billing_disputes table (shared lookup point for charges/PIs).
@@ -121,7 +117,7 @@ async function resolveOrgFromCharge(charge: BillingRefundedCharge): Promise<stri
 
   if (charge.paymentIntentId) {
     // Try: billing_disputes for this paymentIntentId (may have been disputed before).
-    const disputeRow = await d.query.billingDisputes.findFirst({
+    const disputeRow = await tx.query.billingDisputes.findFirst({
       where: eq(schema.billingDisputes.paymentIntentId, charge.paymentIntentId),
       columns: { orgId: true },
     });
@@ -131,7 +127,7 @@ async function resolveOrgFromCharge(charge: BillingRefundedCharge): Promise<stri
   }
 
   // Try: billing_disputes for this chargeId.
-  const disputeByCharge = await d.query.billingDisputes.findFirst({
+  const disputeByCharge = await tx.query.billingDisputes.findFirst({
     where: eq(schema.billingDisputes.stripeChargeId, charge.id),
     columns: { orgId: true },
   });
@@ -158,91 +154,94 @@ async function resolveOrgFromCharge(charge: BillingRefundedCharge): Promise<stri
 export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
   const start = Date.now();
 
-  const orgId = await resolveOrgFromDispute(dispute);
-  if (!orgId) {
-    logger.fatal(
-      {
-        alert: "dispute_org_unresolved",
+  await withSystemDb(async (tx) => {
+    // tenancy: system bypass via withSystemDb (dispute webhook, org resolved from Stripe
+    // charge metadata or billing_disputes fallback, no tenant scope) — OXA-1515
+    const orgId = await resolveOrgFromDispute(tx, dispute);
+    if (!orgId) {
+      logger.fatal(
+        {
+          alert: "dispute_org_unresolved",
+          stripeDisputeId: dispute.id,
+          chargeId: dispute.chargeId,
+          paymentIntentId: dispute.paymentIntentId,
+          amountCents: dispute.amountCents,
+        },
+        "billing: dispute.created — CRITICAL: cannot resolve orgId; clawback NOT applied — manual intervention required",
+      );
+      return;
+    }
+
+    const now = new Date();
+
+    // Upsert the dispute row — idempotent on stripeDisputeId.
+    const existing = await tx.query.billingDisputes.findFirst({
+      where: eq(schema.billingDisputes.stripeDisputeId, dispute.id),
+      columns: { id: true, clawedBackCents: true },
+    });
+
+    if (!existing) {
+      await tx.insert(schema.billingDisputes).values({
+        orgId,
         stripeDisputeId: dispute.id,
-        chargeId: dispute.chargeId,
-        paymentIntentId: dispute.paymentIntentId,
+        stripeChargeId: dispute.chargeId ?? null,
+        paymentIntentId: dispute.paymentIntentId ?? null,
         amountCents: dispute.amountCents,
+        currency: dispute.currency,
+        reason: dispute.reason ?? null,
+        status: dispute.status,
+        clawedBackCents: 0n,
+      });
+    } else if (existing.clawedBackCents > 0n) {
+      // Clawback already applied — idempotent return.
+      logger.debug(
+        { disputeId: dispute.id, orgId, clawedBackCents: Number(existing.clawedBackCents) },
+        "billing: dispute.created — clawback already applied, skipping",
+      );
+      return;
+    }
+
+    // Claw back up to amountCents from the org's credit balance.
+    const requestedCents = BigInt(dispute.amountCents);
+    let clawedBackCents = 0n;
+
+    if (requestedCents > 0n) {
+      const { chargedCents } = await consumeCredits({
+        orgId,
+        requestedCents,
+        reason: CREDIT_REASONS.CLAWBACK_DISPUTE,
+        referenceType: "dispute",
+        referenceId: dispute.id,
+      });
+      clawedBackCents = chargedCents;
+    }
+
+    // Record how much we clawed back.
+    const disputeRow = await tx.query.billingDisputes.findFirst({
+      where: eq(schema.billingDisputes.stripeDisputeId, dispute.id),
+      columns: { id: true },
+    });
+
+    if (disputeRow) {
+      await tx
+        .update(schema.billingDisputes)
+        .set({ clawedBackCents, status: dispute.status, updatedAt: now })
+        .where(eq(schema.billingDisputes.id, disputeRow.id));
+    }
+
+    logger.warn(
+      {
+        orgId,
+        disputeId: dispute.id,
+        amountCents: dispute.amountCents,
+        clawedBackCents: Number(clawedBackCents),
+        reason: dispute.reason,
+        status: dispute.status,
+        durationMs: Date.now() - start,
       },
-      "billing: dispute.created — CRITICAL: cannot resolve orgId; clawback NOT applied — manual intervention required",
+      "billing: dispute created — credits clawed back",
     );
-    return;
-  }
-
-  const d = db();
-  const now = new Date();
-
-  // Upsert the dispute row — idempotent on stripeDisputeId.
-  const existing = await d.query.billingDisputes.findFirst({
-    where: eq(schema.billingDisputes.stripeDisputeId, dispute.id),
-    columns: { id: true, clawedBackCents: true },
   });
-
-  if (!existing) {
-    await d.insert(schema.billingDisputes).values({
-      orgId,
-      stripeDisputeId: dispute.id,
-      stripeChargeId: dispute.chargeId ?? null,
-      paymentIntentId: dispute.paymentIntentId ?? null,
-      amountCents: dispute.amountCents,
-      currency: dispute.currency,
-      reason: dispute.reason ?? null,
-      status: dispute.status,
-      clawedBackCents: 0n,
-    });
-  } else if (existing.clawedBackCents > 0n) {
-    // Clawback already applied — idempotent return.
-    logger.debug(
-      { disputeId: dispute.id, orgId, clawedBackCents: Number(existing.clawedBackCents) },
-      "billing: dispute.created — clawback already applied, skipping",
-    );
-    return;
-  }
-
-  // Claw back up to amountCents from the org's credit balance.
-  const requestedCents = BigInt(dispute.amountCents);
-  let clawedBackCents = 0n;
-
-  if (requestedCents > 0n) {
-    const { chargedCents } = await consumeCredits({
-      orgId,
-      requestedCents,
-      reason: CREDIT_REASONS.CLAWBACK_DISPUTE,
-      referenceType: "dispute",
-      referenceId: dispute.id,
-    });
-    clawedBackCents = chargedCents;
-  }
-
-  // Record how much we clawed back.
-  const disputeRow = await d.query.billingDisputes.findFirst({
-    where: eq(schema.billingDisputes.stripeDisputeId, dispute.id),
-    columns: { id: true },
-  });
-
-  if (disputeRow) {
-    await d
-      .update(schema.billingDisputes)
-      .set({ clawedBackCents, status: dispute.status, updatedAt: now })
-      .where(eq(schema.billingDisputes.id, disputeRow.id));
-  }
-
-  logger.warn(
-    {
-      orgId,
-      disputeId: dispute.id,
-      amountCents: dispute.amountCents,
-      clawedBackCents: Number(clawedBackCents),
-      reason: dispute.reason,
-      status: dispute.status,
-      durationMs: Date.now() - start,
-    },
-    "billing: dispute created — credits clawed back",
-  );
 }
 
 /**
@@ -251,13 +250,16 @@ export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
  */
 export async function onDisputeClosed(dispute: BillingDispute): Promise<void> {
   const start = Date.now();
-  const d = db();
   const now = new Date();
 
-  await d
-    .update(schema.billingDisputes)
-    .set({ status: dispute.status, resolvedAt: now, updatedAt: now })
-    .where(eq(schema.billingDisputes.stripeDisputeId, dispute.id));
+  await withSystemDb(async (tx) => {
+    // tenancy: system bypass via withSystemDb (dispute.closed webhook, updates by
+    // stripeDisputeId with no tenant scope) — OXA-1515
+    await tx
+      .update(schema.billingDisputes)
+      .set({ status: dispute.status, resolvedAt: now, updatedAt: now })
+      .where(eq(schema.billingDisputes.stripeDisputeId, dispute.id));
+  });
 
   logger.info(
     { disputeId: dispute.id, status: dispute.status, durationMs: Date.now() - start },
@@ -287,72 +289,74 @@ export async function onDisputeClosed(dispute: BillingDispute): Promise<void> {
 export async function onChargeRefunded(charge: BillingRefundedCharge): Promise<void> {
   const start = Date.now();
 
-  const orgId = await resolveOrgFromCharge(charge);
-  if (!orgId) {
-    logger.fatal(
+  await withSystemDb(async (tx) => {
+    // tenancy: system bypass via withSystemDb (charge.refunded webhook, org resolved from
+    // Stripe charge metadata or billing_disputes fallback, no tenant scope) — OXA-1515
+    const orgId = await resolveOrgFromCharge(tx, charge);
+    if (!orgId) {
+      logger.fatal(
+        {
+          alert: "dispute_org_unresolved",
+          stripeChargeId: charge.id,
+          paymentIntentId: charge.paymentIntentId,
+          amountRefundedCents: charge.amountRefundedCents,
+        },
+        "billing: charge.refunded — CRITICAL: cannot resolve orgId; clawback NOT applied — manual intervention required",
+      );
+      return;
+    }
+
+    if (charge.amountRefundedCents <= 0) {
+      logger.debug(
+        { chargeId: charge.id, orgId },
+        "billing: charge.refunded — amountRefundedCents is 0, nothing to clawback",
+      );
+      return;
+    }
+
+    // Idempotency guard: check for an existing ledger row keyed to this charge.
+    // Uses the same (orgId, reason, referenceType, referenceId) tuple that backs
+    // the partial unique index, matching the pattern from onDisputeCreated.
+    const refundReferenceId = deterministicUuid(charge.id);
+
+    const existingLedgerRow = await tx.query.creditLedger.findFirst({
+      where: and(
+        eq(schema.creditLedger.orgId, orgId),
+        eq(schema.creditLedger.reason, CREDIT_REASONS.REFUND),
+        eq(schema.creditLedger.referenceType, "charge_refund"),
+        eq(schema.creditLedger.referenceId, refundReferenceId),
+        isNotNull(schema.creditLedger.referenceId),
+      ),
+      columns: { id: true },
+    });
+
+    if (existingLedgerRow) {
+      logger.debug(
+        { chargeId: charge.id, orgId, refundReferenceId },
+        "billing: charge.refunded — clawback already applied, skipping (idempotent)",
+      );
+      return;
+    }
+
+    const requestedCents = BigInt(charge.amountRefundedCents);
+    const { chargedCents } = await consumeCredits({
+      orgId,
+      requestedCents,
+      reason: CREDIT_REASONS.REFUND,
+      referenceType: "charge_refund",
+      referenceId: refundReferenceId,
+    });
+
+    logger.info(
       {
-        alert: "dispute_org_unresolved",
-        stripeChargeId: charge.id,
+        orgId,
+        chargeId: charge.id,
         paymentIntentId: charge.paymentIntentId,
         amountRefundedCents: charge.amountRefundedCents,
+        clawedBackCents: Number(chargedCents),
+        durationMs: Date.now() - start,
       },
-      "billing: charge.refunded — CRITICAL: cannot resolve orgId; clawback NOT applied — manual intervention required",
+      "billing: charge.refunded — credits clawed back",
     );
-    return;
-  }
-
-  if (charge.amountRefundedCents <= 0) {
-    logger.debug(
-      { chargeId: charge.id, orgId },
-      "billing: charge.refunded — amountRefundedCents is 0, nothing to clawback",
-    );
-    return;
-  }
-
-  const d = db();
-
-  // Idempotency guard: check for an existing ledger row keyed to this charge.
-  // Uses the same (orgId, reason, referenceType, referenceId) tuple that backs
-  // the partial unique index, matching the pattern from onDisputeCreated.
-  const refundReferenceId = deterministicUuid(charge.id);
-
-  const existingLedgerRow = await d.query.creditLedger.findFirst({
-    where: and(
-      eq(schema.creditLedger.orgId, orgId),
-      eq(schema.creditLedger.reason, CREDIT_REASONS.REFUND),
-      eq(schema.creditLedger.referenceType, "charge_refund"),
-      eq(schema.creditLedger.referenceId, refundReferenceId),
-      isNotNull(schema.creditLedger.referenceId),
-    ),
-    columns: { id: true },
   });
-
-  if (existingLedgerRow) {
-    logger.debug(
-      { chargeId: charge.id, orgId, refundReferenceId },
-      "billing: charge.refunded — clawback already applied, skipping (idempotent)",
-    );
-    return;
-  }
-
-  const requestedCents = BigInt(charge.amountRefundedCents);
-  const { chargedCents } = await consumeCredits({
-    orgId,
-    requestedCents,
-    reason: CREDIT_REASONS.REFUND,
-    referenceType: "charge_refund",
-    referenceId: refundReferenceId,
-  });
-
-  logger.info(
-    {
-      orgId,
-      chargeId: charge.id,
-      paymentIntentId: charge.paymentIntentId,
-      amountRefundedCents: charge.amountRefundedCents,
-      clawedBackCents: Number(chargedCents),
-      durationMs: Date.now() - start,
-    },
-    "billing: charge.refunded — credits clawed back",
-  );
 }

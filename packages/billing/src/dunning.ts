@@ -1,4 +1,5 @@
-import { withTenantDb, db, schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
+import type { Tx } from "@oxagen/database";
 import { and, eq, lt, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import type { BillingInvoice } from "./provider";
@@ -103,15 +104,14 @@ export async function assertOrgCanConsume(orgId: string): Promise<void> {
  * Resolve the orgId from an invoice (via orgId field or subscription lookup).
  * Returns null when it cannot be resolved.
  *
- * tenancy: unscoped seam (resolves org from external Stripe invoice id before a
- * tenant scope exists) — OXA-1515.
+ * tenancy: system bypass via withSystemDb (resolves org from external Stripe invoice id
+ * before a tenant scope exists) — OXA-1515.
  */
-async function resolveOrgFromInvoice(invoice: BillingInvoice): Promise<string | null> {
+async function resolveOrgFromInvoice(tx: Tx, invoice: BillingInvoice): Promise<string | null> {
   if (invoice.orgId) return invoice.orgId;
 
   if (invoice.subscriptionId) {
-    // tenancy: unscoped seam (resolves org from external Stripe id before a tenant scope exists) — OXA-1515
-    const row = await db().query.subscriptions.findFirst({
+    const row = await tx.query.subscriptions.findFirst({
       where: eq(schema.subscriptions.stripeSubscriptionId, invoice.subscriptionId),
       columns: { orgId: true },
     });
@@ -129,54 +129,56 @@ async function resolveOrgFromInvoice(invoice: BillingInvoice): Promise<string | 
  */
 export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<void> {
   const start = Date.now();
-  const orgId = await resolveOrgFromInvoice(invoice);
-  if (!orgId) {
-    logger.warn({ invoiceId: invoice.providerInvoiceId }, "billing: dunning — could not resolve orgId from invoice");
-    return;
-  }
 
-  const now = new Date();
-  const graceEndsAt = new Date(now.getTime() + DUNNING_GRACE_DAYS * 24 * 60 * 60 * 1000);
+  await withSystemDb(async (tx) => {
+    // tenancy: system bypass via withSystemDb (org resolved from Stripe invoice, no workspace
+    // context; billing is org_only; webhook path with no tenant scope) — OXA-1515
+    const orgId = await resolveOrgFromInvoice(tx, invoice);
+    if (!orgId) {
+      logger.warn({ invoiceId: invoice.providerInvoiceId }, "billing: dunning — could not resolve orgId from invoice");
+      return;
+    }
 
-  // tenancy: unscoped seam — org resolved from Stripe invoice, no workspace context; billing is org_only — OXA-1515
-  const d = db();
+    const now = new Date();
+    const graceEndsAt = new Date(now.getTime() + DUNNING_GRACE_DAYS * 24 * 60 * 60 * 1000);
 
-  // Upsert settings row: set grace state idempotently. Only set delinquentSince
-  // the FIRST time (i.e. if it's already set, preserve the original timestamp).
-  const existing = await d.query.orgBillingSettings.findFirst({
-    where: eq(schema.orgBillingSettings.orgId, orgId),
-    columns: { id: true, delinquentSince: true, dunningState: true },
-  });
-
-  if (existing) {
-    await d
-      .update(schema.orgBillingSettings)
-      .set({
-        dunningState: "grace",
-        delinquentSince: existing.delinquentSince ?? now,
-        graceEndsAt,
-        updatedAt: now,
-      })
-      .where(eq(schema.orgBillingSettings.orgId, orgId));
-  } else {
-    // No settings row yet — insert one.
-    await d.insert(schema.orgBillingSettings).values({
-      orgId,
-      dunningState: "grace",
-      delinquentSince: now,
-      graceEndsAt,
+    // Upsert settings row: set grace state idempotently. Only set delinquentSince
+    // the FIRST time (i.e. if it's already set, preserve the original timestamp).
+    const existing = await tx.query.orgBillingSettings.findFirst({
+      where: eq(schema.orgBillingSettings.orgId, orgId),
+      columns: { id: true, delinquentSince: true, dunningState: true },
     });
-  }
 
-  logger.info(
-    {
-      orgId,
-      invoiceId: invoice.providerInvoiceId,
-      graceEndsAt,
-      durationMs: Date.now() - start,
-    },
-    "billing: dunning — entered grace period after payment failure",
-  );
+    if (existing) {
+      await tx
+        .update(schema.orgBillingSettings)
+        .set({
+          dunningState: "grace",
+          delinquentSince: existing.delinquentSince ?? now,
+          graceEndsAt,
+          updatedAt: now,
+        })
+        .where(eq(schema.orgBillingSettings.orgId, orgId));
+    } else {
+      // No settings row yet — insert one.
+      await tx.insert(schema.orgBillingSettings).values({
+        orgId,
+        dunningState: "grace",
+        delinquentSince: now,
+        graceEndsAt,
+      });
+    }
+
+    logger.info(
+      {
+        orgId,
+        invoiceId: invoice.providerInvoiceId,
+        graceEndsAt,
+        durationMs: Date.now() - start,
+      },
+      "billing: dunning — entered grace period after payment failure",
+    );
+  });
 }
 
 /**
@@ -187,42 +189,45 @@ export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<v
  */
 export async function onInvoiceRecovered(invoice: BillingInvoice): Promise<void> {
   const start = Date.now();
-  const orgId = await resolveOrgFromInvoice(invoice);
-  if (!orgId) {
-    logger.warn({ invoiceId: invoice.providerInvoiceId }, "billing: dunning — could not resolve orgId for recovery");
-    return;
-  }
 
-  const now = new Date();
-  // tenancy: unscoped seam — org resolved from Stripe invoice, no workspace context; billing is org_only — OXA-1515
-  const d = db();
+  await withSystemDb(async (tx) => {
+    // tenancy: system bypass via withSystemDb (org resolved from Stripe invoice, no workspace
+    // context; billing is org_only; webhook path with no tenant scope) — OXA-1515
+    const orgId = await resolveOrgFromInvoice(tx, invoice);
+    if (!orgId) {
+      logger.warn({ invoiceId: invoice.providerInvoiceId }, "billing: dunning — could not resolve orgId for recovery");
+      return;
+    }
 
-  const existing = await d.query.orgBillingSettings.findFirst({
-    where: eq(schema.orgBillingSettings.orgId, orgId),
-    columns: { id: true, dunningState: true },
+    const now = new Date();
+
+    const existing = await tx.query.orgBillingSettings.findFirst({
+      where: eq(schema.orgBillingSettings.orgId, orgId),
+      columns: { id: true, dunningState: true },
+    });
+
+    // Only bother updating if the org was actually in a non-active state.
+    if (!existing || existing.dunningState === "active") {
+      logger.debug({ orgId, invoiceId: invoice.providerInvoiceId }, "billing: dunning — already active, skipping recovery");
+      return;
+    }
+
+    await tx
+      .update(schema.orgBillingSettings)
+      .set({
+        dunningState: "active",
+        delinquentSince: null,
+        graceEndsAt: null,
+        suspendedAt: null,
+        updatedAt: now,
+      })
+      .where(eq(schema.orgBillingSettings.orgId, orgId));
+
+    logger.info(
+      { orgId, invoiceId: invoice.providerInvoiceId, durationMs: Date.now() - start },
+      "billing: dunning — recovered to active after invoice paid",
+    );
   });
-
-  // Only bother updating if the org was actually in a non-active state.
-  if (!existing || existing.dunningState === "active") {
-    logger.debug({ orgId, invoiceId: invoice.providerInvoiceId }, "billing: dunning — already active, skipping recovery");
-    return;
-  }
-
-  await d
-    .update(schema.orgBillingSettings)
-    .set({
-      dunningState: "active",
-      delinquentSince: null,
-      graceEndsAt: null,
-      suspendedAt: null,
-      updatedAt: now,
-    })
-    .where(eq(schema.orgBillingSettings.orgId, orgId));
-
-  logger.info(
-    { orgId, invoiceId: invoice.providerInvoiceId, durationMs: Date.now() - start },
-    "billing: dunning — recovered to active after invoice paid",
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -237,39 +242,41 @@ export async function onInvoiceRecovered(invoice: BillingInvoice): Promise<void>
 export async function sweepDunning(): Promise<{ suspended: number }> {
   const start = Date.now();
   const now = new Date();
-  // tenancy: unscoped seam — scheduled job sweeps all orgs, no per-org scope; billing is org_only — OXA-1515
-  const d = db();
 
-  const toSuspend = await d.query.orgBillingSettings.findMany({
-    where: and(
-      eq(schema.orgBillingSettings.dunningState, "grace"),
-      lt(schema.orgBillingSettings.graceEndsAt, now),
-    ),
-    columns: { id: true, orgId: true, graceEndsAt: true },
+  return withSystemDb(async (tx) => {
+    // tenancy: system bypass via withSystemDb (scheduled cron sweeps all orgs,
+    // no per-org scope; billing is org_only) — OXA-1515
+    const toSuspend = await tx.query.orgBillingSettings.findMany({
+      where: and(
+        eq(schema.orgBillingSettings.dunningState, "grace"),
+        lt(schema.orgBillingSettings.graceEndsAt, now),
+      ),
+      columns: { id: true, orgId: true, graceEndsAt: true },
+    });
+
+    if (toSuspend.length === 0) {
+      logger.info({ durationMs: Date.now() - start }, "billing: dunning sweep — no orgs to suspend");
+      return { suspended: 0 };
+    }
+
+    let suspended = 0;
+    for (const row of toSuspend) {
+      await tx
+        .update(schema.orgBillingSettings)
+        .set({
+          dunningState: "suspended",
+          suspendedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(schema.orgBillingSettings.id, row.id));
+      suspended++;
+      logger.warn(
+        { orgId: row.orgId, graceEndsAt: row.graceEndsAt },
+        "billing: dunning sweep — org suspended (grace period elapsed)",
+      );
+    }
+
+    logger.info({ suspended, durationMs: Date.now() - start }, "billing: dunning sweep complete");
+    return { suspended };
   });
-
-  if (toSuspend.length === 0) {
-    logger.info({ durationMs: Date.now() - start }, "billing: dunning sweep — no orgs to suspend");
-    return { suspended: 0 };
-  }
-
-  let suspended = 0;
-  for (const row of toSuspend) {
-    await d
-      .update(schema.orgBillingSettings)
-      .set({
-        dunningState: "suspended",
-        suspendedAt: now,
-        updatedAt: now,
-      })
-      .where(eq(schema.orgBillingSettings.id, row.id));
-    suspended++;
-    logger.warn(
-      { orgId: row.orgId, graceEndsAt: row.graceEndsAt },
-      "billing: dunning sweep — org suspended (grace period elapsed)",
-    );
-  }
-
-  logger.info({ suspended, durationMs: Date.now() - start }, "billing: dunning sweep complete");
-  return { suspended };
 }

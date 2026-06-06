@@ -79,6 +79,7 @@ const checkoutDbObj = {
 vi.mock("@oxagen/database", () => ({
   db: () => checkoutDbObj,
   withTenantDb: async (fn: (tx: typeof checkoutDbObj) => unknown) => fn(checkoutDbObj),
+  withSystemDb: async (fn: (tx: typeof checkoutDbObj) => unknown) => fn(checkoutDbObj),
   schema: {
     plans: { slug: "plans.slug" },
     subscriptions: { orgId: "subscriptions.orgId", status: "subscriptions.status" },

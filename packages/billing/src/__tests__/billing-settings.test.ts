@@ -46,6 +46,7 @@ const dbMocks = {
 vi.mock("@oxagen/database", () => ({
   db: () => dbMocks,
   withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
+  withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   schema: {
     orgBillingSettings: {
       orgId: "org_billing_settings.orgId",

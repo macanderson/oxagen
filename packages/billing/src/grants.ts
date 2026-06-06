@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { withTenantDb, db, schema, type Tx } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema, type Tx } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { syncSubscriptionFromStripe } from "./subscriptions";
@@ -191,35 +191,36 @@ export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): P
   // Make sure our subscriptions row exists before resolving the plan.
   await syncSubscriptionFromStripe(invoice.subscriptionId);
 
-  // tenancy: unscoped seam — invoice.paid webhook has no org scope yet; org resolved
-  // from Stripe subscription id before a tenant scope exists. Billing is org_only — OXA-1515.
-  const d = db();
-  const sub = await d.query.subscriptions.findFirst({
-    where: eq(schema.subscriptions.stripeSubscriptionId, invoice.subscriptionId),
-    columns: { orgId: true, planId: true },
-  });
-  if (!sub) return;
-
-  const plan = await d.query.plans.findFirst({
-    where: eq(schema.plans.id, sub.planId),
-    columns: { includedCreditCents: true },
-  });
-  const credits = plan?.includedCreditCents ?? 0;
-  if (credits <= 0) return;
-
-  const invoiceRow = await d.query.invoices.findFirst({
-    where: eq(schema.invoices.stripeInvoiceId, invoice.providerInvoiceId),
-    columns: { id: true },
-  });
-  const referenceId = invoiceRow?.id;
-  if (!referenceId) return;
-
-  const grantDate = new Date();
-  const expiresAt = endOfGrantMonth(grantDate);
-  const amountCents = BigInt(credits);
-
   let granted = false;
-  await d.transaction(async (tx) => {
+
+  await withSystemDb(async (tx) => {
+    // tenancy: system bypass via withSystemDb (invoice.paid webhook has no org scope yet;
+    // org resolved from Stripe subscription id before a tenant scope exists;
+    // billing is org_only) — OXA-1515
+    const sub = await tx.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.stripeSubscriptionId, invoice.subscriptionId!),
+      columns: { orgId: true, planId: true },
+    });
+    if (!sub) return;
+
+    const plan = await tx.query.plans.findFirst({
+      where: eq(schema.plans.id, sub.planId),
+      columns: { includedCreditCents: true },
+    });
+    const credits = plan?.includedCreditCents ?? 0;
+    if (credits <= 0) return;
+
+    const invoiceRow = await tx.query.invoices.findFirst({
+      where: eq(schema.invoices.stripeInvoiceId, invoice.providerInvoiceId),
+      columns: { id: true },
+    });
+    const referenceId = invoiceRow?.id;
+    if (!referenceId) return;
+
+    const grantDate = new Date();
+    const expiresAt = endOfGrantMonth(grantDate);
+    const amountCents = BigInt(credits);
+
     granted = await tryInsertGrantLedger(
       tx,
       sub.orgId,
@@ -228,11 +229,12 @@ export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): P
       referenceId,
       amountCents,
     );
-    if (!granted) return; // Already granted.
+    if (!granted) {
+      logger.debug({ orgId: sub.orgId, referenceId }, "billing: plan renewal credits already granted, skipping");
+      return;
+    }
     await insertLotAndMirrorBalance(tx, sub.orgId, "subscription", amountCents, grantDate, expiresAt);
-  });
 
-  if (granted) {
     logger.info(
       {
         orgId: sub.orgId,
@@ -243,9 +245,7 @@ export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): P
       },
       "billing: plan renewal credits granted",
     );
-  } else {
-    logger.debug({ orgId: sub.orgId, referenceId }, "billing: plan renewal credits already granted, skipping");
-  }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -281,12 +281,15 @@ export async function grantProratedPlanUpgradeCredits(
   toPlanId: string,
 ): Promise<void> {
   const start = Date.now();
-  const d = db();
 
-  const [fromPlan, toPlan] = await Promise.all([
-    d.query.plans.findFirst({ where: eq(schema.plans.id, fromPlanId), columns: { includedCreditCents: true } }),
-    d.query.plans.findFirst({ where: eq(schema.plans.id, toPlanId), columns: { includedCreditCents: true } }),
-  ]);
+  // Kernel/scoped path (called from changeOrgPlan): the active tenant scope is
+  // on ALS, so withTenantDb keeps these org_only reads/writes RLS-checked.
+  const [fromPlan, toPlan] = await withTenantDb((tx) =>
+    Promise.all([
+      tx.query.plans.findFirst({ where: eq(schema.plans.id, fromPlanId), columns: { includedCreditCents: true } }),
+      tx.query.plans.findFirst({ where: eq(schema.plans.id, toPlanId), columns: { includedCreditCents: true } }),
+    ]),
+  );
 
   const fromIncluded = fromPlan?.includedCreditCents ?? 0;
   const toIncluded = toPlan?.includedCreditCents ?? 0;
@@ -301,13 +304,15 @@ export async function grantProratedPlanUpgradeCredits(
   }
 
   // Find the active subscription to get period bounds.
-  const sub = await d.query.subscriptions.findFirst({
-    where: and(
-      eq(schema.subscriptions.orgId, orgId),
-      sql`${schema.subscriptions.status} IN ('active','trialing')`,
-    ),
-    columns: { currentPeriodStart: true, currentPeriodEnd: true },
-  });
+  const sub = await withTenantDb((tx) =>
+    tx.query.subscriptions.findFirst({
+      where: and(
+        eq(schema.subscriptions.orgId, orgId),
+        sql`${schema.subscriptions.status} IN ('active','trialing')`,
+      ),
+      columns: { currentPeriodStart: true, currentPeriodEnd: true },
+    }),
+  );
 
   if (!sub) {
     logger.warn({ orgId }, "billing: plan upgrade grant — no active subscription, skipping");
@@ -339,7 +344,7 @@ export async function grantProratedPlanUpgradeCredits(
   const expiresAt = endOfGrantMonth(now);
 
   let granted = false;
-  await d.transaction(async (tx) => {
+  await withTenantDb(async (tx) => {
     granted = await tryInsertGrantLedger(
       tx,
       orgId,
@@ -407,7 +412,9 @@ export async function grantCreditPackForCheckout(session: BillingCheckoutSession
   const amountCents = BigInt(totalCredits);
 
   let granted = false;
-  await db().transaction(async (tx) => {
+  await withSystemDb(async (tx) => {
+    // tenancy: system bypass via withSystemDb (checkout.session.completed webhook, orgId
+    // from session metadata, no active tenant scope at webhook dispatch time) — OXA-1515
     granted = await tryInsertGrantLedger(
       tx,
       orgId,

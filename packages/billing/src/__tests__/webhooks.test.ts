@@ -142,6 +142,7 @@ const dbState: { instance: ReturnType<typeof makeDb> | null } = { instance: null
 vi.mock("@oxagen/database", () => ({
   db: () => dbState.instance,
   withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
+  withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
   schema: {
     stripeEvents: { stripeEventId: "stripeEvents.stripeEventId" },
     stripeEventProcessing: {

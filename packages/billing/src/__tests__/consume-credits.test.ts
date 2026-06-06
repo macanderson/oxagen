@@ -116,6 +116,7 @@ vi.mock("@oxagen/database", () => ({
     transaction: (cb: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => cb(makeTx()),
   }),
   withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx()),
+  withSystemDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx()),
   schema: SCHEMA,
 }));
 

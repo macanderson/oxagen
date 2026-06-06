@@ -1,21 +1,8 @@
-import { withTenantDb, db, schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { eq, and, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
 import { getOrgSeatUsage, SeatLimitError } from "./seats";
-
-// tenancy: resolvePlanId and syncSubscriptionFromStripe are webhook-path helpers
-// (called from subscription.* events with no org scope). Raw db() kept
-// intentionally per OXA-1515 unscoped-seam rules.
-async function resolvePlanId(stripeProductId: string | null): Promise<string | null> {
-  if (!stripeProductId) return null;
-  const d = db();
-  const plan = await d.query.plans.findFirst({
-    where: eq(schema.plans.stripeProductId, stripeProductId),
-    columns: { id: true },
-  });
-  return plan?.id ?? null;
-}
 
 /**
  * Pulls the canonical subscription record from the billing provider and
@@ -23,13 +10,12 @@ async function resolvePlanId(stripeProductId: string | null): Promise<string | n
  * The webhook handler invokes this for every subscription.* event so our
  * table mirrors the provider within one round trip.
  *
- * tenancy: unscoped seam (called from webhook dispatch, no tenant scope) — OXA-1515.
+ * tenancy: system bypass via withSystemDb (called from webhook dispatch, no tenant
+ * scope; org resolved from Stripe subscription metadata) — OXA-1515.
  */
 export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<void> {
   const start = Date.now();
   const sub = await billingProvider().getSubscription(stripeSubId);
-  // tenancy: unscoped seam (resolves org from external Stripe id before a tenant scope exists) — OXA-1515
-  const d = db();
 
   const orgId = sub.metadata?.org_id ?? null;
   if (!orgId) {
@@ -39,49 +25,58 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
     return;
   }
 
-  const planId = await resolvePlanId(sub.productId);
-  if (!planId) {
-    logger.warn({ stripeSubId, productId: sub.productId }, "billing: unknown product id, cannot sync subscription");
-    return; // Unknown plan; cannot upsert without referential integrity.
-  }
-
-  const row = {
-    orgId,
-    planId,
-    stripeSubscriptionId: sub.id,
-    stripeCustomerId: sub.customerId,
-    status: sub.status,
-    billingInterval: sub.billingInterval,
-    currentPeriodStart: sub.currentPeriodStart,
-    currentPeriodEnd: sub.currentPeriodEnd,
-    cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
-    canceledAt: sub.canceledAt,
-    trialEnd: sub.trialEnd,
-    seatCount: sub.seatCount,
-  };
-
-  await d
-    .insert(schema.subscriptions)
-    .values(row)
-    .onConflictDoUpdate({
-      target: schema.subscriptions.stripeSubscriptionId,
-      set: {
-        status: row.status,
-        billingInterval: row.billingInterval,
-        currentPeriodStart: row.currentPeriodStart,
-        currentPeriodEnd: row.currentPeriodEnd,
-        cancelAtPeriodEnd: row.cancelAtPeriodEnd,
-        canceledAt: row.canceledAt,
-        trialEnd: row.trialEnd,
-        seatCount: row.seatCount,
-        updatedAt: new Date(),
-      },
+  await withSystemDb(async (tx) => {
+    // tenancy: system bypass via withSystemDb (webhook path, resolves plan from Stripe
+    // product id before a tenant scope exists; billing tables are org_only) — OXA-1515
+    const plan = await tx.query.plans.findFirst({
+      where: eq(schema.plans.stripeProductId, sub.productId ?? ""),
+      columns: { id: true },
     });
+    const planId = plan?.id ?? null;
 
-  logger.info(
-    { orgId, stripeSubId, status: sub.status, durationMs: Date.now() - start },
-    "billing: subscription synced",
-  );
+    if (!planId) {
+      logger.warn({ stripeSubId, productId: sub.productId }, "billing: unknown product id, cannot sync subscription");
+      return; // Unknown plan; cannot upsert without referential integrity.
+    }
+
+    const row = {
+      orgId,
+      planId,
+      stripeSubscriptionId: sub.id,
+      stripeCustomerId: sub.customerId,
+      status: sub.status,
+      billingInterval: sub.billingInterval,
+      currentPeriodStart: sub.currentPeriodStart,
+      currentPeriodEnd: sub.currentPeriodEnd,
+      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      canceledAt: sub.canceledAt,
+      trialEnd: sub.trialEnd,
+      seatCount: sub.seatCount,
+    };
+
+    await tx
+      .insert(schema.subscriptions)
+      .values(row)
+      .onConflictDoUpdate({
+        target: schema.subscriptions.stripeSubscriptionId,
+        set: {
+          status: row.status,
+          billingInterval: row.billingInterval,
+          currentPeriodStart: row.currentPeriodStart,
+          currentPeriodEnd: row.currentPeriodEnd,
+          cancelAtPeriodEnd: row.cancelAtPeriodEnd,
+          canceledAt: row.canceledAt,
+          trialEnd: row.trialEnd,
+          seatCount: row.seatCount,
+          updatedAt: new Date(),
+        },
+      });
+
+    logger.info(
+      { orgId, stripeSubId, status: sub.status, durationMs: Date.now() - start },
+      "billing: subscription synced",
+    );
+  });
 }
 
 export async function cancelSubscription(stripeSubId: string, atPeriodEnd = true): Promise<void> {
