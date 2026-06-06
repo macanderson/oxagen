@@ -21,7 +21,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict 5EwAe2qizevbKg8963qd5163T7TB0LePehj6EmKobAHaKPzSiEvHGeFLsJfwARw
 
 -- Dumped from database version 16.14
 -- Dumped by pg_dump version 16.14
@@ -4391,5 +4390,4 @@ ALTER TABLE ONLY workspace.workspace_users
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 5EwAe2qizevbKg8963qd5163T7TB0LePehj6EmKobAHaKPzSiEvHGeFLsJfwARw
 
