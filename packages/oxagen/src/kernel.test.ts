@@ -15,8 +15,8 @@ import {
 } from "./kernel";
 
 const ctx: CapabilityContext = {
-  orgId: "t",
-  workspaceId: "w",
+  orgId: "00000000-0000-0000-0000-000000000001",
+  workspaceId: "00000000-0000-0000-0000-000000000002",
   userId: "u",
   apiKeyId: null,
   requestId: "r",

@@ -29,6 +29,7 @@
     "@oxagen/ontology": "workspace:*",
     "@oxagen/sandbox": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
+    "@oxagen/tenancy": "workspace:*",
     "ai": "6.0.197",
     "drizzle-orm": "0.45.2",
     "inngest": "3.54.2",

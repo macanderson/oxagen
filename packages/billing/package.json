@@ -19,6 +19,7 @@
     "@oxagen/database": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
+    "@oxagen/tenancy": "workspace:*",
     "stripe": "17.7.0",
     "zod": "3.25.76"
   },

@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
+    "@oxagen/tenancy": "workspace:*",
     "zod": "3.25.76"
   },
   "devDependencies": {

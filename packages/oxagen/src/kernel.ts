@@ -1,6 +1,7 @@
 import type { CapabilityContext, CapabilitySurface, CapabilityEffect, ResolvedPrincipal } from "./types";
 import { getSurfaces } from "./types";
 import { getCapability, listCapabilities } from "./registry";
+import { runInTenantScope } from "@oxagen/tenancy";
 
 // ── Billing admission gate (injected at bootstrap) ───────────────────────────
 //
@@ -160,8 +161,11 @@ export interface KernelSecurityEvent {
   workspaceId: string;
   actorUserId: string | null;
   requestId: string;
-  /** The CapabilityErrorCode that caused a deny/error, if any. */
-  errorCode: CapabilityErrorCode | null;
+  /**
+   * The CapabilityErrorCode that caused a deny/error, if any. Includes
+   * "no_tenant_scope" for the fail-closed tenant-scope denial (OXA-1515).
+   */
+  errorCode: CapabilityErrorCode | "no_tenant_scope" | null;
   /** Wall-clock milliseconds from invoke() entry to emit. */
   durationMs: number;
 }
@@ -415,20 +419,30 @@ export async function invoke(
   let output: unknown;
   try {
     const handler = await resolveHandler(name);
-    output = await handler(inputResult.data, ctx);
+    output = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => handler(inputResult.data, ctx),
+    );
   } catch (err) {
     // Distinguish CapabilityError (handler not found → deny) from a
-    // handler runtime throw (→ error).
+    // handler runtime throw (→ error). A TenantScopeError (e.g. the MCP
+    // orgId:"" fail-open path) carries a stable `code` we surface to the
+    // audit chain so the denial reason is explainable (SOC 2 forensics).
     const isCapErr = err instanceof CapabilityError;
+    const scopeCode =
+      err instanceof Error && "code" in err && err.code === "no_tenant_scope"
+        ? "no_tenant_scope"
+        : null;
     emitSecurityEvent({
       capability: name,
-      outcome: isCapErr && err.code === "no_handler" ? "deny" : "error",
+      outcome:
+        (isCapErr && err.code === "no_handler") || scopeCode ? "deny" : "error",
       surface: ctx.surface,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
-      errorCode: isCapErr ? err.code : null,
+      errorCode: isCapErr ? err.code : scopeCode,
       durationMs: Date.now() - startMs,
     });
     throw err;

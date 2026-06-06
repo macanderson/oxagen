@@ -133,6 +133,9 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../../packages/tenancy
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
@@ -209,6 +212,9 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../../packages/tenancy
       '@oxagen/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -449,6 +455,9 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../../packages/tenancy
       xmcp:
         specifier: 0.6.10
         version: 0.6.10(postcss@8.5.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(tslib@2.8.1)(webpack@5.107.2(@swc/core@1.15.40)(lightningcss@1.32.0)(postcss@8.5.15))(zod@3.25.76)
@@ -556,6 +565,9 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       ai:
         specifier: 6.0.197
         version: 6.0.197(zod@3.25.76)
@@ -614,6 +626,9 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       ai:
         specifier: 6.0.197
         version: 6.0.197(zod@3.25.76)
@@ -648,6 +663,9 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       better-auth:
         specifier: 1.6.11
         version: 1.6.11(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9))(next@16.2.7(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0))
@@ -679,6 +697,9 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       stripe:
         specifier: 17.7.0
         version: 17.7.0
@@ -745,6 +766,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
@@ -797,6 +821,9 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
@@ -834,6 +861,9 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
@@ -877,6 +907,9 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
@@ -936,6 +969,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       neo4j-driver:
         specifier: 5.28.3
         version: 5.28.3
@@ -958,6 +994,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       zod:
         specifier: 3.25.76
         version: 3.25.76
@@ -1061,6 +1100,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 2.1.9
@@ -1068,6 +1110,15 @@ importers:
       tsx:
         specifier: 4.22.3
         version: 4.22.3
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0)
+
+  packages/tenancy:
+    devDependencies:
       typescript:
         specifier: 6.0.3
         version: 6.0.3

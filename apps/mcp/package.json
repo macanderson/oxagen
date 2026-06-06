@@ -21,6 +21,7 @@
     "@oxagen/iam": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
+    "@oxagen/tenancy": "workspace:*",
     "xmcp": "0.6.10",
     "zod": "3.25.76"
   },

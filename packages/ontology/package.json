@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
     "./migrate": "./src/migrate.ts",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./tenant": "./src/tenant.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -20,6 +21,7 @@
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
+    "@oxagen/tenancy": "workspace:*",
     "neo4j-driver": "5.28.3"
   },
   "devDependencies": {
