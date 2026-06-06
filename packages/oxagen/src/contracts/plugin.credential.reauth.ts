@@ -7,7 +7,8 @@ export const pluginCredentialReauth = registerCapability({
   description:
     "Return the OAuth authorization URL to initiate re-authentication for a plugin credential that has expired or been revoked. Use this URL to deep-link the user into the OAuth consent flow.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
+  agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
   layers: ["api", "mcp", "unit"],
   scoped: true,
   sensitivity: "medium",

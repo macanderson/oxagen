@@ -1,6 +1,8 @@
 "use server";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { invoke } from "@oxagen/oxagen";
+import "@oxagen/handlers/register";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
@@ -47,18 +49,32 @@ async function resolveManagedOrgForPlugins(
   return { orgId: tenant.id, actorUserId: session.user.id };
 }
 
+function buildCtx(opts: { orgId: string; userId: string }) {
+  return {
+    orgId: opts.orgId,
+    workspaceId: "",
+    userId: opts.userId,
+    apiKeyId: null as string | null,
+    requestId: crypto.randomUUID(),
+    surface: "app" as const,
+    messageId: null as string | null,
+  };
+}
+
 // ── setAuthAlertsAction ───────────────────────────────────────────────────────
+
+/**
+ * Roles accepted by the plugin.settings.set_auth_alerts contract.
+ * Must be title-case to match the capability's enum.
+ */
+const AuthAlertRole = z.enum(["Owner", "Admin", "Compliance", "Billing"]);
 
 const AuthAlertsSchema = z.object({
   orgSlug: z.string().min(1),
   sendEmail: z.boolean(),
-  roles: z.array(z.string()).min(1),
+  roles: z.array(AuthAlertRole).min(1),
 });
 
-/**
- * Stop-gap direct DB update. Replace with invoke("plugin.settings.set_auth_alerts", ...)
- * once that capability is shipped (tracked in Linear).
- */
 export async function setAuthAlertsAction(
   input: z.infer<typeof AuthAlertsSchema>,
 ): Promise<{ ok: boolean; error?: string }> {
@@ -66,28 +82,17 @@ export async function setAuthAlertsAction(
   if (!parsed.success) return { ok: false, error: "Invalid input" };
   const managed = await resolveManagedOrgForPlugins(parsed.data.orgSlug);
   if (!managed) return { ok: false, error: NOT_AUTHORIZED };
-
-  const { withTenantDb, schema } = await import("@oxagen/database");
-  const { eq, sql } = await import("drizzle-orm");
+  const ctx = buildCtx({ orgId: managed.orgId, userId: managed.actorUserId });
 
   try {
-    await runInTenantScope(
-      { orgId: managed.orgId, workspaceId: ORG_ONLY_WS },
-      () =>
-        withTenantDb((tx) =>
-          tx
-            .update(schema.organizations)
-            .set({
-              settings: sql`
-                COALESCE(settings, '{}'::jsonb) ||
-                jsonb_build_object('mcp_auth_alerts', jsonb_build_object(
-                  'send_email', ${parsed.data.sendEmail}::boolean,
-                  'roles', ${JSON.stringify(parsed.data.roles)}::jsonb
-                ))
-              `,
-            })
-            .where(eq(schema.organizations.id, managed.orgId)),
-        ),
+    await invoke(
+      "plugin.settings.set_auth_alerts",
+      {
+        sendEmail: parsed.data.sendEmail,
+        roles: parsed.data.roles,
+      },
+      ctx,
+      { surface: "agent" },
     );
     revalidatePath(`/${parsed.data.orgSlug}/settings/plugins`);
     return { ok: true };
