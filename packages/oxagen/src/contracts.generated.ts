@@ -42,6 +42,7 @@ import "./contracts/org.member.role.change";
 import "./contracts/organization.create";
 import "./contracts/plugin.catalog.browse";
 import "./contracts/plugin.catalog.get";
+import "./contracts/plugin.credential.reauth";
 import "./contracts/plugin.credential.set_secret";
 import "./contracts/plugin.denylist.add";
 import "./contracts/plugin.denylist.remove";

@@ -211,3 +211,7 @@ registerHandler(
   "plugin.credential.set_secret",
   async () => (await import("./plugin.credential.set_secret")).handler as CapabilityHandlerFn,
 );
+registerHandler(
+  "plugin.credential.reauth",
+  async () => (await import("./plugin.credential.reauth")).handler as CapabilityHandlerFn,
+);

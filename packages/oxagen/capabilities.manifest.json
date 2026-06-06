@@ -690,6 +690,21 @@
       }
     },
     {
+      "name": "plugin.credential.reauth",
+      "file": "plugin.credential.reauth.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
       "name": "plugin.credential.set_secret",
       "file": "plugin.credential.set_secret.ts",
       "domain": "plugin",
