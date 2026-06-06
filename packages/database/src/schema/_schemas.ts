@@ -18,3 +18,6 @@ export const graphSchema = pgSchema("graph");
 export const evaluationSchema = pgSchema("evaluation");
 export const billingSchema = pgSchema("billing");
 export const securitySchema = pgSchema("security");
+export const mcpSchema = pgSchema("mcp");
+export const pluginSchema = pgSchema("plugin");
+export const notificationSchema = pgSchema("notification");

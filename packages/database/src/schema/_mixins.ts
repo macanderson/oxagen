@@ -24,6 +24,15 @@ export const ltree = customType<{ data: string; driverData: string }>({
   },
 });
 
+// bytea for envelope-encrypted columns — Drizzle has no first-class bytea
+// helper, so we declare it via customType. The service layer is responsible
+// for encrypt/decrypt (see @oxagen/crypto); the column stores an opaque Buffer.
+export const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
+
 // UUIDv7 default. The initial migration installs the uuidv7() function
 // or the pg_uuidv7 extension; if neither is available we fall back to
 // uuid_generate_v4 from uuid-ossp (also installed by the initial

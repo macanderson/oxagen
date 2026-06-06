@@ -16,3 +16,6 @@ export * from "./content";
 export * from "./billing";
 export * from "./security";
 export * from "./iam";
+export * from "./mcp";
+export * from "./plugin";
+export * from "./notification";

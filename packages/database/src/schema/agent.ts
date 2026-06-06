@@ -263,6 +263,7 @@ export const mcpServers = agentSchema.table(
     ...idMixin("mcs"),
     ...auditMixin(),
     ...orgScopeMixin(),
+    orgListingId: uuid("org_listing_id"),
     name: text("name").notNull(),
     transportType: text("transport_type").notNull(),
     endpointUrl: text("endpoint_url").notNull(),
