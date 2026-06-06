@@ -103,6 +103,36 @@ export const assertOrgMember = cache(
   },
 );
 
+/** Roles permitted to manage plugins (MCP servers, integrations, content tools). */
+const MCP_MANAGER_ROLES = new Set(["owner", "admin"]);
+
+/**
+ * Assert that the user is a member of the org AND holds a plugin-management
+ * role (owner/admin). Calls `notFound()` otherwise — consistent with
+ * {@link assertBillingManager}. Use in any server route/action that mutates
+ * org plugin governance (install, uninstall, denylist, registry, enable/disable).
+ */
+export const assertMcpManager = cache(
+  async (orgId: string, userId: string): Promise<void> => {
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({ role: schema.orgUsers.role })
+        .from(schema.orgUsers)
+        .where(
+          and(
+            eq(schema.orgUsers.orgId, orgId),
+            eq(schema.orgUsers.userId, userId),
+          ),
+        )
+        .limit(1),
+    );
+    const role = rows[0]?.role;
+    if (!role || !MCP_MANAGER_ROLES.has(role)) {
+      notFound();
+    }
+  },
+);
+
 /** Roles permitted to manage billing (mirror of the billing actions gate). */
 const BILLING_MANAGER_ROLES = new Set(["owner", "admin", "billing"]);
 

@@ -8,8 +8,6 @@
  *
  * On REDIRECT: redirects the browser to the authorization server's authorize URL.
  * On AUTHORIZED (already connected): redirects to the workspace integrations page.
- *
- * VERIFY: swap to assertMcpManager once Plan 6 lands.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { randomUUID } from "node:crypto";
@@ -18,12 +16,7 @@ import { and, eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import { DbOAuthClientProvider } from "@oxagen/plugins";
 import { getSession } from "@/lib/session";
-import { resolveOrg, assertBillingManager } from "@/lib/resolve-org";
-
-// VERIFY: swap to assertMcpManager once Plan 6 lands.
-// Using assertBillingManager as a proxy for owner/admin role gate until
-// a dedicated assertMcpManager helper is created in Plan 6.
-const assertMcpManager = assertBillingManager;
+import { resolveOrg, assertMcpManager } from "@/lib/resolve-org";
 
 export const runtime = "nodejs"; // MCP SDK auth uses Node crypto — edge-unsafe.
 
