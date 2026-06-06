@@ -15,16 +15,18 @@
 // Partition naming: security_events_<YYYY>_<MM>  (zero-padded month).
 // Example: security_events_2026_06 covers [2026-06-01, 2026-07-01).
 //
-// Dependencies: @oxagen/database (Drizzle db() + sql). No pg_partman / pg_cron
-// assumed. DDL is sent via db().execute(sql.raw(...)) which uses the same
-// postgres.js pool already open in the process.
+// Dependencies: @oxagen/database (withSystemDb + sql). No pg_partman / pg_cron
+// assumed. Partition DDL is system-level (cross-tenant, no tenant scope), so it
+// runs through withSystemDb — the explicit, audited RLS-bypass seam for trusted
+// cron jobs (OXA-1515). All statements here are transaction-safe DDL (no
+// CONCURRENTLY), so a single withSystemDb transaction per step is correct.
 //
 // Instrumentation: logs created/skipped/dropped counts at info level with
 // durationMs so the Inngest dashboard + any log sink can track partition health.
 
 import { sql } from "drizzle-orm";
 import { inngest } from "../inngest";
-import { db } from "@oxagen/database/client";
+import { withSystemDb } from "@oxagen/database";
 import { logger } from "../logger";
 
 /** 7-year retention in milliseconds. */
@@ -68,41 +70,42 @@ export const securityAuditPartitionRollover = inngest.createFunction(
 
     await step.run("create-upcoming-partitions", async () => {
       const startMs = Date.now();
-      const d = db();
 
-      for (let offset = 1; offset <= 2; offset++) {
-        const target = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-        const spec = partitionSpec(target.getFullYear(), target.getMonth() + 1);
+      await withSystemDb(async (tx) => {
+        for (let offset = 1; offset <= 2; offset++) {
+          const target = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+          const spec = partitionSpec(target.getFullYear(), target.getMonth() + 1);
 
-        // Check whether the child table already exists in pg_class.
-        const existsRows = await d.execute<{ exists: boolean }>(sql`
-          SELECT EXISTS (
-            SELECT 1
-            FROM   pg_class      c
-            JOIN   pg_namespace  n ON n.oid = c.relnamespace
-            WHERE  n.nspname = 'security'
-            AND    c.relname  = ${spec.name}
-            AND    c.relkind  = 'r'
-          ) AS exists
-        `);
+          // Check whether the child table already exists in pg_class.
+          const existsRows = await tx.execute<{ exists: boolean }>(sql`
+            SELECT EXISTS (
+              SELECT 1
+              FROM   pg_class      c
+              JOIN   pg_namespace  n ON n.oid = c.relnamespace
+              WHERE  n.nspname = 'security'
+              AND    c.relname  = ${spec.name}
+              AND    c.relkind  = 'r'
+            ) AS exists
+          `);
 
-        // drizzle-orm execute returns an array of row objects.
-        const exists = (existsRows as { exists: boolean }[])[0]?.exists ?? false;
+          // drizzle-orm execute returns an array of row objects.
+          const exists = (existsRows as { exists: boolean }[])[0]?.exists ?? false;
 
-        if (exists) {
-          skipped.push(spec.name);
-          continue;
+          if (exists) {
+            skipped.push(spec.name);
+            continue;
+          }
+
+          // CREATE TABLE ... PARTITION OF. IF NOT EXISTS is a second idempotency
+          // guard in case of a concurrent run between the check and the create.
+          await tx.execute(sql.raw(
+            `CREATE TABLE IF NOT EXISTS security.${spec.name}` +
+            ` PARTITION OF security.security_events` +
+            ` FOR VALUES FROM ('${spec.from}') TO ('${spec.to}')`,
+          ));
+          created.push(spec.name);
         }
-
-        // CREATE TABLE ... PARTITION OF. IF NOT EXISTS is a second idempotency
-        // guard in case of a concurrent run between the check and the create.
-        await d.execute(sql.raw(
-          `CREATE TABLE IF NOT EXISTS security.${spec.name}` +
-          ` PARTITION OF security.security_events` +
-          ` FOR VALUES FROM ('${spec.from}') TO ('${spec.to}')`,
-        ));
-        created.push(spec.name);
-      }
+      });
 
       logger.info(
         { created, skipped, durationMs: Date.now() - startMs },
@@ -115,55 +118,56 @@ export const securityAuditPartitionRollover = inngest.createFunction(
 
     await step.run("drop-expired-partitions", async () => {
       const startMs = Date.now();
-      const d = db();
       const retentionCutoff = new Date(now.getTime() - RETENTION_MS);
 
-      // List all named monthly child partitions of security.security_events.
-      // We exclude the DEFAULT partition by name and filter by name pattern.
-      const rows = await d.execute<{ relname: string }>(sql`
-        SELECT c.relname
-        FROM   pg_inherits    i
-        JOIN   pg_class       c  ON c.oid = i.inhrelid
-        JOIN   pg_namespace   n  ON n.oid = c.relnamespace
-        WHERE  i.inhparent = (
-                 SELECT c2.oid
-                 FROM   pg_class      c2
-                 JOIN   pg_namespace  n2 ON n2.oid = c2.relnamespace
-                 WHERE  n2.nspname = 'security'
-                 AND    c2.relname  = 'security_events'
-               )
-        AND    n.nspname = 'security'
-        AND    c.relname LIKE 'security_events_%_%'
-        AND    c.relname != 'security_events_default'
-        ORDER  BY c.relname
-      `);
+      await withSystemDb(async (tx) => {
+        // List all named monthly child partitions of security.security_events.
+        // We exclude the DEFAULT partition by name and filter by name pattern.
+        const rows = await tx.execute<{ relname: string }>(sql`
+          SELECT c.relname
+          FROM   pg_inherits    i
+          JOIN   pg_class       c  ON c.oid = i.inhrelid
+          JOIN   pg_namespace   n  ON n.oid = c.relnamespace
+          WHERE  i.inhparent = (
+                   SELECT c2.oid
+                   FROM   pg_class      c2
+                   JOIN   pg_namespace  n2 ON n2.oid = c2.relnamespace
+                   WHERE  n2.nspname = 'security'
+                   AND    c2.relname  = 'security_events'
+                 )
+          AND    n.nspname = 'security'
+          AND    c.relname LIKE 'security_events_%_%'
+          AND    c.relname != 'security_events_default'
+          ORDER  BY c.relname
+        `);
 
-      for (const row of rows as { relname: string }[]) {
-        // Parse year and month from name: security_events_YYYY_MM.
-        const match = /^security_events_(\d{4})_(\d{2})$/.exec(row.relname);
-        if (!match) continue; // unexpected name — skip safely
+        for (const row of rows as { relname: string }[]) {
+          // Parse year and month from name: security_events_YYYY_MM.
+          const match = /^security_events_(\d{4})_(\d{2})$/.exec(row.relname);
+          if (!match) continue; // unexpected name — skip safely
 
-        const [, yearStr, monthStr] = match;
-        if (!yearStr || !monthStr) continue;
-        const year = Number(yearStr);
-        const month = Number(monthStr); // 1-indexed
+          const [, yearStr, monthStr] = match;
+          if (!yearStr || !monthStr) continue;
+          const year = Number(yearStr);
+          const month = Number(monthStr); // 1-indexed
 
-        // Partition's upper bound = first day of the month AFTER this one.
-        // If the upper bound is on or before the cutoff, the entire partition
-        // is older than 7 years and eligible for deletion.
-        const partitionEnd = new Date(
-          month === 12 ? year + 1 : year,
-          month === 12 ? 0 : month, // JS month: 0-indexed → month+1 = next
-          1,
-        );
+          // Partition's upper bound = first day of the month AFTER this one.
+          // If the upper bound is on or before the cutoff, the entire partition
+          // is older than 7 years and eligible for deletion.
+          const partitionEnd = new Date(
+            month === 12 ? year + 1 : year,
+            month === 12 ? 0 : month, // JS month: 0-indexed → month+1 = next
+            1,
+          );
 
-        if (partitionEnd <= retentionCutoff) {
-          await d.execute(sql.raw(
-            `DROP TABLE IF EXISTS security.${row.relname}`,
-          ));
-          dropped.push(row.relname);
+          if (partitionEnd <= retentionCutoff) {
+            await tx.execute(sql.raw(
+              `DROP TABLE IF EXISTS security.${row.relname}`,
+            ));
+            dropped.push(row.relname);
+          }
         }
-      }
+      });
 
       logger.info(
         {
