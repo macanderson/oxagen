@@ -6,10 +6,47 @@ import { withSystemDb, schema } from "@oxagen/database";
 // a scope cannot be entered before the org row exists; withSystemDb bypasses
 // RLS deliberately) — OXA-1515
 import { grantFreeCredits } from "@oxagen/billing";
+import { ingestImageFromUrl, isIngestibleImageUrl } from "@oxagen/storage";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { getSessionOrRedirect } from "@/lib/session";
 import { bootstrapOrgIAM } from "@oxagen/handlers/iam-provision";
+
+// An avatar URL we already own — served from our Vercel Blob store. Such URLs
+// (produced by /api/v1/upload/avatar) are persisted as-is; no re-ingest needed.
+function isOwnedBlobUrl(url: string): boolean {
+  try {
+    return new URL(url).hostname.endsWith(".public.blob.vercel-storage.com");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve the org logo URL to persist from the submitted `avatarUrl`.
+ *
+ * - empty               → null (logo is optional).
+ * - our own blob URL    → kept as-is (uploaded through our route).
+ * - trusted OAuth host  → copied into our blob store so we own the binary
+ *                         (storage boundary); falls back to the external URL
+ *                         only if the copy fails, so the avatar still renders.
+ * - anything else       → dropped (null). We never fetch or store an arbitrary
+ *                         user-supplied URL — that would be an SSRF / stored-
+ *                         reference risk.
+ */
+async function resolveOrgAvatarUrl(
+  submitted: string | undefined,
+  ownerId: string,
+): Promise<string | null> {
+  const url = submitted?.trim();
+  if (!url) return null;
+  if (isOwnedBlobUrl(url)) return url;
+  if (isIngestibleImageUrl(url)) {
+    const ingested = await ingestImageFromUrl({ url, kind: "avatar", ownerId });
+    return ingested?.url ?? url;
+  }
+  return null;
+}
 
 // FormData schema: captures all flat fields from NewOrgForm.
 // Fields forwarded via hidden inputs (type, industry, employeeSize, addressCountry,
@@ -108,6 +145,11 @@ export async function createOrgAction(
   });
   if (!workspaceInput.success) return { ok: false, error: "Invalid workspace" };
 
+  // Resolve the logo BEFORE the transaction — copying an OAuth avatar into our
+  // blob store is a network call that must not run inside the DB transaction.
+  // Best-effort: never block org creation on it.
+  const resolvedAvatarUrl = await resolveOrgAvatarUrl(fd.avatarUrl, session.user.id);
+
   // Build the billing-profile row from the validated, normalised input.
   const billingProfile =
     org.billingEmail !== undefined || org.billingAddress !== undefined
@@ -140,7 +182,7 @@ export async function createOrgAction(
           website: org.website ?? null,
           industry: org.industry ?? null,
           employeeSize: org.employeeSize ?? null,
-          avatarUrl: nonEmpty(fd.avatarUrl) ?? null,
+          avatarUrl: resolvedAvatarUrl,
           createdByUserId: session.user.id,
           updatedByUserId: session.user.id,
         })

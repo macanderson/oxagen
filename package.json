@@ -52,7 +52,9 @@
   "pnpm": {
     "overrides": {
       "drizzle-orm": "0.45.2",
-      "typescript": "6.0.3"
+      "typescript": "6.0.3",
+      "d3-path": "3.1.0",
+      "d3-shape": "3.2.0"
     },
     "onlyBuiltDependencies": [
       "@swc/core",

@@ -30,3 +30,8 @@ export {
   deriveAssetKey,
 } from "./assets";
 export type { AssetKind } from "./assets";
+export { ingestImageFromUrl, isIngestibleImageUrl } from "./ingest";
+export type {
+  IngestImageDeps,
+  IngestImageFromUrlInput,
+} from "./ingest";

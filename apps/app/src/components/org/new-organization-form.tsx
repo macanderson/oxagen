@@ -13,6 +13,7 @@ import {
 import { BillingAddressFields } from "@/components/billing/billing-address-fields";
 import { AvatarUpload } from "@/components/media/avatar-upload";
 import { slugify } from "@/lib/slug";
+import type { OrgSignupPrefill } from "@/lib/oauth-prefill";
 import { ORG_TYPE_OPTIONS, INDUSTRY_OPTIONS, EMPLOYEE_SIZE_OPTIONS } from "@oxagen/config";
 import type { OrgType } from "@oxagen/config";
 
@@ -25,23 +26,63 @@ function deriveSlug(name: string): string {
   return slugify(name).slice(0, 40);
 }
 
-export function NewOrgForm({ action }: { action: NewOrgAction }) {
+const PROVIDER_LABEL: Record<NonNullable<OrgSignupPrefill["provider"]>, string> = {
+  google: "Google",
+  github: "GitHub",
+};
+
+export function NewOrgForm({
+  action,
+  prefill,
+}: {
+  action: NewOrgAction;
+  prefill?: OrgSignupPrefill;
+}) {
+  // The default account type drives which name the form seeds: a business org
+  // name (derived from the email domain) for "business", the user's own name
+  // for "personal".
+  const suggestedName = React.useCallback(
+    (type: OrgType): string =>
+      type === "business"
+        ? (prefill?.suggestedBusinessName ?? "")
+        : (prefill?.name ?? ""),
+    [prefill],
+  );
+
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
-  const [name, setName] = React.useState("");
-  const [slug, setSlug] = React.useState("");
   const [orgType, setOrgType] = React.useState<OrgType>("business");
+  const [name, setName] = React.useState(() => suggestedName("business"));
+  const [slug, setSlug] = React.useState(() => deriveSlug(suggestedName("business")));
   const [industry, setIndustry] = React.useState("");
   const [employeeSize, setEmployeeSize] = React.useState("");
   // Logo is optional at creation; AvatarUpload.onChange returns the uploaded
   // blob URL, mirrored into a hidden input so it rides the FormData submit.
-  const [avatarUrl, setAvatarUrl] = React.useState("");
+  // Seeded with the OAuth avatar (an external Google/GitHub URL) — the server
+  // action copies that into our blob store on submit.
+  const [avatarUrl, setAvatarUrl] = React.useState(prefill?.avatarUrl ?? "");
   // The slug auto-follows the name until the user hand-edits it to a non-empty
   // value. Clearing the slug field back to empty re-arms auto-population, so an
   // empty slug + a name change always repopulates the slug.
   const slugManuallyEdited = React.useRef(false);
+  // The name auto-follows the account-type toggle until the user hand-edits it,
+  // so flipping personal⇄business swaps the prefilled name appropriately.
+  const nameManuallyEdited = React.useRef(false);
 
   const isBusiness = orgType === "business";
+
+  // Switch account type and, when the user hasn't overridden the name, re-seed
+  // the name (and dependent slug) from the prefill for the new type.
+  const selectOrgType = (next: OrgType) => {
+    setOrgType(next);
+    if (!nameManuallyEdited.current) {
+      const seeded = suggestedName(next);
+      setName(seeded);
+      if (!slugManuallyEdited.current) setSlug(deriveSlug(seeded));
+    }
+  };
+
+  const providerLabel = prefill?.provider ? PROVIDER_LABEL[prefill.provider] : null;
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -67,6 +108,14 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
+      {/* Attribution — only when the profile came from a social provider, so
+          the user knows the fields were prefilled and are theirs to edit. */}
+      {providerLabel && (
+        <p className="text-xs text-muted-foreground">
+          Prefilled from your {providerLabel} account — edit anything below.
+        </p>
+      )}
+
       {/* ── Type selector ─────────────────────────────────────────────── */}
       <div className="space-y-1.5">
         <Label>Account type</Label>
@@ -75,7 +124,7 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
             <button
               key={opt.value}
               type="button"
-              onClick={() => setOrgType(opt.value)}
+              onClick={() => selectOrgType(opt.value)}
               className={[
                 "flex-1 px-4 py-2 text-sm font-medium transition-colors",
                 "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
@@ -114,6 +163,9 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
           value={name}
           onChange={(e) => {
             const next = e.target.value;
+            // A hand-edit pins the name so the account-type toggle stops
+            // re-seeding it from the prefill.
+            nameManuallyEdited.current = true;
             setName(next);
             // Auto-populate while the user hasn't overridden the slug, and also
             // whenever the slug is currently empty (re-armed override).
@@ -170,6 +222,8 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
               type="url"
               placeholder="https://acme.com"
               autoComplete="url"
+              // Seeded from the email domain for business (non-consumer) emails.
+              defaultValue={prefill?.suggestedWebsite || undefined}
             />
           </div>
 
@@ -224,6 +278,8 @@ export function NewOrgForm({ action }: { action: NewOrgAction }) {
           type="email"
           placeholder="billing@acme.com"
           autoComplete="email"
+          // Seeded with the signed-in user's verified email.
+          defaultValue={prefill?.email || undefined}
         />
       </div>
         </div>{/* end left column */}
