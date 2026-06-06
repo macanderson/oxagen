@@ -276,8 +276,18 @@ export const mcpServers = agentSchema.table(
     healthStatus: text("health_status").notNull(),
     lastHealthcheckAt: timestamp("last_healthcheck_at", { withTimezone: true, mode: "date" }),
     discoveredTools: jsonb("discovered_tools").notNull().default(sql`'[]'::jsonb`),
+    // Workspace enable/disable toggle for a marketplace-installed server. Survives
+    // disable so config + cached discoveredTools aren't lost. The runtime injects
+    // tools only when enabled = true AND healthStatus = 'healthy'.
+    enabled: boolean("enabled").notNull().default(true),
   },
   (t) => ({
     orgIdx: index("mcp_servers_org_idx").on(t.orgId, t.workspaceId),
+    enabledIdx: index("mcp_servers_enabled_idx").on(t.workspaceId, t.enabled),
+    // Partial unique: one install row per (workspace, org_listing); legacy
+    // custom rows with NULL org_listing_id are unaffected.
+    wsListingUniq: uniqueIndex("mcp_servers_ws_listing_uniq")
+      .on(t.workspaceId, t.orgListingId)
+      .where(sql`org_listing_id IS NOT NULL`),
   }),
 );

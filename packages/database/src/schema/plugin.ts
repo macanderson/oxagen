@@ -11,6 +11,11 @@ import {
 import { pluginSchema } from "./_schemas";
 import { auditMixin, idMixin, softDeleteMixin } from "./_mixins";
 
+/** The three installable plugin types. The discriminator stored in
+ *  plugin.org_listings.plugin_type and used by the runtime PluginType registry. */
+export const PLUGIN_TYPES = ["mcp_server", "integration", "content_tool"] as const;
+export type PluginType = (typeof PLUGIN_TYPES)[number];
+
 /**
  * plugin.org_listings — the org allow-list. Polymorphic across plugin types
  * (mcp_server | integration | content_tool). A row with catalog_server_id set
