@@ -1,0 +1,70 @@
+import { and, eq, count, sql } from "drizzle-orm";
+import { schema, withSystemDb } from "@oxagen/database";
+import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+
+export const handler: CapabilityHandlerFn = async (input, ctx) => {
+  const { unreadOnly, limit } = input as { unreadOnly: boolean; limit: number };
+
+  if (!ctx.userId) {
+    throw new Error("[notifications.list] userId is required (user-scoped)");
+  }
+  const userId = ctx.userId;
+
+  return withSystemDb(async (tx) => {
+    const conditions = [
+      eq(schema.notifications.userId, userId),
+      eq(schema.notifications.archived, false),
+    ];
+    if (unreadOnly) {
+      conditions.push(eq(schema.notifications.unread, true));
+    }
+    const where = and(...conditions);
+
+    const [rows, countRows] = await Promise.all([
+      tx
+        .select({
+          id: schema.notifications.id,
+          publicId: schema.notifications.publicId,
+          kind: schema.notifications.kind,
+          title: schema.notifications.title,
+          body: schema.notifications.body,
+          deepLink: schema.notifications.deepLink,
+          unread: schema.notifications.unread,
+          archived: schema.notifications.archived,
+          createdAt: schema.notifications.createdAt,
+        })
+        .from(schema.notifications)
+        .where(where)
+        .orderBy(sql`${schema.notifications.createdAt} DESC`)
+        .limit(limit),
+      tx
+        .select({ n: count() })
+        .from(schema.notifications)
+        .where(
+          and(
+            eq(schema.notifications.userId, userId),
+            eq(schema.notifications.archived, false),
+            eq(schema.notifications.unread, true),
+          ),
+        ),
+    ]);
+
+    const countRow = countRows[0];
+    const unreadCount = countRow?.n ?? 0;
+
+    return {
+      notifications: rows.map((r) => ({
+        id: r.id,
+        publicId: r.publicId,
+        kind: r.kind,
+        title: r.title,
+        body: r.body,
+        deepLink: r.deepLink,
+        unread: r.unread,
+        archived: r.archived,
+        createdAt: r.createdAt.toISOString(),
+      })),
+      unreadCount,
+    };
+  });
+};
