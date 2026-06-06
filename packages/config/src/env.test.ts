@@ -100,6 +100,32 @@ describe("loadEnv", () => {
   });
 });
 
+// ── TENANT_RLS_ENFORCEMENT_ENABLED ───────────────────────────────────────────
+
+describe("TENANT_RLS_ENFORCEMENT_ENABLED", () => {
+  beforeEach(() => {
+    __resetEnvCacheForTests();
+  });
+
+  it("defaults TENANT_RLS_ENFORCEMENT_ENABLED to false (seeding-safe)", () => {
+    __resetEnvCacheForTests();
+    const env = requireEnv(["TENANT_RLS_ENFORCEMENT_ENABLED"], {
+      ...process.env,
+      TENANT_RLS_ENFORCEMENT_ENABLED: undefined,
+    });
+    expect(env.TENANT_RLS_ENFORCEMENT_ENABLED).toBe(false);
+  });
+
+  it("coerces TENANT_RLS_ENFORCEMENT_ENABLED='true' to true", () => {
+    __resetEnvCacheForTests();
+    const env = requireEnv(["TENANT_RLS_ENFORCEMENT_ENABLED"], {
+      ...process.env,
+      TENANT_RLS_ENFORCEMENT_ENABLED: "true",
+    });
+    expect(env.TENANT_RLS_ENFORCEMENT_ENABLED).toBe(true);
+  });
+});
+
 // ── requireEnv ────────────────────────────────────────────────────────────────
 
 describe("requireEnv", () => {
