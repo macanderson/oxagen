@@ -186,9 +186,13 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
       }).catch(() => null),
       // First page of active conversations for the history nav. Failure is
       // non-fatal — the nav renders empty rather than crashing the chat page.
-      conversationListHandler({ filter: "active", limit: 50, cursor: null }, userCtx).catch(
-        () => ({ conversations: [], nextCursor: null }),
-      ),
+      // runInTenantScope is required: conversationListHandler calls withTenantDb
+      // which requires an active ALS scope; without it every call throws and the
+      // list is silently empty.
+      runInTenantScope(
+        { orgId: tenant.id, workspaceId: workspace.id },
+        () => conversationListHandler({ filter: "active", limit: 50, cursor: null }, userCtx),
+      ).catch(() => ({ conversations: [], nextCursor: null })),
     ]);
 
   // Bind the workspace scope into the nav's server actions so the client only

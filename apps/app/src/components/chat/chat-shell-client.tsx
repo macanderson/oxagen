@@ -196,8 +196,12 @@ export function ChatShellClient({
       // public id. Without `?c=<publicId>` the bare /ask|/chat URL resolves to
       // a blank slate, so the new conversation's persisted history would never
       // render (and the next turn would spawn yet another conversation).
+      // Also trigger an immediate router.refresh() so the conversation nav list
+      // updates right away (shows the new conversation) without waiting for the
+      // stream to finish — the DB row exists as soon as sendAction returns.
       if (wasNewConversation && result.conversationPublicId) {
         router.replace(`${pathname}?c=${result.conversationPublicId}`);
+        router.refresh();
       }
 
       void (async () => {
