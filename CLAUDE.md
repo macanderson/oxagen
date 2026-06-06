@@ -262,6 +262,18 @@ its empty-string clear does **not** fire React's controlled `onChange`; to set
 a React-controlled field reliably (or to clear one), use `evaluate_script` with
 the native value setter + a bubbling `input` event.
 
+## Key dependency versions
+
+Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level overrides.
+
+- **Next.js `16.2.7`** — App Router, Turbopack default (extensionless imports).
+  `proxy.ts` replaces `middleware.ts` (see below).
+- **AI SDK `ai@6.0.x`** — use `modelIdOf()` to resolve model handles to gateway
+  slugs; the v4/v5 web docs do NOT match this version. `streamText` /
+  `generateObject` / `generateText` are the correct APIs; `ai/rsc` and
+  `useChat` are forbidden (see App stack notes).
+- **TypeScript `6.0.3`** — stricter inference; no `any`.
+
 ## App stack
 
 ### `apps/app` — interactive agent UI
@@ -303,8 +315,26 @@ the native value setter + a bubbling `input` event.
 
 ### `apps/api`, `apps/mcp`
 
-- Node services. No UI. Surface platform capabilities defined in
-  `/packages` once and exposed identically through API and MCP.
+- **`apps/api`** — Hono REST server. Routes live at
+  `apps/api/src/routes/v1/<capability>.ts` (versioned, one file per
+  capability). No UI. Thin shell over `packages/`.
+- **`apps/mcp`** — xmcp server. Tools live at
+  `apps/mcp/src/tools/<capability>.ts` (one file per capability).
+  Connect at `/mcp` over streamable HTTP.
+- **Capability parity rule:** any new user-facing action must also be a
+  contract in `packages/oxagen/src/contracts/` (via `registerCapability`)
+  wired into BOTH `apps/api/src/routes/v1/` and `apps/mcp/src/tools/`.
+  Run `pnpm check:manifest` to verify parity after adding a contract.
+- **Parity caveat:** *contract-declared* capabilities are symmetric between
+  API and MCP. However, several UI-only billing/settings/profile actions are
+  not yet contracted (tracked in Linear) and therefore NOT reachable from
+  the MCP surface. Do not assume full API↔MCP parity — run `check:manifest`
+  to get the current gap list.
+
+### `apps/cli`
+
+- Commander + Ink CLI. Entry: `apps/cli/src/index.tsx`. Provides the
+  `oxagen dev` command (port-prober and dev-stack launcher).
 
 ### `apps/admin`
 

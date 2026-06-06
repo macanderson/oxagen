@@ -5,6 +5,7 @@ import {
   teardownFixture,
   type AgentRuntimeFixture,
 } from "./helpers/agent-runtime-fixture";
+import { signUpFreshUser } from "./helpers/signup";
 
 // ─── Auth-guard smoke tests (no session required) ───────────────────────────
 
@@ -114,5 +115,60 @@ test.describe("auth — successful sign-in journey", () => {
     await expect(
       page.locator("body").getByText(new RegExp(AUTH_ORG_SLUG, "i")),
     ).toBeVisible();
+  });
+});
+
+// ─── Real email+password login form journey ──────────────────────────────────
+//
+// Signs up a fresh user via signUpFreshUser (which drives the real /signup
+// form), explicitly logs out, then logs BACK IN via the typed /login form.
+// Asserts that a successful authenticated landing is reached without cookie
+// injection — this proves the login form → Better Auth → session cookie round
+// trip works end-to-end.
+
+test.describe("auth — email+password login form", () => {
+  test("signup → logout → login via typed form lands on authenticated page", async ({
+    page,
+  }) => {
+    // ── 1. Sign up a fresh user (drives the real /signup form) ─────────────
+    const { email, password, orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "form-login",
+    });
+
+    // After signup+org creation we are on /<orgSlug>/default — authenticated.
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page).toHaveURL(new RegExp(orgSlug));
+
+    // ── 2. Log out by navigating to /logout (Better Auth session endpoint) ─
+    // Better Auth exposes POST /api/auth/sign-out. Drive it via the UI to
+    // keep the test realistic: navigate to a logout URL that triggers the
+    // sign-out server action, or navigate to /login which clears state.
+    // Simplest reliable approach: clear all cookies (equivalent to logout)
+    // then navigate to /login to confirm the session is gone.
+    await page.context().clearCookies();
+
+    // Navigating to a protected route should now redirect to /login.
+    await page.goto(`/${orgSlug}/default`);
+    await expect(page).toHaveURL(/\/login/);
+
+    // ── 3. Fill the real /login form ──────────────────────────────────────
+    await page.waitForSelector('input[name="email"]', { state: "visible" });
+    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="password"]', password);
+    await page.getByRole("button", { name: /sign in|continue|log in/i }).click();
+
+    // Better Auth sets the session cookie and redirects to the app.
+    // After a successful login, the user should land on an authenticated page
+    // (not /login). Allow up to 15 s for the session round-trip.
+    await page.waitForURL(
+      (url) => !url.pathname.startsWith("/login"),
+      { timeout: 15_000 },
+    );
+
+    // ── 4. Assert authenticated landing ──────────────────────────────────
+    await expect(page).not.toHaveURL(/\/login/);
+    // The org slug should be present in the URL (the shell redirects to
+    // the user's default org after a successful login).
+    await expect(page).toHaveURL(new RegExp(orgSlug));
   });
 });

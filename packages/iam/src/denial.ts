@@ -1,6 +1,6 @@
 // denial.ts — DenialResponse factory and type guard (OXA-1390, Phase 3).
 //
-// DenialResponse is the structured value returned by defineContract().invoke()
+// DenialResponse is the structured value returned by kernel.invoke()
 // when the IAM resolver decides deny or pending_approval. The handler is never
 // called in these cases. isDenial() narrows the union so callers can handle
 // allow vs. denial cleanly without catching exceptions.

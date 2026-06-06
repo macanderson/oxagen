@@ -1,13 +1,12 @@
-// bootstrap.ts — IAM runtime adapter for setIAMRuntime() (OXA-1390, Phase 3).
+// bootstrap.ts — IAM runtime adapter for kernel.invoke() (OXA-1390, OXA-1498).
 //
 // Surfaces (apps/api, apps/mcp) import bootstrapIAMRuntime() and call it ONCE
-// at process start — before any defineContract().invoke() can run — to wire
-// the real IAM enforcement functions into the @oxagen/oxagen contract boundary.
+// at process start to wire the real IAM enforcement into kernel.invoke().
 //
 // WHY AN ADAPTER: checkIAM() returns { result: ResolveResult, principal } but
-// IAMCheckFn (define-contract.ts) expects { outcome, reason?, principal }.
-// The adapter flattens ResolveResult into those fields so the two packages
-// remain independently typed. createAccessRequest() is directly assignable.
+// KernelIAMCheckFn expects { outcome, reason?, principal }. The adapter
+// flattens ResolveResult into those fields so the two packages remain
+// independently typed.
 //
 // GRACEFUL DEGRADATION IS PRESERVED: fetchAuthz() (inside checkIAM) already
 // catches Postgres 42P01 (relation does not exist) and returns empty AuthzData,
@@ -15,56 +14,32 @@
 // adds NO degradation of its own — it only wires real implementations.
 //
 // IDEMPOTENT: calling bootstrapIAMRuntime() more than once (e.g. in tests or
-// hot-reload scenarios) is safe — setIAMRuntime() simply overwrites the refs.
+// hot-reload scenarios) is safe — setKernelIAMRuntime() simply overwrites the ref.
+//
+// NOTE: The defineContract() parallel dispatch path and its setIAMRuntime() /
+// clearIAMRuntime() injection points were removed because no contracts used
+// defineContract() — all 43 contracts call registerCapability() directly and
+// dispatch through kernel.invoke(). The dead defineContract.ts file was
+// deleted in the release-audit-ce1cec3 fix bundle.
 
-import { setIAMRuntime, type IAMCheckFn, type CreateAccessRequestFn } from "@oxagen/oxagen";
 import { setKernelIAMRuntime, type KernelIAMCheckFn } from "@oxagen/oxagen/kernel";
 import { checkIAM } from "./check-iam";
-import { createAccessRequest } from "./access-request";
 import { requireEnv } from "@oxagen/config/env";
 
 /**
- * Adapter: maps checkIAM's { result: ResolveResult, principal } return shape
- * to the IAMCheckFn-expected { outcome, reason?, principal } shape.
- */
-const iamCheckAdapter: IAMCheckFn = async (args) => {
-  const { result, principal } = await checkIAM(args);
-
-  // Extract outcome and the optional reason string from the discriminated union.
-  const outcome = result.outcome;
-  const reason = "reason" in result ? result.reason : undefined;
-
-  return { outcome, reason, principal };
-};
-
-/**
- * createAccessRequest is structurally identical to CreateAccessRequestFn —
- * assigned directly with no adapter required.
- */
-const createAccessRequestAdapter: CreateAccessRequestFn = createAccessRequest;
-
-/**
- * Wire the real IAM enforcement runtime into both dispatch paths:
- *   1. defineContract().invoke() — the contract-level IAM boundary.
- *   2. kernel.invoke() — the kernel-level IAM boundary (OXA-1498).
+ * Wire the real IAM enforcement runtime into kernel.invoke() (OXA-1498).
  *
  * kernel.invoke() reads IAM_ENFORCEMENT_ENABLED to decide whether to BLOCK
- * on deny (true) or only LOG would-deny decisions (false, default). Both
- * paths ALWAYS resolve authz and emit the ClickHouse audit event.
+ * on deny (true) or only LOG would-deny decisions (false). Both paths ALWAYS
+ * resolve authz and emit the ClickHouse audit event.
  *
  * Call once per process at surface bootstrap (apps/api/src/index.ts,
  * apps/mcp/src/middleware.ts) before any capability can be invoked.
  * Safe to call multiple times — idempotent overwrite.
  */
 export function bootstrapIAMRuntime(): void {
-  setIAMRuntime({
-    checkIAM: iamCheckAdapter,
-    createAccessRequest: createAccessRequestAdapter,
-  });
-
-  // Wire the kernel IAM path. The kernel adapter mirrors the IAM check adapter
-  // (same underlying checkIAM call) but returns the flattened result shape that
-  // kernel.invoke() expects (KernelIAMCheckResult).
+  // Wire the kernel IAM path. The adapter flattens checkIAM's ResolveResult
+  // into the { outcome, reason?, principal } shape that KernelIAMCheckFn expects.
   const kernelIAMAdapter: KernelIAMCheckFn = async (args) => {
     const { result, principal } = await checkIAM(args);
     const outcome = result.outcome;
