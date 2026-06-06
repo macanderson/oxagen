@@ -129,15 +129,9 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
     // db().update should have been called at least twice: mark-running + mark-completed
     expect(mocks.dbUpdate.mock.calls.length).toBeGreaterThanOrEqual(2);
 
-<<<<<<< Updated upstream
     // kernel.invoke called with the capability name from payload (OXA-1498)
     expect(mocks.kernelInvoke).toHaveBeenCalledTimes(1);
     const [capName, _capInput, capCtx] = mocks.kernelInvoke.mock.calls[0] as [
-=======
-    // invokeCapability called with the capability name from payload
-    expect(mocks.invokeCapability).toHaveBeenCalledTimes(1);
-    const [capName, _capInput, capCtx] = mocks.invokeCapability.mock.calls[0] as [
->>>>>>> Stashed changes
       string,
       unknown,
       Record<string, unknown>,

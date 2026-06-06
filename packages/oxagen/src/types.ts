@@ -168,6 +168,17 @@ export interface CapabilityContext {
    * call `resolveOrgTier(ctx.orgId)` directly.
    */
   planTier?: PlanTier;
+  /**
+   * Client IP address for the request. Optional (nullable) — extracted from
+   * x-forwarded-for (first hop) or x-real-ip at each surface entry seam and
+   * propagated into the IAM resolver for ip_ranges / ip_allow condition
+   * evaluation. When null/absent, any IP-based condition fails-closed (deny).
+   *
+   * Never use this field as a security boundary for anything other than IAM
+   * condition evaluation — IP addresses can be spoofed via proxy headers.
+   * The IAM layer is the enforcing surface.
+   */
+  clientIp?: string | null;
 }
 
 /**

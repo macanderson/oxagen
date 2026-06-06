@@ -62,16 +62,36 @@ export type McpContextResolution =
   | { ok: false; reason: McpAuthFailure };
 
 /**
+ * Extract the real client IP from proxy headers.
+ * x-forwarded-for may carry a comma-separated list — take the first hop
+ * (leftmost = original client). Falls back to x-real-ip, then null.
+ *
+ * SECURITY: these headers can be spoofed. Used only for IAM ip_ranges
+ * condition evaluation, never for authentication.
+ */
+function extractClientIp(hdrs: HttpHeaders): string | null {
+  const xff = firstHeader(hdrs["x-forwarded-for"]);
+  if (xff) {
+    const first = xff.split(",")[0]?.trim();
+    if (first && first.length > 0) return first;
+  }
+  const realIp = firstHeader(hdrs["x-real-ip"]);
+  return realIp?.trim() || null;
+}
+
+/**
  * Resolves a CapabilityContext from the Authorization header of an MCP
  * request. Returns a typed result (never throws for auth failures) so a
  * non-throwing caller can translate to 401.
  *
  * @param authHeader - Raw value of the Authorization HTTP header.
- * @param requestId - Trace-correlation id to stamp onto the context.
+ * @param requestId  - Trace-correlation id to stamp onto the context.
+ * @param clientIp   - Client IP extracted from x-forwarded-for / x-real-ip.
  */
 export async function resolveMcpContext(
   authHeader: string | undefined,
   requestId: string,
+  clientIp: string | null = null,
 ): Promise<McpContextResolution> {
   const token = extractBearerToken(authHeader);
   if (!token) return { ok: false, reason: "unauthenticated" };
@@ -98,6 +118,7 @@ export async function resolveMcpContext(
         requestId,
         surface: "mcp",
         messageId: null,
+        clientIp,
       },
     };
   }
@@ -119,6 +140,7 @@ export async function resolveMcpContext(
       requestId,
       surface: "mcp",
       messageId: null,
+      clientIp,
     },
   };
 }
@@ -133,8 +155,9 @@ export async function resolveMcpContext(
 export async function buildContext(hdrs: HttpHeaders): Promise<CapabilityContext> {
   const authHeader = firstHeader(hdrs["authorization"]);
   const requestId = firstHeader(hdrs["x-request-id"]) ?? crypto.randomUUID();
+  const clientIp = extractClientIp(hdrs);
 
-  const resolution = await resolveMcpContext(authHeader, requestId);
+  const resolution = await resolveMcpContext(authHeader, requestId, clientIp);
   if (!resolution.ok) throw new McpUnauthorizedError(resolution.reason);
   return resolution.ctx;
 }

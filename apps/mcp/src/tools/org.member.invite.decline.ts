@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member.invite.decline";
@@ -6,7 +5,10 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
 export const schema = {
-  invitationPublicId: z.string().min(1).describe("Public ID of the invitation to decline"),
+  ...orgMemberInviteDecline.input.shape,
+  invitationPublicId: orgMemberInviteDecline.input.shape.invitationPublicId.describe(
+    "Public ID of the invitation to decline",
+  ),
 };
 
 export const metadata: ToolMetadata = {

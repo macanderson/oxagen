@@ -170,11 +170,15 @@ export const auth = betterAuth({
     provider: "pg",
     // Better Auth resolves models by name; with usePlural=true the names
     // become "users", "sessions", etc., so the schema keys must match.
+    // "rateLimit" is the exact model name the rate-limiter uses internally
+    // when storage:"database" is configured — it must be included here so
+    // the Drizzle adapter can find the auth.rate_limit table (migration 0009).
     schema: {
       users: schema.users,
       sessions: schema.sessions,
       accounts: schema.accounts,
       verifications: schema.verifications,
+      rateLimit: schema.rateLimitTable,
     },
     usePlural: true,
   }),
@@ -197,6 +201,32 @@ export const auth = betterAuth({
     enabled: true,
     autoSignIn: true,
     minPasswordLength: 8,
+  },
+
+  // ---------------------------------------------------------------------------
+  // OXA-SOC2: Brute-force defense — database-backed rate limiting.
+  //
+  // `storage: "database"` is the only option that survives across Vercel
+  // serverless instances (memory resets on cold-start). The auth.rate_limit
+  // table (migration 0009) stores (id, key, count, lastRequest). The Drizzle
+  // adapter resolves the model name "rateLimit" → schema.rateLimitTable.
+  //
+  // Base: 100 req / 60 s (well above normal interactive usage).
+  // Sign-in email: 5 req / 60 s (SOC2-grade: 5 attempts before lockout).
+  // Sign-up email: 10 req / 60 s (generous for legitimate sign-up flows).
+  // Note: Better Auth also applies a built-in default rule of 3 req / 10 s
+  // for /sign-in/* and /sign-up/* paths; our customRules below OVERRIDE
+  // that with the SOC2-appropriate 5/60 and 10/60 windows.
+  // ---------------------------------------------------------------------------
+  rateLimit: {
+    enabled: true,
+    storage: "database",
+    window: 60,
+    max: 100,
+    customRules: {
+      "/sign-in/email": { window: 60, max: 5 },
+      "/sign-up/email": { window: 60, max: 10 },
+    },
   },
   socialProviders: {
     google:

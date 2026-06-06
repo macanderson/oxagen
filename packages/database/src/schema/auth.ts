@@ -1,4 +1,4 @@
-import { boolean, customType, index, text, timestamp, uniqueIndex, uuid, jsonb } from "drizzle-orm/pg-core";
+import { bigint, boolean, customType, index, integer, text, timestamp, uniqueIndex, uuid, jsonb } from "drizzle-orm/pg-core";
 import { authSchema } from "./_schemas";
 import { auditMixin, citext, idMixin, softDeleteMixin, orgScopeMixin } from "./_mixins";
 
@@ -188,6 +188,33 @@ export const verifications = authSchema.table(
   },
   (t) => ({
     identifierIdx: index("verifications_identifier_idx").on(t.identifier),
+  }),
+);
+
+// ── Better Auth rate-limit store ─────────────────────────────────────────────
+// Used when `rateLimit.storage: "database"` is configured in betterAuth().
+// Better Auth resolves this table via the model name "rateLimit"; the Drizzle
+// adapter schema map in auth.ts wires "rateLimit" → this table export.
+//
+// Schema matches what the Better Auth rate-limiter creates/reads:
+//   id          — text PK (Better Auth generates the id).
+//   key         — text UNIQUE: composite of IP + path (the rate-limit bucket).
+//   count       — integer: request count within the current window.
+//   lastRequest — bigint: Date.now() milliseconds since epoch of the last hit.
+//
+// Migration: 0009_soc2_auth_hardening.sql
+export const rateLimitTable = authSchema.table(
+  "rate_limit",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull(),
+    count: integer("count").notNull().default(0),
+    // bigint mode:"number" — JS can safely represent up to 2^53 ms (year ~287401)
+    // which is more than sufficient for epoch milliseconds.
+    lastRequest: bigint("lastRequest", { mode: "number" }).notNull().default(0),
+  },
+  (t) => ({
+    keyIdx: uniqueIndex("rate_limit_key_idx").on(t.key),
   }),
 );
 

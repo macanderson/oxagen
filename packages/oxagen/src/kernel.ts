@@ -470,6 +470,136 @@ export async function invoke(
   return outputResult.data;
 }
 
+// ── External-tool IAM check helper (OXA-1390, agent-runtime gap-4) ──────────
+//
+// The agent runtime dispatches external MCP tools under synthetic capability
+// ids of the form `mcp.<server>.<tool>`. Those ids are never registered in
+// the capability registry (no defineContract / handler), so kernel.invoke()
+// cannot be used to policy-check them. This helper runs the SAME gate that
+// kernel.invoke() uses — _iamCheckFn + _iamEnforced semantics + security
+// event emit — without requiring a registered handler or contract.
+//
+// Usage:
+//   const { allowed } = await authorizeExternalCapability(
+//     "mcp.github.list_pull_requests",
+//     ctx,
+//     "deny", // default effect when no explicit grant exists
+//   );
+//   if (!allowed) throw new McpToolDeniedError(...);
+//
+// The caller (agent runtime / materialize-tools) is responsible for deciding
+// what to do with the result. This helper never throws on deny (unlike
+// kernel.invoke() with enforcement=true) — it returns a typed result so the
+// caller can apply the appropriate error shape for its transport.
+
+export interface AuthorizeExternalCapabilityResult {
+  /** True when the IAM check passed (outcome === "allow" OR enforcement is off). */
+  allowed: boolean;
+  /** The IAM outcome string: "allow" | "deny" | "pending_approval". */
+  outcome: string;
+  /** Human-readable denial reason, or null when allowed. */
+  reason: string | null;
+}
+
+/**
+ * Policy-check a synthetic capability id (e.g. `mcp.<server>.<tool>`) without
+ * requiring a registered contract or handler. Runs the same IAM gate that
+ * kernel.invoke() uses:
+ *
+ *   1. Calls _iamCheckFn (if registered) with the synthetic capability name.
+ *   2. Applies _iamEnforced semantics:
+ *        - enforced=true  → allowed=false when outcome !== "allow"
+ *        - enforced=false → allowed=true (but outcome/reason reflect would-deny)
+ *   3. Emits a KernelSecurityEvent for the audit trail (fire-and-forget).
+ *
+ * When no IAM runtime is registered (tests / local dev without bootstrap),
+ * the call is unconditionally allowed and emits no event — mirrors the
+ * kernel.invoke() behaviour under the same conditions.
+ *
+ * @param name          Synthetic capability id, e.g. "mcp.github.list_pull_requests".
+ * @param ctx           CapabilityContext built at the surface entry seam.
+ * @param defaultEffect Fallback effect when no explicit grant/policy matches.
+ */
+export async function authorizeExternalCapability(
+  name: string,
+  ctx: CapabilityContext,
+  defaultEffect: "allow" | "deny",
+): Promise<AuthorizeExternalCapabilityResult> {
+  const startMs = Date.now();
+  const checkFn = _iamCheckFn;
+
+  if (checkFn === null) {
+    // No IAM runtime registered — unconditionally allow (mirrors kernel.invoke()).
+    return { allowed: true, outcome: "allow", reason: null };
+  }
+
+  let iamCheckThrew = false;
+  const iamResult = await checkFn({
+    capability: name,
+    ctx,
+    defaultEffect,
+    rawInputJson: "null",
+  }).catch((err: unknown) => {
+    iamCheckThrew = true;
+    console.error(`[kernel:external] IAM check threw for "${name}":`, err);
+    return null;
+  });
+
+  // Fail closed on resolver error when enforcement is enabled.
+  if (iamCheckThrew && _iamEnforced) {
+    emitSecurityEvent({
+      capability: name,
+      outcome: "deny",
+      surface: ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      errorCode: "authz_denied",
+      durationMs: Date.now() - startMs,
+    });
+    return { allowed: false, outcome: "deny", reason: "iam_check_error" };
+  }
+
+  // IAM check errored but enforcement is off — allow with a warning.
+  if (iamCheckThrew) {
+    console.warn(
+      `[kernel:external] IAM check errored for "${name}" (enforcement=off) — allowing.`,
+    );
+    return { allowed: true, outcome: "allow", reason: null };
+  }
+
+  const outcome = iamResult?.outcome ?? "deny";
+  const reason = iamResult && "reason" in iamResult ? (iamResult.reason ?? null) : null;
+  const isDenied = outcome !== "allow";
+
+  emitSecurityEvent({
+    capability: name,
+    outcome: isDenied ? "deny" : "allow",
+    surface: ctx.surface,
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    actorUserId: ctx.userId,
+    requestId: ctx.requestId,
+    errorCode: isDenied ? "authz_denied" : null,
+    durationMs: Date.now() - startMs,
+  });
+
+  if (isDenied) {
+    if (_iamEnforced) {
+      return { allowed: false, outcome, reason: reason ?? outcome };
+    }
+    // Enforcement off — log would-deny and allow.
+    console.warn(
+      `[kernel:external] IAM would-deny "${name}" (outcome=${outcome}, ` +
+        `reason=${reason ?? "none"}) — IAM_ENFORCEMENT_ENABLED=false, allowing.`,
+    );
+    return { allowed: true, outcome, reason: reason ?? outcome };
+  }
+
+  return { allowed: true, outcome: "allow", reason: null };
+}
+
 /**
  * Drift guard for the verification gate: every capability exposed on a
  * machine surface must have a bound handler. Run after all register modules

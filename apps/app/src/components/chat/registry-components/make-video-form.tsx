@@ -45,6 +45,18 @@ export interface MakeVideoFormProps {
   durationSeconds?: number;
   /** Optional style hint (e.g. "cinematic", "animated") */
   style?: string;
+  /**
+   * Org slug from the current URL route segment. Required so the server
+   * action can resolve real org + workspace context for the IAM check.
+   * Injected by the stream route into the render directive props.
+   */
+  orgSlug?: string;
+  /**
+   * Workspace slug from the current URL route segment. Required so the server
+   * action can resolve real org + workspace context for the IAM check.
+   * Injected by the stream route into the render directive props.
+   */
+  workspaceSlug?: string;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -56,6 +68,8 @@ export default function MakeVideoForm({
   aspectRatio: initialAspectRatio,
   durationSeconds: initialDurationSeconds,
   style: initialStyle = "",
+  orgSlug = "",
+  workspaceSlug = "",
 }: MakeVideoFormProps): React.ReactElement {
   const [prompt, setPrompt] = React.useState(initialPrompt);
   const [aspectRatio, setAspectRatio] = React.useState<string>(
@@ -88,6 +102,8 @@ export default function MakeVideoForm({
       durationSeconds: Number.isFinite(parsedDuration) ? parsedDuration : undefined,
       aspectRatio: aspectRatio as "16:9" | "9:16" | "1:1",
       style: style.trim() !== "" ? style.trim() : undefined,
+      orgSlug,
+      workspaceSlug,
     });
 
     if (result.ok) {

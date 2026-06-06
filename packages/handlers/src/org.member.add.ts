@@ -13,8 +13,17 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberAdd } from "@oxagen/oxagen/contracts/org.member.add";
 import { db, schema } from "@oxagen/database";
+import { makeSecurityEventInserter } from "@oxagen/database/security";
+import { recordSecurityEvent } from "@oxagen/telemetry";
 import { assertSeatAvailable, isSeatLimitError } from "@oxagen/billing";
 import { logger } from "./logger";
+
+// Lazy singleton — avoids constructing the inserter until first call.
+let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
+function auditInsert() {
+  if (!_auditInsert) _auditInsert = makeSecurityEventInserter(db());
+  return _auditInsert;
+}
 
 // 30-day invitation TTL.
 const INVITATION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -96,6 +105,20 @@ export const orgMemberAddHandler: CapabilityHandler<typeof orgMemberAdd> = async
     { orgId: ctx.orgId, email: input.email, role: input.role, invitationId: invitation.publicId, surface: ctx.surface },
     "org.member.add: invitation created",
   );
+
+  // Emit org.member_invited security event (fire-and-forget; must not fail the
+  // capability — an audit write failure is non-blocking per SOC2 design).
+  recordSecurityEvent(auditInsert(), {
+    eventType: "org.member_invited",
+    actorUserId: actorId,
+    orgId: ctx.orgId,
+    workspaceId: null,
+    capability: "org.member.add",
+    outcome: "success",
+    ip: null,
+    userAgent: null,
+    requestId: ctx.requestId ?? null,
+  });
 
   return {
     invitationId: invitation.publicId,

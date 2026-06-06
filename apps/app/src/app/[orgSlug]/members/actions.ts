@@ -3,10 +3,20 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { eq, and } from "drizzle-orm";
 import { db, schema } from "@oxagen/database";
+import { makeSecurityEventInserter } from "@oxagen/database/security";
+import { recordSecurityEvent } from "@oxagen/telemetry";
 import { isSeatLimitError, assertSeatAvailable } from "@oxagen/billing";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
+
+// Lazy singleton: build the inserter on first use so the db() singleton is
+// ready at call time rather than at module import time.
+let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
+function auditInsert() {
+  if (!_auditInsert) _auditInsert = makeSecurityEventInserter(db());
+  return _auditInsert;
+}
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -67,6 +77,20 @@ export async function inviteMemberAction(
       });
 
     logger.info({ orgSlug, email, role }, "members: invitation created");
+
+    // Emit org.member_invited audit event (fire-and-forget).
+    recordSecurityEvent(auditInsert(), {
+      eventType: "org.member_invited",
+      actorUserId: session.user.id,
+      orgId: tenant.id,
+      workspaceId: null,
+      capability: "org.member.add",
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
+
     revalidatePath(`/${orgSlug}/members`);
     return { ok: true };
   } catch (err) {

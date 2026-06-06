@@ -41,6 +41,8 @@ import { organizationCreate } from "./organization.create";
 import { orgMemberAdd } from "./org.member.add";
 import { orgMemberInviteAccept } from "./org.member.invite.accept";
 import { orgMemberInviteDecline } from "./org.member.invite.decline";
+import { orgMemberRemove } from "./org.member.remove";
+import { orgMemberRoleChange } from "./org.member.role.change";
 import { workspaceCreate } from "./workspace.create";
 import { videoGenerate } from "./video.generate";
 import { imageGenerate } from "./image.generate";
@@ -85,6 +87,8 @@ export {
   orgMemberAdd,
   orgMemberInviteAccept,
   orgMemberInviteDecline,
+  orgMemberRemove,
+  orgMemberRoleChange,
   workspaceCreate,
   videoGenerate,
   imageGenerate,
@@ -138,6 +142,8 @@ export const contracts = [
   orgMemberAdd,
   orgMemberInviteAccept,
   orgMemberInviteDecline,
+  orgMemberRemove,
+  orgMemberRoleChange,
   workspaceCreate,
   videoGenerate,
   imageGenerate,

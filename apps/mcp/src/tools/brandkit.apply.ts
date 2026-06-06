@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { brandkitApply } from "@oxagen/oxagen/contracts/brandkit.apply";
@@ -6,9 +5,16 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
 export const schema = {
-  workspaceId: z.string().min(1).describe("The workspace the brand kit belongs to"),
-  brandKitId: z.string().min(1).describe("ID of the brand kit to apply"),
-  targetFileId: z.string().min(1).describe("Cloud file ID of the target document"),
+  ...brandkitApply.input.shape,
+  workspaceId: brandkitApply.input.shape.workspaceId.describe(
+    "The workspace the brand kit belongs to",
+  ),
+  brandKitId: brandkitApply.input.shape.brandKitId.describe(
+    "ID of the brand kit to apply",
+  ),
+  targetFileId: brandkitApply.input.shape.targetFileId.describe(
+    "Cloud file ID of the target document",
+  ),
 };
 
 export const metadata: ToolMetadata = {

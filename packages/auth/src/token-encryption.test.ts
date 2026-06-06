@@ -195,9 +195,11 @@ describe("buildAccountTokenHooks", () => {
     expect(typeof hooks.update.before).toBe("function");
   });
 
-  it("create.before encrypts token fields and strips plaintext columns", async () => {
-    // CONTRACT phase: access_token / refresh_token columns are dropped from DB.
-    // The hook must NOT return accessToken / refreshToken in the data object.
+  it("create.before encrypts token fields and strips all plaintext columns", async () => {
+    // CONTRACT phase: access_token / refresh_token columns are dropped from DB
+    // (migration 0012). id_token column still exists but plaintext is stripped
+    // so no plaintext is durably stored once the *_enc column is populated
+    // (SOC2 hardening migration 0009; DB trigger is the final backstop).
     const encBuf = Buffer.from("enc");
     mockEncrypt.mockResolvedValue(encBuf);
 
@@ -216,9 +218,10 @@ describe("buildAccountTokenHooks", () => {
       idTokenEnc: encBuf,
       tokenKmsKeyId: KEY_ID,
     });
-    // Plaintext columns are absent — they were dropped in migration 0012.
+    // All three plaintext token fields are absent.
     expect(result.data).not.toHaveProperty("accessToken");
     expect(result.data).not.toHaveProperty("refreshToken");
+    expect(result.data).not.toHaveProperty("idToken");
   });
 
   it("update.before skips encryption when no token field is present", async () => {
@@ -238,7 +241,10 @@ describe("buildAccountTokenHooks", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildStripOnlyAccountHooks", () => {
-  it("strips the dropped accessToken/refreshToken columns on create so OAuth sign-up succeeds", async () => {
+  it("strips accessToken, refreshToken, and idToken on create (SOC2: no plaintext at rest)", async () => {
+    // SOC2 hardening (migration 0009): idToken is now also stripped so that
+    // plaintext is never durably stored. The DB trigger is the final backstop;
+    // this hook is the application-layer first defence.
     const hooks = buildStripOnlyAccountHooks();
     const account = {
       providerId: "google",
@@ -252,8 +258,9 @@ describe("buildStripOnlyAccountHooks", () => {
     const { data } = await hooks.create.before(account);
     expect(data).not.toHaveProperty("accessToken");
     expect(data).not.toHaveProperty("refreshToken");
-    // Non-dropped fields (idToken column is retained) pass through untouched.
-    expect(data.idToken).toBe("id.jwt");
+    // idToken is also stripped — no plaintext persisted once encrypted.
+    expect(data).not.toHaveProperty("idToken");
+    // Non-token fields pass through untouched.
     expect(data.providerId).toBe("google");
     expect(data.userId).toBe("u-1");
     expect(data.scope).toBe("openid email");
@@ -261,11 +268,17 @@ describe("buildStripOnlyAccountHooks", () => {
     expect(mockEncrypt).not.toHaveBeenCalled();
   });
 
-  it("strips the dropped columns on update too", async () => {
+  it("strips accessToken, refreshToken, and idToken on update too", async () => {
     const hooks = buildStripOnlyAccountHooks();
-    const { data } = await hooks.update.before({ accessToken: "x", refreshToken: "y", scope: "s" });
+    const { data } = await hooks.update.before({
+      accessToken: "x",
+      refreshToken: "y",
+      idToken: "z",
+      scope: "s",
+    });
     expect(data).not.toHaveProperty("accessToken");
     expect(data).not.toHaveProperty("refreshToken");
+    expect(data).not.toHaveProperty("idToken");
     expect(data.scope).toBe("s");
   });
 });

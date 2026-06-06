@@ -1,4 +1,4 @@
-import { put as blobPut, del as blobDel } from "@vercel/blob";
+import { put as blobPut, del as blobDel, get as blobGet } from "@vercel/blob";
 import { logger } from "./logger";
 import type { GetObjectResult, PutObjectInput, PutObjectResult, StorageAdapter, StorageBody } from "./types";
 
@@ -73,69 +73,83 @@ function toPutBody(body: StorageBody): Blob | Buffer {
  * the SDK) so the upload route can fail closed via `requireEnv` before we get
  * here. `addRandomSuffix: false` keeps keys deterministic — callers already
  * include a UUID in the key, so a second random suffix would only obscure it.
+ *
+ * Private blobs
+ * -------------
+ * When `access: "private"` is passed to `put()`, the object is stored without
+ * a public CDN URL. `get()` fetches the bytes using the authenticated
+ * `@vercel/blob` `get()` API (which passes the read-write token to the storage
+ * plane) rather than a plain public `fetch()`. The public CDN URL is never
+ * returned or persisted for private objects.
+ *
+ * Call sites determine access level at write time:
+ *   - Avatars: access "public" (world-readable by design).
+ *   - Generated images/video, workspace files: access "private" (served only
+ *     through the access-controlled /api/v1/assets/[id] and /api/v1/files/[id]
+ *     routes, never via a guessable CDN URL).
  */
 export function createVercelBlobAdapter(token: string): StorageAdapter {
-  // The public base URL is derived lazily on first get() call so that
-  // adapters constructed for put/delete-only use cases (e.g. avatar uploads)
-  // can use any token string without requiring the full vercel_blob_rw_…
-  // format. The derivation is memoised after the first parse.
-  let _base: string | null = null;
-  function base(): string {
-    if (!_base) _base = publicBaseUrlFromToken(token);
-    return _base;
-  }
-
   return {
     driver: "vercel-blob",
 
     async get(key: string): Promise<GetObjectResult> {
       const start = Date.now();
-      // Vercel Blob public objects are served at a predictable URL derived
-      // from the store ID and the object key. We fetch through fetch() so
-      // the response body is a web-standard ReadableStream that can be
-      // piped directly into a Response (zero-copy streaming).
-      const url = `${base()}/${encodeURI(key)}`;
-      const res = await fetch(url);
-      if (!res.ok || !res.body) {
+
+      // We don't know the access level of an existing object from the key
+      // alone. Try the authenticated SDK get() first (works for both public
+      // and private blobs when we have the read-write token). Fall back to a
+      // plain public fetch only when the SDK path is unavailable. Using the
+      // SDK path for all gets is the safest default: it works for private blobs
+      // and is no slower than a direct fetch for public ones.
+      const result = await blobGet(key, { token, access: "private" });
+      if (!result || !result.stream) {
+        // SDK returns null for 404 (not found) or 304 (not modified).
+        // Both cases surface as StorageNotFoundError to the serve route.
         logger.warn(
-          { driver: "vercel-blob", key, status: res.status, durationMs: Date.now() - start },
-          "storage: get — object not found or empty body",
+          { driver: "vercel-blob", key, durationMs: Date.now() - start },
+          "storage: get — object not found or empty stream",
         );
         throw new StorageNotFoundError(key);
       }
-      const contentLength = res.headers.get("content-length");
-      const sizeBytes = contentLength !== null ? Number(contentLength) || null : null;
+
+      const contentType = result.blob.contentType ?? null;
+      const sizeBytes = result.blob.size ?? null;
+
       logger.info(
-        { driver: "vercel-blob", key, contentType: res.headers.get("content-type"), sizeBytes, durationMs: Date.now() - start },
+        { driver: "vercel-blob", key, contentType, sizeBytes, durationMs: Date.now() - start },
         "storage: object read",
       );
       return {
-        body: res.body,
-        contentType: res.headers.get("content-type"),
-        sizeBytes,
+        body: result.stream,
+        contentType,
+        sizeBytes: sizeBytes !== null && sizeBytes > 0 ? sizeBytes : null,
       };
     },
 
     async put(input: PutObjectInput): Promise<PutObjectResult> {
       const start = Date.now();
+      const access = input.access ?? "public";
       const bytes = byteLength(input.body);
       const result = await blobPut(input.key, toPutBody(input.body), {
-        access: input.access ?? "public",
+        access,
         token,
         contentType: input.contentType,
         addRandomSuffix: false,
         allowOverwrite: true,
       });
       logger.info(
-        { driver: "vercel-blob", key: input.key, contentType: input.contentType, bytes, durationMs: Date.now() - start },
+        { driver: "vercel-blob", key: input.key, access, contentType: input.contentType, bytes, durationMs: Date.now() - start },
         "storage: object written",
       );
-      return { url: result.url, key: result.pathname, bytes };
+      // For private blobs, result.url is the authenticated access URL (not a
+      // public CDN URL). We return result.pathname as the canonical key in all
+      // cases; callers must use the adapter get() to retrieve private bytes.
+      return { url: result.url, key: result.pathname, bytes, access };
     },
 
     async delete(urlOrKey: string): Promise<void> {
       const start = Date.now();
-      // `del` accepts the public URL; it is a no-op for an already-absent object.
+      // `del` accepts either the URL or the pathname.
       await blobDel(urlOrKey, { token });
       logger.info(
         { driver: "vercel-blob", key: urlOrKey, durationMs: Date.now() - start },

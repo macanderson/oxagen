@@ -5,7 +5,7 @@ import { registerCapability } from "../registry";
 
 const fieldTypeSchema = z.enum(["text", "textarea", "number", "select", "boolean"]);
 
-const fieldDescriptorSchema = z.object({
+export const fieldDescriptorSchema = z.object({
   name: z.string().min(1),
   label: z.string().min(1),
   type: fieldTypeSchema,

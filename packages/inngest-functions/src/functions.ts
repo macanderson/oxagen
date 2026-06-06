@@ -6,6 +6,7 @@ import { chatPersistStream } from "./functions/chat.persist-stream";
 import { agentExecuteSubagent } from "./functions/agent.execute-subagent";
 import { agentBackgroundTaskExecute } from "./functions/agent.background-task.execute";
 import { agentVideoRender, agentVideoRenderOnFailure } from "./functions/agent.video-render";
+import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
 
 export const functions = [
   billingRollupUsage,
@@ -17,4 +18,5 @@ export const functions = [
   agentBackgroundTaskExecute,
   agentVideoRender,
   agentVideoRenderOnFailure,
+  securityAuditPartitionRollover,
 ];

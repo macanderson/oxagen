@@ -124,6 +124,7 @@ describe("resolveMcpContext", () => {
         requestId,
         surface: "mcp",
         messageId: null,
+        clientIp: null,
       },
     });
     expect(resolveApiKey).toHaveBeenCalledWith("oxk_mysecret");
@@ -157,6 +158,7 @@ describe("resolveMcpContext", () => {
         requestId,
         surface: "mcp",
         messageId: null,
+        clientIp: null,
       },
     });
     expect(resolveSession).toHaveBeenCalledWith("sessiontoken");

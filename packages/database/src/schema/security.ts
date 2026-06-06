@@ -10,8 +10,17 @@
 // Every capability invocation, auth lifecycle event, and authz decision
 // that touches org data lands here. Downstream: compliance reports,
 // anomaly detection, SOC2 CC6/CC7 evidence.
+//
+// PARTITION MANAGEMENT:
+//   The table is a RANGE-partitioned heap on occurred_at (monthly, DDL in
+//   0002_security_events_partitioning.sql). The composite PK (id, occurred_at)
+//   is required by Postgres declarative partitioning. Monthly child partitions
+//   are created and expired by the `security.audit-partition-rollover` Inngest
+//   cron (packages/inngest-functions). 7-year retention matches ClickHouse
+//   audit_events TTL. DO NOT add event types here without also updating the
+//   CHECK constraint DDL in the migration file.
 
-import { check, index, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, index, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { securitySchema } from "./_schemas";
 
@@ -51,13 +60,16 @@ export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
 export const securityEvents = securitySchema.table(
   "security_events",
   {
-    // Primary key — UUIDv4 is fine here; ordering by occurred_at already
-    // provides the temporal sort. Not using idMixin because append-only
-    // tables must NOT inherit updatedAt / updatedByUserId.
-    id: uuid("id").primaryKey().default(sql`uuid_generate_v4()`),
+    // Composite PK (id, occurred_at) is required by Postgres declarative
+    // partitioning — the partition key must be included in every unique
+    // constraint and primary key. id remains UUIDv4 so it is functionally
+    // unique; occurred_at is the partition key. Not using idMixin because
+    // append-only tables must NOT inherit updatedAt / updatedByUserId.
+    id: uuid("id").notNull().default(sql`uuid_generate_v4()`),
 
     // When the event actually happened (caller-supplied for accurate
     // timestamps when events are emitted close to a transaction boundary).
+    // Also the partition key — never null.
     occurredAt: timestamp("occurred_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
@@ -90,6 +102,10 @@ export const securityEvents = securitySchema.table(
     requestId: text("request_id"),
   },
   (t) => ({
+    // Composite PK: required by Postgres RANGE partitioning — partition key
+    // (occurred_at) must be part of every unique constraint and primary key.
+    pk: primaryKey({ columns: [t.id, t.occurredAt] }),
+
     // Compliance range queries: "show me all events for org X in period Y"
     orgOccurredIdx: index("security_events_org_occurred_idx").on(t.orgId, t.occurredAt),
     // Alert queries: "show me all denied invocations in the last hour"

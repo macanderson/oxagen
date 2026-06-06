@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { UserPlus, Mail, AlertCircle, CheckCircle2, AlertTriangle } from "lucide-react";
+import { UserPlus, Mail, AlertCircle, CheckCircle2, AlertTriangle, Trash2 } from "lucide-react";
 import type { OrgSeatUsage } from "@oxagen/billing";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,7 @@ import { useToast } from "@/components/ui/toast";
 import { seatAlert } from "@/lib/seat-alert";
 import { formatDate } from "@/lib/utils";
 import { inviteMemberAction, declineInvitationAction } from "@/app/[orgSlug]/members/actions";
+import { removeMemberAction, changeMemberRoleAction } from "@/app/[orgSlug]/members/member-actions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ export interface Member {
   displayName: string | null;
   email: string;
   role: string;
+  userId: string;
   joinedAt: Date | string | null;
 }
 
@@ -54,8 +56,10 @@ export interface MembersPanelProps {
   members: Member[];
   pendingInvitations: PendingInvitation[];
   seatUsage: OrgSeatUsage;
-  /** The viewing user's role — used for gating Add-member controls. */
+  /** The viewing user's role — used for gating mutating controls. */
   viewerRole: string;
+  /** The viewing user's own userId — used to prevent self-remove. */
+  viewerUserId: string;
 }
 
 // ── SeatAlertBanner ───────────────────────────────────────────────────────────
@@ -68,7 +72,6 @@ function SeatAlertBanner({
   seatUsage: OrgSeatUsage;
 }) {
   const alert = seatAlert(seatUsage, orgSlug);
-
   const Icon =
     alert.variant === "error"
       ? AlertCircle
@@ -251,6 +254,205 @@ function AddMemberDialog({
   );
 }
 
+// ── RemoveMemberDialog ────────────────────────────────────────────────────────
+// Destructive action — always requires confirmation per [[conversation-history-nav]].
+
+function RemoveMemberDialog({
+  orgSlug,
+  member,
+  onRemoved,
+}: {
+  orgSlug: string;
+  member: Member;
+  onRemoved: () => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [pending, startTransition] = React.useTransition();
+  const { add: addToast } = useToast();
+
+  function handleConfirm() {
+    startTransition(async () => {
+      const res = await removeMemberAction({ orgSlug, targetUserId: member.userId });
+      if (res.ok) {
+        addToast({
+          title: "Member removed",
+          description: `${member.displayName ?? member.email} has been removed from the org.`,
+          type: "success",
+        });
+        setOpen(false);
+        onRemoved();
+      } else {
+        addToast({
+          title: "Failed to remove member",
+          description: res.error,
+          type: "error",
+        });
+        setOpen(false);
+      }
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+          />
+        }
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        <span className="sr-only">Remove</span>
+      </DialogTrigger>
+
+      <DialogPopup>
+        <DialogHeader>
+          <DialogTitle>Remove member</DialogTitle>
+          <DialogDescription>
+            This will permanently remove{" "}
+            <span className="font-medium">
+              {member.displayName ?? member.email}
+            </span>{" "}
+            from the org and revoke their access. This action cannot be undone without
+            sending a new invitation.
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
+          <Button variant="destructive" onClick={handleConfirm} disabled={pending}>
+            {pending ? "Removing…" : "Remove member"}
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
+  );
+}
+
+// ── RoleSelector ─────────────────────────────────────────────────────────────
+// Inline role select for privileged users. Shows current role; on change
+// calls changeMemberRoleAction immediately (no separate confirm step — role
+// changes are reversible, unlike removes).
+
+const ORG_ROLES = ["Owner", "Admin", "Member", "Billing", "Compliance"] as const;
+type OrgRoleName = (typeof ORG_ROLES)[number];
+
+function RoleSelector({
+  orgSlug,
+  member,
+  onChanged,
+}: {
+  orgSlug: string;
+  member: Member;
+  onChanged: (newRole: string) => void;
+}) {
+  const [pending, startTransition] = React.useTransition();
+  const { add: addToast } = useToast();
+
+  function handleChange(newRole: string | null) {
+    if (!newRole || newRole === member.role) return;
+    startTransition(async () => {
+      const res = await changeMemberRoleAction({
+        orgSlug,
+        targetUserId: member.userId,
+        newRole,
+      });
+      if (res.ok) {
+        onChanged(newRole);
+        addToast({
+          title: "Role updated",
+          description: `${member.displayName ?? member.email} is now ${newRole}.`,
+          type: "success",
+        });
+      } else {
+        addToast({
+          title: "Failed to update role",
+          description: res.error,
+          type: "error",
+        });
+      }
+    });
+  }
+
+  return (
+    <Select
+      value={member.role}
+      onValueChange={handleChange}
+      disabled={pending}
+    >
+      <SelectTrigger
+        className="h-7 min-w-[7rem] text-xs"
+        aria-label={`Change role for ${member.displayName ?? member.email}`}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectPopup>
+        {ORG_ROLES.map((r) => (
+          <SelectItem key={r} value={r}>
+            {r}
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
+  );
+}
+
+// ── MemberRow ─────────────────────────────────────────────────────────────────
+
+function MemberRow({
+  orgSlug,
+  member: initialMember,
+  canManage,
+  isSelf,
+  onRemoved,
+}: {
+  orgSlug: string;
+  member: Member;
+  canManage: boolean;
+  isSelf: boolean;
+  onRemoved: () => void;
+}) {
+  // Local role state so the RoleSelector update is optimistic without a full
+  // RSC re-render (revalidatePath kicks in as the background refresh).
+  const [role, setRole] = React.useState(initialMember.role);
+  const member = { ...initialMember, role };
+
+  return (
+    <li key={member.publicId} className="flex items-center justify-between py-3">
+      <div className="flex flex-col">
+        <span className="font-medium">{member.displayName ?? member.email}</span>
+        <span className="text-xs text-muted-foreground">{member.email}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        {canManage && !isSelf ? (
+          <>
+            {/* Inline role selector for privileged users */}
+            <RoleSelector
+              orgSlug={orgSlug}
+              member={member}
+              onChanged={(newRole) => setRole(newRole as OrgRoleName)}
+            />
+            {/* Destructive remove button with confirm dialog */}
+            <RemoveMemberDialog
+              orgSlug={orgSlug}
+              member={member}
+              onRemoved={onRemoved}
+            />
+          </>
+        ) : (
+          /* Non-privileged users see a read-only badge */
+          <Badge variant="outline">{member.role}</Badge>
+        )}
+        <span className="text-xs text-muted-foreground">
+          Joined {formatDate(member.joinedAt)}
+        </span>
+      </div>
+    </li>
+  );
+}
+
 // ── PendingInvitationsList ────────────────────────────────────────────────────
 
 function PendingInvitationsList({
@@ -318,16 +520,24 @@ function PendingInvitationsList({
 
 // ── MembersPanel ──────────────────────────────────────────────────────────────
 
-const CAN_MANAGE_MEMBERS = new Set(["owner", "admin"]);
+const CAN_MANAGE_MEMBERS = new Set(["owner", "admin", "Owner", "Admin"]);
 
 export function MembersPanel({
   orgSlug,
-  members,
+  members: initialMembers,
   pendingInvitations,
   seatUsage,
   viewerRole,
+  viewerUserId,
 }: MembersPanelProps) {
+  // Local member list so removals optimistically drop the row without waiting
+  // for a full RSC refresh (revalidatePath triggers the background sync).
+  const [members, setMembers] = React.useState(initialMembers);
   const canManage = CAN_MANAGE_MEMBERS.has(viewerRole);
+
+  function handleRemoved(userId: string) {
+    setMembers((prev) => prev.filter((m) => m.userId !== userId));
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -353,18 +563,14 @@ export function MembersPanel({
           ) : (
             <ul className="divide-y divide-border/60">
               {members.map((m) => (
-                <li key={m.publicId} className="flex items-center justify-between py-3">
-                  <div className="flex flex-col">
-                    <span className="font-medium">{m.displayName ?? m.email}</span>
-                    <span className="text-xs text-muted-foreground">{m.email}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline">{m.role}</Badge>
-                    <span className="text-xs text-muted-foreground">
-                      Joined {formatDate(m.joinedAt)}
-                    </span>
-                  </div>
-                </li>
+                <MemberRow
+                  key={m.publicId}
+                  orgSlug={orgSlug}
+                  member={m}
+                  canManage={canManage}
+                  isSelf={m.userId === viewerUserId}
+                  onRemoved={() => handleRemoved(m.userId)}
+                />
               ))}
             </ul>
           )}

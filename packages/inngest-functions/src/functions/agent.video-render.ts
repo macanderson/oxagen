@@ -85,11 +85,13 @@ export const agentVideoRender = inngest.createFunction(
         });
 
         const ext = generatedMime === "video/mp4" ? "mp4" : "bin";
+        // Private: the CDN URL must never be guessable. Bytes are served only
+        // through the auth-gated /api/v1/assets/[publicId] proxy.
         const putResult = await storage().put({
           key: `generated/videos/${orgId}/${assetId}.${ext}`,
           body: bytes,
           contentType: generatedMime,
-          access: "public",
+          access: "private",
         });
 
         return {

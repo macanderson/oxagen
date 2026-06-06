@@ -1,3 +1,10 @@
+// Side-effect imports: bind all foundation + agent capability handlers into
+// the kernel. These run at module-load time — before bootstrapIAMRuntime()
+// and before any tool invocation can occur. xmcp has no lifecycle hook, so
+// module scope is the only guaranteed-run location on cold start.
+import "@oxagen/handlers/register";
+import "@oxagen/agent/register";
+
 import { apiKeyAuthMiddleware, type Middleware } from "xmcp";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";

@@ -1,12 +1,12 @@
 import { tool, type Tool, type ToolSet } from "ai";
 import { z, type ZodTypeAny } from "zod";
 import { insertToolInvocation } from "@oxagen/telemetry";
-import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityContext } from "../types";
-import { invoke } from "@oxagen/oxagen/kernel";
+import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
 import { beforeTool, afterTool, onError } from "../hooks/runtime";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { connectMcp, materializeMcpTools } from "../dispatch/mcp-client";
+import { isSandboxAvailable } from "@oxagen/sandbox";
 import { db, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 
@@ -95,10 +95,12 @@ export async function materializeTools(
   const surfacesFn = _getSurfaces;
   if (!listFn || !surfacesFn) throw new Error("registry not initialized");
   const all = listFn();
-  // OXA-1348: agent.code.execute requires a sandbox driver. Until the
-  // Vercel-compatible driver ships, gate materialization on SANDBOX_ENABLED.
-  // Off by default in prod so the tool is not advertised to the model.
-  const sandboxEnabled = requireEnv(["SANDBOX_ENABLED"] as const).SANDBOX_ENABLED === true;
+  // OXA-1348: agent.code.execute requires a configured sandbox driver. Gate
+  // materialization on isSandboxAvailable() — the single source of truth that
+  // checks SANDBOX_ENABLED=true AND that the configured driver has the required
+  // credentials. The tool is only advertised to the model when it can actually
+  // execute; a non-functional tool is never shown.
+  const sandboxAvailable = isSandboxAvailable();
   const out: Record<string, Tool> = {};
   const nameMap: Record<string, string> = {};
 
@@ -121,7 +123,7 @@ export async function materializeTools(
     if (!surfacesFn(cap).includes("agent")) continue;
     if (opts.allowlist && !opts.allowlist.has(cap.name)) continue;
     if (!passesRisk(cap, opts.riskCeiling)) continue;
-    if (cap.name === "agent.code.execute" && !sandboxEnabled) continue;
+    if (cap.name === "agent.code.execute" && !sandboxAvailable) continue;
     const riskLevel: "low" | "medium" | "high" = cap.agent?.riskLevel ?? "low";
     const requiresApproval = cap.agent?.requiresApproval === true;
     register(cap.name, tool({
@@ -219,18 +221,16 @@ export async function materializeTools(
   }
   // ── MCP tool integration (OXA-1498) ─────────────────────────────────────────
   // Load tools from healthy registered MCP servers for this workspace.
-  // Each MCP tool execution is METERED via insertToolInvocation under a
-  // synthetic capability name `mcp.<serverId>.<toolName>` (audit trail).
-  //
-  // NOTE: MCP tools are metered, NOT individually IAM-enforced. Unlike the
-  // capability-backed tools above (which route through invoke() and therefore
-  // the full IAM kernel), MCP tools call the server transport directly, so an
-  // IAM `deny` policy against a synthetic `mcp.*` capability is NOT applied
-  // here even when IAM_ENFORCEMENT_ENABLED=true. Per-tool MCP enforcement
-  // (routing each call through an IAM check against the synthetic capability)
-  // is tracked separately; wiring it requires registering MCP tools as
-  // first-class capabilities. Failures per-server are isolated — a degraded
-  // server never blocks the model from receiving other tools.
+  // Each MCP tool execution is:
+  //   1. IAM-checked via authorizeExternalCapability() against the synthetic
+  //      capability id `mcp.<serverId>.<toolName>`. defaultEffect is "allow"
+  //      because the user intentionally registered the server; an explicit
+  //      deny/require_approval policy against the synthetic id overrides this.
+  //   2. METERED via insertToolInvocation — whether the call was allowed,
+  //      blocked by IAM, or failed. The full invocation trail is preserved
+  //      ([[instrument-everything]]).
+  // Failures per-server are isolated — a degraded server never blocks the
+  // model from receiving other tools.
   if (ctx.workspaceId) {
     let mcpServerRows: (typeof schema.mcpServers.$inferSelect)[] = [];
     try {
@@ -269,6 +269,58 @@ export async function materializeTools(
             execute: async (input: unknown) => {
               const invocationId = crypto.randomUUID();
               const startedAt = Date.now();
+
+              // ── IAM gate (GAP-4) ────────────────────────────────────────────
+              // capturedKey is the synthetic capability id for this tool:
+              // `mcp.<serverId>.<toolName>`. Run the same IAM gate as invoke()
+              // so an explicit deny/require_approval policy against the
+              // synthetic id is honoured when IAM_ENFORCEMENT_ENABLED=true.
+              // defaultEffect="allow" — the user intentionally registered this
+              // server; absent any explicit policy the call is permitted.
+              const iamResult = await authorizeExternalCapability(
+                capturedKey,
+                ctx,
+                "allow",
+              );
+              if (!iamResult.allowed) {
+                // Record the blocked invocation in the audit trail.
+                try {
+                  await insertToolInvocation({
+                    invocation_id: invocationId,
+                    org_id: ctx.orgId,
+                    workspace_id: ctx.workspaceId,
+                    capability_name: capturedKey,
+                    message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
+                    parent_message_id: null,
+                    execution_step_id: null,
+                    // ToolInvocationRow has no "denied" status; encode IAM
+                    // denial as "failed" + error_class="IamDenied" — the same
+                    // information, queryable in ClickHouse the same way.
+                    status: "failed",
+                    input_size_bytes: byteSize(input),
+                    output_size_bytes: 0,
+                    latency_ms: Date.now() - startedAt,
+                    error_class: "IamDenied",
+                    external_provider: "",
+                    external_server_id: server.id,
+                    risk_level: "low",
+                    required_approval: 0,
+                    surface: ctx.surface,
+                    provider: "",
+                    created_at: new Date().toISOString(),
+                  });
+                } catch {
+                  /* telemetry must never fail the call */
+                }
+                // Return a structured error the model can read and surface to
+                // the user. Do NOT throw — a thrown error would cause the AI SDK
+                // to mark the turn as failed; a returned string lets the model
+                // reason about the denial and stop gracefully.
+                const reason = iamResult.reason ?? iamResult.outcome;
+                return `Tool blocked by workspace policy: ${reason}`;
+              }
+              // ── End IAM gate ────────────────────────────────────────────────
+
               try {
                 // capturedExecute is the AI SDK Tool execute fn (input: T, options) => Promise<R>.
                 // The MCP wrapper in mcp-client.ts returns a Tool whose execute takes one arg;

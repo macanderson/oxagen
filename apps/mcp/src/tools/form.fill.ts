@@ -1,46 +1,27 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
-import { formFill } from "@oxagen/oxagen/contracts/form.fill";
+import { formFill, fieldDescriptorSchema } from "@oxagen/oxagen/contracts/form.fill";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
-const fieldDescriptorSchema = z.object({
-  name: z.string().min(1).describe("Field identifier"),
-  label: z.string().min(1).describe("Human-readable field label"),
-  type: z
-    .enum(["text", "textarea", "number", "select", "boolean"])
-    .describe("Field input type"),
-  current: z.unknown().describe("Current field value"),
-  options: z
-    .array(z.object({ label: z.string(), value: z.string() }))
-    .optional()
-    .describe("Allowed values for select fields"),
-  required: z.boolean().optional().describe("Whether the field is required"),
-});
-
 export const schema = {
-  route: z
-    .string()
-    .min(1)
-    .describe("URL route the form lives on (used for telemetry and context)"),
-  entitySummary: z
-    .string()
-    .optional()
-    .describe(
-      "Optional plain-text summary of the entity being edited, e.g. \"Project: Acme, status: active\"",
-    ),
-  instruction: z
-    .string()
-    .min(1)
-    .describe(
-      "Natural-language instruction for how to fill the form, e.g. \"Set the name to Acme Corp and mark it active\"",
-    ),
-  fields: z
-    .array(fieldDescriptorSchema)
-    .min(1)
-    .describe("Every field on the form, including its current value"),
+  ...formFill.input.shape,
+  route: formFill.input.shape.route.describe(
+    "URL route the form lives on (used for telemetry and context)",
+  ),
+  entitySummary: formFill.input.shape.entitySummary.describe(
+    'Optional plain-text summary of the entity being edited, e.g. "Project: Acme, status: active"',
+  ),
+  instruction: formFill.input.shape.instruction.describe(
+    'Natural-language instruction for how to fill the form, e.g. "Set the name to Acme Corp and mark it active"',
+  ),
+  fields: formFill.input.shape.fields.describe(
+    "Every field on the form, including its current value",
+  ),
 };
+
+// Re-export for consumers that need the field descriptor type.
+export { fieldDescriptorSchema };
 
 export const metadata: ToolMetadata = {
   name: formFill.name,
