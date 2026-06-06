@@ -96,12 +96,13 @@ export const baseEnvSchema = z.object({
   // must be HTTP-referrer-restricted in the Google Cloud console. Optional so
   // builds stay green without it — the address form degrades to plain manual
   // entry when absent.
-  // NEXT_PUBLIC_GOOGLE_MAPS_API_SECRET is the URL-signing secret and must be
-  // consumed SERVER-SIDE ONLY. Despite the NEXT_PUBLIC_ prefix it must NEVER
-  // be referenced in client bundle code; it is registered here purely so the
-  // env contract documents and validates it alongside its sibling key.
+  // GOOGLE_MAPS_URL_SIGNING_SECRET is the server-only URL-signing secret.
+  // It must NEVER be referenced in client bundle code. The NEXT_PUBLIC_ prefix
+  // was removed (was NEXT_PUBLIC_GOOGLE_MAPS_API_SECRET) to prevent Next.js
+  // from inlining it into the browser bundle — a signing secret must remain
+  // server-side only.
   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
-  NEXT_PUBLIC_GOOGLE_MAPS_API_SECRET: z.string().min(1).optional(),
+  GOOGLE_MAPS_URL_SIGNING_SECRET: z.string().min(1).optional(),
 
   LINEAR_API_KEY: z.string().optional(),
 

@@ -64,13 +64,12 @@ function writeContractBarrel(files) {
 /**
  * Returns true when the given layer is satisfied for a capability.
  *
- * The "mcp" layer is special: the MCP server dispatches ALL mcp-surface
- * capabilities dynamically via `capabilitiesForSurface("mcp") + invoke()`.
- * There are no per-tool files under apps/mcp/src/tools/ — they were deleted
- * in commit d401d73 because they were zombie stubs using the now-dead
- * placeholderContext(). The correct gate for the "mcp" layer is therefore:
- * does the capability's surfaces[] include "mcp"? If yes, the dynamic server
- * will dispatch it — that IS the mcp layer artifact.
+ * The "mcp" layer is satisfied by TWO conditions both being true:
+ *   1. The capability's surfaces[] includes "mcp" — enabling dynamic dispatch
+ *      through the xmcp server's capabilitiesForSurface("mcp") + kernel.invoke().
+ *   2. A per-tool file exists at apps/mcp/src/tools/<capability>.ts — the xmcp
+ *      tool registration that maps the capability into the MCP protocol surface.
+ *      As of this writing, 38+ such files exist and are actively used.
  *
  * @param {string} layer - the layer name from the contract's layers[]
  * @param {string} capName - the capability name (e.g. "org.create")
@@ -78,10 +77,12 @@ function writeContractBarrel(files) {
  */
 function layerSatisfied(layer, capName, capSurfaces) {
   const slug = slugify(capName);
-  // The mcp layer is satisfied by dynamic dispatch: if the capability
-  // declares "mcp" in its surfaces[], the server will serve it.
+  // The mcp layer is satisfied when the capability declares "mcp" in surfaces[]
+  // AND a tool file exists at apps/mcp/src/tools/<capability>.ts (xmcp registration).
   if (layer === "mcp") {
-    return capSurfaces.includes("mcp");
+    if (!capSurfaces.includes("mcp")) return false;
+    const toolFile = join(ROOT, `apps/mcp/src/tools/${capName}.ts`);
+    return existsSync(toolFile);
   }
   const candidates = {
     schema: [join(ROOT, "packages/database/src/schema")],

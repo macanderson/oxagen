@@ -11,6 +11,11 @@
  *
  * The test signs up a fresh user so it is independent and safe under
  * fullyParallel.
+ *
+ * API AVAILABILITY: a beforeAll guard asserts the API server is reachable.
+ * If the API is down the suite fails loudly — it does NOT silently skip,
+ * because silent skips hide parity regressions. Run the API server before
+ * executing these tests (pnpm --filter @oxagen/api dev or the turbo dev task).
  */
 
 import { test, expect } from "@playwright/test";
@@ -33,7 +38,34 @@ async function getSessionCookieValue(
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+/**
+ * Assert the API server is reachable. Called in beforeAll for every suite
+ * that sends requests to the external API. Fails with a clear message rather
+ * than silently skipping so parity regressions are never hidden.
+ */
+async function assertApiIsUp(request: import("@playwright/test").APIRequestContext): Promise<void> {
+  let reachable = false;
+  try {
+    const probe = await request.get(`${API_BASE}/health`, { timeout: 5_000 });
+    // Accept any non-5xx response — the route may not exist, but that proves
+    // the server is listening.
+    reachable = probe.status() < 500;
+  } catch {
+    reachable = false;
+  }
+  if (!reachable) {
+    throw new Error(
+      `API server at ${API_BASE} is not reachable. ` +
+        "Start it with `pnpm --filter @oxagen/api dev` before running parity tests.",
+    );
+  }
+}
+
 test.describe("MCP-API parity: agent.tool.list", () => {
+  test.beforeAll(async ({ request }) => {
+    await assertApiIsUp(request);
+  });
+
   test("agent.tool.list via API route returns authorized response", async ({
     page,
     baseURL,
@@ -64,14 +96,6 @@ test.describe("MCP-API parity: agent.tool.list", () => {
 
     // Must not be 401 (unauthorized) — the session cookie is valid.
     // A 200 or 404 (no tools seeded yet) are both acceptable "authorized" responses.
-    // A 500 is acceptable if the API isn't running; we mark as skip-worthy.
-    if (response.status() === 0 || response.status() >= 500) {
-      // API server not reachable or internal error — skip gracefully rather than
-      // failing the entire suite over infrastructure absence.
-      test.skip();
-      return;
-    }
-
     expect(response.status()).not.toBe(401);
     expect(response.status()).not.toBe(403);
 
@@ -98,6 +122,10 @@ test.describe("MCP-API parity: agent.tool.list", () => {
 });
 
 test.describe("MCP-API parity: org.member.add endpoint is auth-gated", () => {
+  test.beforeAll(async ({ request }) => {
+    await assertApiIsUp(request);
+  });
+
   test("org.member.add via API requires auth — 401 without credentials", async ({
     page,
   }) => {
@@ -107,19 +135,7 @@ test.describe("MCP-API parity: org.member.add endpoint is auth-gated", () => {
     const response = await page.request.post(apiUrl, {
       headers: { "Content-Type": "application/json" },
       data: { email: "test@example.com", role: "member" },
-    }).catch(() => null);
-
-    if (!response) {
-      // API not reachable — tolerate.
-      test.skip();
-      return;
-    }
-
-    if (response.status() >= 500) {
-      // API internal error (e.g. DB not reachable) — tolerate.
-      test.skip();
-      return;
-    }
+    });
 
     // Without credentials the API must return 401.
     expect(response.status()).toBe(401);
@@ -147,12 +163,7 @@ test.describe("MCP-API parity: org.member.add endpoint is auth-gated", () => {
       },
       // Intentionally invalid body to get a validation error (not a 401).
       data: { email: "invalid-not-a-real-email" },
-    }).catch(() => null);
-
-    if (!response || response.status() === 0 || response.status() >= 500) {
-      test.skip();
-      return;
-    }
+    });
 
     // Any response that is NOT 401/403 proves the session was accepted.
     // 400 (validation error), 201 (success), 422 — all mean auth passed.

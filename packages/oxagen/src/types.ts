@@ -23,9 +23,9 @@ export type CapabilitySensitivity = "low" | "medium" | "high" | "destructive";
  */
 export type CapabilityEffect = "allow" | "deny" | "require_approval";
 
-// DenialResponse — returned by defineContract().invoke() when the IAM resolver
-// decides deny or pending_approval. Guards never expose the raw handler.
-// isDenial() narrows the union so callers can handle allow vs deny cleanly.
+// DenialResponse — returned by kernel.invoke() when the IAM resolver decides
+// deny or pending_approval. isDenial() narrows the union so callers can handle
+// allow vs deny cleanly.
 
 export interface DenialResponse {
   /** Sentinel discriminant — always true on a DenialResponse. */
