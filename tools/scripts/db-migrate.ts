@@ -102,33 +102,61 @@ async function migratePostgres(): Promise<void> {
   }
 }
 
+/**
+ * Which stores to migrate, as a comma-separated list in `DB_MIGRATE_STORES`.
+ * Defaults to all three (local dev / `pnpm db:reset` run every store). CI for a
+ * managed environment sets `DB_MIGRATE_STORES=postgres,clickhouse` because the
+ * prod/preview Neo4j credentials are not provisioned in CI yet — selecting a
+ * subset keeps the runner from dialing a store it has no creds for.
+ */
+function selectedStores(): Set<string> {
+  const raw = process.env.DB_MIGRATE_STORES ?? "postgres,clickhouse,neo4j";
+  return new Set(
+    raw
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
 async function main(): Promise<void> {
-  console.log(kleur.bold("[migrate] postgres"));
-  await migratePostgres();
-  // Platform-global seed (Free plan, etc.) — idempotent, baked into the migrate
-  // path so a fresh DB / `pnpm db:reset` always re-seeds it. NOT the dev org.
-  console.log(kleur.bold("[migrate] seed (platform defaults)"));
-  try {
-    await seedPlatform();
-    console.log(kleur.green("[seed] platform defaults applied"));
-  } finally {
-    await closeDatabase();
+  const stores = selectedStores();
+
+  if (stores.has("postgres")) {
+    console.log(kleur.bold("[migrate] postgres"));
+    await migratePostgres();
+    // Platform-global seed (Free plan, etc.) — idempotent, baked into the migrate
+    // path so a fresh DB / `pnpm db:reset` always re-seeds it. NOT the dev org.
+    console.log(kleur.bold("[migrate] seed (platform defaults)"));
+    try {
+      await seedPlatform();
+      console.log(kleur.green("[seed] platform defaults applied"));
+    } finally {
+      await closeDatabase();
+    }
   }
-  console.log(kleur.bold("[migrate] clickhouse"));
-  try {
-    await migrateClickhouse();
-  } finally {
-    // The CH client holds a keepalive HTTP socket that prevents process
-    // exit; close it here since the imported migrate() doesn't.
-    await closeClickhouse();
+
+  if (stores.has("clickhouse")) {
+    console.log(kleur.bold("[migrate] clickhouse"));
+    try {
+      await migrateClickhouse();
+    } finally {
+      // The CH client holds a keepalive HTTP socket that prevents process
+      // exit; close it here since the imported migrate() doesn't.
+      await closeClickhouse();
+    }
   }
-  console.log(kleur.bold("[migrate] neo4j"));
-  try {
-    await migrateNeo4j();
-  } finally {
-    await closeDriver();
+
+  if (stores.has("neo4j")) {
+    console.log(kleur.bold("[migrate] neo4j"));
+    try {
+      await migrateNeo4j();
+    } finally {
+      await closeDriver();
+    }
   }
-  console.log(kleur.green().bold("[migrate] all stores complete"));
+
+  console.log(kleur.green().bold(`[migrate] complete (${[...stores].join(", ")})`));
 }
 
 main()

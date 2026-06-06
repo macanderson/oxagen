@@ -4,6 +4,10 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Manual trigger to apply migrations to PRODUCTION on demand — e.g. a one-time
+  # catch-up when migrations were committed before this job existed. Only the
+  # `migrate` job acts on this event (other jobs are gated to push/PR).
+  workflow_dispatch:
 
 # Cancel superseded PR runs so a rapid push sequence doesn't queue redundant
 # gates. Main pushes key on the SHA so a post-merge run is never cancelled by a
@@ -49,6 +53,9 @@ jobs:
   # AND on merge to main (advisory post-merge signal; does NOT gate deploys).
   # ──────────────────────────────────────────────────────────────────────
   checks:
+    # workflow_dispatch is the manual prod-migrate path — only the migrate job
+    # acts on it; skip the full validation suite.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -114,6 +121,7 @@ jobs:
   # PR AND on merge to main (advisory; does NOT gate deploys).
   # ──────────────────────────────────────────────────────────────────────
   test:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -224,6 +232,101 @@ jobs:
       # previous step and this just runs the coverage pass.
       - name: Coverage thresholds (affected)
         run: pnpm turbo run test:coverage --filter="...[${TURBO_BASE}]"
+
+  # ──────────────────────────────────────────────────────────────────────
+  # migrate — apply DB migrations to a PERSISTENT environment database.
+  #   pull_request  → PREVIEW  database (PREVIEW_* secrets) so the per-PR Vercel
+  #                   preview deployment runs against the new schema, and the
+  #                   migration is validated on a real managed DB.
+  #   push to main  → PRODUCTION database (PRODUCTION_* secrets) so a merge ships
+  #                   schema + code together — no manual migration step.
+  # Postgres + ClickHouse only (no managed Neo4j creds yet) via DB_MIGRATE_STORES.
+  # Idempotent: the runner records applied files in public._migrations with a
+  # checksum and skips them on re-run, so running on every qualifying event is
+  # safe. Serialized per-environment so two merges (or two PRs) can't race the
+  # same database. Gated on migration-file changes to avoid needless runs.
+  # NOTE: this runs in parallel with Vercel's deploy (chosen "simple" ordering);
+  # additive, expand-then-contract migrations (engineering policy §5) keep the
+  # previously-deployed code working during the brief overlap.
+  # ──────────────────────────────────────────────────────────────────────
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Serialize per target environment; never cancel a half-applied migration.
+    # Target = PRODUCTION for everything except pull_request (push-to-main and
+    # the manual workflow_dispatch both target prod); pull_request → PREVIEW.
+    concurrency:
+      group: db-migrate-${{ github.event_name != 'pull_request' && 'production' || 'preview' }}
+      cancel-in-progress: false
+    env:
+      # Postgres + ClickHouse only — Neo4j prod/preview creds are not provisioned.
+      DB_MIGRATE_STORES: postgres,clickhouse
+      # Select the target environment's creds by event. The non-DB env defaults
+      # (Better Auth / Stripe / Inngest / Neo4j dummies) are inherited from the
+      # workflow-level env block above so loadEnv() validates; only the DB +
+      # ClickHouse connection values are overridden here with real secrets.
+      DATABASE_URL: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_DATABASE_URL || secrets.PREVIEW_DATABASE_URL }}
+      CLICKHOUSE_URL: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_URL || secrets.PREVIEW_CLICKHOUSE_URL }}
+      CLICKHOUSE_USERNAME: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_USERNAME || secrets.PREVIEW_CLICKHOUSE_USERNAME }}
+      CLICKHOUSE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_PASSWORD || secrets.PREVIEW_CLICKHOUSE_PASSWORD }}
+      CLICKHOUSE_DATABASE: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_DATABASE || secrets.PREVIEW_CLICKHOUSE_DATABASE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Only migrate when migration files changed in this push/PR range.
+      - name: Detect migration changes
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+        run: |
+          # Manual run is an explicit catch-up — always apply (it reconciles any
+          # migrations committed before this job existed; the runner is idempotent).
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            git fetch origin main --no-tags
+            BASE="origin/main"
+          else
+            BASE="$EVENT_BEFORE"
+            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+              BASE="$(git rev-parse HEAD~1)"
+            fi
+          fi
+          if git diff --name-only "${BASE}"...HEAD | grep -qE '^packages/database/drizzle/|^packages/telemetry/'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.changes.outputs.changed == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.changes.outputs.changed == 'true'
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+        if: steps.changes.outputs.changed == 'true'
+
+      # Idempotent bootstrap: creates the extensions + 14 domain schemas that
+      # 0000_baseline.sql attaches to. `if not exists` everywhere, so it is a
+      # no-op against an already-provisioned production database and the required
+      # first step for a fresh preview database.
+      - name: Bootstrap schema (idempotent)
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          sudo apt-get install -y postgresql-client
+          psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
+
+      - name: Apply migrations (${{ github.event_name != 'pull_request' && 'PRODUCTION' || 'PREVIEW' }} — postgres + clickhouse)
+        if: steps.changes.outputs.changed == 'true'
+        run: pnpm db:migrate
 
   # ──────────────────────────────────────────────────────────────────────
   # deploy — post-merge side-car (main only). The actual app deploys are
