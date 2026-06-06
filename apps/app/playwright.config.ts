@@ -1,6 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
+  globalSetup: "./e2e/fixtures/global-setup.ts",
+  globalTeardown: "./e2e/fixtures/global-setup.ts",
   testDir: "./e2e",
   // Helpers under `e2e/helpers/**` are imported by specs but contain no
   // tests themselves — exclude them from the Playwright test matcher so
