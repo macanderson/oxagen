@@ -31,6 +31,11 @@ export function bootstrap(): void {
   // auto-reload) into contract.invoke(), alongside the IAM gate.
   bootstrapBillingRuntime();
 
+  // tenancy: unscoped seam (process/startup bootstrap — no request context
+  // exists here; db() is called once to bind the audit inserter before any
+  // request is served). The security event emitter fires fire-and-forget for
+  // ALL kernel events including no_tenant_scope denials, so the inserter MUST
+  // use a raw db() and never withTenantDb (which requires an active scope). — OXA-1515
   const securityInsert = makeSecurityEventInserter(db());
   setSecurityEventEmitter((kernelEvent) => {
     recordSecurityEvent(securityInsert, {
