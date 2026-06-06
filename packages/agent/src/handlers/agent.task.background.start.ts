@@ -1,4 +1,4 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import type { CapabilityContext } from "../types";
 import { getInngestClient } from "../dispatch/inngest-client";
 import type { AgentTaskBackgroundStartInput, AgentTaskBackgroundStartOutput } from "@oxagen/oxagen/contracts/agent.task.background.start";
@@ -13,19 +13,21 @@ export async function agentTaskBackgroundStartHandler(
   // it back when the function actually starts. The row is the durable
   // handle the chat tray polls.
   const inngestRunId = `bgt_${crypto.randomUUID()}`;
-  const [row] = await db()
-    .insert(schema.backgroundTasks)
-    .values({
-      orgId: ctx.orgId,
-      workspaceId: ctx.workspaceId,
-      kind: input.kind,
-      label: input.label ?? null,
-      inngestRunId,
-      status: "pending",
-      inputPayload: (input.payload ?? null) as object,
-      createdByUserId: ctx.userId,
-    })
-    .returning({ publicId: schema.backgroundTasks.publicId });
+  const [row] = await withTenantDb((tx) =>
+    tx
+      .insert(schema.backgroundTasks)
+      .values({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        kind: input.kind,
+        label: input.label ?? null,
+        inngestRunId,
+        status: "pending",
+        inputPayload: (input.payload ?? null) as object,
+        createdByUserId: ctx.userId,
+      })
+      .returning({ publicId: schema.backgroundTasks.publicId }),
+  );
   if (!row) throw new Error("background_tasks insert failed");
 
   await getInngestClient().send({

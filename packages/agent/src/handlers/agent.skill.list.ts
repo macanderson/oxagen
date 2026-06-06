@@ -1,4 +1,4 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, ilike } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
 import type { AgentSkillListInput, AgentSkillListOutput } from "@oxagen/oxagen/contracts/agent.skill.list";
@@ -18,23 +18,25 @@ export async function agentSkillListHandler(
   ];
   if (input.filter) conditions.push(ilike(schema.skills.name, `%${input.filter}%`));
 
-  const rows = await db()
-    .select({
-      slug: schema.skills.slug,
-      name: schema.skills.name,
-      description: schema.skills.description,
-      source: schema.skills.source,
-      version: schema.skillVersions.versionNumber,
-    })
-    .from(schema.skills)
-    .leftJoin(
-      schema.skillVersions,
-      and(
-        eq(schema.skillVersions.skillId, schema.skills.id),
-        eq(schema.skillVersions.isLatest, true),
-      ),
-    )
-    .where(and(...conditions));
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({
+        slug: schema.skills.slug,
+        name: schema.skills.name,
+        description: schema.skills.description,
+        source: schema.skills.source,
+        version: schema.skillVersions.versionNumber,
+      })
+      .from(schema.skills)
+      .leftJoin(
+        schema.skillVersions,
+        and(
+          eq(schema.skillVersions.skillId, schema.skills.id),
+          eq(schema.skillVersions.isLatest, true),
+        ),
+      )
+      .where(and(...conditions)),
+  );
 
   return {
     skills: rows.map((r) => ({

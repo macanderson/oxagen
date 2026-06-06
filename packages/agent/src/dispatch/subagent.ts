@@ -1,4 +1,4 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { Inngest } from "inngest";
@@ -39,7 +39,7 @@ export interface DispatchedFanout {
 // single Inngest event the runner picks up to execute each child.
 export async function dispatchFanout(args: DispatchFanoutArgs): Promise<DispatchedFanout> {
   const childMessageIds = args.children.map(() => randomUUID());
-  const { fanoutId } = await db().transaction(async (tx) => {
+  const { fanoutId } = await withTenantDb(async (tx) => {
     const [fan] = await tx
       .insert(schema.subagentFanouts)
       .values({
@@ -100,29 +100,31 @@ export async function readFanout(
   fanoutId: string,
   orgId: string,
 ): Promise<FanoutSnapshot | null> {
-  const [fan] = await db()
-    .select()
-    .from(schema.subagentFanouts)
-    .where(
-      and(eq(schema.subagentFanouts.id, fanoutId), eq(schema.subagentFanouts.orgId, orgId)),
-    )
-    .limit(1);
-  if (!fan) return null;
-  const runs = await db()
-    .select()
-    .from(schema.subagentRuns)
-    .where(
-      and(eq(schema.subagentRuns.fanoutId, fanoutId), eq(schema.subagentRuns.orgId, orgId)),
-    );
-  return {
-    fanoutId,
-    status: (fan.status as FanoutSnapshot["status"]) ?? "pending",
-    results: runs.map((r) => ({
-      childMessageId: r.childMessageId,
-      capability: r.capabilityName,
-      status: (r.status as "completed" | "failed" | "pending") ?? "pending",
-      output: r.outputPayload,
-      error: r.errorReason,
-    })),
-  };
+  return withTenantDb(async (tx) => {
+    const [fan] = await tx
+      .select()
+      .from(schema.subagentFanouts)
+      .where(
+        and(eq(schema.subagentFanouts.id, fanoutId), eq(schema.subagentFanouts.orgId, orgId)),
+      )
+      .limit(1);
+    if (!fan) return null;
+    const runs = await tx
+      .select()
+      .from(schema.subagentRuns)
+      .where(
+        and(eq(schema.subagentRuns.fanoutId, fanoutId), eq(schema.subagentRuns.orgId, orgId)),
+      );
+    return {
+      fanoutId,
+      status: (fan.status as FanoutSnapshot["status"]) ?? "pending",
+      results: runs.map((r) => ({
+        childMessageId: r.childMessageId,
+        capability: r.capabilityName,
+        status: (r.status as "completed" | "failed" | "pending") ?? "pending",
+        output: r.outputPayload,
+        error: r.errorReason,
+      })),
+    };
+  });
 }

@@ -39,6 +39,26 @@ vi.mock("@oxagen/oxagen", () => ({
   getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
 }));
 
+// Stub database so the MCP server row query (inside the try/catch in materialize-tools)
+// silently returns no rows without attempting a real DB connection.
+const fakeMaterializeDb = {
+  select: () => ({
+    from: () => ({ where: async () => [] }),
+  }),
+};
+vi.mock("@oxagen/database", () => ({
+  db: () => fakeMaterializeDb,
+  withTenantDb: async (fn: (tx: typeof fakeMaterializeDb) => Promise<unknown>) =>
+    fn(fakeMaterializeDb),
+  schema: {
+    mcpServers: {
+      orgId: "orgId",
+      workspaceId: "workspaceId",
+      healthStatus: "healthStatus",
+    },
+  },
+}));
+
 vi.mock("@oxagen/oxagen/kernel", () => ({
   invoke: vi.fn(async () => ({ ok: true })),
 }));

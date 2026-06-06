@@ -1,4 +1,4 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import type { CapabilityContext } from "../types";
 import { createApprovalRequest } from "../runtime/approval";
 import type { AgentPlanCreateInput, AgentPlanCreateOutput } from "@oxagen/oxagen/contracts/agent.plan.create";
@@ -22,10 +22,9 @@ export async function agentPlanCreateHandler(
     dependsOn: s.dependsOn as object,
     status: "pending",
   }));
-  const inserted = await db()
-    .insert(schema.planSteps)
-    .values(planRows)
-    .returning({ id: schema.planSteps.id });
+  const inserted = await withTenantDb((tx) =>
+    tx.insert(schema.planSteps).values(planRows).returning({ id: schema.planSteps.id }),
+  );
   const planId = inserted[0]?.id ?? ctx.requestId;
   await createApprovalRequest({
     orgId: ctx.orgId,

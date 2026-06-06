@@ -14,8 +14,11 @@ mocks.leftJoinMock.mockReturnValue({ where: mocks.whereMock });
 mocks.fromMock.mockReturnValue({ leftJoin: mocks.leftJoinMock });
 mocks.selectMock.mockReturnValue({ from: mocks.fromMock });
 
+const fakeSkillListDb = { select: mocks.selectMock };
 vi.mock("@oxagen/database", () => ({
-  db: () => ({ select: mocks.selectMock }),
+  db: () => fakeSkillListDb,
+  withTenantDb: async (fn: (tx: typeof fakeSkillListDb) => Promise<unknown>) =>
+    fn(fakeSkillListDb),
   schema: {
     skills: {
       orgId: "orgId",

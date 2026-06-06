@@ -18,8 +18,11 @@ mocks.innerJoinSpy.mockReturnValue({ where: mocks.whereSpy });
 mocks.fromSpy.mockReturnValue({ innerJoin: mocks.innerJoinSpy });
 mocks.selectSpy.mockReturnValue({ from: mocks.fromSpy });
 
+const fakeSkillLoadDb = { select: mocks.selectSpy };
 vi.mock("@oxagen/database", () => ({
-  db: () => ({ select: mocks.selectSpy }),
+  db: () => fakeSkillLoadDb,
+  withTenantDb: async (fn: (tx: typeof fakeSkillLoadDb) => Promise<unknown>) =>
+    fn(fakeSkillLoadDb),
   schema: {
     skills: { slug: "slug", orgId: "orgId", workspaceId: "workspaceId", id: "id" },
     skillVersions: {

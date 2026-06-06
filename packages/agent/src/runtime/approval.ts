@@ -1,4 +1,4 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { eq, and, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import postgres from "postgres";
@@ -61,20 +61,22 @@ export async function createApprovalRequest(
   args: CreateApprovalArgs,
 ): Promise<{ approvalId: string }> {
   const expiresAt = new Date(Date.now() + (args.ttlMs ?? DEFAULT_TTL_MS));
-  const [row] = await db()
-    .insert(schema.approvalRequests)
-    .values({
-      orgId: args.orgId,
-      workspaceId: args.workspaceId,
-      messageId: args.messageId,
-      capabilityName: args.capabilityName,
-      inputPreview: args.inputPreview as object,
-      riskLevel: args.riskLevel,
-      executionStepId: args.executionStepId ?? null,
-      toolCallId: args.toolCallId ?? null,
-      expiresAt,
-    })
-    .returning({ id: schema.approvalRequests.id });
+  const [row] = await withTenantDb((tx) =>
+    tx
+      .insert(schema.approvalRequests)
+      .values({
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+        messageId: args.messageId,
+        capabilityName: args.capabilityName,
+        inputPreview: args.inputPreview as object,
+        riskLevel: args.riskLevel,
+        executionStepId: args.executionStepId ?? null,
+        toolCallId: args.toolCallId ?? null,
+        expiresAt,
+      })
+      .returning({ id: schema.approvalRequests.id }),
+  );
   if (!row) throw new Error("approval insert failed");
   return { approvalId: row.id };
 }
@@ -113,22 +115,26 @@ export async function notifyResolution(r: ApprovalResolution): Promise<void> {
   const payload = JSON.stringify(r);
   // Use drizzle sql tagged-template so channel and payload are passed as bound
   // parameters — no user-controlled string is ever concatenated into SQL.
-  await db().execute(sql`select pg_notify(${NOTIFY_CHANNEL}, ${payload})`);
+  await withTenantDb((tx) =>
+    tx.execute(sql`select pg_notify(${NOTIFY_CHANNEL}, ${payload})`),
+  );
 }
 
 // Used by handlers that need a tenant-scoped lookup before update.
 export async function readApproval(approvalId: string, orgId: string) {
-  const [row] = await db()
-    .select({
-      id: schema.approvalRequests.id,
-      orgId: schema.approvalRequests.orgId,
-      resolution: schema.approvalRequests.resolution,
-      expiresAt: schema.approvalRequests.expiresAt,
-    })
-    .from(schema.approvalRequests)
-    .where(
-      and(eq(schema.approvalRequests.id, approvalId), eq(schema.approvalRequests.orgId, orgId)),
-    )
-    .limit(1);
+  const [row] = await withTenantDb((tx) =>
+    tx
+      .select({
+        id: schema.approvalRequests.id,
+        orgId: schema.approvalRequests.orgId,
+        resolution: schema.approvalRequests.resolution,
+        expiresAt: schema.approvalRequests.expiresAt,
+      })
+      .from(schema.approvalRequests)
+      .where(
+        and(eq(schema.approvalRequests.id, approvalId), eq(schema.approvalRequests.orgId, orgId)),
+      )
+      .limit(1),
+  );
   return row ?? null;
 }

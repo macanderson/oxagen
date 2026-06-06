@@ -14,8 +14,11 @@ mocks.whereMock.mockImplementation(() => ({ returning: mocks.returningMock }));
 mocks.setMock.mockImplementation(() => ({ where: mocks.whereMock }));
 mocks.updateMock.mockImplementation(() => ({ set: mocks.setMock }));
 
+const fakeApprovalResolveDb = { update: mocks.updateMock };
 vi.mock("@oxagen/database", () => ({
-  db: () => ({ update: mocks.updateMock }),
+  db: () => fakeApprovalResolveDb,
+  withTenantDb: async (fn: (tx: typeof fakeApprovalResolveDb) => Promise<unknown>) =>
+    fn(fakeApprovalResolveDb),
   schema: {
     approvalRequests: {
       id: "id",

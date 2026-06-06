@@ -1,4 +1,4 @@
-import { db, schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import type { CapabilityContext } from "../types";
 import { healthcheck } from "../dispatch/mcp-client";
 import type { AgentMcpRegisterInput, AgentMcpRegisterOutput } from "@oxagen/oxagen/contracts/agent.mcp.register";
@@ -21,21 +21,23 @@ export async function agentMcpRegisterHandler(
         })
       : { status: "degraded" as const, discoveredTools: [] };
 
-  const [row] = await db()
-    .insert(schema.mcpServers)
-    .values({
-      orgId: ctx.orgId,
-      workspaceId: ctx.workspaceId,
-      name: input.name,
-      transportType: input.transportType,
-      endpointUrl: input.endpointUrl,
-      authStrategy: input.authStrategy,
-      authConfig: (input.authConfig ?? {}) as object,
-      healthStatus: probe.status,
-      lastHealthcheckAt: new Date(),
-      discoveredTools: probe.discoveredTools as object,
-    })
-    .returning({ publicId: schema.mcpServers.publicId });
+  const [row] = await withTenantDb((tx) =>
+    tx
+      .insert(schema.mcpServers)
+      .values({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        name: input.name,
+        transportType: input.transportType,
+        endpointUrl: input.endpointUrl,
+        authStrategy: input.authStrategy,
+        authConfig: (input.authConfig ?? {}) as object,
+        healthStatus: probe.status,
+        lastHealthcheckAt: new Date(),
+        discoveredTools: probe.discoveredTools as object,
+      })
+      .returning({ publicId: schema.mcpServers.publicId }),
+  );
   if (!row) throw new Error("mcp_servers insert failed");
   return {
     mcpServerId: row.publicId,

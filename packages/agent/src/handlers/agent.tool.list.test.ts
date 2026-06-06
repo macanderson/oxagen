@@ -13,8 +13,11 @@ mocks.whereMock.mockImplementation(async (): Promise<unknown> => mocks.selectRes
 mocks.fromMock.mockReturnValue({ where: mocks.whereMock });
 mocks.selectMock.mockReturnValue({ from: mocks.fromMock });
 
+const fakeToolListDb = { select: mocks.selectMock };
 vi.mock("@oxagen/database", () => ({
-  db: () => ({ select: mocks.selectMock }),
+  db: () => fakeToolListDb,
+  withTenantDb: async (fn: (tx: typeof fakeToolListDb) => Promise<unknown>) =>
+    fn(fakeToolListDb),
   schema: {
     mcpServers: {
       name: "name",
