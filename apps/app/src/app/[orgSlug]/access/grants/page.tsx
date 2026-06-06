@@ -1,123 +1,240 @@
-import { desc, eq } from "drizzle-orm";
-import { withTenantDb, schema } from "@oxagen/database";
-import { runInTenantScope } from "@oxagen/tenancy";
-import { resolveOrg } from "@/lib/resolve-org";
+/**
+ * Grants tab — static mock UI.
+ *
+ * Displays a high-fidelity table of capability grants (principal → capability).
+ * ZERO server data dependencies — all data is inline mock constants.
+ * Will be wired to live IAM data in OXA-XXXX (see parent ticket).
+ */
 
-// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
-import { ShieldCheck, Shield, XCircle, AlertTriangle } from "lucide-react";
-import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Shield,
+  XCircle,
+  AlertTriangle,
+  ShieldCheck,
+} from "lucide-react";
+import {
+  Card,
+  CardPanel,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-function formatDate(d: Date | null | undefined): string {
-  if (!d) return "—";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+// ---------------------------------------------------------------------------
+// Mock data — realistic, hardcoded. Replace with DB query when wired.
+// ---------------------------------------------------------------------------
+
+type GrantEffect = "allow" | "deny" | "require_approval";
+type ScopeKind = "org" | "workspace" | "global";
+
+interface MockGrant {
+  id: string;
+  principal: string;
+  principalKind: "user" | "service" | "agent";
+  capabilityId: string;
+  scope: ScopeKind;
+  effect: GrantEffect;
+  grantedBy: string;
+  grantedAt: string;
+  expiresAt: string | null;
 }
 
-const EFFECT_LABEL: Record<string, string> = {
+const MOCK_GRANTS: MockGrant[] = [
+  {
+    id: "grn_01j9xk2p3q4r5s6t",
+    principal: "Sarah Chen",
+    principalKind: "user",
+    capabilityId: "agent.run",
+    scope: "org",
+    effect: "allow",
+    grantedBy: "Mac Anderson",
+    grantedAt: "May 28, 2026",
+    expiresAt: null,
+  },
+  {
+    id: "grn_02j9xk2p3q4r5s7u",
+    principal: "data-sync-worker",
+    principalKind: "service",
+    capabilityId: "knowledge.ingest",
+    scope: "workspace",
+    effect: "allow",
+    grantedBy: "Mac Anderson",
+    grantedAt: "May 30, 2026",
+    expiresAt: "Jun 30, 2026",
+  },
+  {
+    id: "grn_03j9xk2p3q4r5s8v",
+    principal: "James Park",
+    principalKind: "user",
+    capabilityId: "billing.manage",
+    scope: "org",
+    effect: "allow",
+    grantedBy: "Mac Anderson",
+    grantedAt: "Jun 1, 2026",
+    expiresAt: null,
+  },
+  {
+    id: "grn_04j9xk2p3q4r5s9w",
+    principal: "research-agent-v2",
+    principalKind: "agent",
+    capabilityId: "web.search",
+    scope: "workspace",
+    effect: "allow",
+    grantedBy: "Sarah Chen",
+    grantedAt: "Jun 2, 2026",
+    expiresAt: "Jun 16, 2026",
+  },
+  {
+    id: "grn_05j9xk2p3q4r5sax",
+    principal: "Priya Nair",
+    principalKind: "user",
+    capabilityId: "content.generate",
+    scope: "org",
+    effect: "require_approval",
+    grantedBy: "Mac Anderson",
+    grantedAt: "Jun 3, 2026",
+    expiresAt: null,
+  },
+  {
+    id: "grn_06j9xk2p3q4r5sby",
+    principal: "ci-deploy-bot",
+    principalKind: "service",
+    capabilityId: "infra.deploy",
+    scope: "global",
+    effect: "deny",
+    grantedBy: "Mac Anderson",
+    grantedAt: "Jun 4, 2026",
+    expiresAt: null,
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const EFFECT_LABEL: Record<GrantEffect, string> = {
   allow: "Allow",
   deny: "Deny",
   require_approval: "Require approval",
 };
 
-export default async function AccessGrantsPage({
-  params,
-}: {
-  params: Promise<{ orgSlug: string }>;
-}) {
-  const { orgSlug } = await params;
-  const tenant = await resolveOrg(orgSlug);
+const PRINCIPAL_KIND_LABEL: Record<MockGrant["principalKind"], string> = {
+  user: "User",
+  service: "Service",
+  agent: "Agent",
+};
 
-  // Org-only route — sentinel workspaceId. — OXA-1515
-  const grants = await (async () => {
-    try {
-      return await runInTenantScope(
-        { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
-        () =>
-          withTenantDb((tx) =>
-            tx
-              .select({
-                publicId: schema.grants.publicId,
-                capabilityId: schema.grants.capabilityId,
-                effect: schema.grants.effect,
-                scopeKind: schema.grants.scopeKind,
-                grantedAt: schema.grants.grantedAt,
-                expiresAt: schema.grants.expiresAt,
-                principalId: schema.grants.principalId,
-              })
-              .from(schema.grants)
-              .where(eq(schema.grants.orgId, tenant.id))
-              .orderBy(desc(schema.grants.grantedAt))
-              .limit(50),
-          ),
-      );
-    } catch {
-      return [];
-    }
-  })();
+function EffectBadge({ effect }: { effect: GrantEffect }) {
+  const variant =
+    effect === "allow"
+      ? ("default" as const)
+      : effect === "deny"
+        ? ("destructive" as const)
+        : ("muted" as const);
+
+  const Icon =
+    effect === "allow" ? Shield : effect === "deny" ? XCircle : AlertTriangle;
 
   return (
+    <Badge variant={variant} className="shrink-0 text-xs">
+      <Icon className="mr-1 h-3 w-3" aria-hidden="true" />
+      {EFFECT_LABEL[effect]}
+    </Badge>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export default function AccessGrantsPage() {
+  return (
     <div className="flex flex-col gap-6">
+      {/* Preview pill */}
+      <p className="text-[11px] text-muted-foreground/60 font-medium">
+        Preview &middot; not yet wired to live data
+      </p>
+
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <ShieldCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <ShieldCheck
+                className="h-4 w-4 text-muted-foreground"
+                aria-hidden="true"
+              />
             </span>
             <div>
               <CardTitle>Capability grants</CardTitle>
               <CardDescription>
-                Direct principal-to-capability grants outside of roles.
+                Direct principal-to-capability grants outside of roles. These
+                supplement role-based access for specific principals.
               </CardDescription>
             </div>
           </div>
         </CardHeader>
+
         <CardPanel>
-          {grants.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No explicit grants. Capabilities are typically granted via roles.
-            </p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {grants.map((g) => (
-                <div
-                  key={g.publicId}
-                  className="flex flex-col gap-1.5 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:gap-4"
+          {/* Table header */}
+          <div className="mb-2 hidden grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_80px_80px_100px_100px] gap-4 px-4 sm:grid">
+            {["Principal", "Capability", "Scope", "Effect", "Granted by", "Expires"].map(
+              (h) => (
+                <span
+                  key={h}
+                  className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
                 >
-                  <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-                    <p className="font-mono text-xs font-medium text-foreground truncate">
-                      {g.capabilityId}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Scope: {g.scopeKind} · Granted {formatDate(g.grantedAt)}
-                      {g.expiresAt ? ` · Expires ${formatDate(g.expiresAt)}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Badge
-                      variant={
-                        g.effect === "allow"
-                          ? "default"
-                          : g.effect === "deny"
-                          ? "destructive"
-                          : "muted"
-                      }
-                      className="text-xs"
-                    >
-                      {g.effect === "allow" ? (
-                        <Shield className="mr-1 h-3 w-3" aria-hidden="true" />
-                      ) : g.effect === "deny" ? (
-                        <XCircle className="mr-1 h-3 w-3" aria-hidden="true" />
-                      ) : (
-                        <AlertTriangle className="mr-1 h-3 w-3" aria-hidden="true" />
-                      )}
-                      {EFFECT_LABEL[g.effect] ?? g.effect}
-                    </Badge>
-                  </div>
+                  {h}
+                </span>
+              ),
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            {MOCK_GRANTS.map((g) => (
+              <div
+                key={g.id}
+                className="grid rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm
+                  grid-cols-1 gap-y-1
+                  sm:grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_80px_80px_100px_100px] sm:gap-4 sm:items-center"
+              >
+                {/* Principal */}
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="font-medium text-foreground truncate">
+                    {g.principal}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {PRINCIPAL_KIND_LABEL[g.principalKind]}
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
+
+                {/* Capability */}
+                <span className="font-mono text-xs text-foreground truncate">
+                  {g.capabilityId}
+                </span>
+
+                {/* Scope */}
+                <Badge variant="outline" className="w-fit text-xs capitalize">
+                  {g.scope}
+                </Badge>
+
+                {/* Effect */}
+                <EffectBadge effect={g.effect} />
+
+                {/* Granted by */}
+                <span className="text-xs text-muted-foreground truncate">
+                  {g.grantedBy}
+                  <br />
+                  <span className="text-muted-foreground/60">{g.grantedAt}</span>
+                </span>
+
+                {/* Expires */}
+                <span className="text-xs text-muted-foreground">
+                  {g.expiresAt ?? "Never"}
+                </span>
+              </div>
+            ))}
+          </div>
         </CardPanel>
       </Card>
     </div>

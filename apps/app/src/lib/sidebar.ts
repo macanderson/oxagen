@@ -173,7 +173,6 @@ const orgConfig: SidebarConfig = {
       icon: Users,
       href: (ctx) => org.members(ctx),
       group: "primary",
-      badge: () => 2,
     },
     {
       id: "access",
@@ -181,7 +180,6 @@ const orgConfig: SidebarConfig = {
       icon: KeyRound,
       href: (ctx) => org.access.root(ctx),
       group: "primary",
-      badge: () => 5,
     },
     {
       id: "security",

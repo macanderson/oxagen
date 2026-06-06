@@ -16,7 +16,7 @@ export default async function AccessLayout({
     { label: "Grants", href: org.access.grants(ctx) },
     { label: "Roles", href: org.access.roles(ctx) },
     { label: "Policies", href: org.access.policies(ctx) },
-    { label: "Requests", href: org.access.requests(ctx), badge: 5 },
+    { label: "Requests", href: org.access.requests(ctx) },
     { label: "Sessions", href: org.access.sessions(ctx) },
     { label: "Identities", href: org.access.identities(ctx) },
   ];
