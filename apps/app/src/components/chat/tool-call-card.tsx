@@ -50,6 +50,7 @@ export function ToolCallCard(props: ToolCallCardProps) {
       data-component="tool-call-card"
       data-capability={capability}
       data-status={status}
+      data-testid={`tool-call-card-${props.toolCallId}`}
     >
       <button
         type="button"

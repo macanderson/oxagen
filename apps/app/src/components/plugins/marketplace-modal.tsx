@@ -370,7 +370,10 @@ export function MarketplaceModal({
                               </div>
 
                               {denied && (
-                                <p className="text-xs text-muted-foreground italic">
+                                <p
+                                  className="text-xs text-muted-foreground italic"
+                                  data-testid={`marketplace-denied-badge-${srv.id}`}
+                                >
                                   Blocked by your organization&apos;s admins
                                 </p>
                               )}

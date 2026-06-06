@@ -58,6 +58,11 @@ export interface PluginFixture {
   orgListingId: string;
   /** The UUID primary key (`id`) of the seeded mcp.catalog_servers row. */
   catalogServerId: string;
+  /**
+   * The reverse-DNS server name used in the catalog and denylist
+   * (e.g. "e2e.mock.mcp.{id}"). Used by the denylist spec.
+   */
+  serverName: string;
   cleanup: () => Promise<void>;
 }
 
@@ -257,6 +262,7 @@ export async function seedPlugin(opts: PluginFixtureOptions): Promise<PluginFixt
     workspaceSlug: opts.workspaceSlug,
     orgListingId,
     catalogServerId,
+    serverName,
     cleanup,
   };
 }
