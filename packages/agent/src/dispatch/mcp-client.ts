@@ -1,5 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import { tool, type Tool } from "ai";
 import { z } from "zod";
 
@@ -7,6 +8,7 @@ export interface McpConnectArgs {
   endpointUrl: string;
   authStrategy: "none" | "bearer" | "header";
   authConfig?: Record<string, string>;
+  authProvider?: OAuthClientProvider; // OAuth path — transport auto-refreshes
 }
 
 // Apply auth strategy to the transport headers — bearer goes in
@@ -23,6 +25,7 @@ function buildHeaders(args: McpConnectArgs): Record<string, string> {
 
 export async function connectMcp(args: McpConnectArgs): Promise<Client> {
   const transport = new StreamableHTTPClientTransport(new URL(args.endpointUrl), {
+    authProvider: args.authProvider,
     requestInit: { headers: buildHeaders(args) },
   });
   const client = new Client(
