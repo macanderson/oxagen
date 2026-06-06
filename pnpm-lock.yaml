@@ -947,6 +947,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/database':
+        specifier: workspace:*
+        version: link:../database
       nodemailer:
         specifier: 8.0.10
         version: 8.0.10
