@@ -30,7 +30,6 @@ const fakeCtx = {
   clientIp: null,
 };
 
-const fakeExtra = {} as Parameters<typeof import("./notifications.list")["default"]>[1];
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -52,7 +51,7 @@ describe("notifications.list handler", () => {
   });
 
   it("calls buildContext then invoke with correct args", async () => {
-    const fakeOutput = { notifications: [], total: 0 };
+    const fakeOutput = { notifications: [], unreadCount: 0 };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { unreadOnly: false, limit: 50 };
@@ -65,7 +64,7 @@ describe("notifications.list handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ notifications: [] });
+    expect(result).toMatchObject({ notifications: [], unreadCount: 0 });
   });
 
   it("propagates invoke errors", async () => {
@@ -93,7 +92,7 @@ describe("notifications.mark handler", () => {
     const fakeOutput = { ok: true };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { id: "ntf_1", read: true };
+    const args = { id: "ntf_1", read: true as boolean | undefined, archived: undefined };
     await handler_notificationsMark(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -148,7 +147,7 @@ describe("org.member.invite.accept handler", () => {
   });
 
   it("calls invoke with invite accept args", async () => {
-    const fakeOutput = { orgUserId: "oru_1", orgId: "org_test" };
+    const fakeOutput = { orgUserId: "oru_1", orgId: "org_test", role: "Member", joinedAt: "2026-01-01T00:00:00.000Z" };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { invitationPublicId: "inv_1" };
@@ -206,7 +205,7 @@ describe("org.member.remove handler", () => {
   });
 
   it("calls invoke with remove member args", async () => {
-    const fakeOutput = { removed: true };
+    const fakeOutput = { removed: true, targetUserId: "user_1", orgId: "org_test" };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { targetUserId: "user_1" };
@@ -235,7 +234,7 @@ describe("org.member.role.change handler", () => {
   });
 
   it("calls invoke with role change args", async () => {
-    const fakeOutput = { orgUserId: "oru_1", newRole: "Admin" };
+    const fakeOutput = { changed: true, targetUserId: "user_1", orgId: "org_test", previousRole: "Member", newRole: "Admin" };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { targetUserId: "user_1", newRole: "Admin" };
@@ -264,10 +263,20 @@ describe("organization.create handler", () => {
   });
 
   it("calls invoke with create args", async () => {
-    const fakeOutput = { orgId: "org_new", slug: "acme-corp" };
+    const fakeOutput = { publicId: "org_new", name: "Acme Corp", slug: "acme-corp", type: "business", createdAt: "2026-01-01T00:00:00.000Z" };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { name: "Acme Corp", slug: "acme-corp", planSlug: "free" as const };
+    const args = {
+      name: "Acme Corp",
+      slug: "acme-corp",
+      planSlug: "free",
+      type: "business" as const,
+      website: undefined,
+      industry: undefined,
+      employeeSize: undefined,
+      billingEmail: undefined,
+      billingAddress: undefined,
+    };
     await handler_organizationCreate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -293,7 +302,7 @@ describe("workspace.create handler", () => {
   });
 
   it("calls invoke with workspace create args", async () => {
-    const fakeOutput = { workspaceId: "ws_new", slug: "my-workspace" };
+    const fakeOutput = { publicId: "ws_new", name: "My Workspace", slug: "my-workspace", orgSlug: "acme-corp", createdAt: "2026-01-01T00:00:00.000Z" };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { name: "My Workspace", slug: "my-workspace" };
@@ -360,10 +369,28 @@ describe("user.preferences.write handler", () => {
   });
 
   it("calls invoke with preference write args", async () => {
-    const fakeOutput = { ok: true };
+    const fakeOutput = {
+      fontSize: "large" as const,
+      density: "comfortable" as const,
+      enterToSubmit: false,
+      pendingPromptBehavior: "queue" as const,
+      defaultTextTier: null,
+      defaultTextModel: null,
+      defaultImageModel: null,
+      defaultVideoModel: null,
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { fontSize: "large" as const, enterToSubmit: false };
+    const args = {
+      fontSize: "large" as const,
+      density: undefined,
+      enterToSubmit: false as boolean | undefined,
+      pendingPromptBehavior: undefined,
+      defaultTextTier: undefined,
+      defaultTextModel: undefined,
+      defaultImageModel: undefined,
+      defaultVideoModel: undefined,
+    };
     await handler_userPreferencesWrite(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -430,7 +457,12 @@ describe("workspace.model.settings.write handler", () => {
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { defaultTextTier: "balanced" as const };
+    const args = {
+      defaultTextTier: "balanced" as const,
+      defaultTextModel: undefined,
+      defaultImageModel: undefined,
+      defaultVideoModel: undefined,
+    };
     await handler_workspaceModelSettingsWrite(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -456,7 +488,11 @@ describe("system.install.instructions handler", () => {
   });
 
   it("calls invoke with install instructions args", async () => {
-    const fakeOutput = { client: "claude-code", steps: [] };
+    const fakeOutput = {
+      client: "claude-code" as const,
+      steps: [{ label: "Run the install command" }],
+      render: { componentId: "install-instructions", props: { client: "claude-code" } },
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { client: "claude-code" as const, workspaceSlug: "my-workspace" };
@@ -485,10 +521,15 @@ describe("workflow.run handler", () => {
   });
 
   it("calls invoke with workflow run args", async () => {
-    const fakeOutput = { workflowId: "wfr_1", status: "pending" };
+    const fakeOutput = {
+      workflowId: "uuid-wfr-1",
+      publicId: "wfr_1",
+      status: "planning" as const,
+      render: { componentId: "workflow-progress" as const, props: { workflowId: "uuid-wfr-1" } },
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { goal: "Profile Fortune 500 CEOs", outputFormat: "json" as const, maxParallelism: 10 };
+    const args = { goal: "Profile Fortune 500 CEOs", title: undefined, outputFormat: "json" as const, maxParallelism: 10 };
     await handler_workflowRun(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -514,7 +555,29 @@ describe("workflow.status handler", () => {
   });
 
   it("calls invoke with workflow status args", async () => {
-    const fakeOutput = { workflow: { id: "wfr_1", status: "running" }, tasks: [] };
+    const fakeOutput = {
+      workflow: {
+        id: "uuid-wfr-1",
+        publicId: "wfr_1",
+        orgId: "org_test",
+        workspaceId: "ws_test",
+        title: "Fortune 500 Research",
+        goal: "Profile Fortune 500 CEOs",
+        status: "running" as const,
+        planJson: null,
+        totalTasks: 10,
+        completedTasks: 3,
+        failedTasks: 0,
+        maxParallelism: 10,
+        outputFormat: "json" as const,
+        resultUrl: null,
+        startedAt: "2026-01-01T00:00:00.000Z",
+        completedAt: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      tasks: [],
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { workflowId: "wfr_1" };

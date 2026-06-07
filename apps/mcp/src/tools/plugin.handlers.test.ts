@@ -47,10 +47,10 @@ describe("plugin.catalog.browse handler", () => {
   });
 
   it("calls buildContext then invoke with correct args", async () => {
-    const fakeOutput = { servers: [], total: 0, offset: 0, limit: 30 };
+    const fakeOutput = { servers: [], nextOffset: null, total: 0 };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { limit: 30, offset: 0 };
+    const args = { limit: 30, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined };
     const result = await handler_pluginCatalogBrowse(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
@@ -60,13 +60,13 @@ describe("plugin.catalog.browse handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ servers: [] });
+    expect(result).toMatchObject({ servers: [], total: 0 });
   });
 
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("catalog unavailable"));
     await expect(
-      handler_pluginCatalogBrowse({ limit: 10, offset: 0 }),
+      handler_pluginCatalogBrowse({ limit: 10, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined }),
     ).rejects.toThrow("catalog unavailable");
   });
 });
@@ -95,6 +95,12 @@ describe("plugin.catalog.get handler", () => {
       websiteUrl: null,
       icons: [],
       packages: [],
+      remotes: [],
+      transportTypes: ["streamable-http"],
+      authKind: "none",
+      categories: [],
+      readmeHtml: null,
+      status: "active",
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -159,7 +165,9 @@ describe("plugin.credential.set_secret handler", () => {
     const args = {
       orgListingId: "orl_1",
       authKind: "secret" as const,
-      secret: "my-api-key",
+      secret: "my-api-key" as string | undefined,
+      accessToken: undefined,
+      refreshToken: undefined,
     };
     await handler_pluginCredentialSetSecret(args);
 
@@ -253,7 +261,8 @@ describe("plugin.org.install handler", () => {
 
     const args = {
       pluginType: "mcp_server" as const,
-      catalogServerId: "cat_1",
+      catalogServerId: "cat_1" as string | undefined,
+      custom: undefined,
     };
     await handler_pluginOrgInstall(args);
 
@@ -311,7 +320,7 @@ describe("plugin.org.list handler", () => {
   });
 
   it("calls invoke with org list args", async () => {
-    const fakeOutput = { listings: [] };
+    const fakeOutput = { listings: [], denylist: [] };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { pluginType: "mcp_server" as const };
@@ -326,8 +335,8 @@ describe("plugin.org.list handler", () => {
   });
 
   it("works with empty args", async () => {
-    mocks.invoke.mockResolvedValue({ listings: [] });
-    await handler_pluginOrgList({});
+    mocks.invoke.mockResolvedValue({ listings: [], denylist: [] });
+    await handler_pluginOrgList({ pluginType: undefined });
     expect(mocks.invoke).toHaveBeenCalledOnce();
   });
 });

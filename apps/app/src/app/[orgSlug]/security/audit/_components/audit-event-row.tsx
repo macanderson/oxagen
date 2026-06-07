@@ -14,6 +14,8 @@ export interface AuditEventRowData {
   eventType: string;
   outcome: string;
   actorUserId: string | null;
+  /** Resolved display name for the actor (null when unknown/system). */
+  actorName: string | null;
   workspaceId: string | null;
   capability: string | null;
   ip: string | null;
@@ -94,7 +96,11 @@ export function AuditEventRow({ row }: { row: AuditEventRowData }) {
       {open && (
         <div className="grid grid-cols-2 gap-3 border-t border-border/60 px-4 py-3 sm:grid-cols-3">
           <Detail label="Event ID" value={row.id} mono />
-          <Detail label="Actor user" value={row.actorUserId} mono />
+          <Detail
+            label="Actor"
+            value={row.actorName ?? row.actorUserId}
+            mono={!row.actorName}
+          />
           <Detail label="Workspace" value={row.workspaceId} mono />
           <Detail label="Capability" value={row.capability} mono />
           <Detail label="IP address" value={row.ip} mono />

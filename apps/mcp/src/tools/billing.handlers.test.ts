@@ -29,7 +29,6 @@ const fakeCtx = {
   clientIp: null,
 };
 
-const fakeExtra = {} as Parameters<typeof import("./billing.credits.purchase")["default"]>[1];
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -51,10 +50,10 @@ describe("billing.credits.purchase handler", () => {
   });
 
   it("calls buildContext then invoke with correct args", async () => {
-    const fakeOutput = { credits: 50, charged: 42.5, receiptUrl: null };
+    const fakeOutput = { url: "https://checkout.stripe.com/pay/cs_test", grantCents: 5000, priceCents: 4250, percent: 15 };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { amountUsd: 50 };
+    const args = { amountUsd: 50, successUrl: undefined, cancelUrl: undefined };
     const result = await handler_billingCreditsPurchase(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
@@ -64,13 +63,13 @@ describe("billing.credits.purchase handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ credits: 50 });
+    expect(result).toMatchObject({ url: "https://checkout.stripe.com/pay/cs_test", grantCents: 5000 });
   });
 
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("payment failed"));
     await expect(
-      handler_billingCreditsPurchase({ amountUsd: 10 }),
+      handler_billingCreditsPurchase({ amountUsd: 10, successUrl: undefined, cancelUrl: undefined }),
     ).rejects.toThrow("payment failed");
   });
 });
@@ -89,7 +88,7 @@ describe("billing.subscription.read handler", () => {
   });
 
   it("calls invoke with empty args for read", async () => {
-    const fakeOutput = { subscription: null };
+    const fakeOutput = { subscription: null, creditBalanceCents: 0, periodUsage: null };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     await handler_billingSubscriptionRead({});
@@ -157,7 +156,15 @@ describe("api.key.create handler", () => {
   });
 
   it("calls invoke with key creation args", async () => {
-    const fakeOutput = { publicId: "aky_test", token: "oxg_test_secret" };
+    const fakeOutput = {
+      keyId: "uuid-1",
+      publicId: "aky_test",
+      name: "My Key",
+      keyPrefix: "oxg_t",
+      rawKey: "oxg_test_secret",
+      expiresAt: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { name: "My Key", scope: {}, expiresAt: undefined };
@@ -186,7 +193,7 @@ describe("api.key.revoke handler", () => {
   });
 
   it("calls invoke with revoke args", async () => {
-    const fakeOutput = { revoked: true };
+    const fakeOutput = { revoked: true, keyPublicId: "aky_test123", revokedAt: "2026-01-01T00:00:00.000Z" };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { keyPublicId: "aky_test123" };

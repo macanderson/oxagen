@@ -28,7 +28,6 @@ const fakeCtx = {
   clientIp: null,
 };
 
-const fakeExtra = {} as Parameters<typeof import("./conversation.archive")["default"]>[1];
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -50,7 +49,7 @@ describe("conversation.archive handler", () => {
   });
 
   it("calls buildContext then invoke with correct args", async () => {
-    const fakeOutput = { archived: 2 };
+    const fakeOutput = { updated: 2 };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { conversationIds: ["cnv_1", "cnv_2"], archived: true };
@@ -63,7 +62,7 @@ describe("conversation.archive handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ archived: 2 });
+    expect(result).toMatchObject({ updated: 2 });
   });
 
   it("propagates invoke errors", async () => {
@@ -175,7 +174,7 @@ describe("conversation.rename handler", () => {
   });
 
   it("calls invoke with rename args", async () => {
-    const fakeOutput = { conversationId: "cnv_1", title: "New Title" };
+    const fakeOutput = { publicId: "cnv_1", title: "New Title" };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { conversationId: "cnv_1", title: "New Title" };
@@ -205,7 +204,12 @@ describe("chat.message.send handler", () => {
   });
 
   it("calls invoke with send args", async () => {
-    const fakeOutput = { conversationId: "cnv_new", messageId: "msg_1" };
+    const fakeOutput = {
+      conversationId: "cnv_new",
+      userMessageId: "msg_1",
+      assistantMessageId: "msg_2",
+      activeLeafMessageId: "msg_2",
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = {

@@ -10,6 +10,8 @@ import { ScrollText, ArrowLeft, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { inArray } from "drizzle-orm";
+import { withSystemDb, schema } from "@oxagen/database";
 import { resolveOrg, assertOrgMember, getOrgRole, SECURITY_MANAGER_ROLES } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { getEnterpriseAccess } from "@/lib/enterprise";
@@ -20,6 +22,23 @@ import { queryAuditPage } from "@/lib/audit-query";
 import { AuditFilterBar } from "./_components/audit-filter-bar";
 import { AuditEventRow } from "./_components/audit-event-row";
 import { AuditExportButtons } from "./_components/audit-export-buttons";
+
+/** Batch-resolve actor user IDs → display names for a page of audit rows. */
+async function resolveActorNames(
+  userIds: string[],
+): Promise<Map<string, string>> {
+  const unique = [...new Set(userIds.filter(Boolean))];
+  if (unique.length === 0) return new Map();
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select({ id: schema.users.id, displayName: schema.users.displayName, email: schema.users.email })
+      .from(schema.users)
+      .where(inArray(schema.users.id, unique)),
+  );
+  const map = new Map<string, string>();
+  for (const r of rows) map.set(r.id, r.displayName ?? r.email);
+  return map;
+}
 
 export default async function SecurityAuditPage({
   params,
@@ -41,6 +60,12 @@ export default async function SecurityAuditPage({
   ]);
 
   const page = await queryAuditPage(tenant.id, filter);
+
+  // Batch-resolve actor names so rows show "Alice Smith" instead of raw UUIDs.
+  const actorIds = page.rows
+    .map((e) => e.actorUserId)
+    .filter((id): id is string => id !== null);
+  const actorNames = await resolveActorNames(actorIds);
 
   const isManager = role != null && SECURITY_MANAGER_ROLES.has(role);
   const canExport = access.isEnterprise && isManager;
@@ -105,6 +130,7 @@ export default async function SecurityAuditPage({
                     eventType: e.eventType,
                     outcome: e.outcome,
                     actorUserId: e.actorUserId,
+                    actorName: e.actorUserId ? (actorNames.get(e.actorUserId) ?? null) : null,
                     workspaceId: e.workspaceId,
                     capability: e.capability,
                     ip: e.ip,

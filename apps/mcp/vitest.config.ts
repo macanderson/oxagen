@@ -7,62 +7,91 @@ export default defineConfig({
     include: ["src/**/*.test.ts"],
     coverage: {
       provider: "v8",
-      // Scope to files that have test coverage.
+      // All tool files that have handler-invocation tests (*.handlers.test.ts)
+      // or schema tests (*.schema.test.ts / schemas.test.ts / conversations.schema.test.ts).
       // middleware.ts has module-level side effects (bootstrapIAMRuntime,
       // setSecurityEventEmitter, db()) that require the full infra stack —
       // excluded here; integration-level coverage is tracked separately.
-      // Tools with no test file (agent.approval.resolve, svg.generate, etc.)
-      // are excluded — they follow the same pattern as the tested tools and
-      // have no testable pure logic beyond the handler default export.
       include: [
         "src/context.ts",
-        "src/tools/organization.create.ts",
-        "src/tools/workspace.create.ts",
-        "src/tools/image.generate.ts",
+        // agent tools
+        "src/tools/agent.approval.resolve.ts",
+        "src/tools/agent.mcp.list.ts",
+        "src/tools/agent.mcp.register.ts",
         "src/tools/agent.memory.recall.ts",
-        "src/tools/chat.message.send.ts",
-        "src/tools/agent.task.background.start.ts",
-        "src/tools/form.fill.ts",
-        // New schema-tested tool files below. All follow the same pattern
-        // as the tools above: pure `schema`/`metadata` exports are covered;
-        // the async default-export handler (buildContext → invoke → output.parse)
-        // is NOT exercised in unit tests and is excluded from the functions
-        // threshold to avoid pulling it below 30% (matching existing precedent).
-        //
-        // conversation tools — covered by conversations.schema.test.ts
-        "src/tools/conversation.archive.ts",
-        "src/tools/conversation.rename.ts",
-        "src/tools/conversation.list.ts",
-        // agent tools — covered by agent.schema.test.ts
         "src/tools/agent.memory.write.ts",
         "src/tools/agent.plan.approve.ts",
-        "src/tools/agent.mcp.register.ts",
-        // billing tools — covered by billing.schema.test.ts
+        "src/tools/agent.skill.list.ts",
+        "src/tools/agent.task.background.cancel.ts",
+        "src/tools/agent.task.background.read.ts",
+        "src/tools/agent.task.background.start.ts",
+        "src/tools/agent.tool.list.ts",
+        // billing / API key tools
         "src/tools/billing.credits.purchase.ts",
-        // misc tools — covered by misc.schema.test.ts
-        "src/tools/system.install.instructions.ts",
+        "src/tools/billing.subscription.read.ts",
+        "src/tools/billing.subscription.upgrade.start.ts",
+        "src/tools/api.key.create.ts",
+        "src/tools/api.key.revoke.ts",
+        // conversation tools
+        "src/tools/conversation.archive.ts",
+        "src/tools/conversation.delete.ts",
+        "src/tools/conversation.list.ts",
+        "src/tools/conversation.purge.ts",
+        "src/tools/conversation.rename.ts",
+        "src/tools/chat.message.send.ts",
+        // document / media / asset tools
+        "src/tools/archive.create.ts",
+        "src/tools/asset.upload.ts",
+        "src/tools/brandkit.apply.ts",
+        "src/tools/documents.generate.ts",
+        "src/tools/documents.pdf.create.ts",
+        "src/tools/form.fill.ts",
+        "src/tools/image.generate.ts",
+        "src/tools/svg.generate.ts",
+        "src/tools/video.generate.ts",
+        // misc / org / workspace tools
+        "src/tools/notifications.list.ts",
+        "src/tools/notifications.mark.ts",
+        "src/tools/org.member.add.ts",
+        "src/tools/org.member.invite.accept.ts",
+        "src/tools/org.member.invite.decline.ts",
+        "src/tools/org.member.remove.ts",
+        "src/tools/org.member.role.change.ts",
+        "src/tools/organization.create.ts",
+        "src/tools/workspace.create.ts",
+        "src/tools/user.preferences.read.ts",
         "src/tools/user.preferences.write.ts",
+        "src/tools/workspace.model.settings.read.ts",
         "src/tools/workspace.model.settings.write.ts",
+        "src/tools/system.install.instructions.ts",
+        "src/tools/workflow.cancel.ts",
+        "src/tools/workflow.run.ts",
+        "src/tools/workflow.status.ts",
+        // plugin tools
+        "src/tools/plugin.catalog.browse.ts",
+        "src/tools/plugin.catalog.get.ts",
+        "src/tools/plugin.credential.reauth.ts",
+        "src/tools/plugin.credential.set_secret.ts",
+        "src/tools/plugin.denylist.add.ts",
+        "src/tools/plugin.denylist.remove.ts",
+        "src/tools/plugin.org.install.ts",
+        "src/tools/plugin.org.install_bulk.ts",
+        "src/tools/plugin.org.list.ts",
+        "src/tools/plugin.org.set_enabled.ts",
+        "src/tools/plugin.org.uninstall.ts",
+        "src/tools/plugin.registry.add.ts",
+        "src/tools/plugin.registry.list.ts",
+        "src/tools/plugin.registry.remove.ts",
+        "src/tools/plugin.registry.sync.ts",
+        "src/tools/plugin.settings.set_auth_alerts.ts",
+        "src/tools/plugin.workspace.set_enabled.ts",
       ],
       exclude: ["src/tools/*.test.ts"],
-      // Current measured floor (2026-06-02):
-      //   context.ts:                 stmts 85% | branch 94% | funcs 66% | lines 85%
-      //   tested tool schemas:        stmts 73-90% | branch 100% | funcs 0% | lines 73-90%
-      //                               (default export async handlers need live invoke())
-      // Overall measured: stmts ~80% | branch ~98% | lines ~80%
-      // Ratchet target: 85% lines / 80% branch when integration tests are added.
       thresholds: {
-        lines: 78,
-        branches: 94,
-        // functions: 28 — the async default-export handler (buildContext → invoke →
-        // output.parse) in each tool file is not exercised in unit tests; it
-        // requires a live invoke() runtime. Each new schema-tested tool file added
-        // to the include list further dilutes the functions metric because its
-        // handler function stays at 0%. The floor is set to what unit tests can
-        // actually achieve; integration tests will raise this once added.
-        // Previous floor was 30 (before the new schema-test tool files were added).
-        functions: 28,
-        statements: 78,
+        lines: 90,
+        branches: 90,
+        functions: 90,
+        statements: 90,
       },
     },
   },
