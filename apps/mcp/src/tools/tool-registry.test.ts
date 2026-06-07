@@ -78,6 +78,9 @@ import { metadata as videoGenerateMetadata } from "./video.generate";
 import { metadata as workspaceCreateMetadata } from "./workspace.create";
 import { metadata as workspaceModelSettingsReadMetadata } from "./workspace.model.settings.read";
 import { metadata as workspaceModelSettingsWriteMetadata } from "./workspace.model.settings.write";
+import { metadata as workflowRunMetadata } from "./workflow.run";
+import { metadata as workflowStatusMetadata } from "./workflow.status";
+import { metadata as workflowCancelMetadata } from "./workflow.cancel";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -144,6 +147,9 @@ const allToolMetadata = [
   workspaceCreateMetadata,
   workspaceModelSettingsReadMetadata,
   workspaceModelSettingsWriteMetadata,
+  workflowRunMetadata,
+  workflowStatusMetadata,
+  workflowCancelMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────

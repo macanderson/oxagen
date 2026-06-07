@@ -16,6 +16,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { resolveOrg } from "@/lib/resolve-org";
+import { getEnterpriseAccess } from "@/lib/enterprise";
+import { EnterpriseUpsell } from "@/components/security/enterprise-upsell";
 
 // ---------------------------------------------------------------------------
 // Mock data — pure presentational, zero live DB dependency (OXA-1579)
@@ -178,9 +181,25 @@ function ControlStatusIcon({ status }: { status: ControlStatus }) {
 
 const categories = Array.from(new Set(MOCK_CONTROLS.map((c) => c.category)));
 
-export default function SecurityCompliancePage() {
+export default async function SecurityCompliancePage({
+  params,
+}: {
+  params: Promise<{ orgSlug: string }>;
+}) {
+  const { orgSlug } = await params;
+  const tenant = await resolveOrg(orgSlug);
+  const access = await getEnterpriseAccess(tenant.id);
+
   return (
     <div className="flex flex-col gap-6">
+      {!access.isEnterprise && (
+        <EnterpriseUpsell
+          orgSlug={orgSlug}
+          feature="SOC 2 compliance reporting"
+          currentTier={access.tier}
+        />
+      )}
+
       {/* Preview pill — per scope requirement */}
       <div>
         <Badge variant="muted" className="text-[10px] tracking-wide uppercase">

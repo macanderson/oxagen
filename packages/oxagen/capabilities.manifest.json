@@ -1,22 +1,6 @@
 {
   "capabilities": [
     {
-      "name": "agent.ui.render",
-      "file": "agent.ui.render.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
       "name": "agent.approval.resolve",
       "file": "agent.approval.resolve.ts",
       "domain": "agent",
@@ -295,6 +279,20 @@
       }
     },
     {
+      "name": "agent.ui.render",
+      "file": "agent.ui.render.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
       "name": "api.key.create",
       "file": "api.key.create.ts",
       "domain": "api_key",
@@ -340,7 +338,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -378,7 +376,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -664,7 +662,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -683,7 +681,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -702,7 +700,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1102,6 +1100,60 @@
       "name": "video.generate",
       "file": "video.generate.ts",
       "domain": "video",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "workflow.cancel",
+      "file": "workflow.cancel.ts",
+      "domain": "workflow",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "workflow.run",
+      "file": "workflow.run.ts",
+      "domain": "workflow",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "workflow.status",
+      "file": "workflow.status.ts",
+      "domain": "workflow",
       "mode": "sync",
       "surfaces": [
         "api",
