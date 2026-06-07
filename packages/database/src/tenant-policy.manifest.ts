@@ -61,11 +61,13 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "integration.connections", policyClass: "standard" },
 
   // ── workspace.* ───────────────────────────────────────────────────────────
+  //   workspaces has org_id NOT NULL but no workspace_id — org_only policy.
   //   folders use orgScopeMixin (org_id + workspace_id). workspace_users is the
   //   membership table: it has workspace_id + user_id but NO org_id, so it
   //   cannot use an org-keyed policy. It gets a workspace_only policy keyed on
   //   app.current_workspace_id — without it the table has NO RLS and member
   //   rows leak across tenants (OXA-1515).
+  { table: "workspace.workspaces", policyClass: "org_only" },
   { table: "workspace.folders", policyClass: "standard" },
   { table: "workspace.workspace_users", policyClass: "workspace_only" },
 
