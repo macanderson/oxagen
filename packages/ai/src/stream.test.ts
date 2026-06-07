@@ -287,7 +287,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
     expect("temperature" in arg).toBe(false);
     expect(arg.providerOptions).toEqual({
-      openai: { reasoningEffort: "low", reasoningSummary: "auto" },
+      openai: { reasoningEffort: "low", reasoningSummary: "detailed" },
     });
   });
 });
@@ -332,7 +332,7 @@ describe("reasoningRequestConfig (@oxagen/ai)", () => {
       const result = reasoningRequestConfig("openai/gpt-5.2", "high");
       expect(result.temperatureLocked).toBe(true);
       expect(result.providerOptions).toEqual({
-        openai: { reasoningEffort: "high", reasoningSummary: "auto" },
+        openai: { reasoningEffort: "high", reasoningSummary: "detailed" },
       });
     });
 

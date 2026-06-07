@@ -82,7 +82,10 @@ export function reasoningRequestConfig(
         providerOptions: {
           openai: {
             reasoningEffort: effort,
-            reasoningSummary: "auto",
+            // "detailed" streams the model's reasoning summary into fullStream
+            // (as reasoning-delta parts); "auto" frequently yields no summary at
+            // all through the gateway, leaving the reasoning card unfed.
+            reasoningSummary: "detailed",
           },
         },
         temperatureLocked: true,
