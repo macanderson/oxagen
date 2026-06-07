@@ -226,6 +226,7 @@ export function ChatShellClient({
               content,
               conversationId: result.conversationId,
               parentMessageId: result.userMessageId ?? null,
+              newConversation: wasNewConversation,
               orgSlug: orgSlugRef.current,
               workspaceSlug: workspaceSlugRef.current,
               tier: (formData.get("tier") as string) || null,

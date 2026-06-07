@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import {
@@ -10,6 +10,7 @@ import {
   imageTierModelId,
   videoTierModelId,
   generateImageFor,
+  generateObjectFor,
   supportsReasoning,
   modelIdOf,
   loadEffectiveModelDefaults,
@@ -91,7 +92,59 @@ const BodySchema = z.object({
   generate: z.enum(["image", "video"]).nullable().default(null),
   mediaTier: z.enum(["basic", "advanced"]).nullable().default(null),
   mediaModel: z.string().min(1).nullable().default(null),
+  // True when the client created this conversation on this turn (first message).
+  // Used to trigger auto-title generation after the assistant replies.
+  newConversation: z.boolean().default(false),
 });
+
+// Generates a short title for a newly created conversation (fire-and-forget).
+// Uses the fast (Haiku) model since title generation is pure infrastructure.
+// Guards against overwriting an already-set title via isNull predicate.
+async function autoTitleConversation(opts: {
+  conversationId: string;
+  firstUserMessage: string;
+  orgId: string;
+  workspaceId: string;
+  requestId: string;
+}): Promise<void> {
+  try {
+    const { object } = await generateObjectFor({
+      schema: z.object({ title: z.string().max(80) }),
+      model: selectModel({ tier: "fast" }),
+      system:
+        "You are a conversation titler. Respond with a concise title (≤6 words, Title Case, no trailing punctuation) that captures the main topic of the user message. Return only the title.",
+      prompt: opts.firstUserMessage.slice(0, 500),
+      temperature: 0.3,
+      telemetry: {
+        orgId: opts.orgId,
+        workspaceId: opts.workspaceId,
+        surface: "app",
+        messageId: opts.requestId,
+      },
+    });
+
+    const title = object.title?.trim();
+    if (!title) return;
+
+    await runInTenantScope(
+      { orgId: opts.orgId, workspaceId: opts.workspaceId },
+      () =>
+        withTenantDb((tx) =>
+          tx
+            .update(schema.conversations)
+            .set({ title, updatedAt: new Date() })
+            .where(
+              and(
+                eq(schema.conversations.id, opts.conversationId),
+                isNull(schema.conversations.title),
+              ),
+            ),
+        ),
+    );
+  } catch {
+    // Best-effort — title generation failure must never affect the chat turn.
+  }
+}
 
 // Maximum number of prior messages to include in the context window.
 // Keeps prompt size bounded while preserving enough history for coherent
@@ -156,6 +209,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     generate,
     mediaTier,
     mediaModel,
+    newConversation,
   } = parsed.data;
 
   let tenant: Awaited<ReturnType<typeof resolveOrg>>;
@@ -718,6 +772,19 @@ export async function POST(request: NextRequest): Promise<Response> {
           } catch (persistErr) {
             console.error("[chat/stream] failed to persist assistant reply:", persistErr);
           }
+        }
+
+        // Auto-title new conversations using the fast model (fire-and-forget).
+        // Only fires on the first turn; the isNull predicate in autoTitleConversation
+        // makes concurrent calls idempotent.
+        if (newConversation && conversationId) {
+          void autoTitleConversation({
+            conversationId,
+            firstUserMessage: content,
+            orgId: tenant.id,
+            workspaceId: workspace.id,
+            requestId,
+          });
         }
       } catch (err) {
         // Surface stream errors as a text event so the client can show them.
