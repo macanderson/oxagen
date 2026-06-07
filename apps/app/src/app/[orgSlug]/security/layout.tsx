@@ -19,6 +19,7 @@ export default async function SecurityLayout({
     { label: "MFA", href: org.security.mfa(ctx) },
     { label: "Audit", href: org.security.audit(ctx) },
     { label: "Compliance", href: org.security.compliance(ctx) },
+    { label: "Trust", href: org.security.trust(ctx) },
     { label: "Incidents", href: org.security.incidents(ctx) },
   ];
 

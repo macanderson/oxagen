@@ -210,6 +210,7 @@ function WandChatShell({
     >
       <LazyChatShellClient
         conversationId={null}
+        conversationPublicId={null}
         activeLeafMessageId={null}
         messages={[]}
         sendAction={sendAction}

@@ -3,10 +3,11 @@
 // Pattern: vi.mock the kernel `invoke` and the context seam `buildContext` so
 // that each default-export handler can be called without a live runtime.
 // Each test asserts: (a) buildContext was called, (b) invoke was called once
-// with the correct contract name + args + { surface: "mcp" }, (c) the handler
-// returns/forwards the invoke result.
+// with the correct contract name + args + { surface: "mcp" }, (c) handler
+// returns the parsed result.
 //
-// Schema-boundary (valid/invalid parse) tests live in agent.schema.test.ts.
+// Fake outputs satisfy each contract's output Zod schema so `.output.parse()`
+// in the handler passes cleanly.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -33,7 +34,9 @@ const fakeCtx = {
   clientIp: null,
 };
 
-const fakeExtra = {} as Parameters<typeof import("./agent.approval.resolve")["default"]>[1];
+// xmcp passes a second `extra` argument; type matches any handler signature.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fakeExtra: any = {};
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -49,15 +52,15 @@ import handler_agentApprovalResolve, {
 } from "./agent.approval.resolve";
 
 describe("agent.approval.resolve handler", () => {
+  const validOutput = { approvalId: "apr_1", resolution: "approved" as const };
+
   it("exports schema and metadata", () => {
     expect(agentApprovalResolveSchema).toBeDefined();
     expect(agentApprovalResolveMetadata.name).toBe("agent.approval.resolve");
   });
 
-  it("calls buildContext then invoke with correct args", async () => {
-    const fakeOutput = { approvalId: "apr_1", resolution: "approved" };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
+  it("calls buildContext then invoke with correct contract name and args", async () => {
+    mocks.invoke.mockResolvedValue(validOutput);
     const args = { approvalId: "apr_1", decision: "approved" as const };
     const result = await handler_agentApprovalResolve(args, fakeExtra);
 
@@ -88,15 +91,15 @@ import handler_agentMcpList, {
 } from "./agent.mcp.list";
 
 describe("agent.mcp.list handler", () => {
+  const validOutput = { servers: [] };
+
   it("exports schema and metadata", () => {
     expect(agentMcpListSchema).toBeDefined();
     expect(agentMcpListMetadata.name).toBe("agent.mcp.list");
   });
 
   it("calls invoke with 'agent.mcp.list' and empty args", async () => {
-    const fakeOutput = { servers: [] };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
+    mocks.invoke.mockResolvedValue(validOutput);
     const result = await handler_agentMcpList({}, fakeExtra);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
@@ -118,15 +121,19 @@ import handler_agentMcpRegister, {
 } from "./agent.mcp.register";
 
 describe("agent.mcp.register handler", () => {
+  const validOutput = {
+    mcpServerId: "srv_1",
+    healthStatus: "healthy" as const,
+    discoveredTools: ["tool_a", "tool_b"],
+  };
+
   it("exports schema and metadata", () => {
     expect(agentMcpRegisterSchema).toBeDefined();
     expect(agentMcpRegisterMetadata.name).toBe("agent.mcp.register");
   });
 
-  it("calls invoke with correct args", async () => {
-    const fakeOutput = { serverId: "srv_1", name: "Test Server" };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
+  it("calls invoke with correct args and forwards result", async () => {
+    mocks.invoke.mockResolvedValue(validOutput);
     const args = {
       name: "Test MCP",
       transportType: "streamable-http" as const,
@@ -141,7 +148,7 @@ describe("agent.mcp.register handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ serverId: "srv_1" });
+    expect(result).toMatchObject({ mcpServerId: "srv_1", healthStatus: "healthy" });
   });
 });
 
@@ -153,15 +160,15 @@ import handler_agentMemoryRecall, {
 } from "./agent.memory.recall";
 
 describe("agent.memory.recall handler", () => {
+  const validOutput = { memories: [] };
+
   it("exports schema and metadata", () => {
     expect(agentMemoryRecallSchema).toBeDefined();
     expect(agentMemoryRecallMetadata.name).toBe("agent.memory.recall");
   });
 
   it("calls invoke with recall args", async () => {
-    const fakeOutput = { nodes: [] };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
+    mocks.invoke.mockResolvedValue(validOutput);
     const args = { query: "user prefs", minWeight: "high" as const, limit: 10 };
     await handler_agentMemoryRecall(args, fakeExtra);
 
@@ -182,15 +189,15 @@ import handler_agentMemoryWrite, {
 } from "./agent.memory.write";
 
 describe("agent.memory.write handler", () => {
+  const validOutput = { memoryId: "mem_1", nodeRef: "node-abc" };
+
   it("exports schema and metadata", () => {
     expect(agentMemoryWriteSchema).toBeDefined();
     expect(agentMemoryWriteMetadata.name).toBe("agent.memory.write");
   });
 
   it("calls invoke with write args", async () => {
-    const fakeOutput = { nodeId: "node_1" };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
+    mocks.invoke.mockResolvedValue(validOutput);
     const args = {
       nodeRef: "node-abc",
       weight: "high" as const,
@@ -198,7 +205,7 @@ describe("agent.memory.write handler", () => {
       lesson: "Always flush cache",
       source: "fix" as const,
     };
-    await handler_agentMemoryWrite(args, fakeExtra);
+    const result = await handler_agentMemoryWrite(args, fakeExtra);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "agent.memory.write",
@@ -206,6 +213,7 @@ describe("agent.memory.write handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
+    expect(result).toMatchObject({ memoryId: "mem_1" });
   });
 });
 
@@ -217,15 +225,15 @@ import handler_agentPlanApprove, {
 } from "./agent.plan.approve";
 
 describe("agent.plan.approve handler", () => {
+  const validOutput = { planId: "plan_1", status: "approved" };
+
   it("exports schema and metadata", () => {
     expect(agentPlanApproveSchema).toBeDefined();
     expect(agentPlanApproveMetadata.name).toBe("agent.plan.approve");
   });
 
   it("calls invoke with plan approval args", async () => {
-    const fakeOutput = { planId: "plan_1", status: "approved" };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
+    mocks.invoke.mockResolvedValue(validOutput);
     const args = { planId: "plan_1", decision: "approve" as const };
     await handler_agentPlanApprove(args, fakeExtra);
 
@@ -246,15 +254,15 @@ import handler_agentSkillList, {
 } from "./agent.skill.list";
 
 describe("agent.skill.list handler", () => {
+  const validOutput = { skills: [] };
+
   it("exports schema and metadata", () => {
     expect(agentSkillListSchema).toBeDefined();
     expect(agentSkillListMetadata.name).toBe("agent.skill.list");
   });
 
   it("calls invoke with skill list args", async () => {
-    const fakeOutput = { skills: [] };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
+    mocks.invoke.mockResolvedValue(validOutput);
     const args = { filter: "my-skill" };
     await handler_agentSkillList(args, fakeExtra);
 
@@ -267,7 +275,7 @@ describe("agent.skill.list handler", () => {
   });
 
   it("works with empty args", async () => {
-    mocks.invoke.mockResolvedValue({ skills: [] });
+    mocks.invoke.mockResolvedValue(validOutput);
     await handler_agentSkillList({}, fakeExtra);
     expect(mocks.invoke).toHaveBeenCalledOnce();
   });
@@ -281,15 +289,15 @@ import handler_agentTaskBackgroundCancel, {
 } from "./agent.task.background.cancel";
 
 describe("agent.task.background.cancel handler", () => {
+  const validOutput = { taskId: "task_1", status: "cancelled" as const };
+
   it("exports schema and metadata", () => {
     expect(agentTaskBackgroundCancelSchema).toBeDefined();
     expect(agentTaskBackgroundCancelMetadata.name).toBe("agent.task.background.cancel");
   });
 
   it("calls invoke with cancel args", async () => {
-    const fakeOutput = { taskId: "task_1", status: "cancelled" };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
+    mocks.invoke.mockResolvedValue(validOutput);
     const args = { taskId: "task_1" };
     await handler_agentTaskBackgroundCancel(args, fakeExtra);
 
@@ -310,23 +318,27 @@ import handler_agentTaskBackgroundRead, {
 } from "./agent.task.background.read";
 
 describe("agent.task.background.read handler", () => {
+  const validOutput = {
+    taskId: "task_1",
+    kind: "agent.run",
+    status: "completed" as const,
+    label: null,
+    resultPayload: null,
+    failureReason: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    startedAt: null,
+    completedAt: null,
+  };
+
   it("exports schema and metadata", () => {
     expect(agentTaskBackgroundReadSchema).toBeDefined();
     expect(agentTaskBackgroundReadMetadata.name).toBe("agent.task.background.read");
   });
 
   it("calls invoke with read args", async () => {
-    const fakeOutput = {
-      taskId: "task_1",
-      kind: "agent.run",
-      status: "completed",
-      label: null,
-      resultPayload: null,
-    };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
+    mocks.invoke.mockResolvedValue(validOutput);
     const args = { taskId: "task_1" };
-    await handler_agentTaskBackgroundRead(args, fakeExtra);
+    const result = await handler_agentTaskBackgroundRead(args, fakeExtra);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "agent.task.background.read",
@@ -334,6 +346,7 @@ describe("agent.task.background.read handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
+    expect(result).toMatchObject({ taskId: "task_1", status: "completed" });
   });
 });
 
@@ -345,17 +358,17 @@ import handler_agentTaskBackgroundStart, {
 } from "./agent.task.background.start";
 
 describe("agent.task.background.start handler", () => {
+  const validOutput = { taskId: "task_1", inngestRunId: "inngest_run_1" };
+
   it("exports schema and metadata", () => {
     expect(agentTaskBackgroundStartSchema).toBeDefined();
     expect(agentTaskBackgroundStartMetadata.name).toBe("agent.task.background.start");
   });
 
   it("calls invoke with start args", async () => {
-    const fakeOutput = { taskId: "task_1", status: "pending" };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
+    mocks.invoke.mockResolvedValue(validOutput);
     const args = { kind: "agent.run", payload: { foo: 1 } };
-    await handler_agentTaskBackgroundStart(args, fakeExtra);
+    const result = await handler_agentTaskBackgroundStart(args, fakeExtra);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "agent.task.background.start",
@@ -363,6 +376,7 @@ describe("agent.task.background.start handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
+    expect(result).toMatchObject({ taskId: "task_1", inngestRunId: "inngest_run_1" });
   });
 });
 
@@ -374,15 +388,15 @@ import handler_agentToolList, {
 } from "./agent.tool.list";
 
 describe("agent.tool.list handler", () => {
+  const validOutput = { tools: [] };
+
   it("exports schema and metadata", () => {
     expect(agentToolListSchema).toBeDefined();
     expect(agentToolListMetadata.name).toBe("agent.tool.list");
   });
 
   it("calls invoke with tool list args", async () => {
-    const fakeOutput = { tools: [] };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
+    mocks.invoke.mockResolvedValue(validOutput);
     const args = { includeExternal: true };
     await handler_agentToolList(args, fakeExtra);
 
