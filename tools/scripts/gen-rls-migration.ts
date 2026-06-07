@@ -58,19 +58,6 @@ function predicates(cls: PolicyClass): Predicates {
       check: `${BYPASS} OR (org_id = ${ORG})`,
     };
   }
-  if (cls === "org_or_global") {
-    // Nullable org_id: NULL rows are a shared/global catalog. This is the ONE
-    // class where USING ≠ WITH CHECK:
-    //   • READS  (USING): own-org rows + the global (NULL) catalog.
-    //   • WRITES (CHECK): own-org rows ONLY. Creating/altering a global (NULL)
-    //     row is reserved for the seeding/system path (app.rls_bypass='on').
-    // A symmetric predicate would let any tenant INSERT org_id=NULL and publish
-    // a platform-wide registry entry visible to everyone (SSRF / supply-chain).
-    return {
-      using: `${BYPASS} OR (org_id IS NULL OR org_id = ${ORG})`,
-      check: `${BYPASS} OR (org_id = ${ORG})`,
-    };
-  }
   // standard: org_id + workspace_id both required
   const p = `${BYPASS} OR (org_id = ${ORG} AND workspace_id = ${WS})`;
   return { using: p, check: p };
