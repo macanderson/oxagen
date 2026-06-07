@@ -62,7 +62,7 @@ test.describe("set-password — OAuth-only user", () => {
 
   // ── Navigate to /account/profile as the OAuth-only user ──────────────────
 
-  test("set-password form is visible for an OAuth-only user", async ({ browser }) => {
+  test("set-password form is visible for an OAuth-only user", async ({ _browser: _b }) => {
     // Each test gets a fresh page from the shared context (which already has the
     // session cookie injected). We can't use the built-in `page` fixture here
     // because it belongs to a fresh, unauthenticated context — we need the
