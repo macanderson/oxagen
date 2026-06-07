@@ -231,3 +231,163 @@ describe("billing-upgrade-inline — plan list", () => {
   it("enterprise plan defined", () => { expect(PLANS).toContain("enterprise"); });
   it("exactly 3 plans", () => { expect(PLANS).toHaveLength(3); });
 });
+
+// ── Pure helpers: workflow-progress ──────────────────────────────────────────
+
+type WorkflowStatus = "planning" | "running" | "completed" | "failed" | "cancelled";
+
+const TERMINAL_STATUSES = new Set<WorkflowStatus>(["completed", "failed", "cancelled"]);
+
+function isTerminal(status: WorkflowStatus): boolean {
+  return TERMINAL_STATUSES.has(status);
+}
+
+function formatElapsed(startedAt: string | null, completedAt: string | null): string {
+  if (!startedAt) return "—";
+  const start = new Date(startedAt).getTime();
+  const end = completedAt ? new Date(completedAt).getTime() : start;
+  const ms = end - start;
+  if (ms < 1000) return `${ms}ms`;
+  const s = Math.round(ms / 100) / 10;
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = Math.round(s % 60);
+  return `${m}m ${rem}s`;
+}
+
+function formatEta(
+  completedTasks: number,
+  totalTasks: number,
+  startedAt: string | null,
+  now: number,
+): string {
+  if (!startedAt || completedTasks === 0 || totalTasks === 0) return "—";
+  const elapsed = now - new Date(startedAt).getTime();
+  const rate = completedTasks / elapsed;
+  const remaining = totalTasks - completedTasks;
+  const etaMs = remaining / rate;
+  const etaS = Math.round(etaMs / 1000);
+  if (etaS < 60) return `~${etaS}s`;
+  return `~${Math.round(etaS / 60)}m`;
+}
+
+function progressPct(completedTasks: number, totalTasks: number): number {
+  return totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+}
+
+// ── Tests: workflow-progress terminal status detection ────────────────────────
+
+describe("workflow-progress — terminal status detection", () => {
+  it("'completed' is terminal", () => { expect(isTerminal("completed")).toBe(true); });
+  it("'failed' is terminal", () => { expect(isTerminal("failed")).toBe(true); });
+  it("'cancelled' is terminal", () => { expect(isTerminal("cancelled")).toBe(true); });
+  it("'running' is NOT terminal", () => { expect(isTerminal("running")).toBe(false); });
+  it("'planning' is NOT terminal", () => { expect(isTerminal("planning")).toBe(false); });
+  it("exactly 3 terminal statuses", () => { expect(TERMINAL_STATUSES.size).toBe(3); });
+});
+
+// ── Tests: workflow-progress elapsed time formatting ─────────────────────────
+
+describe("workflow-progress — formatElapsed", () => {
+  it("returns '—' when startedAt is null", () => {
+    expect(formatElapsed(null, null)).toBe("—");
+  });
+
+  it("returns ms string for sub-second elapsed", () => {
+    const start = new Date("2026-06-07T10:00:00.000Z").toISOString();
+    const end = new Date("2026-06-07T10:00:00.500Z").toISOString();
+    expect(formatElapsed(start, end)).toBe("500ms");
+  });
+
+  it("returns seconds string for sub-minute elapsed", () => {
+    const start = new Date("2026-06-07T10:00:00.000Z").toISOString();
+    const end = new Date("2026-06-07T10:00:30.000Z").toISOString();
+    expect(formatElapsed(start, end)).toBe("30s");
+  });
+
+  it("returns m+s string for multi-minute elapsed", () => {
+    const start = new Date("2026-06-07T10:00:00.000Z").toISOString();
+    const end = new Date("2026-06-07T10:02:45.000Z").toISOString();
+    expect(formatElapsed(start, end)).toBe("2m 45s");
+  });
+
+  it("uses completedAt when provided (does not use live clock)", () => {
+    const start = new Date("2026-06-07T10:00:00.000Z").toISOString();
+    const end = new Date("2026-06-07T10:01:00.000Z").toISOString();
+    expect(formatElapsed(start, end)).toBe("1m 0s");
+  });
+});
+
+// ── Tests: workflow-progress progress percentage ──────────────────────────────
+
+describe("workflow-progress — progressPct", () => {
+  it("returns 0 when totalTasks is 0", () => {
+    expect(progressPct(0, 0)).toBe(0);
+  });
+
+  it("returns 0 when nothing is completed", () => {
+    expect(progressPct(0, 10)).toBe(0);
+  });
+
+  it("returns 50 when half complete", () => {
+    expect(progressPct(5, 10)).toBe(50);
+  });
+
+  it("returns 100 when all complete", () => {
+    expect(progressPct(10, 10)).toBe(100);
+  });
+
+  it("rounds to nearest integer", () => {
+    expect(progressPct(1, 3)).toBe(33);
+  });
+});
+
+// ── Tests: workflow-progress ETA calculation ─────────────────────────────────
+
+describe("workflow-progress — formatEta", () => {
+  it("returns '—' when startedAt is null", () => {
+    expect(formatEta(5, 10, null, Date.now())).toBe("—");
+  });
+
+  it("returns '—' when completedTasks is 0 (avoid division by zero)", () => {
+    expect(formatEta(0, 10, new Date().toISOString(), Date.now())).toBe("—");
+  });
+
+  it("returns '—' when totalTasks is 0", () => {
+    expect(formatEta(0, 0, new Date().toISOString(), Date.now())).toBe("—");
+  });
+
+  it("returns seconds ETA when remaining < 60s", () => {
+    const now = Date.now();
+    // 5 tasks done in 10000ms → rate = 0.5/s → 5 remaining → 10s ETA
+    const start = new Date(now - 10000).toISOString();
+    const eta = formatEta(5, 10, start, now);
+    expect(eta).toBe("~10s");
+  });
+
+  it("returns minutes ETA when remaining >= 60s", () => {
+    const now = Date.now();
+    // 1 task done in 1000ms → rate = 1/1000ms → 99 remaining → 99s ≈ 2m ETA
+    const start = new Date(now - 1000).toISOString();
+    const eta = formatEta(1, 100, start, now);
+    expect(eta).toBe("~2m");
+  });
+});
+
+// ── Tests: workflow-progress status-to-polling-stop mapping ──────────────────
+
+describe("workflow-progress — polling stops on terminal status", () => {
+  const cases: Array<{ status: WorkflowStatus; shouldStop: boolean }> = [
+    { status: "planning", shouldStop: false },
+    { status: "running", shouldStop: false },
+    { status: "completed", shouldStop: true },
+    { status: "failed", shouldStop: true },
+    { status: "cancelled", shouldStop: true },
+  ];
+
+  for (const { status, shouldStop } of cases) {
+    it(`status '${status}' → shouldStop=${shouldStop}`, () => {
+      expect(isTerminal(status)).toBe(shouldStop);
+    });
+  }
+});

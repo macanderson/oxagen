@@ -26,6 +26,8 @@ type AnyLazy = LazyExoticComponent<(props: Record<string, unknown>) => React.Rea
  *   "image-preview"        — renders a generated / fetched image (M agent)
  *   "install-instructions" — renders a copy-able installation step block (M agent)
  *   "make-video-form"      — renders the make-a-video request form (V agent)
+ *   "file-attachment"      — renders a generated document/spreadsheet/pdf/archive asset card
+ *   "html-artifact"        — renders model-generated HTML in a sandboxed iframe
  */
 /**
  * Emit a structured warning when a componentId arrives with no registered
@@ -89,5 +91,11 @@ export const CHAT_COMPONENTS = {
   ),
   "workflow-progress": lazy(
     () => import("@/components/chat/registry-components/workflow-progress"),
+  ),
+  "file-attachment": lazy(
+    () => import("@/components/chat/registry-components/file-attachment"),
+  ),
+  "html-artifact": lazy(
+    () => import("@/components/chat/registry-components/artifact-iframe"),
   ),
 } as unknown as Record<string, AnyLazy>;

@@ -405,6 +405,7 @@ export function enumerateNavTargets(
     targets.push({ label: "Automation", href: workspace.automation.root(wsCtx), parent: "automation" });
     targets.push({ label: "Activity", href: workspace.activity.root(wsCtx), parent: "activity" });
     targets.push({ label: "Studio", href: workspace.studio.root(wsCtx), parent: "studio" });
+    targets.push({ label: "Workflows", href: workspace.workflows.root(wsCtx), parent: "workflows" });
     targets.push({ label: "Settings", href: workspace.settings.root(wsCtx), parent: "settings" });
 
     // Knowledge tabs

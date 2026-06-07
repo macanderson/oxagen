@@ -55,6 +55,12 @@ export const SECURITY_EVENT_TYPES = [
   "org.member_invited",
   "org.member_removed",
   "org.role_changed",
+  // Security policy
+  "security.mfa_policy_updated",
+  "security.session_revoked",
+  // Access review
+  "access.review_completed",
+  "access.member_access_confirmed",
 ] as const;
 
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];

@@ -82,10 +82,10 @@ describe("resolveSidebarMode", () => {
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 6 items", () => {
+  it("workspace config has exactly 7 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    expect(config.items).toHaveLength(6);
+    expect(config.items).toHaveLength(7);
   });
 
   it("org config has exactly 7 items", () => {
@@ -107,11 +107,13 @@ describe("getSidebarConfig item counts", () => {
     expect(returnItems[0]?.id).toBe("back");
   });
 
-  it("workspace config has exactly one 'tools' group item (Studio)", () => {
+  it("workspace config has exactly two 'tools' group items (Studio, Workflows)", () => {
     const items = getSidebarConfig("workspace").items;
     const toolsItems = items.filter((item) => item.group === "tools");
-    expect(toolsItems).toHaveLength(1);
-    expect(toolsItems[0]?.id).toBe("studio");
+    expect(toolsItems).toHaveLength(2);
+    const ids = toolsItems.map((i) => i.id);
+    expect(ids).toContain("studio");
+    expect(ids).toContain("workflows");
   });
 
   it("workspace config has exactly one 'footer' group item (Settings)", () => {
@@ -381,5 +383,49 @@ describe("ORG_SCOPE_ROUTES", () => {
 
   it("a workspace slug like 'production' is NOT in the reserved set", () => {
     expect(ORG_SCOPE_ROUTES.has("production")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Workflows sidebar item — added in Phase 2
+// ---------------------------------------------------------------------------
+
+describe("Workflows sidebar item", () => {
+  it("'workflows' item exists in workspace config tools group", () => {
+    const items = getSidebarConfig("workspace").items;
+    const workflows = items.find((item) => item.id === "workflows");
+    expect(workflows).toBeDefined();
+    expect(workflows?.group).toBe("tools");
+    expect(workflows?.label).toBe("Workflows");
+  });
+
+  it("'workflows' href resolves to /{org}/{ws}/workflows", () => {
+    const ctx: Required<ScopeContext> = { orgSlug: "acme", workspaceSlug: "prod" };
+    const items = getSidebarConfig("workspace").items;
+    const workflows = items.find((item) => item.id === "workflows");
+    expect(workflows?.href(ctx)).toBe("/acme/prod/workflows");
+  });
+
+  it("'workflows' href falls back to org root when workspaceSlug absent", () => {
+    const ctx: ScopeContext = { orgSlug: "acme" };
+    const items = getSidebarConfig("workspace").items;
+    const workflows = items.find((item) => item.id === "workflows");
+    expect(workflows?.href(ctx)).toBe("/acme");
+  });
+
+  it("enumerateNavTargets includes Workflows for workspace context", () => {
+    const ctx: Required<ScopeContext> = { orgSlug: "acme", workspaceSlug: "prod" };
+    const targets = enumerateNavTargets(ctx);
+    const workflowsTarget = targets.find((t) => t.label === "Workflows");
+    expect(workflowsTarget).toBeDefined();
+    expect(workflowsTarget?.href).toBe("/acme/prod/workflows");
+    expect(workflowsTarget?.parent).toBe("workflows");
+  });
+
+  it("all workspace hrefs are unique (including Workflows)", () => {
+    const ctx: Required<ScopeContext> = { orgSlug: "acme", workspaceSlug: "prod" };
+    const eff = resolveSidebarCtx("/acme/prod/ask", ctx);
+    const hrefs = getSidebarConfig("workspace").items.map((item) => item.href(eff));
+    expect(new Set(hrefs).size).toBe(hrefs.length);
   });
 });

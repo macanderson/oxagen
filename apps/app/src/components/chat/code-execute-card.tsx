@@ -5,6 +5,26 @@ import { Tabs, TabsPanel, TabsList, TabsTab } from "@/components/ui/tabs";
 import { StatusIcon } from "./status-icon";
 import { formatDuration } from "./tool-call-card";
 import type { ToolCallStatus } from "./stream-event-types";
+import { lazy, Suspense } from "react";
+
+// Lazy-load the sandboxed iframe renderer so it doesn't bloat the main chunk.
+const HtmlArtifact = lazy(
+  () => import("@/components/chat/registry-components/artifact-iframe"),
+);
+
+/**
+ * Heuristic: classify stdout as renderable HTML when the string starts with a
+ * recognisable HTML doctype or tag. We avoid a full parse here to keep it fast.
+ */
+export function looksLikeHtml(text: string): boolean {
+  const trimmed = text.trimStart();
+  return (
+    trimmed.startsWith("<!DOCTYPE html") ||
+    trimmed.startsWith("<!doctype html") ||
+    trimmed.startsWith("<html") ||
+    trimmed.startsWith("<HTML")
+  );
+}
 
 export interface CodeExecuteCardProps {
   toolCallId: string;

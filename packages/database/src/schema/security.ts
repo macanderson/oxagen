@@ -20,7 +20,7 @@
 //   audit_events TTL. DO NOT add event types here without also updating the
 //   CHECK constraint DDL in the migration file.
 
-import { check, index, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, primaryKey, text, timestamp, uuid, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
   SECURITY_EVENT_TYPES,
@@ -115,3 +115,37 @@ export const securityEvents = securitySchema.table(
 
 export type SecurityEvent = typeof securityEvents.$inferSelect;
 export type NewSecurityEvent = typeof securityEvents.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// security.org_security_policy — org-level security configuration.
+//
+// One row per org (upsertable). Tracks MFA enforcement policy (CC6.1/CC6.2).
+// The table is mutable (orgs can change policy) but all mutations are audited
+// via security_events (security.mfa_policy_updated).
+// ---------------------------------------------------------------------------
+
+export const orgSecurityPolicy = securitySchema.table(
+  "org_security_policy",
+  {
+    orgId: uuid("org_id").primaryKey().notNull(),
+    // When true, members who lack MFA are blocked from accessing org resources
+    // after the grace period expires.
+    mfaRequired: boolean("mfa_required").notNull().default(false),
+    // How many hours a member can access the org after MFA is required before
+    // they are forced to enroll. 0 = immediate enforcement.
+    mfaGraceHours: integer("mfa_grace_hours").notNull().default(48),
+    updatedByUserId: uuid("updated_by_user_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgIdx: uniqueIndex("org_security_policy_org_idx").on(t.orgId),
+  }),
+);
+
+export type OrgSecurityPolicy = typeof orgSecurityPolicy.$inferSelect;
+export type NewOrgSecurityPolicy = typeof orgSecurityPolicy.$inferInsert;
