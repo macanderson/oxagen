@@ -10,6 +10,12 @@ vi.mock("@oxagen/database", () => {
         }),
       }),
     }),
+    // emailedAt stamping after a successful send: tx.update(...).set(...).where(...)
+    update: (_t: unknown) => ({
+      set: (_v: unknown) => ({
+        where: (_w: unknown) => Promise.resolve(undefined),
+      }),
+    }),
   };
   return {
     schema: {
