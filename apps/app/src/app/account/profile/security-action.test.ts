@@ -322,4 +322,63 @@ describe("unlinkAccountAction", () => {
     expect(result.ok).toBe(false);
     expect((result as { ok: false; error: string }).error).toMatch(/failed to disconnect/i);
   });
+
+  it("returns ok:false with 'Account not found' on ACCOUNT_NOT_FOUND error", async () => {
+    mockListUserAccounts.mockResolvedValue([
+      makeAccount("google"),
+      makeAccount("github"),
+    ]);
+    mockUnlinkAccount.mockRejectedValue(new Error("ACCOUNT_NOT_FOUND"));
+
+    const result = await unlinkAccountAction({ providerId: "google" });
+
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toMatch(/account not found/i);
+  });
+
+  it("returns ok:false validation_error when providerId is empty string", async () => {
+    mockListUserAccounts.mockResolvedValue([makeAccount("google"), makeAccount("github")]);
+
+    const result = await unlinkAccountAction({ providerId: "" });
+
+    expect(result.ok).toBe(false);
+    // Empty providerId fails z.string().min(1) validation before the API call.
+    expect(mockUnlinkAccount).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Additional setPasswordAction coverage: PASSWORD_TOO_SHORT / PASSWORD_TOO_LONG
+// ---------------------------------------------------------------------------
+
+describe("setPasswordAction — additional error branches", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getSessionOrRedirect).mockResolvedValue(mockSession as never);
+    mockListUserAccounts.mockResolvedValue([makeAccount("google")]);
+  });
+
+  it("returns ok:false with min-length message when API throws PASSWORD_TOO_SHORT", async () => {
+    mockSetPassword.mockRejectedValue(new Error("PASSWORD_TOO_SHORT"));
+
+    const result = await setPasswordAction({
+      newPassword: "validpass123",
+      confirmPassword: "validpass123",
+    });
+
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toMatch(/too short/i);
+  });
+
+  it("returns ok:false with max-length message when API throws PASSWORD_TOO_LONG", async () => {
+    mockSetPassword.mockRejectedValue(new Error("PASSWORD_TOO_LONG"));
+
+    const result = await setPasswordAction({
+      newPassword: "validpass123",
+      confirmPassword: "validpass123",
+    });
+
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toMatch(/too long/i);
+  });
 });
