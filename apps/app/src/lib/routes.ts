@@ -44,6 +44,7 @@ export const org = {
     requests: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/requests`,
     sessions: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/sessions`,
     identities: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/identities`,
+    reviews: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/reviews`,
   },
 
   // Security sub-routes
@@ -55,6 +56,7 @@ export const org = {
     audit: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/audit`,
     compliance: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/compliance`,
     incidents: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/incidents`,
+    trust: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/trust`,
   },
 
   // Billing — promoted from legacy settings/billing

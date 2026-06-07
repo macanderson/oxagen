@@ -15,14 +15,14 @@ export default defineConfig({
         "src/vercel.ts",
         "src/bootstrap.ts",
       ],
-      // Ratchet floors set just below current measured coverage
-      // (lines 63.47 / branches 96.63 / functions 95.45) so the gate lives in
-      // the build, not in review. Raise as coverage grows — never lower.
+      // Ratchet floors raised after route-handler tests were added:
+      // measured 99.21% lines / 98.17% branches / 95.45% functions.
+      // Keep raising as coverage grows — never lower.
       thresholds: {
-        lines: 62,
+        lines: 90,
         branches: 90,
         functions: 92,
-        statements: 62,
+        statements: 90,
       },
     },
   },

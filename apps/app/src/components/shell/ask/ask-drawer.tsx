@@ -150,6 +150,7 @@ function AskDrawerChatShell({
     >
       <LazyChatShellClient
         conversationId={null}
+        conversationPublicId={null}
         activeLeafMessageId={null}
         messages={[]}
         sendAction={sendAction}
