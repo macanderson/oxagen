@@ -1,0 +1,463 @@
+"use client";
+
+import * as React from "react";
+import {
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  CircleDot,
+  Download,
+  X,
+  BarChart3,
+  Clock,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { WorkflowRunSnapshot, WorkflowTaskSnapshot } from "@oxagen/oxagen/contracts/workflow.status";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type WorkflowStatus = WorkflowRunSnapshot["status"];
+type TaskStatus = WorkflowTaskSnapshot["status"];
+
+interface WorkflowProgressProps {
+  workflowId: string;
+  orgSlug?: string;
+  workspaceSlug?: string;
+}
+
+interface WorkflowData {
+  workflow: WorkflowRunSnapshot;
+  tasks: WorkflowTaskSnapshot[];
+}
+
+// ── Status config ─────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG: Record<
+  WorkflowStatus,
+  { label: string; badgeClass: string; isDone: boolean }
+> = {
+  planning: {
+    label: "Planning",
+    badgeClass: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+    isDone: false,
+  },
+  running: {
+    label: "Running",
+    badgeClass: "bg-primary/10 text-primary",
+    isDone: false,
+  },
+  completed: {
+    label: "Completed",
+    badgeClass: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+    isDone: true,
+  },
+  failed: {
+    label: "Failed",
+    badgeClass: "bg-destructive/10 text-destructive",
+    isDone: true,
+  },
+  cancelled: {
+    label: "Cancelled",
+    badgeClass: "bg-muted text-muted-foreground",
+    isDone: true,
+  },
+};
+
+const TASK_STATUS_CONFIG: Record<
+  TaskStatus,
+  { icon: React.ElementType; iconClass: string; cellClass: string; label: string }
+> = {
+  pending: {
+    icon: CircleDot,
+    iconClass: "text-muted-foreground/40",
+    cellClass: "bg-muted/30 border-border/40",
+    label: "Pending",
+  },
+  running: {
+    icon: Loader2,
+    iconClass: "text-primary animate-spin",
+    cellClass: "bg-primary/5 border-primary/30",
+    label: "Running",
+  },
+  completed: {
+    icon: CheckCircle2,
+    iconClass: "text-emerald-500",
+    cellClass: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800/40",
+    label: "Done",
+  },
+  failed: {
+    icon: XCircle,
+    iconClass: "text-destructive",
+    cellClass: "bg-destructive/5 border-destructive/20",
+    label: "Failed",
+  },
+  cancelled: {
+    icon: CircleDot,
+    iconClass: "text-muted-foreground/30",
+    cellClass: "bg-muted/20 border-border/30",
+    label: "Cancelled",
+  },
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatElapsed(startedAt: string | null): string {
+  if (!startedAt) return "—";
+  const ms = Date.now() - new Date(startedAt).getTime();
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+function formatEta(
+  completedTasks: number,
+  totalTasks: number,
+  startedAt: string | null,
+): string {
+  if (!startedAt || completedTasks === 0 || totalTasks === 0) return "—";
+  const elapsed = Date.now() - new Date(startedAt).getTime();
+  const perTask = elapsed / completedTasks;
+  const remaining = (totalTasks - completedTasks) * perTask;
+  const s = Math.floor(remaining / 1000);
+  if (s < 60) return `~${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `~${m}m`;
+  return `~${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+// ── Task cell ─────────────────────────────────────────────────────────────────
+
+function TaskCell({ task }: { task: WorkflowTaskSnapshot }) {
+  const cfg = TASK_STATUS_CONFIG[task.status];
+  const Icon = cfg.icon;
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <div
+      className={cn(
+        "relative flex h-12 w-12 flex-shrink-0 items-center justify-center",
+        "rounded-lg border transition-all",
+        cfg.cellClass,
+      )}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      aria-label={`Task ${task.taskIndex + 1}: ${task.title} — ${cfg.label}`}
+      role="img"
+    >
+      <Icon className={cn("h-4 w-4", cfg.iconClass)} aria-hidden="true" />
+      <span className="sr-only">{task.taskIndex + 1}</span>
+      {hovered && (
+        <div
+          className={cn(
+            "absolute bottom-full left-1/2 z-50 mb-1.5 -translate-x-1/2",
+            "max-w-48 rounded-md border border-border bg-popover px-2.5 py-1.5",
+            "text-center text-[11px] text-popover-foreground shadow-sm",
+          )}
+          role="tooltip"
+        >
+          <span className="font-medium">#{task.taskIndex + 1}</span>{" "}
+          <span className="text-muted-foreground">{task.title}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export default function WorkflowProgress({
+  workflowId,
+  orgSlug = "",
+  workspaceSlug = "",
+}: WorkflowProgressProps): React.ReactElement {
+  const [data, setData] = React.useState<WorkflowData | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [cancelling, setCancelling] = React.useState(false);
+
+  const isDone = data
+    ? STATUS_CONFIG[data.workflow.status].isDone
+    : false;
+
+  // Poll /api/v1/workflow/:id every 3s until terminal status
+  React.useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/v1/workflow/${workflowId}`, {
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as WorkflowData;
+        if (!cancelled) {
+          setData(json);
+          setError(null);
+          if (!STATUS_CONFIG[json.workflow.status].isDone) {
+            timer = setTimeout(poll, 3000);
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load workflow status");
+          timer = setTimeout(poll, 5000);
+        }
+      }
+    }
+
+    void poll();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [workflowId]);
+
+  async function handleCancel() {
+    if (!data || isDone || cancelling) return;
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/v1/workflow/${workflowId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const result = (await res.json()) as { cancelled: boolean };
+      if (result.cancelled) {
+        setData((prev) =>
+          prev ? { ...prev, workflow: { ...prev.workflow, status: "cancelled" } } : prev,
+        );
+      }
+    } catch {
+      // non-fatal
+    } finally {
+      setCancelling(false);
+    }
+  }
+
+  // ── Loading skeleton ────────────────────────────────────────────────────────
+
+  if (!data && !error) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-5 space-y-4 animate-pulse">
+        <div className="flex items-center gap-3">
+          <div className="h-4 w-4 rounded bg-muted" />
+          <div className="h-4 w-40 rounded bg-muted" />
+          <div className="ml-auto h-5 w-16 rounded-full bg-muted" />
+        </div>
+        <div className="h-2 w-full rounded-full bg-muted" />
+        <div className="grid grid-cols-4 gap-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-8 rounded-lg bg-muted" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Error ───────────────────────────────────────────────────────────────────
+
+  if (error && !data) {
+    return (
+      <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-5">
+        <p className="text-sm text-destructive">
+          Failed to load workflow: {error}
+        </p>
+      </div>
+    );
+  }
+
+  if (!data) return <></>;
+
+  const { workflow, tasks } = data;
+  const statusCfg = STATUS_CONFIG[workflow.status];
+  const pct =
+    workflow.totalTasks > 0
+      ? Math.round((workflow.completedTasks / workflow.totalTasks) * 100)
+      : 0;
+
+  const recentCompleted = [...tasks]
+    .filter((t) => t.status === "completed" || t.status === "failed")
+    .sort((a, b) => {
+      const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+      const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+      return bTime - aTime;
+    })
+    .slice(0, 5);
+
+  const downloadUrl = workflow.resultUrl
+    ? workflow.resultUrl
+    : `/api/v1/workflow/${workflowId}/result`;
+
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border border-border bg-card p-5 space-y-4",
+        "max-w-full",
+      )}
+      role="region"
+      aria-label={`Workflow: ${workflow.title}`}
+    >
+      {/* Header */}
+      <div className="flex items-start gap-3">
+        <BarChart3 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground truncate">{workflow.title}</p>
+          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{workflow.goal}</p>
+        </div>
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+            statusCfg.badgeClass,
+          )}
+          aria-label={`Status: ${statusCfg.label}`}
+        >
+          {statusCfg.label}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      {workflow.totalTasks > 0 && (
+        <div className="space-y-1.5">
+          <div
+            className="h-2 w-full overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`${pct}% complete`}
+          >
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-500",
+                workflow.status === "failed"
+                  ? "bg-destructive"
+                  : workflow.status === "cancelled"
+                    ? "bg-muted-foreground"
+                    : "bg-primary",
+                workflow.status === "running" &&
+                  "animate-[shimmer_1.5s_ease-in-out_infinite]",
+              )}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground text-right">
+            {workflow.completedTasks} / {workflow.totalTasks} tasks
+          </p>
+        </div>
+      )}
+
+      {/* Metrics row */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          { label: "Total", value: String(workflow.totalTasks) },
+          { label: "Done", value: String(workflow.completedTasks) },
+          { label: "Failed", value: String(workflow.failedTasks) },
+          {
+            label:
+              workflow.status === "running" ? "Elapsed" : "Duration",
+            value:
+              workflow.status === "running"
+                ? formatElapsed(workflow.startedAt)
+                : workflow.startedAt && workflow.completedAt
+                  ? formatElapsed(workflow.startedAt)
+                  : "—",
+          },
+        ].map(({ label, value }) => (
+          <div
+            key={label}
+            className="flex flex-col gap-0.5 rounded-lg border border-border/50 bg-muted/40 px-3 py-2"
+          >
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {label}
+            </span>
+            <span className="text-sm font-semibold tabular-nums text-foreground">
+              {value}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* ETA — only while running */}
+      {workflow.status === "running" && workflow.totalTasks > 0 && (
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Clock className="h-3 w-3" aria-hidden="true" />
+          ETA:{" "}
+          {formatEta(workflow.completedTasks, workflow.totalTasks, workflow.startedAt)}
+        </div>
+      )}
+
+      {/* Agent grid */}
+      {tasks.length > 0 && (
+        <div>
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Tasks
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {tasks.map((task) => (
+              <TaskCell key={task.id} task={task} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Live log — last 5 completed/failed */}
+      {recentCompleted.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Recent
+          </p>
+          <ul className="space-y-1" aria-label="Recent task completions">
+            {recentCompleted.map((task) => {
+              const tCfg = TASK_STATUS_CONFIG[task.status];
+              const Icon = tCfg.icon;
+              return (
+                <li key={task.id} className="flex items-center gap-2 text-xs">
+                  <Icon className={cn("h-3 w-3 shrink-0", tCfg.iconClass)} aria-hidden="true" />
+                  <span className="text-muted-foreground">#{task.taskIndex + 1}</span>
+                  <span className="truncate text-foreground">{task.title}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* Actions */}
+      {(workflow.status === "running" || workflow.status === "planning" || workflow.resultUrl) && (
+        <div className="flex items-center gap-2 pt-1 border-t border-border/50">
+          {(workflow.status === "running" || workflow.status === "planning") && (
+            <button
+              type="button"
+              onClick={() => void handleCancel()}
+              disabled={cancelling}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5",
+                "text-xs font-medium text-muted-foreground transition-colors",
+                "hover:border-destructive/40 hover:text-destructive",
+                "disabled:pointer-events-none disabled:opacity-50",
+              )}
+              aria-busy={cancelling}
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+              {cancelling ? "Cancelling…" : "Cancel"}
+            </button>
+          )}
+          {workflow.status === "completed" && (
+            <a
+              href={downloadUrl}
+              download
+              className={cn(
+                "flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5",
+                "text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90",
+              )}
+              aria-label={`Download results as ${workflow.outputFormat.toUpperCase()}`}
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              Download {workflow.outputFormat.toUpperCase()}
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

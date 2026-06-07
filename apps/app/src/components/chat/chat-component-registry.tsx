@@ -87,4 +87,7 @@ export const CHAT_COMPONENTS = {
   "confirm-destructive-inline": lazy(
     () => import("@/components/chat/registry-components/confirm-destructive-inline"),
   ),
+  "workflow-progress": lazy(
+    () => import("@/components/chat/registry-components/workflow-progress"),
+  ),
 } as unknown as Record<string, AnyLazy>;

@@ -23,6 +23,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Terminal,
+  TrendingUp,
   User,
   Users,
   Workflow,
@@ -127,6 +128,16 @@ const workspaceConfig: SidebarConfig = {
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.studio.root(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "tools",
+    },
+    {
+      id: "workflows",
+      label: "Workflows",
+      icon: TrendingUp,
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.workflows.root(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "tools",
     },

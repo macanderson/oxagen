@@ -131,6 +131,11 @@ export const workspace = {
     library: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/tools/studio/library`,
   },
 
+  // Workflows — parallel task supervisor runs
+  workflows: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/workflows`,
+  },
+
   // Settings
   settings: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings`,
