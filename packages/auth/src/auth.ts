@@ -8,6 +8,7 @@ import { requireEnv } from "@oxagen/config/env";
 import { createLocalKmsAdapter, loadMasterKey } from "@oxagen/crypto/kms";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 import { buildAccountTokenHooks, buildStripOnlyAccountHooks } from "./token-encryption";
+import { sendEmail, resetPasswordEmailTemplate } from "@oxagen/notifications";
 
 // Better Auth binds to the canonical auth.users row, not a parallel table.
 // The Drizzle adapter looks up columns via JS property lookup
@@ -221,6 +222,22 @@ export const auth = betterAuth({
     enabled: true,
     autoSignIn: true,
     minPasswordLength: 8,
+    // Tokens expire after 1 hour (Better Auth default). Single-use — deleted
+    // on first successful reset. revokeSessionsOnPasswordReset invalidates all
+    // existing sessions so a hijacked account is secured immediately.
+    revokeSessionsOnPasswordReset: true,
+    sendResetPassword: async ({ user, url }) => {
+      // Fire-and-forget: Better Auth's timing-attack mitigation requires that
+      // the response is returned before the email dispatch completes. We void
+      // the promise so the function returns synchronously; the email is sent
+      // in the background. The backgroundTasks.handler is not configured here
+      // because Vercel's serverless execution keeps the function alive long
+      // enough for a single sendEmail call (< 300 ms typical SMTP).
+      void sendEmail({
+        to: user.email,
+        ...resetPasswordEmailTemplate({ resetUrl: url, email: user.email }),
+      });
+    },
   },
 
   // ---------------------------------------------------------------------------

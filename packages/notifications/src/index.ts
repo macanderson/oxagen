@@ -25,6 +25,8 @@ export type {
 export { createNotification } from "./notifications/create-notification";
 export { notifyOrgManagers } from "./notifications/notify-org-managers";
 export { reauthEmailTemplate } from "./notifications/email-templates";
+export { resetPasswordEmailTemplate } from "./notifications/reset-password-email-template";
+export type { ResetPasswordEmailTemplateInput } from "./notifications/reset-password-email-template";
 export type {
   NotificationKind,
   NotificationRow,

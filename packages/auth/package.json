@@ -21,6 +21,7 @@
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/config": "workspace:*",
+    "@oxagen/notifications": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "drizzle-orm": "0.45.2"

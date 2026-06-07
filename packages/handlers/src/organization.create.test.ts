@@ -254,4 +254,205 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
       }),
     );
   });
+
+  // ── billing profile branch (lines 94–113) ───────────────────────────────
+
+  it("inserts a billing profile row when billingEmail is provided", async () => {
+    // The third tx.insert call (after org + orgUsers) is the billing profile.
+    // Track which insert is which by call count.
+    const billingProfileInsertValues: Record<string, unknown>[] = [];
+
+    mocks.withSystemDbFn.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        let insertCount = 0;
+        const tx = {
+          query: {
+            organizations: { findFirst: mocks.orgFindFirst },
+          },
+          insert: (table: unknown): unknown => {
+            insertCount++;
+            if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
+            if (insertCount === 2) return mocks.txInsertOrgUsers(table) as unknown;
+            // Third insert: billing profile
+            return {
+              values: (v: Record<string, unknown>) => {
+                billingProfileInsertValues.push(v);
+                return Promise.resolve();
+              },
+            };
+          },
+        };
+        return fn(tx as unknown as Parameters<typeof fn>[0]);
+      },
+    );
+
+    await organizationCreateHandler(
+      {
+        name: "Billing Corp",
+        slug: "billing-corp",
+        planSlug: "pro",
+        type: "business" as const,
+        billingEmail: "billing@example.com",
+      },
+      CTX,
+    );
+
+    expect(billingProfileInsertValues).toHaveLength(1);
+    expect(billingProfileInsertValues[0]?.["billingEmail"]).toBe("billing@example.com");
+    expect(billingProfileInsertValues[0]?.["orgId"]).toBe("internal_org_id");
+  });
+
+  it("inserts a billing profile with US address — region and country uppercased", async () => {
+    const billingProfileInsertValues: Record<string, unknown>[] = [];
+
+    mocks.withSystemDbFn.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        let insertCount = 0;
+        const tx = {
+          query: {
+            organizations: { findFirst: mocks.orgFindFirst },
+          },
+          insert: (table: unknown): unknown => {
+            insertCount++;
+            if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
+            if (insertCount === 2) return mocks.txInsertOrgUsers(table) as unknown;
+            return {
+              values: (v: Record<string, unknown>) => {
+                billingProfileInsertValues.push(v);
+                return Promise.resolve();
+              },
+            };
+          },
+        };
+        return fn(tx as unknown as Parameters<typeof fn>[0]);
+      },
+    );
+
+    await organizationCreateHandler(
+      {
+        name: "US Corp",
+        slug: "us-corp",
+        planSlug: "pro",
+        type: "business" as const,
+        billingAddress: {
+          line1: "123 Main St",
+          city: "Austin",
+          region: "tx",
+          postalCode: "78701",
+          country: "us",
+        },
+      },
+      CTX,
+    );
+
+    expect(billingProfileInsertValues).toHaveLength(1);
+    expect(billingProfileInsertValues[0]?.["addressCountry"]).toBe("US");
+    // US region should be uppercased
+    expect(billingProfileInsertValues[0]?.["addressRegion"]).toBe("TX");
+    expect(billingProfileInsertValues[0]?.["addressLine1"]).toBe("123 Main St");
+    expect(billingProfileInsertValues[0]?.["addressCity"]).toBe("Austin");
+  });
+
+  it("inserts a billing profile with non-US address — region left as-is", async () => {
+    const billingProfileInsertValues: Record<string, unknown>[] = [];
+
+    mocks.withSystemDbFn.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        let insertCount = 0;
+        const tx = {
+          query: {
+            organizations: { findFirst: mocks.orgFindFirst },
+          },
+          insert: (table: unknown): unknown => {
+            insertCount++;
+            if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
+            if (insertCount === 2) return mocks.txInsertOrgUsers(table) as unknown;
+            return {
+              values: (v: Record<string, unknown>) => {
+                billingProfileInsertValues.push(v);
+                return Promise.resolve();
+              },
+            };
+          },
+        };
+        return fn(tx as unknown as Parameters<typeof fn>[0]);
+      },
+    );
+
+    await organizationCreateHandler(
+      {
+        name: "French Corp",
+        slug: "french-corp",
+        planSlug: "pro",
+        type: "business" as const,
+        billingAddress: {
+          line1: "12 Rue de Rivoli",
+          city: "Paris",
+          region: "Île-de-France",
+          postalCode: "75001",
+          country: "FR",
+        },
+      },
+      CTX,
+    );
+
+    expect(billingProfileInsertValues).toHaveLength(1);
+    expect(billingProfileInsertValues[0]?.["addressCountry"]).toBe("FR");
+    // Non-US region must NOT be uppercased
+    expect(billingProfileInsertValues[0]?.["addressRegion"]).toBe("Île-de-France");
+  });
+
+  it("skips billing profile insertion when neither billingEmail nor billingAddress is provided", async () => {
+    const billingProfileInsertValues: Record<string, unknown>[] = [];
+    let insertCount = 0;
+
+    mocks.withSystemDbFn.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        const tx = {
+          query: {
+            organizations: { findFirst: mocks.orgFindFirst },
+          },
+          insert: (table: unknown): unknown => {
+            insertCount++;
+            if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
+            if (insertCount === 2) return mocks.txInsertOrgUsers(table) as unknown;
+            // Should not be called for billing profile
+            return {
+              values: (v: Record<string, unknown>) => {
+                billingProfileInsertValues.push(v);
+                return Promise.resolve();
+              },
+            };
+          },
+        };
+        return fn(tx as unknown as Parameters<typeof fn>[0]);
+      },
+    );
+
+    await organizationCreateHandler(
+      { name: "No Billing", slug: "no-billing", planSlug: "free", type: "business" as const },
+      CTX,
+    );
+
+    // No billing profile insert beyond org + orgUsers
+    expect(billingProfileInsertValues).toHaveLength(0);
+  });
+
+  // ── grantFreeCredits error handling (lines 149–155) ─────────────────────
+
+  it("does not throw when grantFreeCredits fails — org creation still succeeds", async () => {
+    mocks.grantFreeCredits.mockRejectedValueOnce(new Error("billing service unavailable"));
+
+    // Should not propagate the billing error
+    const result = await organizationCreateHandler(
+      { name: "Credits Fail", slug: "credits-fail", planSlug: "free", type: "business" as const },
+      CTX,
+    );
+
+    // Org was created successfully despite grantFreeCredits failure
+    expect(result.publicId).toBe("org_pub_1");
+    expect(result.slug).toBe("acme");
+    // grantFreeCredits was called (and failed silently)
+    expect(mocks.grantFreeCredits).toHaveBeenCalledTimes(1);
+  });
 });

@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,7 +50,17 @@ export function LoginForm({ mode = "signin" }: { mode?: "signin" | "signup" }) {
         <Input id="email" name="email" type="email" required autoComplete="email" />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="password">Password</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="password">Password</Label>
+          {mode === "signin" ? (
+            <Link
+              href="/forgot-password"
+              className="text-xs text-muted-foreground hover:underline"
+            >
+              Forgot password?
+            </Link>
+          ) : null}
+        </div>
         <Input
           id="password"
           name="password"

@@ -18,16 +18,20 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   listCapabilities: vi.fn(),
+  withSystemDb: vi.fn(),
 }));
+
+// Default: throw when withSystemDb is called unexpectedly (most tests pass tx directly).
+mocks.withSystemDb.mockImplementation(async (_fn: unknown) => {
+  throw new Error("[test] withSystemDb() should not be called when tx param is provided");
+});
 
 // Column references used by drizzle-orm are mocked as plain strings.
 // All tests pass an explicit tx param — neither db() nor withSystemDb should
 // be called when tx is provided.
 vi.mock("@oxagen/database", () => ({
   db: () => { throw new Error("[test] db() should not be called directly — pass tx param"); },
-  withSystemDb: async (_fn: unknown) => {
-    throw new Error("[test] withSystemDb() should not be called when tx param is provided");
-  },
+  withSystemDb: (fn: unknown): Promise<unknown> => mocks.withSystemDb(fn) as Promise<unknown>,
   schema: {
     roles: {
       id: "roles.id",
@@ -412,5 +416,140 @@ describe("provisionMemberPrincipal()", () => {
     expect(principalId).toBe("prn_already_exists");
     // No insert — select found existing row.
     expect(insertedThisTest).toHaveLength(0);
+  });
+
+  it("uses withSystemDb fallback when no tx is provided (lines 365–366)", async () => {
+    // When no tx param is supplied, provisionMemberPrincipal must open its own
+    // system-bypass transaction via withSystemDb. This test exercises the
+    // `if (tx) { ... } return withSystemDb(...)` branch.
+    let selectCount = 0;
+
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: () => {
+              const idx = selectCount++;
+              if (idx === 0) return Promise.resolve([]); // no existing principal
+              if (idx === 1) {
+                return Promise.resolve([{ displayName: "Fallback User", email: "fallback@example.com" }]);
+              }
+              return Promise.resolve([]);
+            },
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: (_values: Record<string, unknown>) => ({
+          onConflictDoNothing: () => ({
+            returning: () => Promise.resolve([{ id: "prn_fallback" }]),
+          }),
+        }),
+      }),
+    };
+
+    // Allow withSystemDb to call through with the fake db.
+    mocks.withSystemDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => Promise<unknown>) => fn(db),
+    );
+
+    // Call WITHOUT passing tx — forces the withSystemDb code path.
+    const principalId = await provisionMemberPrincipal({
+      orgId: "org_fallback",
+      userId: "usr_fallback",
+      actorUserId: "usr_admin",
+    });
+
+    expect(principalId).toBe("prn_fallback");
+    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-selects principal on lost insert race and returns its id (lines 420–436)", async () => {
+    // Simulates the concurrent-insert race: insert().onConflictDoNothing()
+    // returns an empty array (the conflict handler swallowed the insert),
+    // so the function must fall through to a second SELECT to recover the
+    // winning row's id.
+    let selectCount = 0;
+
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: () => {
+              const idx = selectCount++;
+              if (idx === 0) return Promise.resolve([]); // no existing principal on first check
+              if (idx === 1) {
+                // user display name lookup
+                return Promise.resolve([{ displayName: "Race User", email: "race@example.com" }]);
+              }
+              if (idx === 2) {
+                // re-select after lost race — return the winner's row
+                return Promise.resolve([{ id: "prn_race_winner" }]);
+              }
+              return Promise.resolve([]);
+            },
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: (_values: Record<string, unknown>) => ({
+          onConflictDoNothing: () => ({
+            // Empty array: insert was suppressed by onConflictDoNothing
+            returning: () => Promise.resolve([]),
+          }),
+        }),
+      }),
+    };
+
+    const principalId = await provisionMemberPrincipal({
+      orgId: "org_race",
+      userId: "usr_race",
+      actorUserId: "usr_admin",
+      tx: db as unknown as Parameters<typeof provisionMemberPrincipal>[0]["tx"],
+    });
+
+    // Must return the re-selected row's id (the race winner).
+    expect(principalId).toBe("prn_race_winner");
+  });
+
+  it("throws when re-select after lost insert race returns no row (lines 431–433)", async () => {
+    // Edge case: the winning concurrent insert is rolled back between the
+    // onConflictDoNothing suppression and the re-select. provisionMemberPrincipal
+    // must throw a clear error rather than returning undefined.
+    let selectCount = 0;
+
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: () => {
+              const idx = selectCount++;
+              if (idx === 0) return Promise.resolve([]); // no existing principal
+              if (idx === 1) {
+                return Promise.resolve([{ displayName: "Ghost User", email: "ghost@example.com" }]);
+              }
+              // re-select also returns nothing (winner rolled back)
+              return Promise.resolve([]);
+            },
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: (_values: Record<string, unknown>) => ({
+          onConflictDoNothing: () => ({
+            returning: () => Promise.resolve([]),
+          }),
+        }),
+      }),
+    };
+
+    await expect(
+      provisionMemberPrincipal({
+        orgId: "org_ghost",
+        userId: "usr_ghost",
+        actorUserId: "usr_admin",
+        tx: db as unknown as Parameters<typeof provisionMemberPrincipal>[0]["tx"],
+      }),
+    ).rejects.toThrow("[iam-provision] Failed to upsert member principal for org org_ghost, user usr_ghost");
   });
 });

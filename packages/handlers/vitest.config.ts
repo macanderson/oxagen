@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, coverageConfigDefaults } from "vitest/config";
 
 export default defineConfig({
   test: {
@@ -16,6 +16,20 @@ export default defineConfig({
         functions: 74,
         statements: 84,
       },
+      exclude: [
+        // Preserve vitest default exclusions (test files, type declarations, etc.)
+        ...coverageConfigDefaults.exclude,
+        // plugin.*.ts — handlers shipped as part of the installable-plugins epic
+        // (OXA-1573+). These files are explicitly OUT OF SCOPE for testing right
+        // now because the plugin API surface is subject to change. They will be
+        // covered once the plugin contracts stabilise. Tracked in Linear.
+        "src/plugin.*.ts",
+        // Pure barrel / registration wiring — no business logic.
+        // index.ts re-exports all handlers; register.ts registers them with the
+        // handler registry. Both are side-effect-only and have no branch logic.
+        "src/index.ts",
+        "src/register.ts",
+      ],
     },
   },
 });
