@@ -63,4 +63,7 @@ export const CHAT_COMPONENTS = {
   "video-result": lazy(
     () => import("@/components/chat/registry-components/video-result"),
   ),
+  "api-key-display": lazy(
+    () => import("@/components/api-key-display").then(m => ({ default: m.ApiKeyDisplay })),
+  ),
 } as unknown as Record<string, AnyLazy>;

@@ -154,7 +154,7 @@ export const apiKeyCreateHandler: CapabilityHandler<typeof apiKeyCreate> = async
     "api.key.create: API key created",
   );
 
-  return {
+  const baseOutput = {
     keyId: inserted.id,
     publicId: inserted.publicId,
     name: inserted.name,
@@ -163,4 +163,24 @@ export const apiKeyCreateHandler: CapabilityHandler<typeof apiKeyCreate> = async
     expiresAt: inserted.expiresAt?.toISOString() ?? null,
     createdAt: inserted.createdAt.toISOString(),
   };
+
+  // Include render directive for the app surface to display the key component in chat
+  if (ctx.surface === "app") {
+    return {
+      ...baseOutput,
+      render: {
+        componentId: "api-key-display",
+        props: {
+          keyId: inserted.id,
+          publicId: inserted.publicId,
+          name: inserted.name,
+          rawKey,
+          createdAt: inserted.createdAt.toISOString(),
+          expiresAt: inserted.expiresAt?.toISOString() ?? null,
+        },
+      },
+    };
+  }
+
+  return baseOutput;
 };

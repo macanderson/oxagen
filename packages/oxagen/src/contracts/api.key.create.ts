@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
+// Render directive schema (mirrors RenderDirective in stream-event-types)
+const renderDirectiveSchema = z.object({
+  componentId: z.string(),
+  props: z.record(z.unknown()),
+});
+
 // Create a new API key scoped to the requesting org. The raw key is returned
 // exactly once (on creation) and is never stored in plaintext — only the SHA-256
 // hash and the short prefix are persisted. Callers must save the raw key
@@ -13,7 +19,7 @@ export const apiKeyCreate = registerCapability({
   description:
     "Create a new API key for the org. Returns the raw key once — it is never recoverable after this call. Audited as api_key.created.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["api", "mcp", "unit"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "organization" },
@@ -44,6 +50,9 @@ export const apiKeyCreate = registerCapability({
     rawKey: z.string().describe("The full API key — shown ONCE, never again"),
     expiresAt: z.string().nullable().describe("ISO-8601 expiry or null"),
     createdAt: z.string().describe("ISO-8601 creation timestamp"),
+    render: renderDirectiveSchema
+      .optional()
+      .describe("Render directive for displaying the key in the chat UI (agent surface only)"),
   }),
 });
 
