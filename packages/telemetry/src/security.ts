@@ -36,52 +36,20 @@
 //
 // Do NOT wrap the AuditInsertFn or makeSecurityEventInserter in withTenantDb.
 //
-// Shared type: SecurityEventType and SECURITY_EVENT_TYPES also live in
-// packages/database/src/schema/security.ts. They are re-exported here so
-// callers that only depend on @oxagen/telemetry don't need to import from
-// @oxagen/database as well.
+// Shared taxonomy: SECURITY_EVENT_TYPES, SecurityEventType, and SecurityOutcome
+// are owned by @oxagen/compliance (the single source of truth). They are
+// re-exported here so callers that only depend on @oxagen/telemetry don't need
+// to import from @oxagen/compliance as well. @oxagen/database derives its CHECK
+// constraint from the same source, so the emit type and the DB can never drift.
 
-// ---------------------------------------------------------------------------
-// SecurityEventType — typed const-union (mirror of the DB CHECK constraint).
-// Keep in sync with database/src/schema/security.ts and the migration SQL.
-// ---------------------------------------------------------------------------
+import {
+  SECURITY_EVENT_TYPES,
+  type SecurityEventType,
+  type SecurityOutcome,
+} from "@oxagen/compliance";
 
-export const SECURITY_EVENT_TYPES = [
-  // Auth lifecycle
-  "auth.sign_in",
-  "auth.sign_in_failed",
-  "auth.sign_out",
-  "auth.token_refreshed",
-  "auth.password_changed",
-  "auth.email_verified",
-  // API key lifecycle
-  "api_key.created",
-  "api_key.revoked",
-  "api_key.used",
-  // Billing mutations
-  "billing.access_denied",
-  "billing.auto_reload_updated",
-  "billing.credits_purchased",
-  "billing.payment_method_added",
-  "billing.payment_method_default_changed",
-  "billing.payment_method_removed",
-  "billing.plan_changed",
-  "billing.seats_changed",
-  "billing.subscription_canceled",
-  "billing.subscription_reactivated",
-  // Capability authz
-  "capability.invoke_allowed",
-  "capability.invoke_denied",
-  "capability.invoke_error",
-  // Admin / org management
-  "org.member_invited",
-  "org.member_removed",
-  "org.role_changed",
-] as const;
-
-export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
-
-export type SecurityOutcome = "allow" | "deny" | "error" | "success";
+export { SECURITY_EVENT_TYPES };
+export type { SecurityEventType, SecurityOutcome };
 
 // ---------------------------------------------------------------------------
 // SecurityEventInput — the caller-facing shape. Fields mirror the table

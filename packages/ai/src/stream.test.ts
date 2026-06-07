@@ -41,7 +41,7 @@ vi.mock("@oxagen/billing", () => ({
 }));
 vi.mock("./models", () => ({ defaultModel: mocks.defaultModel, modelIdOf: (m: { modelId: string } | string) => (typeof m === "string" ? m : m.modelId) }));
 
-import { streamAgentReply } from "./stream";
+import { streamAgentReply, reasoningRequestConfig } from "./stream";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -105,10 +105,14 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     expect(arg.providerOptions).toBeUndefined();
   });
 
-  it("maps effort to the OpenAI reasoningEffort provider option", () => {
+  it("falls back to the openai namespace for a model id without a vendor prefix", () => {
+    // defaultModel() returns { modelId: "claude-sonnet-4-6" } (no "/" prefix)
+    // which lands in the default/back-compat branch.
     streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY, effort: "high" });
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(arg.providerOptions).toEqual({ openai: { reasoningEffort: "high" } });
+    // default branch does NOT lock temperature
+    expect(arg.temperature).toBe(0.7);
   });
 
   it("uses defaultModel() when no model arg is given", () => {
@@ -250,5 +254,147 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     const row = rows[0] as Record<string, unknown>;
     expect(row.input_tokens).toBe(0);
     expect(row.output_tokens).toBe(0);
+  });
+
+  it("omits temperature entirely when an anthropic-prefixed model is used with effort", () => {
+    // Override the modelIdOf mock to return a prefixed id so the anthropic
+    // branch fires and temperatureLocked = true.
+    const anthropicModel = { modelId: "anthropic/claude-opus-4.8" };
+    streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+      effort: "medium",
+      model: anthropicModel as Parameters<typeof streamAgentReply>[0]["model"],
+    });
+    const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    // temperature must be absent — Anthropic thinking rejects it
+    expect("temperature" in arg).toBe(false);
+    // Claude 4.x uses adaptive thinking + output_config.effort (the older
+    // type:"enabled"+budgetTokens shape is rejected by these models).
+    expect(arg.providerOptions).toEqual({
+      anthropic: { thinking: { type: "adaptive" }, outputConfig: { effort: "medium" } },
+    });
+  });
+
+  it("omits temperature entirely when an openai-prefixed model is used with effort", () => {
+    const openaiModel = { modelId: "openai/gpt-5.2" };
+    streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+      effort: "low",
+      model: openaiModel as Parameters<typeof streamAgentReply>[0]["model"],
+    });
+    const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect("temperature" in arg).toBe(false);
+    expect(arg.providerOptions).toEqual({
+      openai: { reasoningEffort: "low", reasoningSummary: "auto" },
+    });
+  });
+});
+
+// ── reasoningRequestConfig unit tests ────────────────────────────────────────
+
+describe("reasoningRequestConfig (@oxagen/ai)", () => {
+  it("returns no providerOptions and temperatureLocked=false when effort is undefined", () => {
+    const result = reasoningRequestConfig("anthropic/claude-opus-4.8", undefined);
+    expect(result.providerOptions).toBeUndefined();
+    expect(result.temperatureLocked).toBe(false);
+  });
+
+  describe("anthropic vendor", () => {
+    it("sets adaptive thinking + output_config.effort and locks temperature", () => {
+      const result = reasoningRequestConfig("anthropic/claude-sonnet-4.6", "medium");
+      expect(result.temperatureLocked).toBe(true);
+      expect(result.providerOptions).toEqual({
+        anthropic: { thinking: { type: "adaptive" }, outputConfig: { effort: "medium" } },
+      });
+    });
+
+    it("passes the effort level through to outputConfig (low)", () => {
+      const result = reasoningRequestConfig("anthropic/claude-opus-4.8", "low");
+      const opts = result.providerOptions?.anthropic as {
+        thinking: { type: string };
+        outputConfig: { effort: string };
+      };
+      expect(opts.thinking.type).toBe("adaptive");
+      expect(opts.outputConfig.effort).toBe("low");
+    });
+
+    it("passes the effort level through to outputConfig (high)", () => {
+      const result = reasoningRequestConfig("anthropic/claude-opus-4.8", "high");
+      const opts = result.providerOptions?.anthropic as { outputConfig: { effort: string } };
+      expect(opts.outputConfig.effort).toBe("high");
+    });
+  });
+
+  describe("openai vendor", () => {
+    it("sets reasoningEffort + reasoningSummary and locks temperature", () => {
+      const result = reasoningRequestConfig("openai/gpt-5.2", "high");
+      expect(result.temperatureLocked).toBe(true);
+      expect(result.providerOptions).toEqual({
+        openai: { reasoningEffort: "high", reasoningSummary: "auto" },
+      });
+    });
+
+    it("passes through each effort level unchanged", () => {
+      for (const effort of ["low", "medium", "high"] as const) {
+        const result = reasoningRequestConfig("openai/o4", effort);
+        expect((result.providerOptions?.openai as { reasoningEffort: string }).reasoningEffort).toBe(effort);
+      }
+    });
+  });
+
+  describe("google vendor", () => {
+    it("sets thinkingConfig with includeThoughts and correct budget, does NOT lock temperature", () => {
+      const result = reasoningRequestConfig("google/gemini-3-pro", "low");
+      expect(result.temperatureLocked).toBe(false);
+      expect(result.providerOptions).toEqual({
+        google: {
+          thinkingConfig: { includeThoughts: true, thinkingBudget: 4096 },
+        },
+      });
+    });
+
+    it("maps high effort to 12288 budget tokens", () => {
+      const result = reasoningRequestConfig("google/gemini-3-pro", "high");
+      const cfg = (result.providerOptions?.google as { thinkingConfig: { thinkingBudget: number } }).thinkingConfig;
+      expect(cfg.thinkingBudget).toBe(12288);
+    });
+  });
+
+  describe("xai vendor", () => {
+    it("sets xai reasoningEffort and does NOT lock temperature", () => {
+      const result = reasoningRequestConfig("xai/grok-4", "medium");
+      expect(result.temperatureLocked).toBe(false);
+      expect(result.providerOptions).toEqual({
+        xai: { reasoningEffort: "medium" },
+      });
+    });
+  });
+
+  describe("deepseek vendor", () => {
+    it("returns no providerOptions (native streaming) and does NOT lock temperature", () => {
+      const result = reasoningRequestConfig("deepseek/deepseek-v3.2", "high");
+      expect(result.providerOptions).toBeUndefined();
+      expect(result.temperatureLocked).toBe(false);
+    });
+  });
+
+  describe("unknown/unrecognised vendor (back-compat)", () => {
+    it("falls back to openai namespace without locking temperature", () => {
+      const result = reasoningRequestConfig("somevendor/some-model", "medium");
+      expect(result.temperatureLocked).toBe(false);
+      expect(result.providerOptions).toEqual({
+        openai: { reasoningEffort: "medium" },
+      });
+    });
+
+    it("falls back to openai namespace for a plain id with no slash", () => {
+      const result = reasoningRequestConfig("some-plain-model-slug", "low");
+      expect(result.temperatureLocked).toBe(false);
+      expect(result.providerOptions).toEqual({
+        openai: { reasoningEffort: "low" },
+      });
+    });
   });
 });

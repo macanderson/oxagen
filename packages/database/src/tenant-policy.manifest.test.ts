@@ -8,6 +8,7 @@ describe("tenant policy manifest", () => {
       "workspace_nullable",
       "org_only",
       "workspace_only",
+      "org_or_global",
     ];
     for (const entry of POLICY_MANIFEST) {
       expect(classes).toContain(entry.policyClass);

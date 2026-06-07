@@ -14,6 +14,8 @@ import { MemoryCard } from "./memory-card";
 import { SubagentFanout } from "./subagent-fanout";
 import { CHAT_COMPONENTS, logUnknownComponent } from "./chat-component-registry";
 import { StreamingText } from "./streaming-text";
+import { ReasoningCard } from "./reasoning-card";
+import { ActivityTimeline, TimelineItem } from "./activity-timeline";
 import { useToolStream } from "./use-tool-stream";
 import type { ChatShellProps } from "./chat-shell";
 import type { StreamEvent } from "./stream-event-types";
@@ -70,11 +72,14 @@ export function ChatShellClient({
     plans,
     pendingApprovals,
     toolCalls,
+    reasonings,
+    steps,
+    textSegments,
     memoryRecalls,
     memoryWrites,
     activeFanouts,
     components: liveComponents,
-    messages: liveMessages,
+    order,
     turnUsage,
     consume,
     reset,
@@ -290,33 +295,237 @@ export function ChatShellClient({
     },
   };
 
-  // Partition live tool calls: agent.code.execute renders as CodeExecuteCard;
-  // all others render as ToolCallCard.
-  const codeExecuteToolCalls = Object.values(toolCalls).filter(
-    (tc) => tc.capability === "agent.code.execute",
-  );
-  const genericToolCalls = Object.values(toolCalls).filter(
-    (tc) => tc.capability !== "agent.code.execute",
-  );
+  // The live turn renders as a single ORDERED timeline (the chain of
+  // thought/action): the reducer records every entity's first appearance in
+  // `order`, and we walk it here so reasoning → tool → text interleave in true
+  // stream order rather than in fixed per-category groups.
+  const stepCount = Object.keys(steps).length;
+  const hasLiveContent = isStreaming || order.length > 0;
 
-  const livePlans = Object.values(plans);
-  const liveApprovals = Object.values(pendingApprovals);
-  const liveMemoryRecalls = Object.values(memoryRecalls);
-  const liveMemoryWritesList = Object.values(memoryWrites);
-  const liveFanouts = Object.values(activeFanouts);
-  const liveTextMessages = Object.values(liveMessages);
-  const liveComponentList = Object.values(liveComponents);
-  const hasLiveContent =
-    isStreaming ||
-    livePlans.length > 0 ||
-    liveApprovals.length > 0 ||
-    genericToolCalls.length > 0 ||
-    codeExecuteToolCalls.length > 0 ||
-    liveMemoryRecalls.length > 0 ||
-    liveMemoryWritesList.length > 0 ||
-    liveFanouts.length > 0 ||
-    liveTextMessages.length > 0 ||
-    liveComponentList.length > 0;
+  // Resolve one ordered timeline key (`<kind>:<id>`) to its card plus the
+  // tone/active flags the TimelineItem rail uses. Returns null when the entity
+  // isn't renderable yet (e.g. an empty text segment).
+  const renderEntry = (
+    key: string,
+  ): { node: React.ReactNode; tone: TimelineTone; active: boolean } | null => {
+    const sep = key.indexOf(":");
+    const kind = key.slice(0, sep);
+    const id = key.slice(sep + 1);
+    switch (kind) {
+      case "reasoning": {
+        const r = reasonings[id];
+        if (!r) return null;
+        return {
+          node: (
+            <ReasoningCard text={r.text} status={r.status} durationMs={r.durationMs} />
+          ),
+          tone: r.status === "thinking" ? "thinking" : "done",
+          active: r.status === "thinking",
+        };
+      }
+      case "step": {
+        // Single-step turns add no information — skip the marker noise.
+        if (stepCount <= 1) return null;
+        const s = steps[Number(id)];
+        if (!s) return null;
+        return {
+          node: <StepMarker index={s.stepIndex} status={s.status} />,
+          tone: s.status === "running" ? "running" : "done",
+          active: s.status === "running",
+        };
+      }
+      case "tool": {
+        const tc = toolCalls[id];
+        if (!tc) return null;
+        const tone: TimelineTone =
+          tc.status === "completed"
+            ? "done"
+            : tc.status === "failed"
+              ? "failed"
+              : "running";
+        const active = tc.status === "pending" || tc.status === "running";
+        if (tc.capability === "agent.code.execute") {
+          const preview = (tc.inputPreview as Record<string, unknown> | null) ?? {};
+          const language = typeof preview.language === "string" ? preview.language : "node";
+          const code = typeof preview.code === "string" ? preview.code : "";
+          const outputRecord = (tc.output as Record<string, unknown> | null) ?? {};
+          const exitCode =
+            typeof outputRecord.exitCode === "number" ? outputRecord.exitCode : undefined;
+          return {
+            node: (
+              <CodeExecuteCard
+                toolCallId={tc.toolCallId}
+                language={language}
+                code={code}
+                status={tc.status}
+                stdout={tc.stdout}
+                stderr={tc.stderr}
+                exitCode={exitCode}
+                durationMs={tc.durationMs}
+              />
+            ),
+            tone,
+            active,
+          };
+        }
+        return {
+          node: (
+            <ToolCallCard
+              toolCallId={tc.toolCallId}
+              capability={tc.capability}
+              // While args are still streaming, show the partial JSON; once the
+              // parsed input lands we show the structured preview.
+              inputPreview={
+                tc.status === "pending" ? tc.partialInput ?? "" : tc.inputPreview
+              }
+              riskLevel={tc.riskLevel}
+              status={tc.status}
+              output={tc.output}
+              stdout={tc.stdout}
+              stderr={tc.stderr}
+              errorReason={tc.errorReason}
+              durationMs={tc.durationMs}
+              // Auto-expand the in-flight call so the user watches the agent
+              // compose its arguments and stream output live.
+              defaultOpen={active}
+            />
+          ),
+          tone,
+          active,
+        };
+      }
+      case "text": {
+        const seg = textSegments[key];
+        if (!seg || !seg.text) return null;
+        return {
+          node: (
+            <StreamingText text={seg.text} isStreaming={isStreaming} className="text-sm" />
+          ),
+          tone: "idle",
+          active: false,
+        };
+      }
+      case "plan": {
+        const plan = plans[id];
+        if (!plan) return null;
+        return {
+          node: (
+            <PlanCard
+              planId={plan.planId}
+              title={plan.title}
+              steps={plan.steps}
+              rationale={plan.rationale}
+              status={plan.status}
+              agentCapabilities={agentCapabilities}
+              onResolve={resolvePlanAction}
+            />
+          ),
+          tone: plan.status === "pending" ? "running" : "done",
+          active: plan.status === "pending",
+        };
+      }
+      case "approval": {
+        const a = pendingApprovals[id];
+        if (!a) return null;
+        return {
+          node: (
+            <ApprovalCard
+              approvalId={a.approvalId}
+              capability={a.capability}
+              inputPreview={a.inputPreview}
+              riskLevel={a.riskLevel}
+              expiresAt={a.expiresAt}
+              resolution={a.resolution}
+              onResolved={wrappedResolveApproval}
+            />
+          ),
+          tone: a.resolution ? "done" : "running",
+          active: a.resolution === undefined,
+        };
+      }
+      case "memory": {
+        const mr = memoryRecalls[id];
+        if (!mr) return null;
+        return {
+          node: <MemoryCard queryId={mr.queryId} memories={mr.memories} />,
+          tone: "done",
+          active: false,
+        };
+      }
+      case "memwrite": {
+        const w = memoryWrites[id];
+        if (!w) return null;
+        return {
+          node: (
+            <MemoryCard
+              queryId={w.memoryId}
+              memories={[
+                {
+                  id: w.memoryId,
+                  lesson: `Memory written → ${w.nodeRef}`,
+                  weight: w.weight,
+                  score: 1,
+                  nodeRef: w.nodeRef,
+                },
+              ]}
+            />
+          ),
+          tone: "done",
+          active: false,
+        };
+      }
+      case "fanout": {
+        const f = activeFanouts[id];
+        if (!f) return null;
+        return {
+          node: (
+            <SubagentFanout
+              fanoutId={f.fanoutId}
+              parentMessageId={f.parentMessageId}
+              subagents={f.children}
+              status={f.status}
+              results={f.results}
+              onSelectChild={callbacks.onNavigateToChild}
+            />
+          ),
+          tone:
+            f.status === "completed"
+              ? "done"
+              : f.status === "running"
+                ? "running"
+                : "failed",
+          active: f.status === "running",
+        };
+      }
+      case "component": {
+        const lc = liveComponents[id];
+        if (!lc) return null;
+        const Component = CHAT_COMPONENTS[lc.componentId];
+        if (!Component) {
+          logUnknownComponent(lc.componentId);
+          return null;
+        }
+        return {
+          node: (
+            <Suspense fallback={<ComponentSkeleton />}>
+              <Component {...lc.props} />
+            </Suspense>
+          ),
+          tone: "done",
+          active: false,
+        };
+      }
+      default:
+        return null;
+    }
+  };
+
+  const timelineEntries = order
+    .map((key) => ({ key, rendered: renderEntry(key) }))
+    .filter(
+      (e): e is { key: string; rendered: NonNullable<ReturnType<typeof renderEntry>> } =>
+        e.rendered !== null,
+    );
 
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4">
@@ -329,140 +538,29 @@ export function ChatShellClient({
         ) : (
           <div className="flex flex-col gap-4">
             <MessageTree messages={messages} callbacks={callbacks} />
-            {/* Live turn: stream events rendered before the RSC revalidate. */}
+            {/* Live turn: the ordered chain of thought/action, rendered as a
+                connected timeline before the RSC revalidate replaces it with
+                the persisted message. */}
             {hasLiveContent ? (
-              <div className="flex flex-col gap-2" data-live-turn>
-                {livePlans.map((plan) => (
-                  <PlanCard
-                    key={plan.planId}
-                    planId={plan.planId}
-                    title={plan.title}
-                    steps={plan.steps}
-                    rationale={plan.rationale}
-                    status={plan.status}
-                    agentCapabilities={agentCapabilities}
-                    onResolve={resolvePlanAction}
-                  />
-                ))}
-                {liveApprovals.map((approval) => (
-                  <ApprovalCard
-                    key={approval.approvalId}
-                    approvalId={approval.approvalId}
-                    capability={approval.capability}
-                    inputPreview={approval.inputPreview}
-                    riskLevel={approval.riskLevel}
-                    expiresAt={approval.expiresAt}
-                    resolution={approval.resolution}
-                    onResolved={wrappedResolveApproval}
-                  />
-                ))}
-                {genericToolCalls.map((tc) => (
-                  <ToolCallCard
-                    key={tc.toolCallId}
-                    toolCallId={tc.toolCallId}
-                    capability={tc.capability}
-                    inputPreview={tc.inputPreview}
-                    riskLevel={tc.riskLevel}
-                    status={tc.status}
-                    output={tc.output}
-                    stdout={tc.stdout}
-                    stderr={tc.stderr}
-                    errorReason={tc.errorReason}
-                    durationMs={tc.durationMs}
-                  />
-                ))}
-                {liveMemoryRecalls.map((mr) => (
-                  <MemoryCard
-                    key={mr.queryId}
-                    queryId={mr.queryId}
-                    memories={mr.memories}
-                  />
-                ))}
-                {codeExecuteToolCalls.map((tc) => {
-                  const preview = tc.inputPreview as Record<string, unknown> | null ?? {};
-                  const language = typeof preview.language === "string" ? preview.language : "node";
-                  const code = typeof preview.code === "string" ? preview.code : "";
-                  const outputRecord = tc.output as Record<string, unknown> | null ?? {};
-                  const exitCode = typeof outputRecord.exitCode === "number" ? outputRecord.exitCode : undefined;
-                  return (
-                    <CodeExecuteCard
-                      key={tc.toolCallId}
-                      toolCallId={tc.toolCallId}
-                      language={language}
-                      code={code}
-                      status={tc.status}
-                      stdout={tc.stdout}
-                      stderr={tc.stderr}
-                      exitCode={exitCode}
-                      durationMs={tc.durationMs}
-                    />
-                  );
-                })}
-                {liveFanouts.map((fanout) => (
-                  <SubagentFanout
-                    key={fanout.fanoutId}
-                    fanoutId={fanout.fanoutId}
-                    parentMessageId={fanout.parentMessageId}
-                    subagents={fanout.children}
-                    status={fanout.status}
-                    results={fanout.results}
-                    onSelectChild={callbacks.onNavigateToChild}
-                  />
-                ))}
-                {liveMemoryWritesList.map((write) => (
-                  <MemoryCard
-                    key={write.memoryId}
-                    queryId={write.memoryId}
-                    memories={[
-                      {
-                        id: write.memoryId,
-                        lesson: `Memory written → ${write.nodeRef}`,
-                        weight: write.weight,
-                        score: 1,
-                        nodeRef: write.nodeRef,
-                      },
-                    ]}
-                  />
-                ))}
-                {liveTextMessages.map((msg) =>
-                  msg.text ? (
-                    <StreamingText
-                      key={msg.messageId}
-                      text={msg.text}
-                      isStreaming={isStreaming}
-                      className="text-sm"
-                    />
-                  ) : null,
-                )}
-                {liveComponentList.map((lc) => {
-                  const Component = CHAT_COMPONENTS[lc.componentId];
-                  if (!Component) {
-                    logUnknownComponent(lc.componentId);
-                    return null;
-                  }
-                  return (
-                    <Suspense
-                      key={lc.toolCallId}
-                      fallback={
-                        <div
-                          className={cn(
-                            "rounded-xl border bg-card px-4 py-3",
-                            "animate-pulse space-y-2",
-                          )}
-                          aria-busy="true"
-                          aria-label="Loading component"
-                        >
-                          <div className="h-3 w-2/3 rounded bg-muted-foreground/20" />
-                          <div className="h-3 w-1/2 rounded bg-muted-foreground/15" />
-                        </div>
+              <div data-live-turn>
+                <ActivityTimeline>
+                  {timelineEntries.map((entry, i) => (
+                    <TimelineItem
+                      key={entry.key}
+                      tone={entry.rendered.tone}
+                      // The pulsing ring only animates an in-flight node while the
+                      // turn is actually streaming.
+                      isActive={entry.rendered.active && isStreaming}
+                      isLast={
+                        i === timelineEntries.length - 1 && turnUsage === undefined
                       }
                     >
-                      <Component {...lc.props} />
-                    </Suspense>
-                  );
-                })}
+                      {entry.rendered.node}
+                    </TimelineItem>
+                  ))}
+                </ActivityTimeline>
                 {turnUsage !== undefined ? (
-                  <div className="text-xs text-muted-foreground text-right tabular-nums">
+                  <div className="mt-1 text-right text-xs tabular-nums text-muted-foreground">
                     {turnUsage.totalTokens.toLocaleString()} tokens
                     {turnUsage.creditsCharged !== undefined
                       ? ` · ${turnUsage.creditsCharged} credit${turnUsage.creditsCharged === 1 ? "" : "s"}`
@@ -486,6 +584,46 @@ export function ChatShellClient({
         onInterrupt={handleInterrupt}
         initialModelState={initialModelState}
       />
+    </div>
+  );
+}
+
+// Tone of a timeline node's rail dot — mirrors TimelineItem's `tone` prop.
+type TimelineTone = "thinking" | "running" | "done" | "failed" | "idle";
+
+// Subtle multi-step boundary marker, shown only when a turn has >1 step. Reads
+// as a quiet divider in the timeline rather than a card.
+function StepMarker({
+  index,
+  status,
+}: {
+  index: number;
+  status: "running" | "done";
+}) {
+  return (
+    <div
+      className="flex items-center gap-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70"
+      data-component="step-marker"
+      data-status={status}
+    >
+      <span>Step {index + 1}</span>
+      {status === "running" ? (
+        <span className="text-[#7182ff]">·  working</span>
+      ) : null}
+    </div>
+  );
+}
+
+// Shared loading skeleton for a lazily-rendered registry component.
+function ComponentSkeleton() {
+  return (
+    <div
+      className={cn("rounded-xl border bg-card px-4 py-3", "animate-pulse space-y-2")}
+      aria-busy="true"
+      aria-label="Loading component"
+    >
+      <div className="h-3 w-2/3 rounded bg-muted-foreground/20" />
+      <div className="h-3 w-1/2 rounded bg-muted-foreground/15" />
     </div>
   );
 }

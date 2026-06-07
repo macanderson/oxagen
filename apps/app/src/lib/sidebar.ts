@@ -11,14 +11,11 @@
 import {
   Activity,
   ArrowLeft,
-  Bell,
   BookOpen,
   Building2,
   CreditCard,
-  EyeOff,
   KeyRound,
   LayoutGrid,
-  LifeBuoy,
   Lock,
   MessageSquare,
   Settings,
@@ -256,27 +253,6 @@ const accountConfig: SidebarConfig = {
       href: () => account.security(),
       group: "primary",
     },
-    {
-      id: "cases",
-      label: "Cases",
-      icon: LifeBuoy,
-      href: () => account.cases(),
-      group: "primary",
-    },
-    {
-      id: "notifications",
-      label: "Notifications",
-      icon: Bell,
-      href: () => account.notifications(),
-      group: "primary",
-    },
-    {
-      id: "privacy",
-      label: "Privacy",
-      icon: EyeOff,
-      href: () => account.privacy(),
-      group: "primary",
-    },
   ],
 };
 
@@ -489,9 +465,6 @@ export function enumerateNavTargets(
   targets.push({ label: "Profile", href: account.profile(), parent: "profile" });
   targets.push({ label: "Preferences", href: account.preferences(), parent: "preferences" });
   targets.push({ label: "Security", href: account.security(), parent: "security" });
-  targets.push({ label: "Cases", href: account.cases(), parent: "cases" });
-  targets.push({ label: "Notifications", href: account.notifications(), parent: "notifications" });
-  targets.push({ label: "Privacy", href: account.privacy(), parent: "privacy" });
 
   return targets;
 }

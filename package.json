@@ -27,6 +27,7 @@
     "db:seed-iam": "tsx --env-file-if-exists=.env.local tools/scripts/seed-iam-defaults.ts",
     "check:manifest": "node tools/scripts/check_manifest.mjs",
     "check:manifest:tickets": "tsx --env-file-if-exists=.env.local tools/scripts/ensure-manifest-tickets.ts",
+    "e2e:failure-ticket": "tsx --env-file-if-exists=.env.local tools/scripts/ensure-e2e-failure-ticket.ts",
     "check:contracts": "node tools/scripts/check-contracts.mjs",
     "env:check": "tsx tools/scripts/env-check.ts",
     "gate": "turbo run lint typecheck test:unit build --filter=...[origin/main] && pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations",

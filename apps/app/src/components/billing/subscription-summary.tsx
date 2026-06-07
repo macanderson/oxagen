@@ -356,13 +356,22 @@ export function SubscriptionSummary({
   onChangeCard,
 }: SubscriptionSummaryProps) {
   if (!subscription) {
+    // No paid subscription ⇒ the org is on the Free plan (the baseline tier),
+    // not "nothing". Present it as the current plan so the billing page always
+    // reflects an active tier.
     return (
       <Card>
         <CardHeader>
-          <CardTitle>No active subscription</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            Current plan
+            <Badge variant="muted">Free</Badge>
+          </CardTitle>
         </CardHeader>
         <CardPanel>
-          <p className="text-sm text-muted-foreground">Choose a plan below to get started.</p>
+          <p className="text-sm text-muted-foreground">
+            You&rsquo;re on the <span className="font-medium text-foreground">Free</span> plan.
+            Upgrade below for more credits, seats, and capabilities.
+          </p>
         </CardPanel>
       </Card>
     );

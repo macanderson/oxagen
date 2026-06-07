@@ -728,6 +728,18 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0)
 
+  packages/compliance:
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0))
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0)
+
   packages/config:
     dependencies:
       zod:
@@ -774,6 +786,9 @@ importers:
 
   packages/database:
     dependencies:
+      '@oxagen/compliance':
+        specifier: workspace:*
+        version: link:../compliance
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
@@ -1169,6 +1184,9 @@ importers:
       '@clickhouse/client':
         specifier: 1.19.0
         version: 1.19.0
+      '@oxagen/compliance':
+        specifier: workspace:*
+        version: link:../compliance
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
@@ -13468,7 +13486,7 @@ snapshots:
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
-      eslint-plugin-import: 2.32.0(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-react: 7.37.5(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-react-hooks: 7.1.1(eslint@9.39.4(jiti@2.7.0))
@@ -13501,7 +13519,7 @@ snapshots:
       tinyglobby: 0.2.17
       unrs-resolver: 1.12.2
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
@@ -13515,7 +13533,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
+  eslint-plugin-import@2.32.0(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9

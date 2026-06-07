@@ -7,6 +7,7 @@ import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
 // Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { planLabelFrom } from "@/lib/plan-label";
+import { isLowBalance } from "@oxagen/billing";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageContextProvider } from "@/lib/page-context";
 import { AskDrawer } from "@/components/shell/ask/ask-drawer";
@@ -35,7 +36,7 @@ export default async function OrgLayout({
   // unknown org. This is the single enforcement point for all [orgSlug] routes.
   await assertOrgMember(org.id, session.user.id);
 
-  const [orgRows, workspacesRows] = await Promise.all([
+  const [orgRows, workspacesRows, lowBalance] = await Promise.all([
     // Cross-tenant read: the user's full org list (pre-scope, identity resolution).
     // withSystemDb bypasses RLS deliberately — OXA-1515.
     withSystemDb((tx) =>
@@ -75,6 +76,12 @@ export default async function OrgLayout({
             .where(eq(schema.workspaces.orgId, org.id)),
         ),
     ),
+    // Always-visible credit balance for the shell header. credit_lots is org_only
+    // under RLS → tenant scope. Degrade to null (pill hidden) on any failure so a
+    // billing read never blocks the whole app shell from rendering. — OXA-1515
+    runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
+      isLowBalance(org.id),
+    ).catch(() => null),
   ]);
 
   // Shape the org rows for the picker: a flat { …identity, avatarUrl, planLabel }.
@@ -105,6 +112,11 @@ export default async function OrgLayout({
         availableOrgs={availableOrgs}
         availableWorkspaces={workspacesRows}
         user={user}
+        balance={
+          lowBalance
+            ? { cents: lowBalance.balanceCents, low: lowBalance.low }
+            : null
+        }
       >
         {children}
       </AppShell>

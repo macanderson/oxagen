@@ -8,6 +8,8 @@ import { PlanCard, type AgentCapability } from "./plan-card";
 import { SubagentFanout } from "./subagent-fanout";
 import { MemoryCard } from "./memory-card";
 import { CodeExecuteCard } from "./code-execute-card";
+import { ReasoningCard } from "./reasoning-card";
+import { ActivityTimeline, TimelineItem, type TimelineItemProps } from "./activity-timeline";
 import { CHAT_COMPONENTS, logUnknownComponent } from "./chat-component-registry";
 import type { AssistantContentBlock } from "./stream-event-types";
 import { MarkdownMessage } from "./markdown-message";
@@ -50,6 +52,11 @@ export function MessageBubble({
   const isUser = message.role === "user";
   const blocks = message.contentBlocks;
   const hasBlocks = Array.isArray(blocks) && blocks.length > 0;
+  // Render as a connected timeline (matching the live turn) only when the
+  // message actually has a chain — reasoning, a tool call, or several blocks.
+  // A lone text block renders plainly, without a rail.
+  const useTimeline =
+    hasBlocks && (blocks.length > 1 || blocks.some((b) => b.type !== "text"));
 
   return (
     <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
@@ -65,9 +72,19 @@ export function MessageBubble({
         </div>
 
         {hasBlocks ? (
-          <div className="space-y-2">
-            {blocks!.map((block, idx) => renderBlock(block, idx, callbacks))}
-          </div>
+          useTimeline ? (
+            <ActivityTimeline>
+              {blocks!.map((block, idx) => (
+                <TimelineItem key={blockKey(block, idx)} tone={blockTone(block)}>
+                  {renderBlock(block, idx, callbacks)}
+                </TimelineItem>
+              ))}
+            </ActivityTimeline>
+          ) : (
+            <div className="space-y-2">
+              {blocks!.map((block, idx) => renderBlock(block, idx, callbacks))}
+            </div>
+          )
         ) : (
           <MarkdownMessage>{message.content}</MarkdownMessage>
         )}
@@ -91,6 +108,17 @@ function renderBlock(
         <MarkdownMessage key={idx}>
           {block.text}
         </MarkdownMessage>
+      );
+    case "reasoning":
+      // Persisted reasoning is terminal: render collapsed ("Thought for Xs"),
+      // re-expandable. status="done" so it never shows the live typewriter.
+      return (
+        <ReasoningCard
+          key={block.reasoningId}
+          text={block.text}
+          status="done"
+          durationMs={block.durationMs}
+        />
       );
     case "tool-call":
       return (
@@ -194,6 +222,67 @@ function renderBlock(
         </Suspense>
       );
     }
+    default: {
+      const _exhaustive: never = block;
+      return _exhaustive;
+    }
+  }
+}
+
+// Tone of a persisted block's timeline rail dot. Persisted blocks are terminal,
+// so this maps the stored status to the final-state color.
+function blockTone(
+  block: AssistantContentBlock,
+): NonNullable<TimelineItemProps["tone"]> {
+  switch (block.type) {
+    case "text":
+      return "idle";
+    case "reasoning":
+    case "memory-recall":
+    case "component":
+      return "done";
+    case "tool-call":
+    case "code-execute":
+      return block.status === "completed"
+        ? "done"
+        : block.status === "failed"
+          ? "failed"
+          : "running";
+    case "approval-request":
+      return block.resolution ? "done" : "running";
+    case "plan":
+      return block.status === "pending" ? "running" : "done";
+    case "subagent-fanout":
+      return block.status === "completed"
+        ? "done"
+        : block.status === "running"
+          ? "running"
+          : "failed";
+    default: {
+      const _exhaustive: never = block;
+      return _exhaustive;
+    }
+  }
+}
+
+// Stable React key for a persisted block — its id field, falling back to index.
+function blockKey(block: AssistantContentBlock, idx: number): string {
+  switch (block.type) {
+    case "reasoning":
+    case "tool-call":
+    case "code-execute":
+    case "component":
+      return block.type === "reasoning" ? block.reasoningId : block.toolCallId;
+    case "approval-request":
+      return block.approvalId;
+    case "plan":
+      return block.planId;
+    case "subagent-fanout":
+      return block.fanoutId;
+    case "memory-recall":
+      return block.queryId;
+    case "text":
+      return `text-${idx}`;
     default: {
       const _exhaustive: never = block;
       return _exhaustive;

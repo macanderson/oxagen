@@ -462,6 +462,147 @@ describe("usage event", () => {
 });
 
 // ---------------------------------------------------------------------------
+// reasoning-start / reasoning-delta / reasoning-end
+// ---------------------------------------------------------------------------
+
+describe("reasoning events", () => {
+  it("creates a thinking segment, appends deltas, and finalizes on end", () => {
+    let s = reducer(INITIAL_STATE, event({ type: "reasoning-start", messageId: MSG_ID, reasoningId: "r-1" }));
+    expect(s.reasonings["r-1"]?.status).toBe("thinking");
+    expect(s.order).toContain("reasoning:r-1");
+
+    s = reducer(s, event({ type: "reasoning-delta", reasoningId: "r-1", text: "Let me " }));
+    s = reducer(s, event({ type: "reasoning-delta", reasoningId: "r-1", text: "think." }));
+    expect(s.reasonings["r-1"]?.text).toBe("Let me think.");
+
+    s = reducer(s, event({ type: "reasoning-end", reasoningId: "r-1", durationMs: 1200 }));
+    expect(s.reasonings["r-1"]?.status).toBe("done");
+    expect(s.reasonings["r-1"]?.durationMs).toBe(1200);
+  });
+
+  it("breaks the active text segment so text after reasoning is a new node", () => {
+    let s = reducer(INITIAL_STATE, event({ type: "text", messageId: MSG_ID, text: "Answer A" }));
+    expect(s.activeTextKey).not.toBeNull();
+    s = reducer(s, event({ type: "reasoning-start", messageId: MSG_ID, reasoningId: "r-1" }));
+    expect(s.activeTextKey).toBeNull();
+  });
+
+  it("creates a defensive entry when reasoning-delta arrives without a start", () => {
+    const s = reducer(INITIAL_STATE, event({ type: "reasoning-delta", reasoningId: "r-x", text: "orphan" }));
+    expect(s.reasonings["r-x"]?.text).toBe("orphan");
+    expect(s.order).toContain("reasoning:r-x");
+  });
+
+  it("returns same state reference on reasoning-end for an unknown id", () => {
+    const s = INITIAL_STATE;
+    const next = reducer(s, event({ type: "reasoning-end", reasoningId: "nope", durationMs: 0 }));
+    expect(next).toBe(s);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// step-start / step-finish
+// ---------------------------------------------------------------------------
+
+describe("step events", () => {
+  it("creates a running step and marks it done on finish", () => {
+    let s = reducer(INITIAL_STATE, event({ type: "step-start", messageId: MSG_ID, stepIndex: 0 }));
+    expect(s.steps[0]?.status).toBe("running");
+    expect(s.order).toContain("step:0");
+    s = reducer(s, event({ type: "step-finish", stepIndex: 0 }));
+    expect(s.steps[0]?.status).toBe("done");
+  });
+
+  it("returns same state reference on step-finish for an unknown index", () => {
+    const s = INITIAL_STATE;
+    const next = reducer(s, event({ type: "step-finish", stepIndex: 9 }));
+    expect(next).toBe(s);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// tool-input-start / tool-input-delta (streaming args)
+// ---------------------------------------------------------------------------
+
+describe("streaming tool input", () => {
+  it("creates a pending tool call and accumulates partial args", () => {
+    let s = reducer(INITIAL_STATE, event({
+      type: "tool-input-start",
+      messageId: MSG_ID,
+      toolCallId: TOOL_ID,
+      capability: "fs.read",
+    }));
+    expect(s.toolCalls[TOOL_ID]?.status).toBe("pending");
+    expect(s.order).toContain(`tool:${TOOL_ID}`);
+
+    s = reducer(s, event({ type: "tool-input-delta", toolCallId: TOOL_ID, delta: '{"path":' }));
+    s = reducer(s, event({ type: "tool-input-delta", toolCallId: TOOL_ID, delta: '"/tmp"}' }));
+    expect(s.toolCalls[TOOL_ID]?.partialInput).toBe('{"path":"/tmp"}');
+  });
+
+  it("flips pending → running on tool-call-start, preserving startedAt", () => {
+    let s = reducer(INITIAL_STATE, event({
+      type: "tool-input-start",
+      messageId: MSG_ID,
+      toolCallId: TOOL_ID,
+      capability: "fs.read",
+    }));
+    const startedAt = s.toolCalls[TOOL_ID]?.startedAt;
+    s = reducer(s, event({
+      type: "tool-call-start",
+      toolCallId: TOOL_ID,
+      messageId: MSG_ID,
+      capability: "fs.read",
+      inputPreview: { path: "/tmp" },
+      riskLevel: "low",
+    }));
+    expect(s.toolCalls[TOOL_ID]?.status).toBe("running");
+    expect(s.toolCalls[TOOL_ID]?.inputPreview).toEqual({ path: "/tmp" });
+    expect(s.toolCalls[TOOL_ID]?.startedAt).toBe(startedAt);
+    // The order has a single tool entry, not two.
+    expect(s.order.filter((k) => k === `tool:${TOOL_ID}`)).toHaveLength(1);
+  });
+
+  it("returns same state reference on tool-input-delta for an unknown id", () => {
+    const s = INITIAL_STATE;
+    const next = reducer(s, event({ type: "tool-input-delta", toolCallId: "nope", delta: "x" }));
+    expect(next).toBe(s);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ordered timeline + interleaved text segments
+// ---------------------------------------------------------------------------
+
+describe("ordered timeline", () => {
+  it("records entities in first-appearance order and splits text around a tool", () => {
+    let s = reducer(INITIAL_STATE, event({ type: "text", messageId: MSG_ID, text: "before " }));
+    s = reducer(s, event({
+      type: "tool-call-start",
+      toolCallId: TOOL_ID,
+      messageId: MSG_ID,
+      capability: "fs.read",
+      inputPreview: {},
+      riskLevel: "low",
+    }));
+    s = reducer(s, event({ type: "text", messageId: MSG_ID, text: "after" }));
+
+    expect(s.order).toEqual([`text:${MSG_ID}:0`, `tool:${TOOL_ID}`, `text:${MSG_ID}:2`]);
+    expect(s.textSegments[`text:${MSG_ID}:0`]?.text).toBe("before ");
+    expect(s.textSegments[`text:${MSG_ID}:2`]?.text).toBe("after");
+    // The full accumulated message text is still available.
+    expect(s.messages[MSG_ID]?.text).toBe("before after");
+  });
+
+  it("keeps a contiguous run of text deltas in a single segment", () => {
+    let s = reducer(INITIAL_STATE, event({ type: "text", messageId: MSG_ID, text: "a" }));
+    s = reducer(s, event({ type: "text", messageId: MSG_ID, text: "b" }));
+    expect(s.order).toEqual([`text:${MSG_ID}:0`]);
+    expect(s.textSegments[`text:${MSG_ID}:0`]?.text).toBe("ab");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Unknown event type
 // ---------------------------------------------------------------------------
 

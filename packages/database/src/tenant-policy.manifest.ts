@@ -2,7 +2,11 @@ export type PolicyClass =
   | "standard"
   | "workspace_nullable"
   | "org_only"
-  | "workspace_only";
+  | "workspace_only"
+  // org_or_global: org_id is NULLABLE — NULL rows are a shared/global catalog
+  // visible to every tenant, non-NULL rows are tenant-private. Used by
+  // mcp.registries (global default-seed registry + optional per-org registries).
+  | "org_or_global";
 
 export interface PolicyEntry {
   readonly table: string; // schema-qualified (schema.table_name)
@@ -104,4 +108,16 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
 
   // ── security.* (org_id NOT NULL, workspace_id nullable) ──────────────────
   { table: "security.security_events", policyClass: "workspace_nullable" },
+
+  // ── Installable-plugins epic (schemas plugin / mcp / notification) ─────────
+  //   Added by migration 0008 AFTER the 0001 baseline, so their RLS is applied
+  //   by the forward migration 0010_plugin_mcp_notification_rls.sql — NOT by
+  //   regenerating 0001 (these tables don't exist when 0001 runs on a fresh DB).
+  //   mcp.catalog_servers is intentionally omitted: it is a shared catalog with
+  //   no org_id column.
+  { table: "plugin.org_listings", policyClass: "org_only" },
+  { table: "plugin.org_denylist", policyClass: "org_only" },
+  { table: "mcp.credentials", policyClass: "standard" }, // encrypted OAuth tokens — org+workspace scoped
+  { table: "mcp.registries", policyClass: "org_or_global" }, // NULL org_id = global default seed
+  { table: "notification.notifications", policyClass: "workspace_nullable" },
 ];

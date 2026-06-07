@@ -21,25 +21,36 @@ import type { PlanChangePreview } from "@oxagen/billing";
 export interface PlansGridProps {
   orgSlug: string;
   currentPlanSlug: string | null;
+  /**
+   * The org's current tier. An org with no active subscription is on the Free
+   * tier, so this defaults to "free" — that makes every paid plan read as an
+   * "Upgrade" rather than a bare "Switch". — drives the CTA label.
+   */
+  currentTier?: string;
   /** Plans ordered cheapest-first (drives upgrade/downgrade relation). */
   plans: Plan[];
 }
 
-/** Derive the relation of a candidate plan to the currently subscribed one. */
+/**
+ * Tier ranking, lowest-first. Free is the implicit baseline for any org without
+ * an active paid subscription, so an upgrade/downgrade can always be computed
+ * even when the current plan isn't one of the cards in the grid.
+ */
+const TIER_RANK: Record<string, number> = { free: 0, build: 1, scale: 2, enterprise: 3 };
+
+/** Derive the relation of a candidate plan to the org's current tier. */
 function getPlanRelation(
-  planSlug: string,
+  plan: Plan,
   currentPlanSlug: string | null,
-  plans: Plan[],
+  currentTier: string,
 ): PlanRelation {
-  if (planSlug === currentPlanSlug) return "current";
-  if (!currentPlanSlug) return "switch";
+  if (plan.slug === currentPlanSlug) return "current";
 
-  const currentIdx = plans.findIndex((p) => p.slug === currentPlanSlug);
-  const candidateIdx = plans.findIndex((p) => p.slug === planSlug);
+  const currentRank = TIER_RANK[currentTier] ?? 0;
+  const candidateRank = TIER_RANK[plan.tier] ?? 0;
 
-  if (currentIdx === -1 || candidateIdx === -1) return "switch";
-  if (candidateIdx > currentIdx) return "upgrade";
-  if (candidateIdx < currentIdx) return "downgrade";
+  if (candidateRank > currentRank) return "upgrade";
+  if (candidateRank < currentRank) return "downgrade";
   return "switch";
 }
 
@@ -49,7 +60,7 @@ interface PendingPlanChange {
   preview: PlanChangePreview;
 }
 
-export function PlansGrid({ orgSlug, currentPlanSlug, plans }: PlansGridProps) {
+export function PlansGrid({ orgSlug, currentPlanSlug, currentTier = "free", plans }: PlansGridProps) {
   const [pending, startTransition] = React.useTransition();
   const [interval, setInterval] = React.useState<"month" | "year">("month");
   const [previewLoading, setPreviewLoading] = React.useState(false);
@@ -114,7 +125,13 @@ export function PlansGrid({ orgSlug, currentPlanSlug, plans }: PlansGridProps) {
     <>
       <section>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Plans</h2>
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-lg font-semibold">Plans</h2>
+            <span className="text-sm text-muted-foreground">
+              You&rsquo;re on the{" "}
+              <span className="font-medium capitalize text-foreground">{currentTier}</span> plan
+            </span>
+          </div>
           <Tabs value={interval} onValueChange={(v) => setInterval(v as "month" | "year")}>
             <TabsList>
               <TabsTab value="month">Monthly</TabsTab>
@@ -130,7 +147,7 @@ export function PlansGrid({ orgSlug, currentPlanSlug, plans }: PlansGridProps) {
               key={plan.publicId}
               plan={plan}
               interval={interval}
-              relation={getPlanRelation(plan.slug, currentPlanSlug, plans)}
+              relation={getPlanRelation(plan, currentPlanSlug, currentTier)}
               onSelect={onSelect}
               pending={pending || previewLoading || confirmPending}
             />

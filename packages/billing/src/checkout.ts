@@ -1,4 +1,4 @@
-import { withTenantDb, schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import { billingProvider } from "./client";
@@ -55,19 +55,25 @@ export async function createCheckoutSession(
   const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
 
   // Guard: refuse to create a second subscription when one is active.
-  const { existingActive, plan } = await withTenantDb(async (tx) => {
-    const active = await tx.query.subscriptions.findFirst({
-      where: and(
-        eq(schema.subscriptions.orgId, input.orgId),
-        sql`${schema.subscriptions.status} IN ('active','trialing')`,
-      ),
-      columns: { stripeSubscriptionId: true },
-    });
-    const p = await tx.query.plans.findFirst({
-      where: eq(schema.plans.slug, input.planSlug),
-    });
-    return { existingActive: active, plan: p };
-  });
+  // billing.subscriptions is org-scoped (withTenantDb); billing.plans is a shared
+  // catalog (no org_id, RLS not enabled) read via withSystemDb to match the
+  // catalog-read convention used in public-plans.ts / subscription/page.tsx. — OXA-1515
+  const [existingActive, plan] = await Promise.all([
+    withTenantDb((tx) =>
+      tx.query.subscriptions.findFirst({
+        where: and(
+          eq(schema.subscriptions.orgId, input.orgId),
+          sql`${schema.subscriptions.status} IN ('active','trialing')`,
+        ),
+        columns: { stripeSubscriptionId: true },
+      }),
+    ),
+    withSystemDb((tx) =>
+      tx.query.plans.findFirst({
+        where: eq(schema.plans.slug, input.planSlug),
+      }),
+    ),
+  ]);
 
   if (existingActive) {
     throw new ActiveSubscriptionError(existingActive.stripeSubscriptionId);

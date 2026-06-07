@@ -71,9 +71,24 @@ export function ToolCallCard(props: ToolCallCardProps) {
       </button>
       {open ? (
         <div className="space-y-3 border-t px-3 py-3">
-          <Section label="Input">
+          <Section label={status === "pending" ? "Composing input…" : "Input"}>
             <pre className="overflow-x-auto rounded-lg bg-muted/40 p-2 font-mono text-xs">
-              {safeJson(inputPreview)}
+              {/* While args stream in, inputPreview is the partial JSON string —
+                  render it raw (with a caret) rather than re-encoding it. */}
+              {typeof inputPreview === "string" ? (
+                inputPreview.length > 0 ? (
+                  <>
+                    {inputPreview}
+                    {status === "pending" ? (
+                      <span className="stream-caret ml-0.5" aria-hidden="true" />
+                    ) : null}
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">Composing arguments…</span>
+                )
+              ) : (
+                safeJson(inputPreview)
+              )}
             </pre>
           </Section>
           {(stdout || stderr || status === "running") && (

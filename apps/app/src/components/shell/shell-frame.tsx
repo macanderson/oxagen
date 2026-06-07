@@ -22,6 +22,8 @@ import { resolveSidebarCtx } from "@/lib/sidebar";
 import { MobileNav } from "./mobile-nav";
 import { AskBar } from "@/components/shell/ask/ask-bar";
 import { NotificationsBell } from "./notifications-bell";
+import { SupportMenu } from "./support-menu";
+import { BalancePill } from "./balance-pill";
 import { OrgSwitcher, type OrgOption } from "@/components/org/org-switcher";
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
 import { Button } from "@/components/ui/button";
@@ -38,6 +40,8 @@ export interface ShellFrameProps {
   availableWorkspaces?: { publicId: string; slug: string; name: string }[];
   /** May be undefined during a transient post-signup render; guarded in UserSwitcher. */
   user: SessionUser | undefined;
+  /** Org credit balance for the always-visible header pill. Null hides it. */
+  balance?: { cents: number; low: boolean } | null;
   /** Bound server action for inline workspace creation dialog. */
   createWorkspaceAction?: NewWorkspaceAction;
   children: ReactNode;
@@ -49,6 +53,7 @@ export function ShellFrame({
   availableOrgs,
   availableWorkspaces,
   user,
+  balance,
   createWorkspaceAction,
   children,
 }: ShellFrameProps) {
@@ -130,8 +135,16 @@ export function ShellFrame({
             </div>
           </div>
 
-          {/* Right cluster: notifications. */}
+          {/* Right cluster: balance · support · notifications. */}
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            {balance ? (
+              <BalancePill
+                orgSlug={org.slug}
+                balanceCents={balance.cents}
+                low={balance.low}
+              />
+            ) : null}
+            <SupportMenu orgSlug={ctx.orgSlug} workspaceSlug={ctx.workspaceSlug} />
             <NotificationsBell />
           </div>
         </header>

@@ -22,47 +22,23 @@
 
 import { check, index, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import {
+  SECURITY_EVENT_TYPES,
+  generateEventTypeCheckClause,
+  generateOutcomeCheckClause,
+} from "@oxagen/compliance";
 import { securitySchema } from "./_schemas";
 
 // ---------------------------------------------------------------------------
-// SecurityEventType — typed const-union. Add values here as new event kinds
-// are wired up; keep in lexicographic order within each group.
+// SecurityEventType — typed const-union. SINGLE SOURCE: @oxagen/compliance.
+// Add new event kinds in packages/compliance/src/security-event-types.ts; both
+// this schema's CHECK constraint and the @oxagen/telemetry emit type derive
+// from that one array. Re-exported here so existing `@oxagen/database/schema`
+// importers keep working.
 // ---------------------------------------------------------------------------
 
-export const SECURITY_EVENT_TYPES = [
-  // Auth lifecycle
-  "auth.sign_in",
-  "auth.sign_in_failed",
-  "auth.sign_out",
-  "auth.token_refreshed",
-  "auth.password_changed",
-  "auth.email_verified",
-  // API key lifecycle
-  "api_key.created",
-  "api_key.revoked",
-  "api_key.used",
-  // Billing mutations
-  "billing.access_denied",
-  "billing.auto_reload_updated",
-  "billing.credits_purchased",
-  "billing.payment_method_added",
-  "billing.payment_method_default_changed",
-  "billing.payment_method_removed",
-  "billing.plan_changed",
-  "billing.seats_changed",
-  "billing.subscription_canceled",
-  "billing.subscription_reactivated",
-  // Capability authz
-  "capability.invoke_allowed",
-  "capability.invoke_denied",
-  "capability.invoke_error",
-  // Admin / org management
-  "org.member_invited",
-  "org.member_removed",
-  "org.role_changed",
-] as const;
-
-export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
+export { SECURITY_EVENT_TYPES };
+export type { SecurityEventType } from "@oxagen/compliance";
 
 // ---------------------------------------------------------------------------
 // security.security_events
@@ -123,13 +99,16 @@ export const securityEvents = securitySchema.table(
     typeOccurredIdx: index("security_events_type_occurred_idx").on(t.eventType, t.occurredAt),
 
     // DB-level CHECK constraints to enforce the typed union and outcome set.
+    // The clause bodies are generated from the @oxagen/compliance single source
+    // (db-check.ts) so the schema, the emit type, and the migration DDL can
+    // never drift. The column names match this table's physical columns.
     eventTypeCheck: check(
       "security_events_event_type_check",
-      sql`${t.eventType} IN (${sql.raw(SECURITY_EVENT_TYPES.map((v) => `'${v}'`).join(", "))})`,
+      sql.raw(generateEventTypeCheckClause("event_type")),
     ),
     outcomeCheck: check(
       "security_events_outcome_check",
-      sql`${t.outcome} IN ('allow', 'deny', 'error', 'success')`,
+      sql.raw(generateOutcomeCheckClause("outcome")),
     ),
   }),
 );
