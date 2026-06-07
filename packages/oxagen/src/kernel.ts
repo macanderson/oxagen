@@ -443,10 +443,19 @@ export async function invoke(
   let output: unknown;
   try {
     const handler = await resolveHandler(name);
-    output = await runInTenantScope(
-      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-      () => handler(inputResult.data, ctx),
-    );
+    // Unscoped capabilities (cap.scoped === false) operate outside any tenant —
+    // e.g. user.preferences.write keys on the user, not an org/workspace, and is
+    // invoked with empty org/workspace ids. runInTenantScope asserts both are
+    // UUIDs, so wrapping an unscoped call throws TenantScopeError before the
+    // handler runs (this silently broke Save preferences). Run those handlers
+    // directly; only scoped capabilities get the tenant-scope wrapper. — OXA-1515
+    output =
+      cap.scoped === false
+        ? await handler(inputResult.data, ctx)
+        : await runInTenantScope(
+            { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+            () => handler(inputResult.data, ctx),
+          );
   } catch (err) {
     // Distinguish CapabilityError (handler not found → deny) from a
     // handler runtime throw (→ error). A TenantScopeError (e.g. the MCP

@@ -222,26 +222,32 @@ export async function changeOrgPlan(
   interval: "month" | "year",
   opts?: { successUrl?: string; cancelUrl?: string },
 ): Promise<{ checkoutUrl: string } | null> {
-  const { targetPlan, activeSubRow } = await withTenantDb(async (tx) => {
-    const tp = await tx.query.plans.findFirst({
-      where: eq(schema.plans.slug, targetPlanSlug),
-      columns: { id: true, tier: true, stripePriceIdMonthly: true, stripePriceIdAnnual: true },
-    });
-
-    const asr = await tx.query.subscriptions.findFirst({
-      where: and(
-        eq(schema.subscriptions.orgId, orgId),
-        sql`${schema.subscriptions.status} IN ('active','trialing')`,
-      ),
-      columns: {
-        stripeSubscriptionId: true,
-        seatCount: true,
-        planId: true,
-      },
-    });
-
-    return { targetPlan: tp, activeSubRow: asr };
-  });
+  // billing.plans is a shared platform catalog (no org_id, RLS not enabled) —
+  // read via withSystemDb to match the catalog-read convention used everywhere
+  // else (public-plans.ts, subscription/page.tsx). billing.subscriptions IS
+  // org-scoped under RLS, so it stays on withTenantDb. — OXA-1515
+  const [targetPlan, activeSubRow] = await Promise.all([
+    withSystemDb((tx) =>
+      tx.query.plans.findFirst({
+        where: eq(schema.plans.slug, targetPlanSlug),
+        columns: { id: true, tier: true, stripePriceIdMonthly: true, stripePriceIdAnnual: true },
+      }),
+    ),
+    // billing.subscriptions IS org-scoped — keep it tenant-scoped under RLS.
+    withTenantDb((tx) =>
+      tx.query.subscriptions.findFirst({
+        where: and(
+          eq(schema.subscriptions.orgId, orgId),
+          sql`${schema.subscriptions.status} IN ('active','trialing')`,
+        ),
+        columns: {
+          stripeSubscriptionId: true,
+          seatCount: true,
+          planId: true,
+        },
+      }),
+    ),
+  ]);
 
   if (!targetPlan) throw new Error(`Plan '${targetPlanSlug}' not found`);
 
@@ -266,8 +272,8 @@ export async function changeOrgPlan(
     return { checkoutUrl: result.url };
   }
 
-  // Resolve current plan tier for proration decision.
-  const currentPlanRow = await withTenantDb((tx) =>
+  // Resolve current plan tier for proration decision. Shared catalog (no RLS) → system. — OXA-1515
+  const currentPlanRow = await withSystemDb((tx) =>
     tx.query.plans.findFirst({
       where: eq(schema.plans.id, activeSubRow.planId),
       columns: { tier: true },
@@ -508,33 +514,36 @@ export async function previewPlanChange(
 ): Promise<PlanChangePreview> {
   const start = Date.now();
 
-  const { targetPlan, activeSub } = await withTenantDb(async (tx) => {
-    const tp = await tx.query.plans.findFirst({
-      where: eq(schema.plans.slug, targetPlanSlug),
-      columns: {
-        id: true,
-        tier: true,
-        stripePriceIdMonthly: true,
-        stripePriceIdAnnual: true,
-        monthlyCents: true,
-        annualCents: true,
-      },
-    });
-
-    const as = await tx.query.subscriptions.findFirst({
-      where: and(
-        eq(schema.subscriptions.orgId, orgId),
-        sql`${schema.subscriptions.status} IN ('active','trialing')`,
-      ),
-      columns: {
-        stripeSubscriptionId: true,
-        stripeCustomerId: true,
-        planId: true,
-      },
-    });
-
-    return { targetPlan: tp, activeSub: as };
-  });
+  // billing.plans is a shared platform catalog (no org_id, RLS not enabled) →
+  // read via withSystemDb; billing.subscriptions is org-scoped → withTenantDb. — OXA-1515
+  const [targetPlan, activeSub] = await Promise.all([
+    withSystemDb((tx) =>
+      tx.query.plans.findFirst({
+        where: eq(schema.plans.slug, targetPlanSlug),
+        columns: {
+          id: true,
+          tier: true,
+          stripePriceIdMonthly: true,
+          stripePriceIdAnnual: true,
+          monthlyCents: true,
+          annualCents: true,
+        },
+      }),
+    ),
+    withTenantDb((tx) =>
+      tx.query.subscriptions.findFirst({
+        where: and(
+          eq(schema.subscriptions.orgId, orgId),
+          sql`${schema.subscriptions.status} IN ('active','trialing')`,
+        ),
+        columns: {
+          stripeSubscriptionId: true,
+          stripeCustomerId: true,
+          planId: true,
+        },
+      }),
+    ),
+  ]);
 
   if (!targetPlan) throw new Error(`Plan '${targetPlanSlug}' not found`);
 
@@ -599,8 +608,8 @@ export async function previewPlanChange(
     };
   }
 
-  // Active subscription — in-place swap preview.
-  const currentPlanRow = await withTenantDb((tx) =>
+  // Active subscription — in-place swap preview. Shared catalog (no RLS) → system. — OXA-1515
+  const currentPlanRow = await withSystemDb((tx) =>
     tx.query.plans.findFirst({
       where: eq(schema.plans.id, activeSub.planId),
       columns: { tier: true },

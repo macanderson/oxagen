@@ -23,9 +23,6 @@ export const account = {
   profile: (): string => "/account/profile",
   preferences: (): string => "/account/preferences",
   security: (): string => "/account/security",
-  cases: (): string => "/account/cases",
-  notifications: (): string => "/account/notifications",
-  privacy: (): string => "/account/privacy",
 } as const;
 
 // ---------------------------------------------------------------------------

@@ -14,6 +14,8 @@ import {
   setOrgDefaultPaymentMethod,
   removeOrgPaymentMethod,
   updateAutoReloadSettings,
+  createUsageCreditCheckout,
+  isTierDenied,
 } from "@oxagen/billing";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type {
@@ -319,16 +321,22 @@ export async function buyCreditsAction(
   const env = loadEnv();
 
   try {
-    const res = await fetch(`${env.NEXT_PUBLIC_APP_URL}/api/v1/stripe/credits`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orgSlug, amountUsd }),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      return { ok: false, error: text || "Credits checkout failed" };
-    }
-    const json = (await res.json()) as { url: string };
+    // Call the billing function directly (mirrors changePlanAction → changeOrgPlan).
+    // The previous implementation did a server-side fetch() to the internal
+    // /api/v1/stripe/credits route WITHOUT forwarding the session cookie, so that
+    // route's getSession() always saw an anonymous request and returned 401 —
+    // surfacing to the user as a spurious "Unauthorized". resolveManagedOrg above
+    // already authenticates the caller and enforces the owner/admin/billing role.
+    const result = await runInTenantScope(
+      { orgId: managed.orgId, workspaceId: ORG_ONLY_WS },
+      () =>
+        createUsageCreditCheckout({
+          orgId: managed.orgId,
+          grantCents: Math.round(amountUsd * 100),
+          successUrl: `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/billing/subscription?status=success`,
+          cancelUrl: `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/billing/subscription?status=canceled`,
+        }),
+    );
     // Checkout URL created — credits purchase intent authorised and initiated.
     recordSecurityEvent(auditInsert(), {
       eventType: "billing.credits_purchased",
@@ -341,8 +349,16 @@ export async function buyCreditsAction(
       userAgent: null,
       requestId: null,
     });
-    return { ok: true, url: json.url };
+    return { ok: true, url: result.url };
   } catch (err) {
+    // Free orgs cannot buy usage credits — they must subscribe to a paid plan
+    // first. Surface that as actionable copy rather than a raw error string.
+    if (isTierDenied(err)) {
+      return {
+        ok: false,
+        error: "Usage credits require a paid plan. Upgrade to Build or higher, then add credits.",
+      };
+    }
     const message = err instanceof Error ? err.message : "Credits checkout failed";
     logger.error({ err, orgSlug, amountUsd }, "billing: buyCreditsAction failed");
     return { ok: false, error: message };

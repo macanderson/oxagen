@@ -186,7 +186,10 @@ export default async function BillingSubscriptionPage({
     : null;
 
   // planForSub already resolved the plan row by subscriptionRow.planId — reuse its slug.
+  // No active subscription ⇒ the org is on the Free tier (the implicit baseline),
+  // so paid plans render as "Upgrade" and the current plan reads as "Free".
   const currentPlanSlug = planForSub?.slug ?? null;
+  const currentTier = planForSub?.tier ?? "free";
 
   // Default card for display inside SubscriptionSummary.
   const defaultCard = paymentMethods.find((pm) => pm.isDefault) ?? null;
@@ -250,6 +253,7 @@ export default async function BillingSubscriptionPage({
       <PlansGrid
         orgSlug={orgSlug}
         currentPlanSlug={currentPlanSlug}
+        currentTier={currentTier}
         plans={publicPlans}
       />
 
