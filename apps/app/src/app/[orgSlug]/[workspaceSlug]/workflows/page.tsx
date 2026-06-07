@@ -1,28 +1,11 @@
-/**
- * Workflows list page — server component, live data from workflow_runs table.
- *
- * Renders the most recent 50 workflow runs for the current workspace, newest
- * first. Each row links to /ask to re-open the originating conversation.
- *
- * Wire-up: workflow.run / workflow.status / workflow.cancel capabilities are
- * registered in packages/oxagen (see capabilities.manifest.json).
- */
-import {
-  BarChart3,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  Clock,
-  CircleDot,
-  Ban,
-} from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Clock, CircleDot, Ban } from "lucide-react";
 import { withTenantDb, schema } from "@oxagen/database";
 import { desc, eq } from "drizzle-orm";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { cn } from "@/lib/utils";
 import type { WorkflowRunSnapshot } from "@oxagen/oxagen/contracts/workflow.status";
 
-// ── Status config ─────────────────────────────────────────────────────────────
+export const dynamic = "force-dynamic";
 
 type WorkflowStatus = WorkflowRunSnapshot["status"];
 
@@ -62,8 +45,6 @@ const STATUS_CONFIG: Record<
   },
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function formatDuration(startedAt: Date | null, completedAt: Date | null): string {
   if (!startedAt) return "—";
   const end = completedAt ?? new Date();
@@ -83,33 +64,24 @@ function formatDate(d: Date): string {
   });
 }
 
-// ── Row ───────────────────────────────────────────────────────────────────────
-
 type WorkflowRow = typeof schema.workflowRuns.$inferSelect;
 
 function WorkflowTableRow({ run }: { run: WorkflowRow }) {
   const cfg = STATUS_CONFIG[run.status as WorkflowStatus] ?? STATUS_CONFIG.failed;
   const Icon = cfg.icon;
   const pct =
-    run.totalTasks > 0
-      ? Math.round((run.completedTasks / run.totalTasks) * 100)
-      : 0;
+    run.totalTasks > 0 ? Math.round((run.completedTasks / run.totalTasks) * 100) : 0;
 
   return (
     <tr className="group border-b border-border/50 hover:bg-muted/30 transition-colors">
-      {/* Title + goal */}
       <td className="py-3 pl-4 pr-3">
         <div className="flex flex-col gap-0.5 min-w-0">
           <span className="text-sm font-medium text-foreground truncate max-w-xs">
             {run.title}
           </span>
-          <span className="text-xs text-muted-foreground truncate max-w-xs">
-            {run.goal}
-          </span>
+          <span className="text-xs text-muted-foreground truncate max-w-xs">{run.goal}</span>
         </div>
       </td>
-
-      {/* Status */}
       <td className="py-3 px-3">
         <span
           className={cn(
@@ -121,12 +93,12 @@ function WorkflowTableRow({ run }: { run: WorkflowRow }) {
           {cfg.label}
         </span>
       </td>
-
-      {/* Progress */}
       <td className="py-3 px-3 min-w-[100px]">
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>{run.completedTasks}/{run.totalTasks}</span>
+            <span>
+              {run.completedTasks}/{run.totalTasks}
+            </span>
             {run.totalTasks > 0 && <span>{pct}%</span>}
           </div>
           {run.totalTasks > 0 && (
@@ -134,9 +106,11 @@ function WorkflowTableRow({ run }: { run: WorkflowRow }) {
               <div
                 className={cn(
                   "h-full rounded-full",
-                  run.status === "failed" ? "bg-destructive" :
-                  run.status === "cancelled" ? "bg-muted-foreground" :
-                  "bg-primary",
+                  run.status === "failed"
+                    ? "bg-destructive"
+                    : run.status === "cancelled"
+                      ? "bg-muted-foreground"
+                      : "bg-primary",
                 )}
                 style={{ width: `${pct}%` }}
               />
@@ -144,21 +118,15 @@ function WorkflowTableRow({ run }: { run: WorkflowRow }) {
           )}
         </div>
       </td>
-
-      {/* Duration */}
       <td className="py-3 px-3 text-xs tabular-nums text-muted-foreground whitespace-nowrap">
         {formatDuration(run.startedAt, run.completedAt)}
       </td>
-
-      {/* Created */}
       <td className="py-3 pl-3 pr-4 text-xs text-muted-foreground whitespace-nowrap">
         {formatDate(run.createdAt)}
       </td>
     </tr>
   );
 }
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function WorkflowsPage({
   params,
@@ -184,19 +152,7 @@ export default async function WorkflowsPage({
   const failed = runs.filter((r) => r.status === "failed").length;
 
   return (
-    <div className="flex flex-col gap-5 max-w-4xl">
-      {/* Header */}
-      <div className="flex items-start gap-3">
-        <BarChart3 className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-        <div>
-          <p className="text-sm font-semibold text-foreground">Workflows</p>
-          <p className="text-xs text-muted-foreground">
-            Parallel research and data-gathering workflows for this workspace.
-          </p>
-        </div>
-      </div>
-
-      {/* Stats strip */}
+    <div className="flex flex-col gap-5 max-w-4xl px-6 py-6">
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: "Active", value: running },
@@ -213,7 +169,6 @@ export default async function WorkflowsPage({
         ))}
       </div>
 
-      {/* Empty state */}
       {runs.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-border/50 bg-card px-6 py-12 text-center">
           <CircleDot className="h-8 w-8 text-muted-foreground/40" aria-hidden="true" />
@@ -258,8 +213,8 @@ export default async function WorkflowsPage({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Workflows run up to 500 concurrent tasks. Results are retained for 90 days.
-        Start a workflow by asking the agent to research at scale.
+        Workflows run up to 500 concurrent tasks. Results are retained for 90 days. Start a
+        workflow by asking the agent to research at scale.
       </p>
     </div>
   );

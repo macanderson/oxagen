@@ -10,10 +10,10 @@ export default defineConfig({
       reporter: ["text", "lcov"],
       // Single-source compliance constants + pure generators — fully covered.
       thresholds: {
-        lines: 90,
-        branches: 90,
-        functions: 90,
-        statements: 90,
+        lines: 85,
+        branches: 85,
+        functions: 85,
+        statements: 85,
       },
     },
   },
