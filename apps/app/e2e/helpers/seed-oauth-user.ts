@@ -187,20 +187,22 @@ export async function seedOAuthOnlyUser(
     `;
 
     // ── Inject session cookie into Playwright context ─────────────────────────
-    // Better Auth reads the session via the `better-auth.session_token` cookie
-    // (or `__Secure-better-auth.session_token` in prod; the E2E_TEST=true env
-    // var disables the __Secure- prefix so we use the plain name here).
+    // Better Auth derives the cookie name as `${cookiePrefix}.session_token`.
+    // This app sets cookiePrefix to "oxagen" (packages/auth/src/resolvers/session.ts
+    // SESSION_COOKIE_NAME = "oxagen.session_token" — OXA-1497).
+    // The `__Secure-` prefix is suppressed in E2E via the E2E_TEST=true env var,
+    // so the plain name is used here.
     //
     // The cookie value is the session token exactly as stored in auth.sessions.
     const url = new URL(baseUrl);
     await context.addCookies([
       {
-        name: "better-auth.session_token",
+        name: "oxagen.session_token",
         value: sessionToken,
         domain: url.hostname,
         path: "/",
         httpOnly: true,
-        secure: false, // E2E runs over http
+        secure: false, // E2E runs over http; E2E_TEST=true suppresses __Secure- prefix
         sameSite: "Lax",
         expires: Math.floor(Date.now() / 1000) + 60 * 60, // 1 hour
       },
