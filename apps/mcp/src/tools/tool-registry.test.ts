@@ -42,7 +42,26 @@ import { metadata as documentsGenerateMetadata } from "./documents.generate";
 import { metadata as documentsPdfCreateMetadata } from "./documents.pdf.create";
 import { metadata as formFillMetadata } from "./form.fill";
 import { metadata as imageGenerateMetadata } from "./image.generate";
+import { metadata as notificationsListMetadata } from "./notifications.list";
+import { metadata as notificationsMarkMetadata } from "./notifications.mark";
 import { metadata as organizationCreateMetadata } from "./organization.create";
+import { metadata as pluginCatalogBrowseMetadata } from "./plugin.catalog.browse";
+import { metadata as pluginCatalogGetMetadata } from "./plugin.catalog.get";
+import { metadata as pluginCredentialReauthMetadata } from "./plugin.credential.reauth";
+import { metadata as pluginCredentialSetSecretMetadata } from "./plugin.credential.set_secret";
+import { metadata as pluginDenylistAddMetadata } from "./plugin.denylist.add";
+import { metadata as pluginDenylistRemoveMetadata } from "./plugin.denylist.remove";
+import { metadata as pluginOrgInstallMetadata } from "./plugin.org.install";
+import { metadata as pluginOrgInstallBulkMetadata } from "./plugin.org.install_bulk";
+import { metadata as pluginOrgListMetadata } from "./plugin.org.list";
+import { metadata as pluginOrgSetEnabledMetadata } from "./plugin.org.set_enabled";
+import { metadata as pluginOrgUninstallMetadata } from "./plugin.org.uninstall";
+import { metadata as pluginRegistryAddMetadata } from "./plugin.registry.add";
+import { metadata as pluginRegistryListMetadata } from "./plugin.registry.list";
+import { metadata as pluginRegistryRemoveMetadata } from "./plugin.registry.remove";
+import { metadata as pluginRegistrySyncMetadata } from "./plugin.registry.sync";
+import { metadata as pluginSettingsSetAuthAlertsMetadata } from "./plugin.settings.set_auth_alerts";
+import { metadata as pluginWorkspaceSetEnabledMetadata } from "./plugin.workspace.set_enabled";
 import { metadata as orgMemberAddMetadata } from "./org.member.add";
 import { metadata as orgMemberInviteAcceptMetadata } from "./org.member.invite.accept";
 import { metadata as orgMemberInviteDeclineMetadata } from "./org.member.invite.decline";
@@ -86,12 +105,31 @@ const allToolMetadata = [
   documentsPdfCreateMetadata,
   formFillMetadata,
   imageGenerateMetadata,
+  notificationsListMetadata,
+  notificationsMarkMetadata,
   organizationCreateMetadata,
   orgMemberAddMetadata,
   orgMemberInviteAcceptMetadata,
   orgMemberInviteDeclineMetadata,
   orgMemberRemoveMetadata,
   orgMemberRoleChangeMetadata,
+  pluginCatalogBrowseMetadata,
+  pluginCatalogGetMetadata,
+  pluginCredentialReauthMetadata,
+  pluginCredentialSetSecretMetadata,
+  pluginDenylistAddMetadata,
+  pluginDenylistRemoveMetadata,
+  pluginOrgInstallMetadata,
+  pluginOrgInstallBulkMetadata,
+  pluginOrgListMetadata,
+  pluginOrgSetEnabledMetadata,
+  pluginOrgUninstallMetadata,
+  pluginRegistryAddMetadata,
+  pluginRegistryListMetadata,
+  pluginRegistryRemoveMetadata,
+  pluginRegistrySyncMetadata,
+  pluginSettingsSetAuthAlertsMetadata,
+  pluginWorkspaceSetEnabledMetadata,
   svgGenerateMetadata,
   systemInstallInstructionsMetadata,
   userPreferencesReadMetadata,

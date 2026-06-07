@@ -93,6 +93,18 @@ function contractNameToPathSegment(name: string): string {
     svg: "svg",
     image: "image",
     system: "system",
+    // Notifications + installable-plugins domains. Routes follow REST casing
+    // (kebab-case URLs, pluralized "registries") that does not derive
+    // mechanically from the dot-separated contract name, so map each domain
+    // prefix to its actual mounted route segment.
+    notifications: "notifications",
+    "plugin.catalog": "plugin/catalog",
+    "plugin.credential": "plugin/credential",
+    "plugin.denylist": "plugin/denylist",
+    "plugin.org": "plugin/org",
+    "plugin.registry": "plugin/registries",
+    "plugin.settings": "plugin/settings",
+    "plugin.workspace": "plugin/workspace",
   };
 
   // Try progressively shorter prefixes

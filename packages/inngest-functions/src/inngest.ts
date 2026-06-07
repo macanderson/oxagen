@@ -97,30 +97,43 @@ function resolveInngestEnv() {
   return base;
 }
 
-// Inngest uses ClientOptions as its generic parameter. We store the untyped
-// base form (ClientOptions default) internally; callers get full event-type
-// safety from `InngestClient` below, which captures the inferred constructor
-// return type of the concrete call (with EventSchemas<Events>).
-let _inngest: Inngest | null = null;
+// Derive the concrete Inngest client type from the constructor call shape so
+// all event names and payloads flow through to consumers without `any`.
+// This helper is never called — it exists only as a compile-time type source.
+function _makeInngestClient() {
+  return new Inngest({
+    id: "oxagen-runner",
+    schemas: new EventSchemas().fromRecord<Events>(),
+  });
+}
+type ConcreteInngestClient = ReturnType<typeof _makeInngestClient>;
 
-function getInngest(): Inngest {
+// OXA-1349: INNGEST keys are optional in the base schema (not every service
+// runs Inngest) but must be present in production when this package is loaded.
+// The underlying instance is lazy-initialized (not at module eval time) so
+// that importing this module during Next.js build-time page-data collection —
+// when Inngest env vars are not injected — does not crash the build. The
+// instance is created on first `.send()` / `.createFunction()` call (i.e. at
+// actual runtime, not import time).
+let _inngest: ConcreteInngestClient | null = null;
+
+function getInngest(): ConcreteInngestClient {
   if (!_inngest) {
     const env = resolveInngestEnv();
     _inngest = new Inngest({
       id: "oxagen-runner",
       eventKey: env.INNGEST_EVENT_KEY,
       schemas: new EventSchemas().fromRecord<Events>(),
-    });
+    }) as ConcreteInngestClient;
   }
   return _inngest;
 }
 
 // Proxy object: module consumers import `inngest` and call `.send()`,
 // `.createFunction()`, etc. exactly as before — the lazy init is transparent.
-// The base-generic `Inngest` target is an internal implementation detail;
-// all exported `.send()` / `.createFunction()` calls flow through the real
-// fully-typed instance at runtime.
-export const inngest = new Proxy({} as Inngest, {
+// The Proxy is cast to ConcreteInngestClient so full event-type inference
+// flows into all createFunction() handlers without `any`.
+export const inngest = new Proxy({} as ConcreteInngestClient, {
   get(_target, prop) {
     const instance = getInngest() as unknown as Record<string | symbol, unknown>;
     return instance[prop];
