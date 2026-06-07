@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { schema, withSystemDb } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
@@ -11,6 +11,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
 
   if (!ctx.userId) {
     throw new Error("[notifications.mark] userId is required (user-scoped)");
+  }
+  if (!ctx.orgId) {
+    throw new Error("[notifications.mark] orgId is required (org-scoped)");
   }
 
   const updates: Partial<{ unread: boolean; archived: boolean; updatedAt: Date }> = {
@@ -24,7 +27,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     return { ok: true };
   }
 
-  await withSystemDb(async (tx) => {
+  await withTenantDb(async (tx) => {
     await tx
       .update(schema.notifications)
       .set(updates)
@@ -32,6 +35,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         and(
           eq(schema.notifications.publicId, id),
           eq(schema.notifications.userId, ctx.userId!),
+          eq(schema.notifications.orgId, ctx.orgId!),
         ),
       );
   });

@@ -1,5 +1,5 @@
 import { and, eq, count, sql } from "drizzle-orm";
-import { schema, withSystemDb } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
@@ -8,11 +8,16 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   if (!ctx.userId) {
     throw new Error("[notifications.list] userId is required (user-scoped)");
   }
+  if (!ctx.orgId) {
+    throw new Error("[notifications.list] orgId is required (org-scoped)");
+  }
   const userId = ctx.userId;
+  const orgId = ctx.orgId;
 
-  return withSystemDb(async (tx) => {
+  return withTenantDb(async (tx) => {
     const conditions = [
       eq(schema.notifications.userId, userId),
+      eq(schema.notifications.orgId, orgId),
       eq(schema.notifications.archived, false),
     ];
     if (unreadOnly) {
@@ -43,6 +48,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         .where(
           and(
             eq(schema.notifications.userId, userId),
+            eq(schema.notifications.orgId, orgId),
             eq(schema.notifications.archived, false),
             eq(schema.notifications.unread, true),
           ),
