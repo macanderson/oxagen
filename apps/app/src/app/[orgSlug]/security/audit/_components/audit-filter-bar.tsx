@@ -36,9 +36,16 @@ export function AuditFilterBar({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  // Local input state, seeded from the URL's `q`. When `q` changes externally
+  // (e.g. the Clear button rewrites the URL), re-sync during render via the
+  // previous-value sentinel — React's recommended alternative to a setState
+  // effect (https://react.dev/learn/you-might-not-need-an-effect).
   const [text, setText] = React.useState(q ?? "");
-
-  React.useEffect(() => setText(q ?? ""), [q]);
+  const [lastQ, setLastQ] = React.useState(q);
+  if (q !== lastQ) {
+    setLastQ(q);
+    setText(q ?? "");
+  }
 
   // Build a fresh URLSearchParams from the current URL, drop the cursor, and let
   // the caller mutate it before we navigate.
