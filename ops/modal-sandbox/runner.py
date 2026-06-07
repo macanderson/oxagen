@@ -15,14 +15,26 @@ Contract:
   POST /run
     headers: authorization: Bearer <MODAL_RUNNER_TOKEN>
     body:    { language, code, stdin?, env?, timeout_ms, memory_mb,
-               network, tenant_id, workspace_id, image }
+               network, org_id, workspace_id, image }
     returns: { exit_code, stdout, stderr, duration_ms, timed_out, oom_killed }
 
+  GET /healthz
+    returns: { status: "ok" }
+
 Deploy:
-  modal token new                              # first time only
-  modal deploy ops/modal/runner.py             # ships the function
-  modal secret create oxagen-runner            # paste MODAL_RUNNER_TOKEN
-  # The runner URL prints on deploy; copy it to MODAL_RUNNER_URL on Vercel.
+  cd ops/modal-sandbox
+  uv run modal token new              # first time only — opens browser
+  uv run modal secret create oxagen-runner MODAL_RUNNER_TOKEN=<paste-value>
+  uv run modal deploy runner.py       # prints the public URL on success
+
+  Wire the printed URL + token into Vercel and .env.local:
+    MODAL_RUNNER_URL   = https://<workspace>--oxagen-sandbox-fastapi-app.modal.run
+    MODAL_RUNNER_TOKEN = <same token>
+    SANDBOX_DRIVER     = modal
+    SANDBOX_ENABLED    = true
+
+Health check:
+  curl "$MODAL_RUNNER_URL/healthz"   # → {"status":"ok"}
 
 Free tier:
   Modal grants $30/month of compute credits with no card on file. At our
@@ -40,29 +52,38 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
-# Image catalog. Must stay in lockstep with packages/sandbox/src/images.ts.
-# The Node driver sends the desired image tag; we map to a pre-built Modal
-# Image so cold starts are warm-pool fast instead of pulling from Docker Hub.
+# Image catalog — keyed by language enum, not by mutable tag string.
+#
+# The Node driver (@oxagen/sandbox/src/modal.ts) sends the language enum
+# ("node" | "python" | "shell") in the request body. We map language → Modal
+# Image here so Modal can pre-build and warm-pool the image, rather than
+# pulling from Docker Hub on every cold start.
+#
+# The docker driver uses digest-pinned OCI refs (e.g. "node@sha256:…") for
+# its own image pulling; those refs are NOT sent over the HTTP boundary.
+# The `image` field in the request body is kept for forward-compat (in case
+# a caller wants to select an image by tag in future) but the runner always
+# derives the Modal Image from `language` first.
 # ---------------------------------------------------------------------------
 
 LANG_IMAGES: dict[str, modal.Image] = {
-    "node:20-alpine": modal.Image.from_registry("node:20-alpine", add_python=None),
-    "python:3.12-slim": modal.Image.debian_slim(python_version="3.12"),
-    "alpine:3.20": modal.Image.from_registry("alpine:3.20", add_python=None),
+    "node": modal.Image.from_registry("node:20-alpine", add_python=None),
+    "python": modal.Image.debian_slim(python_version="3.12"),
+    "shell": modal.Image.from_registry("alpine:3.20", add_python=None),
 }
 
 LANG_ENTRY: dict[str, tuple[str, list[str]]] = {
     # (filename_in_workdir, argv_template)
-    "node": ("main.js", ["node", "/work/main.js"]),
-    "python": ("main.py", ["python", "/work/main.py"]),
-    "shell": ("main.sh", ["/bin/sh", "/work/main.sh"]),
+    "node":   ("main.js",  ["node", "/work/main.js"]),
+    "python": ("main.py",  ["python", "/work/main.py"]),
+    "shell":  ("main.sh",  ["/bin/sh", "/work/main.sh"]),
 }
 
-# The shared secret is created out-of-band: `modal secret create oxagen-runner`
+# The shared secret is created out-of-band: `uv run modal secret create oxagen-runner`
 RUNNER_SECRET = modal.Secret.from_name("oxagen-runner")
 
 app = modal.App("oxagen-sandbox")
-web = FastAPI(title="oxagen-sandbox-runner", version="0.1.0")
+web = FastAPI(title="oxagen-sandbox-runner", version="0.2.0")
 
 
 class RunRequest(BaseModel):
@@ -73,9 +94,13 @@ class RunRequest(BaseModel):
     timeout_ms: int
     memory_mb: int
     network: Literal["allow", "deny"]
-    tenant_id: str
+    # org_id and workspace_id are forwarded for per-tenant audit logging.
+    # (Previously named tenant_id — corrected to match the TS driver.)
+    org_id: str
     workspace_id: str
-    image: str
+    # image field is accepted for forward-compat but ignored; the runner
+    # derives the Modal Image from the `language` enum (see LANG_IMAGES).
+    image: str | None = None
 
 
 class RunResponse(BaseModel):
@@ -90,7 +115,10 @@ class RunResponse(BaseModel):
 def _check_auth(authorization: str | None, expected: str) -> None:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="missing bearer token")
-    if authorization[len("Bearer ") :] != expected:
+    token = authorization[len("Bearer "):]
+    # Constant-time comparison to guard against timing attacks.
+    import hmac
+    if not hmac.compare_digest(token, expected):
         raise HTTPException(status_code=401, detail="invalid bearer token")
 
 
@@ -100,9 +128,9 @@ async def run(req: RunRequest, authorization: str | None = Header(default=None))
 
     _check_auth(authorization, os.environ["MODAL_RUNNER_TOKEN"])
 
-    image = LANG_IMAGES.get(req.image)
+    image = LANG_IMAGES.get(req.language)
     if image is None:
-        raise HTTPException(status_code=400, detail=f"unsupported image {req.image}")
+        raise HTTPException(status_code=400, detail=f"unsupported language {req.language!r}")
 
     filename, argv = LANG_ENTRY[req.language]
 
@@ -117,6 +145,9 @@ async def run(req: RunRequest, authorization: str | None = Header(default=None))
         f"mkdir -p /work && cat > /work/{filename} && chmod +x /work/{filename}",
         image=image,
         memory=req.memory_mb,
+        # Give the sandbox a few extra seconds beyond the logical timeout so
+        # the runner can report the timeout cleanly instead of being killed
+        # mid-response by the Modal platform's own limit.
         timeout=max(30, req.timeout_ms // 1000 + 5),
         block_network=block_network,
         app=app,
@@ -136,19 +167,26 @@ async def run(req: RunRequest, authorization: str | None = Header(default=None))
             await proc.stdin.drain.aio()
             proc.stdin.write_eof()
 
-        stdout = await proc.stdout.read.aio()
-        stderr = await proc.stderr.read.aio()
+        stdout_raw = await proc.stdout.read.aio()
+        stderr_raw = await proc.stderr.read.aio()
         exit_code = await proc.wait.aio()
         duration_ms = int((time.monotonic() - started) * 1000)
+
         # Modal surfaces timeouts as exit_code 124 and OOM as 137 (matches
         # the kernel's SIGKILL convention), so we can derive both signals
         # without a side-channel.
         timed_out = exit_code == 124
         oom_killed = exit_code == 137
+
+        def decode(raw: bytes | str) -> str:
+            if isinstance(raw, str):
+                return raw
+            return raw.decode("utf-8", errors="replace")
+
         return RunResponse(
             exit_code=exit_code,
-            stdout=stdout if isinstance(stdout, str) else stdout.decode("utf-8", errors="replace"),
-            stderr=stderr if isinstance(stderr, str) else stderr.decode("utf-8", errors="replace"),
+            stdout=decode(stdout_raw),
+            stderr=decode(stderr_raw),
             duration_ms=duration_ms,
             timed_out=timed_out,
             oom_killed=oom_killed,
@@ -162,7 +200,10 @@ async def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.function(secrets=[RUNNER_SECRET], image=modal.Image.debian_slim().pip_install("fastapi", "pydantic"))
+@app.function(
+    secrets=[RUNNER_SECRET],
+    image=modal.Image.debian_slim().pip_install("fastapi", "pydantic"),
+)
 @modal.asgi_app()
 def fastapi_app() -> FastAPI:
     return web

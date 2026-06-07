@@ -1,9 +1,18 @@
 [project]
-name = "python-sandbox"
-version = "0.1.0"
-description = "Add your description here"
+name = "oxagen-modal-sandbox"
+version = "0.2.0"
+description = "Modal sandbox runner for Oxagen — deploys as a FastAPI ASGI app on Modal's Firecracker microVM platform."
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
     "modal>=1.4.3",
+    "fastapi>=0.115.0",
+    "pydantic>=2.0.0",
+    "uvicorn>=0.34.0",
 ]
+
+[tool.uv]
+# python-version is set in .python-version (3.14 locally). The runner
+# executes on Modal's debian_slim Python 3.12 image — that version constraint
+# is on Modal's side, not enforced here.
+python-preference = "system"
