@@ -1,121 +1,140 @@
-import { desc, eq } from "drizzle-orm";
-import { withTenantDb, schema } from "@oxagen/database";
-import { runInTenantScope } from "@oxagen/tenancy";
-import { resolveOrg } from "@/lib/resolve-org";
+// Security → Audit: filterable, paginated audit-log viewer with signed export.
+//
+// Rec 2 / OXA-1558 of docs/architecture/security/soc2-simplification.html.
+// Replaces the static 50-row list with URL-driven filters, keyset pagination,
+// per-row forensic drill-down, and a signed NDJSON/CSV export. Export is an
+// Enterprise feature and additionally requires an owner/admin role; both gates
+// are re-checked in the export route (the disabled button is cosmetic).
 
-// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
-import { ScrollText, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { ScrollText, ArrowLeft, ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-
-function formatDate(d: Date): string {
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-const OUTCOME_VARIANT: Record<string, "default" | "destructive" | "muted" | "outline"> = {
-  allow: "default",
-  success: "default",
-  deny: "destructive",
-  error: "muted",
-};
+import { Button } from "@/components/ui/button";
+import { resolveOrg, assertOrgMember, getOrgRole, SECURITY_MANAGER_ROLES } from "@/lib/resolve-org";
+import { getSessionOrRedirect } from "@/lib/session";
+import { getEnterpriseAccess } from "@/lib/enterprise";
+import { org } from "@/lib/routes";
+import { EnterpriseUpsell } from "@/components/security/enterprise-upsell";
+import { parseAuditFilter, encodeAuditFilter, hasActiveFilter } from "@/lib/audit-filters";
+import { queryAuditPage } from "@/lib/audit-query";
+import { AuditFilterBar } from "./_components/audit-filter-bar";
+import { AuditEventRow } from "./_components/audit-event-row";
+import { AuditExportButtons } from "./_components/audit-export-buttons";
 
 export default async function SecurityAuditPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orgSlug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { orgSlug } = await params;
-  const tenant = await resolveOrg(orgSlug);
+  const sp = await searchParams;
 
-  // Org-only route — sentinel workspaceId. — OXA-1515
-  const events = await (async () => {
-    try {
-      return await runInTenantScope(
-        { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
-        () =>
-          withTenantDb((tx) =>
-            tx
-              .select({
-                id: schema.securityEvents.id,
-                eventType: schema.securityEvents.eventType,
-                outcome: schema.securityEvents.outcome,
-                capability: schema.securityEvents.capability,
-                actorUserId: schema.securityEvents.actorUserId,
-                ip: schema.securityEvents.ip,
-                occurredAt: schema.securityEvents.occurredAt,
-              })
-              .from(schema.securityEvents)
-              .where(eq(schema.securityEvents.orgId, tenant.id))
-              .orderBy(desc(schema.securityEvents.occurredAt))
-              .limit(50),
-          ),
-      );
-    } catch {
-      return [];
-    }
-  })();
+  const [session, tenant] = await Promise.all([getSessionOrRedirect(), resolveOrg(orgSlug)]);
+  await assertOrgMember(tenant.id, session.user.id);
+
+  const [access, role, filter] = await Promise.all([
+    getEnterpriseAccess(tenant.id),
+    getOrgRole(tenant.id, session.user.id),
+    Promise.resolve(parseAuditFilter(sp)),
+  ]);
+
+  const page = await queryAuditPage(tenant.id, filter);
+
+  const isManager = role != null && SECURITY_MANAGER_ROLES.has(role);
+  const canExport = access.isEnterprise && isManager;
+  const disabledReason = !access.isEnterprise
+    ? "Signed audit export requires the Enterprise plan."
+    : "Signed audit export requires an owner or admin role.";
+
+  // Pagination links (keyset → forward + first-page).
+  const onFirstPage = filter.cursor === null;
+  const nextHref = page.nextCursor
+    ? `${org.security.audit({ orgSlug })}?${encodeAuditFilter(filter, { cursor: page.nextCursor }).toString()}`
+    : null;
+  const firstHref = `${org.security.audit({ orgSlug })}?${encodeAuditFilter(filter, { cursor: null }).toString()}`;
 
   return (
     <div className="flex flex-col gap-6">
+      {!access.isEnterprise && (
+        <EnterpriseUpsell orgSlug={orgSlug} feature="Audit log export" currentTier={access.tier} />
+      )}
+
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <ScrollText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>Audit log</CardTitle>
-              <CardDescription>
-                Append-only security event stream. The most recent 50 events are shown.
-              </CardDescription>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
+                <ScrollText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              </span>
+              <div>
+                <CardTitle>Audit log</CardTitle>
+                <CardDescription>
+                  Append-only security event stream. Filter, drill down, and export signed
+                  evidence.
+                </CardDescription>
+              </div>
             </div>
+            <AuditExportButtons canExport={canExport} disabledReason={disabledReason} />
           </div>
         </CardHeader>
-        <CardPanel>
-          {events.length === 0 ? (
+        <CardPanel className="flex flex-col gap-4">
+          <AuditFilterBar
+            selectedEventTypes={filter.eventTypes}
+            selectedOutcome={filter.outcome}
+            q={filter.q}
+            from={filter.from ? filter.from.toISOString() : null}
+            to={filter.to ? filter.to.toISOString() : null}
+          />
+
+          {page.rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No security events recorded yet.
+              {hasActiveFilter(filter)
+                ? "No security events match these filters."
+                : "No security events recorded yet."}
             </p>
           ) : (
             <div className="flex flex-col gap-2">
-              {events.map((e) => (
-                <div
+              {page.rows.map((e) => (
+                <AuditEventRow
                   key={e.id}
-                  className="flex flex-col gap-1.5 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:gap-4"
-                >
-                  <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-                    <p className="font-mono text-xs font-medium text-foreground truncate">
-                      {e.eventType}
-                      {e.capability ? ` · ${e.capability}` : ""}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span>{formatDate(e.occurredAt)}</span>
-                      {e.ip && <span>{e.ip}</span>}
-                    </div>
-                  </div>
-                  <Badge
-                    variant={OUTCOME_VARIANT[e.outcome] ?? "outline"}
-                    className="shrink-0 text-xs"
-                  >
-                    {e.outcome === "allow" || e.outcome === "success" ? (
-                      <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" />
-                    ) : e.outcome === "deny" ? (
-                      <XCircle className="mr-1 h-3 w-3" aria-hidden="true" />
-                    ) : (
-                      <AlertTriangle className="mr-1 h-3 w-3" aria-hidden="true" />
-                    )}
-                    {e.outcome}
-                  </Badge>
-                </div>
+                  row={{
+                    id: e.id,
+                    occurredAt: e.occurredAt.toISOString(),
+                    eventType: e.eventType,
+                    outcome: e.outcome,
+                    actorUserId: e.actorUserId,
+                    workspaceId: e.workspaceId,
+                    capability: e.capability,
+                    ip: e.ip,
+                    userAgent: e.userAgent,
+                    requestId: e.requestId,
+                  }}
+                />
               ))}
+            </div>
+          )}
+
+          {/* Keyset pagination: forward + jump-to-first. */}
+          {(nextHref || !onFirstPage) && (
+            <div className="flex items-center justify-between pt-1">
+              {!onFirstPage ? (
+                <Button variant="ghost" size="sm" render={<Link href={firstHref} />}>
+                  <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                  First page
+                </Button>
+              ) : (
+                <span />
+              )}
+              {nextHref ? (
+                <Button variant="outline" size="sm" render={<Link href={nextHref} />}>
+                  Next
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </Button>
+              ) : (
+                <span className="text-xs text-muted-foreground">End of results</span>
+              )}
             </div>
           )}
         </CardPanel>
