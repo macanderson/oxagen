@@ -95,13 +95,29 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
     async get(key: string): Promise<GetObjectResult> {
       const start = Date.now();
 
-      // We don't know the access level of an existing object from the key
-      // alone. Try the authenticated SDK get() first (works for both public
-      // and private blobs when we have the read-write token). Fall back to a
-      // plain public fetch only when the SDK path is unavailable. Using the
-      // SDK path for all gets is the safest default: it works for private blobs
-      // and is no slower than a direct fetch for public ones.
-      const result = await blobGet(key, { token, access: "private" });
+      // Try the authenticated SDK get() first (works for private blobs when
+      // we have the read-write token). If the store doesn't support private
+      // access, fall back to a plain public fetch. For public-only stores,
+      // we still use the token-based approach since it's faster and doesn't
+      // require guessing the public URL format.
+      let result = await blobGet(key, { token, access: "private" }).catch(
+        async (err: unknown) => {
+          // If private access fails on a public-only store, try without
+          // the access parameter (defaults to public fetch).
+          if (
+            err instanceof Error &&
+            err.message.includes("Cannot use private access")
+          ) {
+            logger.info(
+              { driver: "vercel-blob", key, reason: "store is public-only" },
+              "storage: retrying get without private access",
+            );
+            return blobGet(key, { token });
+          }
+          throw err;
+        },
+      );
+
       if (!result || !result.stream) {
         // SDK returns null for 404 (not found) or 304 (not modified).
         // Both cases surface as StorageNotFoundError to the serve route.
