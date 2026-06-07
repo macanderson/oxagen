@@ -85,6 +85,8 @@ vi.mock("@oxagen/billing", () => ({
   setOrgDefaultPaymentMethod: vi.fn(),
   removeOrgPaymentMethod: vi.fn(),
   updateAutoReloadSettings: vi.fn(),
+  createUsageCreditCheckout: vi.fn(),
+  isTierDenied: vi.fn(() => false),
 }));
 
 vi.mock("@oxagen/config/env", () => ({
@@ -130,6 +132,7 @@ import {
   cancelOrgSubscription,
   setSubscriptionSeats,
   isSeatLimitError,
+  createUsageCreditCheckout,
 } from "@oxagen/billing";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 
@@ -299,19 +302,24 @@ describe("buyCreditsAction — Zod validation", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("amountUsd=5 → proceeds (calls fetch with org data)", async () => {
-    // Mock global fetch
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ url: "https://checkout.stripe.com/pay/cs_test" }),
-    });
-    vi.stubGlobal("fetch", fetchMock);
+  it("amountUsd=5 → proceeds (calls createUsageCreditCheckout directly)", async () => {
+    // The action now calls the billing function directly (no cookie-less self
+    // fetch — that returned a spurious 401). Assert the billing fn is invoked
+    // with the resolved orgId + cents and its checkout url is returned.
+    vi.mocked(createUsageCreditCheckout).mockResolvedValue({
+      url: "https://checkout.stripe.com/pay/cs_test",
+      grantCents: 500,
+      priceCents: 500,
+      percent: 0,
+    } as never);
 
     setRole("owner");
     const result = await buyCreditsAction({ orgSlug: "acme", amountUsd: 5 });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.url).toContain("stripe");
-    vi.unstubAllGlobals();
+    expect(createUsageCreditCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: "org-1", grantCents: 500 }),
+    );
   });
 
   it("amountUsd=0 → {ok:false}", async () => {

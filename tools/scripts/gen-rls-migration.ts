@@ -58,6 +58,11 @@ function predicates(cls: PolicyClass): Predicates {
       check: `${BYPASS} OR (org_id = ${ORG})`,
     };
   }
+  if (cls === "org_or_global") {
+    // Nullable org_id: NULL rows are a shared/global catalog visible to every
+    // tenant; non-NULL rows are private to their org.
+    return `${BYPASS} OR (org_id IS NULL OR org_id = ${ORG})`;
+  }
   // standard: org_id + workspace_id both required
   const p = `${BYPASS} OR (org_id = ${ORG} AND workspace_id = ${WS})`;
   return { using: p, check: p };
