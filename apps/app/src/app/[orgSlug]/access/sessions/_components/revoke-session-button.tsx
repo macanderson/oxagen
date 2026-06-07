@@ -64,7 +64,6 @@ export function RevokeSessionButton({
           variant="destructive"
           size="sm"
           onClick={handleRevoke}
-          disabled={status === "revoking"}
           className="h-7 px-2.5 text-xs"
         >
           Confirm

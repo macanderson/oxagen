@@ -14,6 +14,8 @@ export { type ChatMessage } from "./message-bubble";
 
 export interface ChatShellProps {
   conversationId: string | null;
+  /** Public id (e.g. "conv_…") used to fetch conversation assets. */
+  conversationPublicId?: string | null;
   activeLeafMessageId: string | null;
   messagesPromise: Promise<ChatMessage[]>;
   sendAction: ComposerAction;
@@ -47,6 +49,7 @@ export interface ChatShellProps {
 // `messagesPromise` being recomputed after the server action revalidates.
 export function ChatShell({
   conversationId,
+  conversationPublicId,
   activeLeafMessageId,
   messagesPromise,
   sendAction,
@@ -68,6 +71,7 @@ export function ChatShell({
         <AsyncShell
           promise={messagesPromise}
           conversationId={conversationId}
+          conversationPublicId={conversationPublicId ?? null}
           activeLeafMessageId={activeLeafMessageId}
           sendAction={sendAction}
           resolveApprovalAction={resolveApprovalAction}
@@ -92,6 +96,7 @@ export function ChatShell({
 async function AsyncShell({
   promise,
   conversationId,
+  conversationPublicId,
   activeLeafMessageId,
   sendAction,
   resolveApprovalAction,
@@ -105,6 +110,7 @@ async function AsyncShell({
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
+  conversationPublicId: string | null;
   activeLeafMessageId: string | null;
   sendAction: ComposerAction;
   resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
@@ -121,6 +127,7 @@ async function AsyncShell({
   return (
     <ChatShellClient
       conversationId={conversationId}
+      conversationPublicId={conversationPublicId}
       activeLeafMessageId={activeLeafMessageId}
       messages={messages}
       sendAction={sendAction}
