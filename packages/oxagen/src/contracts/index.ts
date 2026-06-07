@@ -53,6 +53,25 @@ import { userPreferencesRead } from "./user.preferences.read";
 import { userPreferencesWrite } from "./user.preferences.write";
 import { workspaceModelSettingsRead } from "./workspace.model.settings.read";
 import { workspaceModelSettingsWrite } from "./workspace.model.settings.write";
+import { notificationsList } from "./notifications.list";
+import { notificationsMark } from "./notifications.mark";
+import { pluginCatalogBrowse } from "./plugin.catalog.browse";
+import { pluginCatalogGet } from "./plugin.catalog.get";
+import { pluginCredentialReauth } from "./plugin.credential.reauth";
+import { pluginCredentialSetSecret } from "./plugin.credential.set_secret";
+import { pluginDenylistAdd } from "./plugin.denylist.add";
+import { pluginDenylistRemove } from "./plugin.denylist.remove";
+import { pluginOrgInstall } from "./plugin.org.install";
+import { pluginOrgInstallBulk } from "./plugin.org.install_bulk";
+import { pluginOrgList } from "./plugin.org.list";
+import { pluginOrgSetEnabled } from "./plugin.org.set_enabled";
+import { pluginOrgUninstall } from "./plugin.org.uninstall";
+import { pluginRegistryAdd } from "./plugin.registry.add";
+import { pluginRegistryList } from "./plugin.registry.list";
+import { pluginRegistryRemove } from "./plugin.registry.remove";
+import { pluginRegistrySync } from "./plugin.registry.sync";
+import { pluginSettingsSetAuthAlerts } from "./plugin.settings.set_auth_alerts";
+import { pluginWorkspaceSetEnabled } from "./plugin.workspace.set_enabled";
 
 export {
   assetUpload,
@@ -100,6 +119,25 @@ export {
   userPreferencesWrite,
   workspaceModelSettingsRead,
   workspaceModelSettingsWrite,
+  notificationsList,
+  notificationsMark,
+  pluginCatalogBrowse,
+  pluginCatalogGet,
+  pluginCredentialReauth,
+  pluginCredentialSetSecret,
+  pluginDenylistAdd,
+  pluginDenylistRemove,
+  pluginOrgInstall,
+  pluginOrgInstallBulk,
+  pluginOrgList,
+  pluginOrgSetEnabled,
+  pluginOrgUninstall,
+  pluginRegistryAdd,
+  pluginRegistryList,
+  pluginRegistryRemove,
+  pluginRegistrySync,
+  pluginSettingsSetAuthAlerts,
+  pluginWorkspaceSetEnabled,
 };
 
 /**
@@ -156,4 +194,23 @@ export const contracts = [
   userPreferencesWrite,
   workspaceModelSettingsRead,
   workspaceModelSettingsWrite,
+  notificationsList,
+  notificationsMark,
+  pluginCatalogBrowse,
+  pluginCatalogGet,
+  pluginCredentialReauth,
+  pluginCredentialSetSecret,
+  pluginDenylistAdd,
+  pluginDenylistRemove,
+  pluginOrgInstall,
+  pluginOrgInstallBulk,
+  pluginOrgList,
+  pluginOrgSetEnabled,
+  pluginOrgUninstall,
+  pluginRegistryAdd,
+  pluginRegistryList,
+  pluginRegistryRemove,
+  pluginRegistrySync,
+  pluginSettingsSetAuthAlerts,
+  pluginWorkspaceSetEnabled,
 ] as const;
