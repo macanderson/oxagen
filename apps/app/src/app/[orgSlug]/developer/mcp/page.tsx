@@ -1,58 +1,140 @@
-import { PlugZap, Terminal, Copy, ExternalLink } from "lucide-react";
+/**
+ * Developer → MCP page — live API key injection.
+ *
+ * Reads the org's first active API key (same query as the tokens page) and
+ * injects it into the install snippets so the copy-paste actually works.
+ * Falls back gracefully when no API key exists: shows a note to create one.
+ */
+
+import { desc, eq } from "drizzle-orm";
+import { PlugZap, ExternalLink, KeySquare } from "lucide-react";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
+import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
+import { getSession } from "@/lib/session";
 import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { McpInstallTabs } from "./mcp-install-tabs";
+import type { McpTabEntry } from "./mcp-install-tabs";
 
-interface McpEntry {
-  client: string;
-  configKey: string;
-  snippet: string;
-}
+// Sentinel workspaceId for org-only routes. — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
-const MCP_ENTRIES: McpEntry[] = [
-  {
-    client: "Claude Code",
-    configKey: "claude_code_config",
-    snippet: `claude mcp add oxagen \\
-  --transport http \\
-  --url https://oxagen-v2-mcp.vercel.app/mcp \\
-  --header "Authorization: Bearer $OXAGEN_API_KEY"`,
-  },
-  {
-    client: "Claude Desktop",
-    configKey: "claude_desktop_config",
-    snippet: `{
+const MCP_URL = "https://oxagen-v2-mcp.vercel.app/mcp";
+
+/** Build the install snippets with a real (or placeholder) API key. */
+function buildSnippets(apiKey: string): Omit<McpTabEntry, "highlightedHtml">[] {
+  return [
+    {
+      key: "claude_code",
+      client: "Claude Code",
+      raw: `claude mcp add oxagen \\\n  --transport http \\\n  --url ${MCP_URL} \\\n  --header "Authorization: Bearer ${apiKey}"`,
+    },
+    {
+      key: "claude_desktop",
+      client: "Claude Desktop",
+      raw: `{
   "mcpServers": {
     "oxagen": {
       "command": "npx",
       "args": ["-y", "@oxagen/mcp-client"],
       "env": {
-        "OXAGEN_API_KEY": "<your-api-key>"
+        "OXAGEN_API_KEY": "${apiKey}"
       }
     }
   }
 }`,
-  },
-  {
-    client: "Cursor",
-    configKey: "cursor_config",
-    snippet: `{
+    },
+    {
+      key: "cursor",
+      client: "Cursor",
+      raw: `{
   "mcp": {
     "servers": [
       {
         "name": "oxagen",
         "transport": "http",
-        "url": "https://oxagen-v2-mcp.vercel.app/mcp",
+        "url": "${MCP_URL}",
         "headers": {
-          "Authorization": "Bearer $OXAGEN_API_KEY"
+          "Authorization": "Bearer ${apiKey}"
         }
       }
     ]
   }
 }`,
-  },
-];
+    },
+  ];
+}
 
-export default function DeveloperMcpPage() {
+/** Shiki is an optional enhancement — fall back to plain text on failure. */
+async function highlight(code: string, lang: string): Promise<string> {
+  try {
+    const { codeToHtml } = await import("shiki");
+    return await codeToHtml(code, {
+      lang,
+      themes: { light: "github-light", dark: "github-dark" },
+    });
+  } catch {
+    // Shiki not available or failed — return plain pre-escaped HTML.
+    const escaped = code
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    return `<pre><code>${escaped}</code></pre>`;
+  }
+}
+
+export default async function DeveloperMcpPage({
+  params,
+}: {
+  params: Promise<{ orgSlug: string }>;
+}) {
+  const { orgSlug } = await params;
+  const [org, session] = await Promise.all([resolveOrg(orgSlug), getSession()]);
+
+  const viewerUserId = session?.user?.id ?? "";
+  if (viewerUserId) {
+    await assertOrgMember(org.id, viewerUserId);
+  }
+
+  // Read the first active API key for this org.
+  let firstKey: string | null = null;
+  try {
+    const keys = await runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
+      withTenantDb((tx) =>
+        tx
+          .select({ keyPrefix: schema.apiKeys.keyPrefix, expiresAt: schema.apiKeys.expiresAt })
+          .from(schema.apiKeys)
+          .where(eq(schema.apiKeys.orgId, org.id))
+          .orderBy(desc(schema.apiKeys.createdAt))
+          .limit(10),
+      ),
+    );
+    const active = keys.filter(
+      (k) => !k.expiresAt || k.expiresAt > new Date(),
+    );
+    if (active[0]) {
+      // Show the key prefix only — the full hash is never readable after creation.
+      firstKey = `${active[0].keyPrefix}${"•".repeat(32)}`;
+    }
+  } catch {
+    // DB unreachable — degrade gracefully.
+  }
+
+  // Build snippets with real key or placeholder.
+  const apiKeyDisplay = firstKey ?? "$OXAGEN_API_KEY";
+  const snippetDefs = buildSnippets(apiKeyDisplay);
+
+  // Highlight each snippet. Shell snippets use "bash", JSON uses "json".
+  const entries: McpTabEntry[] = await Promise.all(
+    snippetDefs.map(async (s) => {
+      const lang = s.key === "claude_code" ? "bash" : "json";
+      return {
+        ...s,
+        highlightedHtml: await highlight(s.raw, lang),
+      };
+    }),
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -70,38 +152,47 @@ export default function DeveloperMcpPage() {
           </div>
         </CardHeader>
         <CardPanel className="flex flex-col gap-6">
+          {/* Endpoint notice */}
           <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
             <ExternalLink className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
               The MCP endpoint is live at{" "}
               <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
-                https://oxagen-v2-mcp.vercel.app/mcp
+                {MCP_URL}
               </code>
-              . Generate an API token on the Tokens tab, then follow the
-              install instructions for your client below.
+              . Connect over streamable HTTP — no SSE path needed.
             </span>
           </div>
 
-          <div className="flex flex-col gap-4">
-            {MCP_ENTRIES.map((entry) => (
-              <div key={entry.configKey} className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <Terminal className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                  <p className="text-sm font-medium text-foreground">{entry.client}</p>
-                  <Badge variant="outline" className="ml-auto text-xs">
-                    <Copy className="mr-1 h-3 w-3" aria-hidden="true" />
-                    Copy
-                  </Badge>
-                </div>
-                <pre
-                  aria-label={`${entry.client} configuration snippet`}
-                  className="overflow-x-auto rounded-xl border border-border/40 bg-muted/50 px-4 py-3 font-mono text-xs text-foreground"
+          {/* API key notice */}
+          {firstKey ? (
+            <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              <KeySquare className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                The snippets below use your org&apos;s first active API token (prefix shown).
+                Replace with the full token value you saved when the key was created.
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-50/30 dark:bg-amber-900/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+              <KeySquare className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                No active API token found. Create one on the{" "}
+                <a
+                  href={`/${orgSlug}/developer/tokens`}
+                  className="font-medium underline underline-offset-2 hover:no-underline"
                 >
-                  {entry.snippet}
-                </pre>
-              </div>
-            ))}
-          </div>
+                  Tokens
+                </a>{" "}
+                tab, then replace{" "}
+                <code className="font-mono text-xs">$OXAGEN_API_KEY</code> in the
+                snippets below with your key value.
+              </span>
+            </div>
+          )}
+
+          {/* Install tabs */}
+          <McpInstallTabs entries={entries} />
         </CardPanel>
       </Card>
     </div>

@@ -56,7 +56,7 @@ export async function GET(
       .where(
         and(
           eq(schema.conversations.publicId, conversationId),
-          eq(schema.conversations.deletedAt, null),
+          isNull(schema.conversations.deletedAt),
         ),
       )
       .limit(1),
@@ -101,7 +101,7 @@ export async function GET(
       .where(
         and(
           eq(schema.generatedAssets.conversationId, conv.id),
-          eq(schema.generatedAssets.deletedAt, null),
+          isNull(schema.generatedAssets.deletedAt),
           eq(schema.generatedAssets.status, "ready"),
           // "image" and "video" are rendered by dedicated components; include
           // all kinds here so the files-list panel is comprehensive.
