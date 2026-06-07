@@ -53,6 +53,7 @@ export function ShellFrame({
   availableOrgs,
   availableWorkspaces,
   user,
+  balance,
   createWorkspaceAction,
   children,
 }: ShellFrameProps) {
@@ -134,8 +135,16 @@ export function ShellFrame({
             </div>
           </div>
 
-          {/* Right cluster: notifications. */}
+          {/* Right cluster: balance · support · notifications. */}
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            {balance ? (
+              <BalancePill
+                orgSlug={org.slug}
+                balanceCents={balance.cents}
+                low={balance.low}
+              />
+            ) : null}
+            <SupportMenu orgSlug={ctx.orgSlug} workspaceSlug={ctx.workspaceSlug} />
             <NotificationsBell />
           </div>
         </header>
