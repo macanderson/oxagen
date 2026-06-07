@@ -97,22 +97,20 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
 
       // Try the authenticated SDK get() first (works for private blobs when
       // we have the read-write token). If the store doesn't support private
-      // access, fall back to a plain public fetch. For public-only stores,
-      // we still use the token-based approach since it's faster and doesn't
-      // require guessing the public URL format.
+      // access, fall back to public access. For public-only stores, both
+      // approaches work but private first ensures compatibility.
       let result = await blobGet(key, { token, access: "private" }).catch(
         async (err: unknown) => {
-          // If private access fails on a public-only store, try without
-          // the access parameter (defaults to public fetch).
+          // If private access fails on a public-only store, try with public access.
           if (
             err instanceof Error &&
             err.message.includes("Cannot use private access")
           ) {
             logger.info(
               { driver: "vercel-blob", key, reason: "store is public-only" },
-              "storage: retrying get without private access",
+              "storage: retrying get with public access",
             );
-            return blobGet(key, { token });
+            return blobGet(key, { token, access: "public" });
           }
           throw err;
         },
