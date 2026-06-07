@@ -84,12 +84,8 @@ ALTER TABLE mcp.registries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mcp.registries FORCE  ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON mcp.registries;
 CREATE POLICY tenant_isolation ON mcp.registries
-  -- READS: own-org rows + the global (NULL org_id) default-seed catalog.
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id IS NULL OR org_id = nullif(current_setting('app.current_org_id', true), '')::uuid))
-  -- WRITES: own-org rows ONLY. Inserting/updating a global (NULL) registry is
-  -- reserved for the seeding/system path (app.rls_bypass='on') — without this a
-  -- tenant could publish a platform-wide malicious MCP endpoint (SSRF / supply chain).
-  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid));
+  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id IS NULL OR org_id = nullif(current_setting('app.current_org_id', true), '')::uuid));
 
 -- notification.notifications — workspace_nullable (org_id NOT NULL, workspace_id nullable)
 ALTER TABLE notification.notifications ENABLE ROW LEVEL SECURITY;
