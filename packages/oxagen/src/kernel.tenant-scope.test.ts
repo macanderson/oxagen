@@ -55,6 +55,38 @@ describe("kernel tenant scope", () => {
     expect(out).toEqual({ org: ORG });
   });
 
+  it("skips the tenant-scope wrapper for unscoped capabilities (scoped:false)", async () => {
+    // Regression: user.preferences.write is scoped:false (keyed on the user, not
+    // an org) and is invoked with empty org/workspace ids. The kernel must NOT
+    // wrap it in runInTenantScope — doing so threw TenantScopeError on the empty
+    // ids and silently broke "Save preferences". The handler must run, and see
+    // no active tenant scope.
+    registerCapability({
+      name: "test.unscoped",
+      domain: "test",
+      description: "unscoped",
+      mode: "sync",
+      surfaces: ["api"],
+      layers: ["unit"],
+      sensitivity: "low",
+      defaultEffect: "allow",
+      defaultRoles: { org: {}, workspace: {} },
+      scoped: false,
+      input: z.object({}),
+      output: z.object({ scope: z.string() }),
+    });
+    registerHandler("test.unscoped", async () => async () => {
+      const s = getScope();
+      return { scope: s ? "SCOPED" : "NONE" };
+    });
+    const out = await invoke(
+      "test.unscoped",
+      {},
+      ctx({ orgId: "", workspaceId: "" }),
+    );
+    expect(out).toEqual({ scope: "NONE" });
+  });
+
   it("fails closed when orgId is empty (MCP session-token path)", async () => {
     registerCapability({
       name: "test.echo2",
