@@ -27,13 +27,13 @@
   "dependencies": {
     "@oxagen/compliance": "workspace:*",
     "@oxagen/config": "workspace:*",
+    "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "drizzle-orm": "0.45.2",
     "postgres": "3.4.9",
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@oxagen/telemetry": "workspace:*",
     "@types/pg": "8.20.0",
     "drizzle-kit": "0.31.10",
     "typescript": "6.0.3",

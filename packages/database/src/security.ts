@@ -16,7 +16,12 @@
 // @oxagen/telemetry type contract — keeping the coupling explicit and
 // locatable.
 
-import type { AuditInsertFn, SecurityEventInput } from "@oxagen/telemetry";
+import {
+  recordSecurityEvent,
+  recordSecurityEventAsync,
+  type AuditInsertFn,
+  type SecurityEventInput,
+} from "@oxagen/telemetry";
 import { schema } from "./index";
 import { withSystemDb } from "./tenant";
 
@@ -70,4 +75,51 @@ export function makeSecurityEventInserter(): AuditInsertFn {
       }),
     );
   };
+}
+
+// ---------------------------------------------------------------------------
+// Call-site registry — emitSecurityEvent / emitSecurityEventAsync
+//
+// Before this helper, every audit call site (org member handlers, billing
+// actions, auth route) hand-rolled the same lazy-singleton boilerplate:
+//
+//   let _auditInsert = null;
+//   function auditInsert() { return (_auditInsert ??= makeSecurityEventInserter()); }
+//   ...
+//   recordSecurityEvent(auditInsert(), { ...event });
+//
+// That is three lines of ceremony per file, copy-pasted ~8 times, and nothing
+// stopped a mutation handler from simply forgetting to emit. `emitSecurityEvent`
+// collapses it to one call against a single process-wide inserter, so wiring a
+// new privileged mutation is a one-liner and the coverage invariant test
+// (packages/compliance) can assert the registry is the only emit path.
+//
+// The inserter uses withSystemDb (RLS bypass) on purpose — see the design note
+// at the top of this file. Safe to call from any surface (handlers, server
+// actions, webhooks, bootstrap) without constructing anything.
+// ---------------------------------------------------------------------------
+
+let _registryInserter: AuditInsertFn | null = null;
+
+/** The process-wide audit inserter, lazily constructed on first emit. */
+function registryInserter(): AuditInsertFn {
+  return (_registryInserter ??= makeSecurityEventInserter());
+}
+
+/**
+ * Fire-and-forget emit of one audit row through the shared inserter. The audit
+ * write never blocks or fails the caller (errors go to stderr via
+ * recordSecurityEvent). This is the canonical way to record a privileged
+ * mutation — prefer it over constructing an inserter by hand.
+ */
+export function emitSecurityEvent(event: SecurityEventInput): void {
+  recordSecurityEvent(registryInserter(), event);
+}
+
+/**
+ * Awaitable emit for the rare caller that needs the audit row durably written
+ * before proceeding (tests, or evidence-load-bearing paths).
+ */
+export function emitSecurityEventAsync(event: SecurityEventInput): Promise<void> {
+  return recordSecurityEventAsync(registryInserter(), event);
 }

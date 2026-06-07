@@ -20,14 +20,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
-// ── Telemetry mock ───────────────────────────────────────────────────────────
-const mockRecordSecurityEvent = vi.fn();
-vi.mock("@oxagen/telemetry", () => ({
-  recordSecurityEvent: mockRecordSecurityEvent,
-}));
-
 // ── @oxagen/database/security mock ───────────────────────────────────────────
+// The handler emits through the consolidated registry helper emitSecurityEvent
+// (OXA-N1); we mock it directly and assert the event payload.
+const mockEmitSecurityEvent = vi.fn();
 vi.mock("@oxagen/database/security", () => ({
+  emitSecurityEvent: mockEmitSecurityEvent,
+  emitSecurityEventAsync: vi.fn(),
   makeSecurityEventInserter: vi.fn().mockReturnValue(vi.fn()),
 }));
 
@@ -248,8 +247,8 @@ describe("orgMemberRoleChangeHandler", () => {
     });
 
     // Audit event emitted.
-    expect(mockRecordSecurityEvent).toHaveBeenCalledOnce();
-    const [, event] = mockRecordSecurityEvent.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
+    const [event] = mockEmitSecurityEvent.mock.calls[0] as [Record<string, unknown>];
     expect(event.eventType).toBe("org.role_changed");
     expect(event.orgId).toBe("org-abc");
     expect(event.outcome).toBe("success");

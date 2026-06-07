@@ -17,19 +17,9 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member.role.change";
 import { schema, withTenantDb } from "@oxagen/database";
-import { makeSecurityEventInserter } from "@oxagen/database/security";
-import { recordSecurityEvent } from "@oxagen/telemetry";
+import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, isNull } from "drizzle-orm";
 import { logger } from "./logger";
-
-// Lazy singleton inserter — avoids constructing until first invocation.
-// makeSecurityEventInserter() resolves its own db handle (withSystemDb for the
-// no-scope audit write), so it takes no argument.
-let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
-function auditInsert() {
-  if (!_auditInsert) _auditInsert = makeSecurityEventInserter();
-  return _auditInsert;
-}
 
 const OWNER_ROLE_NAME = "Owner";
 const AUTHORIZED_ROLES = new Set(["Owner", "Admin"]);
@@ -291,7 +281,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleC
   });
 
   // ── Emit audit event (fire-and-forget; must not fail the capability) ──────────
-  recordSecurityEvent(auditInsert(), {
+  emitSecurityEvent({
     eventType: "org.role_changed",
     actorUserId: actorId,
     orgId: ctx.orgId,

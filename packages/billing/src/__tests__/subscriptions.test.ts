@@ -58,6 +58,18 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
+// ---------------------------------------------------------------------------
+// Audit emit mock — syncSubscriptionFromStripe emits billing.subscription_canceled
+// on a provider-initiated cancel transition (OXA-N1).
+// ---------------------------------------------------------------------------
+
+const emitSecurityEventMock = vi.fn();
+vi.mock("@oxagen/database/security", () => ({
+  emitSecurityEvent: emitSecurityEventMock,
+  emitSecurityEventAsync: vi.fn(),
+  makeSecurityEventInserter: vi.fn(() => vi.fn()),
+}));
+
 // Import after mocks.
 const { syncSubscriptionFromStripe } = await import("../subscriptions");
 
@@ -135,5 +147,36 @@ describe("syncSubscriptionFromStripe", () => {
     await syncSubscriptionFromStripe("sub_test_001");
 
     expect(dbMocks.insert).toHaveBeenCalledOnce();
+  });
+
+  it("provider-initiated cancellation (active → canceled) → emits billing.subscription_canceled", async () => {
+    getSubscriptionMock.mockResolvedValue(
+      makeSubscription({ productId: "prod_known", status: "canceled" }),
+    );
+    dbMocks.query.plans.findFirst.mockResolvedValue({ id: "plan-uuid-1" });
+    // Prior row was still active before this sync.
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({ status: "active" });
+
+    await syncSubscriptionFromStripe("sub_test_001");
+
+    expect(emitSecurityEventMock).toHaveBeenCalledOnce();
+    const [event] = emitSecurityEventMock.mock.calls[0] as [Record<string, unknown>];
+    expect(event.eventType).toBe("billing.subscription_canceled");
+    expect(event.orgId).toBe("org-abc-123");
+    expect(event.actorUserId).toBeNull(); // system / provider-confirmed
+    expect(event.outcome).toBe("success");
+  });
+
+  it("repeated sync of an already-canceled subscription → does NOT re-emit", async () => {
+    getSubscriptionMock.mockResolvedValue(
+      makeSubscription({ productId: "prod_known", status: "canceled" }),
+    );
+    dbMocks.query.plans.findFirst.mockResolvedValue({ id: "plan-uuid-1" });
+    // Prior row was already canceled — no edge transition.
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({ status: "canceled" });
+
+    await syncSubscriptionFromStripe("sub_test_001");
+
+    expect(emitSecurityEventMock).not.toHaveBeenCalled();
   });
 });

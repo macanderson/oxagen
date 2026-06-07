@@ -1,4 +1,5 @@
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
+import { emitSecurityEvent } from "@oxagen/database/security";
 import { eq, and, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
@@ -25,6 +26,14 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
     return;
   }
 
+  // Track whether this sync represents a Stripe-initiated cancellation so we can
+  // emit an audit row outside the write transaction. The billing UI emits
+  // billing.subscription_canceled when a USER cancels; a subscription can also
+  // be canceled by Stripe itself (dunning exhaustion, non-payment, or an action
+  // in the Stripe dashboard) with no UI path — those would otherwise leave no
+  // SOC2 audit trail. We detect the transition INTO "canceled" here. — OXA-N1
+  let canceledTransition = false;
+
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (webhook path, resolves plan from Stripe
     // product id before a tenant scope exists; billing tables are org_only) — OXA-1515
@@ -38,6 +47,15 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
       logger.warn({ stripeSubId, productId: sub.productId }, "billing: unknown product id, cannot sync subscription");
       return; // Unknown plan; cannot upsert without referential integrity.
     }
+
+    // Read the prior status before the upsert so we only emit on the edge
+    // (status entering "canceled"), never on repeated syncs of an already-
+    // canceled subscription.
+    const existing = await tx.query.subscriptions.findFirst({
+      where: eq(schema.subscriptions.stripeSubscriptionId, sub.id),
+      columns: { status: true },
+    });
+    canceledTransition = sub.status === "canceled" && existing?.status !== "canceled";
 
     const row = {
       orgId,
@@ -77,6 +95,23 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
       "billing: subscription synced",
     );
   });
+
+  // Provider-confirmed cancellation audit (system actor; no user session at the
+  // webhook boundary). Fire-and-forget — never blocks the sync. — OXA-N1
+  if (canceledTransition) {
+    emitSecurityEvent({
+      eventType: "billing.subscription_canceled",
+      actorUserId: null,
+      orgId,
+      workspaceId: null,
+      capability: null,
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
+    logger.info({ orgId, stripeSubId }, "billing: subscription canceled (provider-confirmed) — audit emitted");
+  }
 }
 
 export async function cancelSubscription(stripeSubId: string, atPeriodEnd = true): Promise<void> {

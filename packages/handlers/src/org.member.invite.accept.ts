@@ -15,18 +15,10 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member.invite.accept";
 import { schema, withSystemDb } from "@oxagen/database";
-import { makeSecurityEventInserter } from "@oxagen/database/security";
-import { recordSecurityEvent } from "@oxagen/telemetry";
+import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq } from "drizzle-orm";
 import { provisionMemberPrincipal } from "./iam-provision";
 import { logger } from "./logger";
-
-// Lazy singleton inserter.
-let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
-function auditInsert() {
-  if (!_auditInsert) _auditInsert = makeSecurityEventInserter();
-  return _auditInsert;
-}
 
 export const orgMemberInviteAcceptHandler: CapabilityHandler<typeof orgMemberInviteAccept> = async (
   input,
@@ -204,7 +196,7 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<typeof orgMemberInv
   // Emit org.role_changed: the new member's initial role assignment (none → role)
   // is the first role change on their principal. Fire-and-forget so an audit
   // failure never breaks the accept flow.
-  recordSecurityEvent(auditInsert(), {
+  emitSecurityEvent({
     eventType: "org.role_changed",
     actorUserId: ctx.userId,
     orgId: invitation.orgId,

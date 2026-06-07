@@ -27,15 +27,7 @@ import { loadEnv } from "@oxagen/config/env";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
-import { makeSecurityEventInserter } from "@oxagen/database/security";
-import { recordSecurityEvent } from "@oxagen/telemetry";
-
-// Lazy singleton — avoids constructing the inserter until first call.
-let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
-function auditInsert() {
-  if (!_auditInsert) _auditInsert = makeSecurityEventInserter();
-  return _auditInsert;
-}
+import { emitSecurityEvent } from "@oxagen/database/security";
 
 const CAN_MANAGE_BILLING = new Set(["owner", "admin", "billing"]);
 
@@ -85,7 +77,7 @@ async function resolveManagedOrg(
     logger.warn({ orgSlug, userId: session.user.id, role }, "billing: action denied — not a billing manager");
     // Emit billing.access_denied audit row (fire-and-forget; must not fail the
     // gate itself). orgId is always available at this point (resolveOrg succeeded).
-    recordSecurityEvent(auditInsert(), {
+    emitSecurityEvent({
       eventType: "billing.access_denied",
       actorUserId: session.user.id,
       orgId: tenant.id,
@@ -120,7 +112,7 @@ export async function cancelSubscriptionAction(input: {
   }
   revalidatePath(`/${input.orgSlug}/billing`);
   revalidatePath(`/${input.orgSlug}/billing/subscription`);
-  recordSecurityEvent(auditInsert(), {
+  emitSecurityEvent({
     eventType: "billing.subscription_canceled",
     actorUserId: managed.actorUserId,
     orgId: managed.orgId,
@@ -150,7 +142,7 @@ export async function reactivateSubscriptionAction(input: {
   }
   revalidatePath(`/${input.orgSlug}/billing`);
   revalidatePath(`/${input.orgSlug}/billing/subscription`);
-  recordSecurityEvent(auditInsert(), {
+  emitSecurityEvent({
     eventType: "billing.subscription_reactivated",
     actorUserId: managed.actorUserId,
     orgId: managed.orgId,
@@ -201,7 +193,7 @@ export async function changePlanAction(
       revalidatePath(`/${orgSlug}/billing`);
       revalidatePath(`/${orgSlug}/billing/subscription`);
       logger.info({ orgSlug, targetPlanSlug, interval }, "billing: plan swapped in-place");
-      recordSecurityEvent(auditInsert(), {
+      emitSecurityEvent({
         eventType: "billing.plan_changed",
         actorUserId: managed.actorUserId,
         orgId: managed.orgId,
@@ -219,7 +211,7 @@ export async function changePlanAction(
     // action was authorised and initiated (checkout URL creation = plan change
     // intent; the Stripe webhook completes the ledger side).
     logger.info({ orgSlug, targetPlanSlug, interval }, "billing: plan change → Stripe checkout");
-    recordSecurityEvent(auditInsert(), {
+    emitSecurityEvent({
       eventType: "billing.plan_changed",
       actorUserId: managed.actorUserId,
       orgId: managed.orgId,
@@ -269,7 +261,7 @@ export async function setSeatsAction(
     revalidatePath(`/${orgSlug}/billing`);
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug, seats }, "billing: seats updated");
-    recordSecurityEvent(auditInsert(), {
+    emitSecurityEvent({
       eventType: "billing.seats_changed",
       actorUserId: managed.actorUserId,
       orgId: managed.orgId,
@@ -338,7 +330,7 @@ export async function buyCreditsAction(
         }),
     );
     // Checkout URL created — credits purchase intent authorised and initiated.
-    recordSecurityEvent(auditInsert(), {
+    emitSecurityEvent({
       eventType: "billing.credits_purchased",
       actorUserId: managed.actorUserId,
       orgId: managed.orgId,
@@ -445,7 +437,7 @@ export async function createSetupIntentAction(input: {
       createPaymentMethodSetupIntent(managed.orgId),
     );
     logger.info({ orgSlug }, "billing: createSetupIntentAction");
-    recordSecurityEvent(auditInsert(), {
+    emitSecurityEvent({
       eventType: "billing.payment_method_added",
       actorUserId: managed.actorUserId,
       orgId: managed.orgId,
@@ -513,7 +505,7 @@ export async function setDefaultPaymentMethodAction(input: {
     );
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug, paymentMethodId }, "billing: setDefaultPaymentMethodAction");
-    recordSecurityEvent(auditInsert(), {
+    emitSecurityEvent({
       eventType: "billing.payment_method_default_changed",
       actorUserId: managed.actorUserId,
       orgId: managed.orgId,
@@ -551,7 +543,7 @@ export async function removePaymentMethodAction(input: {
     );
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug, paymentMethodId }, "billing: removePaymentMethodAction");
-    recordSecurityEvent(auditInsert(), {
+    emitSecurityEvent({
       eventType: "billing.payment_method_removed",
       actorUserId: managed.actorUserId,
       orgId: managed.orgId,
@@ -600,7 +592,7 @@ export async function updateAutoReloadAction(input: {
     );
     revalidatePath(`/${orgSlug}/billing/subscription`);
     logger.info({ orgSlug }, "billing: updateAutoReloadAction");
-    recordSecurityEvent(auditInsert(), {
+    emitSecurityEvent({
       eventType: "billing.auto_reload_updated",
       actorUserId: managed.actorUserId,
       orgId: managed.orgId,

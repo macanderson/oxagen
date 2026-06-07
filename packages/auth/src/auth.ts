@@ -3,10 +3,9 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { eq } from "drizzle-orm";
 import { db } from "@oxagen/database/client";
 import { schema, withSystemDb } from "@oxagen/database";
-import { makeSecurityEventInserter } from "@oxagen/database/security";
+import { emitSecurityEvent } from "@oxagen/database/security";
 import { requireEnv } from "@oxagen/config/env";
 import { createLocalKmsAdapter, loadMasterKey } from "@oxagen/crypto/kms";
-import { recordSecurityEvent } from "@oxagen/telemetry";
 import { buildAccountTokenHooks, buildStripOnlyAccountHooks } from "./token-encryption";
 import { sendEmail, resetPasswordEmailTemplate } from "@oxagen/notifications";
 
@@ -77,19 +76,12 @@ const kmsAdapter = tokenEncryptionKey
 // ---------------------------------------------------------------------------
 // Security audit setup
 //
-// auditInsert is created lazily on first use to avoid calling db() at module
-// load time (db() requires DATABASE_URL; tests may not have it).
+// emitSecurityEvent (from @oxagen/database/security) writes through the shared
+// process-wide inserter, which uses withSystemDb internally. These emits run
+// inside Better Auth lifecycle hooks (session.create/delete) where no tenant
+// scope has been established yet — the session itself is the identity signal
+// (tenancy: system bypass — OXA-1515).
 // ---------------------------------------------------------------------------
-
-let _auditInsert: ReturnType<typeof makeSecurityEventInserter> | null = null;
-function auditInsert(): ReturnType<typeof makeSecurityEventInserter> {
-  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists) — OXA-1515
-  // The security-event inserter uses withSystemDb internally (see @oxagen/database/security).
-  // It runs inside Better Auth lifecycle hooks (session.create/delete) where no tenant
-  // scope has been established yet — the session itself is the identity signal.
-  if (!_auditInsert) _auditInsert = makeSecurityEventInserter();
-  return _auditInsert;
-}
 
 // ---------------------------------------------------------------------------
 // resolveFirstOrgId — resolve an orgId for a given userId so that
@@ -366,7 +358,7 @@ export const auth = betterAuth({
             userAgent?: string | null;
           };
           const orgId = await resolveFirstOrgId(s.userId);
-          recordSecurityEvent(auditInsert(), {
+          emitSecurityEvent({
             eventType: "auth.sign_in",
             actorUserId: s.userId,
             orgId: orgId ?? NO_ORG_SENTINEL,
@@ -387,7 +379,7 @@ export const auth = betterAuth({
             userAgent?: string | null;
           };
           const orgId = await resolveFirstOrgId(s.userId);
-          recordSecurityEvent(auditInsert(), {
+          emitSecurityEvent({
             eventType: "auth.sign_out",
             actorUserId: s.userId,
             orgId: orgId ?? NO_ORG_SENTINEL,

@@ -19,16 +19,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
-// ── Telemetry mock ───────────────────────────────────────────────────────────
-const mockRecordSecurityEvent = vi.fn();
-vi.mock("@oxagen/telemetry", () => ({
-  recordSecurityEvent: mockRecordSecurityEvent,
-}));
-
 // ── @oxagen/database/security mock ───────────────────────────────────────────
-const mockMakeSecurityEventInserter = vi.fn().mockReturnValue(vi.fn());
+// The handler emits through the consolidated registry helper emitSecurityEvent
+// (OXA-N1); we mock it directly and assert the event payload.
+const mockEmitSecurityEvent = vi.fn();
 vi.mock("@oxagen/database/security", () => ({
-  makeSecurityEventInserter: mockMakeSecurityEventInserter,
+  emitSecurityEvent: mockEmitSecurityEvent,
+  emitSecurityEventAsync: vi.fn(),
+  makeSecurityEventInserter: vi.fn().mockReturnValue(vi.fn()),
 }));
 
 // ── drizzle-orm mock ─────────────────────────────────────────────────────────
@@ -268,8 +266,8 @@ describe("orgMemberRemoveHandler", () => {
     });
 
     // Audit event must have been emitted.
-    expect(mockRecordSecurityEvent).toHaveBeenCalledOnce();
-    const [, event] = mockRecordSecurityEvent.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
+    const [event] = mockEmitSecurityEvent.mock.calls[0] as [Record<string, unknown>];
     expect(event.eventType).toBe("org.member_removed");
     expect(event.orgId).toBe("org-abc");
     expect(event.outcome).toBe("success");
