@@ -717,15 +717,16 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   TENANT_RLS_ENFORCEMENT_ENABLED: {
     group: "Security",
     description:
-      "When true, Postgres RLS policies filter by org/workspace. Default off " +
-      "during seeding; withTenantDb sets app.rls_bypass while off. Flip to true " +
-      "per env after db.query.unscoped telemetry reads zero.",
+      "When true, Postgres RLS policies filter by org/workspace. Production-safe " +
+      "default — leave true for all deployed environments. Local dev override: set " +
+      "false in .env.local only if seeding/migration scripts need to bypass RLS; " +
+      "revert to true before running app code against the DB.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
-    placeholder: "false",
+    placeholder: "true",
   },
 
   // ── Sandbox runtime ───────────────────────────────────────────────────────────

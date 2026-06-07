@@ -105,6 +105,7 @@ function contractNameToPathSegment(name: string): string {
     "plugin.registry": "plugin/registries",
     "plugin.settings": "plugin/settings",
     "plugin.workspace": "plugin/workspace",
+    "api.key": "api-keys",
   };
 
   // Try progressively shorter prefixes
