@@ -6,9 +6,20 @@ import type { ToolCallStatus } from "./stream-event-types";
 
 /**
  * StatusIcon — shared status indicator used by ToolCallCard and CodeExecuteCard.
- * Renders a spinner for running, a check for completed, or an X for failed/other.
+ * Renders a pulsing dot while the model is still composing the call's arguments
+ * (pending), a spinner while executing (running), a check for completed, or an
+ * X for failed.
  */
 export function StatusIcon({ status }: { status: ToolCallStatus }) {
+  if (status === "pending") {
+    // Args still streaming in — a soft pulsing indigo dot reads as "composing".
+    return (
+      <span
+        className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#7182ff]"
+        aria-label="Composing"
+      />
+    );
+  }
   if (status === "running") {
     return <Loader2 className={cn("h-3.5 w-3.5 animate-spin text-foreground")} aria-label="Running" />;
   }

@@ -32,6 +32,48 @@ export interface LiveToolCall {
   errorReason?: string;
   durationMs?: number;
   startedAt: number;
+  /**
+   * Partial argument JSON accumulated from tool-input-delta events while the
+   * model is still composing the call (status === "pending"). Cleared/ignored
+   * once the parsed `inputPreview` lands with tool-call-start.
+   */
+  partialInput?: string;
+}
+
+/**
+ * A live reasoning ("chain of thought") segment accumulated from
+ * reasoning-start → reasoning-delta* → reasoning-end. Keyed by reasoningId in
+ * `ToolStreamState.reasonings`.
+ */
+export interface LiveReasoning {
+  reasoningId: string;
+  messageId: string;
+  text: string;
+  status: "thinking" | "done";
+  startedAt: number;
+  durationMs?: number;
+}
+
+/**
+ * A live multi-step boundary from start-step/finish-step. Keyed by stepIndex.
+ * Surfaced as subtle step markers in the activity timeline (only shown when a
+ * turn has more than one step).
+ */
+export interface LiveStep {
+  stepIndex: number;
+  status: "running" | "done";
+}
+
+/**
+ * An interleaved assistant-text segment. The model emits text in bursts that
+ * interleave with tool calls and reasoning; each contiguous run of text between
+ * non-text events becomes its own segment so the timeline preserves true
+ * think→act→speak order (rather than collapsing all text into one node).
+ */
+export interface LiveTextSegment {
+  key: string;
+  messageId: string;
+  text: string;
 }
 
 export interface LivePendingApproval {
@@ -84,6 +126,12 @@ export interface LiveComponent {
 export interface ToolStreamState {
   messages: Record<string, LiveAssistantMessage>;
   toolCalls: Record<string, LiveToolCall>;
+  /** Reasoning segments received this turn, keyed by reasoningId. */
+  reasonings: Record<string, LiveReasoning>;
+  /** Multi-step boundaries this turn, keyed by stepIndex. */
+  steps: Record<number, LiveStep>;
+  /** Interleaved assistant-text segments, keyed by segment key. */
+  textSegments: Record<string, LiveTextSegment>;
   pendingApprovals: Record<string, LivePendingApproval>;
   plans: Record<string, LivePlan>;
   activeFanouts: Record<string, LiveFanout>;
@@ -91,6 +139,18 @@ export interface ToolStreamState {
   memoryWrites: Record<string, LiveMemoryWrite>;
   /** Live component directives received this turn, keyed by toolCallId. */
   components: Record<string, LiveComponent>;
+  /**
+   * Ordered list of timeline-entry keys in first-appearance order. Each key is
+   * `<kind>:<id>` (e.g. "reasoning:abc", "tool:xyz", "text:msg:3", "step:0").
+   * The activity timeline walks this to render the chain in true stream order.
+   */
+  order: string[];
+  /**
+   * Internal cursor: the key of the text segment currently being appended to,
+   * or null when the next text delta should open a fresh segment. Cleared on
+   * every non-text timeline event so text breaks around tools/reasoning.
+   */
+  activeTextKey: string | null;
   /** Usage summary from the turn's "usage" event; undefined until the event arrives. */
   turnUsage: TurnUsage | undefined;
 }
@@ -98,14 +158,24 @@ export interface ToolStreamState {
 export const INITIAL_STATE: ToolStreamState = {
   messages: {},
   toolCalls: {},
+  reasonings: {},
+  steps: {},
+  textSegments: {},
   pendingApprovals: {},
   plans: {},
   activeFanouts: {},
   memoryRecalls: {},
   memoryWrites: {},
   components: {},
+  order: [],
+  activeTextKey: null,
   turnUsage: undefined,
 };
+
+/** Append a timeline key in first-appearance order (idempotent). */
+function withOrder(order: string[], key: string): string[] {
+  return order.includes(key) ? order : [...order, key];
+}
 
 export type Action = { type: "event"; event: StreamEvent } | { type: "reset" };
 
@@ -114,16 +184,134 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
   const e = action.event;
   switch (e.type) {
     case "text": {
-      const prev = state.messages[e.messageId] ?? { messageId: e.messageId, text: "" };
+      const prevMsg = state.messages[e.messageId] ?? { messageId: e.messageId, text: "" };
+      // Reuse the open segment, or open a fresh one keyed by position so text
+      // before/after a tool call renders as distinct timeline nodes.
+      const segKey = state.activeTextKey ?? `text:${e.messageId}:${state.order.length}`;
+      const prevSeg =
+        state.textSegments[segKey] ?? { key: segKey, messageId: e.messageId, text: "" };
       return {
         ...state,
         messages: {
           ...state.messages,
-          [e.messageId]: { ...prev, text: prev.text + e.text },
+          [e.messageId]: { ...prevMsg, text: prevMsg.text + e.text },
+        },
+        textSegments: {
+          ...state.textSegments,
+          [segKey]: { ...prevSeg, text: prevSeg.text + e.text },
+        },
+        order: withOrder(state.order, segKey),
+        activeTextKey: segKey,
+      };
+    }
+    case "reasoning-start": {
+      return {
+        ...state,
+        reasonings: {
+          ...state.reasonings,
+          [e.reasoningId]: {
+            reasoningId: e.reasoningId,
+            messageId: e.messageId,
+            text: "",
+            status: "thinking",
+            startedAt: Date.now(),
+          },
+        },
+        order: withOrder(state.order, `reasoning:${e.reasoningId}`),
+        activeTextKey: null,
+      };
+    }
+    case "reasoning-delta": {
+      const existing =
+        state.reasonings[e.reasoningId] ??
+        ({
+          reasoningId: e.reasoningId,
+          messageId: "",
+          text: "",
+          status: "thinking" as const,
+          startedAt: Date.now(),
+        } satisfies LiveReasoning);
+      return {
+        ...state,
+        reasonings: {
+          ...state.reasonings,
+          [e.reasoningId]: { ...existing, text: existing.text + e.text },
+        },
+        order: withOrder(state.order, `reasoning:${e.reasoningId}`),
+        activeTextKey: null,
+      };
+    }
+    case "reasoning-end": {
+      const existing = state.reasonings[e.reasoningId];
+      if (!existing) return state;
+      return {
+        ...state,
+        reasonings: {
+          ...state.reasonings,
+          [e.reasoningId]: { ...existing, status: "done", durationMs: e.durationMs },
+        },
+      };
+    }
+    case "step-start": {
+      return {
+        ...state,
+        steps: {
+          ...state.steps,
+          [e.stepIndex]: { stepIndex: e.stepIndex, status: "running" },
+        },
+        order: withOrder(state.order, `step:${e.stepIndex}`),
+        activeTextKey: null,
+      };
+    }
+    case "step-finish": {
+      const existing = state.steps[e.stepIndex];
+      if (!existing) return state;
+      return {
+        ...state,
+        steps: { ...state.steps, [e.stepIndex]: { ...existing, status: "done" } },
+      };
+    }
+    case "tool-input-start": {
+      const existing = state.toolCalls[e.toolCallId];
+      return {
+        ...state,
+        toolCalls: {
+          ...state.toolCalls,
+          [e.toolCallId]:
+            existing ??
+            ({
+              toolCallId: e.toolCallId,
+              messageId: e.messageId,
+              capability: e.capability,
+              inputPreview: undefined,
+              riskLevel: "low",
+              status: "pending",
+              stdout: "",
+              stderr: "",
+              partialInput: "",
+              startedAt: Date.now(),
+            } satisfies LiveToolCall),
+        },
+        order: withOrder(state.order, `tool:${e.toolCallId}`),
+        activeTextKey: null,
+      };
+    }
+    case "tool-input-delta": {
+      const existing = state.toolCalls[e.toolCallId];
+      if (!existing) return state;
+      return {
+        ...state,
+        toolCalls: {
+          ...state.toolCalls,
+          [e.toolCallId]: {
+            ...existing,
+            partialInput: (existing.partialInput ?? "") + e.delta,
+          },
         },
       };
     }
     case "tool-call-start": {
+      const existing = state.toolCalls[e.toolCallId];
       return {
         ...state,
         toolCalls: {
@@ -135,11 +323,17 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
             inputPreview: e.inputPreview,
             riskLevel: e.riskLevel,
             status: "running",
-            stdout: "",
-            stderr: "",
-            startedAt: Date.now(),
+            stdout: existing?.stdout ?? "",
+            stderr: existing?.stderr ?? "",
+            output: existing?.output,
+            errorReason: existing?.errorReason,
+            durationMs: existing?.durationMs,
+            startedAt: existing?.startedAt ?? Date.now(),
+            partialInput: existing?.partialInput,
           },
         },
+        order: withOrder(state.order, `tool:${e.toolCallId}`),
+        activeTextKey: null,
       };
     }
     case "tool-call-output": {
@@ -184,6 +378,8 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
             expiresAt: e.expiresAt,
           },
         },
+        order: withOrder(state.order, `approval:${e.approvalId}`),
+        activeTextKey: null,
       };
     }
     case "approval-resolved": {
@@ -210,6 +406,8 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
             status: "pending",
           },
         },
+        order: withOrder(state.order, `plan:${e.planId}`),
+        activeTextKey: null,
       };
     }
     case "plan-resolved": {
@@ -232,6 +430,8 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
             status: "running",
           },
         },
+        order: withOrder(state.order, `fanout:${e.fanoutId}`),
+        activeTextKey: null,
       };
     }
     case "subagent-completed": {
@@ -252,6 +452,8 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
           ...state.memoryRecalls,
           [e.queryId]: { queryId: e.queryId, memories: e.memories },
         },
+        order: withOrder(state.order, `memory:${e.queryId}`),
+        activeTextKey: null,
       };
     }
     case "memory-written": {
@@ -266,6 +468,8 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
             weight: e.weight,
           },
         },
+        order: withOrder(state.order, `memwrite:${e.memoryId}`),
+        activeTextKey: null,
       };
     }
     case "component": {
@@ -279,6 +483,8 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
             props: e.props,
           },
         },
+        order: withOrder(state.order, `component:${e.toolCallId}`),
+        activeTextKey: null,
       };
     }
     case "usage": {

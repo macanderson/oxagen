@@ -1,5 +1,5 @@
 {
-  "name": "@oxagen/telemetry",
+  "name": "@oxagen/compliance",
   "version": "0.2.2",
   "private": true,
   "type": "module",
@@ -7,25 +7,16 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./client": "./src/client.ts",
-    "./migrate": "./src/migrate.ts",
-    "./tenant": "./src/tenant.ts"
+    "./security-event-types": "./src/security-event-types.ts",
+    "./db-check": "./src/db-check.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
-    "migrate": "tsx src/migrate.ts",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
-  "dependencies": {
-    "@clickhouse/client": "1.19.0",
-    "@oxagen/compliance": "workspace:*",
-    "@oxagen/config": "workspace:*",
-    "@oxagen/tenancy": "workspace:*"
-  },
   "devDependencies": {
-    "tsx": "4.22.3",
     "typescript": "6.0.3",
     "vitest": "2.1.9",
     "@vitest/coverage-v8": "2.1.9"

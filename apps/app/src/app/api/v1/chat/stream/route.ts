@@ -21,7 +21,11 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { randomUUID } from "node:crypto";
 import type { ModelMessage } from "ai";
-import type { RenderDirective, StreamEvent } from "@/components/chat/stream-event-types";
+import type {
+  AssistantContentBlock,
+  RenderDirective,
+  StreamEvent,
+} from "@/components/chat/stream-event-types";
 
 // Side-effect imports: bind every handler into the shared kernel BEFORE
 // materializeTools runs so invoke() can resolve both agent.* and all
@@ -37,14 +41,31 @@ import "@oxagen/agent/register";
  * arm to a concrete narrowable shape when TOOLS is the wide `ToolSet` alias.
  */
 interface TextDeltaPart { type: "text-delta"; text: string }
+interface ReasoningDeltaPart { type: "reasoning-delta"; id: string; text: string }
+interface ReasoningBoundaryPart { type: "reasoning-start" | "reasoning-end"; id: string }
+interface ToolInputStartPart { type: "tool-input-start"; id: string; toolName: string }
+interface ToolInputDeltaPart { type: "tool-input-delta"; id: string; delta: string }
 interface ToolCallPart { type: "tool-call"; toolCallId: string; toolName: string; input: unknown }
 interface ToolResultPart { type: "tool-result"; toolCallId: string; toolName: string; output: unknown }
+interface ToolErrorPart { type: "tool-error"; toolCallId: string; toolName: string; error: unknown }
 interface FinishPart { type: "finish"; totalUsage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }
 
 function partType(p: unknown): string | undefined {
   return typeof p === "object" && p !== null && "type" in p
     ? String((p as { type: unknown }).type)
     : undefined;
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+function errorMessageOf(error: unknown): string {
+  return error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : "Tool execution failed";
 }
 
 const BodySchema = z.object({
@@ -392,26 +413,117 @@ export async function POST(request: NextRequest): Promise<Response> {
         // the tool-result arm becomes an unresolvable intersection.
         const toolStartedAt: Record<string, number> = {};
         // Accumulate the assistant's text so we can persist the full reply
-        // once the stream finishes (see the INSERT after the loop).
+        // (content column + next turn's history context).
         let assistantText = "";
+
+        // ── Ordered content-block accumulator ────────────────────────────────
+        // Build the assistant message's content_blocks in true stream order so
+        // a page refresh re-renders the exact chain of thought/action (reasoning
+        // → tool calls → text), not just the final text. `currentText` buffers
+        // contiguous text deltas; flushText() commits them as a block whenever a
+        // structural event (reasoning/tool/component) interrupts the prose.
+        const blocks: AssistantContentBlock[] = [];
+        let currentText = "";
+        const flushText = (): void => {
+          if (currentText.length > 0) {
+            blocks.push({ type: "text", text: currentText });
+            currentText = "";
+          }
+        };
+        // Index maps so terminal events can update the block pushed earlier.
+        const reasoningBlockIndex: Record<string, number> = {};
+        const reasoningStartedAt: Record<string, number> = {};
+        const toolBlockIndex: Record<string, number> = {};
+        // Multi-step boundary counter (start-step/finish-step).
+        let stepIndex = -1;
 
         for await (const raw of result.fullStream as AsyncIterable<unknown>) {
           const pType = partType(raw);
           if (pType === "text-delta") {
             const part = raw as TextDeltaPart;
             assistantText += part.text;
+            currentText += part.text;
             emit({ type: "text", messageId: requestId, text: part.text });
+          } else if (pType === "reasoning-start") {
+            const part = raw as ReasoningBoundaryPart;
+            flushText();
+            reasoningStartedAt[part.id] = Date.now();
+            // Reserve the block slot now so reasoning keeps its place in order.
+            reasoningBlockIndex[part.id] = blocks.length;
+            blocks.push({ type: "reasoning", reasoningId: part.id, text: "" });
+            emit({ type: "reasoning-start", messageId: requestId, reasoningId: part.id });
+          } else if (pType === "reasoning-delta") {
+            const part = raw as ReasoningDeltaPart;
+            const idx = reasoningBlockIndex[part.id];
+            if (idx !== undefined) {
+              const blk = blocks[idx];
+              if (blk && blk.type === "reasoning") blk.text += part.text;
+            }
+            emit({ type: "reasoning-delta", reasoningId: part.id, text: part.text });
+          } else if (pType === "reasoning-end") {
+            const part = raw as ReasoningBoundaryPart;
+            const durationMs =
+              reasoningStartedAt[part.id] !== undefined
+                ? Date.now() - (reasoningStartedAt[part.id] as number)
+                : 0;
+            const idx = reasoningBlockIndex[part.id];
+            if (idx !== undefined) {
+              const blk = blocks[idx];
+              if (blk && blk.type === "reasoning") blk.durationMs = durationMs;
+            }
+            emit({ type: "reasoning-end", reasoningId: part.id, durationMs });
+          } else if (pType === "start-step") {
+            stepIndex += 1;
+            flushText();
+            emit({ type: "step-start", messageId: requestId, stepIndex });
+          } else if (pType === "finish-step") {
+            if (stepIndex >= 0) emit({ type: "step-finish", stepIndex });
+          } else if (pType === "tool-input-start") {
+            const part = raw as ToolInputStartPart;
+            flushText();
+            emit({
+              type: "tool-input-start",
+              messageId: requestId,
+              toolCallId: part.id,
+              capability: toolNameMap[part.toolName] ?? part.toolName,
+            });
+          } else if (pType === "tool-input-delta") {
+            const part = raw as ToolInputDeltaPart;
+            emit({ type: "tool-input-delta", toolCallId: part.id, delta: part.delta });
           } else if (pType === "tool-call") {
             const part = raw as ToolCallPart;
             toolStartedAt[part.toolCallId] = Date.now();
+            // Translate the model-safe tool name back to the real dotted
+            // capability name so the UI labels and routes (e.g.
+            // agent.code.execute → CodeExecuteCard) on the real name.
+            const capability = toolNameMap[part.toolName] ?? part.toolName;
+            flushText();
+            // Reserve a terminal block; tool-result/tool-error fills it in.
+            toolBlockIndex[part.toolCallId] = blocks.length;
+            if (capability === "agent.code.execute") {
+              const inp = isRecord(part.input) ? part.input : {};
+              blocks.push({
+                type: "code-execute",
+                toolCallId: part.toolCallId,
+                language: typeof inp.language === "string" ? inp.language : "node",
+                code: typeof inp.code === "string" ? inp.code : "",
+                status: "running",
+              });
+            } else {
+              blocks.push({
+                type: "tool-call",
+                toolCallId: part.toolCallId,
+                capability,
+                inputPreview: part.input,
+                riskLevel: "low",
+                status: "running",
+              });
+            }
             emit({
               type: "tool-call-start",
               messageId: requestId,
               toolCallId: part.toolCallId,
-              // Translate the model-safe tool name back to the real dotted
-              // capability name so the UI labels and routes (e.g.
-              // agent.code.execute → CodeExecuteCard) on the real name.
-              capability: toolNameMap[part.toolName] ?? part.toolName,
+              capability,
               inputPreview: part.input,
               // Default risk level; capabilities may override via tool metadata.
               riskLevel: "low",
@@ -422,6 +534,24 @@ export async function POST(request: NextRequest): Promise<Response> {
               toolStartedAt[part.toolCallId] !== undefined
                 ? Date.now() - (toolStartedAt[part.toolCallId] as number)
                 : 0;
+            // Update the terminal block with the result.
+            const idx = toolBlockIndex[part.toolCallId];
+            if (idx !== undefined) {
+              const blk = blocks[idx];
+              if (blk && blk.type === "tool-call") {
+                blk.status = "completed";
+                blk.output = part.output;
+                blk.durationMs = durationMs;
+              } else if (blk && blk.type === "code-execute") {
+                const out = isRecord(part.output) ? part.output : {};
+                blk.status = "completed";
+                if (typeof out.stdout === "string") blk.stdout = out.stdout;
+                if (typeof out.stderr === "string") blk.stderr = out.stderr;
+                if (typeof out.exitCode === "number") blk.exitCode = out.exitCode;
+                if (typeof out.oomKilled === "boolean") blk.oomKilled = out.oomKilled;
+                blk.durationMs = durationMs;
+              }
+            }
             emit({
               type: "tool-call-end",
               toolCallId: part.toolCallId,
@@ -446,18 +576,52 @@ export async function POST(request: NextRequest): Promise<Response> {
                 // registry component that needs to call a scoped server action
                 // (e.g. make-video-form → videoGenerateAction) has real tenant
                 // context and does not fall back to a stub / empty context.
+                const props = {
+                  ...(render.props as Record<string, unknown>),
+                  orgSlug,
+                  workspaceSlug,
+                };
+                blocks.push({
+                  type: "component",
+                  toolCallId: part.toolCallId,
+                  componentId: render.componentId,
+                  props,
+                });
                 emit({
                   type: "component",
                   toolCallId: part.toolCallId,
                   componentId: render.componentId,
-                  props: {
-                    ...(render.props as Record<string, unknown>),
-                    orgSlug,
-                    workspaceSlug,
-                  },
+                  props,
                 });
               }
             }
+          } else if (pType === "tool-error") {
+            // A tool whose execute() THREW surfaces as a `tool-error` part (not
+            // `tool-result`). Without this arm the client's tool card would spin
+            // "running" forever. Emit a failed tool-call-end and mark the block.
+            const part = raw as ToolErrorPart;
+            const durationMs =
+              toolStartedAt[part.toolCallId] !== undefined
+                ? Date.now() - (toolStartedAt[part.toolCallId] as number)
+                : 0;
+            const errorReason = errorMessageOf(part.error);
+            const idx = toolBlockIndex[part.toolCallId];
+            if (idx !== undefined) {
+              const blk = blocks[idx];
+              if (blk && (blk.type === "tool-call" || blk.type === "code-execute")) {
+                blk.status = "failed";
+                blk.durationMs = durationMs;
+                if (blk.type === "tool-call") blk.errorReason = errorReason;
+                else blk.stderr = (blk.stderr ?? "") + errorReason;
+              }
+            }
+            emit({
+              type: "tool-call-end",
+              toolCallId: part.toolCallId,
+              status: "failed",
+              errorReason,
+              durationMs,
+            });
           } else if (pType === "finish") {
             const part = raw as FinishPart;
             // Emit usage so the client can show credits consumed this turn.
@@ -488,9 +652,16 @@ export async function POST(request: NextRequest): Promise<Response> {
             // error back into the next turn's history context.
             emit({ type: "text", messageId: requestId, text: `\n\n[Error: ${message}]` });
           }
-          // step-start, step-finish, tool-call-streaming-start, tool-call-delta,
-          // reasoning, source — intentionally not forwarded to the client.
+          // tool-input-end, source, raw, abort — intentionally not forwarded.
         }
+        // Commit any trailing prose as the final text block.
+        flushText();
+        // Drop reasoning blocks that never received any text (e.g. a provider
+        // that emits reasoning boundaries but no summary) so we don't persist
+        // empty "Thought for…" cards.
+        const persistedBlocks = blocks.filter(
+          (b) => b.type !== "reasoning" || b.text.length > 0,
+        );
 
         // Persist the assistant reply so it survives a page refresh and is
         // included in the next turn's history (OXA-1509). sendMessageAction
@@ -499,7 +670,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         // Token usage is metered separately by streamAgentReply.onFinish.
         // Best-effort: a DB failure here must NOT corrupt the SSE response the
         // client already consumed, so it is isolated and only logged.
-        if (conversationId && assistantText.length > 0) {
+        if (conversationId && (assistantText.length > 0 || persistedBlocks.length > 0)) {
           try {
             await runInTenantScope(
               { orgId: tenant.id, workspaceId: workspace.id },
@@ -514,7 +685,11 @@ export async function POST(request: NextRequest): Promise<Response> {
                       parentMessageId: parentMessageId ?? undefined,
                       role: "assistant",
                       content: assistantText,
-                      contentBlocks: [],
+                      // Persist the full ordered chain (reasoning → tools →
+                      // text) so a refresh re-renders the timeline, not just the
+                      // final prose. The plain `content` column keeps the text
+                      // for history/model context.
+                      contentBlocks: persistedBlocks,
                       isActiveInBranch: true,
                       metadata: { status: "complete" },
                       createdByUserId: session.user.id,

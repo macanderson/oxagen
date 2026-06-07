@@ -31,7 +31,12 @@ export interface TurnUsage {
   creditsCharged?: number;
 }
 
-export type ToolCallStatus = "running" | "completed" | "failed";
+// "pending" is the pre-execution phase while the model is still streaming the
+// tool's arguments (tool-input-start → tool-input-delta*); it flips to
+// "running" once the full tool-call lands and execution begins. Persisted
+// blocks are always terminal ("completed" | "failed"); "pending"/"running"
+// only exist on live (in-flight) tool calls.
+export type ToolCallStatus = "pending" | "running" | "completed" | "failed";
 
 export type ApprovalResolution = "approved" | "denied" | "expired";
 
@@ -68,6 +73,32 @@ export interface SubagentChild {
 
 export type StreamEvent =
   | { type: "text"; messageId: string; text: string }
+  // ── Reasoning ("chain of thought") ──────────────────────────────────────
+  // Emitted when a reasoning-capable model streams its thinking. A turn may
+  // contain several reasoning segments (one per tool-loop step), each keyed by
+  // `reasoningId`. `reasoning-start` opens a segment, `reasoning-delta` appends
+  // thinking text, `reasoning-end` closes it with the elapsed time.
+  | { type: "reasoning-start"; messageId: string; reasoningId: string }
+  | { type: "reasoning-delta"; reasoningId: string; text: string }
+  | { type: "reasoning-end"; reasoningId: string; durationMs: number }
+  // ── Step boundaries ("chain of action") ─────────────────────────────────
+  // Multi-step tool-loop markers from the SDK's start-step/finish-step parts.
+  // Surfaced so the timeline can render think→act→observe as discrete steps.
+  | { type: "step-start"; messageId: string; stepIndex: number }
+  | { type: "step-finish"; stepIndex: number }
+  // ── Streaming tool arguments ────────────────────────────────────────────
+  // Emitted before `tool-call-start` while the model is still composing the
+  // tool's arguments. `tool-input-start` creates a "pending" tool-call entry;
+  // `tool-input-delta` appends the partial argument JSON as it is typed. The
+  // subsequent `tool-call-start` replaces the partial with the parsed input and
+  // flips the entry to "running".
+  | {
+      type: "tool-input-start";
+      messageId: string;
+      toolCallId: string;
+      capability: string;
+    }
+  | { type: "tool-input-delta"; toolCallId: string; delta: string }
   | {
       type: "tool-call-start";
       messageId: string;
@@ -166,6 +197,18 @@ export interface TextContentBlock {
   text: string;
 }
 
+/**
+ * A persisted reasoning ("chain of thought") segment — the terminal form of a
+ * reasoning-start→delta*→end stream sequence. Rendered by the ReasoningCard as
+ * a collapsed "Thought for {duration}" disclosure that re-expands on click.
+ */
+export interface ReasoningContentBlock {
+  type: "reasoning";
+  reasoningId: string;
+  text: string;
+  durationMs?: number;
+}
+
 export interface ToolCallContentBlock {
   type: "tool-call";
   toolCallId: string;
@@ -242,6 +285,7 @@ export interface ComponentContentBlock {
 
 export type AssistantContentBlock =
   | TextContentBlock
+  | ReasoningContentBlock
   | ToolCallContentBlock
   | CodeExecuteContentBlock
   | ApprovalRequestContentBlock

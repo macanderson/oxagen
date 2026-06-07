@@ -728,6 +728,18 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0)
 
+  packages/compliance:
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0))
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.1)(lightningcss@1.32.0)(terser@5.48.0)
+
   packages/config:
     dependencies:
       zod:
@@ -774,6 +786,9 @@ importers:
 
   packages/database:
     dependencies:
+      '@oxagen/compliance':
+        specifier: workspace:*
+        version: link:../compliance
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
@@ -1169,6 +1184,9 @@ importers:
       '@clickhouse/client':
         specifier: 1.19.0
         version: 1.19.0
+      '@oxagen/compliance':
+        specifier: workspace:*
+        version: link:../compliance
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config

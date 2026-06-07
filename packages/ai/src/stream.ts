@@ -1,4 +1,5 @@
 import { streamText, type ModelMessage, type LanguageModel, type ToolSet, type StreamTextResult } from "ai";
+import type { JSONObject } from "@ai-sdk/provider";
 import {
   hashPrompt,
   insertTokenUsage,
@@ -8,6 +9,118 @@ import {
 import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
 import { defaultModel, modelIdOf } from "./models";
 import type { EffortLevel } from "./catalog";
+
+// ── Reasoning token budget per effort level (tokens allocated to thinking) ──
+const REASONING_BUDGET: Record<EffortLevel, number> = {
+  low: 4096,
+  medium: 8192,
+  high: 12288,
+};
+
+/**
+ * Per-vendor configuration required to surface reasoning/thinking tokens
+ * in `fullStream`. Different providers use incompatible option shapes; this
+ * helper centralises the mapping so the `streamText` call stays clean.
+ */
+export interface ReasoningRequestConfig {
+  /** Provider options to spread into the `streamText` call. Undefined when no
+   *  effort was requested or the vendor has no effort knob (e.g. deepseek). */
+  providerOptions?: Record<string, JSONObject>;
+  /**
+   * When `true` the caller MUST omit `temperature` entirely — the upstream
+   * provider will reject any non-default temperature while thinking is active
+   * (Anthropic, OpenAI reasoning models). When `false` the caller may pass
+   * its normal temperature.
+   */
+  temperatureLocked: boolean;
+}
+
+/**
+ * Build the vendor-specific `providerOptions` (and `temperatureLocked` flag)
+ * needed to emit reasoning/thinking tokens from `fullStream`.
+ *
+ * Vendor is derived from the gateway model id prefix (`vendor/model-slug`).
+ * An id without a prefix (e.g. a plain slug) falls through to the `openai`
+ * back-compat namespace.
+ *
+ * @param modelId - Vercel AI Gateway model id, e.g. "anthropic/claude-opus-4.8"
+ * @param effort  - Reasoning effort level; `undefined` → no-op (no providerOptions)
+ */
+export function reasoningRequestConfig(
+  modelId: string,
+  effort: EffortLevel | undefined,
+): ReasoningRequestConfig {
+  if (effort === undefined) {
+    return { temperatureLocked: false };
+  }
+
+  const vendor = modelId.includes("/") ? modelId.split("/")[0] : "unknown";
+  const budget = REASONING_BUDGET[effort];
+
+  switch (vendor) {
+    case "anthropic":
+      // Extended thinking requires temperature to be omitted (provider errors otherwise).
+      return {
+        providerOptions: {
+          anthropic: {
+            thinking: { type: "enabled", budgetTokens: budget },
+          },
+        },
+        temperatureLocked: true,
+      };
+
+    case "openai":
+      // Reasoning models (gpt-5.x / o-series) reject non-default temperature.
+      // `reasoningSummary: "auto"` causes the gateway to stream a reasoning
+      // summary chunk into fullStream.
+      return {
+        providerOptions: {
+          openai: {
+            reasoningEffort: effort,
+            reasoningSummary: "auto",
+          },
+        },
+        temperatureLocked: true,
+      };
+
+    case "google":
+      // Gemini thinking config; temperature is NOT locked for Google.
+      return {
+        providerOptions: {
+          google: {
+            thinkingConfig: {
+              includeThoughts: true,
+              thinkingBudget: budget,
+            },
+          },
+        },
+        temperatureLocked: false,
+      };
+
+    case "xai":
+      // Grok exposes a reasoning effort knob but does not lock temperature.
+      return {
+        providerOptions: {
+          xai: { reasoningEffort: effort },
+        },
+        temperatureLocked: false,
+      };
+
+    case "deepseek":
+      // DeepSeek-R1-style models stream reasoning natively with no effort knob.
+      return { temperatureLocked: false };
+
+    default:
+      // Unknown/unrecognised vendor: back-compat with the previous openai-
+      // namespace behaviour so existing callers don't regress silently.
+      return {
+        providerOptions: {
+          openai: { reasoningEffort: effort },
+        },
+        temperatureLocked: false,
+      };
+  }
+}
 
 export interface StreamAgentReplyArgs {
   messages: ModelMessage[];
@@ -59,20 +172,20 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
       ? lastUserMessage.content
       : JSON.stringify(lastUserMessage?.content ?? "");
 
+  const rc = reasoningRequestConfig(modelId, args.effort);
+
   return streamText({
     model,
     messages: args.messages,
     tools: args.tools,
     system: args.system,
-    temperature: args.temperature ?? 0.7,
-    // Reasoning effort is expressed via the OpenAI-style `reasoningEffort`
-    // provider option under the `openai` namespace; the Vercel AI Gateway
-    // (@ai-sdk/gateway) forwards `reasoning_effort` to whichever vendor backs
-    // the model. Only set when the caller passed `effort` (already gated to
-    // reasoning-capable models by the route via supportsReasoning).
-    ...(args.effort
-      ? { providerOptions: { openai: { reasoningEffort: args.effort } } }
-      : {}),
+    // When the provider locks temperature (Anthropic extended thinking,
+    // OpenAI reasoning models) we must omit the field entirely — sending
+    // any value, even the default, causes the upstream to reject the request.
+    ...(rc.temperatureLocked ? {} : { temperature: args.temperature ?? 0.7 }),
+    // Vendor-specific reasoning/thinking options, or nothing when effort is
+    // undefined or the vendor has no knob (deepseek).
+    ...(rc.providerOptions ? { providerOptions: rc.providerOptions } : {}),
     onFinish: async (event) => {
       const durationMs = Date.now() - startedAt;
       // AI SDK v6: usage fields are inputTokens/outputTokens (was
