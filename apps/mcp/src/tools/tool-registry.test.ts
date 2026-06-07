@@ -19,6 +19,7 @@ import { contracts } from "@oxagen/oxagen/contracts";
 import { metadata as apiKeyCreateMetadata } from "./api.key.create";
 import { metadata as apiKeyRevokeMetadata } from "./api.key.revoke";
 import { metadata as agentApprovalResolveMetadata } from "./agent.approval.resolve";
+import { metadata as archiveCreateMetadata } from "./archive.create";
 import { metadata as agentMcpListMetadata } from "./agent.mcp.list";
 import { metadata as agentMcpRegisterMetadata } from "./agent.mcp.register";
 import { metadata as agentMemoryRecallMetadata } from "./agent.memory.recall";
@@ -94,6 +95,7 @@ const allToolMetadata = [
   agentTaskBackgroundReadMetadata,
   agentTaskBackgroundStartMetadata,
   agentToolListMetadata,
+  archiveCreateMetadata,
   assetUploadMetadata,
   billingCreditsPurchaseMetadata,
   billingSubscriptionReadMetadata,

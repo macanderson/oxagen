@@ -14,6 +14,7 @@ import { archiveCreate } from "./archive.create";
 import { assetUpload } from "./asset.upload";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentCodeExecute } from "./agent.code.execute";
+import { agentUiRender } from "./agent.ui.render";
 import { brandkitApply } from "./brandkit.apply";
 import { documentsGenerate } from "./documents.generate";
 import { documentsPdfCreate } from "./documents.pdf.create";
@@ -75,6 +76,9 @@ import { pluginRegistryRemove } from "./plugin.registry.remove";
 import { pluginRegistrySync } from "./plugin.registry.sync";
 import { pluginSettingsSetAuthAlerts } from "./plugin.settings.set_auth_alerts";
 import { pluginWorkspaceSetEnabled } from "./plugin.workspace.set_enabled";
+import { workflowRun } from "./workflow.run";
+import { workflowStatus } from "./workflow.status";
+import { workflowCancel } from "./workflow.cancel";
 
 export {
   apiKeyCreate,
@@ -83,6 +87,7 @@ export {
   assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
+  agentUiRender,
   brandkitApply,
   documentsGenerate,
   documentsPdfCreate,
@@ -144,6 +149,9 @@ export {
   pluginRegistrySync,
   pluginSettingsSetAuthAlerts,
   pluginWorkspaceSetEnabled,
+  workflowRun,
+  workflowStatus,
+  workflowCancel,
 };
 
 /**
@@ -160,6 +168,7 @@ export const contracts = [
   archiveCreate,
   assetUpload,
   agentApprovalResolve,
+  agentUiRender,
   brandkitApply,
   documentsGenerate,
   documentsPdfCreate,
@@ -222,4 +231,7 @@ export const contracts = [
   pluginRegistrySync,
   pluginSettingsSetAuthAlerts,
   pluginWorkspaceSetEnabled,
+  workflowRun,
+  workflowStatus,
+  workflowCancel,
 ] as const;

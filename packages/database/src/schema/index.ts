@@ -19,3 +19,4 @@ export * from "./iam";
 export * from "./mcp";
 export * from "./plugin";
 export * from "./notification";
+export * from "./workflow-runs";

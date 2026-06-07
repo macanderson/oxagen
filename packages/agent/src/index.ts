@@ -8,3 +8,5 @@ export * from "./memory/neo4j";
 export * as hooks from "./hooks/runtime";
 export { resolveHandler, invokeCapability } from "./handlers/index";
 export type { CapabilityHandlerFn } from "./handlers/index";
+export { buildChatSystemPrompt } from "./system-prompt";
+export type { SystemPromptContext } from "./system-prompt";

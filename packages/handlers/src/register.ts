@@ -210,4 +210,8 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "plugin.settings.set_auth_alerts",
     async () => (await import("./plugin.settings.set_auth_alerts")).handler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "agent.ui.render",
+    async () => (await import("./agent.ui.render")).agentUiRenderHandler as CapabilityHandlerFn,
+  );
 });

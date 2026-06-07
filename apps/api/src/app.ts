@@ -133,7 +133,7 @@ orgScoped.route("/agent/memory/recall", agentMemoryRecallRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/forms/fill", formFillRoute);
-orgScoped.route("/archive", archiveCreateRoute);
+orgScoped.route("/archive/create", archiveCreateRoute);
 orgScoped.route("/documents/generate", documentsGenerateRoute);
 orgScoped.route("/documents/pdf", documentsPdfCreateRoute);
 orgScoped.route("/brandkit/apply", brandkitApplyRoute);

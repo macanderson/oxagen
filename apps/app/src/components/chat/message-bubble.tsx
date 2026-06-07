@@ -114,7 +114,7 @@ function renderBlock(
       // re-expandable. status="done" so it never shows the live typewriter.
       return (
         <ReasoningCard
-          key={block.reasoningId}
+          key={`reasoning:${block.reasoningId}`}
           text={block.text}
           status="done"
           durationMs={block.durationMs}
@@ -123,7 +123,7 @@ function renderBlock(
     case "tool-call":
       return (
         <ToolCallCard
-          key={block.toolCallId}
+          key={`tool-call:${block.toolCallId}`}
           toolCallId={block.toolCallId}
           capability={block.capability}
           inputPreview={block.inputPreview}
@@ -139,7 +139,7 @@ function renderBlock(
     case "code-execute":
       return (
         <CodeExecuteCard
-          key={block.toolCallId}
+          key={`code-execute:${block.toolCallId}`}
           toolCallId={block.toolCallId}
           language={block.language}
           code={block.code}
@@ -154,7 +154,7 @@ function renderBlock(
     case "approval-request":
       return (
         <ApprovalCard
-          key={block.approvalId}
+          key={`approval:${block.approvalId}`}
           approvalId={block.approvalId}
           capability={block.capability}
           inputPreview={block.inputPreview}
@@ -167,7 +167,7 @@ function renderBlock(
     case "plan":
       return (
         <PlanCard
-          key={block.planId}
+          key={`plan:${block.planId}`}
           planId={block.planId}
           title={block.title}
           steps={block.steps}
@@ -180,7 +180,7 @@ function renderBlock(
     case "subagent-fanout":
       return (
         <SubagentFanout
-          key={block.fanoutId}
+          key={`fanout:${block.fanoutId}`}
           fanoutId={block.fanoutId}
           parentMessageId={block.parentMessageId}
           subagents={block.children}
@@ -190,7 +190,7 @@ function renderBlock(
         />
       );
     case "memory-recall":
-      return <MemoryCard key={block.queryId} queryId={block.queryId} memories={block.memories} />;
+      return <MemoryCard key={`memory:${block.queryId}`} queryId={block.queryId} memories={block.memories} />;
     case "component": {
       const Component = CHAT_COMPONENTS[block.componentId];
       if (!Component) {
@@ -201,7 +201,7 @@ function renderBlock(
       }
       return (
         <Suspense
-          key={block.toolCallId}
+          key={`component:${block.toolCallId}`}
           fallback={
             // Tasteful skeleton: an opaque card with two shimmer lines to
             // suggest loading content.
@@ -265,22 +265,26 @@ function blockTone(
   }
 }
 
-// Stable React key for a persisted block — its id field, falling back to index.
+// Stable React key for a persisted block — type-prefixed so a tool-call block
+// and its companion component block (sharing the same toolCallId) never collide.
 function blockKey(block: AssistantContentBlock, idx: number): string {
   switch (block.type) {
     case "reasoning":
+      return `reasoning:${block.reasoningId}`;
     case "tool-call":
+      return `tool-call:${block.toolCallId}`;
     case "code-execute":
+      return `code-execute:${block.toolCallId}`;
     case "component":
-      return block.type === "reasoning" ? block.reasoningId : block.toolCallId;
+      return `component:${block.toolCallId}`;
     case "approval-request":
-      return block.approvalId;
+      return `approval:${block.approvalId}`;
     case "plan":
-      return block.planId;
+      return `plan:${block.planId}`;
     case "subagent-fanout":
-      return block.fanoutId;
+      return `fanout:${block.fanoutId}`;
     case "memory-recall":
-      return block.queryId;
+      return `memory:${block.queryId}`;
     case "text":
       return `text-${idx}`;
     default: {

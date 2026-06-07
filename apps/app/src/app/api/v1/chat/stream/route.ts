@@ -14,7 +14,7 @@ import {
   modelIdOf,
   loadEffectiveModelDefaults,
 } from "@oxagen/ai";
-import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
+import { materializeTools, readWorkspaceContext, injectContext, buildChatSystemPrompt } from "@oxagen/agent";
 import { persistGeneratedAsset, createPendingGeneratedAsset } from "@oxagen/handlers";
 import { inngest } from "@oxagen/inngest-functions/client";
 import { withTenantDb, schema } from "@oxagen/database";
@@ -392,6 +392,12 @@ export async function POST(request: NextRequest): Promise<Response> {
           messages: coreMessages,
           model: turnModel,
           tools: agentTools,
+          system: buildChatSystemPrompt({
+            orgSlug,
+            workspaceSlug,
+            orgName: tenant.name,
+            workspaceName: workspace.name,
+          }),
           ...(turnEffort ? { effort: turnEffort } : {}),
           telemetry: {
             orgId: tenant.id,
