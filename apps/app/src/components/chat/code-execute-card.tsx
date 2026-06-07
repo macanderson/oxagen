@@ -54,12 +54,19 @@ export function CodeExecuteCard({
 }: CodeExecuteCardProps) {
   const stdoutRef = React.useRef<HTMLPreElement>(null);
   const stderrRef = React.useRef<HTMLPreElement>(null);
+  const [showHtmlPreview, setShowHtmlPreview] = React.useState(false);
 
   React.useEffect(() => {
     if (status !== "running") return;
     if (stdoutRef.current) stdoutRef.current.scrollTop = stdoutRef.current.scrollHeight;
     if (stderrRef.current) stderrRef.current.scrollTop = stderrRef.current.scrollHeight;
   }, [stdout, stderr, status]);
+
+  const hasHtmlOutput =
+    status === "completed" &&
+    exitCode === 0 &&
+    stdout != null &&
+    looksLikeHtml(stdout);
 
   return (
     <div
@@ -118,7 +125,29 @@ export function CodeExecuteCard({
             exit {exitCode ?? "?"}
           </Badge>
           {oomKilled ? <Badge variant="destructive">OOM killed</Badge> : null}
+          {hasHtmlOutput ? (
+            <button
+              type="button"
+              onClick={() => setShowHtmlPreview((v) => !v)}
+              className="ml-auto inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-foreground hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+              aria-expanded={showHtmlPreview}
+              aria-label={showHtmlPreview ? "Hide HTML preview" : "Show HTML preview"}
+            >
+              {showHtmlPreview ? "Hide Preview" : "Preview HTML"}
+            </button>
+          ) : null}
         </div>
+      ) : null}
+
+      {/* Sandboxed HTML artifact preview — only shown when stdout is HTML and user toggled it. */}
+      {hasHtmlOutput && showHtmlPreview && stdout != null ? (
+        <Suspense
+          fallback={
+            <div className="h-32 animate-pulse rounded-xl bg-muted" aria-busy="true" aria-label="Loading preview" />
+          }
+        >
+          <HtmlArtifact html={stdout} title={`Output — ${language}`} />
+        </Suspense>
       ) : null}
     </div>
   );

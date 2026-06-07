@@ -1,0 +1,228 @@
+// conversation.handlers.test.ts — handler invocation tests for conversation tools.
+//
+// Pattern: vi.mock the kernel `invoke` and context seam `buildContext`.
+// Schema assertions (valid/invalid parse) live in conversations.schema.test.ts.
+
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// ── Mocks ────────────────────────────────────────────────────────────────────
+
+const mocks = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  buildContext: vi.fn(),
+  headers: vi.fn(),
+}));
+
+vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
+vi.mock("../context", () => ({ buildContext: mocks.buildContext }));
+vi.mock("xmcp/headers", () => ({ headers: mocks.headers }));
+
+const fakeCtx = {
+  orgId: "org_test",
+  workspaceId: "ws_test",
+  userId: null,
+  apiKeyId: "key_test",
+  requestId: "req_test",
+  surface: "mcp" as const,
+  messageId: null,
+  clientIp: null,
+};
+
+const fakeExtra = {} as Parameters<typeof import("./conversation.archive")["default"]>[1];
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  mocks.buildContext.mockResolvedValue(fakeCtx);
+  mocks.headers.mockReturnValue({ authorization: "Bearer test_key" });
+});
+
+// ── conversation.archive ──────────────────────────────────────────────────────
+
+import handler_conversationArchive, {
+  schema as conversationArchiveSchema,
+  metadata as conversationArchiveMetadata,
+} from "./conversation.archive";
+
+describe("conversation.archive handler", () => {
+  it("exports schema and metadata", () => {
+    expect(conversationArchiveSchema).toBeDefined();
+    expect(conversationArchiveMetadata.name).toBe("conversation.archive");
+  });
+
+  it("calls buildContext then invoke with correct args", async () => {
+    const fakeOutput = { archived: 2 };
+    mocks.invoke.mockResolvedValue(fakeOutput);
+
+    const args = { conversationIds: ["cnv_1", "cnv_2"], archived: true };
+    const result = await handler_conversationArchive(args, fakeExtra);
+
+    expect(mocks.buildContext).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "conversation.archive",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+    expect(result).toMatchObject({ archived: 2 });
+  });
+
+  it("propagates invoke errors", async () => {
+    mocks.invoke.mockRejectedValue(new Error("not found"));
+    await expect(
+      handler_conversationArchive({ conversationIds: ["cnv_x"], archived: false }, fakeExtra),
+    ).rejects.toThrow("not found");
+  });
+});
+
+// ── conversation.delete ───────────────────────────────────────────────────────
+
+import handler_conversationDelete, {
+  schema as conversationDeleteSchema,
+  metadata as conversationDeleteMetadata,
+} from "./conversation.delete";
+
+describe("conversation.delete handler", () => {
+  it("exports schema and metadata", () => {
+    expect(conversationDeleteSchema).toBeDefined();
+    expect(conversationDeleteMetadata.name).toBe("conversation.delete");
+  });
+
+  it("calls invoke with delete args", async () => {
+    const fakeOutput = { deleted: 1 };
+    mocks.invoke.mockResolvedValue(fakeOutput);
+
+    const args = { conversationIds: ["cnv_1"] };
+    await handler_conversationDelete(args, fakeExtra);
+
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "conversation.delete",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+  });
+});
+
+// ── conversation.list ─────────────────────────────────────────────────────────
+
+import handler_conversationList, {
+  schema as conversationListSchema,
+  metadata as conversationListMetadata,
+} from "./conversation.list";
+
+describe("conversation.list handler", () => {
+  it("exports schema and metadata", () => {
+    expect(conversationListSchema).toBeDefined();
+    expect(conversationListMetadata.name).toBe("conversation.list");
+  });
+
+  it("calls invoke with list args", async () => {
+    const fakeOutput = { conversations: [], nextCursor: null, total: 0 };
+    mocks.invoke.mockResolvedValue(fakeOutput);
+
+    const args = { filter: "active" as const, limit: 20, cursor: null };
+    await handler_conversationList(args, fakeExtra);
+
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "conversation.list",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+  });
+});
+
+// ── conversation.purge ────────────────────────────────────────────────────────
+
+import handler_conversationPurge, {
+  schema as conversationPurgeSchema,
+  metadata as conversationPurgeMetadata,
+} from "./conversation.purge";
+
+describe("conversation.purge handler", () => {
+  it("exports schema and metadata", () => {
+    expect(conversationPurgeSchema).toBeDefined();
+    expect(conversationPurgeMetadata.name).toBe("conversation.purge");
+  });
+
+  it("calls invoke with empty args for purge", async () => {
+    const fakeOutput = { deleted: 42 };
+    mocks.invoke.mockResolvedValue(fakeOutput);
+
+    await handler_conversationPurge({}, fakeExtra);
+
+    expect(mocks.buildContext).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "conversation.purge",
+      {},
+      fakeCtx,
+      { surface: "mcp" },
+    );
+  });
+});
+
+// ── conversation.rename ───────────────────────────────────────────────────────
+
+import handler_conversationRename, {
+  schema as conversationRenameSchema,
+  metadata as conversationRenameMetadata,
+} from "./conversation.rename";
+
+describe("conversation.rename handler", () => {
+  it("exports schema and metadata", () => {
+    expect(conversationRenameSchema).toBeDefined();
+    expect(conversationRenameMetadata.name).toBe("conversation.rename");
+  });
+
+  it("calls invoke with rename args", async () => {
+    const fakeOutput = { conversationId: "cnv_1", title: "New Title" };
+    mocks.invoke.mockResolvedValue(fakeOutput);
+
+    const args = { conversationId: "cnv_1", title: "New Title" };
+    const result = await handler_conversationRename(args, fakeExtra);
+
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "conversation.rename",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+    expect(result).toMatchObject({ title: "New Title" });
+  });
+});
+
+// ── chat.message.send ─────────────────────────────────────────────────────────
+
+import handler_chatMessageSend, {
+  schema as chatMessageSendSchema,
+  metadata as chatMessageSendMetadata,
+} from "./chat.message.send";
+
+describe("chat.message.send handler", () => {
+  it("exports schema and metadata", () => {
+    expect(chatMessageSendSchema).toBeDefined();
+    expect(chatMessageSendMetadata.name).toBe("chat.message.send");
+  });
+
+  it("calls invoke with send args", async () => {
+    const fakeOutput = { conversationId: "cnv_new", messageId: "msg_1" };
+    mocks.invoke.mockResolvedValue(fakeOutput);
+
+    const args = {
+      conversationId: null,
+      agentVersionId: null,
+      parentMessageId: null,
+      branchReason: null,
+      content: "Hello!",
+      contentBlocks: [],
+    };
+    await handler_chatMessageSend(args, fakeExtra);
+
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "chat.message.send",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+  });
+});
