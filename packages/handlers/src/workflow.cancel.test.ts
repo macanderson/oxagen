@@ -113,7 +113,7 @@ describe("workflow.cancel handler", () => {
 
   it("sends the cancel event with the correct workflowRunId", async () => {
     await workflowCancelHandler({ workflowId: "wfr-uuid-1" }, CTX);
-    const sendArg = mocks.inngestSend.mock.calls[0][0];
-    expect(sendArg.data.workflowRunId).toBe(RUNNING_RUN.id);
+    const sendArg = mocks.inngestSend.mock.calls[0]![0] as Record<string, unknown>;
+    expect((sendArg.data as Record<string, unknown>).workflowRunId).toBe(RUNNING_RUN.id);
   });
 });

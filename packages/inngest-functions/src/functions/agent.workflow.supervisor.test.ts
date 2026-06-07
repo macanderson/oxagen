@@ -161,7 +161,7 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
   it("calls generateObjectFor with the run goal", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     expect(mocks.generateObjectFor).toHaveBeenCalledOnce();
-    const args = mocks.generateObjectFor.mock.calls[0][0] as Record<string, unknown>;
+    const args = mocks.generateObjectFor.mock.calls[0]![0] as Record<string, unknown>;
     expect(args.prompt).toContain("Profile all Fortune 500 CEOs");
     expect(args.telemetry).toMatchObject({
       orgId: "org-1",
@@ -173,7 +173,7 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
   it("inserts workflow_run_tasks rows for each planned task", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     expect(mocks.dbInsertValues).toHaveBeenCalledOnce();
-    const insertedTasks = mocks.dbInsertValues.mock.calls[0][0] as Array<Record<string, unknown>>;
+    const insertedTasks = mocks.dbInsertValues.mock.calls[0]![0] as Array<Record<string, unknown>>;
     expect(insertedTasks).toHaveLength(2);
     expect(insertedTasks[0]).toMatchObject({ taskIndex: 0, goal: "Find CEO of Apple" });
   });
@@ -181,7 +181,7 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
   it("dispatches inngest events for each task", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     expect(mocks.inngestSend).toHaveBeenCalled();
-    const sendArg = mocks.inngestSend.mock.calls[0][0] as Array<Record<string, unknown>>;
+    const sendArg = mocks.inngestSend.mock.calls[0]![0] as Array<Record<string, unknown>>;
     expect(Array.isArray(sendArg)).toBe(true);
     expect(sendArg[0]).toMatchObject({
       name: "agent/workflow.task.execute",
@@ -199,7 +199,7 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
     };
     mocks.generateObjectFor.mockResolvedValueOnce({ object: bigPlan });
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
-    const insertedTasks = mocks.dbInsertValues.mock.calls[0][0] as Array<unknown>;
+    const insertedTasks = mocks.dbInsertValues.mock.calls[0]![0] as Array<unknown>;
     expect(insertedTasks.length).toBeLessThanOrEqual(500);
   });
 

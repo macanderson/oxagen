@@ -133,9 +133,10 @@ describe("workflow.status handler", () => {
   it("returns tasks array with ISO timestamps", async () => {
     const result = await workflowStatusHandler({ workflowId: "wfr-uuid-1" }, CTX);
     expect(result.tasks).toHaveLength(1);
-    expect(result.tasks[0].taskIndex).toBe(0);
-    expect(result.tasks[0].status).toBe("completed");
-    expect(result.tasks[0].startedAt).toBe("2026-06-07T00:01:00.000Z");
+    const task = result.tasks[0];
+    expect(task?.taskIndex).toBe(0);
+    expect(task?.status).toBe("completed");
+    expect(task?.startedAt).toBe("2026-06-07T00:01:00.000Z");
   });
 
   it("returns null timestamps for null date fields", async () => {

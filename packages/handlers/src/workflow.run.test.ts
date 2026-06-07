@@ -59,17 +59,16 @@ describe("workflow.run handler", () => {
     mocks.inngestSend.mockResolvedValue(undefined);
   });
 
+  const BASE_INPUT = { goal: "Profile Fortune 500 CEOs", outputFormat: "json" as const, maxParallelism: 50 };
+
   it("rejects when no userId in context", async () => {
     await expect(
-      workflowRunHandler({ goal: "Profile Fortune 500 CEOs" }, { ...CTX, userId: null }),
+      workflowRunHandler(BASE_INPUT, { ...CTX, userId: null }),
     ).rejects.toThrow("workflow.run requires an authenticated user");
   });
 
   it("inserts a workflow_runs row and fires inngest event", async () => {
-    const result = await workflowRunHandler(
-      { goal: "Profile Fortune 500 CEOs" },
-      CTX,
-    );
+    const result = await workflowRunHandler(BASE_INPUT, CTX);
 
     expect(mocks.insertValues).toHaveBeenCalledTimes(1);
     expect(mocks.inngestSend).toHaveBeenCalledOnce();
@@ -89,34 +88,34 @@ describe("workflow.run handler", () => {
   });
 
   it("returns a render directive for workflow-progress", async () => {
-    const result = await workflowRunHandler({ goal: "test goal" }, CTX);
+    const result = await workflowRunHandler(BASE_INPUT, CTX);
     expect(result.render.componentId).toBe("workflow-progress");
     expect(result.render.props.workflowId).toBe(ROW.id);
   });
 
   it("uses input title when provided", async () => {
-    await workflowRunHandler({ goal: "test goal", title: "My Workflow" }, CTX);
-    const insertCall = mocks.insertValues.mock.calls[0][0];
+    await workflowRunHandler({ ...BASE_INPUT, title: "My Workflow" }, CTX);
+    const insertCall = mocks.insertValues.mock.calls[0][0] as Record<string, unknown>;
     expect(insertCall.title).toBe("My Workflow");
   });
 
   it("truncates goal to 200 chars as title when title omitted", async () => {
     const longGoal = "A".repeat(300);
-    await workflowRunHandler({ goal: longGoal }, CTX);
-    const insertCall = mocks.insertValues.mock.calls[0][0];
-    expect(insertCall.title.length).toBe(200);
+    await workflowRunHandler({ ...BASE_INPUT, goal: longGoal }, CTX);
+    const insertCall = mocks.insertValues.mock.calls[0][0] as Record<string, unknown>;
+    expect((insertCall.title as string).length).toBe(200);
   });
 
   it("forwards maxParallelism to inngest payload", async () => {
-    await workflowRunHandler({ goal: "test", maxParallelism: 10 }, CTX);
-    const sendCall = mocks.inngestSend.mock.calls[0][0];
-    expect(sendCall.data.maxParallelism).toBe(10);
+    await workflowRunHandler({ ...BASE_INPUT, maxParallelism: 10 }, CTX);
+    const sendCall = mocks.inngestSend.mock.calls[0][0] as Record<string, unknown>;
+    expect((sendCall.data as Record<string, unknown>).maxParallelism).toBe(10);
   });
 
   it("throws when insert returns no row", async () => {
     mocks.insertReturning.mockResolvedValueOnce([]);
     await expect(
-      workflowRunHandler({ goal: "test" }, CTX),
+      workflowRunHandler(BASE_INPUT, CTX),
     ).rejects.toThrow("workflow.run: insert returned no row");
   });
 });

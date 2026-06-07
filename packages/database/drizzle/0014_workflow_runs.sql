@@ -1,4 +1,4 @@
--- 0010_workflow_runs.sql — workflow supervisor tables.
+-- 0014_workflow_runs.sql — workflow supervisor tables.
 -- agent.workflow_runs: tracks a multi-task parallel workflow dispatch.
 -- agent.workflow_run_tasks: one row per planned sub-task.
 -- Forward migration (immutable after merge).
