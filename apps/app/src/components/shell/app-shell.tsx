@@ -62,6 +62,7 @@ export function AppShell({
         availableOrgs={availableOrgs}
         availableWorkspaces={availableWorkspaces}
         user={user}
+        balance={balance}
         createWorkspaceAction={boundCreateWorkspace}
       >
         {children}
