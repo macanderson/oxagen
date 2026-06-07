@@ -138,11 +138,11 @@ once every auditor has returned.
 
 Write a self-contained HTML report (no external assets) to:
 
-  docs/audits/release-audits/<SHORT_SHA>_<UTC_TIMESTAMP>_release-audit.html
+  docs/audits/release-audits/<UTC_TIMESTAMP>_<SHORT_SHA>_release-audit.html
 
-where `SHORT_SHA` is `git rev-parse --short HEAD` captured in Phase 0, and
-`UTC_TIMESTAMP` is the audit *request* time as `YYYYMMDDTHHMMSSZ`.
-Example: docs/audits/release-audits/a1b9f3c_20260601T174500Z_release-audit.html
+where `UTC_TIMESTAMP` is the audit *request* time as `YYYYMMDDTHHMMSSZ` and
+`SHORT_SHA` is `git rev-parse --short HEAD` captured in Phase 0.
+Example: docs/audits/release-audits/20260601T174500Z_a1b9f3c_release-audit.html
 
 `mkdir -p docs/audits/release-audits` first. The report must contain, in order:
 1. A header with repo, branch, full commit SHA, and request timestamp.
@@ -176,7 +176,7 @@ never changes. Leave the `DATA` shape and the renderer intact.
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{TIMESTAMP}} · {{SHORT_SHA}} Release Audit</title>
+<title>{{TIMESTAMP}} · {{SHORT_SHA}} · Release Audit</title>
 <style>
   :root {
     --bg:#0B1020; --panel:rgba(255,255,255,.04); --border:rgba(255,255,255,.08);
