@@ -194,13 +194,15 @@ describe("grantFreeCredits", () => {
     vi.clearAllMocks();
   });
 
-  it("first grant — transaction runs, lot + ledger + balance written", async () => {
+  it("first grant — lot + ledger + balance written via the system seam", async () => {
     const txMock = makeTx(false); // no conflict
     dbState.instance = makeDb(txMock);
 
     await grantFreeCredits("org-abc");
 
-    expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
+    // grantFreeCredits runs via withSystemDb (no tenant scope post-org-creation),
+    // so the tenant-path transaction() is NOT used — see grants.scope.test.ts.
+    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
     expect(txMock.insert).toHaveBeenCalledTimes(3);
     expect(txMock._lotInsertCalled).toBe(true);
     expect(txMock._balanceUpsertCalled).toBe(true);
@@ -212,7 +214,7 @@ describe("grantFreeCredits", () => {
 
     await grantFreeCredits("org-abc");
 
-    expect(dbState.instance!.transaction).toHaveBeenCalledOnce();
+    expect(dbState.instance!.transaction).not.toHaveBeenCalled();
     // Only the ledger insert (idempotency check) is called; lot/balance are skipped.
     expect(txMock.insert).toHaveBeenCalledTimes(1);
     expect(txMock._lotInsertCalled).toBe(false);

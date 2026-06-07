@@ -1,0 +1,51 @@
+import { z } from "zod";
+import { registerCapability } from "../registry";
+
+// Create a new API key scoped to the requesting org. The raw key is returned
+// exactly once (on creation) and is never stored in plaintext — only the SHA-256
+// hash and the short prefix are persisted. Callers must save the raw key
+// immediately; it cannot be retrieved later. Audited as api_key.created.
+//
+// Authorization: org Owner or Admin only.
+export const apiKeyCreate = registerCapability({
+  name: "api.key.create",
+  domain: "api_key",
+  description:
+    "Create a new API key for the org. Returns the raw key once — it is never recoverable after this call. Audited as api_key.created.",
+  mode: "sync",
+  surfaces: ["api", "mcp"],
+  layers: ["api", "mcp", "unit"],
+  scoped: true,
+  agent: { requiresApproval: false, riskLevel: "medium", category: "organization" },
+  sensitivity: "high",
+  defaultEffect: "deny",
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: {},
+  },
+  input: z.object({
+    name: z.string().min(1).max(120).describe("Human-readable label for the key"),
+    scope: z
+      .record(z.unknown())
+      .optional()
+      .default({})
+      .describe("Optional scope constraints (reserved for future use)"),
+    expiresAt: z
+      .string()
+      .datetime()
+      .optional()
+      .describe("Optional ISO-8601 expiry timestamp. Omit for a non-expiring key."),
+  }),
+  output: z.object({
+    keyId: z.string().describe("Internal UUID of the created key"),
+    publicId: z.string().describe("Prefixed public identifier (aky_ prefix)"),
+    name: z.string(),
+    keyPrefix: z.string().describe("Short prefix stored for index lookup"),
+    rawKey: z.string().describe("The full API key — shown ONCE, never again"),
+    expiresAt: z.string().nullable().describe("ISO-8601 expiry or null"),
+    createdAt: z.string().describe("ISO-8601 creation timestamp"),
+  }),
+});
+
+export type ApiKeyCreateInput = z.output<typeof apiKeyCreate.input>;
+export type ApiKeyCreateOutput = z.output<typeof apiKeyCreate.output>;

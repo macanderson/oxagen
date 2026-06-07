@@ -8,6 +8,8 @@
 // Note: these imports trigger the registerCapability() side-effects inside
 // each file, so this barrel also serves as the registration entrypoint.
 
+import { apiKeyCreate } from "./api.key.create";
+import { apiKeyRevoke } from "./api.key.revoke";
 import { assetUpload } from "./asset.upload";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentCodeExecute } from "./agent.code.execute";
@@ -74,6 +76,8 @@ import { pluginSettingsSetAuthAlerts } from "./plugin.settings.set_auth_alerts";
 import { pluginWorkspaceSetEnabled } from "./plugin.workspace.set_enabled";
 
 export {
+  apiKeyCreate,
+  apiKeyRevoke,
   assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
@@ -149,6 +153,8 @@ export {
  * Add one entry here whenever a new contract file is added to this directory.
  */
 export const contracts = [
+  apiKeyCreate,
+  apiKeyRevoke,
   assetUpload,
   agentApprovalResolve,
   brandkitApply,

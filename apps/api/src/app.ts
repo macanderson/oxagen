@@ -68,6 +68,8 @@ import { pluginCredentialReauthRoute } from "./routes/v1/plugin.credential.reaut
 import { notificationsListRoute } from "./routes/v1/notifications.list";
 import { notificationsMarkRoute } from "./routes/v1/notifications.mark";
 import { pluginSettingsSetAuthAlertsRoute } from "./routes/v1/plugin.settings.set_auth_alerts";
+import { apiKeyCreateRoute } from "./routes/v1/api.key.create";
+import { apiKeyRevokeRoute } from "./routes/v1/api.key.revoke";
 
 export type AppEnv = {
   Variables: {
@@ -165,4 +167,6 @@ orgScoped.route("/plugin/credential/reauth", pluginCredentialReauthRoute);
 orgScoped.route("/notifications", notificationsListRoute);
 orgScoped.route("/notifications/mark", notificationsMarkRoute);
 orgScoped.route("/plugin/settings/auth-alerts", pluginSettingsSetAuthAlertsRoute);
+orgScoped.route("/api-keys", apiKeyCreateRoute);
+orgScoped.route("/api-keys/revoke", apiKeyRevokeRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

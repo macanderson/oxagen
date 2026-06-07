@@ -1,3 +1,5 @@
+export { apiKeyCreateHandler } from "./api.key.create";
+export { apiKeyRevokeHandler } from "./api.key.revoke";
 export { organizationCreateHandler } from "./organization.create";
 export { bootstrapOrgIAM, provisionMemberPrincipal } from "./iam-provision";
 export type { BootstrapOrgIAMArgs, ProvisionMemberPrincipalArgs } from "./iam-provision";

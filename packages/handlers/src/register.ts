@@ -9,6 +9,14 @@ import { registerHandler, registerHandlersOnce, type CapabilityHandlerFn } from 
 // on hot reload is a no-op instead of tripping the kernel's duplicate guard.
 registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler(
+    "api.key.create",
+    async () => (await import("./api.key.create")).apiKeyCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "api.key.revoke",
+    async () => (await import("./api.key.revoke")).apiKeyRevokeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "asset.upload",
     async () => (await import("./asset.upload")).assetUploadHandler as CapabilityHandlerFn,
   );

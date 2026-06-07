@@ -16,6 +16,8 @@ import { contracts } from "@oxagen/oxagen/contracts";
 
 // ── Import all tool metadata ──────────────────────────────────────────────────
 
+import { metadata as apiKeyCreateMetadata } from "./api.key.create";
+import { metadata as apiKeyRevokeMetadata } from "./api.key.revoke";
 import { metadata as agentApprovalResolveMetadata } from "./agent.approval.resolve";
 import { metadata as agentMcpListMetadata } from "./agent.mcp.list";
 import { metadata as agentMcpRegisterMetadata } from "./agent.mcp.register";
@@ -79,6 +81,8 @@ import { metadata as workspaceModelSettingsWriteMetadata } from "./workspace.mod
 // ── Build the registered tool name list ───────────────────────────────────────
 
 const allToolMetadata = [
+  apiKeyCreateMetadata,
+  apiKeyRevokeMetadata,
   agentApprovalResolveMetadata,
   agentMcpListMetadata,
   agentMcpRegisterMetadata,

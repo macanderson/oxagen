@@ -147,7 +147,15 @@ export async function grantFreeCredits(orgId: string): Promise<void> {
   const start = Date.now();
   let granted = false;
 
-  await withTenantDb(async (tx) => {
+  // tenancy: system bypass via withSystemDb. grantFreeCredits runs immediately
+  // after org creation (onboarding action + organizationCreateHandler), where
+  // there is NO active tenant scope yet — the org-creation transaction is itself
+  // a system-level write, and the orgId is supplied explicitly. Using
+  // withTenantDb here throws TenantScopeError ("no_tenant_scope") under enforced
+  // RLS, silently dropping the $5 signup grant. credit_* tables are org_only and
+  // every write is scoped by the explicit orgId. Mirrors grantPlanCreditsForInvoicePaid
+  // / grantCreditPackForCheckout. — OXA-1515
+  await withSystemDb(async (tx) => {
     granted = await tryInsertGrantLedger(
       tx,
       orgId,
