@@ -98,14 +98,14 @@ export async function persistGeneratedAsset(
 ): Promise<PersistedGeneratedAsset> {
   const key = `generated/${args.kind}s/${args.orgId}/${randomUUID()}.${extFor(args.mimeType)}`;
   const store = storage();
-  // Store generated assets as public blobs; access control is enforced via the
-  // auth-gated /api/v1/assets/[publicId] proxy (serveGeneratedAsset enforces
-  // access policy). The storage-level URL is never exposed directly to clients.
+  // Store as private blobs; the CDN URL must never be publicly guessable.
+  // Access is served exclusively through the auth-gated /api/v1/assets/[publicId]
+  // proxy which enforces the asset's access policy before returning the blob.
   const { url, key: storageKey, bytes } = await store.put({
     key,
     body: args.bytes,
     contentType: args.mimeType,
-    access: "public",
+    access: "private",
   });
 
   // tenancy: system bypass via withSystemDb (shared utility called from both
