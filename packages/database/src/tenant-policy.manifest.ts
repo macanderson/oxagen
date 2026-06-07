@@ -112,6 +112,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
 
   // ── security.* (org_id NOT NULL, workspace_id nullable) ──────────────────
   { table: "security.security_events", policyClass: "workspace_nullable" },
+  { table: "security.org_security_policy", policyClass: "org_only" },
 
   // ── Installable-plugins epic (schemas plugin / mcp / notification) ─────────
   //   Added by migration 0008 AFTER the 0001 baseline, so their RLS is applied
