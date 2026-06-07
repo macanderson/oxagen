@@ -46,11 +46,28 @@ async function ensureRegistry(): Promise<void> {
   _getSurfaces = mod.getSurfaces;
 }
 
+export interface ApprovalRequiredEvent {
+  approvalId: string;
+  capability: string;
+  inputPreview: unknown;
+  riskLevel: "low" | "medium" | "high";
+  /** ISO string — when the approval request expires server-side. */
+  expiresAt: string;
+}
+
 export interface MaterializeOptions {
   allowlist?: Set<string>;
   // Workspace risk policy: when set to "low" or "medium", any capability
   // with a strictly-higher riskLevel is filtered out of the tool set.
   riskCeiling?: "low" | "medium" | "high";
+  /**
+   * Called immediately after an approval request is created and BEFORE
+   * `waitForApproval` blocks. Lets the stream route emit an
+   * `approval-required` SSE event so the client renders the approval card
+   * before execution pauses. Without this callback the stream hangs silently
+   * until the 5-minute TTL expires — the approval card never appears.
+   */
+  onApprovalRequired?: (event: ApprovalRequiredEvent) => void;
 }
 
 // Result of materializeTools: the Vercel AI SDK tool map keyed by *model-safe*
@@ -90,6 +107,9 @@ function passesRisk(cap: AnyCapability, ceiling?: MaterializeOptions["riskCeilin
 // Build the Vercel AI SDK tool map for a workspace turn. Filters by
 // allowlist + risk policy, never crosses tenant boundaries (the handler
 // itself enforces scope from CapabilityContext).
+// Default TTL must stay in sync with approval.ts DEFAULT_TTL_MS (5 min).
+const APPROVAL_TTL_MS = 5 * 60 * 1000;
+
 export async function materializeTools(
   ctx: CapabilityContext,
   opts: MaterializeOptions = {},
@@ -144,6 +164,7 @@ export async function materializeTools(
           // request to in the chat DAG. Direct API / MCP callers skip the
           // gate (their auth surface is responsible for authorization).
           if (requiresApproval && ctx.messageId) {
+            const expiresAt = new Date(Date.now() + APPROVAL_TTL_MS).toISOString();
             const { approvalId } = await createApprovalRequest({
               orgId: ctx.orgId,
               workspaceId: ctx.workspaceId,
@@ -151,6 +172,17 @@ export async function materializeTools(
               capabilityName: cap.name,
               inputPreview: input,
               riskLevel,
+            });
+            // Emit approval-required event BEFORE blocking so the stream route
+            // can forward it to the client immediately. Without this, the SSE
+            // channel goes silent during the waitForApproval block and the
+            // approval card never renders — the stream appears hung.
+            opts.onApprovalRequired?.({
+              approvalId,
+              capability: cap.name,
+              inputPreview: input,
+              riskLevel,
+              expiresAt,
             });
             const resolution = await waitForApproval(approvalId);
             if (resolution.resolution !== "approved") {

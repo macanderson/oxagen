@@ -325,21 +325,6 @@ export async function POST(request: NextRequest): Promise<Response> {
     request.headers.get("x-real-ip")?.trim() ??
     null;
 
-  // materializeTools returns the AI SDK tool map keyed by *model-safe* names
-  // (the gateway rejects the dotted capability names — see toModelToolName)
-  // plus a reverse map back to the real capability name. The map translates
-  // tool-call stream events so the UI still shows/routes on the real name.
-  const { tools: agentTools, nameMap: toolNameMap } = await materializeTools({
-    orgId: tenant.id,
-    workspaceId: workspace.id,
-    userId: session.user.id,
-    apiKeyId: null,
-    requestId,
-    surface: "app",
-    messageId: parentMessageId ?? requestId,
-    clientIp,
-  });
-
   const encoder = new TextEncoder();
 
   const responseStream = new ReadableStream<Uint8Array>({
@@ -349,6 +334,39 @@ export async function POST(request: NextRequest): Promise<Response> {
       }
 
       try {
+        // materializeTools is called inside start() so the emit() function is
+        // already live when onApprovalRequired fires. Tools are built here and
+        // used immediately below — no async gap between build and use.
+        //
+        // onApprovalRequired: called synchronously inside each tool's execute()
+        // closure, BEFORE waitForApproval() blocks the execution. This emits
+        // the `approval-required` SSE event to the client so the approval card
+        // renders while the stream is paused waiting for user decision.
+        const { tools: agentTools, nameMap: toolNameMap } = await materializeTools(
+          {
+            orgId: tenant.id,
+            workspaceId: workspace.id,
+            userId: session.user.id,
+            apiKeyId: null,
+            requestId,
+            surface: "app",
+            messageId: parentMessageId ?? requestId,
+            clientIp,
+          },
+          {
+            onApprovalRequired: (approvalEvent) => {
+              emit({
+                type: "approval-required",
+                approvalId: approvalEvent.approvalId,
+                capability: approvalEvent.capability,
+                inputPreview: approvalEvent.inputPreview,
+                riskLevel: approvalEvent.riskLevel,
+                expiresAt: approvalEvent.expiresAt,
+              });
+            },
+          },
+        );
+
         const result = streamAgentReply({
           messages: coreMessages,
           model: turnModel,
