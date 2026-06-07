@@ -1,4 +1,5 @@
 "use server";
+import "@oxagen/handlers/register";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen";

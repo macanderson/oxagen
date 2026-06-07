@@ -373,13 +373,23 @@ Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level override
 ## Common commands
 
 ```bash
-pnpm dev                         # start all apps + Docker (Postgres :5433)
+pnpm dev                         # start all apps + Docker (Postgres :5433, ClickHouse :8123, Neo4j :7687)
 pnpm typecheck                   # run TS across the monorepo (do before push)
 pnpm test                        # run test suite
 pnpm check:manifest              # verify API↔MCP capability parity (warn-only)
 pnpm check:manifest --json       # machine-readable parity output
+pnpm check:contracts             # verify contract definitions
+pnpm env:check                   # validate .env.local against schema
 pnpm db:migrate                  # apply pending Postgres migrations
+pnpm db:lint-migrations          # verify migration file names and checksums
+pnpm db:seed-iam                 # seed IAM roles and permissions
+pnpm gate                        # run full CI suite locally (lint + typecheck + test + build)
+pnpm kill                        # kill all background processes (dev, docker, etc.)
+pnpm env:pull                    # pull Vercel env vars to .env.local (dev only)
+pnpm billing:stripe-sync         # sync meter pricing and discounts with Stripe
 lsof -ti:3000                    # check if app dev server is already running
+lsof -ti:4000                    # check if API server is running (port 4000)
+lsof -ti:4100                    # check if MCP server is running (port 4100)
 git fetch origin && git rebase origin/main  # sync before pushing (avoids force-push)
 ```
 
@@ -387,6 +397,9 @@ git fetch origin && git rebase origin/main  # sync before pushing (avoids force-
 
 - **`"use client"` boundary** — never call a `"use client"` function from a
   Server Component; the compiler won't catch it but it will blow up at runtime.
+- **`invoke()` needs handler registration** — any file that calls `invoke()`
+  must `import "@oxagen/handlers/register"` before the call; forgetting it
+  silently no-ops the metering/IAM layer.
 - **`invoke()` needs handler registration** — any file that calls `invoke()`
   must `import "@oxagen/handlers/register"` before the call; forgetting it
   silently no-ops the metering/IAM layer.
@@ -400,6 +413,10 @@ git fetch origin && git rebase origin/main  # sync before pushing (avoids force-
 - **Rebase before pushing to main** — other agents/users push to main
   concurrently; always `git fetch origin && git rebase origin/main` before
   `git push` to avoid non-fast-forward errors.
+- **Stripe webhook tunnel** — the local Stripe CLI webhook tunnel (`stripe listen`)
+  must be running alongside `pnpm dev` for the API to receive Stripe events.
+  Restarting the API without restarting the tunnel causes signature verification
+  failures. Either restart both together or maintain the tunnel in a separate tab.
 - **AI Gateway slug drift** — gateway model slugs can be dropped/renamed
   silently; always use `modelIdOf()` to resolve handles, never hard-code
   slugs. Verify against live `/v1/models` when adding a new model.

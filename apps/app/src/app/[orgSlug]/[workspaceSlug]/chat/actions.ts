@@ -1,4 +1,5 @@
 "use server";
+import "@oxagen/handlers/register";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";

@@ -33,7 +33,7 @@ Enterprise agent platform. Monorepo. Built around three primitives:
 
 - `mcp` — MCP server exposing platform capabilities
 - `api` — HTTP API exposing the same capabilities
-- `app` — web app; hosts the interactive QA agent
+- `app` — web app; hosts the interactive enterprise AI platform
 - `website` — marketing site
 - `cli` — developer utility (Commander + Ink); currently one command, `oxagen dev`, that probes local dev-stack ports. A first-class streaming CLI product is planned, not yet shipped.
 - `admin` — Next.js; **stub/landing page only** today (no auth gate, no routes beyond `/`). Intended as the internal operator dashboard (tenant management, billing overrides, feature flags) — not yet implemented.
@@ -42,6 +42,6 @@ Enterprise agent platform. Monorepo. Built around three primitives:
 ## When adding a capability
 
 1. Define it in `/packages` once.
-2. Wire it into `apps/mcp`, `apps/api`, and the `apps/app` QA agent.
+2. Wire it into `apps/mcp`, `apps/api`, and the `apps/app` enterprise AI platform.
 3. Emit logs/metrics/traces and write execution lineage to Neo4j.
 4. Store transactional state in Postgres, runtime events in ClickHouse.

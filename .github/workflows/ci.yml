@@ -234,6 +234,101 @@ jobs:
         run: pnpm turbo run test:coverage --filter="...[${TURBO_BASE}]"
 
   # ──────────────────────────────────────────────────────────────────────
+  # e2e — end-to-end tests (affected only), sharded across 4 workers.
+  # Runs on every PR and after merge to main (advisory, does NOT gate deploys).
+  # ──────────────────────────────────────────────────────────────────────
+  e2e:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      matrix:
+        shard: [1, 2, 3, 4]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: oxagen
+          POSTGRES_PASSWORD: oxagen
+          POSTGRES_DB: oxagen
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oxagen -d oxagen"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8-alpine
+        env:
+          CLICKHOUSE_DB: oxagen
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+        ports:
+          - 8123:8123
+          - 9000:9000
+        options: >-
+          --health-cmd "clickhouse-client -q 'SELECT 1' || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      neo4j:
+        image: neo4j:5.24-community
+        env:
+          NEO4J_AUTH: neo4j/oxagen-dev
+        ports:
+          - 7474:7474
+          - 7687:7687
+        options: >-
+          --health-cmd "wget -q -O - http://localhost:7474 >/dev/null 2>&1 || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Compute affected base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            git fetch origin main --no-tags
+            echo "TURBO_BASE=origin/main" >> "$GITHUB_ENV"
+          else
+            BEFORE="$EVENT_BEFORE"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+              BEFORE="$(git rev-parse HEAD~1)"
+            fi
+            echo "TURBO_BASE=$BEFORE" >> "$GITHUB_ENV"
+          fi
+      - name: Apply Postgres init schemas
+        run: |
+          sudo apt-get install -y postgresql-client
+          psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Detect migration changes
+        id: migration_changes
+        run: |
+          if git diff --name-only "${TURBO_BASE}"...HEAD | grep -qE '^packages/database/drizzle/'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Migrate
+        if: steps.migration_changes.outputs.changed == 'true'
+        run: pnpm db:migrate
+      - name: Build (affected)
+        run: pnpm turbo run build --filter="...[${TURBO_BASE}]"
+      - name: E2E tests (affected, shard ${{ matrix.shard }}/4)
+        run: pnpm turbo run test:e2e --filter="...[${TURBO_BASE}]" -- --shard=${{ matrix.shard }}/4
+
+  # ──────────────────────────────────────────────────────────────────────
   # rls-integration — the single proof that tenant Row-Level Security actually
   # isolates (OXA-1515). Spins up a real Postgres, applies the schema + the
   # generated RLS policy migration, and runs the integration suite with
