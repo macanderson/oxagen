@@ -267,10 +267,12 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
       model: anthropicModel as Parameters<typeof streamAgentReply>[0]["model"],
     });
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
-    // temperature must be absent — Anthropic extended thinking rejects it
+    // temperature must be absent — Anthropic thinking rejects it
     expect("temperature" in arg).toBe(false);
+    // Claude 4.x uses adaptive thinking + output_config.effort (the older
+    // type:"enabled"+budgetTokens shape is rejected by these models).
     expect(arg.providerOptions).toEqual({
-      anthropic: { thinking: { type: "enabled", budgetTokens: 8192 } },
+      anthropic: { thinking: { type: "adaptive" }, outputConfig: { effort: "medium" } },
     });
   });
 
