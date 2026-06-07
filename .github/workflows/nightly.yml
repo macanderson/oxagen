@@ -206,3 +206,15 @@ jobs:
         run: pnpm turbo run build --filter=@oxagen/app
       - name: E2e suite
         run: pnpm test:e2e
+
+      - name: File Linear ticket on e2e failure
+        if: failure()
+        continue-on-error: true
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          LINEAR_PROJECT_ID: ${{ vars.LINEAR_PROJECT_ID || 'oxagen-v2-355ea6b2a3f7' }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: pnpm e2e:failure-ticket
