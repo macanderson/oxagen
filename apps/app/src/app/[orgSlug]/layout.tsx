@@ -112,6 +112,11 @@ export default async function OrgLayout({
         availableOrgs={availableOrgs}
         availableWorkspaces={workspacesRows}
         user={user}
+        balance={
+          lowBalance
+            ? { cents: lowBalance.balanceCents, low: lowBalance.low }
+            : null
+        }
       >
         {children}
       </AppShell>
