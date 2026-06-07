@@ -21,6 +21,8 @@ import type { ChatShellProps } from "./chat-shell";
 import type { StreamEvent } from "./stream-event-types";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 import type { ComposerModelState } from "./model-picker";
+import { SuggestedPromptChips } from "./suggested-prompt-chips";
+import { ConversationFiles } from "./conversation-files";
 
 // Client surface for the chat. The RSC `ChatShell` resolves the messages
 // promise and hands them in; this component:
@@ -38,6 +40,7 @@ import type { ComposerModelState } from "./model-picker";
 //    fanout cards delegate to.
 export function ChatShellClient({
   conversationId,
+  conversationPublicId,
   activeLeafMessageId,
   messages,
   sendAction,
@@ -52,6 +55,8 @@ export function ChatShellClient({
   initialModelState,
 }: {
   conversationId: string | null;
+  /** publicId used for the files-panel fetch. */
+  conversationPublicId: string | null;
   activeLeafMessageId: string | null;
   messages: ChatMessage[];
   sendAction: ComposerAction;

@@ -1,11 +1,22 @@
+/**
+ * Security → Compliance: LIVE-derived SOC 2 control catalog.
+ *
+ * Control statuses are derived from real signals:
+ *   - CC7.2: security_events count (audit pipeline live?)
+ *   - CC6.1/CC6.2: org_security_policy.mfa_required
+ *   - CC6.1: TENANT_RLS_ENFORCEMENT_ENABLED env flag
+ *   - CC6.1: oldest active API key age
+ *
+ * No more mock data.
+ */
+
 import {
   ClipboardCheck,
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  FileDown,
-  ChevronRight,
 } from "lucide-react";
+import Link from "next/link";
 import {
   Card,
   CardPanel,
@@ -14,145 +25,73 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { resolveOrg } from "@/lib/resolve-org";
+import { Button } from "@/components/ui/button";
+import { and, count, eq, gt, isNull, min, or } from "drizzle-orm";
+import { withSystemDb, schema } from "@oxagen/database";
+import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
+import { getSessionOrRedirect } from "@/lib/session";
 import { getEnterpriseAccess } from "@/lib/enterprise";
 import { EnterpriseUpsell } from "@/components/security/enterprise-upsell";
+import { org } from "@/lib/routes";
+import {
+  deriveComplianceControls,
+  summariseControls,
+  type ControlStatus,
+} from "@/lib/compliance-controls";
 
-// ---------------------------------------------------------------------------
-// Mock data — pure presentational, zero live DB dependency (OXA-1579)
-// ---------------------------------------------------------------------------
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
-type ControlStatus = "active" | "partial" | "not_started";
-type Framework = "SOC 2 Type II" | "HIPAA" | "GDPR";
+async function loadSignals(orgId: string) {
+  const now = new Date();
+  const rlsEnforced =
+    process.env["TENANT_RLS_ENFORCEMENT_ENABLED"] === "true";
 
-interface ComplianceControl {
-  id: string;
-  criterion: string;
-  title: string;
-  description: string;
-  status: ControlStatus;
-  category: string;
-  evidenceCount: number;
-  lastReviewedAt: string | null;
+  // Run all DB queries in parallel via withSystemDb (RLS bypass is fine — this
+  // is a security-manager surface that runs inside an org-member gate).
+  const [auditRow, policyRow, apiKeyRow] = await Promise.all([
+    withSystemDb((tx) =>
+      tx
+        .select({ c: count() })
+        .from(schema.securityEvents)
+        .where(eq(schema.securityEvents.orgId, orgId)),
+    ),
+    withSystemDb((tx) =>
+      tx
+        .select({
+          mfaRequired: schema.orgSecurityPolicy.mfaRequired,
+        })
+        .from(schema.orgSecurityPolicy)
+        .where(eq(schema.orgSecurityPolicy.orgId, orgId))
+        .limit(1),
+    ),
+    withSystemDb((tx) =>
+      tx
+        .select({ oldest: min(schema.apiKeys.createdAt) })
+        .from(schema.apiKeys)
+        .where(
+          and(
+            eq(schema.apiKeys.orgId, orgId),
+            isNull(schema.apiKeys.deletedAt),
+            or(
+              isNull(schema.apiKeys.expiresAt),
+              gt(schema.apiKeys.expiresAt, now),
+            ),
+          ),
+        ),
+    ),
+  ]);
+
+  const auditEventCount = auditRow[0]?.c ?? 0;
+  const mfaRequired = policyRow[0]?.mfaRequired ?? false;
+  const oldestKeyDate = apiKeyRow[0]?.oldest ?? null;
+  const oldestActiveApiKeyDays =
+    oldestKeyDate
+      ? Math.floor((now.getTime() - oldestKeyDate.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+  return { auditEventCount, mfaRequired, rlsEnforced, oldestActiveApiKeyDays };
 }
-
-interface FrameworkSummary {
-  name: Framework;
-  total: number;
-  active: number;
-  partial: number;
-  notStarted: number;
-}
-
-const MOCK_CONTROLS: ComplianceControl[] = [
-  {
-    id: "cc6.1",
-    criterion: "CC6.1",
-    title: "Logical access controls",
-    description:
-      "The entity implements logical access security software, infrastructure, and architectures to protect against security events.",
-    status: "active",
-    category: "Logical & Physical Access",
-    evidenceCount: 8,
-    lastReviewedAt: "Jun 1, 2026",
-  },
-  {
-    id: "cc6.2",
-    criterion: "CC6.2",
-    title: "Authentication and credential management",
-    description:
-      "Prior to issuing system credentials and granting system access, the entity registers and authorizes new internal and external users.",
-    status: "active",
-    category: "Logical & Physical Access",
-    evidenceCount: 5,
-    lastReviewedAt: "Jun 1, 2026",
-  },
-  {
-    id: "cc6.3",
-    criterion: "CC6.3",
-    title: "Role-based access and least privilege",
-    description:
-      "The entity authorizes, modifies, or removes access to data, software, functions, and other protected information assets based on approved changes.",
-    status: "active",
-    category: "Logical & Physical Access",
-    evidenceCount: 6,
-    lastReviewedAt: "May 28, 2026",
-  },
-  {
-    id: "cc6.7",
-    criterion: "CC6.7",
-    title: "Data transmission controls",
-    description:
-      "The entity restricts the transmission, movement, and removal of information to authorized internal and external users and processes.",
-    status: "partial",
-    category: "Logical & Physical Access",
-    evidenceCount: 2,
-    lastReviewedAt: "May 15, 2026",
-  },
-  {
-    id: "cc7.1",
-    criterion: "CC7.1",
-    title: "System component configuration",
-    description:
-      "To meet its objectives, the entity uses detection and monitoring procedures to identify changes to configurations.",
-    status: "active",
-    category: "System Operations",
-    evidenceCount: 4,
-    lastReviewedAt: "Jun 2, 2026",
-  },
-  {
-    id: "cc7.2",
-    criterion: "CC7.2",
-    title: "Security event monitoring",
-    description:
-      "The entity monitors system components and the operation of those components for anomalies that are indicative of malicious acts.",
-    status: "active",
-    category: "System Operations",
-    evidenceCount: 7,
-    lastReviewedAt: "Jun 6, 2026",
-  },
-  {
-    id: "cc7.3",
-    criterion: "CC7.3",
-    title: "Incident identification and response",
-    description:
-      "The entity evaluates security events to determine whether they could or have resulted in a failure of the entity to meet its objectives.",
-    status: "partial",
-    category: "System Operations",
-    evidenceCount: 1,
-    lastReviewedAt: "May 10, 2026",
-  },
-  {
-    id: "cc9.1",
-    criterion: "CC9.1",
-    title: "Business continuity planning",
-    description:
-      "The entity identifies, selects, and develops risk mitigation activities for risks arising from potential business disruptions.",
-    status: "not_started",
-    category: "Risk Mitigation",
-    evidenceCount: 0,
-    lastReviewedAt: null,
-  },
-  {
-    id: "cc9.2",
-    criterion: "CC9.2",
-    title: "Vendor and third-party risk management",
-    description:
-      "The entity assesses and manages risks associated with vendors and business partners.",
-    status: "partial",
-    category: "Risk Mitigation",
-    evidenceCount: 3,
-    lastReviewedAt: "Apr 22, 2026",
-  },
-];
-
-const FRAMEWORK_SUMMARIES: FrameworkSummary[] = [
-  { name: "SOC 2 Type II", total: 9, active: 5, partial: 3, notStarted: 1 },
-  { name: "HIPAA", total: 12, active: 4, partial: 5, notStarted: 3 },
-  { name: "GDPR", total: 8, active: 3, partial: 3, notStarted: 2 },
-];
 
 const STATUS_VARIANT: Record<ControlStatus, "success" | "warning" | "error"> = {
   active: "success",
@@ -179,16 +118,29 @@ function ControlStatusIcon({ status }: { status: ControlStatus }) {
   return <XCircle className={cls} aria-hidden="true" />;
 }
 
-const categories = Array.from(new Set(MOCK_CONTROLS.map((c) => c.category)));
-
 export default async function SecurityCompliancePage({
   params,
 }: {
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
-  const tenant = await resolveOrg(orgSlug);
-  const access = await getEnterpriseAccess(tenant.id);
+  const [session, tenant] = await Promise.all([
+    getSessionOrRedirect(),
+    resolveOrg(orgSlug),
+  ]);
+  await assertOrgMember(tenant.id, session.user.id);
+
+  const [signals, access] = await Promise.all([
+    loadSignals(tenant.id),
+    getEnterpriseAccess(tenant.id),
+  ]);
+
+  const controls = deriveComplianceControls(signals);
+  const summary = summariseControls(controls);
+  const pct = Math.round((summary.active / summary.total) * 100);
+  const ctx = { orgSlug };
+
+  const categories = Array.from(new Set(controls.map((c) => c.category)));
 
   return (
     <div className="flex flex-col gap-6">
@@ -200,47 +152,48 @@ export default async function SecurityCompliancePage({
         />
       )}
 
-      {/* Preview pill — per scope requirement */}
-      <div>
-        <Badge variant="muted" className="text-[10px] tracking-wide uppercase">
-          Preview · not yet wired to live data
-        </Badge>
-      </div>
-
-      {/* Framework summary cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {FRAMEWORK_SUMMARIES.map((fw) => {
-          const pct = Math.round((fw.active / fw.total) * 100);
-          return (
-            <Card key={fw.name}>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="text-sm leading-snug">{fw.name}</CardTitle>
-                  <Badge
-                    variant={pct >= 80 ? "success" : pct >= 50 ? "warning" : "error"}
-                    className="shrink-0 text-xs"
-                  >
-                    {pct}%
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardPanel>
-                <div className="mb-3 h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>{fw.active} active</span>
-                  <span>{fw.partial} partial</span>
-                  <span>{fw.notStarted} not started</span>
-                </div>
-              </CardPanel>
-            </Card>
-          );
-        })}
-      </div>
+      {/* SOC 2 summary card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle>SOC 2 Type II</CardTitle>
+              <CardDescription>
+                Trust Service Criteria control status — derived from live
+                platform signals, not static declarations.
+              </CardDescription>
+            </div>
+            <Badge
+              variant={pct >= 80 ? "success" : pct >= 50 ? "warning" : "error"}
+              className="shrink-0 text-sm font-semibold px-2.5"
+            >
+              {pct}% ready
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardPanel>
+          <div className="mb-3 h-2 w-full rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <div className="flex gap-4 text-xs text-muted-foreground">
+            <span>
+              <span className="font-semibold text-[hsl(142_71%_45%)]">{summary.active}</span>{" "}
+              active
+            </span>
+            <span>
+              <span className="font-semibold text-[hsl(38_92%_50%)]">{summary.partial}</span>{" "}
+              partial
+            </span>
+            <span>
+              <span className="font-semibold text-destructive">{summary.notStarted}</span>{" "}
+              not started
+            </span>
+          </div>
+        </CardPanel>
+      </Card>
 
       {/* Control catalog */}
       <Card>
@@ -251,22 +204,21 @@ export default async function SecurityCompliancePage({
                 <ClipboardCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               </span>
               <div>
-                <CardTitle>SOC 2 control catalog</CardTitle>
+                <CardTitle>Control catalog</CardTitle>
                 <CardDescription>
-                  Trust Service Criteria control status and evidence summary for SOC 2 Type II
-                  audit readiness.
+                  Trust Service Criteria controls and their current status.
+                  Every status is derived from live system signals.
                 </CardDescription>
               </div>
             </div>
-            <Button variant="outline" size="sm">
-              <FileDown className="h-3.5 w-3.5" aria-hidden="true" />
-              Export report
+            <Button variant="outline" size="sm" render={<Link href={org.security.audit(ctx)} />}>
+              View audit log
             </Button>
           </div>
         </CardHeader>
         <CardPanel>
           {categories.map((category, catIdx) => {
-            const controls = MOCK_CONTROLS.filter((c) => c.category === category);
+            const catControls = controls.filter((c) => c.category === category);
             return (
               <div key={category}>
                 {catIdx > 0 && <Separator className="my-5" />}
@@ -274,7 +226,7 @@ export default async function SecurityCompliancePage({
                   {category}
                 </p>
                 <div className="flex flex-col gap-2">
-                  {controls.map((ctrl) => (
+                  {catControls.map((ctrl) => (
                     <div
                       key={ctrl.id}
                       className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 sm:flex-row sm:items-start sm:gap-4"
@@ -293,29 +245,17 @@ export default async function SecurityCompliancePage({
                           <p className="text-xs text-muted-foreground leading-snug">
                             {ctrl.description}
                           </p>
-                          {ctrl.lastReviewedAt && (
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Last reviewed: {ctrl.lastReviewedAt}
-                            </p>
-                          )}
+                          <p className="text-xs text-muted-foreground/70 leading-snug italic mt-0.5">
+                            {ctrl.rationale}
+                          </p>
                         </div>
                       </div>
-                      <div className="flex shrink-0 flex-wrap items-center gap-2 sm:flex-col sm:items-end">
-                        <Badge variant={STATUS_VARIANT[ctrl.status]} className="text-xs">
-                          {STATUS_LABEL[ctrl.status]}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">
-                          {ctrl.evidenceCount} evidence item
-                          {ctrl.evidenceCount !== 1 ? "s" : ""}
-                        </span>
-                        <button
-                          type="button"
-                          className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-                        >
-                          View
-                          <ChevronRight className="h-3 w-3" aria-hidden="true" />
-                        </button>
-                      </div>
+                      <Badge
+                        variant={STATUS_VARIANT[ctrl.status]}
+                        className="shrink-0 self-start text-xs"
+                      >
+                        {STATUS_LABEL[ctrl.status]}
+                      </Badge>
                     </div>
                   ))}
                 </div>
