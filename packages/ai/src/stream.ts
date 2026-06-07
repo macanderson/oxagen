@@ -59,11 +59,16 @@ export function reasoningRequestConfig(
 
   switch (vendor) {
     case "anthropic":
-      // Extended thinking requires temperature to be omitted (provider errors otherwise).
+      // Claude 4.x ("adaptive thinking") models reject the older
+      // `thinking.type: "enabled"` + `budgetTokens` shape — they require
+      // `thinking.type: "adaptive"` and control depth via `output_config.effort`
+      // (the gateway maps the camelCase `outputConfig` provider option through).
+      // Thinking still requires temperature to be omitted (provider errors otherwise).
       return {
         providerOptions: {
           anthropic: {
-            thinking: { type: "enabled", budgetTokens: budget },
+            thinking: { type: "adaptive" },
+            outputConfig: { effort },
           },
         },
         temperatureLocked: true,

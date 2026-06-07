@@ -68,7 +68,7 @@ describe("resolveSidebarMode", () => {
 
   it("account mode takes priority over workspace ctx", () => {
     // Even if workspaceSlug is present, /account prefix wins.
-    expect(resolveSidebarMode("/account/privacy", wsCtx)).toBe("account");
+    expect(resolveSidebarMode("/account/security", wsCtx)).toBe("account");
   });
 });
 
@@ -78,7 +78,7 @@ describe("resolveSidebarMode", () => {
 // Spec (application-shell spec §4):
 //   workspace: 6 items (Ask, Knowledge, Automation, Activity, Studio, Settings)
 //   org:       6 items (Workspaces, Members, Access, Security, Billing, Developer)
-//   account:   7 items (Back to app, Profile, Preferences, Security, Cases, Notifications, Privacy)
+//   account:   4 items (Back to app, Profile, Preferences, Security)
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
@@ -94,10 +94,10 @@ describe("getSidebarConfig item counts", () => {
     expect(config.items).toHaveLength(7);
   });
 
-  it("account config has exactly 7 items", () => {
+  it("account config has exactly 4 items", () => {
     const config = getSidebarConfig("account");
     expect(config.mode).toBe("account");
-    expect(config.items).toHaveLength(7);
+    expect(config.items).toHaveLength(4);
   });
 
   it("account config contains exactly one isReturn item", () => {

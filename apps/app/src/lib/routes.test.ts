@@ -109,9 +109,6 @@ describe("account route builders", () => {
   it("profile → /account/profile", () => expect(account.profile()).toBe("/account/profile"));
   it("preferences → /account/preferences", () => expect(account.preferences()).toBe("/account/preferences"));
   it("security → /account/security", () => expect(account.security()).toBe("/account/security"));
-  it("cases → /account/cases", () => expect(account.cases()).toBe("/account/cases"));
-  it("notifications → /account/notifications", () => expect(account.notifications()).toBe("/account/notifications"));
-  it("privacy → /account/privacy", () => expect(account.privacy()).toBe("/account/privacy"));
 });
 
 // ---------------------------------------------------------------------------
