@@ -26,20 +26,6 @@ CREATE POLICY tenant_isolation ON agent.tools
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
 
-ALTER TABLE agent.tool_versions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE agent.tool_versions FORCE  ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON agent.tool_versions;
-CREATE POLICY tenant_isolation ON agent.tool_versions
-  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
-  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
-
-ALTER TABLE agent.tool_assignments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE agent.tool_assignments FORCE  ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON agent.tool_assignments;
-CREATE POLICY tenant_isolation ON agent.tool_assignments
-  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
-  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
-
 ALTER TABLE agent.skills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent.skills FORCE  ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON agent.skills;
@@ -96,6 +82,20 @@ CREATE POLICY tenant_isolation ON agent.mcp_servers
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
 
+ALTER TABLE agent.workflow_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent.workflow_runs FORCE  ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON agent.workflow_runs;
+CREATE POLICY tenant_isolation ON agent.workflow_runs
+  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
+
+ALTER TABLE agent.workflow_run_tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent.workflow_run_tasks FORCE  ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON agent.workflow_run_tasks;
+CREATE POLICY tenant_isolation ON agent.workflow_run_tasks
+  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
+
 ALTER TABLE workflow.playbooks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workflow.playbooks FORCE  ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON workflow.playbooks;
@@ -117,24 +117,10 @@ CREATE POLICY tenant_isolation ON workflow.playbook_steps
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
 
-ALTER TABLE workflow.playbook_step_assignments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE workflow.playbook_step_assignments FORCE  ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON workflow.playbook_step_assignments;
-CREATE POLICY tenant_isolation ON workflow.playbook_step_assignments
-  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
-  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
-
 ALTER TABLE event.triggers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE event.triggers FORCE  ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON event.triggers;
 CREATE POLICY tenant_isolation ON event.triggers
-  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
-  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
-
-ALTER TABLE event.workflow_triggers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE event.workflow_triggers FORCE  ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON event.workflow_triggers;
-CREATE POLICY tenant_isolation ON event.workflow_triggers
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
 
@@ -156,13 +142,6 @@ ALTER TABLE execution.tool_calls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE execution.tool_calls FORCE  ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON execution.tool_calls;
 CREATE POLICY tenant_isolation ON execution.tool_calls
-  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
-  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
-
-ALTER TABLE execution.execution_artifacts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE execution.execution_artifacts FORCE  ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON execution.execution_artifacts;
-CREATE POLICY tenant_isolation ON execution.execution_artifacts
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
 
@@ -207,6 +186,13 @@ DROP POLICY IF EXISTS tenant_isolation ON integration.connections;
 CREATE POLICY tenant_isolation ON integration.connections
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
+
+ALTER TABLE workspace.workspaces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE workspace.workspaces FORCE  ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON workspace.workspaces;
+CREATE POLICY tenant_isolation ON workspace.workspaces
+  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid))
+  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid));
 
 ALTER TABLE workspace.folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workspace.folders FORCE  ROW LEVEL SECURITY;
@@ -387,6 +373,41 @@ ALTER TABLE security.security_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE security.security_events FORCE  ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON security.security_events;
 CREATE POLICY tenant_isolation ON security.security_events
+  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND (workspace_id IS NULL OR workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid)))
+  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND (workspace_id IS NULL OR workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid)));
+
+ALTER TABLE plugin.org_listings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE plugin.org_listings FORCE  ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON plugin.org_listings;
+CREATE POLICY tenant_isolation ON plugin.org_listings
+  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid))
+  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid));
+
+ALTER TABLE plugin.org_denylist ENABLE ROW LEVEL SECURITY;
+ALTER TABLE plugin.org_denylist FORCE  ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON plugin.org_denylist;
+CREATE POLICY tenant_isolation ON plugin.org_denylist
+  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid))
+  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid));
+
+ALTER TABLE mcp.credentials ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mcp.credentials FORCE  ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON mcp.credentials;
+CREATE POLICY tenant_isolation ON mcp.credentials
+  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
+
+ALTER TABLE mcp.registries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mcp.registries FORCE  ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON mcp.registries;
+CREATE POLICY tenant_isolation ON mcp.registries
+  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id IS NULL OR org_id = nullif(current_setting('app.current_org_id', true), '')::uuid))
+  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid));
+
+ALTER TABLE notification.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notification.notifications FORCE  ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON notification.notifications;
+CREATE POLICY tenant_isolation ON notification.notifications
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND (workspace_id IS NULL OR workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid)))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND (workspace_id IS NULL OR workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid)));
 

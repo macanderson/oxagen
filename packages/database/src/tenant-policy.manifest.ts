@@ -34,6 +34,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.subagent_runs", policyClass: "standard" },
   { table: "agent.plan_steps", policyClass: "standard" },
   { table: "agent.mcp_servers", policyClass: "standard" },
+  { table: "agent.workflow_runs", policyClass: "standard" },
+  { table: "agent.workflow_run_tasks", policyClass: "standard" },
 
   // ── workflow.* (orgScopeMixin) ────────────────────────────────────────────
   { table: "workflow.playbooks", policyClass: "standard" },
