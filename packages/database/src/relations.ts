@@ -24,6 +24,11 @@ import {
   planSteps,
 } from "./schema/agent";
 import {
+  agentExecutions,
+  agentExecutionSteps,
+  agentToolCalls,
+} from "./schema/agent-executions";
+import {
   playbooks,
   playbookVersions,
   playbookSteps,
@@ -180,6 +185,31 @@ export const planStepsRelations = relations(planSteps, ({ one }) => ({
   executionStep: one(executionSteps, {
     fields: [planSteps.executionStepId],
     references: [executionSteps.id],
+  }),
+}));
+
+// Canonical agent execution log relations
+export const agentExecutionsRelations = relations(agentExecutions, ({ one, many }) => ({
+  agent: one(agents, { fields: [agentExecutions.agentId], references: [agents.id] }),
+  agentVersion: one(agentVersions, {
+    fields: [agentExecutions.agentVersionId],
+    references: [agentVersions.id],
+  }),
+  steps: many(agentExecutionSteps),
+}));
+
+export const agentExecutionStepsRelations = relations(agentExecutionSteps, ({ one, many }) => ({
+  execution: one(agentExecutions, {
+    fields: [agentExecutionSteps.executionId],
+    references: [agentExecutions.id],
+  }),
+  toolCalls: many(agentToolCalls),
+}));
+
+export const agentToolCallsRelations = relations(agentToolCalls, ({ one }) => ({
+  step: one(agentExecutionSteps, {
+    fields: [agentToolCalls.executionStepId],
+    references: [agentExecutionSteps.id],
   }),
 }));
 
