@@ -13,6 +13,7 @@ export default async function SecurityLayout({
   const ctx = { orgSlug };
 
   const tabs = [
+    { label: "Overview", href: org.security.root(ctx) },
     { label: "SSO", href: org.security.sso(ctx) },
     { label: "SCIM", href: org.security.scim(ctx) },
     { label: "MFA", href: org.security.mfa(ctx) },
