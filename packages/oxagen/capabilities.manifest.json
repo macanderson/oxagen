@@ -1,6 +1,22 @@
 {
   "capabilities": [
     {
+      "name": "agent.ui.render",
+      "file": "agent.ui.render.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.approval.resolve",
       "file": "agent.approval.resolve.ts",
       "domain": "agent",

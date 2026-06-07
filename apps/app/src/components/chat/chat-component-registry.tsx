@@ -66,4 +66,25 @@ export const CHAT_COMPONENTS = {
   "api-key-display": lazy(
     () => import("@/components/api-key-display").then(m => ({ default: m.ApiKeyDisplay })),
   ),
+  "create-workspace-inline": lazy(
+    () => import("@/components/chat/registry-components/create-workspace-inline"),
+  ),
+  "create-org-inline": lazy(
+    () => import("@/components/chat/registry-components/create-org-inline"),
+  ),
+  "invite-member-inline": lazy(
+    () => import("@/components/chat/registry-components/invite-member-inline"),
+  ),
+  "model-settings-inline": lazy(
+    () => import("@/components/chat/registry-components/model-settings-inline"),
+  ),
+  "billing-upgrade-inline": lazy(
+    () => import("@/components/chat/registry-components/billing-upgrade-inline"),
+  ),
+  "credits-purchase-inline": lazy(
+    () => import("@/components/chat/registry-components/credits-purchase-inline"),
+  ),
+  "confirm-destructive-inline": lazy(
+    () => import("@/components/chat/registry-components/confirm-destructive-inline"),
+  ),
 } as unknown as Record<string, AnyLazy>;
