@@ -190,6 +190,9 @@ importers:
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../../packages/billing
+      '@oxagen/compliance':
+        specifier: workspace:*
+        version: link:../../packages/compliance
       '@oxagen/config':
         specifier: workspace:*
         version: link:../../packages/config
