@@ -227,6 +227,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
         <div className="mx-auto h-full max-w-4xl">
           <ChatShell
             conversationId={conversationId}
+            conversationPublicId={conv?.publicId ?? null}
             activeLeafMessageId={activeLeafMessageId}
             messagesPromise={messagesPromise}
             sendAction={sendAction}

@@ -535,11 +535,24 @@ export function ChatShellClient({
 
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4">
+      {/* Toolbar row: files panel trigger (right-aligned). */}
+      <div className="flex shrink-0 items-center justify-end">
+        <ConversationFiles conversationPublicId={conversationPublicId} />
+      </div>
+
       <div className="min-h-0 flex-1 overflow-y-auto pr-2">
         {messages.length === 0 && !hasLiveContent ? (
-          <div className="flex h-full flex-col items-center justify-center text-center text-sm text-muted-foreground">
-            <p className="font-medium">Start a conversation.</p>
-            <p>Send a message below to begin.</p>
+          <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-sm text-muted-foreground">
+            <div>
+              <p className="font-medium">Start a conversation.</p>
+              <p>Send a message below to begin.</p>
+            </div>
+            {/* Suggested chips in empty state */}
+            <SuggestedPromptChips
+              action={wrappedSendAction}
+              conversationId={conversationId}
+              parentMessageId={activeLeafMessageId}
+            />
           </div>
         ) : (
           <div className="flex flex-col gap-4">
@@ -578,6 +591,17 @@ export function ChatShellClient({
           </div>
         )}
       </div>
+      {/* Suggested prompt chips — shown above the composer once there are messages
+          (empty state renders its own chips above; this avoids duplication). */}
+      {messages.length > 0 || hasLiveContent ? (
+        <SuggestedPromptChips
+          action={wrappedSendAction}
+          conversationId={conversationId}
+          parentMessageId={activeLeafMessageId}
+          className="justify-center"
+        />
+      ) : null}
+
       <MessageComposer
         conversationId={conversationId}
         parentMessageId={activeLeafMessageId}
