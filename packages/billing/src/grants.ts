@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { withTenantDb, withSystemDb, schema, type Tx } from "@oxagen/database";
+import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { syncSubscriptionFromStripe } from "./subscriptions";
@@ -245,6 +246,18 @@ export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): P
       },
       "billing: plan renewal credits granted",
     );
+
+    emitSecurityEvent({
+      eventType: "billing.credits_purchased",
+      actorUserId: null,
+      orgId: sub.orgId,
+      workspaceId: null,
+      capability: null,
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
   });
 }
 
@@ -438,6 +451,17 @@ export async function grantCreditPackForCheckout(session: BillingCheckoutSession
       },
       "billing: credit pack credits granted",
     );
+    emitSecurityEvent({
+      eventType: "billing.credits_purchased",
+      actorUserId: null,
+      orgId,
+      workspaceId: null,
+      capability: null,
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
   } else {
     logger.debug({ orgId, referenceId }, "billing: credit pack already granted, skipping");
   }
