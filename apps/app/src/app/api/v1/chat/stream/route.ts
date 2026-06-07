@@ -417,29 +417,38 @@ export async function POST(request: NextRequest): Promise<Response> {
         // closure, BEFORE waitForApproval() blocks the execution. This emits
         // the `approval-required` SSE event to the client so the approval card
         // renders while the stream is paused waiting for user decision.
-        const { tools: agentTools, nameMap: toolNameMap } = await materializeTools(
-          {
-            orgId: tenant.id,
-            workspaceId: workspace.id,
-            userId: session.user.id,
-            apiKeyId: null,
-            requestId,
-            surface: "app",
-            messageId: parentMessageId ?? requestId,
-            clientIp,
-          },
-          {
-            onApprovalRequired: (approvalEvent) => {
-              emit({
-                type: "approval-required",
-                approvalId: approvalEvent.approvalId,
-                capability: approvalEvent.capability,
-                inputPreview: approvalEvent.inputPreview,
-                riskLevel: approvalEvent.riskLevel,
-                expiresAt: approvalEvent.expiresAt,
-              });
-            },
-          },
+        //
+        // runInTenantScope is required here: contributeMcpTools (called inside
+        // materializeTools) reads workspace MCP server listings via withTenantDb,
+        // which requires an active ALS tenant scope. The outer route does not
+        // establish one before entering the ReadableStream callback.
+        const { tools: agentTools, nameMap: toolNameMap } = await runInTenantScope(
+          { orgId: tenant.id, workspaceId: workspace.id },
+          () =>
+            materializeTools(
+              {
+                orgId: tenant.id,
+                workspaceId: workspace.id,
+                userId: session.user.id,
+                apiKeyId: null,
+                requestId,
+                surface: "app",
+                messageId: parentMessageId ?? requestId,
+                clientIp,
+              },
+              {
+                onApprovalRequired: (approvalEvent) => {
+                  emit({
+                    type: "approval-required",
+                    approvalId: approvalEvent.approvalId,
+                    capability: approvalEvent.capability,
+                    inputPreview: approvalEvent.inputPreview,
+                    riskLevel: approvalEvent.riskLevel,
+                    expiresAt: approvalEvent.expiresAt,
+                  });
+                },
+              },
+            ),
         );
 
         const result = streamAgentReply({
