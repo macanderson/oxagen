@@ -58,7 +58,7 @@ describe("archive.create handler", () => {
       archiveName: "my-archive",
       entries: [{ name: "readme.txt", text: "Hello" }],
     };
-    const result = await handler_archiveCreate(args, fakeExtra);
+    const result = await handler_archiveCreate(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -73,7 +73,7 @@ describe("archive.create handler", () => {
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("archive failed"));
     await expect(
-      handler_archiveCreate({ archiveName: "x", entries: [{ name: "f.txt", text: "t" }] }, fakeExtra),
+      handler_archiveCreate({ archiveName: "x", entries: [{ name: "f.txt", text: "t" }] }),
     ).rejects.toThrow("archive failed");
   });
 });
@@ -96,7 +96,7 @@ describe("asset.upload handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { sourceUrl: "https://example.com/image.png", kind: "image" as const };
-    await handler_assetUpload(args, fakeExtra);
+    await handler_assetUpload(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "asset.upload",
@@ -129,7 +129,7 @@ describe("brandkit.apply handler", () => {
       brandKitId: "bk_1",
       targetFileId: "file_1",
     };
-    await handler_brandkitApply(args, fakeExtra);
+    await handler_brandkitApply(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "brandkit.apply",
@@ -164,7 +164,7 @@ describe("documents.generate handler", () => {
         sections: [{ heading: "Intro", paragraphs: ["Hello world."] }],
       },
     };
-    await handler_documentsGenerate(args, fakeExtra);
+    await handler_documentsGenerate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "documents.generate",
@@ -198,7 +198,7 @@ describe("documents.pdf.create handler", () => {
         sections: [{ heading: "Intro", paragraphs: ["Content here."] }],
       },
     };
-    await handler_documentsPdfCreate(args, fakeExtra);
+    await handler_documentsPdfCreate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "documents.pdf.create",
@@ -227,7 +227,7 @@ describe("image.generate handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { prompt: "A red fox in snow", size: "1024x1024" as const };
-    const result = await handler_imageGenerate(args, fakeExtra);
+    const result = await handler_imageGenerate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "image.generate",
@@ -257,7 +257,7 @@ describe("svg.generate handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { prompt: "A simple house icon", width: 400, height: 400 };
-    await handler_svgGenerate(args, fakeExtra);
+    await handler_svgGenerate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "svg.generate",
@@ -286,7 +286,7 @@ describe("video.generate handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { prompt: "A sunset over mountains", durationSeconds: 5 };
-    await handler_videoGenerate(args, fakeExtra);
+    await handler_videoGenerate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "video.generate",
@@ -321,7 +321,7 @@ describe("form.fill handler", () => {
         { name: "project_name", label: "Project Name", type: "text" as const, current: "", required: true },
       ],
     };
-    await handler_formFill(args, fakeExtra);
+    await handler_formFill(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "form.fill",

@@ -55,7 +55,7 @@ describe("billing.credits.purchase handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { amountUsd: 50 };
-    const result = await handler_billingCreditsPurchase(args, fakeExtra);
+    const result = await handler_billingCreditsPurchase(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -70,7 +70,7 @@ describe("billing.credits.purchase handler", () => {
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("payment failed"));
     await expect(
-      handler_billingCreditsPurchase({ amountUsd: 10 }, fakeExtra),
+      handler_billingCreditsPurchase({ amountUsd: 10 }),
     ).rejects.toThrow("payment failed");
   });
 });
@@ -92,7 +92,7 @@ describe("billing.subscription.read handler", () => {
     const fakeOutput = { subscription: null };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    await handler_billingSubscriptionRead({}, fakeExtra);
+    await handler_billingSubscriptionRead({});
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -131,7 +131,7 @@ describe("billing.subscription.upgrade.start handler", () => {
       successUrl: "https://app.oxagen.ai/billing?success=1",
       cancelUrl: "https://app.oxagen.ai/billing",
     };
-    const result = await handler_billingSubscriptionUpgradeStart(args, fakeExtra);
+    const result = await handler_billingSubscriptionUpgradeStart(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "billing.subscription.upgrade.start",
@@ -161,7 +161,7 @@ describe("api.key.create handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { name: "My Key", scope: {}, expiresAt: undefined };
-    await handler_apiKeyCreate(args, fakeExtra);
+    await handler_apiKeyCreate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "api.key.create",
@@ -190,7 +190,7 @@ describe("api.key.revoke handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { keyPublicId: "aky_test123" };
-    await handler_apiKeyRevoke(args, fakeExtra);
+    await handler_apiKeyRevoke(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "api.key.revoke",

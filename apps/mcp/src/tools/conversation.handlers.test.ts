@@ -54,7 +54,7 @@ describe("conversation.archive handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { conversationIds: ["cnv_1", "cnv_2"], archived: true };
-    const result = await handler_conversationArchive(args, fakeExtra);
+    const result = await handler_conversationArchive(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -69,7 +69,7 @@ describe("conversation.archive handler", () => {
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("not found"));
     await expect(
-      handler_conversationArchive({ conversationIds: ["cnv_x"], archived: false }, fakeExtra),
+      handler_conversationArchive({ conversationIds: ["cnv_x"], archived: false }),
     ).rejects.toThrow("not found");
   });
 });
@@ -92,7 +92,7 @@ describe("conversation.delete handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { conversationIds: ["cnv_1"] };
-    await handler_conversationDelete(args, fakeExtra);
+    await handler_conversationDelete(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "conversation.delete",
@@ -121,7 +121,7 @@ describe("conversation.list handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { filter: "active" as const, limit: 20, cursor: null };
-    await handler_conversationList(args, fakeExtra);
+    await handler_conversationList(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "conversation.list",
@@ -149,7 +149,7 @@ describe("conversation.purge handler", () => {
     const fakeOutput = { deleted: 42 };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    await handler_conversationPurge({}, fakeExtra);
+    await handler_conversationPurge({});
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -179,7 +179,7 @@ describe("conversation.rename handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { conversationId: "cnv_1", title: "New Title" };
-    const result = await handler_conversationRename(args, fakeExtra);
+    const result = await handler_conversationRename(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "conversation.rename",
@@ -216,7 +216,7 @@ describe("chat.message.send handler", () => {
       content: "Hello!",
       contentBlocks: [],
     };
-    await handler_chatMessageSend(args, fakeExtra);
+    await handler_chatMessageSend(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "chat.message.send",

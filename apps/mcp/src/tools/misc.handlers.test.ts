@@ -56,7 +56,7 @@ describe("notifications.list handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { unreadOnly: false, limit: 50 };
-    const result = await handler_notificationsList(args, fakeExtra);
+    const result = await handler_notificationsList(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -71,7 +71,7 @@ describe("notifications.list handler", () => {
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("DB error"));
     await expect(
-      handler_notificationsList({ unreadOnly: true, limit: 10 }, fakeExtra),
+      handler_notificationsList({ unreadOnly: true, limit: 10 }),
     ).rejects.toThrow("DB error");
   });
 });
@@ -94,7 +94,7 @@ describe("notifications.mark handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { id: "ntf_1", read: true };
-    await handler_notificationsMark(args, fakeExtra);
+    await handler_notificationsMark(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "notifications.mark",
@@ -123,7 +123,7 @@ describe("org.member.add handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { email: "user@example.com", role: "Member" };
-    await handler_orgMemberAdd(args, fakeExtra);
+    await handler_orgMemberAdd(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "org.member.add",
@@ -152,7 +152,7 @@ describe("org.member.invite.accept handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { invitationPublicId: "inv_1" };
-    await handler_orgMemberInviteAccept(args, fakeExtra);
+    await handler_orgMemberInviteAccept(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "org.member.invite.accept",
@@ -181,7 +181,7 @@ describe("org.member.invite.decline handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { invitationPublicId: "inv_1" };
-    await handler_orgMemberInviteDecline(args, fakeExtra);
+    await handler_orgMemberInviteDecline(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "org.member.invite.decline",
@@ -210,7 +210,7 @@ describe("org.member.remove handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { targetUserId: "user_1" };
-    await handler_orgMemberRemove(args, fakeExtra);
+    await handler_orgMemberRemove(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "org.member.remove",
@@ -239,7 +239,7 @@ describe("org.member.role.change handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { targetUserId: "user_1", newRole: "Admin" };
-    await handler_orgMemberRoleChange(args, fakeExtra);
+    await handler_orgMemberRoleChange(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "org.member.role.change",
@@ -268,7 +268,7 @@ describe("organization.create handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { name: "Acme Corp", slug: "acme-corp", planSlug: "free" as const };
-    await handler_organizationCreate(args, fakeExtra);
+    await handler_organizationCreate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "organization.create",
@@ -297,7 +297,7 @@ describe("workspace.create handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { name: "My Workspace", slug: "my-workspace" };
-    await handler_workspaceCreate(args, fakeExtra);
+    await handler_workspaceCreate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "workspace.create",
@@ -334,7 +334,7 @@ describe("user.preferences.read handler", () => {
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    await handler_userPreferencesRead({}, fakeExtra);
+    await handler_userPreferencesRead({});
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -364,7 +364,7 @@ describe("user.preferences.write handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { fontSize: "large" as const, enterToSubmit: false };
-    await handler_userPreferencesWrite(args, fakeExtra);
+    await handler_userPreferencesWrite(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "user.preferences.write",
@@ -397,7 +397,7 @@ describe("workspace.model.settings.read handler", () => {
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    await handler_workspaceModelSettingsRead({}, fakeExtra);
+    await handler_workspaceModelSettingsRead({});
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "workspace.model.settings.read",
@@ -431,7 +431,7 @@ describe("workspace.model.settings.write handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { defaultTextTier: "balanced" as const };
-    await handler_workspaceModelSettingsWrite(args, fakeExtra);
+    await handler_workspaceModelSettingsWrite(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "workspace.model.settings.write",
@@ -460,7 +460,7 @@ describe("system.install.instructions handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { client: "claude-code" as const, workspaceSlug: "my-workspace" };
-    await handler_systemInstallInstructions(args, fakeExtra);
+    await handler_systemInstallInstructions(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "system.install.instructions",
@@ -489,7 +489,7 @@ describe("workflow.run handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { goal: "Profile Fortune 500 CEOs", outputFormat: "json" as const, maxParallelism: 10 };
-    await handler_workflowRun(args, fakeExtra);
+    await handler_workflowRun(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "workflow.run",
@@ -518,7 +518,7 @@ describe("workflow.status handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { workflowId: "wfr_1" };
-    await handler_workflowStatus(args, fakeExtra);
+    await handler_workflowStatus(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "workflow.status",
@@ -547,7 +547,7 @@ describe("workflow.cancel handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { workflowId: "wfr_1" };
-    await handler_workflowCancel(args, fakeExtra);
+    await handler_workflowCancel(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "workflow.cancel",

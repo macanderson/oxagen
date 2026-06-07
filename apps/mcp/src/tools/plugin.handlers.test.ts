@@ -27,8 +27,6 @@ const fakeCtx = {
   clientIp: null,
 };
 
-const fakeExtra = {} as Parameters<typeof import("./plugin.catalog.browse")["default"]>[1];
-
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.buildContext.mockResolvedValue(fakeCtx);
@@ -53,7 +51,7 @@ describe("plugin.catalog.browse handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { limit: 30, offset: 0 };
-    const result = await handler_pluginCatalogBrowse(args, fakeExtra);
+    const result = await handler_pluginCatalogBrowse(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -68,7 +66,7 @@ describe("plugin.catalog.browse handler", () => {
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("catalog unavailable"));
     await expect(
-      handler_pluginCatalogBrowse({ limit: 10, offset: 0 }, fakeExtra),
+      handler_pluginCatalogBrowse({ limit: 10, offset: 0 }),
     ).rejects.toThrow("catalog unavailable");
   });
 });
@@ -101,7 +99,7 @@ describe("plugin.catalog.get handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { catalogId: "cat_1" };
-    await handler_pluginCatalogGet(args, fakeExtra);
+    await handler_pluginCatalogGet(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.catalog.get",
@@ -130,7 +128,7 @@ describe("plugin.credential.reauth handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { orgListingId: "orl_1" };
-    await handler_pluginCredentialReauth(args, fakeExtra);
+    await handler_pluginCredentialReauth(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.credential.reauth",
@@ -163,7 +161,7 @@ describe("plugin.credential.set_secret handler", () => {
       authKind: "secret" as const,
       secret: "my-api-key",
     };
-    await handler_pluginCredentialSetSecret(args, fakeExtra);
+    await handler_pluginCredentialSetSecret(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.credential.set_secret",
@@ -196,7 +194,7 @@ describe("plugin.denylist.add handler", () => {
       serverName: "dangerous-mcp",
       reason: "Security risk",
     };
-    await handler_pluginDenylistAdd(args, fakeExtra);
+    await handler_pluginDenylistAdd(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.denylist.add",
@@ -225,7 +223,7 @@ describe("plugin.denylist.remove handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { serverName: "safe-mcp", pluginType: "mcp_server" as const };
-    await handler_pluginDenylistRemove(args, fakeExtra);
+    await handler_pluginDenylistRemove(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.denylist.remove",
@@ -257,7 +255,7 @@ describe("plugin.org.install handler", () => {
       pluginType: "mcp_server" as const,
       catalogServerId: "cat_1",
     };
-    await handler_pluginOrgInstall(args, fakeExtra);
+    await handler_pluginOrgInstall(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.org.install",
@@ -288,7 +286,7 @@ describe("plugin.org.install_bulk handler", () => {
     const args = {
       items: [{ pluginType: "mcp_server" as const, catalogServerId: "cat_1" }],
     };
-    await handler_pluginOrgInstallBulk(args, fakeExtra);
+    await handler_pluginOrgInstallBulk(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.org.install_bulk",
@@ -317,7 +315,7 @@ describe("plugin.org.list handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { pluginType: "mcp_server" as const };
-    await handler_pluginOrgList(args, fakeExtra);
+    await handler_pluginOrgList(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.org.list",
@@ -329,7 +327,7 @@ describe("plugin.org.list handler", () => {
 
   it("works with empty args", async () => {
     mocks.invoke.mockResolvedValue({ listings: [] });
-    await handler_pluginOrgList({}, fakeExtra);
+    await handler_pluginOrgList({});
     expect(mocks.invoke).toHaveBeenCalledOnce();
   });
 });
@@ -352,7 +350,7 @@ describe("plugin.org.set_enabled handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { orgListingId: "orl_1", enabled: true };
-    await handler_pluginOrgSetEnabled(args, fakeExtra);
+    await handler_pluginOrgSetEnabled(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.org.set_enabled",
@@ -381,7 +379,7 @@ describe("plugin.org.uninstall handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { orgListingId: "orl_1" };
-    await handler_pluginOrgUninstall(args, fakeExtra);
+    await handler_pluginOrgUninstall(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.org.uninstall",
@@ -410,7 +408,7 @@ describe("plugin.registry.add handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { name: "My Registry", baseUrl: "https://registry.example.com" };
-    await handler_pluginRegistryAdd(args, fakeExtra);
+    await handler_pluginRegistryAdd(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.registry.add",
@@ -438,7 +436,7 @@ describe("plugin.registry.list handler", () => {
     const fakeOutput = { registries: [] };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    await handler_pluginRegistryList({}, fakeExtra);
+    await handler_pluginRegistryList({});
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.registry.list",
@@ -467,7 +465,7 @@ describe("plugin.registry.remove handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { registryId: "reg_1" };
-    await handler_pluginRegistryRemove(args, fakeExtra);
+    await handler_pluginRegistryRemove(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.registry.remove",
@@ -496,7 +494,7 @@ describe("plugin.registry.sync handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { registryId: "reg_1", mode: "incremental" as const };
-    await handler_pluginRegistrySync(args, fakeExtra);
+    await handler_pluginRegistrySync(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.registry.sync",
@@ -525,7 +523,7 @@ describe("plugin.settings.set_auth_alerts handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { sendEmail: true, roles: ["Owner" as const, "Admin" as const] };
-    await handler_pluginSettingsSetAuthAlerts(args, fakeExtra);
+    await handler_pluginSettingsSetAuthAlerts(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.settings.set_auth_alerts",
@@ -554,7 +552,7 @@ describe("plugin.workspace.set_enabled handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { orgListingId: "orl_1", enabled: true };
-    await handler_pluginWorkspaceSetEnabled(args, fakeExtra);
+    await handler_pluginWorkspaceSetEnabled(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "plugin.workspace.set_enabled",

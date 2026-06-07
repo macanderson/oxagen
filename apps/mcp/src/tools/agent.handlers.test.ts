@@ -62,7 +62,7 @@ describe("agent.approval.resolve handler", () => {
   it("calls buildContext then invoke with correct contract name and args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
     const args = { approvalId: "apr_1", decision: "approved" as const };
-    const result = await handler_agentApprovalResolve(args, fakeExtra);
+    const result = await handler_agentApprovalResolve(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledOnce();
@@ -78,7 +78,7 @@ describe("agent.approval.resolve handler", () => {
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("invoke failed"));
     await expect(
-      handler_agentApprovalResolve({ approvalId: "x", decision: "denied" }, fakeExtra),
+      handler_agentApprovalResolve({ approvalId: "x", decision: "denied" }),
     ).rejects.toThrow("invoke failed");
   });
 });
@@ -100,7 +100,7 @@ describe("agent.mcp.list handler", () => {
 
   it("calls invoke with 'agent.mcp.list' and empty args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
-    const result = await handler_agentMcpList({}, fakeExtra);
+    const result = await handler_agentMcpList({});
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -140,7 +140,7 @@ describe("agent.mcp.register handler", () => {
       endpointUrl: "https://mcp.example.com/mcp",
       authStrategy: "none" as const,
     };
-    const result = await handler_agentMcpRegister(args, fakeExtra);
+    const result = await handler_agentMcpRegister(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "agent.mcp.register",
@@ -170,7 +170,7 @@ describe("agent.memory.recall handler", () => {
   it("calls invoke with recall args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
     const args = { query: "user prefs", minWeight: "high" as const, limit: 10 };
-    await handler_agentMemoryRecall(args, fakeExtra);
+    await handler_agentMemoryRecall(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "agent.memory.recall",
@@ -205,7 +205,7 @@ describe("agent.memory.write handler", () => {
       lesson: "Always flush cache",
       source: "fix" as const,
     };
-    const result = await handler_agentMemoryWrite(args, fakeExtra);
+    const result = await handler_agentMemoryWrite(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "agent.memory.write",
@@ -235,7 +235,7 @@ describe("agent.plan.approve handler", () => {
   it("calls invoke with plan approval args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
     const args = { planId: "plan_1", decision: "approve" as const };
-    await handler_agentPlanApprove(args, fakeExtra);
+    await handler_agentPlanApprove(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "agent.plan.approve",
@@ -264,7 +264,7 @@ describe("agent.skill.list handler", () => {
   it("calls invoke with skill list args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
     const args = { filter: "my-skill" };
-    await handler_agentSkillList(args, fakeExtra);
+    await handler_agentSkillList(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "agent.skill.list",
@@ -276,7 +276,7 @@ describe("agent.skill.list handler", () => {
 
   it("works with empty args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
-    await handler_agentSkillList({}, fakeExtra);
+    await handler_agentSkillList({});
     expect(mocks.invoke).toHaveBeenCalledOnce();
   });
 });
@@ -299,7 +299,7 @@ describe("agent.task.background.cancel handler", () => {
   it("calls invoke with cancel args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
     const args = { taskId: "task_1" };
-    await handler_agentTaskBackgroundCancel(args, fakeExtra);
+    await handler_agentTaskBackgroundCancel(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "agent.task.background.cancel",
@@ -338,7 +338,7 @@ describe("agent.task.background.read handler", () => {
   it("calls invoke with read args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
     const args = { taskId: "task_1" };
-    const result = await handler_agentTaskBackgroundRead(args, fakeExtra);
+    const result = await handler_agentTaskBackgroundRead(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "agent.task.background.read",
@@ -368,7 +368,7 @@ describe("agent.task.background.start handler", () => {
   it("calls invoke with start args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
     const args = { kind: "agent.run", payload: { foo: 1 } };
-    const result = await handler_agentTaskBackgroundStart(args, fakeExtra);
+    const result = await handler_agentTaskBackgroundStart(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "agent.task.background.start",
@@ -398,7 +398,7 @@ describe("agent.tool.list handler", () => {
   it("calls invoke with tool list args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
     const args = { includeExternal: true };
-    await handler_agentToolList(args, fakeExtra);
+    await handler_agentToolList(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "agent.tool.list",
