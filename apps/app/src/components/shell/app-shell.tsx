@@ -30,6 +30,8 @@ export interface AppShellProps {
   availableWorkspaces?: { publicId: string; slug: string; name: string }[];
   /** May be undefined during a transient post-signup render; guarded in UserSwitcher. */
   user: SessionUser | undefined;
+  /** Org credit balance for the always-visible header pill. Null hides it. */
+  balance?: { cents: number; low: boolean } | null;
   children: ReactNode;
 }
 
@@ -39,6 +41,7 @@ export function AppShell({
   availableOrgs,
   availableWorkspaces,
   user,
+  balance,
   children,
 }: AppShellProps) {
   const ctx = { orgSlug: org.slug, workspaceSlug: workspace?.slug };
