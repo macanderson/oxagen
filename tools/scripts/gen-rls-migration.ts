@@ -35,6 +35,11 @@ function predicate(cls: PolicyClass): string {
     // Membership/join tables that carry workspace_id but no org_id.
     return `${BYPASS} OR (workspace_id = ${WS})`;
   }
+  if (cls === "org_or_global") {
+    // Nullable org_id: NULL rows are a shared/global catalog visible to every
+    // tenant; non-NULL rows are private to their org.
+    return `${BYPASS} OR (org_id IS NULL OR org_id = ${ORG})`;
+  }
   // standard: org_id + workspace_id both required
   return `${BYPASS} OR (org_id = ${ORG} AND workspace_id = ${WS})`;
 }

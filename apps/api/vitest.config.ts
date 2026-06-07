@@ -15,7 +15,15 @@ export default defineConfig({
         "src/vercel.ts",
         "src/bootstrap.ts",
       ],
-      // No hard thresholds on first run — ratchet upward as coverage grows.
+      // Ratchet floors set just below current measured coverage
+      // (lines 63.47 / branches 96.63 / functions 95.45) so the gate lives in
+      // the build, not in review. Raise as coverage grows — never lower.
+      thresholds: {
+        lines: 62,
+        branches: 90,
+        functions: 92,
+        statements: 62,
+      },
     },
   },
 });
