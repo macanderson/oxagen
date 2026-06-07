@@ -214,4 +214,16 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "agent.ui.render",
     async () => (await import("./agent.ui.render")).agentUiRenderHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "workflow.run",
+    async () => (await import("./workflow.run")).workflowRunHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "workflow.status",
+    async () => (await import("./workflow.status")).workflowStatusHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "workflow.cancel",
+    async () => (await import("./workflow.cancel")).workflowCancelHandler as CapabilityHandlerFn,
+  );
 });

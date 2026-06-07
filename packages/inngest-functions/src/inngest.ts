@@ -70,6 +70,29 @@ type Events = {
   "plugin/registry.sync": {
     data: { registryId: string; mode: "full" | "incremental" };
   };
+  "agent/workflow.supervisor.start": {
+    data: {
+      orgId: string;
+      workspaceId: string;
+      workflowRunId: string;
+      maxParallelism: number;
+      maxTasksGuard: number;
+    };
+  };
+  "agent/workflow.task.execute": {
+    data: {
+      orgId: string;
+      workspaceId: string;
+      workflowRunId: string;
+      taskId: string;
+      taskIndex: number;
+      goal: string;
+      outputFormat: "json" | "csv";
+    };
+  };
+  "agent/workflow.cancel": {
+    data: { orgId: string; workflowRunId: string };
+  };
 };
 
 // OXA-1349: INNGEST keys are optional in the base schema (not every service

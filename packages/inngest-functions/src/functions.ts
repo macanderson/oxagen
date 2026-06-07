@@ -10,6 +10,8 @@ import { securityAuditPartitionRollover } from "./functions/security.audit-parti
 import { pluginCatalogSyncCron } from "./functions/plugin.catalog-sync-cron";
 import { pluginRegistrySync } from "./functions/plugin.registry-sync";
 import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
+import { agentWorkflowSupervisor } from "./functions/agent.workflow.supervisor";
+import { agentWorkflowTaskExecute } from "./functions/agent.workflow.task.execute";
 
 export const functions = [
   billingRollupUsage,
@@ -25,4 +27,6 @@ export const functions = [
   pluginCatalogSyncCron,
   pluginRegistrySync,
   pluginOauthRefreshWatcher,
+  agentWorkflowSupervisor,
+  agentWorkflowTaskExecute,
 ];

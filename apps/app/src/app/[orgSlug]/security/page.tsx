@@ -14,6 +14,8 @@ import { and, count, desc, eq, gte, isNull, or } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg } from "@/lib/resolve-org";
+import { getEnterpriseAccess } from "@/lib/enterprise";
+import { EnterpriseUpsell } from "@/components/security/enterprise-upsell";
 import { org } from "@/lib/routes";
 import Link from "next/link";
 import {
@@ -210,7 +212,10 @@ export default async function SecurityOverviewPage({
 }) {
   const { orgSlug } = await params;
   const tenant = await resolveOrg(orgSlug);
-  const posture = await loadPosture(tenant.id);
+  const [posture, access] = await Promise.all([
+    loadPosture(tenant.id),
+    getEnterpriseAccess(tenant.id),
+  ]);
   const ctx = { orgSlug };
 
   const auditLive = posture.totalAuditEvents > 0;

@@ -8,7 +8,7 @@ const CTX: CapabilityContext = {
   userId: "u_1",
   apiKeyId: null,
   requestId: "req_1",
-  surface: "agent",
+  surface: "app",
   messageId: null,
 };
 
