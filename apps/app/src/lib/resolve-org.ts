@@ -165,3 +165,38 @@ export const assertBillingManager = cache(
     }
   },
 );
+
+/** Roles permitted to export signed compliance evidence (SOC 2 audit export). */
+export const SECURITY_MANAGER_ROLES = new Set(["owner", "admin"]);
+
+/**
+ * Return the caller's role in the org, or null when they are not a member.
+ * Read-only (does NOT 404) — use for UI gating (e.g. enabling/disabling the
+ * audit-export button). For a hard server gate use {@link assertSecurityManager}.
+ */
+export const getOrgRole = cache(
+  async (orgId: string, userId: string): Promise<string | null> => {
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({ role: schema.orgUsers.role })
+        .from(schema.orgUsers)
+        .where(and(eq(schema.orgUsers.orgId, orgId), eq(schema.orgUsers.userId, userId)))
+        .limit(1),
+    );
+    return rows[0]?.role ?? null;
+  },
+);
+
+/**
+ * Assert the user holds a security-management role (owner/admin) in the org.
+ * Calls `notFound()` otherwise. Use on the signed audit-export endpoint so a
+ * non-manager cannot pull the org's full audit trail.
+ */
+export const assertSecurityManager = cache(
+  async (orgId: string, userId: string): Promise<void> => {
+    const role = await getOrgRole(orgId, userId);
+    if (!role || !SECURITY_MANAGER_ROLES.has(role)) {
+      notFound();
+    }
+  },
+);

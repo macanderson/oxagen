@@ -17,8 +17,9 @@ export const documentsPdfCreate = registerCapability({
   name: "documents.pdf.create",
   domain: "documents",
   description:
-    "[Foundation milestone stub] Generate a PDF from a title and structured text content. " +
-    "Currently returns a mock asset response without actual PDF generation.",
+    "Generate a PDF from a title and structured text content using pdf-lib. " +
+    "The PDF is built in-process (pure JS, no Chromium), uploaded to blob storage, " +
+    "and served through the access-controlled /api/v1/assets/<publicId> route.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
