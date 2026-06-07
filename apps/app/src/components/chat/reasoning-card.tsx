@@ -59,6 +59,12 @@ export function ReasoningCard({
     setOpen((v) => !v);
   }
 
+  // Some providers (e.g. Anthropic adaptive thinking) emit reasoning boundaries
+  // but redact the content — the model thinks, yet no plaintext is exposed.
+  // In that case we still surface that reasoning happened (and how long it took)
+  // as a compact pill, but there's nothing to expand.
+  const hasText = text.trim().length > 0;
+
   const label =
     status === "thinking"
       ? "Thinking…"
@@ -95,12 +101,17 @@ export function ReasoningCard({
       data-component="reasoning-card"
       data-status={status}
     >
-      {/* Header toggle row */}
+      {/* Header row. Only a toggle when there's reasoning text to reveal;
+          otherwise it's a static "Thinking…/Thought for Xs" pill (redacted). */}
       <button
         type="button"
-        onClick={handleToggle}
-        className="flex w-full items-center gap-1.5 px-3 py-2 text-left"
-        aria-expanded={open}
+        onClick={hasText ? handleToggle : undefined}
+        className={cn(
+          "flex w-full items-center gap-1.5 px-3 py-2 text-left",
+          !hasText && "cursor-default",
+        )}
+        aria-expanded={hasText ? open : undefined}
+        disabled={!hasText}
       >
         <Brain className="h-3.5 w-3.5 shrink-0 text-[#7182ff]" aria-hidden="true" />
 
@@ -115,18 +126,20 @@ export function ReasoningCard({
           <span className="text-xs text-muted-foreground">{label}</span>
         )}
 
-        <span className="ml-auto text-muted-foreground/60">
-          {open ? (
-            <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
-        </span>
+        {hasText ? (
+          <span className="ml-auto text-muted-foreground/60">
+            {open ? (
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+          </span>
+        ) : null}
       </button>
 
-      {/* Body — animated height/opacity collapse */}
+      {/* Body — animated height/opacity collapse. Only when there's text. */}
       <AnimatePresence initial={false}>
-        {open && (
+        {hasText && open && (
           <motion.div
             key="reasoning-body"
             initial={reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}

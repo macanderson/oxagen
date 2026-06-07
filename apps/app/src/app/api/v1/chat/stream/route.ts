@@ -656,11 +656,14 @@ export async function POST(request: NextRequest): Promise<Response> {
         }
         // Commit any trailing prose as the final text block.
         flushText();
-        // Drop reasoning blocks that never received any text (e.g. a provider
-        // that emits reasoning boundaries but no summary) so we don't persist
-        // empty "Thought for…" cards.
+        // Keep reasoning blocks that actually happened — either they carry
+        // summary text (OpenAI/Google) or they completed with a duration
+        // (Anthropic adaptive thinking redacts the content but still reports the
+        // time spent, which the ReasoningCard renders as a "Thought for Xs"
+        // pill). Drop only orphan reasoning-start blocks that never ended.
         const persistedBlocks = blocks.filter(
-          (b) => b.type !== "reasoning" || b.text.length > 0,
+          (b) =>
+            b.type !== "reasoning" || b.text.length > 0 || b.durationMs !== undefined,
         );
 
         // Persist the assistant reply so it survives a page refresh and is
