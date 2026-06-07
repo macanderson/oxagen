@@ -302,30 +302,28 @@ describe("reasoningRequestConfig (@oxagen/ai)", () => {
   });
 
   describe("anthropic vendor", () => {
-    it("sets extended thinking providerOptions and locks temperature", () => {
+    it("sets adaptive thinking + output_config.effort and locks temperature", () => {
       const result = reasoningRequestConfig("anthropic/claude-sonnet-4.6", "medium");
       expect(result.temperatureLocked).toBe(true);
       expect(result.providerOptions).toEqual({
-        anthropic: { thinking: { type: "enabled", budgetTokens: 8192 } },
+        anthropic: { thinking: { type: "adaptive" }, outputConfig: { effort: "medium" } },
       });
     });
 
-    it("maps low effort to 4096 budget tokens", () => {
+    it("passes the effort level through to outputConfig (low)", () => {
       const result = reasoningRequestConfig("anthropic/claude-opus-4.8", "low");
-      const thinking = (result.providerOptions?.anthropic as { thinking: { budgetTokens: number } }).thinking;
-      expect(thinking.budgetTokens).toBe(4096);
+      const opts = result.providerOptions?.anthropic as {
+        thinking: { type: string };
+        outputConfig: { effort: string };
+      };
+      expect(opts.thinking.type).toBe("adaptive");
+      expect(opts.outputConfig.effort).toBe("low");
     });
 
-    it("maps medium effort to 8192 budget tokens", () => {
-      const result = reasoningRequestConfig("anthropic/claude-opus-4.8", "medium");
-      const thinking = (result.providerOptions?.anthropic as { thinking: { budgetTokens: number } }).thinking;
-      expect(thinking.budgetTokens).toBe(8192);
-    });
-
-    it("maps high effort to 12288 budget tokens", () => {
+    it("passes the effort level through to outputConfig (high)", () => {
       const result = reasoningRequestConfig("anthropic/claude-opus-4.8", "high");
-      const thinking = (result.providerOptions?.anthropic as { thinking: { budgetTokens: number } }).thinking;
-      expect(thinking.budgetTokens).toBe(12288);
+      const opts = result.providerOptions?.anthropic as { outputConfig: { effort: string } };
+      expect(opts.outputConfig.effort).toBe("high");
     });
   });
 
