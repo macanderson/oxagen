@@ -1,0 +1,118 @@
+"use client";
+/**
+ * WandButton — the floating magic-wand trigger button.
+ *
+ * Fixed bottom-right of the viewport with equal margins (1.5rem).
+ * Circular, Wand2 icon, indigo→green gradient ring (on-brand).
+ * Accessible: aria-label, focus ring, keyboard-openable.
+ * Hidden on narrow mobile when the bottom tab bar is visible (offset above it).
+ *
+ * Accessibility notes (frontend-patterns §a11y):
+ *   - role="button" is implicit from <button>.
+ *   - aria-label describes the action (toggles the agent panel).
+ *   - aria-expanded reflects panel open state.
+ *   - focus-visible ring uses ring-ring token.
+ *   - prefers-reduced-motion: the gradient ring pulse animation is suppressed.
+ */
+
+import * as React from "react";
+import { Wand2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { usePageContext } from "@/lib/page-context";
+
+export interface WandButtonProps {
+  /** Additional class names for the outer positioned container. */
+  className?: string;
+}
+
+export function WandButton({ className }: WandButtonProps) {
+  const { isWandOpen, openWand, closeWand } = usePageContext();
+
+  const handleClick = () => {
+    if (isWandOpen) {
+      closeWand();
+    } else {
+      openWand();
+    }
+  };
+
+  return (
+    <div
+      className={cn(
+        // Position: fixed bottom-right, equal 1.5rem margins.
+        // z-40 puts it above normal content but below modals (z-50).
+        "fixed bottom-6 right-6 z-40",
+        // On mobile: offset above the MobileBottomBar (3.5rem height + 1.5rem gap).
+        // MobileBottomBar is visible below md breakpoint.
+        "bottom-[calc(3.5rem+1.5rem)] md:bottom-6",
+        className,
+      )}
+      // Keep the button out of the main document landmark so it doesn't
+      // interrupt tab order in large page forms.
+      aria-label="Oxagen AI agent"
+    >
+      <button
+        type="button"
+        onClick={handleClick}
+        aria-label={isWandOpen ? "Close AI agent" : "Open AI agent"}
+        aria-expanded={isWandOpen}
+        aria-controls="wand-panel"
+        className={cn(
+          // Size and shape.
+          "relative flex h-12 w-12 items-center justify-center rounded-full",
+          // Background: muted dark surface.
+          "bg-background shadow-lg",
+          // The gradient ring — a pseudo-element ring using the brand gradient
+          // (indigo→green). We use a wrapper with a gradient background and an
+          // inset mask so the gradient appears as a border ring.
+          "ring-2 ring-offset-1",
+          // Default ring follows brand gradient; open state uses a tighter ring.
+          isWandOpen
+            ? "ring-primary/60"
+            : "ring-transparent",
+          // Focus ring (keyboard).
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          // Hover / press affordance.
+          "transition-transform duration-150 hover:scale-105 active:scale-95",
+          // Gradient ring animation when closed — suppressed at prefers-reduced-motion.
+          !isWandOpen && "wand-ring-gradient",
+        )}
+      >
+        {/* Gradient ring layer — decorative, aria-hidden. */}
+        <span
+          className={cn(
+            "absolute inset-0 rounded-full",
+            // Indigo→green gradient matching the brand identity.
+            "bg-gradient-to-br from-indigo-500 via-violet-500 to-emerald-500",
+            // Inset mask so only the ring border shows, not the fill.
+            "opacity-80",
+            // Pulsing glow when closed to draw attention; disabled with reduced motion.
+            !isWandOpen && "animate-[wand-ring-pulse_3s_ease-in-out_infinite] motion-reduce:animate-none",
+          )}
+          aria-hidden="true"
+          style={{
+            WebkitMask: "radial-gradient(circle at center, transparent 68%, black 70%)",
+            mask: "radial-gradient(circle at center, transparent 68%, black 70%)",
+          }}
+        />
+
+        {/* Inner circle — sits above the gradient ring. */}
+        <span
+          className="absolute inset-[3px] rounded-full bg-background"
+          aria-hidden="true"
+        />
+
+        {/* Icon — on top of the inner circle. */}
+        <Wand2
+          className={cn(
+            "relative h-5 w-5 transition-colors duration-150",
+            isWandOpen
+              ? "text-primary"
+              : "text-foreground",
+          )}
+          aria-hidden="true"
+        />
+      </button>
+    </div>
+  );
+}

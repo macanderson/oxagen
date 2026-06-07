@@ -20,6 +20,8 @@ import { useToast } from "@/components/ui/toast";
 import { ModelDefaultsFields, type ModelDefaultsValue } from "@/components/settings/model-defaults-fields";
 import { updatePreferencesAction } from "./preferences-action";
 import type { PreferencesInput } from "./preferences-action";
+import { useRegisterFillableForm, useRegisterPageEntity } from "@/lib/page-context";
+import type { FieldDescriptor } from "@/lib/ask/fill-types";
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -56,6 +58,91 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
   });
 
   const [status, setStatus] = React.useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  // ── Register the account preferences entity + fillable form ──────────────
+  useRegisterPageEntity({
+    kind: "user",
+    id: "account-preferences",
+    label: "Account Preferences",
+    summary: "User preferences for appearance, interactive agent, and model defaults.",
+  });
+
+  const preferencesFields = React.useMemo<FieldDescriptor[]>(
+    () => [
+      {
+        name: "fontSize",
+        label: "Font size",
+        type: "select",
+        current: fontSize,
+        options: [
+          { label: "Small", value: "small" },
+          { label: "Medium", value: "medium" },
+          { label: "Large", value: "large" },
+        ],
+        required: false,
+      },
+      {
+        name: "density",
+        label: "Interface density",
+        type: "select",
+        current: density,
+        options: [
+          { label: "Compact", value: "compact" },
+          { label: "Comfortable", value: "comfortable" },
+          { label: "Spacious", value: "spacious" },
+        ],
+        required: false,
+      },
+      {
+        name: "enterToSubmit",
+        label: "Enter to submit messages",
+        type: "boolean",
+        current: enterToSubmit,
+        required: false,
+      },
+      {
+        name: "pendingPromptBehavior",
+        label: "Pending prompt behavior",
+        type: "select",
+        current: pendingPromptBehavior,
+        options: [
+          { label: "Queue it", value: "queue" },
+          { label: "Interrupt the response", value: "interrupt" },
+        ],
+        required: false,
+      },
+    ],
+    [fontSize, density, enterToSubmit, pendingPromptBehavior],
+  );
+
+  const applyPreferences = React.useCallback(
+    (proposed: Record<string, unknown>) => {
+      if (proposed.fontSize === "small" || proposed.fontSize === "medium" || proposed.fontSize === "large") {
+        setFontSize(proposed.fontSize);
+        // Optimistically apply to the document so the change is visible immediately.
+        document.documentElement.dataset.fontSize = proposed.fontSize;
+      }
+      if (proposed.density === "compact" || proposed.density === "comfortable" || proposed.density === "spacious") {
+        setDensity(proposed.density);
+        document.documentElement.dataset.density = proposed.density;
+      }
+      if (typeof proposed.enterToSubmit === "boolean") {
+        setEnterToSubmit(proposed.enterToSubmit);
+      }
+      if (proposed.pendingPromptBehavior === "queue" || proposed.pendingPromptBehavior === "interrupt") {
+        setPendingPromptBehavior(proposed.pendingPromptBehavior);
+      }
+    },
+    [],
+  );
+
+  useRegisterFillableForm({
+    formId: "account-preferences",
+    title: "Account Preferences",
+    fields: preferencesFields,
+    apply: applyPreferences,
+  });
+  // ─────────────────────────────────────────────────────────────────────────
 
   // ── Optimistic appearance application ──────────────────────────────────────
   // Write the dataset attributes immediately on change so the UI responds

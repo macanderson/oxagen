@@ -48,6 +48,10 @@ registerHandlersOnce("@oxagen/handlers", () => {
   );
   registerHandler("form.fill", async () => (await import("./form.fill")).formFillHandler as CapabilityHandlerFn);
   registerHandler(
+    "archive.create",
+    async () => (await import("./archive.create")).archiveCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "documents.generate",
     async () => (await import("./documents.generate")).documentsGenerateHandler as CapabilityHandlerFn,
   );

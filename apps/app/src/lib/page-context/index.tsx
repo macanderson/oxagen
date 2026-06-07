@@ -36,6 +36,7 @@ export function PageContextProvider({ children }: { children: React.ReactNode })
   const [isFilling, setIsFilling] = React.useState(false);
   const [isAskOpen, setIsAskOpen] = React.useState(false);
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
+  const [isWandOpen, setIsWandOpen] = React.useState(false);
 
   // Stable callbacks: useCallback with [] dep so these function references
   // never change. This prevents the pageCtx object from being recreated (via
@@ -48,6 +49,8 @@ export function PageContextProvider({ children }: { children: React.ReactNode })
   const closeAsk = React.useCallback(() => setIsAskOpen(false), []);
   const openCommand = React.useCallback(() => setIsCommandOpen(true), []);
   const closeCommand = React.useCallback(() => setIsCommandOpen(false), []);
+  const openWand = React.useCallback(() => setIsWandOpen(true), []);
+  const closeWand = React.useCallback(() => setIsWandOpen(false), []);
 
   const value = React.useMemo<PageContextValue>(
     () => ({
@@ -65,8 +68,11 @@ export function PageContextProvider({ children }: { children: React.ReactNode })
       isCommandOpen,
       openCommand,
       closeCommand,
+      isWandOpen,
+      openWand,
+      closeWand,
     }),
-    [entity, fillableForm, fillResult, isFilling, isAskOpen, openAsk, closeAsk, isCommandOpen, openCommand, closeCommand],
+    [entity, fillableForm, fillResult, isFilling, isAskOpen, openAsk, closeAsk, isCommandOpen, openCommand, closeCommand, isWandOpen, openWand, closeWand],
   );
 
   return <PageContext.Provider value={value}>{children}</PageContext.Provider>;

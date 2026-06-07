@@ -77,3 +77,20 @@ html[data-density="spacious"] {
   --density-gap: 0.875rem;  /* 14px */
   --density-py: 1rem;       /* 16px */
 }
+
+/* ── Wand widget ────────────────────────────────────────────────────────── */
+/*
+ * The gradient ring on the floating wand button pulses gently to draw
+ * attention when closed. Suppressed by prefers-reduced-motion via the
+ * motion-reduce: Tailwind variant on the element itself.
+ */
+@keyframes wand-ring-pulse {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.04);
+  }
+}

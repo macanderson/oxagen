@@ -19,6 +19,7 @@ import {
   orgShellResolvePlanAction,
 } from "./shell-actions";
 import { resolvedTierCatalog } from "@oxagen/ai";
+import { WandButton, WandPanel } from "@/components/shell/wand";
 
 export default async function OrgLayout({
   children,
@@ -135,6 +136,18 @@ export default async function OrgLayout({
 
       {/* Fill overlay — renders AI form-fill suggestions from AskBar */}
       <FillOverlay />
+
+      {/* Floating wand AI agent button — fixed bottom-right of the viewport. */}
+      <WandButton />
+
+      {/* Wand panel — the AI agent chat drawer triggered by the wand button.
+          Mounted once at the org layout boundary so it persists across navigation.
+          The panel resolves the active workspace from the URL on each send. */}
+      <WandPanel
+        orgSlug={orgSlug}
+        availableWorkspaces={workspacesRows}
+        modelConfig={resolvedTierCatalog()}
+      />
     </PageContextProvider>
   );
 }

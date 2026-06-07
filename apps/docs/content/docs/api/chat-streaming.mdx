@@ -1,0 +1,115 @@
+---
+title: Chat streaming
+description: How to consume the chat SSE stream — event types, message threading, and credit delta events.
+---
+
+The chat capability (`chat.message.send`) streams its response as Server-Sent Events (SSE). This is the same stream the in-app agent uses — there is no separate "streaming API vs. web API."
+
+## Endpoint
+
+```
+POST https://oxagen-v2-api.vercel.app/v1/{orgSlug}/{workspaceSlug}/chat/stream
+```
+
+The org and workspace slugs are derived from the API key scope. You still include them in the URL path.
+
+## Request
+
+```http
+POST /v1/acme-corp/engineering/chat/stream
+Authorization: Bearer oxk_live_…
+Content-Type: application/json
+
+{
+  "message": "Summarize the last 10 agent runs and identify any failures.",
+  "conversationId": "uuid",
+  "parentMessageId": "uuid"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `message` | string | Yes | The user's message text |
+| `conversationId` | string | No | Existing conversation to continue. Omit to start a new conversation. |
+| `parentMessageId` | string | No | Parent message ID for threading. If omitted, the server uses the current leaf message. |
+
+## Response
+
+The response has `Content-Type: text/event-stream`. Each event is a JSON object preceded by `data: ` and terminated by a blank line.
+
+```
+data: {"type":"message_start","conversationId":"uuid","messageId":"uuid"}
+
+data: {"type":"text_delta","delta":"Here are the last 10 agent runs:"}
+
+data: {"type":"text_delta","delta":" 3 failures detected."}
+
+data: {"type":"tool_call_start","toolCallId":"uuid","toolName":"agent.tool.list"}
+
+data: {"type":"tool_call_output","toolCallId":"uuid","output":{"tools":[...]}}
+
+data: {"type":"tool_call_end","toolCallId":"uuid"}
+
+data: {"type":"credit_delta","balance":4847,"delta":-5}
+
+data: {"type":"message_end","messageId":"uuid","stopReason":"end_turn"}
+```
+
+## Event types
+
+| Type | Description |
+|---|---|
+| `message_start` | Beginning of a new assistant message. Includes `conversationId` and `messageId`. |
+| `text_delta` | A chunk of streamed assistant text. Concatenate `delta` fields in order. |
+| `tool_call_start` | The agent is about to invoke a capability. Includes `toolCallId` and `toolName`. |
+| `tool_call_output` | The result of a tool invocation. Includes `toolCallId` and `output`. |
+| `tool_call_end` | Tool invocation complete. |
+| `approval_required` | The agent has paused for user approval. Includes `toolCallId`, `toolName`, `riskLevel`, and a human-readable `description`. Resolve with `agent.approval.resolve`. |
+| `plan_proposed` | The agent has entered plan mode and is proposing a plan. Includes a structured `plan` object. Approve with `agent.plan.approve`. |
+| `subagent_dispatched` | A subagent has been dispatched. Includes `subagentId` and `taskDescription`. |
+| `credit_delta` | Emitted after `onFinish`. Includes `balance` (new org credit balance) and `delta` (credits charged this turn, negative integer). |
+| `message_end` | Stream complete. Includes `stopReason` (`end_turn`, `max_tokens`, `tool_use`, `approval_required`). |
+| `error` | An error occurred. Includes `code` and `message`. The stream closes after this event. |
+
+## Handling approval events
+
+When `approval_required` is emitted, the stream pauses. Resolve the approval with a separate API call:
+
+```http
+POST /v1/agent/approval/resolve
+Authorization: Bearer oxk_live_…
+Content-Type: application/json
+
+{
+  "approvalRequestId": "uuid",
+  "resolution": "approved"
+}
+```
+
+The stream resumes automatically after resolution. `resolution` is `"approved"` or `"denied"`.
+
+## Message threading
+
+The server uses the current database leaf message as the parent if `parentMessageId` is omitted. This prevents vanishing history: if the client loses track of the message ID, the server thread remains correct. Pin your client to the returned `messageId` from `message_start` for explicit threading.
+
+New conversations (no `conversationId`) create a new conversation record. The `conversationId` is returned in `message_start` — persist it for subsequent messages in the same thread.
+
+## Credit delta
+
+The `credit_delta` event is emitted after the model call completes and credits are charged. Use the `balance` field to update your own credit display without making a separate balance API call.
+
+If `balance` reaches 0, subsequent stream requests return `402 Insufficient Credits` before the stream begins.
+
+## Error handling
+
+Stream errors arrive as `error` events:
+
+```
+data: {"type":"error","code":"capability_denied","message":"agent.code.execute requires approval","requestId":"req_…"}
+```
+
+After an `error` event, the stream closes. Reconnect with the same `conversationId` and `parentMessageId` to continue the conversation.
+
+## Connection management
+
+SSE connections are long-lived. If your HTTP client enforces a short timeout, set it to at least 120 seconds to accommodate multi-step agent runs. The stream sends a keep-alive comment (`: ping`) every 15 seconds while the agent is processing.

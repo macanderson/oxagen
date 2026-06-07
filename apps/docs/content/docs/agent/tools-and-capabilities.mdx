@@ -1,0 +1,98 @@
+---
+title: Tools and capabilities
+description: The agent tool surface — which capabilities agents can invoke, how the tool list is assembled, and how skills extend it.
+---
+
+## How the tool list is built
+
+At the start of each agent turn, the runtime materializes the tool list by:
+
+1. Taking all capabilities that declare `surfaces: ['agent']` (or `['api', 'mcp', 'agent']`).
+2. Filtering to capabilities enabled by the workspace tool policy.
+3. Filtering to capabilities the current principal has grants for.
+4. Adding tools contributed by enabled workspace plugins (external MCP servers whose tools are injected into the workspace toolchain).
+
+The result is a Vercel AI SDK `tools` map passed to `streamText`. The agent selects from this map; it cannot use a tool not in the map.
+
+## Built-in agent tools
+
+### Memory
+
+| Tool | Description |
+|---|---|
+| `agent.memory.recall` | Query the workspace knowledge graph for relevant memories. Returns scored matches by semantic similarity. |
+| `agent.memory.write` | Persist a new memory (rule, fact, or note) to the workspace knowledge graph, attached to a graph node with a confidence weight. |
+
+Memories persist across sessions and are visible in **Workspace → Knowledge → Memories**.
+
+### Subagents
+
+| Tool | Description |
+|---|---|
+| `agent.subagent.dispatch` | Dispatch one or more subagents in parallel. Each subagent runs a scoped capability and returns its result to the parent. Long-running subagents run as durable Inngest jobs. |
+| `agent.subagent.aggregate` | Aggregate results from previously dispatched subagents. |
+
+### Code execution
+
+| Tool | Description |
+|---|---|
+| `agent.code.execute` | Execute Node 20, Python 3.12, or shell code in a hardened sandbox. Streams stdout/stderr back to the chat. `riskLevel: high` — requires user approval by default. |
+
+See [Code execution](/docs/agent/code-execution) for full details on the sandbox environment.
+
+### Planning
+
+| Tool | Description |
+|---|---|
+| `agent.plan.create` | Enter plan mode. The agent proposes a structured plan before executing any side-effectful tools. |
+| `agent.plan.approve` | Approve the proposed plan. The agent proceeds to execute. |
+
+### Skills
+
+| Tool | Description |
+|---|---|
+| `agent.skill.list` | List available skills (built-in filesystem skills + workspace prompt templates). |
+| `agent.skill.load` | Load a specific skill into the agent's context for the current turn. |
+
+Skills are file-based prompt templates (`.skill.md` format) that give the agent specialized domain knowledge or instructions. Workspace administrators can define custom skills via **Workspace → Knowledge** prompt templates.
+
+### Background tasks
+
+| Tool | Description |
+|---|---|
+| `agent.task.background.start` | Start a long-running Inngest job. Returns a task ID immediately. The task runs asynchronously. |
+| `agent.task.background.read` | Poll the status of a background task. |
+| `agent.task.background.cancel` | Cancel a running background task. |
+
+Background tasks appear in **Workspace → Activity → Runs** with live status updates.
+
+### Approvals
+
+| Tool | Description |
+|---|---|
+| `agent.approval.resolve` | Approve or deny a pending approval request (used programmatically; in the app UI, approval cards render inline in chat). |
+
+### MCP server management
+
+| Tool | Description |
+|---|---|
+| `agent.mcp.list` | List external MCP servers registered for the workspace. |
+| `agent.tool.list` | List all tools available in the current session (built-in + plugin tools). |
+
+## Plugin tools
+
+When a workspace enables an external MCP server plugin, that server's tools are injected into the workspace toolchain. Plugin tools appear in the agent's tool list alongside built-in tools. They are governed by the same IAM and audit infrastructure — calling a plugin tool produces the same audit record as calling a built-in tool.
+
+Plugin tool names are namespaced by the plugin's server ID to prevent collisions.
+
+## Tool permissions and risk levels
+
+Every tool has a `riskLevel` field: `low`, `medium`, or `high`.
+
+- **Low:** No approval required by default.
+- **Medium:** May require approval depending on workspace policy.
+- **High:** Requires explicit user approval before execution (stream pauses; approval card rendered).
+
+`agent.code.execute` is the primary high-risk tool. The workspace tool policy can customize risk thresholds — see **Workspace → Settings → General → Tool policy**.
+
+Default-deny applies to high-risk tools. A workspace that has never configured a tool policy has code execution disabled by default.

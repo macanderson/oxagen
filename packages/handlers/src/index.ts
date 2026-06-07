@@ -1,3 +1,4 @@
+export { archiveCreateHandler } from "./archive.create";
 export { apiKeyCreateHandler } from "./api.key.create";
 export { apiKeyRevokeHandler } from "./api.key.revoke";
 export { organizationCreateHandler } from "./organization.create";

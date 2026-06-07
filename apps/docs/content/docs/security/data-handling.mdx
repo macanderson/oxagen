@@ -1,0 +1,87 @@
+---
+title: Data handling
+description: Encryption at rest, data residency, retention policies, and sub-processor details.
+---
+
+## Encryption at rest
+
+All persisted data is encrypted at rest without exception:
+
+| Store | Encryption | Key management |
+|---|---|---|
+| Postgres (Neon / AlloyDB) | AES-256, managed by provider | Provider-managed KMS |
+| ClickHouse Cloud | AES-256, managed by provider | Provider-managed KMS |
+| Neo4j AuraDB | Encryption at rest enabled | Provider-managed |
+| Vercel Blob (binary assets) | AES-256, managed by Vercel | Provider-managed KMS |
+
+Plugin OAuth tokens and API key secrets receive an additional application-layer encryption with AES-256-GCM before being written to Postgres. The encryption key is held in the secret manager (not in the database or in code).
+
+## Encryption in transit
+
+All connections between clients and Oxagen services use TLS 1.2 or higher. There is no unencrypted path to any data store or API. Internal connections from Vercel Functions to Postgres, ClickHouse, and Neo4j are also TLS-secured.
+
+## Data residency
+
+Oxagen services are deployed to US-East (`iad1` on Vercel). All data stores are provisioned in US regions:
+
+| Service | Region |
+|---|---|
+| Vercel Functions (API, App, MCP) | `iad1` (US-East) |
+| Postgres (Neon / AlloyDB) | US-East |
+| ClickHouse Cloud | AWS `us-east-2` |
+| Neo4j AuraDB | US region |
+| Vercel Blob | US region |
+
+Customer data does not leave the United States in normal operation. If a workspace connects to an external MCP server, data sent to that server is subject to that server's data handling policies — Oxagen does not control or log the payloads sent to external integrations.
+
+## Data classification
+
+Oxagen handles four categories of customer data:
+
+- **Identity data:** User profiles, email addresses, authentication credentials. Stored in Postgres `auth.*` tables. Never written to ClickHouse. Never included in agent prompts.
+- **Operational data:** Conversations, agent runs, playbooks, memories, tool calls, file uploads. Stored in Postgres with tenant-scoped RLS enforcement and in Neo4j for graph relationships.
+- **Telemetry:** Token usage, execution latency, tool invocation counts, audit events. Stored in ClickHouse (append-only). Never contains message content.
+- **Billing data:** Subscription status, credit balances, payment method tokens. Managed via Stripe; Oxagen stores only Stripe-issued identifiers, not raw card data.
+
+## Retention
+
+| Data type | Retention policy |
+|---|---|
+| Security audit events (Postgres) | 7 years, monthly RANGE partitions |
+| Audit events (ClickHouse) | 7-year TTL |
+| Conversations and messages | Retained until deleted by the user or org; soft-delete with 30-day recovery window |
+| Token usage telemetry | Retained for the life of the organization; exportable |
+| Credit ledger | Permanent (append-only financial record) |
+| Binary assets | Retained until deleted; hard-delete is immediate |
+
+Users can export all their personal data (conversations, profile, audit events scoped to their account) from **Account → Privacy → Export data**. Exports are generated as a signed download link valid for 7 days.
+
+Users can request account deletion from **Account → Privacy → Delete personal data**. A 30-day soft-delete window is provided. On hard-delete, PII is removed and audit events are anonymized to `<deleted-user>` with a stable hash retained for referential integrity.
+
+## Sub-processors
+
+Oxagen uses the following sub-processors:
+
+| Sub-processor | Purpose | Data categories |
+|---|---|---|
+| **Vercel** | Compute (Functions), edge delivery, blob storage | All categories (primary compute layer) |
+| **Neon / AlloyDB** | Postgres managed service | Identity, operational, billing |
+| **ClickHouse Cloud** | Analytics managed service | Telemetry, audit |
+| **Neo4j AuraDB** | Graph database managed service | Operational (knowledge graph, memory) |
+| **Stripe** | Payment processing, subscription management | Billing |
+| **Inngest** | Background job orchestration | Job payloads (org and workspace IDs, capability names) |
+| **Google Cloud** | Secret management (Google Secret Manager) | Secrets (keys, not customer data) |
+
+DPAs are available on request for all primary sub-processors. Contact privacy@oxagen.ai.
+
+## Model providers and AI inference
+
+All AI inference routes through the Vercel AI Gateway. Oxagen does not hold Anthropic, OpenAI, or other provider API keys in its codebase or deployment environment — the gateway handles provider authentication.
+
+Inference requests contain the content of the user's message and the agent's system prompt. They do not contain: passwords, API keys, raw payment data, or other secrets. Model providers' data handling policies apply to the content of inference requests.
+
+By default, model training opt-out is enabled for all Oxagen users (see **Account → Privacy → Consent settings**).
+
+## Data processing agreements
+
+Oxagen offers a Data Processing Agreement (DPA) for customers subject to GDPR, HIPAA, or other regulatory requirements. Contact legal@oxagen.ai to initiate DPA execution.

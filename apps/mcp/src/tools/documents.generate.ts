@@ -4,20 +4,22 @@ import { documentsGenerate } from "@oxagen/oxagen/contracts/documents.generate";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
+// Generate a DOCX document, XLSX spreadsheet, or PPTX presentation from
+// structured content. No cloud OAuth required — built in-process.
+
 export const schema = {
   ...documentsGenerate.input.shape,
-  provider: documentsGenerate.input.shape.provider.describe(
-    "Cloud provider to create the document in",
-  ),
   kind: documentsGenerate.input.shape.kind.describe(
-    "The kind of document to generate",
+    "The file format to generate: document (DOCX), spreadsheet (XLSX), or presentation (PPTX)",
   ),
-  title: documentsGenerate.input.shape.title.describe("Title of the new document"),
-  instructions: documentsGenerate.input.shape.instructions.describe(
-    "Optional natural-language instructions for content generation",
+  title: documentsGenerate.input.shape.title.describe(
+    "Title of the document / spreadsheet / presentation",
   ),
-  brandKitId: documentsGenerate.input.shape.brandKitId.describe(
-    "Optional brand-kit ID to apply to the created file",
+  content: documentsGenerate.input.shape.content.describe(
+    "Structured content: sections (document), headers+rows (spreadsheet), or slides (presentation)",
+  ),
+  brandColors: documentsGenerate.input.shape.brandColors.describe(
+    "Optional brand colors (primary, secondary) to thread through the document",
   ),
 };
 

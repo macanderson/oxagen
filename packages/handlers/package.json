@@ -17,22 +17,27 @@
   },
   "dependencies": {
     "@oxagen/ai": "workspace:*",
-    "@oxagen/plugins": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/inngest-functions": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
+    "@oxagen/plugins": "workspace:*",
     "@oxagen/storage": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
+    "docx": "9.7.1",
     "drizzle-orm": "0.45.2",
+    "exceljs": "4.4.0",
+    "fflate": "0.8.3",
+    "pdf-lib": "1.17.1",
     "pino": "9.14.0",
+    "pptxgenjs": "4.0.1",
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "2.1.9",
     "typescript": "6.0.3",
-    "vitest": "2.1.9",
-    "@vitest/coverage-v8": "2.1.9"
+    "vitest": "2.1.9"
   }
 }

@@ -1,0 +1,123 @@
+---
+title: MCP tools
+description: The full list of tools exposed by the Oxagen MCP server, their parity with the REST API, and known gaps.
+---
+
+## Tool naming convention
+
+MCP tool names use double-underscore (`__`) as the namespace separator because the dot (`.`) is not valid in MCP tool names. The capability `agent.memory.recall` is exposed as the tool `agent__memory__recall`.
+
+## Available tools
+
+All capabilities declared with `'mcp'` in their `surfaces` array are available. The list below mirrors the [capabilities reference](/docs/api/capabilities) filtered to MCP-surfaced capabilities.
+
+### Agent
+
+| Tool | Capability | Description |
+|---|---|---|
+| `agent__tool__list` | `agent.tool.list` | List available tools for the current workspace |
+| `agent__skill__list` | `agent.skill.list` | List available skills |
+| `agent__mcp__list` | `agent.mcp.list` | List registered external MCP servers |
+| `agent__mcp__register` | `agent.mcp.register` | Register an external MCP server |
+| `agent__plan__approve` | `agent.plan.approve` | Approve a pending agent plan |
+| `agent__approval__resolve` | `agent.approval.resolve` | Approve or deny a pending tool-call approval request |
+| `agent__memory__recall` | `agent.memory.recall` | Recall memories from the workspace knowledge graph |
+| `agent__memory__write` | `agent.memory.write` | Write a new memory to the workspace knowledge graph |
+| `agent__task__background__start` | `agent.task.background.start` | Start a long-running background task |
+| `agent__task__background__read` | `agent.task.background.read` | Read the status of a background task |
+| `agent__task__background__cancel` | `agent.task.background.cancel` | Cancel a running background task |
+
+### Chat and conversations
+
+| Tool | Capability | Description |
+|---|---|---|
+| `chat__message__send` | `chat.message.send` | Send a message to a conversation |
+| `conversation__list` | `conversation.list` | List conversations in the workspace |
+| `conversation__archive` | `conversation.archive` | Archive a conversation |
+| `conversation__rename` | `conversation.rename` | Rename a conversation |
+| `conversation__delete` | `conversation.delete` | Delete a conversation |
+| `conversation__purge` | `conversation.purge` | Permanently purge a conversation and all its messages |
+
+### Knowledge and assets
+
+| Tool | Capability | Description |
+|---|---|---|
+| `asset__upload` | `asset.upload` | Upload a binary asset (image, PDF, document) |
+
+### Content generation
+
+| Tool | Capability | Description |
+|---|---|---|
+| `documents__generate` | `documents.generate` | Generate a document (Word, Markdown, or HTML) |
+| `documents__pdf__create` | `documents.pdf.create` | Generate a PDF document |
+| `image__generate` | `image.generate` | Generate an image |
+| `svg__generate` | `svg.generate` | Generate an SVG graphic |
+| `video__generate` | `video.generate` | Generate a video (async; returns task ID) |
+| `brandkit__apply` | `brandkit.apply` | Apply a workspace brand kit to generated content |
+| `form__fill` | `form.fill` | Fill a form with structured data |
+
+### Organization and workspace
+
+| Tool | Capability | Description |
+|---|---|---|
+| `organization__create` | `organization.create` | Create a new organization |
+| `org__member__add` | `org.member.add` | Add a member to the organization |
+| `org__member__remove` | `org.member.remove` | Remove a member from the organization |
+| `org__member__role__change` | `org.member.role.change` | Change a member's role |
+| `org__member__invite__accept` | `org.member.invite.accept` | Accept a pending invitation |
+| `org__member__invite__decline` | `org.member.invite.decline` | Decline a pending invitation |
+| `workspace__create` | `workspace.create` | Create a new workspace |
+| `workspace__model__settings__read` | `workspace.model.settings.read` | Read workspace model configuration |
+
+### Billing
+
+| Tool | Capability | Description |
+|---|---|---|
+| `billing__subscription__read` | `billing.subscription.read` | Read current subscription and credit balance |
+
+### Notifications and preferences
+
+| Tool | Capability | Description |
+|---|---|---|
+| `notifications__list` | `notifications.list` | List notifications |
+| `notifications__mark` | `notifications.mark` | Mark notifications as read |
+| `user__preferences__read` | `user.preferences.read` | Read user preferences |
+| `user__preferences__write` | `user.preferences.write` | Update user preferences |
+
+### Plugins
+
+| Tool | Capability | Description |
+|---|---|---|
+| `plugin__catalog__browse` | `plugin.catalog.browse` | Browse the plugin marketplace |
+| `plugin__catalog__get` | `plugin.catalog.get` | Get details for a specific plugin |
+| `plugin__org__list` | `plugin.org.list` | List org-installed plugins |
+| `plugin__registry__list` | `plugin.registry.list` | List configured plugin registries |
+
+### System
+
+| Tool | Capability | Description |
+|---|---|---|
+| `system__install__instructions` | `system.install.instructions` | Get workspace context and connection verification |
+
+## Parity model
+
+The MCP tool list is generated from the same contract registry as the REST API. Every capability that declares `'mcp'` in its `surfaces` array is a tool; every capability that does not is excluded. This is not maintained by hand — it is structural.
+
+## Known gaps
+
+The following capabilities are not available via MCP due to transport or UX constraints:
+
+| Capability | Reason |
+|---|---|
+| `agent.code.execute` | Agent-surface only; requires an active chat stream context for streaming output and approval flow |
+| `agent.subagent.dispatch` | Agent-surface only; requires the parent agent runtime context |
+| `agent.plan.create` | Agent-surface only; plan mode is initiated by the agent runtime, not by external callers |
+| `agent.skill.load` | Agent-surface only; skills are loaded in the context of a running agent session |
+| `billing.credits.purchase` | Browser redirect required for Stripe Checkout |
+| `billing.subscription.upgrade.start` | Browser redirect required for Stripe Checkout |
+| `workspace.model.settings.write` | Available via REST API only (administrative action) |
+| `plugin.credential.reauth` | OAuth browser redirect required |
+| `plugin.credential.set_secret` | Available via REST API only |
+| OAuth plugin install flows | Browser redirect required |
+
+The `check:manifest` tool (`pnpm check:manifest` in a local clone) reports the current parity gap as a machine-readable JSON output.

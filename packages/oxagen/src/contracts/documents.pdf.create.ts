@@ -1,13 +1,25 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
+// Render directive matching the file-attachment chat component.
+const fileRenderDirective = z.object({
+  componentId: z.literal("file-attachment"),
+  props: z.object({
+    url: z.string(),
+    name: z.string(),
+    kind: z.literal("pdf"),
+    mimeType: z.string(),
+    sizeBytes: z.number(),
+  }),
+});
+
 export const documentsPdfCreate = registerCapability({
   name: "documents.pdf.create",
   domain: "documents",
   description:
-    "Render a PDF from an HTML source or an existing cloud file. " +
-    "Optionally applies a brand kit to the output. " +
-    "Currently a console-logging stub — deferred backing.",
+    "Generate a PDF from a title and structured text content using pdf-lib. " +
+    "The PDF is built in-process (pure JS, no Chromium), uploaded to blob storage, " +
+    "and served through the access-controlled /api/v1/assets/<publicId> route.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -26,17 +38,36 @@ export const documentsPdfCreate = registerCapability({
   input: z.object({
     /** Title / filename of the output PDF. */
     title: z.string().min(1),
-    /** Raw HTML markup to render into a PDF. */
-    sourceHtml: z.string().optional(),
-    /** Cloud file ID of a document to export as PDF. */
-    sourceFileId: z.string().optional(),
-    /** Optional brand-kit ID to apply to the PDF output. */
-    brandKitId: z.string().optional(),
+    /** Structured content sections rendered into the PDF. */
+    content: z
+      .object({
+        sections: z
+          .array(
+            z.object({
+              heading: z.string().optional(),
+              paragraphs: z.array(z.string()).min(1),
+            }),
+          )
+          .optional(),
+      })
+      .optional(),
+    /** Optional brand-kit colors. */
+    brandColors: z
+      .object({
+        primary: z.string().optional(),
+        secondary: z.string().optional(),
+      })
+      .optional(),
   }),
   output: z.object({
-    stub: z.literal(true),
-    fileId: z.string(),
-    url: z.string().url(),
+    assetId: z.string(),
+    publicId: z.string(),
+    kind: z.literal("pdf"),
+    mimeType: z.string(),
+    sizeBytes: z.number(),
+    url: z.string(),
+    serveUrl: z.string(),
+    render: fileRenderDirective,
   }),
 });
 

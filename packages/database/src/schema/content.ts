@@ -69,7 +69,10 @@ export const generatedAssets = contentSchema.table(
     orgIdx: index("generated_assets_org_idx").on(t.orgId, t.workspaceId),
     userIdx: index("generated_assets_user_idx").on(t.userId),
     conversationIdx: index("generated_assets_conversation_idx").on(t.conversationId),
-    kindCheck: check("generated_assets_kind_check", sql`${t.kind} IN ('image', 'video')`),
+    kindCheck: check(
+      "generated_assets_kind_check",
+      sql`${t.kind} IN ('image', 'video', 'document', 'spreadsheet', 'presentation', 'pdf', 'archive')`,
+    ),
     accessPolicyCheck: check(
       "generated_assets_access_policy_check",
       sql`${t.accessPolicy} IN ('user', 'org', 'public')`,

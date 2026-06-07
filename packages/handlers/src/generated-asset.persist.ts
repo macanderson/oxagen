@@ -12,7 +12,14 @@ import { randomUUID } from "node:crypto";
 import { schema, withSystemDb } from "@oxagen/database";
 import { storage } from "@oxagen/storage";
 
-export type AssetKind = "image" | "video";
+export type AssetKind =
+  | "image"
+  | "video"
+  | "document"
+  | "spreadsheet"
+  | "presentation"
+  | "pdf"
+  | "archive";
 export type AssetAccessPolicy = "user" | "org" | "public";
 
 export interface PersistGeneratedAssetArgs {
@@ -67,6 +74,12 @@ const EXT_BY_MIME: Record<string, string> = {
   "image/gif": "gif",
   "video/mp4": "mp4",
   "video/webm": "webm",
+  // document kinds
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+  "application/pdf": "pdf",
+  "application/zip": "zip",
 };
 
 function extFor(mimeType: string): string {

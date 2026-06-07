@@ -10,6 +10,7 @@
 
 import { apiKeyCreate } from "./api.key.create";
 import { apiKeyRevoke } from "./api.key.revoke";
+import { archiveCreate } from "./archive.create";
 import { assetUpload } from "./asset.upload";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentCodeExecute } from "./agent.code.execute";
@@ -78,6 +79,7 @@ import { pluginWorkspaceSetEnabled } from "./plugin.workspace.set_enabled";
 export {
   apiKeyCreate,
   apiKeyRevoke,
+  archiveCreate,
   assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
@@ -155,6 +157,7 @@ export {
 export const contracts = [
   apiKeyCreate,
   apiKeyRevoke,
+  archiveCreate,
   assetUpload,
   agentApprovalResolve,
   brandkitApply,

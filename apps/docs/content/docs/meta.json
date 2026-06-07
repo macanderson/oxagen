@@ -1,0 +1,14 @@
+{
+  "title": "Oxagen docs",
+  "pages": [
+    "index",
+    "getting-started",
+    "security",
+    "governance",
+    "enterprise",
+    "api",
+    "mcp",
+    "agent",
+    "plugins"
+  ]
+}

@@ -4,19 +4,19 @@ import { documentsPdfCreate } from "@oxagen/oxagen/contracts/documents.pdf.creat
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
+// Generate a PDF from a title and structured text content using pdf-lib.
+// Pure JS, no Chromium required, serverless-safe.
+
 export const schema = {
   ...documentsPdfCreate.input.shape,
   title: documentsPdfCreate.input.shape.title.describe(
     "Title / filename of the output PDF",
   ),
-  sourceHtml: documentsPdfCreate.input.shape.sourceHtml.describe(
-    "Raw HTML markup to render into a PDF",
+  content: documentsPdfCreate.input.shape.content.describe(
+    "Structured content sections (heading + paragraphs) to render into the PDF",
   ),
-  sourceFileId: documentsPdfCreate.input.shape.sourceFileId.describe(
-    "Cloud file ID of a document to export as PDF",
-  ),
-  brandKitId: documentsPdfCreate.input.shape.brandKitId.describe(
-    "Optional brand-kit ID to apply to the PDF output",
+  brandColors: documentsPdfCreate.input.shape.brandColors.describe(
+    "Optional brand colors (primary, secondary) for the PDF",
   ),
 };
 

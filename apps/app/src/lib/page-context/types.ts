@@ -79,4 +79,13 @@ export interface PageContextValue {
   isCommandOpen: boolean;
   openCommand: () => void;
   closeCommand: () => void;
+
+  /**
+   * Floating wand widget open state.
+   * The wand is a global floating chat panel separate from the topbar AskDrawer.
+   * Open/close state lives here so any component can toggle it without prop-drilling.
+   */
+  isWandOpen: boolean;
+  openWand: () => void;
+  closeWand: () => void;
 }

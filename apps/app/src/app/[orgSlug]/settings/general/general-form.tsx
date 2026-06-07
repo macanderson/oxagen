@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { slugify } from "@/lib/slug";
+import { useRegisterFillableForm, useRegisterPageEntity } from "@/lib/page-context";
+import type { FieldDescriptor } from "@/lib/ask/fill-types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,6 +45,52 @@ export function OrgGeneralForm({
   // avatarUrl is kept as controlled state so the hidden input always reflects
   // the latest value returned by AvatarUpload.onChange.
   const [avatarUrl, setAvatarUrl] = React.useState(initialAvatarUrl);
+
+  // ── Register the org entity and fillable form with the Ask / wand system ──
+  useRegisterPageEntity({
+    kind: "organization",
+    // Use orgSlug as the identifier — the org public ID is not passed to this
+    // client component (it lives server-side only). Slug is stable and unique.
+    id: orgSlug,
+    label: name,
+    summary: `Organization "${name}" (slug: ${slug}).`,
+  });
+
+  const orgFillFields = React.useMemo<FieldDescriptor[]>(
+    () => [
+      {
+        name: "name",
+        label: "Organization name",
+        type: "text",
+        current: name,
+        required: true,
+      },
+      {
+        name: "slug",
+        label: "Organization slug",
+        type: "text",
+        current: slug,
+        required: true,
+      },
+    ],
+    [name, slug],
+  );
+
+  const applyOrgFill = React.useCallback(
+    (proposed: Record<string, unknown>) => {
+      if (typeof proposed.name === "string") setName(proposed.name);
+      if (typeof proposed.slug === "string") setSlug(slugify(proposed.slug));
+    },
+    [],
+  );
+
+  useRegisterFillableForm({
+    formId: `org-general-${orgSlug}`,
+    title: "Organization Settings",
+    fields: orgFillFields,
+    apply: applyOrgFill,
+  });
+  // ─────────────────────────────────────────────────────────────────────────
 
   // While the slug is empty, keep deriving it from the name as the user types —
   // so an emptied slug refills the moment they edit the name.

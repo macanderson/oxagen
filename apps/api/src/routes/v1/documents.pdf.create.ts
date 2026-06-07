@@ -6,8 +6,8 @@ import type { AppEnv } from "../../app";
 
 export const documentsPdfCreateRoute = new Hono<AppEnv>();
 
-// Stub PDF creation: parses title/source/brandKitId input, logs intent,
-// and returns a typed placeholder. Route is org + workspace scoped (see app.ts).
+// PDF generation from structured content using pdf-lib (pure JS, no Chromium).
+// Route is org + workspace scoped (see app.ts).
 documentsPdfCreateRoute.post("/", async (c) => {
   const body = documentsPdfCreate.input.parse(await c.req.json());
   const ctx = capabilityContext(c);

@@ -1,0 +1,144 @@
+---
+title: Audit logging
+description: How Oxagen records every security event, IAM decision, and capability invocation across two independent audit stores.
+---
+
+Oxagen writes an immutable audit record for every action that matters: every sign-in, every IAM decision, every capability invocation, every billing change, every org management action. The records are distributed across two independent stores optimized for different query patterns — and neither store can be silently tampered with.
+
+## Two independent audit stores
+
+### Postgres: `security.security_events`
+
+Relational, queryable, indexed for point lookups and compliance reporting.
+
+- **Retention:** 7 years, enforced by monthly RANGE partitions. Partitions older than 7 years are dropped automatically.
+- **Schema:** `id`, `occurred_at`, `event_type`, `org_id`, `workspace_id`, `acting_principal_id`, `human_principal_id` (for delegated contexts), `capability`, `scope`, `outcome`, `target_ref`, `payload_hash`, `ip`, `user_agent`, `request_id`, `resolution_trace`.
+- **Query surface:** **Organization → Security → Audit** (filtered UI), or directly via `/v1/audit/events` API.
+- **Use cases:** Point lookups ("did this user access this capability?"), compliance dashboard queries, access-review exports.
+
+### ClickHouse: `audit_events`
+
+Append-only, `ReplacingMergeTree`, high-volume analytics with chain-hash tamper evidence.
+
+- **Retention:** 7-year TTL column.
+- **Tamper evidence:** Each row includes a `prev_hash` field containing the hash of the preceding row's hash (SHA-256). This creates a verifiable hash chain — any deletion or mutation in the middle of the chain is detectable by recomputing the chain from any anchor point. The chain is verifiable programmatically and is checked in the SOC 2 compliance dashboard.
+- **Use cases:** High-volume analytics queries, SIEM export, tamper verification, trend analysis over audit event volumes.
+
+Both stores receive every security event via the same `emitSecurityEvent()` call. Write failures to either store are retried independently — an analytics write failure does not cause a capability invocation to fail, and vice versa.
+
+## Event taxonomy
+
+24 typed security event kinds are defined in a single source of truth:
+
+### Auth lifecycle
+
+| Event | Triggered by |
+|---|---|
+| `auth.sign_in` | Successful login (any method) |
+| `auth.sign_in_failed` | Failed login attempt |
+| `auth.sign_out` | Explicit logout or session revocation |
+| `auth.token_refreshed` | Session token refresh |
+| `auth.password_changed` | Password change (not reset) |
+| `auth.email_verified` | Email verification completed |
+
+### API key lifecycle
+
+| Event | Triggered by |
+|---|---|
+| `api_key.created` | New API key created |
+| `api_key.revoked` | API key revoked |
+| `api_key.used` | Successful API key authentication |
+
+### Billing mutations
+
+| Event | Triggered by |
+|---|---|
+| `billing.access_denied` | Billing operation attempted without `billing` role |
+| `billing.auto_reload_updated` | Auto-reload configuration changed |
+| `billing.credits_purchased` | Credit pack purchase completed |
+| `billing.payment_method_added` | Payment method added |
+| `billing.payment_method_default_changed` | Default payment method changed |
+| `billing.payment_method_removed` | Payment method removed |
+| `billing.plan_changed` | Subscription tier changed |
+| `billing.seats_changed` | Seat count changed |
+| `billing.subscription_canceled` | Subscription canceled |
+| `billing.subscription_reactivated` | Canceled subscription reactivated |
+
+### Capability authorization
+
+| Event | Triggered by |
+|---|---|
+| `capability.invoke_allowed` | IAM decision: allowed |
+| `capability.invoke_denied` | IAM decision: denied |
+| `capability.invoke_error` | Capability handler threw an error |
+
+### Org management
+
+| Event | Triggered by |
+|---|---|
+| `org.member_invited` | Invitation sent |
+| `org.member_removed` | Member removed |
+| `org.role_changed` | Role assignment changed |
+
+Adding a new event kind requires a single edit to `packages/compliance/src/security-event-types.ts`. A CI test verifies that the Postgres CHECK constraint and ClickHouse schema match this source file — schema drift fails CI.
+
+## The completeness guarantee
+
+Every `invoke()` call — regardless of surface (app, API, MCP) — produces either a `capability.invoke_allowed` or `capability.invoke_denied` event. There is no path through the capability boundary that does not emit. This is the SOC 2 completeness argument: every action is audited, with no opt-out and no alternate code path.
+
+## Accessing audit logs
+
+### In the app
+
+**Organization → Security → Audit** provides a filterable view of `security.security_events`. Filter by:
+- Event kind (any of the 24 types above)
+- Acting principal
+- Time range
+- Outcome (allowed / denied)
+- Capability name
+
+Workspace-scoped events also appear under **Workspace → Activity → Audit** (same records, different scope filter).
+
+### Via API
+
+```http
+GET https://oxagen-v2-api.vercel.app/v1/audit/events
+Authorization: Bearer oxk_live_…
+?event_type=capability.invoke_denied&since=2026-01-01T00:00:00Z
+```
+
+Response is paginated JSONL. Use the `next_cursor` field to paginate.
+
+### SIEM export
+
+Export to Splunk, Datadog, S3, or a generic JSONL webhook from **Organization → Security → Audit → Export**. Exports run near-real-time for ClickHouse-backed events.
+
+## Audit event structure
+
+Every audit event carries:
+
+```json
+{
+  "id": "uuid",
+  "occurred_at": "2026-06-07T12:34:56.789Z",
+  "event_type": "capability.invoke_denied",
+  "org_id": "uuid",
+  "workspace_id": "uuid",
+  "acting_principal_id": "uuid",
+  "human_principal_id": "uuid",
+  "capability": "agent.code.execute",
+  "scope": "workspace:uuid",
+  "outcome": "deny",
+  "target_ref": null,
+  "payload_hash": "sha256:…",
+  "ip": "192.0.2.1",
+  "user_agent": "Mozilla/5.0 …",
+  "request_id": "req_uuid",
+  "resolution_trace": {
+    "matched_rule": "org.enforced_deny",
+    "policy_id": "uuid"
+  }
+}
+```
+
+The `resolution_trace` field is present on every `capability.invoke_denied` event. It identifies the exact policy or grant rule that caused the denial — enabling deterministic "why was this denied?" investigations without approximating from logs.

@@ -1,0 +1,11 @@
+{
+  "title": "Agent",
+  "pages": [
+    "overview",
+    "tools-and-capabilities",
+    "code-execution",
+    "plan-mode-and-approvals",
+    "memory",
+    "generated-files"
+  ]
+}

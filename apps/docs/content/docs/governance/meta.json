@@ -1,0 +1,9 @@
+{
+  "title": "Governance",
+  "pages": [
+    "overview",
+    "rbac",
+    "byok-and-models",
+    "plugins-governance"
+  ]
+}
