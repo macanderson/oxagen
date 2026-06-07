@@ -13,7 +13,7 @@
 //
 // Response: JSON array of ConversationAssetItem, ordered createdAt DESC.
 
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, isNull } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import { getSession } from "@/lib/session";
 

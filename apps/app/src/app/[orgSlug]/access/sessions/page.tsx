@@ -1,9 +1,11 @@
 /**
- * Sessions tab — static mock UI.
+ * Access → Sessions: live org session manager with revoke.
  *
- * Displays active session table (user, device, IP, last-active, location).
- * ZERO server data dependencies — all data is inline mock constants.
- * Will be wired to live IAM data in OXA-XXXX (see parent ticket).
+ * Loads all active sessions for org members by joining:
+ *   auth.sessions → auth.users → org.org_users (to scope to this org).
+ *
+ * Owner/admin can revoke any session. Revoke emits security.session_revoked.
+ * CC6.1 evidence.
  */
 
 import {
@@ -11,7 +13,7 @@ import {
   Globe,
   Laptop,
   Smartphone,
-  Chrome,
+  Bot,
   CircleSlash,
 } from "lucide-react";
 import {
@@ -22,282 +24,255 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-// ---------------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------------
+import { eq, and, gt, inArray } from "drizzle-orm";
+import { withSystemDb, schema } from "@oxagen/database";
+import { resolveOrg, assertOrgMember, getOrgRole, SECURITY_MANAGER_ROLES } from "@/lib/resolve-org";
+import { getSessionOrRedirect } from "@/lib/session";
+import { RevokeSessionButton } from "./_components/revoke-session-button";
 
 type DeviceKind = "desktop" | "mobile" | "headless";
-type SessionStatus = "active" | "revoked" | "expired";
 
-interface MockSession {
+interface LiveSession {
   id: string;
-  user: string;
+  userId: string;
+  userName: string | null;
   userEmail: string;
-  device: DeviceKind;
-  browser: string;
-  ip: string;
-  location: string;
-  lastActive: string;
-  startedAt: string;
-  status: SessionStatus;
-  revokeReason: string | null;
+  deviceKind: DeviceKind;
+  userAgent: string | null;
+  ip: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  expiresAt: Date;
 }
 
-const MOCK_SESSIONS: MockSession[] = [
-  {
-    id: "ses_01j9xvpa",
-    user: "Mac Anderson",
-    userEmail: "mac@oxagen.ai",
-    device: "desktop",
-    browser: "Chrome 125",
-    ip: "192.0.2.14",
-    location: "San Francisco, CA",
-    lastActive: "Jun 6, 2026 · 10:47 AM",
-    startedAt: "Jun 6, 2026 · 08:00 AM",
-    status: "active",
-    revokeReason: null,
-  },
-  {
-    id: "ses_02j9xvpb",
-    user: "Sarah Chen",
-    userEmail: "sarah@acme.io",
-    device: "desktop",
-    browser: "Safari 18",
-    ip: "198.51.100.42",
-    location: "New York, NY",
-    lastActive: "Jun 6, 2026 · 09:55 AM",
-    startedAt: "Jun 5, 2026 · 03:22 PM",
-    status: "active",
-    revokeReason: null,
-  },
-  {
-    id: "ses_03j9xvpc",
-    user: "James Park",
-    userEmail: "james@acme.io",
-    device: "mobile",
-    browser: "iOS Safari",
-    ip: "203.0.113.77",
-    location: "Austin, TX",
-    lastActive: "Jun 6, 2026 · 07:30 AM",
-    startedAt: "Jun 6, 2026 · 07:28 AM",
-    status: "active",
-    revokeReason: null,
-  },
-  {
-    id: "ses_04j9xvpd",
-    user: "data-sync-worker",
-    userEmail: "svc:data-sync-worker",
-    device: "headless",
-    browser: "API key",
-    ip: "10.0.1.5",
-    location: "us-central1",
-    lastActive: "Jun 6, 2026 · 10:32 AM",
-    startedAt: "Jun 1, 2026 · 00:00 AM",
-    status: "active",
-    revokeReason: null,
-  },
-  {
-    id: "ses_05j9xvpe",
-    user: "Lena Brandt",
-    userEmail: "lena@acme.io",
-    device: "desktop",
-    browser: "Firefox 127",
-    ip: "203.0.113.199",
-    location: "Berlin, DE",
-    lastActive: "Jun 4, 2026 · 06:00 PM",
-    startedAt: "Jun 4, 2026 · 02:15 PM",
-    status: "expired",
-    revokeReason: null,
-  },
-  {
-    id: "ses_06j9xvpf",
-    user: "Priya Nair",
-    userEmail: "priya@acme.io",
-    device: "desktop",
-    browser: "Chrome 124",
-    ip: "198.51.100.88",
-    location: "London, UK",
-    lastActive: "Jun 3, 2026 · 11:20 AM",
-    startedAt: "Jun 3, 2026 · 09:00 AM",
-    status: "revoked",
-    revokeReason: "Admin revocation — suspicious IP change detected",
-  },
-];
+function classifyDevice(ua: string | null): DeviceKind {
+  if (!ua) return "headless";
+  const u = ua.toLowerCase();
+  if (u.includes("mobile") || u.includes("android") || u.includes("iphone")) return "mobile";
+  if (u.includes("mozilla") || u.includes("chrome") || u.includes("safari") || u.includes("firefox"))
+    return "desktop";
+  return "headless";
+}
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+async function loadOrgSessions(orgId: string): Promise<LiveSession[]> {
+  const now = new Date();
+  // Fetch all active (non-expired) sessions for members of this org.
+  // Step 1: get all user IDs in the org.
+  const memberRows = await withSystemDb((tx) =>
+    tx
+      .select({ userId: schema.orgUsers.userId })
+      .from(schema.orgUsers)
+      .where(eq(schema.orgUsers.orgId, orgId)),
+  );
+
+  if (memberRows.length === 0) return [];
+
+  const userIds = memberRows.map((r) => r.userId);
+
+  // Step 2: load active sessions + user info for those members.
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select({
+        sessionId: schema.sessions.id,
+        userId: schema.sessions.userId,
+        userAgent: schema.sessions.userAgent,
+        ip: schema.sessions.ipAddress,
+        createdAt: schema.sessions.createdAt,
+        updatedAt: schema.sessions.updatedAt,
+        expiresAt: schema.sessions.expiresAt,
+        userName: schema.users.displayName,
+        userEmail: schema.users.email,
+      })
+      .from(schema.sessions)
+      .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
+      .where(
+        and(
+          inArray(schema.sessions.userId, userIds),
+          gt(schema.sessions.expiresAt, now),
+        ),
+      )
+      .orderBy(schema.sessions.updatedAt),
+  );
+
+  return rows.map((r) => ({
+    id: r.sessionId,
+    userId: r.userId,
+    userName: r.userName,
+    userEmail: r.userEmail,
+    deviceKind: classifyDevice(r.userAgent),
+    userAgent: r.userAgent,
+    ip: r.ip,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    expiresAt: r.expiresAt,
+  }));
+}
 
 function DeviceIcon({ kind }: { kind: DeviceKind }) {
   if (kind === "mobile")
-    return (
-      <Smartphone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Mobile" />
-    );
+    return <Smartphone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Mobile" />;
   if (kind === "headless")
-    return (
-      <Chrome className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Headless / API" />
-    );
-  return (
-    <Laptop className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Desktop" />
-  );
+    return <Bot className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="API / headless" />;
+  return <Laptop className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Desktop" />;
 }
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
+function formatTs(d: Date): string {
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
-export default function AccessSessionsPage() {
-  const active = MOCK_SESSIONS.filter((s) => s.status === "active");
-  const inactive = MOCK_SESSIONS.filter((s) => s.status !== "active");
+function extractBrowser(ua: string | null): string {
+  if (!ua) return "Unknown";
+  if (ua.includes("Firefox")) return "Firefox";
+  if (ua.includes("Edg")) return "Edge";
+  if (ua.includes("Chrome")) return "Chrome";
+  if (ua.includes("Safari")) return "Safari";
+  return ua.slice(0, 40);
+}
+
+export default async function AccessSessionsPage({
+  params,
+}: {
+  params: Promise<{ orgSlug: string }>;
+}) {
+  const { orgSlug } = await params;
+  const [session, tenant] = await Promise.all([
+    getSessionOrRedirect(),
+    resolveOrg(orgSlug),
+  ]);
+  await assertOrgMember(tenant.id, session.user.id);
+
+  const [sessions, role] = await Promise.all([
+    loadOrgSessions(tenant.id),
+    getOrgRole(tenant.id, session.user.id),
+  ]);
+
+  const canRevoke = role != null && SECURITY_MANAGER_ROLES.has(role);
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Preview pill */}
-      <p className="text-[11px] text-muted-foreground/60 font-medium">
-        Preview &middot; not yet wired to live data
-      </p>
-
-      {/* Active sessions */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <MonitorDot
-                className="h-4 w-4 text-muted-foreground"
-                aria-hidden="true"
-              />
+              <MonitorDot className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             </span>
             <div>
               <CardTitle>
                 Active sessions{" "}
                 <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
-                  {active.length}
+                  {sessions.length}
                 </span>
               </CardTitle>
               <CardDescription>
-                Currently authenticated principals — users, service accounts,
-                and API-key sessions.
+                All unexpired sessions for members of this organization.
+                Owner and admin roles can revoke any session (CC6.1).
               </CardDescription>
             </div>
           </div>
         </CardHeader>
 
         <CardPanel>
-          {/* Table header (desktop only) */}
-          <div className="mb-2 hidden grid-cols-[minmax(0,1.5fr)_120px_110px_130px_160px_80px] gap-4 px-4 sm:grid">
-            {["User", "Device", "IP", "Location", "Last active", "Status"].map(
-              (h) => (
-                <span
-                  key={h}
-                  className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-                >
-                  {h}
-                </span>
-              ),
-            )}
-          </div>
+          {sessions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No active sessions found.</p>
+          ) : (
+            <>
+              {/* Column headers (desktop) */}
+              <div
+                className="mb-2 hidden px-4 sm:grid sm:gap-4"
+                style={{
+                  gridTemplateColumns: canRevoke
+                    ? "minmax(0,1.6fr) 110px 110px 160px 120px"
+                    : "minmax(0,1.6fr) 110px 110px 160px",
+                }}
+              >
+                {["User", "Device", "IP", "Last active", ...(canRevoke ? [""] : [])].map((h) => (
+                  <span
+                    key={h}
+                    className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
+                    {h}
+                  </span>
+                ))}
+              </div>
 
-          <div className="flex flex-col gap-1.5">
-            {active.map((s) => (
-              <SessionRow key={s.id} session={s} />
-            ))}
-          </div>
+              <div className="flex flex-col gap-1.5">
+                {sessions.map((s) => (
+                  <div
+                    key={s.id}
+                    className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm grid grid-cols-1 gap-y-1 sm:gap-4 sm:items-center"
+                    style={{
+                      gridTemplateColumns: canRevoke
+                        ? "minmax(0,1.6fr) 110px 110px 160px 120px"
+                        : "minmax(0,1.6fr) 110px 110px 160px",
+                    }}
+                  >
+                    {/* User */}
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="font-medium text-foreground truncate">
+                        {s.userName ?? s.userEmail}
+                      </span>
+                      <span className="text-xs text-muted-foreground truncate">
+                        {s.userName ? s.userEmail : ""}
+                      </span>
+                    </div>
+
+                    {/* Device */}
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <DeviceIcon kind={s.deviceKind} />
+                      <span className="truncate">{extractBrowser(s.userAgent)}</span>
+                    </div>
+
+                    {/* IP */}
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+                      <Globe className="h-3 w-3 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{s.ip ?? "—"}</span>
+                    </div>
+
+                    {/* Last active */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs text-muted-foreground">{formatTs(s.updatedAt)}</span>
+                      <span className="text-[11px] text-muted-foreground/60">
+                        Expires {formatTs(s.expiresAt)}
+                      </span>
+                    </div>
+
+                    {/* Revoke */}
+                    {canRevoke && (
+                      <div className="flex items-center">
+                        {s.userId === session.user.id ? (
+                          <Badge variant="muted" className="text-[10px]">Your session</Badge>
+                        ) : (
+                          <RevokeSessionButton
+                            orgSlug={orgSlug}
+                            sessionId={s.id}
+                            targetUserId={s.userId}
+                            userName={s.userName ?? s.userEmail}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </CardPanel>
       </Card>
 
-      {/* Ended sessions */}
-      {inactive.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-                <CircleSlash
-                  className="h-4 w-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </span>
-              <div>
-                <CardTitle>Ended sessions</CardTitle>
-                <CardDescription>
-                  Revoked or expired sessions — last 30 days.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardPanel>
-            <div className="flex flex-col gap-1.5 opacity-75">
-              {inactive.map((s) => (
-                <SessionRow key={s.id} session={s} />
-              ))}
-            </div>
-          </CardPanel>
-        </Card>
+      {!canRevoke && (
+        <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+          <CircleSlash className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <p className="text-xs text-muted-foreground">
+            Owner or admin role required to revoke sessions.
+          </p>
+        </div>
       )}
-    </div>
-  );
-}
-
-function SessionRow({ session: s }: { session: MockSession }) {
-  const statusBadge =
-    s.status === "active" ? (
-      <Badge variant="default" className="text-xs">
-        Active
-      </Badge>
-    ) : s.status === "revoked" ? (
-      <Badge variant="destructive" className="text-xs">
-        <CircleSlash className="mr-1 h-3 w-3" aria-hidden="true" />
-        Revoked
-      </Badge>
-    ) : (
-      <Badge variant="muted" className="text-xs">
-        Expired
-      </Badge>
-    );
-
-  return (
-    <div
-      className="grid rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm
-        grid-cols-1 gap-y-1
-        sm:grid-cols-[minmax(0,1.5fr)_120px_110px_130px_160px_80px] sm:gap-4 sm:items-center"
-    >
-      {/* User */}
-      <div className="flex flex-col gap-0.5 min-w-0">
-        <span className="font-medium text-foreground truncate">{s.user}</span>
-        <span className="text-xs text-muted-foreground truncate">
-          {s.userEmail}
-        </span>
-      </div>
-
-      {/* Device */}
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <DeviceIcon kind={s.device} />
-        <span className="truncate">{s.browser}</span>
-      </div>
-
-      {/* IP */}
-      <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
-        <Globe className="h-3 w-3 shrink-0" aria-hidden="true" />
-        {s.ip}
-      </div>
-
-      {/* Location */}
-      <span className="text-xs text-muted-foreground truncate">
-        {s.location}
-      </span>
-
-      {/* Last active */}
-      <div className="flex flex-col gap-0.5">
-        <span className="text-xs text-muted-foreground">{s.lastActive}</span>
-        {s.revokeReason && (
-          <span className="text-[11px] text-muted-foreground/60 leading-snug truncate">
-            {s.revokeReason}
-          </span>
-        )}
-      </div>
-
-      {/* Status */}
-      {statusBadge}
     </div>
   );
 }
