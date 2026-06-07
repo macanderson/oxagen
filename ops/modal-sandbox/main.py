@@ -21,10 +21,14 @@ Usage:
   curl http://localhost:7799/healthz  # → {"status":"ok"}
 
 The root .env.local must have:
-  MODAL_RUNNER_URL=http://localhost:7799
+  MODAL_RUNNER_URL=http://localhost:7799   ← use this for local shim
   MODAL_RUNNER_TOKEN=<value from ops/modal-sandbox/.env>
   SANDBOX_DRIVER=modal
   SANDBOX_ENABLED=true
+
+For production (real Modal deployment at
+https://oxagenai--oxagen-sandbox-fastapi-app.modal.run), set
+MODAL_RUNNER_URL to that URL in Vercel env vars instead.
 """
 from __future__ import annotations
 
