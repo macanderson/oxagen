@@ -5,17 +5,11 @@ Oxagen sandbox runner — deployed to Modal as a single FastAPI app.
 Pyright is silenced above because modal + fastapi are installed inside
 the Modal image at deploy time, not in the repo's local toolchain.
 
-This is the *only* Python in the v2 stack. It exists because Modal's first-
-class sandbox primitives (Sandbox.create, sb.exec, sb.terminate) are Python-
-SDK-native; running them from Node would mean wrapping the gRPC client by
-hand. A 100-line Python shim is cheaper and inherits Modal's pool warmer,
-egress controls, and per-second billing.
-
 Contract:
   POST /run
     headers: authorization: Bearer <MODAL_RUNNER_TOKEN>
     body:    { language, code, stdin?, env?, timeout_ms, memory_mb,
-               network, org_id, workspace_id, image }
+               network, org_id, workspace_id, image? }
     returns: { exit_code, stdout, stderr, duration_ms, timed_out, oom_killed }
 
   GET /healthz
@@ -23,27 +17,25 @@ Contract:
 
 Deploy:
   cd ops/modal-sandbox
-  uv run modal token new              # first time only — opens browser
-  uv run modal secret create oxagen-runner MODAL_RUNNER_TOKEN=<paste-value>
-  uv run modal deploy runner.py       # prints the public URL on success
+  .venv/bin/modal token set --token-id <id> --token-secret <secret> --profile oxagenai
+  MODAL_PROFILE=oxagenai .venv/bin/modal secret create oxagen-runner MODAL_RUNNER_TOKEN=<token>
+  MODAL_PROFILE=oxagenai .venv/bin/modal deploy runner.py
 
-  Wire the printed URL + token into Vercel and .env.local:
-    MODAL_RUNNER_URL   = https://<workspace>--oxagen-sandbox-fastapi-app.modal.run
-    MODAL_RUNNER_TOKEN = <same token>
-    SANDBOX_DRIVER     = modal
-    SANDBOX_ENABLED    = true
-
-Health check:
-  curl "$MODAL_RUNNER_URL/healthz"   # → {"status":"ok"}
-
-Free tier:
-  Modal grants $30/month of compute credits with no card on file. At our
-  default limits (512 MB, 30s) a single run costs ~$0.0003, so the free
-  tier carries early production. Switch to PAYG when usage justifies it.
+API notes for modal 1.4.3 (synchronicity-wrapped):
+  - .aio wrappers: Sandbox.create, Sandbox.exec, Sandbox.wait, Sandbox.terminate,
+    ContainerProcess.wait, StreamReader.read, StreamWriter.drain
+  - StreamWriter.write + write_eof: synchronous, no .aio
+  - Code staging: base64-encode + pipe to `sh -c 'base64 -d > /work/file'` via
+    a separate exec call in the same sandbox. Avoids shell-quoting issues with
+    arbitrary user code.
 """
 
 from __future__ import annotations
 
+import asyncio
+import base64
+import hmac
+import os
 import time
 from typing import Literal
 
@@ -52,38 +44,27 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
-# Image catalog — keyed by language enum, not by mutable tag string.
-#
-# The Node driver (@oxagen/sandbox/src/modal.ts) sends the language enum
-# ("node" | "python" | "shell") in the request body. We map language → Modal
-# Image here so Modal can pre-build and warm-pool the image, rather than
-# pulling from Docker Hub on every cold start.
-#
-# The docker driver uses digest-pinned OCI refs (e.g. "node@sha256:…") for
-# its own image pulling; those refs are NOT sent over the HTTP boundary.
-# The `image` field in the request body is kept for forward-compat (in case
-# a caller wants to select an image by tag in future) but the runner always
-# derives the Modal Image from `language` first.
+# Image catalog — keyed by language enum.
+# The Node driver sends the language enum; we map it to a Modal Image.
 # ---------------------------------------------------------------------------
 
 LANG_IMAGES: dict[str, modal.Image] = {
-    "node": modal.Image.from_registry("node:20-alpine", add_python=None),
+    "node":   modal.Image.from_registry("node:20-alpine", add_python=None),
     "python": modal.Image.debian_slim(python_version="3.12"),
-    "shell": modal.Image.from_registry("alpine:3.20", add_python=None),
+    "shell":  modal.Image.from_registry("alpine:3.20", add_python=None),
 }
 
+# (code filename inside /work, argv for exec)
 LANG_ENTRY: dict[str, tuple[str, list[str]]] = {
-    # (filename_in_workdir, argv_template)
-    "node":   ("main.js",  ["node", "/work/main.js"]),
-    "python": ("main.py",  ["python", "/work/main.py"]),
+    "node":   ("main.js",  ["node",    "/work/main.js"]),
+    "python": ("main.py",  ["python",  "/work/main.py"]),
     "shell":  ("main.sh",  ["/bin/sh", "/work/main.sh"]),
 }
 
-# The shared secret is created out-of-band: `uv run modal secret create oxagen-runner`
 RUNNER_SECRET = modal.Secret.from_name("oxagen-runner")
 
 app = modal.App("oxagen-sandbox")
-web = FastAPI(title="oxagen-sandbox-runner", version="0.2.0")
+web = FastAPI(title="oxagen-sandbox-runner", version="0.3.0")
 
 
 class RunRequest(BaseModel):
@@ -94,13 +75,9 @@ class RunRequest(BaseModel):
     timeout_ms: int
     memory_mb: int
     network: Literal["allow", "deny"]
-    # org_id and workspace_id are forwarded for per-tenant audit logging.
-    # (Previously named tenant_id — corrected to match the TS driver.)
     org_id: str
     workspace_id: str
-    # image field is accepted for forward-compat but ignored; the runner
-    # derives the Modal Image from the `language` enum (see LANG_IMAGES).
-    image: str | None = None
+    image: str | None = None  # accepted for forward-compat, derived from language
 
 
 class RunResponse(BaseModel):
@@ -116,83 +93,122 @@ def _check_auth(authorization: str | None, expected: str) -> None:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="missing bearer token")
     token = authorization[len("Bearer "):]
-    # Constant-time comparison to guard against timing attacks.
-    import hmac
     if not hmac.compare_digest(token, expected):
         raise HTTPException(status_code=401, detail="invalid bearer token")
 
 
-@web.post("/run", response_model=RunResponse)
-async def run(req: RunRequest, authorization: str | None = Header(default=None)) -> RunResponse:
-    import os
+def decode_output(raw: bytes | str) -> str:
+    if isinstance(raw, str):
+        return raw
+    return raw.decode("utf-8", errors="replace")
 
-    _check_auth(authorization, os.environ["MODAL_RUNNER_TOKEN"])
 
+async def _run_sandbox(req: RunRequest) -> RunResponse:
+    """
+    Execute user code in a Modal Sandbox (Firecracker microVM).
+
+    We create a single sandbox and run two sequential exec() calls in it:
+      1. Stage: `sh -c 'mkdir -p /work && base64 -d > /work/<file>'`
+         — receives base64-encoded code on stdin, writes the source file.
+      2. Execute: the language runtime (node/python/sh) runs the file.
+
+    base64 encoding is used so arbitrary user code (with quotes, backslashes,
+    newlines) is safe to pipe through stdin without any shell escaping.
+    """
     image = LANG_IMAGES.get(req.language)
     if image is None:
         raise HTTPException(status_code=400, detail=f"unsupported language {req.language!r}")
 
     filename, argv = LANG_ENTRY[req.language]
-
-    # Sandbox is the Modal primitive that maps 1:1 to a Firecracker microVM
-    # with a fresh rootfs, capped CPU/RAM, and an optional egress block.
-    # We mount no host paths and stage the code via stdin → tee → exec so the
-    # rootfs stays read-only between runs.
     block_network = req.network == "deny"
+    sandbox_timeout = max(30, req.timeout_ms // 1000 + 10)
+
+    # Base64-encode the source so it's safe to pipe to stdin.
+    code_b64 = base64.b64encode(req.code.encode("utf-8")).decode("ascii") + "\n"
+
+    # Create sandbox — stays alive for both the staging and execution phases.
+    # We use a long-running `sleep` as the sandbox entrypoint so it stays up
+    # between exec() calls; exec() spawns child processes inside it.
     sb = await modal.Sandbox.create.aio(
-        "sh",
-        "-c",
-        f"mkdir -p /work && cat > /work/{filename} && chmod +x /work/{filename}",
+        "sleep", str(sandbox_timeout + 30),
         image=image,
         memory=req.memory_mb,
-        # Give the sandbox a few extra seconds beyond the logical timeout so
-        # the runner can report the timeout cleanly instead of being killed
-        # mid-response by the Modal platform's own limit.
-        timeout=max(30, req.timeout_ms // 1000 + 5),
+        timeout=sandbox_timeout + 30,
         block_network=block_network,
         app=app,
     )
+
+    started = time.monotonic()
+    timed_out = False
+    oom_killed = False
+    exit_code = 0
+    stdout_str = ""
+    stderr_str = ""
+
     try:
-        # Stage the code.
-        await sb.stdin.write.aio(req.code.encode("utf-8"))
-        await sb.stdin.drain.aio()
-        sb.stdin.write_eof()
-        await sb.wait.aio()
-
-        # Execute. We capture both streams; Modal handles the timeout / OOM.
-        proc = await sb.exec.aio(*argv, timeout=req.timeout_ms / 1000)
-        started = time.monotonic()
-        if req.stdin:
-            await proc.stdin.write.aio(req.stdin.encode("utf-8"))
-            await proc.stdin.drain.aio()
-            proc.stdin.write_eof()
-
-        stdout_raw = await proc.stdout.read.aio()
-        stderr_raw = await proc.stderr.read.aio()
-        exit_code = await proc.wait.aio()
-        duration_ms = int((time.monotonic() - started) * 1000)
-
-        # Modal surfaces timeouts as exit_code 124 and OOM as 137 (matches
-        # the kernel's SIGKILL convention), so we can derive both signals
-        # without a side-channel.
-        timed_out = exit_code == 124
-        oom_killed = exit_code == 137
-
-        def decode(raw: bytes | str) -> str:
-            if isinstance(raw, str):
-                return raw
-            return raw.decode("utf-8", errors="replace")
-
-        return RunResponse(
-            exit_code=exit_code,
-            stdout=decode(stdout_raw),
-            stderr=decode(stderr_raw),
-            duration_ms=duration_ms,
-            timed_out=timed_out,
-            oom_killed=oom_killed,
+        # ── Phase 1: Stage the source file ─────────────────────────────────
+        stage_proc = await modal.Sandbox.exec.aio(
+            sb,
+            "sh", "-c", f"mkdir -p /work && base64 -d > /work/{filename}",
         )
+        # Write base64-encoded code to stdin (sync write, async drain).
+        stage_proc.stdin.write(code_b64)
+        stage_proc.stdin.write_eof()
+        await stage_proc.stdin.drain.aio()
+        await stage_proc.wait.aio()
+
+        # ── Phase 2: Execute the code ────────────────────────────────────────
+        exec_env: dict[str, str] | None = req.env if req.env else None
+        exec_proc = await modal.Sandbox.exec.aio(
+            sb,
+            *argv,
+            env=exec_env,
+        )
+
+        if req.stdin:
+            exec_proc.stdin.write(req.stdin)
+            exec_proc.stdin.write_eof()
+            await exec_proc.stdin.drain.aio()
+
+        # Race the wait against the logical timeout.
+        wait_task = asyncio.create_task(exec_proc.wait.aio())
+        done, _ = await asyncio.wait([wait_task], timeout=req.timeout_ms / 1000)
+
+        if not done:
+            timed_out = True
+            exit_code = 124  # Match Modal's timeout convention.
+            wait_task.cancel()
+        else:
+            exit_code = wait_task.result()
+            oom_killed = exit_code == 137
+
+        # Read output — after wait() so all output is flushed.
+        stdout_raw = await exec_proc.stdout.read.aio()
+        stderr_raw = await exec_proc.stderr.read.aio()
+        stdout_str = decode_output(stdout_raw)
+        stderr_str = decode_output(stderr_raw)
+
     finally:
-        await sb.terminate.aio()
+        try:
+            await modal.Sandbox.terminate.aio(sb)
+        except Exception:
+            pass
+
+    duration_ms = int((time.monotonic() - started) * 1000)
+    return RunResponse(
+        exit_code=exit_code,
+        stdout=stdout_str,
+        stderr=stderr_str,
+        duration_ms=duration_ms,
+        timed_out=timed_out,
+        oom_killed=oom_killed,
+    )
+
+
+@web.post("/run", response_model=RunResponse)
+async def run(req: RunRequest, authorization: str | None = Header(default=None)) -> RunResponse:
+    _check_auth(authorization, os.environ["MODAL_RUNNER_TOKEN"])
+    return await _run_sandbox(req)
 
 
 @web.get("/healthz")
@@ -202,7 +218,7 @@ async def healthz() -> dict[str, str]:
 
 @app.function(
     secrets=[RUNNER_SECRET],
-    image=modal.Image.debian_slim().pip_install("fastapi", "pydantic"),
+    image=modal.Image.debian_slim(python_version="3.12").pip_install("fastapi", "pydantic"),
 )
 @modal.asgi_app()
 def fastapi_app() -> FastAPI:
