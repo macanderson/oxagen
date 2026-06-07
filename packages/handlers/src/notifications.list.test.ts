@@ -31,7 +31,7 @@ vi.mock("@oxagen/database", () => {
         deepLink: "deepLink_col",
       },
     },
-    withSystemDb: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
+    withTenantDb: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
       call = 0;
       return fn({
         select: () => {

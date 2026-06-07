@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("@oxagen/database", () => ({
   schema: { notifications: { publicId: "publicId_col", userId: "userId_col", unread: "unread_col", archived: "archived_col", updatedAt: "updatedAt_col" } },
-  withSystemDb: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+  withTenantDb: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({ update: () => ({ set: () => ({ where: () => Promise.resolve() }) }) }),
   ),
 }));
