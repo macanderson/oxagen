@@ -325,6 +325,11 @@ jobs:
         run: pnpm db:migrate
       - name: Build (affected)
         run: pnpm turbo run build --filter="...[${TURBO_BASE}]"
+      # Install the Playwright browser + OS deps. Without this the runner has no
+      # chromium-headless-shell matching the pinned @playwright/test version and
+      # every e2e shard fails with "Executable doesn't exist". Idempotent + fast.
+      - name: Install Playwright browser
+        run: pnpm --filter @oxagen/app exec playwright install --with-deps chromium
       - name: E2E tests (affected, shard ${{ matrix.shard }}/4)
         run: pnpm turbo run test:e2e --filter="...[${TURBO_BASE}]" -- --shard=${{ matrix.shard }}/4
 
