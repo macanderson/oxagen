@@ -6,7 +6,7 @@ export const imageCreate = registerCapability({
   domain: "image",
   description: "Generate an image from a prompt and persist it as a workspace asset",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "generation" },

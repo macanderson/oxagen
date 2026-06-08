@@ -6,7 +6,7 @@ export const userPreferencesGet = registerCapability({
   domain: "user",
   description: "Get the calling user's display preferences (theme, language, timezone, notification settings)",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp"],
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "user" },

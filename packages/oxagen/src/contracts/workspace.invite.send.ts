@@ -6,7 +6,7 @@ export const workspaceInviteSend = registerCapability({
   domain: "workspace",
   description: "Send a workspace invitation to an email address",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },

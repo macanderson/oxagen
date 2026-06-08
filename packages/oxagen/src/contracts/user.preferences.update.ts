@@ -6,7 +6,7 @@ export const userPreferencesUpdate = registerCapability({
   domain: "user",
   description: "Update the calling user's display preferences (theme, language, timezone) — partial update",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp"],
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "user" },

@@ -6,7 +6,7 @@ export const automationCreate = registerCapability({
   domain: "automation",
   description: "Create a new automation with a trigger and action",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "automation" },

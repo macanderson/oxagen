@@ -6,7 +6,7 @@ export const formCreate = registerCapability({
   domain: "form",
   description: "Create a new form with optional field definitions",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "form" },
