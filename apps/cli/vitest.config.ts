@@ -7,7 +7,9 @@ export default defineConfig({
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     coverage: {
       provider: "v8",
-      include: ["src/**/*.ts", "src/**/*.tsx"],
+      // Ink TSX components (index.tsx, DevStatus.tsx) require the Ink renderer
+      // and are covered by E2E tests, not unit tests. Exclude from unit coverage.
+      include: ["src/**/*.ts"],
       exclude: ["src/**/*.test.ts", "src/**/*.test.tsx"],
       thresholds: {
         lines: 85,
