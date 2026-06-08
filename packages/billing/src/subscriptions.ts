@@ -78,6 +78,7 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
       .onConflictDoUpdate({
         target: schema.subscriptions.stripeSubscriptionId,
         set: {
+          planId: row.planId,
           status: row.status,
           billingInterval: row.billingInterval,
           currentPeriodStart: row.currentPeriodStart,

@@ -8,6 +8,7 @@
 
 import { withTenantDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
+import { billingProvider } from "./client";
 import { logger } from "./logger";
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -150,6 +151,41 @@ export async function updateAutoReloadSettings(
     throw new Error(
       `billing-settings: amountCents must be >= ${MIN_RELOAD_AMOUNT_CENTS} (minimum $1.00)`,
     );
+  }
+
+  // Guard: enabling auto-reload requires a payment method on file or being provided.
+  if (input.enabled === true) {
+    const hasPaymentMethodId = input.paymentMethodId !== null && input.paymentMethodId !== undefined;
+
+    // If no payment method is provided in this request, check for a default on file.
+    let hasValidPaymentMethod = hasPaymentMethodId;
+    if (!hasValidPaymentMethod) {
+      const settings = await getOrgBillingSettings(orgId);
+      // If the settings already have a payment method, that's valid.
+      if (settings.autoReloadPaymentMethodId) {
+        hasValidPaymentMethod = true;
+      } else {
+        // Check if the org has a default payment method on Stripe.
+        try {
+          const sub = await withTenantDb((tx) =>
+            tx.query.subscriptions.findFirst({
+              where: eq(schema.subscriptions.orgId, orgId),
+              columns: { stripeCustomerId: true },
+            }),
+          );
+          if (sub?.stripeCustomerId) {
+            const defaultPm = await billingProvider().getDefaultPaymentMethodId(sub.stripeCustomerId);
+            hasValidPaymentMethod = !!defaultPm;
+          }
+        } catch (err) {
+          logger.warn({ orgId, err }, "billing-settings: could not check for default payment method");
+        }
+      }
+    }
+
+    if (!hasValidPaymentMethod) {
+      throw new Error("billing-settings: cannot enable auto-reload without a saved payment method");
+    }
   }
 
   // Ensure a settings row exists before updating.
