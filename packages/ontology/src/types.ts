@@ -16,6 +16,7 @@ export const NodeLabels = {
   AgentMemory: "AgentMemory",
   Conversation: "Conversation",
   Message: "Message",
+  WorkflowRun: "WorkflowRun",
   // Agent runtime epic (spec §6).
   Skill: "Skill",
   SkillVersion: "SkillVersion",
@@ -44,6 +45,8 @@ export const EdgeTypes = {
   LOADED_SKILL: "LOADED_SKILL",
   BRANCHED_TO_SUBAGENT: "BRANCHED_TO_SUBAGENT",
   APPROVED_BY: "APPROVED_BY",
+  ORIGINATED_FROM: "ORIGINATED_FROM",
+  CALLED_TOOL: "CALLED_TOOL",
 } as const;
 export type EdgeType = (typeof EdgeTypes)[keyof typeof EdgeTypes];
 

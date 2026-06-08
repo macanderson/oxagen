@@ -93,6 +93,27 @@ type Events = {
   "agent/workflow.cancel": {
     data: { orgId: string; workflowRunId: string };
   };
+  // Fired by recordExecution() after a completed execution row is committed to
+  // Postgres. The Inngest worker picks this up and mirrors the execution to
+  // the Neo4j knowledge graph (async, best-effort, 24 h retry window).
+  "agent/execution.sync": {
+    data: {
+      executionId: string;
+      orgId: string;
+      workspaceId: string;
+      status: string;
+      originType: string;
+      originId: string;
+      agentId?: string | null;
+      startedAt?: string | null;
+      completedAt?: string | null;
+      latencyMs?: number | null;
+      inputTokens?: number | null;
+      outputTokens?: number | null;
+      estimatedCostUsd?: string | null;
+      toolCalls?: Array<{ toolName: string; toolType: string }>;
+    };
+  };
 };
 
 // OXA-1349: INNGEST keys are optional in the base schema (not every service
