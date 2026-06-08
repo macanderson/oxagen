@@ -66,7 +66,7 @@ export const orgUsers = orgSchema.table(
 export const invitations = orgSchema.table(
   "invitations",
   {
-    ...idMixin("inv"),
+    ...idMixin("invi"),
     ...auditMixin(),
     orgId: uuid("org_id").notNull(),
     // citext for case-insensitive uniqueness
