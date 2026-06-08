@@ -144,13 +144,35 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       const start = Date.now();
       const access = input.access ?? "public";
       const bytes = byteLength(input.body);
-      const result = await blobPut(input.key, toPutBody(input.body), {
+
+      let result = await blobPut(input.key, toPutBody(input.body), {
         access,
         token,
         contentType: input.contentType,
         addRandomSuffix: false,
         allowOverwrite: true,
+      }).catch(async (err: unknown) => {
+        // If private access fails on a public-only store, retry with public access.
+        if (
+          access === "private" &&
+          err instanceof Error &&
+          err.message.includes("Cannot use private access")
+        ) {
+          logger.info(
+            { driver: "vercel-blob", key: input.key, reason: "store is public-only" },
+            "storage: retrying put with public access",
+          );
+          return blobPut(input.key, toPutBody(input.body), {
+            access: "public",
+            token,
+            contentType: input.contentType,
+            addRandomSuffix: false,
+            allowOverwrite: true,
+          });
+        }
+        throw err;
       });
+
       logger.info(
         { driver: "vercel-blob", key: input.key, access, contentType: input.contentType, bytes, durationMs: Date.now() - start },
         "storage: object written",

@@ -364,7 +364,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
 
     historyMessages = rows
-      .filter((r) => VALID_ROLES.has(r.role))
+      .filter((r) => VALID_ROLES.has(r.role) && r.content.trim().length > 0)
       .map((r) => ({ role: r.role as "user" | "assistant" | "system", content: r.content }))
       .reverse();
   }
