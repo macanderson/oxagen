@@ -911,6 +911,35 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { "*": "7799" },
   },
+
+  // ── Security / audit ────────────────────────────────────────────────────────
+  AUDIT_EXPORT_SIGNING_SECRET: {
+    group: "Security",
+    description:
+      "HMAC-SHA256 secret for signing audit-log export tokens. Required by the audit " +
+      "export route (apps/app) so exported files can be verified as untampered. " +
+      "Generate with `openssl rand -base64 32`.",
+    secret: true,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: ["production"],
+    valueOrigin: "generate",
+    placeholder: "",
+  },
+
+  // ── CLI / tooling ────────────────────────────────────────────────────────────
+  OXAGEN_API_URL: {
+    group: "CLI",
+    description:
+      "Base URL for the Oxagen REST API, consumed by the CLI. Falls back to the " +
+      "default production API URL when unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:4000", production: "https://oxagen-v2-api.vercel.app" },
+  },
 };
 
 // ─── Derivations (the single place every surface reads from) ─────────────────

@@ -1097,9 +1097,21 @@ function generateHTML(schemas) {
       const mermaidDef = \`${erdDiagram}\`;
       const erdDiv = document.getElementById('erdDiagram');
       erdDiv.innerHTML = '';
-      erdDiv.appendChild(document.createTextNode(mermaidDef));
-      mermaid.contentLoaderMarked.cache = {};
-      mermaid.run();
+      erdDiv.classList.add('mermaid');
+      erdDiv.textContent = mermaidDef;
+
+      // Initialize mermaid with proper configuration
+      if (mermaid) {
+        mermaid.initialize({
+          startOnLoad: true,
+          theme: 'default',
+          erDiagram: {
+            arrowMarkerAbsolute: true
+          }
+        });
+        mermaid.contentLoaderMarked.cache = {};
+        mermaid.run();
+      }
     }
 
     // Close modal on backdrop click
