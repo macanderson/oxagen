@@ -1,4 +1,4 @@
-import { boolean, index, integer, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, text, timestamp, uniqueIndex, uuid, numeric, bigint } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { agentSchema } from "./_schemas";
 import {
@@ -196,5 +196,87 @@ export const mcpServers = agentSchema.table(
     wsListingUniq: uniqueIndex("mcp_servers_ws_listing_uniq")
       .on(t.workspaceId, t.orgListingId)
       .where(sql`org_listing_id IS NOT NULL`),
+  }),
+);
+
+// Agent execution tracking: lineage, steps, tool calls (migration 0019)
+export const agentExecutions = agentSchema.table(
+  "agent_executions",
+  {
+    ...idMixin("aex"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    agentId: uuid("agent_id").notNull(),
+    agentVersionId: uuid("agent_version_id").notNull(),
+    originType: citext("origin_type").notNull(),
+    originId: uuid("origin_id").notNull(),
+    status: citext("status").notNull().default("planning"),
+    inputPayload: jsonb("input_payload").notNull(),
+    outputPayload: jsonb("output_payload"),
+    failureReason: text("failure_reason"),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    latencyMs: bigint("latency_ms", { mode: "number" }),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    estimatedCostUsd: numeric("estimated_cost_usd", { precision: 10, scale: 6 }),
+    syncedToGraphAt: timestamp("synced_to_graph_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    orgStatusIdx: index("agent_executions_org_status_idx").on(t.orgId, t.workspaceId, t.status),
+    originIdx: index("agent_executions_origin_idx").on(t.originType, t.originId),
+    agentIdx: index("agent_executions_agent_idx").on(t.agentId),
+    createdAtIdx: index("agent_executions_created_at_idx").on(t.createdAt),
+  }),
+);
+
+export const agentExecutionSteps = agentSchema.table(
+  "agent_execution_steps",
+  {
+    ...idMixin("aes"),
+    ...auditMixin(),
+    executionId: uuid("execution_id")
+      .notNull()
+      .references(() => agentExecutions.id),
+    ...orgScopeMixin(),
+    stepNumber: integer("step_number").notNull(),
+    stepType: citext("step_type").notNull(),
+    status: citext("status").notNull(),
+    inputPayload: jsonb("input_payload").notNull(),
+    outputPayload: jsonb("output_payload"),
+    failureReason: text("failure_reason"),
+    latencyMs: bigint("latency_ms", { mode: "number" }),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+  },
+  (t) => ({
+    executionIdx: index("agent_execution_steps_execution_idx").on(t.executionId),
+    orgIdx: index("agent_execution_steps_org_idx").on(t.orgId, t.workspaceId),
+  }),
+);
+
+export const agentToolCalls = agentSchema.table(
+  "agent_tool_calls",
+  {
+    ...idMixin("atc"),
+    ...auditMixin(),
+    executionStepId: uuid("execution_step_id")
+      .notNull()
+      .references(() => agentExecutionSteps.id),
+    ...orgScopeMixin(),
+    toolName: text("tool_name").notNull(),
+    toolType: citext("tool_type").notNull(),
+    requestPayload: jsonb("request_payload").notNull(),
+    responsePayload: jsonb("response_payload"),
+    status: citext("status").notNull(),
+    latencyMs: bigint("latency_ms", { mode: "number" }),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    stepIdx: index("agent_tool_calls_step_idx").on(t.executionStepId),
+    toolIdx: index("agent_tool_calls_tool_idx").on(t.toolName),
+    orgIdx: index("agent_tool_calls_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
