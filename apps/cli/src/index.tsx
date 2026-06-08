@@ -54,6 +54,19 @@ import { formSubmitCommand } from "./commands/form.submit.js";
 import { automationCreateCommand } from "./commands/automation.create.js";
 import { automationTriggerCommand } from "./commands/automation.trigger.js";
 import { skillWorkspaceListCommand } from "./commands/skill.workspace.list.js";
+import { agentMemoryRecallCommand } from "./commands/agent.memory.recall.js";
+import { agentMemoryWriteCommand } from "./commands/agent.memory.write.js";
+import { videoGenerateCommand } from "./commands/video.generate.js";
+import { svgGenerateCommand } from "./commands/svg.generate.js";
+import { workspaceModelSettingsReadCommand } from "./commands/workspace.model.settings.read.js";
+import { workspaceModelSettingsWriteCommand } from "./commands/workspace.model.settings.write.js";
+import { orgMemberInviteAcceptCommand } from "./commands/org.member.invite.accept.js";
+import { pluginRegistryListCommand } from "./commands/plugin.registry.list.js";
+import { pluginCatalogBrowseCommand } from "./commands/plugin.catalog.browse.js";
+import { pluginCredentialReauthCommand } from "./commands/plugin.credential.reauth.js";
+import { imageGenerateCommand } from "./commands/image.generate.js";
+import { documentsGenerateCommand } from "./commands/documents.generate.js";
+import { pluginRegistryAddCommand } from "./commands/plugin.registry.add.js";
 
 const program = new Command();
 
@@ -84,6 +97,8 @@ const orgMember = org.command("member").description("Org member management");
 orgMember.addCommand(orgMemberAddCommand);
 orgMember.addCommand(orgMemberRemoveCommand);
 orgMember.addCommand(orgMemberRoleChangeCommand);
+const orgMemberInvite = orgMember.command("invite").description("Org member invitations");
+orgMemberInvite.addCommand(orgMemberInviteAcceptCommand);
 
 // workspace
 const workspace = program.command("workspace").description("Workspace commands");
@@ -121,6 +136,12 @@ pluginOrg.addCommand(pluginOrgInstallCommand);
 pluginOrg.addCommand(pluginOrgUninstallCommand);
 const pluginCatalog = plugin.command("catalog").description("Plugin catalog");
 pluginCatalog.addCommand(pluginCatalogGetCommand);
+pluginCatalog.addCommand(pluginCatalogBrowseCommand);
+const pluginRegistry = plugin.command("registry").description("Plugin registry management");
+pluginRegistry.addCommand(pluginRegistryListCommand);
+pluginRegistry.addCommand(pluginRegistryAddCommand);
+const pluginCredential = plugin.command("credential").description("Plugin credential management");
+pluginCredential.addCommand(pluginCredentialReauthCommand);
 
 // billing
 const billing = program.command("billing").description("Billing and subscription commands");
@@ -138,6 +159,9 @@ const agentTool = agent.command("tool").description("Agent tool management");
 agentTool.addCommand(agentToolListCommand);
 const agentApproval = agent.command("approval").description("Agent approval management");
 agentApproval.addCommand(agentApprovalResolveCommand);
+const agentMemory = agent.command("memory").description("Agent memory management");
+agentMemory.addCommand(agentMemoryRecallCommand);
+agentMemory.addCommand(agentMemoryWriteCommand);
 
 // archive
 const archive = program.command("archive").description("Archive management");
@@ -158,6 +182,10 @@ const workspaceMember = workspace.command("member").description("Workspace membe
 workspaceMember.addCommand(workspaceMemberListCommand);
 const workspaceInvite = workspace.command("invite").description("Workspace invitation management");
 workspaceInvite.addCommand(workspaceInviteSendCommand);
+const workspaceModel = workspace.command("model").description("Workspace model settings");
+const workspaceModelSettings = workspaceModel.command("settings").description("Model settings management");
+workspaceModelSettings.addCommand(workspaceModelSettingsReadCommand);
+workspaceModelSettings.addCommand(workspaceModelSettingsWriteCommand);
 
 // conversation chat
 conversation.addCommand(conversationChatCommand);
@@ -167,12 +195,15 @@ const image = program.command("image").description("Image generation commands");
 image.addCommand(imageCreateCommand);
 image.addCommand(imageListCommand);
 image.addCommand(imageAnalyzeCommand);
+image.addCommand(imageGenerateCommand);
 
 // document
 const document = program.command("document").description("Document management commands");
 document.addCommand(documentCreateCommand);
 document.addCommand(documentListCommand);
 document.addCommand(documentReadCommand);
+const documents = program.command("documents").description("Document generation commands");
+documents.addCommand(documentsGenerateCommand);
 
 // automation
 const automation = program.command("automation").description("Automation management commands");
@@ -189,6 +220,14 @@ form.addCommand(formSubmitCommand);
 const skill = program.command("skill").description("Skill management commands");
 const skillWorkspace = skill.command("workspace").description("Workspace skill management");
 skillWorkspace.addCommand(skillWorkspaceListCommand);
+
+// video
+const video = program.command("video").description("Video generation commands");
+video.addCommand(videoGenerateCommand);
+
+// svg
+const svg = program.command("svg").description("SVG generation commands");
+svg.addCommand(svgGenerateCommand);
 
 program.parse(process.argv);
 
