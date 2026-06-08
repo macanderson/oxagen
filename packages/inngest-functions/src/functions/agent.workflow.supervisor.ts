@@ -135,7 +135,7 @@ Return between 2 and ${effectiveMaxTasks} tasks. Number them starting from 0.`,
       const batchLabel = `dispatch-batch-${Math.floor(i / batchSize)}`;
       await step.run(batchLabel, () =>
         inngest.send(
-          batch.map((t) => ({
+          batch.map((t: { id: string; taskIndex: number; goal: string }) => ({
             name: "agent/workflow.task.execute" as const,
             data: {
               orgId,

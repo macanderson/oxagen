@@ -46,7 +46,7 @@ export const workflowRuns = workflowSchema.table(
     ...idMixin("wfr"),
     ...auditMixin(),
     ...orgScopeMixin(),
-    workflowId: uuid("workflow_id").notNull(),
+    workflowId: uuid("workflow_id"),
     title: text("title").notNull(),
     goal: text("goal").notNull(),
     // CHECK planning|running|completed|failed|cancelled in migration.
@@ -69,7 +69,34 @@ export const workflowRuns = workflowSchema.table(
   }),
 );
 
-// Workflow step run — execution of a single step within a workflow run. Tracks per-step progress.
+// Workflow run task — dynamic task dispatched by the AI planner for a workflow run.
+// Distinct from workflowStepRuns (which track predefined step executions).
+export const workflowRunTasks = workflowSchema.table(
+  "workflow_run_tasks",
+  {
+    ...idMixin("wft"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    workflowRunId: uuid("workflow_run_id").notNull(),
+    taskIndex: integer("task_index").notNull(),
+    title: text("title").notNull(),
+    goal: text("goal").notNull(),
+    // CHECK pending|running|completed|failed|cancelled in migration.
+    status: citext("status").notNull().default("pending"),
+    inngestRunId: text("inngest_run_id"),
+    outputJson: jsonb("output_json"),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    workflowRunIdx: index("workflow_run_tasks_run_idx").on(t.workflowRunId),
+    orgStatusIdx: index("workflow_run_tasks_org_status_idx").on(t.orgId, t.workspaceId, t.status),
+    orgIdx: index("workflow_run_tasks_org_idx").on(t.orgId, t.workspaceId),
+  }),
+);
+
+// Workflow step run — execution of a single predefined step within a workflow run.
 export const workflowStepRuns = workflowSchema.table(
   "workflow_step_runs",
   {
