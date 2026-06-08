@@ -161,35 +161,6 @@ export const subagentRuns = agentSchema.table(
   }),
 );
 
-// Plan steps tied to executions. execution_step_id is a cross-domain
-// reference (FK omitted per CLAUDE.md storage rules) but indexed.
-export const planSteps = agentSchema.table(
-  "plan_steps",
-  {
-    ...idMixin("pls"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    executionStepId: uuid("execution_step_id").notNull(),
-    planStepKey: text("plan_step_key").notNull(),
-    summary: text("summary").notNull(),
-    intent: text("intent").notNull(),
-    capabilityName: text("capability_name"),
-    inputPreview: jsonb("input_preview"),
-    dependsOn: jsonb("depends_on").notNull().default(sql`'[]'::jsonb`),
-    // CHECK pending|approved|denied|completed|failed in migration.
-    status: citext("status").notNull(),
-  },
-  (t) => ({
-    orgIdx: index("plan_steps_org_idx").on(t.orgId, t.workspaceId),
-    executionStepIdx: index("plan_steps_execution_step_idx").on(t.executionStepId),
-    orgStatusIdx: index("plan_steps_org_status_idx").on(
-      t.orgId,
-      t.workspaceId,
-      t.status,
-    ),
-  }),
-);
-
 export const mcpServers = agentSchema.table(
   "mcp_servers",
   {

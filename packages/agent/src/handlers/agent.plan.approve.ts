@@ -16,18 +16,9 @@ export async function agentPlanApproveHandler(
   ctx: CapabilityContext,
 ): Promise<AgentPlanApproveOutput> {
   const status = DECISION_TO_STATUS[input.decision];
-  // Tenant guard in the WHERE keeps the update from crossing scope.
-  await withTenantDb((tx) =>
-    tx
-      .update(schema.planSteps)
-      .set({ status })
-      .where(
-        and(eq(schema.planSteps.id, input.planId), eq(schema.planSteps.orgId, ctx.orgId)),
-      ),
-  );
-  // PG NOTIFY so a paused stream listening for this plan can resume.
-  // Use drizzle sql tagged-template so planId/status are bound parameters —
-  // no user-controlled string is ever concatenated into SQL.
+  // planSteps table dropped in migration 0026 (was never INSERTed, only UPDATE reference).
+  // Emit NOTIFY for any client listening. Use drizzle sql tagged-template so planId/status
+  // are bound parameters — no user-controlled string is ever concatenated into SQL.
   const payload = JSON.stringify({ planId: input.planId, status });
   await withTenantDb((tx) =>
     tx.execute(sql`select pg_notify(${"agent_plan_resolved"}, ${payload})`),

@@ -5,22 +5,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 //   bound params   → plain string
 // Capture the sql object passed to db().execute so tests can inspect it.
 const executeSpy = vi.fn(async () => undefined);
-const whereMock = vi.fn(() => undefined);
-const setMock = vi.fn(() => ({ where: whereMock }));
-const updateMock = vi.fn(() => ({ set: setMock }));
 
-const fakeDb = { update: updateMock, execute: executeSpy };
+const fakeDb = { execute: executeSpy };
 
 vi.mock("@oxagen/database", () => ({
   db: () => fakeDb,
   withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) => fn(fakeDb),
-  schema: {
-    planSteps: {
-      id: "id",
-      orgId: "orgId",
-      status: "status",
-    },
-  },
+  schema: {},
 }));
 
 // Use the real drizzle sql so the tagged-template object shape is authentic.

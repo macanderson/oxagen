@@ -342,9 +342,9 @@ Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level override
   Run `pnpm check:manifest` to verify parity after adding a contract.
 - **Parity caveat:** *contract-declared* capabilities are symmetric between
   API and MCP. However, a large number of UI sections are intentional static
-  mocks with no backing contracts yet: `knowledge.*`, `automation.*`,
-  `access.*`, `security.*`, `activity.*`, `tools/studio.*`, and several
-  `billing/settings/profile` actions. These stub pages are tracked in Linear
+  mocks with no backing contracts yet: `knowledge.*`, `access.*`, `security.*`,
+  `activity.*`, `tools/studio.*`, and several `billing/settings/profile`
+  actions. These stub pages are tracked in Linear
   and must NOT be wired to live data until a contract exists. The correct
   order is: contract → API route → MCP tool → UI wire-up. Run
   `pnpm check:manifest` to get the current gap list.
@@ -356,8 +356,11 @@ Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level override
 
 ### `apps/cli`
 
-- Commander + Ink CLI. Entry: `apps/cli/src/index.tsx`. Provides the
-  `oxagen dev` command (port-prober and dev-stack launcher).
+- Commander + Ink CLI. Entry: `apps/cli/src/index.tsx`. Ships 40+ commands
+  covering auth, orgs, workspaces, chat, conversations, API keys, plugins,
+  billing, agents, workflows, images, documents, automation, forms, skills,
+  and user preferences. Primary command: `oxagen dev` (port-prober and
+  dev-stack launcher).
 
 ### `apps/docs`
 
@@ -477,20 +480,24 @@ Transactional state in ClickHouse. Binary payloads in any of the three DB stores
 ## Documentation — capability registry
 
 **`docs/capabilities/` must stay in sync with live contracts.** The directory
-contains auto-generated markdown files for every user-facing capability (API
-endpoints, MCP tools, CLI commands) sourced from `packages/oxagen/src/contracts/`.
-It is the single source of truth for product documentation and is shipped to the
-website and agent-facing systems.
+contains markdown files for every user-facing capability (API endpoints, MCP
+tools, CLI commands). It is the single source of truth for product documentation
+shipped to the website and agent-facing systems. **Currently, capability docs
+are manually maintained** (see **Gaps** below). Automated regeneration is
+tracked in Linear.
 
-- **When to regenerate:** Whenever a contract is added, renamed, or removed
-  (not just parameter changes — those do not require a regeneration).
-- **How to regenerate:** `pnpm check:contracts --docs` regenerates all files in
-  `docs/capabilities/` from the live contract definitions in `registerCapability()`
-  calls. The script updates `_index.md` and creates/deletes `.md` files to match.
-- **Before pushing:** Run `pnpm check:contracts --docs` if any contract files
-  changed (`packages/oxagen/src/contracts/`, `apps/api/src/routes/v1/*`,
-  `apps/mcp/src/tools/*`, `apps/cli/src/commands/*`). Stale capability docs
+- **When to update:** Whenever a contract is added, renamed, or removed
+  (not just parameter changes).
+- **How to update:** Manually create `.md` files in `docs/capabilities/` per
+  capability using the pattern from existing files. Filename is the capability
+  name in kebab-case (e.g., `workflow.run.md`). Update `_index.md` for new
+  capabilities.
+- **Before pushing:** Manually verify `docs/capabilities/` matches contracts
+  in `packages/oxagen/src/contracts/`, `apps/api/src/routes/v1/*`,
+  `apps/mcp/src/tools/*`, and `apps/cli/src/commands/*`. Stale or missing docs
   cause drift between shipped product and agent knowledge.
-- **CI gate:** The CI pipeline validates that `docs/capabilities/` matches
-  live contracts; a commit with new contracts but stale docs will fail the gate.
-  Never hand-edit capability markdown — edits are overwritten on regeneration.
+- **Gaps:** As of 2026-06-08, 15 wired capabilities lack docs (workflow.cancel,
+  workflow.run, workflow.status, and automation.*, conversation.chat,
+  document.*, form.*, image.*, skill.workspace.list, workspace.invite.send,
+  workspace.member.list). Automation of docs regeneration is tracked in Linear;
+  for now maintain docs as you ship new contracts.

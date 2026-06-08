@@ -396,7 +396,7 @@ describe("org.member.role.change route", () => {
 // ── user.preferences.read ────────────────────────────────────────────────
 
 describe("user.preferences.read route", () => {
-  const PATH = "/user/preferences";
+  const PATH = "/user/preferences/read";
 
   it("happy path GET: 200 with preferences", async () => {
     const invokeResult = {
@@ -426,7 +426,7 @@ describe("user.preferences.read route", () => {
 // ── user.preferences.write ───────────────────────────────────────────────
 
 describe("user.preferences.write route", () => {
-  const PATH = "/user/preferences";
+  const PATH = "/user/preferences/write";
 
   it("happy path PATCH: 200", async () => {
     mocks.invoke.mockResolvedValue({ fontSize: "large" });
