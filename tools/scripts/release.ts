@@ -60,6 +60,7 @@ interface Options {
   notes: boolean;
   git: boolean;
   vercel: boolean;
+  npm: boolean;
 }
 
 // ── small utilities ──────────────────────────────────────────────────────────
@@ -342,11 +343,80 @@ async function syncVercel(version: string): Promise<void> {
   }
 }
 
+// ── npm CLI publish (only if NPM_TOKEN is available) ────────────────────────
+
+function npmCfg(): { token: string } | null {
+  const token = deQuote(env.NPM_TOKEN);
+  if (!token) {
+    console.log(kleur.dim("[release] NPM_TOKEN not set — skipping npm publish."));
+    return null;
+  }
+  return { token };
+}
+
+function buildCli(): void {
+  console.log(kleur.dim("    building CLI..."));
+  try {
+    execFileSync("pnpm", ["-C", "apps/cli", "build"], {
+      cwd: ROOT,
+      stdio: "pipe",
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch (err) {
+    throw new Error(`CLI build failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function publishCliToNpm(version: string): Promise<void> {
+  const cfg = npmCfg();
+  if (!cfg) return;
+
+  try {
+    console.log(kleur.bold("\n  npm CLI publish:"));
+    // Build the CLI distribution
+    buildCli();
+    console.log(kleur.green("    ✓ CLI built successfully"));
+
+    // Verify the CLI package.json exists and is properly configured
+    const cliPkgPath = join(ROOT, "apps/cli/package.json");
+    const cliPkg = JSON.parse(readFileSync(cliPkgPath, "utf8")) as {
+      name?: string;
+      version?: string;
+      private?: boolean;
+      bin?: Record<string, string>;
+    };
+
+    if (cliPkg.private) {
+      throw new Error('CLI package.json has "private": true — remove this field to publish');
+    }
+
+    if (!cliPkg.bin || Object.keys(cliPkg.bin).length === 0) {
+      throw new Error("CLI package.json missing bin field");
+    }
+
+    // Publish using npm with NPM_TOKEN from environment
+    console.log(kleur.dim("    publishing to npm registry..."));
+    execFileSync("npm", ["publish"], {
+      cwd: join(ROOT, "apps/cli"),
+      stdio: "pipe",
+      env: { ...env, NPM_TOKEN: cfg.token },
+      maxBuffer: 64 * 1024 * 1024,
+    });
+
+    console.log(kleur.green(`    ✓ @oxagen/cli v${version} published to npm`));
+  } catch (err) {
+    throw new Error(
+      `npm publish failed: ${err instanceof Error ? err.message : String(err)}. ` +
+        `Ensure NPM_TOKEN is set and the CLI package is not marked as private.`,
+    );
+  }
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
 function parseArgs(): Options {
   const args = argv.slice(2);
-  const opts: Options = { bump: null, setVersion: null, fromRef: null, dryRun: false, notes: true, git: true, vercel: true };
+  const opts: Options = { bump: null, setVersion: null, fromRef: null, dryRun: false, notes: true, git: true, vercel: true, npm: true };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined) continue;
@@ -355,6 +425,7 @@ function parseArgs(): Options {
     else if (a === "--no-notes") opts.notes = false;
     else if (a === "--no-git") opts.git = false;
     else if (a === "--no-vercel") opts.vercel = false;
+    else if (a === "--no-npm") opts.npm = false;
     else if (a === "--yes") {/* non-interactive already */}
     else if (a === "--set") opts.setVersion = args[++i] ?? null;
     else if (a.startsWith("--set=")) opts.setVersion = a.slice("--set=".length);

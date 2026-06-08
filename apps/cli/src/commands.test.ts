@@ -2290,3 +2290,230 @@ describe("workflow status", () => {
     exitSpy.mockRestore();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Branch coverage: ApiError paths and edge cases
+// These tests exercise the `err instanceof ApiError ? ... : String(err)` branch
+// in catch blocks (currently always false), plus empty/optional data branches.
+// ---------------------------------------------------------------------------
+describe("branch coverage: ApiError error paths", () => {
+  it("automation list returns ApiError message", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(403, "Forbidden");
+    await expect(automationListCommand.parseAsync(["node", "cli"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Forbidden");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("automation create returns ApiError message", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(400, "Name required");
+    await expect(automationCreateCommand.parseAsync(["node", "cli", "-n", "A"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Name required");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("automation trigger returns ApiError message", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(404, "Automation not found");
+    await expect(automationTriggerCommand.parseAsync(["node", "cli", "-a", "a1"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Automation not found");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("billing credits purchase returns ApiError message", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(402, "Payment failed");
+    await expect(billingCreditsPurchaseCommand.parseAsync(["node", "cli", "-a", "10"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Payment failed");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("billing subscription read returns ApiError message", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(404, "Subscription not found");
+    await expect(billingSubscriptionReadCommand.parseAsync(["node", "cli"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Subscription not found");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("document list returns ApiError message", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(403, "Access denied");
+    await expect(documentListCommand.parseAsync(["node", "cli"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Access denied");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("workspace member list returns ApiError message", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(403, "Not a member");
+    await expect(workspaceMemberListCommand.parseAsync(["node", "cli"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Not a member");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("workflow cancel returns ApiError message", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(404, "Workflow not found");
+    await expect(workflowCancelCommand.parseAsync(["node", "cli", "-w", "wfr_abc"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Workflow not found");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("workflow status returns ApiError message", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(404, "Run expired");
+    await expect(workflowStatusCommand.parseAsync(["node", "cli", "-w", "wfr_abc"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Run expired");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("user preferences read returns ApiError message", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(401, "Unauthorized");
+    await expect(userPreferencesReadCommand.parseAsync(["node", "cli"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Unauthorized");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("user preferences write returns ApiError message", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(400, "Invalid font size");
+    await expect(userPreferencesWriteCommand.parseAsync(["node", "cli", "--font-size", "xxx"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Invalid font size");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+});
+
+describe("branch coverage: empty/optional data branches", () => {
+  it("automation list shows empty message when no automations found", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce([]);
+    await automationListCommand.parseAsync(["node", "cli"]);
+    expect(consoleSpy).toHaveBeenCalledWith("No automations found.");
+    consoleSpy.mockRestore();
+  });
+
+  it("automation list with workspace option", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce([{ id: "a1", name: "Test", status: "active", triggers: [] }]);
+    await automationListCommand.parseAsync(["node", "cli", "-w", "ws1"]);
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("workspace_id=ws1"), expect.anything());
+    consoleSpy.mockRestore();
+  });
+
+  it("automation list shows 'none' when triggers are empty", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce([{ id: "a1", name: "Untriggered", status: "active", triggers: [] }]);
+    await automationListCommand.parseAsync(["node", "cli"]);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("triggers=none"));
+    consoleSpy.mockRestore();
+  });
+
+  it("image create with save-to option", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ id: "img1", url: "https://cdn.example.com/img.png", created_at: "2026-06-08", workspace_id: "ws1" });
+    await imageCreateCommand.parseAsync(["node", "cli", "-p", "A cat"]);
+    consoleSpy.mockRestore();
+  });
+
+  it("conversation chat ApiError path", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(401, "Not authenticated");
+    await expect(conversationChatCommand.parseAsync(["node", "cli", "-m", "Hello"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Not authenticated");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("workspace list ApiError path", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(403, "Org not found");
+    await expect(workspaceListCommand.parseAsync(["node", "cli"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Org not found");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("org list ApiError path", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(401, "Token expired");
+    await expect(orgListCommand.parseAsync(["node", "cli"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Token expired");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("api-key create ApiError path", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(429, "Rate limit exceeded");
+    await expect(apiKeyCreateCommand.parseAsync(["node", "cli", "-n", "mykey"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Rate limit exceeded");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("plugin list ApiError path", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(403, "Permission denied");
+    await expect(pluginListCommand.parseAsync(["node", "cli"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Permission denied");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("billing status ApiError path", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(402, "Billing error");
+    await expect(billingStatusCommand.parseAsync(["node", "cli"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Billing error");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("chat send ApiError path", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(503, "Service unavailable");
+    await expect(chatSendCommand.parseAsync(["node", "cli", "-m", "test"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Service unavailable");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("document read ApiError path", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(404, "Document not found");
+    await expect(documentReadCommand.parseAsync(["node", "cli", "-d", "doc1"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Document not found");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("notification list with empty results", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ notifications: [] });
+    await notificationsListCommand.parseAsync(["node", "cli"]);
+    consoleSpy.mockRestore();
+  });
+
+  it("workflow run ApiError path", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(400, "Invalid workflow spec");
+    await expect(workflowRunCommand.parseAsync(["node", "cli", "-t", "My task"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Invalid workflow spec");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+});
