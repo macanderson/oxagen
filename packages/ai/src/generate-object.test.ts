@@ -225,6 +225,7 @@ describe("generateObjectFor (@oxagen/ai)", () => {
       model: "claude-sonnet-4-6",
       inputTokens: 12,
       outputTokens: 8,
+      cachedTokens: 0,
     });
   });
 

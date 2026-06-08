@@ -118,6 +118,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./workspace.model.settings.write")).workspaceModelSettingsWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "prompt.settings.read",
+    async () => (await import("./prompt.settings.read")).promptSettingsReadHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "prompt.settings.write",
+    async () => (await import("./prompt.settings.write")).promptSettingsWriteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "conversation.list",
     async () => (await import("./conversation.list")).conversationListHandler as CapabilityHandlerFn,
   );

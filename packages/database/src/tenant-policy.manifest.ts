@@ -41,9 +41,16 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "chat.messages", policyClass: "standard" },
 
   // ── content.* (orgScopeMixin) ─────────────────────────────────────────────
-  // content.documents dropped in 0021 (orphan table, never wired to handler/route)
   // content.files dropped in 0022 (orphan table, never written to, file.serve always 404)
   { table: "content.generated_assets", policyClass: "standard" },
+  // content.documents re-introduced (0026) — now wired to document.* handlers.
+  { table: "content.documents", policyClass: "standard" },
+  { table: "content.forms", policyClass: "standard" },
+  { table: "content.form_submissions", policyClass: "standard" },
+
+  // ── workflow.* (orgScopeMixin) — automation rules + their runs (0026) ──────
+  { table: "workflow.automations", policyClass: "standard" },
+  { table: "workflow.automation_runs", policyClass: "standard" },
 
   // ── workspace.* ───────────────────────────────────────────────────────────
   //   workspaces has org_id NOT NULL but no workspace_id — org_only policy.

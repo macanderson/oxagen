@@ -48,7 +48,12 @@ import { streamAgentReply, reasoningRequestConfig } from "./stream";
 type StreamResult = ReturnType<typeof streamAgentReply> & {
   _onFinish: (event: {
     text: string;
-    totalUsage: { inputTokens: number; outputTokens: number; totalTokens: number };
+    totalUsage: {
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+      cachedInputTokens?: number;
+    };
     finishReason: string;
   }) => Promise<void>;
 };
@@ -95,8 +100,25 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY });
     expect(mocks.streamText).toHaveBeenCalledTimes(1);
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(arg.messages).toBe(MESSAGES);
+    // No system supplied → no cached system message prepended; messages pass through.
+    expect(arg.messages).toEqual(MESSAGES);
     expect(arg.temperature).toBe(0.7);
+  });
+
+  it("prepends the system prompt as an Anthropic-cacheable system message", () => {
+    streamAgentReply({ messages: MESSAGES, system: "You are Oxagen.", telemetry: TELEMETRY });
+    const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    const msgs = arg.messages as Array<Record<string, unknown>>;
+    // Leading system message carries the ephemeral cache_control breakpoint;
+    // the `system` param is NOT used (only message-level providerOptions can
+    // place a cache marker).
+    expect(arg.system).toBeUndefined();
+    expect(msgs[0]).toEqual({
+      role: "system",
+      content: "You are Oxagen.",
+      providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+    });
+    expect(msgs.slice(1)).toEqual(MESSAGES);
   });
 
   it("does not set providerOptions when no effort is supplied", () => {
@@ -164,7 +186,24 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
       model: "claude-sonnet-4-6",
       inputTokens: 10,
       outputTokens: 20,
+      cachedTokens: 0,
     });
+  });
+
+  it("forwards prompt-cache reads (cachedInputTokens) to telemetry and the meter", async () => {
+    const result = streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY }) as StreamResult;
+    await result._onFinish({
+      text: "hi there",
+      totalUsage: { inputTokens: 100, outputTokens: 20, totalTokens: 120, cachedInputTokens: 80 },
+      finishReason: "stop",
+    });
+    // Telemetry row records the real cached count (not hardcoded 0).
+    const rows = (mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>])[0];
+    expect(rows[0]?.cached_tokens).toBe(80);
+    // The meter receives cachedTokens so the cached portion is priced cheaper.
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledWith(
+      expect.objectContaining({ cachedTokens: 80, inputTokens: 100, outputTokens: 20 }),
+    );
   });
 
   it("swallows a credit-charge error and still calls onFinish", async () => {

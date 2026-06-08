@@ -69,6 +69,8 @@ import "./contracts/plugin.registry.remove";
 import "./contracts/plugin.registry.sync";
 import "./contracts/plugin.settings.set_auth_alerts";
 import "./contracts/plugin.workspace.set_enabled";
+import "./contracts/prompt.settings.read";
+import "./contracts/prompt.settings.write";
 import "./contracts/skill.workspace.list";
 import "./contracts/svg.generate";
 import "./contracts/system.install.instructions";

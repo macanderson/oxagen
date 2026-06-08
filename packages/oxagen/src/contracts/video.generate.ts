@@ -8,10 +8,9 @@ export const videoGenerate = registerCapability({
   domain: "video",
   description:
     "Generate a short video from a text prompt. Optionally accepts duration, aspect ratio, " +
-    "style hints, and a brand-kit ID. Currently a console-logging stub — " +
-    "deferred backing (video rendering pipeline not yet wired). " +
-    "Returns a queued job reference and a render directive so the chat UI " +
-    'immediately shows the make-a-video form component (componentId "make-video-form").',
+    "and style hints. Creates a pending asset row, dispatches the async Veo render job, " +
+    "and returns a queued job reference and a render directive so the chat UI " +
+    'immediately shows the video-result component (componentId "video-result").',
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -40,22 +39,24 @@ export const videoGenerate = registerCapability({
     brandKitId: z.string().optional(),
   }),
   output: z.object({
-    stub: z.literal(true),
-    /** Current lifecycle status — always "queued" for the stub. */
+    /** Current lifecycle status — always "queued" for an async render. */
     status: z.literal("queued"),
-    /** Opaque job identifier for future polling once the pipeline is live. */
+    /** Opaque job identifier (the generated_assets public id) for future polling. */
     jobId: z.string().min(1),
+    /**
+     * Access-controlled serving URL. Returns 404 while the render is pending
+     * and streams the video once the asset row is flipped to `ready`.
+     */
+    serveUrl: z.string(),
     /**
      * Render directive consumed by the chat stream route.
      * The componentId must match the CHAT_COMPONENTS registry key exactly.
      */
     render: z.object({
-      componentId: z.literal("make-video-form"),
+      componentId: z.literal("video-result"),
       props: z.object({
-        prompt: z.string().optional(),
-        durationSeconds: z.number().optional(),
-        aspectRatio: z.string().optional(),
-        style: z.string().optional(),
+        url: z.string(),
+        prompt: z.string(),
       }),
     }),
   }),

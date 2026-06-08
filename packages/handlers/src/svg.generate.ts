@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { generateObjectFor } from "@oxagen/ai";
+import {
+  generateObjectFor,
+  resolvePrompt,
+  svgGeneratePrompt,
+  loadWorkspacePromptConfig,
+  enhancePromptIfInsufficient,
+  type PromptConfig,
+} from "@oxagen/ai";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { svgGenerate } from "@oxagen/oxagen/contracts/svg.generate";
 import { logger } from "./logger";
@@ -42,25 +49,6 @@ const svgModelSchema = z.object({
     .describe("A concise, human-readable title for the graphic (5–60 characters)."),
 });
 
-// ── System prompt ─────────────────────────────────────────────────────────────
-
-function buildSystemPrompt(width: number, height: number): string {
-  return [
-    "You are an SVG generation assistant. Produce clean, valid inline SVG markup.",
-    "",
-    "RULES:",
-    "1. Output ONLY the raw SVG — start with <svg and end with </svg>. No markdown fences.",
-    "2. Set viewBox='0 0 {width} {height}' on the root <svg> element.",
-    `   Default dimensions: width=${width}, height=${height}.`,
-    "3. Use currentColor for all strokes and fills so the graphic adapts to light and dark mode.",
-    "4. Prefer CSS custom properties (--color-accent, --foreground) for brand colours.",
-    "5. Add optional subtle animation using CSS @keyframes in a <style> block or <animate> elements.",
-    "6. Produce semantically meaningful SVG: use <title>, <desc>, and aria-label where appropriate.",
-    "7. NEVER include <script> tags, on* event handlers, or external resource references.",
-    "8. Derive a concise title (5–60 characters) that describes the graphic.",
-  ].join("\n");
-}
-
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export const svgGenerateHandler: CapabilityHandler<typeof svgGenerate> = async (input, ctx) => {
@@ -68,16 +56,37 @@ export const svgGenerateHandler: CapabilityHandler<typeof svgGenerate> = async (
   const height = input.height ?? 400;
   const messageId = ctx.messageId ?? ctx.requestId;
 
+  // Resolve the system prompt through the registry so an enterprise workspace
+  // can override the svg.generate baseline (it's a curated-overridable key) and
+  // any workspace's "additional instructions" are appended. Best-effort load —
+  // a missing config simply yields the untouched baseline.
+  const promptConfig = await loadWorkspacePromptConfig(ctx.workspaceId).catch(
+    (): PromptConfig => ({}),
+  );
+
+  // Auto-improve (Beta): when the workspace toggle is on (default), let the LLM
+  // judge enhance an insufficient description before generation.
+  const { prompt: effectivePrompt } = await enhancePromptIfInsufficient({
+    prompt: input.prompt,
+    kind: "svg",
+    autoImprove: promptConfig.autoImprovePrompts ?? true,
+    telemetry: { orgId: ctx.orgId, workspaceId: ctx.workspaceId, surface: ctx.surface, messageId },
+  });
+
   let rawSvg: string;
   let title: string;
 
   try {
     const result = await generateObjectFor({
       schema: svgModelSchema,
-      system: buildSystemPrompt(width, height),
+      system: resolvePrompt({
+        key: "svg.generate",
+        baseline: svgGeneratePrompt(width, height),
+        config: promptConfig,
+      }),
       prompt: [
         input.title ? `Title: ${input.title}` : "",
-        `Description: ${input.prompt}`,
+        `Description: ${effectivePrompt}`,
       ]
         .filter(Boolean)
         .join("\n"),

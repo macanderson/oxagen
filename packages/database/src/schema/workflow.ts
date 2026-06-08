@@ -1,6 +1,7 @@
-import { index, integer, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, index, integer, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { workflowSchema } from "./_schemas";
-import { auditMixin, citext, idMixin, orgScopeMixin } from "./_mixins";
+import { auditMixin, citext, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
 
 // Workflow run — execution of a workflow definition. Tracks overall progress.
 export const workflowRuns = workflowSchema.table(
@@ -56,5 +57,83 @@ export const workflowRunTasks = workflowSchema.table(
     workflowRunIdx: index("workflow_run_tasks_run_idx").on(t.workflowRunId),
     orgStatusIdx: index("workflow_run_tasks_org_status_idx").on(t.orgId, t.workspaceId, t.status),
     orgIdx: index("workflow_run_tasks_org_idx").on(t.orgId, t.workspaceId),
+  }),
+);
+
+// Workflow step run — execution of a single predefined step within a workflow run.
+export const workflowStepRuns = workflowSchema.table(
+  "workflow_step_runs",
+  {
+    ...idMixin("wfr"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    workflowRunId: uuid("workflow_run_id").notNull(),
+    workflowStepId: uuid("workflow_step_id").notNull(),
+    stepIndex: integer("step_index").notNull(),
+    title: text("title").notNull(),
+    // CHECK pending|running|completed|failed|cancelled in migration.
+    status: citext("status").notNull().default("pending"),
+    inngestRunId: text("inngest_run_id"),
+    outputJson: jsonb("output_json"),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    workflowRunIdx: index("workflow_step_runs_workflow_run_idx").on(t.workflowRunId),
+    workflowStepIdx: index("workflow_step_runs_workflow_step_idx").on(t.workflowStepId),
+    orgStatusIdx: index("workflow_step_runs_org_status_idx").on(t.orgId, t.workspaceId, t.status),
+    orgIdx: index("workflow_step_runs_org_idx").on(t.orgId, t.workspaceId),
+  }),
+);
+
+// Automation — a saved trigger→action rule (distinct from workflows, which are
+// multi-step task templates). `triggerConfig` holds the trigger descriptors
+// surfaced as `triggers: string[]`; `actionConfig` the action payload.
+// Backs automation.create / automation.list.
+export const automations = workflowSchema.table(
+  "automations",
+  {
+    ...idMixin("aut"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...softDeleteMixin(),
+    name: text("name").notNull(),
+    // CHECK active|paused|archived enforced in migration.
+    status: citext("status").notNull().default("active"),
+    triggerConfig: jsonb("trigger_config").notNull().default(sql`'[]'::jsonb`),
+    actionConfig: jsonb("action_config").notNull().default(sql`'{}'::jsonb`),
+  },
+  (t) => ({
+    orgIdx: index("automations_org_idx").on(t.orgId, t.workspaceId),
+    statusCheck: check(
+      "automations_status_check",
+      sql`${t.status} IN ('active', 'paused', 'archived')`,
+    ),
+  }),
+);
+
+// Automation run — a single execution of an automation. Backs automation.trigger.
+export const automationRuns = workflowSchema.table(
+  "automation_runs",
+  {
+    ...idMixin("aur"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    automationId: uuid("automation_id").notNull(),
+    // CHECK running|completed|failed|cancelled enforced in migration.
+    status: citext("status").notNull().default("running"),
+    payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    automationIdx: index("automation_runs_automation_idx").on(t.automationId),
+    orgStatusIdx: index("automation_runs_org_status_idx").on(t.orgId, t.workspaceId, t.status),
+    orgIdx: index("automation_runs_org_idx").on(t.orgId, t.workspaceId),
+    statusCheck: check(
+      "automation_runs_status_check",
+      sql`${t.status} IN ('running', 'completed', 'failed', 'cancelled')`,
+    ),
   }),
 );

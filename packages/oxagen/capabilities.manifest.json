@@ -1123,6 +1123,40 @@
       }
     },
     {
+      "name": "prompt.settings.read",
+      "file": "prompt.settings.read.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "prompt.settings.write",
+      "file": "prompt.settings.write.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
       "name": "skill.workspace.list",
       "file": "skill.workspace.list.ts",
       "domain": "skill",

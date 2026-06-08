@@ -182,11 +182,30 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
 
   const rc = reasoningRequestConfig(modelId, args.effort);
 
+  // Prompt caching: mark the (stable, per-workspace) system prompt as an
+  // Anthropic ephemeral cache breakpoint so repeated turns in a conversation
+  // re-read it from cache at ~1/10th the input price instead of re-billing the
+  // full prefix every turn. The `anthropic` providerOptions namespace is
+  // ignored by every other vendor (OpenAI/Google/xAI/…), so this is a no-op —
+  // never an error — for non-Anthropic models. Caching is keyed on the exact
+  // prefix bytes and only engages above the provider's minimum cacheable size,
+  // so a short system prompt simply isn't cached (no harm). We carry the system
+  // as a leading system message (rather than the `system` param) because only
+  // message-level providerOptions can place a cache_control marker.
+  const cachedSystem: ModelMessage[] = args.system
+    ? [
+        {
+          role: "system",
+          content: args.system,
+          providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+        },
+      ]
+    : [];
+
   return streamText({
     model,
-    messages: args.messages,
+    messages: [...cachedSystem, ...args.messages],
     tools: args.tools,
-    system: args.system,
     // When the provider locks temperature (Anthropic extended thinking,
     // OpenAI reasoning models) we must omit the field entirely — sending
     // any value, even the default, causes the upstream to reject the request.
@@ -201,18 +220,16 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
       // step of the tool-loop, so it's the correct figure to meter/bill.
       const inputTokens = event.totalUsage.inputTokens ?? 0;
       const outputTokens = event.totalUsage.outputTokens ?? 0;
+      // Prompt-cache reads: the AI SDK v6 gateway normalizes the provider's
+      // cache-read count into `cachedInputTokens` (a subset of inputTokens).
+      // Forward it so the rate card prices those tokens at the cheaper cached
+      // rate — otherwise the customer is over-charged on the cached portion.
+      // Zero when caching didn't engage (small prefix / non-Anthropic / cold).
+      const cachedTokens = event.totalUsage.cachedInputTokens ?? 0;
       // The cost meter (provider rate card) turns tokens-in/out-by-model into
       // the USD a provider invoices us. This is the input to both the telemetry
       // cost column and the credit charge below.
-      //
-      // cachedTokens is omitted (defaults to 0) because this gate does not yet
-      // enable prompt caching — there are no cache-control markers on the
-      // messages/system, so the provider reports zero cached reads. If caching
-      // is turned on, forward the provider's cache-read count here (e.g.
-      // event.providerMetadata.anthropic.cacheReadInputTokens) so the meter
-      // prices those tokens at the cheaper cached rate; otherwise the customer
-      // is over-charged on the cached portion.
-      const usage = { model: modelId, inputTokens, outputTokens };
+      const usage = { model: modelId, inputTokens, outputTokens, cachedTokens };
       const costUsdMicros = providerCostUsdMicros(usage);
 
       // Telemetry write is best-effort; if ClickHouse is unreachable, the
@@ -228,7 +245,7 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
             provider,
             input_tokens: inputTokens,
             output_tokens: outputTokens,
-            cached_tokens: 0,
+            cached_tokens: cachedTokens,
             cost_usd_micros: costUsdMicros,
             duration_ms: durationMs,
             surface: args.telemetry.surface,

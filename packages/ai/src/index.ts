@@ -61,3 +61,25 @@ export type {
 // Server-only: loads effective model defaults from DB for a user+workspace session.
 export { loadEffectiveModelDefaults } from "./load-effective-model-defaults";
 export type { LoadEffectiveModelDefaultsArgs } from "./load-effective-model-defaults";
+
+// Prompt registry: baseline system prompts + tiered customer-override resolution.
+export {
+  resolvePrompt,
+  isOverridablePromptKey,
+  OVERRIDABLE_PROMPT_KEYS,
+  chatSystemPrompt,
+  conversationTitlePrompt,
+  svgGeneratePrompt,
+  imageAnalyzePrompt,
+  loadWorkspacePromptConfig,
+  normalizePromptConfig,
+  enhancePromptIfInsufficient,
+} from "./prompts";
+export type {
+  PromptKey,
+  OverridablePromptKey,
+  PromptConfig,
+  SystemPromptContext,
+  EnhancePromptArgs,
+  EnhancePromptResult,
+} from "./prompts";
