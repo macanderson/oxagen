@@ -120,12 +120,10 @@ Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first. Building 
 Until oxagen.ai is launched, production deploys use Vercel-managed domains:
 
 - App: `https://oxagen-v2-app.vercel.app`
-- Website: `https://oxagen-v2-website.vercel.app`
 - API: `https://oxagen-v2-api.vercel.app` (Hono REST; no MCP protocol endpoint)
 - MCP: `https://oxagen-v2-mcp.vercel.app` (xmcp server; connect at `/mcp` over
   streamable HTTP — **not** `oxagen-v2-api.../mcp/sse`. Org+workspace scope is
   carried by the API key, so no org/workspace path segment is needed.)
-- Admin: `https://oxagen-v2-admin.vercel.app`
 - Docs: `https://oxagen-v2-docs.vercel.app`
 
 When generating OAuth callback URLs, env values, allowedOrigins, or any
@@ -256,7 +254,7 @@ it stays stable).
 
 **Spin up the stack.** The dev server is usually already running:
 - `apps/app` → `http://localhost:3000` (check `lsof -ti:3000` first; the repo
-  runs all four Next apps on 3000/3100/3200/3300 via `pnpm dev`).
+  runs all three Next apps on 3000/3100/3200 via `pnpm dev`).
 - Local Postgres is on `:5433` (Docker). `pnpm dev` brings up Docker + env.
 - If port 3000 is free, run `pnpm dev` (needs Docker running).
 
