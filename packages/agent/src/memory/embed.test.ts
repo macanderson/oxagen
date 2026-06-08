@@ -32,7 +32,7 @@ describe("embedText (agent/memory wrapper)", () => {
     const v = await embedText("hello world", { telemetry });
     expect(v).toHaveLength(1536);
     expect(mocks.embedTextAI).toHaveBeenCalledTimes(1);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const calls: unknown[][] = (mocks.embedTextAI.mock.calls as any);
     const [text, opts] = calls[0]!;
     expect(text).toBe("hello world");
@@ -49,7 +49,7 @@ describe("embedText (agent/memory wrapper)", () => {
       executionStepId: "req_1",
     };
     await embedText("test", { telemetry: tel });
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const calls: unknown[][] = (mocks.embedTextAI.mock.calls as any);
     const opts = calls[0]![1] as { telemetry?: unknown };
     expect(opts?.telemetry).toEqual(tel);

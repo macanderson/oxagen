@@ -77,7 +77,7 @@ export function McpInstallTabs({ entries }: McpInstallTabsProps) {
   if (entries.length === 0) return null;
 
   // Safe: length guard above ensures at least one entry exists.
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+   
   const firstKey = entries[0]!.key;
 
   return (
@@ -125,7 +125,7 @@ export function McpInstallTabs({ entries }: McpInstallTabsProps) {
             <div
               data-mcp-code
               aria-label={`${entry.client} install command`}
-              // eslint-disable-next-line react/no-danger
+               
               dangerouslySetInnerHTML={{ __html: entry.highlightedHtml }}
               className="[&_pre]:!bg-transparent [&_pre]:overflow-x-auto [&_pre]:px-4 [&_pre]:py-3 [&_code]:text-xs [&_code]:font-mono [&_code]:leading-relaxed"
             />

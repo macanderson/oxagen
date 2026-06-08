@@ -127,7 +127,7 @@ export default async function AccessReviewsPage({
                 </CardTitle>
                 <CardDescription>
                   Quarterly review of all org members, roles, and last-active
-                  timestamps. Confirm or revoke each member's access to satisfy
+                  timestamps. Confirm or revoke each member&apos;s access to satisfy
                   SOC 2 CC6.3 access provisioning evidence.
                 </CardDescription>
               </div>

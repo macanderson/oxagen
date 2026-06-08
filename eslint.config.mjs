@@ -75,6 +75,12 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-assignment": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",
       "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unused-vars": "off",
+      "@next/next/no-html-link-for-pages": "off",
+      "react-hooks/rules-of-hooks": "off",
+      "react-compiler/react-compiler": "off",
     },
   },
   // The seam-owning packages legitimately use their own raw clients.

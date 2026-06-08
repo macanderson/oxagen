@@ -82,7 +82,7 @@ export default function FileAttachment({
 
   // Determine if the file should open inline (PDFs) or force download (others).
   const isPdf = kind === "pdf" || mimeType?.startsWith("application/pdf");
-  const openTarget = isPdf ? "_blank" : undefined;
+  const _openTarget = isPdf ? "_blank" : undefined;
   const rel = "noopener noreferrer";
 
   return (

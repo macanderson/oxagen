@@ -150,7 +150,7 @@ beforeEach(() => {
 
 describe("documentsGenerateHandler — document (DOCX)", () => {
   it("calls docx Packer.toBlob and persists with kind=document", async () => {
-    const result = await documentsGenerateHandler(
+    await documentsGenerateHandler(
       {
         kind: "document",
         title: "My Report",

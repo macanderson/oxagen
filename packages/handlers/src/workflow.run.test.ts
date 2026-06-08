@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   inngestSend: vi.fn(),
 }));
 
-const NOW = new Date("2026-06-07T00:00:00.000Z");
 const ROW = { id: "wfr-uuid-1", publicId: "wfr_ABCDEF" };
 
 mocks.insertReturning.mockResolvedValue([ROW]);

@@ -7,7 +7,7 @@ import {
   grants,
   accessRequests,
 } from "./schema/iam";
-import { users, sessions, accounts, apiKeys, credentials } from "./schema/auth";
+import { users, sessions, accounts, apiKeys } from "./schema/auth";
 import { workspaces, workspaceUsers } from "./schema/workspace";
 import {
   mcpServers,
@@ -17,7 +17,6 @@ import {
   approvalRequests,
   subagentFanouts,
   subagentRuns,
-  planSteps,
 } from "./schema/agent";
 import {
 } from "./schema/workflow";

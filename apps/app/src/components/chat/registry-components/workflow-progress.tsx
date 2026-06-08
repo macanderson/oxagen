@@ -168,8 +168,8 @@ function TaskCell({ task }: { task: WorkflowTaskSnapshot }) {
 
 export default function WorkflowProgress({
   workflowId,
-  orgSlug = "",
-  workspaceSlug = "",
+  orgSlug: _orgSlug = "",
+  workspaceSlug: _workspaceSlug = "",
 }: WorkflowProgressProps): React.ReactElement {
   const [data, setData] = React.useState<WorkflowData | null>(null);
   const [error, setError] = React.useState<string | null>(null);

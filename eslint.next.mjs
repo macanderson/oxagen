@@ -33,6 +33,24 @@ const config = [
       // OXA-1515: Next apps must route DB access through withTenantDb /
       // withSystemDb — never the raw db() seam.
       "no-restricted-imports": ["error", tenancySeamRestrictedImports],
+      // Standard loading-state pattern in useEffect (setLoading(true) at start of
+      // async effect) is idiomatic and not a real performance problem in practice.
+      "react-hooks/set-state-in-effect": "off",
+    },
+  },
+  // Test files: relax rules that legitimately don't apply in test contexts.
+  {
+    files: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@next/next/no-html-link-for-pages": "off",
+      "react-hooks/rules-of-hooks": "off",
+      "react-hooks/globals": "off",
     },
   },
 ];

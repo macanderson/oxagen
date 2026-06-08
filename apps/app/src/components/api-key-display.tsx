@@ -72,7 +72,7 @@ export function ApiKeyDisplay({ rawKey, name, createdAt, expiresAt }: ApiKeyDisp
 
       <div className="rounded-lg border border-amber-200/30 bg-amber-50/50 dark:bg-amber-950/20 p-3">
         <p className="text-xs text-amber-900 dark:text-amber-200">
-          <strong>Save this key securely.</strong> You won't be able to see it again after you leave this page.
+          <strong>Save this key securely.</strong> You won&apos;t be able to see it again after you leave this page.
         </p>
       </div>
     </div>

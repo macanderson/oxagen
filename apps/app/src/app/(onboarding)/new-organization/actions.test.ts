@@ -348,7 +348,7 @@ describe("createOrgAction", () => {
     mockWithSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => {
       const tx = {
         insert: (table: unknown) => ({
-          values: (data: unknown) => {
+          values: (_data: unknown) => {
             if (table === "orgBillingProfiles") {
               billingInsertCalled = true;
             }

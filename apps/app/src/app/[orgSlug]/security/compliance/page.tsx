@@ -40,7 +40,7 @@ import {
   type ControlStatus,
 } from "@/lib/compliance-controls";
 
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
+const _ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 async function loadSignals(orgId: string) {
   const now = new Date();

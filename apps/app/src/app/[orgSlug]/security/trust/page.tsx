@@ -16,7 +16,6 @@ import {
   CheckCircle2,
   Users,
 } from "lucide-react";
-import Link from "next/link";
 import {
   Card,
   CardPanel,
@@ -26,7 +25,6 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import {
@@ -197,7 +195,7 @@ export default async function SecurityTrustPage({
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                Each org's data is isolated via Postgres row-level security
+                Each org&apos;s data is isolated via Postgres row-level security
                 (RLS). The application database role (
                 <code className="font-mono text-[10px] bg-muted px-1 rounded">
                   oxagen_app
@@ -253,7 +251,7 @@ export default async function SecurityTrustPage({
                 detail:
                   "OAuth access tokens and refresh tokens are encrypted with a rotating application-layer key (AUTH_TOKEN_ENCRYPTION_KEY) before being stored in the database. The key is held in Vercel's encrypted environment variable store, never in source code.",
               },
-            ].map((row, i) => (
+            ].map((row, _i) => (
               <div
                 key={row.label}
                 className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/30 px-4 py-3"

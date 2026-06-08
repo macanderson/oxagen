@@ -1,7 +1,7 @@
 import { index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { workspaceSchema } from "./_schemas";
-import { auditMixin, citext, idMixin, ltree, orgScopeMixin } from "./_mixins";
+import { auditMixin, citext, idMixin } from "./_mixins";
 import { modelTierEnum } from "./auth";
 
 export const workspaces = workspaceSchema.table(

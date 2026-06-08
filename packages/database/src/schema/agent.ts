@@ -1,11 +1,10 @@
-import { boolean, index, integer, jsonb, numeric, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { agentSchema } from "./_schemas";
 import {
   auditMixin,
   citext,
   idMixin,
-  jsonContractMixin,
   softDeleteMixin,
   orgScopeMixin,
   versionMixin,
