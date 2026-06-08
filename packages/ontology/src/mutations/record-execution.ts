@@ -88,7 +88,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
       await neo4j.run(
         `MATCH (e:${NodeLabels.Execution} {id: $executionId, orgId: $orgId})
          MERGE (o:${originLabel} {id: $originId, orgId: $orgId})
-         MERGE (e)-[:ORIGINATED_FROM]->(o)`,
+         MERGE (e)-[:${EdgeTypes.ORIGINATED_FROM}]->(o)`,
         { executionId, originId },
       );
     }
@@ -99,7 +99,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
         await neo4j.run(
           `MATCH (e:${NodeLabels.Execution} {id: $executionId, orgId: $orgId})
            MERGE (t:${NodeLabels.Tool} {name: $toolName, type: $toolType, orgId: $orgId})
-           MERGE (e)-[:CALLED_TOOL]->(t)`,
+           MERGE (e)-[:${EdgeTypes.CALLED_TOOL}]->(t)`,
           { executionId, toolName: tc.toolName, toolType: tc.toolType },
         );
       }
@@ -114,7 +114,7 @@ function originLabelFor(originType: string): string | null {
     case "chat":
       return NodeLabels.Conversation;
     case "workflow_run":
-      return "WorkflowRun";
+      return NodeLabels.WorkflowRun;
     default:
       return null;
   }
