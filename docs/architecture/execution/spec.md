@@ -64,7 +64,7 @@ Caller (chat/event/schedule/mcp/workflow)
         │
         └─► Inngest: agent/execution.sync   ← async, does not block caller
               │
-              └─► Neo4j: CREATE (:AgentExecution) node
+              └─► Neo4j: CREATE (:Execution) node
                           + MERGE entity relationships
 ```
 
@@ -75,7 +75,7 @@ Caller (chat/event/schedule/mcp/workflow)
 | Store       | What lives here                                                  |
 |-------------|------------------------------------------------------------------|
 | PostgreSQL  | `agent_executions`, `agent_execution_steps`, `agent_tool_calls` |
-| Neo4j       | `:AgentExecution` nodes, tool-call edges, entity relationships   |
+| Neo4j       | `:Execution` nodes, tool-call edges, entity relationships        |
 | ClickHouse  | Append-only `execution_events` (time-series analytics)           |
 | Blob        | Large input/output payloads (>64 KB); reference URL in Postgres  |
 

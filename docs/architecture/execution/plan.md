@@ -28,9 +28,9 @@
 
 **Status:** Pending (dispatched as task #6)  
 **Deliverables:**
-- `packages/handlers/src/agent/execution.sync.ts` — Inngest function
-- Consumes `agent/execution.created` event
-- Creates `(:AgentExecution)` node in Neo4j
+- `packages/inngest-functions/src/functions/agent.sync-execution-to-graph.ts` — Inngest function
+- Consumes `agent/execution.sync` event
+- Creates `(:Execution)` node in Neo4j
 - Merges entity relationships (`TOUCHED_ENTITY`, `INVOKED_BY`, etc.)
 - Sets `synced_to_graph_at` on the Postgres row after success
 - Idempotent: re-running on the same execution_id is a no-op
