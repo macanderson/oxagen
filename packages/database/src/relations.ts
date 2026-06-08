@@ -223,7 +223,6 @@ export const messagesRelations = relations(messages, ({ one, many }) => ({
 }));
 
 export const filesRelations = relations(files, ({ many }) => ({
-  documents: many(documents),
 }));
 
 
