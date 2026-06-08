@@ -117,8 +117,8 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
           provider: "",
           created_at: new Date().toISOString(),
         });
-      } catch {
-        /* telemetry must never fail the capability call */
+      } catch (telErr) {
+        logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
       }
       logger.info({ taskId, orgId, workspaceId }, "agent.background-task.execute completed");
       return { taskId, status: "completed" };
@@ -165,8 +165,8 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
           provider: "",
           created_at: new Date().toISOString(),
         });
-      } catch {
-        /* swallow */
+      } catch (telErr) {
+        logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
       }
       logger.error({ taskId, orgId, err }, "agent.background-task.execute failed");
       throw err;

@@ -8,13 +8,12 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // lines floor 58 (measured 63.00); target 80 — raise in follow-up
-      // branches floor 70 (measured 75.00); target 75 — at target
+      // branches measured 75.00 — at target
       thresholds: {
-        lines: 58,
+        lines: 63,
         branches: 70,
-        functions: 48,
-        statements: 58,
+        functions: 63,
+        statements: 63,
       },
     },
   },

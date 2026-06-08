@@ -104,25 +104,38 @@ interface KindIconProps {
   className?: string;
 }
 
+// Semantic color map for file-kind icons. Uses design-system tokens so the
+// colors update automatically when the token values change.
+const FILE_ICON_COLORS: Record<string, string> = {
+  image: "text-primary",
+  video: "text-secondary-foreground",
+  pdf: "text-destructive",
+  document: "text-info",
+  spreadsheet: "text-[#3cff52]", // brand green token
+  presentation: "text-warning",
+  archive: "text-warning",
+};
+
 function KindIcon({ kind, className }: KindIconProps) {
+  const colorClass = FILE_ICON_COLORS[kind] ?? "text-muted-foreground";
   switch (kind) {
     case "image":
-      return <ImageIcon className={cn("text-blue-400", className)} aria-hidden="true" />;
+      return <ImageIcon className={cn(colorClass, className)} aria-hidden="true" />;
     case "video":
-      return <Video className={cn("text-purple-500", className)} aria-hidden="true" />;
+      return <Video className={cn(colorClass, className)} aria-hidden="true" />;
     case "pdf":
-      return <FileText className={cn("text-red-500", className)} aria-hidden="true" />;
+      return <FileText className={cn(colorClass, className)} aria-hidden="true" />;
     case "document":
-      return <FileText className={cn("text-blue-500", className)} aria-hidden="true" />;
+      return <FileText className={cn(colorClass, className)} aria-hidden="true" />;
     case "spreadsheet":
       return (
         // Lucide does not ship a Spreadsheet icon; use a styled FileText variant.
-        <FileText className={cn("text-green-500", className)} aria-hidden="true" />
+        <FileText className={cn(colorClass, className)} aria-hidden="true" />
       );
     case "presentation":
-      return <FileText className={cn("text-orange-500", className)} aria-hidden="true" />;
+      return <FileText className={cn(colorClass, className)} aria-hidden="true" />;
     case "archive":
-      return <FileArchive className={cn("text-yellow-600", className)} aria-hidden="true" />;
+      return <FileArchive className={cn(colorClass, className)} aria-hidden="true" />;
     default:
       return <File className={cn("text-muted-foreground", className)} aria-hidden="true" />;
   }

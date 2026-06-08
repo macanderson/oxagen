@@ -220,31 +220,42 @@
     <div class="card">
       <p><b>@oxagen/skills</b> is the loading layer between the human-readable skill files in <code>.agents/skills/</code> and the agent runtime that needs to discover and dispatch them. It parses YAML frontmatter from each skill's markdown file, validates it against a Zod schema, and populates a typed registry keyed by skill slug.</p>
       <div class="flow" style="margin-top:6px">
-        <span class="node">.agents/skills/*.md</span><span class="arrow">→</span>
+        <span class="node">.agents/skills/*.skill.md</span><span class="arrow">→</span>
         <span class="node hl">@oxagen/skills</span><span class="arrow">→</span>
         <span class="node">typed registry</span><span class="arrow">→</span>
         <span class="node">agent runtime</span>
       </div>
     </div>
     <div class="grid cols-3" style="margin-top:16px">
-      <div class="feature"><div class="ic">⟁</div><h3>Filesystem loader</h3><p>Scans a directory for <code>.md</code> files, extracts YAML frontmatter, and streams each parsed skill into the registry without loading the full markdown body into memory.</p></div>
-      <div class="feature"><div class="ic">◈</div><h3>Zod validation</h3><p>Every skill frontmatter is validated against a shared <code>SkillSchema</code>. Missing required fields or wrong types throw at load time — not at dispatch time.</p></div>
+      <div class="feature"><div class="ic">⟁</div><h3>Filesystem loader</h3><p>Recursively scans a directory for <code>.skill.md</code> files, extracts YAML frontmatter, and eagerly reads each skill's full markdown body and any referenced sibling files.</p></div>
+      <div class="feature"><div class="ic">◈</div><h3>Zod validation</h3><p>Every skill frontmatter is validated against <code>skillFrontmatterSchema</code>. Missing required fields or wrong types throw at load time — not at dispatch time.</p></div>
       <div class="feature"><div class="ic">⊹</div><h3>Queryable registry</h3><p>Look up by slug, list all skills, filter by tag or domain. The registry is the single source of truth for what skills are available to an agent session.</p></div>
     </div>
   </section>
 
   <section id="usage">
     <h2>Usage</h2>
-    <div class="code"><button class="copy">Copy</button><pre><span class="k">import</span> { loadSkills } <span class="k">from</span> <span class="s">"@oxagen/skills/loader"</span>
-<span class="k">import</span> { registry }   <span class="k">from</span> <span class="s">"@oxagen/skills/registry"</span>
+    <div class="code"><button class="copy">Copy</button><pre><span class="k">import</span> { createSkillRegistry } <span class="k">from</span> <span class="s">"@oxagen/skills/registry"</span>
+<span class="k">import</span> { loadSkillFile, scanSkillsDir } <span class="k">from</span> <span class="s">"@oxagen/skills/loader"</span>
+<span class="k">import</span> <span class="k">type</span> { Skill, SkillFrontmatter, SkillRegistry } <span class="k">from</span> <span class="s">"@oxagen/skills/types"</span>
 
-<span class="c">// Load all skills from the .agents/skills/ directory</span>
-<span class="k">await</span> loadSkills(<span class="s">".agents/skills"</span>)
+<span class="c">// Create a registry backed by the filesystem (and optionally a DB adapter)</span>
+<span class="k">const</span> registry = createSkillRegistry({ fsRoot: <span class="s">".agents/skills"</span> })
 
 <span class="c">// Query the registry</span>
-<span class="k">const</span> skill = registry.<span class="n">get</span>(<span class="s">"oxagen-engineering-policy"</span>)
-<span class="k">const</span> all   = registry.<span class="n">list</span>()
-<span class="k">const</span> ui    = registry.<span class="n">filter</span>({ tag: <span class="s">"ui"</span> })</pre></div>
+<span class="k">const</span> skill = <span class="k">await</span> registry.<span class="n">get</span>(<span class="s">"oxagen-engineering-policy"</span>)
+<span class="k">const</span> all   = <span class="k">await</span> registry.<span class="n">list</span>()
+<span class="k">const</span> ui    = <span class="k">await</span> registry.<span class="n">list</span>(<span class="s">"ui"</span>)  <span class="c">// substring filter across slug/name/description</span>
+
+<span class="c">// Load a single skill file directly</span>
+<span class="k">const</span> one = <span class="k">await</span> loadSkillFile(<span class="s">".agents/skills/coding.skill.md"</span>)
+
+<span class="c">// Scan a directory and get back an array of Skill objects</span>
+<span class="k">const</span> skills = <span class="k">await</span> scanSkillsDir(<span class="s">".agents/skills"</span>)
+
+<span class="c">// Seed built-in skills from the filesystem into the database (idempotent)</span>
+<span class="k">import</span> { seedSkillsFromFilesystem } <span class="k">from</span> <span class="s">"@oxagen/skills"</span>
+<span class="k">const</span> result = <span class="k">await</span> seedSkillsFromFilesystem(adapter, { fsRoot: <span class="s">".agents/skills"</span> })</pre></div>
   </section>
 
   <section id="exports">
@@ -252,18 +263,17 @@
     <div class="card">
       <table>
         <tr><th>Export path</th><th>Module</th><th>Description</th></tr>
-        <tr><td><code>@oxagen/skills</code></td><td><code>src/index.ts</code></td><td>Package root — re-exports all public symbols</td></tr>
-        <tr><td><code>@oxagen/skills/loader</code></td><td><code>src/loader.ts</code></td><td><code>loadSkills(dir)</code> — reads, parses, and validates skill files</td></tr>
-        <tr><td><code>@oxagen/skills/registry</code></td><td><code>src/registry.ts</code></td><td>In-memory registry with <code>get</code> / <code>list</code> / <code>filter</code></td></tr>
-        <tr><td><code>@oxagen/skills/types</code></td><td><code>src/types.ts</code></td><td>Exported <code>Skill</code> type and <code>SkillSchema</code> (Zod)</td></tr>
+        <tr><td><code>@oxagen/skills</code></td><td><code>src/index.ts</code></td><td>Package root — re-exports all public symbols including <code>seedSkillsFromFilesystem</code></td></tr>
+        <tr><td><code>@oxagen/skills/loader</code></td><td><code>src/loader.ts</code></td><td><code>loadSkillFile(path)</code>, <code>parseSkill(raw)</code> — reads, parses, and validates a single skill file</td></tr>
+        <tr><td><code>@oxagen/skills/registry</code></td><td><code>src/registry.ts</code></td><td><code>createSkillRegistry({ fsRoot, dbAdapter? })</code> — returns a <code>SkillRegistry</code> with <code>get</code> / <code>list</code> / <code>refresh</code></td></tr>
+        <tr><td><code>@oxagen/skills/types</code></td><td><code>src/types.ts</code></td><td>Exported <code>SkillFrontmatter</code>, <code>Skill</code>, <code>SkillReference</code>, <code>SkillDbAdapter</code> types and <code>skillFrontmatterSchema</code> (Zod)</td></tr>
       </table>
     </div>
     <h3 style="margin-top:26px; font-size:15px; color:var(--ink-soft)">Consumed by</h3>
     <div class="deps" style="margin-top:8px">
-      <span class="dep ws">@oxagen/agent (agent runtime)</span>
-      <span class="dep ws">apps/api (skill-list endpoint)</span>
-      <span class="dep ws">apps/mcp (MCP skill surface)</span>
+      <span class="dep ws">tools/scripts/seed-skills.ts (DB seeder)</span>
     </div>
+    <p style="font-size:13px; color:var(--ink-faint); margin-top:8px">Planned but not yet wired: <code>@oxagen/agent</code> (agent runtime), <code>apps/api</code> (skill-list endpoint), <code>apps/mcp</code> (MCP skill surface).</p>
     <h3 style="margin-top:20px; font-size:15px; color:var(--ink-soft)">External dependencies</h3>
     <div class="deps" style="margin-top:8px">
       <span class="dep">yaml</span>
@@ -275,11 +285,11 @@
     <h2>Source layout</h2>
     <div class="card">
       <ul class="clean">
-        <li><b>src/loader.ts</b> — filesystem scanner; reads <code>.md</code> files, splits frontmatter from body, calls <code>SkillSchema.parse</code></li>
-        <li><b>src/filesystem.ts</b> — low-level file utilities (directory walk, file read) abstracted for testability</li>
-        <li><b>src/registry.ts</b> — in-memory registry; keyed by skill slug; exposes <code>get</code>, <code>list</code>, <code>filter</code>, <code>seed</code></li>
-        <li><b>src/seed.ts</b> — seeds the registry from a pre-built list (used in prod to avoid filesystem access at runtime)</li>
-        <li><b>src/types.ts</b> — <code>Skill</code> interface and <code>SkillSchema</code> Zod definition</li>
+        <li><b>src/loader.ts</b> — <code>loadSkillFile(path)</code> reads a single <code>.skill.md</code>, splits YAML frontmatter from body, resolves reference files, and calls <code>skillFrontmatterSchema.parse</code></li>
+        <li><b>src/filesystem.ts</b> — <code>scanSkillsDir(root)</code> recursively walks a directory for <code>*.skill.md</code> files and calls <code>loadSkillFile</code> on each</li>
+        <li><b>src/registry.ts</b> — <code>createSkillRegistry({ fsRoot, dbAdapter? })</code> returns a lazy-loaded, cached <code>SkillRegistry</code> with <code>get</code>, <code>list</code>, and <code>refresh</code></li>
+        <li><b>src/seed.ts</b> — <code>seedSkillsFromFilesystem(adapter, opts)</code> idempotently upserts built-in skills from the filesystem into <code>agent.skills</code> + <code>agent.skill_versions</code></li>
+        <li><b>src/types.ts</b> — <code>SkillFrontmatter</code>, <code>Skill</code>, <code>SkillReference</code>, <code>SkillDbAdapter</code> types and <code>skillFrontmatterSchema</code> Zod schema</li>
         <li><b>src/index.ts</b> — package root; re-exports all public symbols</li>
       </ul>
     </div>
@@ -304,7 +314,7 @@
     <details>
       <summary><span class="caret">▸</span> What format are skill files?</summary>
       <div class="body">
-        <p>Skills are standard markdown files with a YAML frontmatter block at the top — the same format used by most static-site generators. The frontmatter block must include at minimum <code>name</code>, <code>slug</code>, <code>description</code>, and <code>tags</code>. The markdown body that follows the frontmatter is the human-readable instructions the agent receives when the skill is invoked. The loader separates them: the frontmatter becomes the registry entry, the body is stored as the skill's <code>content</code> field and delivered to the model at dispatch time.</p>
+        <p>Skills are standard markdown files with a YAML frontmatter block at the top — the same format used by most static-site generators. The frontmatter block must include at minimum <code>name</code> (a kebab-case slug) and <code>description</code>. The optional <code>metadata</code> object accepts <code>weight</code> (<code>low</code> | <code>high</code> | <code>critical</code>) and <code>category</code> strings. There is no <code>slug</code> or <code>tags</code> field in the schema. The markdown body that follows the frontmatter is the human-readable instructions the agent receives when the skill is invoked. The loader separates them: the frontmatter becomes the registry entry, the body is stored as the skill's <code>body</code> field and delivered to the model at dispatch time.</p>
       </div>
     </details>
     <details>
@@ -322,7 +332,7 @@
   </section>
 
   <footer>
-    <span>@oxagen/skills · v0.1.0 · internal package · Oxagen monorepo</span>
+    <span>@oxagen/skills · v0.2.2 · internal package · Oxagen monorepo</span>
     <span><a href="../../README.html">monorepo index ↗</a> &nbsp;·&nbsp; <a href="../../README.md">root readme</a> &nbsp;·&nbsp; press <span class="kbd">T</span> to toggle theme</span>
   </footer>
 </div>

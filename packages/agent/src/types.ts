@@ -11,6 +11,12 @@ export interface CapabilityContext {
   surface: "api" | "mcp" | "app" | "runner";
   messageId: string | null;
   /**
+   * The org's effective subscription tier. Optional — populated during
+   * org-scope resolution. Handlers that gate features must read this or
+   * call `resolveOrgTier(ctx.orgId)` directly.
+   */
+  planTier?: "free" | "build" | "scale" | "enterprise";
+  /**
    * Client IP for IAM ip_ranges/ip_allow condition evaluation.
    * Optional/nullable — propagated from entry seams (API, MCP, app).
    * When absent, IP-based conditions fail-closed (deny).

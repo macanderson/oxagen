@@ -17,6 +17,7 @@ import { schema, withSystemDb } from "@oxagen/database";
 import { DbOAuthClientProvider } from "@oxagen/plugins";
 import { getSession } from "@/lib/session";
 import { resolveOrg, assertMcpManager } from "@/lib/resolve-org";
+import { logger } from "@oxagen/handlers/logger";
 
 export const runtime = "nodejs"; // MCP SDK auth uses Node crypto — edge-unsafe.
 
@@ -34,6 +35,8 @@ export async function GET(req: NextRequest) {
   if (!orgSlug || !workspaceSlug || !orgListingId) {
     return NextResponse.json({ error: "missing params: orgSlug, workspaceSlug, orgListingId" }, { status: 400 });
   }
+
+  logger.info({ orgSlug, workspaceSlug, orgListingId }, "mcp-oauth: authorize flow started");
 
   const tenant = await resolveOrg(orgSlug);
 
@@ -87,6 +90,7 @@ export async function GET(req: NextRequest) {
 
   if (result === "AUTHORIZED") {
     // Already connected — redirect straight back.
+    logger.info({ orgId: tenant.id, orgListingId }, "mcp-oauth: already authorized, skipping flow");
     return NextResponse.redirect(`${url.origin}${returnTo}?mcp=already-connected`);
   }
 
@@ -94,5 +98,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "authorization server did not return a redirect URL" }, { status: 502 });
   }
 
+  logger.info({ orgId: tenant.id, orgListingId }, "mcp-oauth: redirecting to authorization server");
   return NextResponse.redirect(provider.pendingRedirect.toString());
 }

@@ -132,8 +132,9 @@ export async function generateImageFor(
         created_at: new Date().toISOString(),
       },
     ]);
-  } catch {
+  } catch (err) {
     // Swallow — telemetry must never fail a capability call.
+    console.error("[oxagen/ai] generateImage telemetry write failed", err);
   }
 
   // Debit the org's credits at the target margin. chargeImageCredits prices the
@@ -147,8 +148,9 @@ export async function generateImageFor(
       imageCount,
       size,
     });
-  } catch {
+  } catch (err) {
     // Swallow — credit metering must never fail a capability call.
+    console.error("[oxagen/ai] generateImage credit charge failed", err);
   }
 
   return {

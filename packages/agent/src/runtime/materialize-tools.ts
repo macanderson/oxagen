@@ -1,6 +1,7 @@
 import { tool, type Tool, type ToolSet } from "ai";
 import { z, type ZodTypeAny } from "zod";
-import { insertToolInvocation } from "@oxagen/telemetry";
+import pino from "pino";
+import { insertToolInvocation, type ToolInvocationRow } from "@oxagen/telemetry";
 import type { CapabilityContext } from "../types";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
 import { beforeTool, afterTool, onError } from "../hooks/runtime";
@@ -10,9 +11,12 @@ import {
   getPluginTypeContributors,
   type ContributedRawTool,
 } from "./plugin-type";
+import { getOxagenRegistry, type RegistryCapability } from "../registry-loader";
 // Side-effect imports register the plugin-type contributors.
 import "./plugin-types/mcp";
 import "./plugin-types/placeholders";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.materialize-tools" } });
 
 function byteSize(v: unknown): number {
   try {
@@ -22,29 +26,52 @@ function byteSize(v: unknown): number {
   }
 }
 
-// Imported dynamically to avoid a static package cycle:
-// @oxagen/oxagen handlers depend on @oxagen/agent for helpers; if this
-// file pulled oxagen at top-level we'd have a build-time cycle.
-type AnyCapability = {
-  name: string;
-  description: string;
-  agent?: { riskLevel?: "low" | "medium" | "high"; category?: string; requiresApproval?: boolean };
-  input: ZodTypeAny;
-  surfaces?: readonly ("api" | "mcp" | "agent")[];
-};
-
-let _listCapabilities: (() => AnyCapability[]) | null = null;
-let _getSurfaces: ((c: AnyCapability) => readonly string[]) | null = null;
-
-async function ensureRegistry(): Promise<void> {
-  if (_listCapabilities) return;
-  const mod = (await import("@oxagen/oxagen")) as unknown as {
-    listCapabilities: () => AnyCapability[];
-    getSurfaces: (c: AnyCapability) => readonly string[];
+// Central factory for tool invocation telemetry rows.
+// Keeps the 15+ shared fields in one place and makes varying fields explicit,
+// preventing silent desync across the five call sites in materializeTools.
+function buildInvocationPayload(
+  base: {
+    invocationId: string;
+    ctx: CapabilityContext;
+    capabilityName: string;
+    externalServerId?: string | null;
+    riskLevel?: "low" | "medium" | "high";
+    requiredApproval?: 0 | 1;
+    inputBytes: number;
+  },
+  overrides: {
+    status: ToolInvocationRow["status"];
+    outputBytes: number;
+    latencyMs: number;
+    errorClass?: string | null;
+  },
+): ToolInvocationRow {
+  return {
+    invocation_id: base.invocationId,
+    org_id: base.ctx.orgId,
+    workspace_id: base.ctx.workspaceId,
+    capability_name: base.capabilityName,
+    message_id: base.ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
+    parent_message_id: null,
+    execution_step_id: null,
+    status: overrides.status,
+    input_size_bytes: base.inputBytes,
+    output_size_bytes: overrides.outputBytes,
+    latency_ms: overrides.latencyMs,
+    error_class: overrides.errorClass ?? null,
+    external_provider: "",
+    external_server_id: base.externalServerId ?? null,
+    risk_level: base.riskLevel ?? "low",
+    required_approval: base.requiredApproval ?? 0,
+    surface: base.ctx.surface,
+    provider: "",
+    created_at: new Date().toISOString(),
   };
-  _listCapabilities = mod.listCapabilities;
-  _getSurfaces = mod.getSurfaces;
 }
+
+// AnyCapability is an alias for the shared RegistryCapability type from
+// registry-loader — kept local so internal usages remain readable.
+type AnyCapability = RegistryCapability;
 
 export interface ApprovalRequiredEvent {
   approvalId: string;
@@ -114,11 +141,8 @@ export async function materializeTools(
   ctx: CapabilityContext,
   opts: MaterializeOptions = {},
 ): Promise<MaterializedTools> {
-  await ensureRegistry();
-  const listFn = _listCapabilities;
-  const surfacesFn = _getSurfaces;
-  if (!listFn || !surfacesFn) throw new Error("registry not initialized");
-  const all = listFn();
+  const { listCapabilities, getSurfaces } = await getOxagenRegistry();
+  const all = listCapabilities();
   // OXA-1348: agent.code.execute requires a configured sandbox driver. Gate
   // materialization on isSandboxAvailable() — the single source of truth that
   // checks SANDBOX_ENABLED=true AND that the configured driver has the required
@@ -144,7 +168,7 @@ export async function materializeTools(
     nameMap[alias] = realName;
   }
   for (const cap of all) {
-    if (!surfacesFn(cap).includes("agent")) continue;
+    if (!getSurfaces(cap).includes("agent")) continue;
     if (opts.allowlist && !opts.allowlist.has(cap.name)) continue;
     if (!passesRisk(cap, opts.riskCeiling)) continue;
     if (cap.name === "agent.code.execute" && !sandboxAvailable) continue;
@@ -152,7 +176,7 @@ export async function materializeTools(
     const requiresApproval = cap.agent?.requiresApproval === true;
     register(cap.name, tool({
       description: cap.description,
-      inputSchema: cap.input,
+      inputSchema: cap.input as ZodTypeAny,
       execute: async (input: unknown) => {
         await beforeTool({ capability: cap.name, ctx, input });
         const invocationId = crypto.randomUUID();
@@ -194,27 +218,10 @@ export async function materializeTools(
           // OXA-1351: every tool invocation lands one row in ClickHouse
           // `tool_invocations` with surface + provider. Failure-isolated.
           try {
-            await insertToolInvocation({
-              invocation_id: invocationId,
-              org_id: ctx.orgId,
-              workspace_id: ctx.workspaceId,
-              capability_name: cap.name,
-              message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
-              parent_message_id: null,
-              execution_step_id: null,
-              status: "completed",
-              input_size_bytes: inputBytes,
-              output_size_bytes: byteSize(result),
-              latency_ms: Date.now() - startedAt,
-              error_class: null,
-              external_provider: "",
-              external_server_id: null,
-              risk_level: riskLevel,
-              required_approval: requiresApproval ? 1 : 0,
-              surface: ctx.surface,
-              provider: "",
-              created_at: new Date().toISOString(),
-            });
+            await insertToolInvocation(buildInvocationPayload(
+              { invocationId, ctx, capabilityName: cap.name, riskLevel, requiredApproval: requiresApproval ? 1 : 0, inputBytes },
+              { status: "completed", outputBytes: byteSize(result), latencyMs: Date.now() - startedAt },
+            ));
           } catch {
             /* telemetry must never fail the call */
           }
@@ -226,27 +233,10 @@ export async function materializeTools(
             error: err instanceof Error ? err : new Error(String(err)),
           });
           try {
-            await insertToolInvocation({
-              invocation_id: invocationId,
-              org_id: ctx.orgId,
-              workspace_id: ctx.workspaceId,
-              capability_name: cap.name,
-              message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
-              parent_message_id: null,
-              execution_step_id: null,
-              status: "failed",
-              input_size_bytes: inputBytes,
-              output_size_bytes: 0,
-              latency_ms: Date.now() - startedAt,
-              error_class: err instanceof Error ? err.name : "UnknownError",
-              external_provider: "",
-              external_server_id: null,
-              risk_level: riskLevel,
-              required_approval: requiresApproval ? 1 : 0,
-              surface: ctx.surface,
-              provider: "",
-              created_at: new Date().toISOString(),
-            });
+            await insertToolInvocation(buildInvocationPayload(
+              { invocationId, ctx, capabilityName: cap.name, riskLevel, requiredApproval: requiresApproval ? 1 : 0, inputBytes },
+              { status: "failed", outputBytes: 0, latencyMs: Date.now() - startedAt, errorClass: err instanceof Error ? err.name : "UnknownError" },
+            ));
           } catch {
             /* swallow */
           }
@@ -275,7 +265,7 @@ export async function materializeTools(
     try {
       contributed = await contributor.contributeTools(ctx);
     } catch (err) {
-      console.error(`[materialize-tools] plugin type ${contributor.type} failed:`, err);
+      logger.error({ pluginType: contributor.type, err }, "plugin type contributor failed");
     }
     for (const raw of contributed) {
       const capturedKey = raw.realName;
@@ -301,27 +291,10 @@ export async function materializeTools(
           );
           if (!iamResult.allowed) {
             try {
-              await insertToolInvocation({
-                invocation_id: invocationId,
-                org_id: ctx.orgId,
-                workspace_id: ctx.workspaceId,
-                capability_name: capturedKey,
-                message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
-                parent_message_id: null,
-                execution_step_id: null,
-                status: "failed",
-                input_size_bytes: byteSize(input),
-                output_size_bytes: 0,
-                latency_ms: Date.now() - startedAt,
-                error_class: "IamDenied",
-                external_provider: "",
-                external_server_id: externalServerId,
-                risk_level: "low",
-                required_approval: 0,
-                surface: ctx.surface,
-                provider: "",
-                created_at: new Date().toISOString(),
-              });
+              await insertToolInvocation(buildInvocationPayload(
+                { invocationId, ctx, capabilityName: capturedKey, externalServerId, inputBytes: byteSize(input) },
+                { status: "failed", outputBytes: 0, latencyMs: Date.now() - startedAt, errorClass: "IamDenied" },
+              ));
             } catch {
               /* telemetry must never fail the call */
             }
@@ -336,54 +309,20 @@ export async function materializeTools(
               messages: [],
             });
             try {
-              await insertToolInvocation({
-                invocation_id: invocationId,
-                org_id: ctx.orgId,
-                workspace_id: ctx.workspaceId,
-                capability_name: capturedKey,
-                message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
-                parent_message_id: null,
-                execution_step_id: null,
-                status: "completed",
-                input_size_bytes: byteSize(input),
-                output_size_bytes: byteSize(result),
-                latency_ms: Date.now() - startedAt,
-                error_class: null,
-                external_provider: "",
-                external_server_id: externalServerId,
-                risk_level: "low",
-                required_approval: 0,
-                surface: ctx.surface,
-                provider: "",
-                created_at: new Date().toISOString(),
-              });
+              await insertToolInvocation(buildInvocationPayload(
+                { invocationId, ctx, capabilityName: capturedKey, externalServerId, inputBytes: byteSize(input) },
+                { status: "completed", outputBytes: byteSize(result), latencyMs: Date.now() - startedAt },
+              ));
             } catch {
               /* telemetry must never fail the call */
             }
             return result;
           } catch (err) {
             try {
-              await insertToolInvocation({
-                invocation_id: invocationId,
-                org_id: ctx.orgId,
-                workspace_id: ctx.workspaceId,
-                capability_name: capturedKey,
-                message_id: ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
-                parent_message_id: null,
-                execution_step_id: null,
-                status: "failed",
-                input_size_bytes: byteSize(input),
-                output_size_bytes: 0,
-                latency_ms: Date.now() - startedAt,
-                error_class: err instanceof Error ? err.name : "UnknownError",
-                external_provider: "",
-                external_server_id: externalServerId,
-                risk_level: "low",
-                required_approval: 0,
-                surface: ctx.surface,
-                provider: "",
-                created_at: new Date().toISOString(),
-              });
+              await insertToolInvocation(buildInvocationPayload(
+                { invocationId, ctx, capabilityName: capturedKey, externalServerId, inputBytes: byteSize(input) },
+                { status: "failed", outputBytes: 0, latencyMs: Date.now() - startedAt, errorClass: err instanceof Error ? err.name : "UnknownError" },
+              ));
             } catch {
               /* swallow */
             }

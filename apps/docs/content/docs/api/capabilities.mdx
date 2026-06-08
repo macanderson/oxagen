@@ -5,7 +5,7 @@ description: The full list of Oxagen capabilities available via the REST API, th
 
 ## The contract model
 
-Every capability in Oxagen is declared once using `defineContract()` in the `packages/oxagen/src/contracts/` directory. A contract declaration specifies:
+Every capability in Oxagen is declared once in the platform contract registry. A contract declaration specifies:
 
 - A stable `id` (e.g., `agent.code.execute`)
 - Input and output schemas (Zod)
@@ -13,9 +13,9 @@ Every capability in Oxagen is declared once using `defineContract()` in the `pac
 - Risk level and approval requirements (for agent-surface capabilities)
 - Default roles and effects (for IAM)
 
-The contract registry is the single source of truth. Every route in `apps/api` and every tool in `apps/mcp` is generated from it. This means: if a capability exists, it is available on every surface it declares. Parity is structural, not maintained by hand.
+The contract registry is the single source of truth. Every API route and every MCP tool is generated from it. This means: if a capability exists, it is available on every surface it declares. Parity is structural, not maintained by hand.
 
-`pnpm check:manifest` verifies parity at build time and reports any gap as a warning with an auto-filed Linear ticket.
+Capability parity is verified automatically at build time; any gap is reported as a warning.
 
 ## Capability list
 
@@ -160,4 +160,4 @@ The following UI-only flows do not have corresponding contract declarations and 
 - Stripe Customer Portal redirect (UI-only billing management; `billing.subscription.upgrade.start` handles upgrades programmatically)
 - OAuth plugin credential flows (browser redirect required)
 
-This list is kept current by `pnpm check:manifest`. As contracts are added for these flows, they will appear in the capability list above.
+This list is kept current automatically. As contracts are added for these flows, they will appear in the capability list above.

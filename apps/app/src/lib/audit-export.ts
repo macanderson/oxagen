@@ -6,7 +6,9 @@
 // transit or at rest.
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import type { AuditEventRow } from "@/lib/audit-query";
 
+export type { AuditEventRow };
 export type AuditExportFormat = "ndjson" | "csv";
 
 /** The columns we export, in stable order (also the CSV header order). */
@@ -24,21 +26,7 @@ export const AUDIT_EXPORT_COLUMNS = [
   "request_id",
 ] as const;
 
-export interface AuditExportRow {
-  id: string;
-  occurredAt: Date;
-  eventType: string;
-  outcome: string;
-  actorUserId: string | null;
-  orgId: string;
-  workspaceId: string | null;
-  capability: string | null;
-  ip: string | null;
-  userAgent: string | null;
-  requestId: string | null;
-}
-
-function rowValues(r: AuditExportRow): Record<(typeof AUDIT_EXPORT_COLUMNS)[number], string> {
+function rowValues(r: AuditEventRow): Record<(typeof AUDIT_EXPORT_COLUMNS)[number], string> {
   return {
     id: r.id,
     occurred_at: r.occurredAt.toISOString(),
@@ -62,7 +50,7 @@ function csvField(value: string): string {
   return value;
 }
 
-export function toCSV(rows: AuditExportRow[]): string {
+export function toCSV(rows: AuditEventRow[]): string {
   const header = AUDIT_EXPORT_COLUMNS.join(",");
   const lines = rows.map((r) => {
     const v = rowValues(r);
@@ -71,11 +59,11 @@ export function toCSV(rows: AuditExportRow[]): string {
   return [header, ...lines].join("\r\n") + "\r\n";
 }
 
-export function toNDJSON(rows: AuditExportRow[]): string {
+export function toNDJSON(rows: AuditEventRow[]): string {
   return rows.map((r) => JSON.stringify(rowValues(r))).join("\n") + (rows.length ? "\n" : "");
 }
 
-export function serializeAuditExport(rows: AuditExportRow[], format: AuditExportFormat): string {
+export function serializeAuditExport(rows: AuditEventRow[], format: AuditExportFormat): string {
   return format === "csv" ? toCSV(rows) : toNDJSON(rows);
 }
 

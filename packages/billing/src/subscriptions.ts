@@ -4,6 +4,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
 import { getOrgSeatUsage, SeatLimitError } from "./seats";
+import { meetsMinimumTier } from "./entitlements";
 
 /**
  * Pulls the canonical subscription record from the billing provider and
@@ -318,10 +319,8 @@ export async function changeOrgPlan(
 
   // Active subscription — swap the price in-place.
   // Determine proration behavior by comparing tier order.
-  const TIER_ORDER: Record<string, number> = { free: 0, build: 1, scale: 2, enterprise: 3 };
-  const currentTierOrder = TIER_ORDER[currentPlanRow?.tier ?? "free"] ?? 0;
-  const targetTierOrder = TIER_ORDER[targetPlan.tier] ?? 0;
-  const isUpgrade = targetTierOrder >= currentTierOrder;
+  const currentTier = currentPlanRow?.tier ?? "free";
+  const isUpgrade = meetsMinimumTier(targetPlan.tier, currentTier);
   const prorationBehavior: "always_invoice" | "none" = isUpgrade ? "always_invoice" : "none";
 
   // Use activeSubRow from now on (renamed to avoid confusion).
@@ -529,13 +528,6 @@ export interface PlanChangePreview {
   requiresCheckout: boolean;
 }
 
-const TIER_ORDER: Record<string, number> = {
-  free: 0,
-  build: 1,
-  scale: 2,
-  enterprise: 3,
-};
-
 /**
  * Simulate a plan change and return what WOULD be charged/credited.
  *
@@ -652,9 +644,8 @@ export async function previewPlanChange(
     }),
   );
 
-  const currentTierOrder = TIER_ORDER[currentPlanRow?.tier ?? "free"] ?? 0;
-  const targetTierOrder = TIER_ORDER[targetPlan.tier] ?? 0;
-  const isUpgrade = targetTierOrder >= currentTierOrder;
+  const currentTier = currentPlanRow?.tier ?? "free";
+  const isUpgrade = meetsMinimumTier(targetPlan.tier, currentTier);
   const prorationBehavior: "always_invoice" | "none" = isUpgrade
     ? "always_invoice"
     : "none";

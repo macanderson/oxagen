@@ -181,7 +181,7 @@ export async function decryptAccountTokens(
  *   is the final backstop for any write path that bypasses this hook.
  * MUST run on every account write.
  */
-function stripDroppedTokenColumns(account: Record<string, unknown>): Record<string, unknown> {
+function stripPlaintextTokens(account: Record<string, unknown>): Record<string, unknown> {
   const { accessToken: _at, refreshToken: _rt, idToken: _it, ...rest } = account;
   void _at;
   void _rt;
@@ -200,8 +200,8 @@ export function buildStripOnlyAccountHooks(): {
   update: { before: (a: Record<string, unknown>) => Promise<{ data: Record<string, unknown> }> };
 } {
   return {
-    create: { before: async (account) => ({ data: stripDroppedTokenColumns(account) }) },
-    update: { before: async (account) => ({ data: stripDroppedTokenColumns(account) }) },
+    create: { before: async (account) => ({ data: stripPlaintextTokens(account) }) },
+    update: { before: async (account) => ({ data: stripPlaintextTokens(account) }) },
   };
 }
 
@@ -217,20 +217,6 @@ export function buildAccountTokenHooks(adapter: KmsAdapter, keyId: string): {
     throw new Error(
       "[auth/token-encryption] a key-version label is required when token encryption is enabled.",
     );
-  }
-
-  /**
-   * Remove plaintext token fields from the account object before writing to
-   * the DB. access_token and refresh_token were dropped by migration 0012;
-   * id_token is stripped here (and by the DB trigger from migration 0009) so
-   * the plaintext is never durably stored once the encrypted counterpart exists.
-   */
-  function stripPlaintextTokens(account: Record<string, unknown>): Record<string, unknown> {
-    const { accessToken: _at, refreshToken: _rt, idToken: _it, ...rest } = account;
-    void _at;
-    void _rt;
-    void _it;
-    return rest;
   }
 
   return {

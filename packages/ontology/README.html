@@ -289,7 +289,8 @@
       <table>
         <tr><th>Export</th><th>Contents</th><th>Typical consumer</th></tr>
         <tr><td><code>@oxagen/ontology</code></td><td>Re-exports from all sub-paths; primary entry point</td><td>All consumers</td></tr>
-        <tr><td><code>@oxagen/ontology/client</code></td><td>Neo4j driver factory and typed session helper</td><td>packages/agent, apps/app</td></tr>
+        <tr><td><code>@oxagen/ontology/client</code></td><td>Neo4j driver factory and typed session helper (<code>driver</code>, <code>session</code>, <code>closeDriver</code>)</td><td>packages/agent, apps/app</td></tr>
+        <tr><td><code>@oxagen/ontology/tenant</code></td><td>Tenant-scoped Cypher session — <code>scopedSession()</code> injects <code>$orgId</code>/<code>$workspaceId</code> and rejects un-scoped queries</td><td>packages/agent, apps/api, apps/mcp</td></tr>
         <tr><td><code>@oxagen/ontology/migrate</code></td><td>Cypher migration runner that applies <code>schema.cypher</code> constraints</td><td>CI setup, local bootstrap</td></tr>
         <tr><td><code>@oxagen/ontology/types</code></td><td>TypeScript types for graph nodes, relationships, and query results</td><td>Any package writing graph queries</td></tr>
       </table>
@@ -298,9 +299,10 @@
     <h2 style="margin-top:36px">Source layout</h2>
     <div class="card">
       <ul class="clean">
-        <li><b>src/client.ts</b> — Neo4j driver factory; returns a typed session with auto-close</li>
+        <li><b>src/client.ts</b> — Neo4j driver factory; exports <code>driver()</code>, <code>session()</code>, and <code>closeDriver()</code></li>
+        <li><b>src/tenant.ts</b> — <code>scopedSession()</code>: tenant-scoped session that auto-injects <code>$orgId</code>/<code>$workspaceId</code> and guards against un-scoped queries</li>
         <li><b>src/migrate.ts</b> — reads <code>schema.cypher</code> and runs constraint/index creation against the configured Neo4j instance</li>
-        <li><b>src/schema.cypher</b> — the authoritative graph schema: node labels, uniqueness constraints, and property indices</li>
+        <li><b>src/schema.cypher</b> — the authoritative graph schema: node labels, uniqueness constraints, property indices, and vector indexes (spec §8.1)</li>
         <li><b>src/types.ts</b> — TypeScript node and relationship types inferred from the Cypher schema</li>
         <li><b>src/index.ts</b> — package entry; re-exports the public surface</li>
       </ul>
@@ -332,23 +334,44 @@
     <div class="tabs" data-tabs>
       <div class="tablist" role="tablist">
         <button role="tab" aria-selected="true" data-tab="query">Driver query</button>
+        <button role="tab" aria-selected="false" data-tab="tenant">Tenant-scoped</button>
         <button role="tab" aria-selected="false" data-tab="migrate">Run migration</button>
         <button role="tab" aria-selected="false" data-tab="import">Import</button>
       </div>
       <div class="tabpanel active" data-panel="query">
-        <p style="font-size:13.5px">Open a session, run a Cypher statement, and let the helper close the session automatically on completion or error.</p>
-        <div class="code"><button class="copy">Copy</button><pre><span class="k">import</span> { withSession } <span class="k">from</span> <span class="s">"@oxagen/ontology/client"</span>
+        <p style="font-size:13.5px">Open a session, run a Cypher statement, and close the session when done. Use <code>session()</code> for system-level queries or <code>scopedSession()</code> (from <code>/tenant</code>) when a tenant scope is active.</p>
+        <div class="code"><button class="copy">Copy</button><pre><span class="k">import</span> { session } <span class="k">from</span> <span class="s">"@oxagen/ontology/client"</span>
 <span class="k">import</span> <span class="k">type</span> { EntityNode } <span class="k">from</span> <span class="s">"@oxagen/ontology/types"</span>
 
-<span class="c">// withSession opens a Neo4j session, runs the callback, then closes it</span>
-<span class="k">const</span> results = <span class="k">await</span> withSession(<span class="k">async</span> (session) => {
-  <span class="k">const</span> { records } = <span class="k">await</span> session.run(
+<span class="k">const</span> s = session()
+<span class="k">try</span> {
+  <span class="k">const</span> { records } = <span class="k">await</span> s.run(
     <span class="s">`MATCH (e:Entity {publicId: $id})-[r:RELATES_TO]->(t)
      RETURN e, r, t LIMIT 50`</span>,
     { id: <span class="n">publicId</span> }
   )
   <span class="k">return</span> records.map((rec) => rec.get(<span class="s">"t"</span>) <span class="k">as</span> EntityNode)
-})</pre></div>
+} <span class="k">finally</span> {
+  <span class="k">await</span> s.close()
+}</pre></div>
+      </div>
+      <div class="tabpanel" data-panel="tenant">
+        <p style="font-size:13.5px">Use <code>scopedSession()</code> inside an active tenant scope. It automatically injects <code>$orgId</code> and <code>$workspaceId</code> into every query and throws <code>TenantScopeError</code> if the Cypher does not reference <code>$orgId</code> — preventing accidental cross-tenant data access.</p>
+        <div class="code"><button class="copy">Copy</button><pre><span class="k">import</span> { scopedSession } <span class="k">from</span> <span class="s">"@oxagen/ontology/tenant"</span>
+<span class="k">import</span> { NodeLabels } <span class="k">from</span> <span class="s">"@oxagen/ontology/types"</span>
+
+<span class="c">// Must be called within an active tenant scope (withTenantScope / runInTenantScope)</span>
+<span class="k">const</span> s = scopedSession()
+<span class="k">try</span> {
+  <span class="k">const</span> { records } = <span class="k">await</span> s.run(
+    <span class="s">`MATCH (m:AgentMemory {orgId: $orgId})
+     RETURN m ORDER BY m.createdAt DESC LIMIT 20`</span>
+  )
+  <span class="c">// $orgId and $workspaceId are injected automatically — no need to pass them</span>
+  <span class="k">return</span> records.map((r) => r.get(<span class="s">"m"</span>))
+} <span class="k">finally</span> {
+  <span class="k">await</span> s.close()
+}</pre></div>
       </div>
       <div class="tabpanel" data-panel="migrate">
         <p style="font-size:13.5px">Apply the Cypher schema constraints and indices to the Neo4j instance. Run once on initial setup and after any <code>schema.cypher</code> changes.</p>
@@ -361,11 +384,12 @@ tsx src/migrate.ts</pre></div>
       </div>
       <div class="tabpanel" data-panel="import">
         <p style="font-size:13.5px">Import types for use in graph query results or when authoring new node/relationship definitions.</p>
-        <div class="code"><button class="copy">Copy</button><pre><span class="k">import</span> { withSession, driver } <span class="k">from</span> <span class="s">"@oxagen/ontology/client"</span>
+        <div class="code"><button class="copy">Copy</button><pre><span class="k">import</span> { session, driver, closeDriver } <span class="k">from</span> <span class="s">"@oxagen/ontology/client"</span>
+<span class="k">import</span> { scopedSession } <span class="k">from</span> <span class="s">"@oxagen/ontology/tenant"</span>
 <span class="k">import</span> <span class="k">type</span> { EntityNode, RelationshipEdge } <span class="k">from</span> <span class="s">"@oxagen/ontology/types"</span>
 
 <span class="c">// Or use the root import for all public exports</span>
-<span class="k">import</span> { withSession } <span class="k">from</span> <span class="s">"@oxagen/ontology"</span></pre></div>
+<span class="k">import</span> { session, driver, closeDriver, NodeLabels, EdgeTypes } <span class="k">from</span> <span class="s">"@oxagen/ontology"</span></pre></div>
       </div>
     </div>
   </section>
@@ -408,7 +432,7 @@ tsx src/migrate.ts</pre></div>
   </section>
 
   <footer>
-    <span>@oxagen/ontology · v0.1.0 · internal package · Oxagen monorepo</span>
+    <span>@oxagen/ontology · v0.2.2 · internal package · Oxagen monorepo</span>
     <span>
       <a href="../../README.html">monorepo index ↗</a> &nbsp;·&nbsp;
       <a href="../../README.md">root readme</a> &nbsp;·&nbsp;

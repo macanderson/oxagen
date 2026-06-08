@@ -17,6 +17,7 @@ import { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
 import { eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import { DbOAuthClientProvider, loadOAuthState, deleteOAuthState } from "@oxagen/plugins";
+import { logger } from "@oxagen/handlers/logger";
 
 export const runtime = "nodejs"; // MCP SDK auth uses Node crypto — edge-unsafe.
 
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
   // Look up the PKCE/state data saved during the authorize step.
   const stateData = await loadOAuthState(state, Date.now());
   if (!stateData) {
+    logger.warn({ state }, "mcp-oauth: callback state expired or not found");
     return NextResponse.json({ error: "state expired or not found" }, { status: 400 });
   }
 
@@ -80,6 +82,7 @@ export async function GET(req: NextRequest) {
         .where(eq(schema.mcpServers.orgListingId, stateData.orgListingId));
     });
 
+    logger.info({ orgId: stateData.orgId, orgListingId: stateData.orgListingId }, "mcp-oauth: token exchange succeeded, install marked healthy");
     return NextResponse.redirect(
       `${url.origin}${stateData.returnTo}?mcp=connected`,
     );
@@ -87,6 +90,7 @@ export async function GET(req: NextRequest) {
 
   // Unexpected: mcpAuth returned REDIRECT during a callback (shouldn't happen
   // with a valid code, but handle it gracefully).
+  logger.warn({ orgId: stateData.orgId, orgListingId: stateData.orgListingId, result }, "mcp-oauth: unexpected REDIRECT result during callback");
   return NextResponse.redirect(
     `${url.origin}${stateData.returnTo}?mcp=error`,
   );

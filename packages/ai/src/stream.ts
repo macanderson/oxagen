@@ -253,8 +253,9 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
             created_at: new Date().toISOString(),
           },
         ]);
-      } catch {
+      } catch (err) {
         // Swallow — telemetry must never fail the chat turn.
+        console.error("[oxagen/ai] stream telemetry write failed", err);
       }
 
       // The gate: debit the org's credits for what this call cost us, marked
@@ -268,8 +269,9 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
           referenceId: args.telemetry.messageId,
           ...usage,
         });
-      } catch {
+      } catch (err) {
         // Swallow — credit metering must never fail the chat turn.
+        console.error("[oxagen/ai] stream credit charge failed", err);
       }
       await args.onFinish?.({
         text: event.text,

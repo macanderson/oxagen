@@ -23,6 +23,7 @@ import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 import type { ComposerModelState } from "./model-picker";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import { ConversationFiles } from "./conversation-files";
+import { useLatestRef } from "@/lib/use-latest-ref";
 
 // Client surface for the chat. The RSC `ChatShell` resolves the messages
 // promise and hands them in; this component:
@@ -97,13 +98,11 @@ export function ChatShellClient({
 
   // Track whether the current turn is streaming (to show live events).
   const [isStreaming, setIsStreaming] = React.useState(false);
-  const isStreamingValueRef = React.useRef(isStreaming);
-  React.useEffect(() => { isStreamingValueRef.current = isStreaming; }, [isStreaming]);
+  const isStreamingValueRef = useLatestRef(isStreaming);
 
   // Latest conversationId, read inside the send callback (whose deps don't
   // include it) to tell whether THIS turn created the conversation.
-  const conversationIdRef = React.useRef(conversationId);
-  React.useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
+  const conversationIdRef = useLatestRef(conversationId);
 
   // Set after a completed turn triggers router.refresh(). When the server then
   // re-renders `messages` (now including the just-persisted assistant reply),
@@ -121,19 +120,12 @@ export function ChatShellClient({
   }, [messages, reset]);
 
   // Stable refs so useCallback deps don't change on every render.
-  const consumeRef = React.useRef(consume);
-  const resetRef = React.useRef(reset);
-  const signalRef = React.useRef(signalApprovalResolved);
-  React.useEffect(() => { consumeRef.current = consume; }, [consume]);
-  React.useEffect(() => { resetRef.current = reset; }, [reset]);
-  React.useEffect(() => { signalRef.current = signalApprovalResolved; }, [signalApprovalResolved]);
-
-  const orgSlugRef = React.useRef(orgSlug);
-  const workspaceSlugRef = React.useRef(workspaceSlug);
-  React.useEffect(() => { orgSlugRef.current = orgSlug; }, [orgSlug]);
-  React.useEffect(() => { workspaceSlugRef.current = workspaceSlug; }, [workspaceSlug]);
-
-  const setIsStreamingRef = React.useRef(setIsStreaming);
+  const consumeRef = useLatestRef(consume);
+  const resetRef = useLatestRef(reset);
+  const signalRef = useLatestRef(signalApprovalResolved);
+  const orgSlugRef = useLatestRef(orgSlug);
+  const workspaceSlugRef = useLatestRef(workspaceSlug);
+  const setIsStreamingRef = useLatestRef(setIsStreaming);
 
   // AbortController for the in-flight SSE fetch. A new controller is created
   // for every turn. Aborted on interrupt and on unmount.

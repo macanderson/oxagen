@@ -8,6 +8,7 @@
 import { and, eq, lt, gte, lte, or, ilike, desc, inArray, type SQL } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { logger } from "@oxagen/handlers/logger";
 import type { AuditFilter } from "@/lib/audit-filters";
 import { AUDIT_PAGE_SIZE } from "@/lib/audit-filters";
 
@@ -109,7 +110,8 @@ export async function queryAuditPage(
       rows: page,
       nextCursor: hasMore && last ? { occurredAt: last.occurredAt, id: last.id } : null,
     };
-  } catch {
+  } catch (err) {
+    logger.error({ err, orgId }, "queryAuditPage failed");
     return { rows: [], nextCursor: null };
   }
 }

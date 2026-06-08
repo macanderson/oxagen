@@ -16,6 +16,7 @@
 import { insertAuditEvent, latestAuditChainHash, type AuditEventRow } from "@oxagen/telemetry";
 import type { ResolveResult, Trace } from "@oxagen/oxagen/iam";
 import type { CapabilityContext, ResolvedPrincipal } from "@oxagen/oxagen";
+import { logger } from "./logger";
 
 // Minimal crypto: SHA-256 hex of a string. Available in Node 16+ and browsers.
 async function sha256Hex(input: string): Promise<string> {
@@ -58,7 +59,7 @@ export async function emitAudit(args: EmitAuditArgs): Promise<void> {
       capability,
     });
   } catch (err) {
-    console.warn("[iam:emit-audit] Failed to read latest chain hash:", err);
+    logger.warn({ err }, "[iam:emit-audit] Failed to read latest chain hash");
   }
 
   // Compute this event's chain hash over (prev_hash || event_id || capability).

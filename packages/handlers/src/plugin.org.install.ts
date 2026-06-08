@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import type { CapabilityContext } from "@oxagen/oxagen/types";
+import { logger } from "./logger";
 
 export interface InstallOneInput {
   pluginType: "mcp_server" | "integration" | "content_tool";
@@ -136,6 +137,13 @@ export async function installOne(
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const typed = input as InstallOneInput;
-  const orgListingId = await installOne(ctx, typed);
+  let orgListingId: string;
+  try {
+    orgListingId = await installOne(ctx, typed);
+  } catch (err) {
+    logger.error({ err, orgId: ctx.orgId, pluginType: typed.pluginType }, "plugin.org.install: failed");
+    throw err;
+  }
+  logger.info({ orgListingId, orgId: ctx.orgId, pluginType: typed.pluginType }, "plugin.org.install: ok");
   return { orgListingId };
 };

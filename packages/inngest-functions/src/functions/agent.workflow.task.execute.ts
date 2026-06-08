@@ -129,8 +129,8 @@ Provide a summary, any relevant structured data, and source references if applic
           provider: "",
           created_at: new Date().toISOString(),
         });
-      } catch {
-        /* swallow */
+      } catch (telErr) {
+        logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
       }
 
       throw err;
@@ -226,8 +226,8 @@ Provide a summary, any relevant structured data, and source references if applic
         provider: "",
         created_at: new Date().toISOString(),
       });
-    } catch {
-      /* swallow */
+    } catch (telErr) {
+      logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
     }
 
     logger.info({ taskId, taskIndex, workflowRunId, orgId }, "agent.workflow.task.execute: completed");

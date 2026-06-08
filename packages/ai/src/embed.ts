@@ -65,8 +65,9 @@ export async function embedText(text: string, opts: EmbedTextOpts): Promise<numb
         created_at: new Date().toISOString(),
       },
     ]);
-  } catch {
+  } catch (err) {
     // Telemetry is best-effort; never fail the caller.
+    console.error("[oxagen/ai] embedText telemetry write failed", err);
   }
 
   return embedding;

@@ -55,6 +55,8 @@ export function ToolCallCard(props: ToolCallCardProps) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={open ? "Collapse tool call details" : "Expand tool call details"}
         className="flex w-full items-center gap-2 px-3 py-2 text-left"
       >
         {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}

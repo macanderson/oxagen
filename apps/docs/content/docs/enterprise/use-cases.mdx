@@ -35,7 +35,7 @@ The compliance dashboard at **Organization → Security → Compliance** exports
 - `capability.invoke_allowed` / `capability.invoke_denied` on every action.
 - Chain-hash tamper evidence in ClickHouse — verifiable programmatically.
 - SOC 2 compliance dashboard with export.
-- `rls.test.ts` integration test suite proving tenant isolation at the database layer.
+- An automated integration test suite proving tenant isolation at the database layer.
 
 ---
 
@@ -57,7 +57,7 @@ The org sets the outer governance rails. Each workspace tightens within them. A 
 - Postgres RLS with `FORCE ROW LEVEL SECURITY` — database-enforced, not application-enforced.
 - Neo4j and ClickHouse scoped at the session seam — fail-closed, not fail-open.
 - Org-enforced policies with workspace-level tighten-but-not-expand model.
-- `rls.test.ts` proves cross-tenant queries return zero rows.
+- An automated integration test suite proves cross-tenant queries return zero rows.
 
 ---
 

@@ -19,6 +19,7 @@ export * from "./components/segmented-control";
 export * from "./components/select";
 export * from "./components/separator";
 export * from "./components/slider";
+export * from "./components/sheet";
 export * from "./components/switch";
 export * from "./components/skeleton";
 export * from "./components/tabs";

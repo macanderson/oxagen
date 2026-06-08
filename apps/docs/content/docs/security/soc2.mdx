@@ -70,7 +70,7 @@ Oxagen maintains two independent audit stores optimized for different query patt
 - **Postgres `security.security_events`** — relational, queryable, indexed by org and event kind. 7-year retention via monthly RANGE partitions. Used for compliance dashboards and point lookups.
 - **ClickHouse `audit_events`** — `ReplacingMergeTree`, append-only, chain-hash tamper evidence (each row includes a hash of the previous row's hash, forming a verifiable chain). 7-year TTL. Used for high-volume analytics, SIEM export, and tamper verification.
 
-24 typed security event kinds are defined in a single source of truth (`packages/compliance/src/security-event-types.ts`). Adding an event type is a one-file edit; a CI test verifies the database schema matches the source file. The taxonomy covers:
+24 typed security event kinds are defined in a single source of truth. Adding an event type is a one-file edit; a CI test verifies the database schema matches the source file. The taxonomy covers:
 
 - Auth lifecycle: `auth.sign_in`, `auth.sign_in_failed`, `auth.sign_out`, `auth.token_refreshed`, `auth.password_changed`, `auth.email_verified`
 - API key lifecycle: `api_key.created`, `api_key.revoked`, `api_key.used`
@@ -96,7 +96,7 @@ Every `capability.invoke_denied` event carries a resolution trace identifying wh
 
 ### CC8.1 — Authorized changes to infrastructure and software
 
-Schema changes are applied via versioned migrations (`pnpm db:migrate`). Migrations follow the expand-then-contract pattern: additive changes first, then removal in a subsequent migration once all callers are updated. No migration is edited after it has been applied; CI verifies checksums.
+Schema changes are applied via versioned migrations. Migrations follow the expand-then-contract pattern: additive changes first, then removal in a subsequent migration once all callers are updated. No migration is edited after it has been applied; CI verifies checksums.
 
 Code changes to the audit, IAM, and billing paths require explicit review. The SOC 2 controls path (the `invoke()` boundary, the RLS migration, the security event emitter) is identified in the codebase as security-critical.
 

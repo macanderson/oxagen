@@ -77,7 +77,7 @@ describe("seedSkillsFromFilesystem", () => {
       fsRoot: SKILLS_FS_ROOT,
     });
 
-    expect(result.seeded).toBe(3);
+    expect(result.processed).toBe(3);
 
     const slugs = [...store.skills.values()].map((r) => r.slug).sort();
     expect(slugs).toEqual(["coding", "debugging", "summarization"]);
@@ -154,7 +154,7 @@ describe("seedSkillsFromFilesystem", () => {
     expect(versionInserts).toBe(6);
   });
 
-  it("returns seeded === 3 on both first and second runs", async () => {
+  it("returns processed === 3 on both first and second runs", async () => {
     const first = await seedSkillsFromFilesystem(adapter, {
       fsRoot: SKILLS_FS_ROOT,
     });
@@ -162,8 +162,8 @@ describe("seedSkillsFromFilesystem", () => {
       fsRoot: SKILLS_FS_ROOT,
     });
 
-    expect(first.seeded).toBe(3);
-    expect(second.seeded).toBe(3);
+    expect(first.processed).toBe(3);
+    expect(second.processed).toBe(3);
   });
 
   it("skips a skill if findSkillId returns undefined", async () => {
@@ -182,8 +182,8 @@ describe("seedSkillsFromFilesystem", () => {
       fsRoot: SKILLS_FS_ROOT,
     });
 
-    // Still counts 3 processed; just no versions were written.
-    expect(result.seeded).toBe(3);
+    // Still counts 3 files processed; just no versions were written.
+    expect(result.processed).toBe(3);
     expect(brokenAdapter.upsertSkillVersion).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const { id, read, archived } = input as {
@@ -27,18 +28,24 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     return { ok: true };
   }
 
-  await withTenantDb(async (tx) => {
-    await tx
-      .update(schema.notifications)
-      .set(updates)
-      .where(
-        and(
-          eq(schema.notifications.publicId, id),
-          eq(schema.notifications.userId, ctx.userId!),
-          eq(schema.notifications.orgId, ctx.orgId!),
-        ),
-      );
-  });
+  try {
+    await withTenantDb(async (tx) => {
+      await tx
+        .update(schema.notifications)
+        .set(updates)
+        .where(
+          and(
+            eq(schema.notifications.publicId, id),
+            eq(schema.notifications.userId, ctx.userId!),
+            eq(schema.notifications.orgId, ctx.orgId!),
+          ),
+        );
+    });
+  } catch (err) {
+    logger.error({ err, id, orgId: ctx.orgId, userId: ctx.userId }, "notifications.mark: failed");
+    throw err;
+  }
 
+  logger.info({ id, orgId: ctx.orgId, userId: ctx.userId }, "notifications.mark: ok");
   return { ok: true };
 };

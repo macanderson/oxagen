@@ -12,8 +12,8 @@ import {
 // streamable HTTP. The REST API host (oxagen-v2-api) has NO MCP endpoint.
 // Org + workspace scope is carried by the API key (auth.api_keys is org- and
 // workspace-bound), so the connect URL needs no org/workspace path segment.
-const PROD_MCP_URL = "https://oxagen-v2-mcp.vercel.app";
-const PROD_APP_URL = "https://oxagen-v2-app.vercel.app";
+const PROD_MCP_URL = process.env["MCP_URL"] ?? "https://oxagen-v2-mcp.vercel.app";
+const PROD_APP_URL = process.env["APP_URL"] ?? "https://oxagen-v2-app.vercel.app";
 
 // ── Step builders ─────────────────────────────────────────────────────────────
 

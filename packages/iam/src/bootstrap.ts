@@ -43,7 +43,7 @@ export function bootstrapIAMRuntime(): void {
   const kernelIAMAdapter: KernelIAMCheckFn = async (args) => {
     const { result, principal } = await checkIAM(args);
     const outcome = result.outcome;
-    const reason = "reason" in result ? (result as { reason?: string }).reason : undefined;
+    const reason = result.outcome === "deny" ? result.reason : undefined;
     return { outcome, reason, principal };
   };
 

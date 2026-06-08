@@ -8,13 +8,14 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // lines floor 37 (measured 42.48); target 75 — raise in follow-up
-      // branches floor 92 (measured 97.82); target 70 — already above target
+      // lines measured 42.48; branches measured 97.82; target 75/70 respectively.
+      // docker.ts run()/stream() hot paths are not yet covered — inject a
+      // Dockerode factory to enable mocked testing of truncation/timeout/OOM paths.
       thresholds: {
-        lines: 37,
+        lines: 42,
         branches: 92,
-        functions: 30,
-        statements: 37,
+        functions: 40,
+        statements: 42,
       },
     },
   },

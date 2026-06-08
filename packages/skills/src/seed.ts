@@ -58,7 +58,9 @@ export interface SeedSkillsOptions {
 }
 
 export interface SeedSkillsResult {
-  seeded: number;
+  /** Total number of skill files scanned. On re-runs the adapter performs no
+   *  inserts (ON CONFLICT DO NOTHING), so this is a scan count, not an insert count. */
+  processed: number;
 }
 
 /**
@@ -68,8 +70,8 @@ export interface SeedSkillsResult {
  * Identity is anchored to the (BUILTIN_WORKSPACE_ID, slug) unique index.
  * On a re-run the rows are left unchanged via ON CONFLICT DO NOTHING.
  *
- * Returns the number of skills processed.  A second run returns the same
- * count even though 0 rows are actually written.
+ * Returns `{ processed }` — the number of skill files scanned.  A second
+ * idempotent run returns the same count even though 0 rows are written.
  */
 export async function seedSkillsFromFilesystem(
   adapter: SkillSeedAdapter,
@@ -105,5 +107,5 @@ export async function seedSkillsFromFilesystem(
     });
   }
 
-  return { seeded: skills.length };
+  return { processed: skills.length };
 }

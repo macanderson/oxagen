@@ -141,24 +141,12 @@ function resolveInngestEnv() {
   return base;
 }
 
-// Derive the concrete Inngest client type from the constructor call shape so
-// all event names and payloads flow through to consumers without `any`.
-// This helper is never called — it exists only as a compile-time type source.
-function _makeInngestClient() {
-  return new Inngest({
-    id: "oxagen-runner",
-    schemas: new EventSchemas().fromRecord<Events>(),
-  });
-}
-type ConcreteInngestClient = ReturnType<typeof _makeInngestClient>;
+// Concrete Inngest client type. Using InstanceType<typeof Inngest> avoids a
+// callable helper function while still giving getInngest() and the Proxy a
+// stable type. Event-name inference flows through the `as ConcreteInngestClient`
+// cast in getInngest() and the EventSchemas binding at construction time.
+type ConcreteInngestClient = InstanceType<typeof Inngest>;
 
-// OXA-1349: INNGEST keys are optional in the base schema (not every service
-// runs Inngest) but must be present in production when this package is loaded.
-// The underlying instance is lazy-initialized (not at module eval time) so
-// that importing this module during Next.js build-time page-data collection —
-// when Inngest env vars are not injected — does not crash the build. The
-// instance is created on first `.send()` / `.createFunction()` call (i.e. at
-// actual runtime, not import time).
 let _inngest: ConcreteInngestClient | null = null;
 
 function getInngest(): ConcreteInngestClient {

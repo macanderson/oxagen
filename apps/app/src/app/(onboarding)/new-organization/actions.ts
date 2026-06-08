@@ -6,6 +6,7 @@ import { withSystemDb, schema } from "@oxagen/database";
 // a scope cannot be entered before the org row exists; withSystemDb bypasses
 // RLS deliberately) — OXA-1515
 import { grantFreeCredits } from "@oxagen/billing";
+import { logger } from "@oxagen/handlers/logger";
 import { ingestImageFromUrl, isIngestibleImageUrl } from "@oxagen/storage";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
@@ -247,7 +248,7 @@ export async function createOrgAction(
     try {
       await grantFreeCredits(result.orgId);
     } catch (grantErr) {
-      console.error("[onboarding] grantFreeCredits failed for org", result.orgId, grantErr);
+      logger.error({ err: grantErr, orgId: result.orgId }, "[onboarding] grantFreeCredits failed");
     }
 
     return { ok: true, orgSlug: result.orgSlug, workspaceSlug: result.workspaceSlug };

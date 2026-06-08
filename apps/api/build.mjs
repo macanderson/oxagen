@@ -76,4 +76,4 @@ await writeFile(
   ),
 );
 
-console.log("[build] wrote .vercel/output (Build Output API)");
+process.stdout.write("[build] wrote .vercel/output (Build Output API)\n");

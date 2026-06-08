@@ -167,8 +167,9 @@ export async function generateVideoFor(
         created_at: new Date().toISOString(),
       },
     ]);
-  } catch {
+  } catch (err) {
     // Swallow — telemetry must never fail a capability call.
+    console.error("[oxagen/ai] generateVideo telemetry write failed", err);
   }
 
   // Debit the org's credits at the target margin. chargeVideoCredits prices the
@@ -181,13 +182,10 @@ export async function generateVideoFor(
       model: resolvedModelId,
       durationSeconds: args.durationSeconds,
     });
-  } catch {
+  } catch (err) {
     // Swallow — credit metering must never fail a capability call.
+    console.error("[oxagen/ai] generateVideo credit charge failed", err);
   }
 
   return { bytes, mimeType, durationMs };
 }
-
-// Re-export gateway for consumers that need to build a VideoModel directly
-// (e.g. tests or callers that want to bypass selectVideoModel).
-export { gateway };

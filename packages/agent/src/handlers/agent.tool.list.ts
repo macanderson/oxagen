@@ -2,36 +2,21 @@ import type { CapabilityContext } from "../types";
 import type { AgentToolListInput, AgentToolListOutput } from "@oxagen/oxagen/contracts/agent.tool.list";
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
+import { getOxagenRegistry } from "../registry-loader";
 
 export type { AgentToolListInput, AgentToolListOutput };
-
-// Dynamic import keeps oxagen out of the static package graph; otherwise
-// oxagen handler shims → @oxagen/agent → @oxagen/oxagen creates a cycle.
-async function loadRegistry() {
-  const mod = (await import("@oxagen/oxagen")) as unknown as {
-    listCapabilities: () => Array<{
-      name: string;
-      description: string;
-      domain: string;
-      agent?: { riskLevel?: "low" | "medium" | "high"; category?: string; requiresApproval?: boolean };
-      surfaces?: readonly ("api" | "mcp" | "agent")[];
-    }>;
-    getSurfaces: (c: { surfaces?: readonly ("api" | "mcp" | "agent")[] }) => readonly string[];
-  };
-  return mod;
-}
 
 export async function agentToolListHandler(
   input: AgentToolListInput,
   ctx: CapabilityContext,
 ): Promise<AgentToolListOutput> {
-  const { listCapabilities, getSurfaces } = await loadRegistry();
+  const { listCapabilities, getSurfaces } = await getOxagenRegistry();
   const builtins = listCapabilities()
     .filter((c) => getSurfaces(c).includes("agent"))
     .map((c) => ({
       name: c.name,
       description: c.description,
-      domain: c.domain,
+      domain: c.domain ?? "",
       category: c.agent?.category ?? null,
       riskLevel: c.agent?.riskLevel ?? "low",
       requiresApproval: c.agent?.requiresApproval ?? false,

@@ -16,7 +16,7 @@ export const schema = {
     "Accessible alt text. Derived from prompt if omitted.",
   ),
   size: imageGenerate.input.shape.size.describe(
-    "Image dimensions — DALL-E 3 supported sizes only",
+    "Image dimensions. Supported values: 1024x1024, 1792x1024, 1024x1792",
   ),
 };
 

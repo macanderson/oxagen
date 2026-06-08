@@ -1,6 +1,6 @@
 ---
 name: coding
-description: How the agent writes code in the Oxagen monorepo — capability-first, ESM with .js suffixes, no narration comments, Tailwind v4 and shadcn aesthetic on the frontend.
+description: How the agent writes code in the Oxagen monorepo — capability-first, ESM with .js suffixes, no narration comments, @base-ui/react components from @oxagen/ui on the frontend.
 metadata:
   weight: high
   category: engineering
@@ -40,11 +40,15 @@ the gate catches.
 
 ## Frontend aesthetic
 
-User-facing surfaces in `apps/app` use Tailwind v4 and shadcn
-components with a glassmorphism aesthetic, both light and dark mode
-supported, and rich micro-transitions on hover, focus, and state
-changes. New components compose existing primitives from
-`packages/ui`; copying a primitive into a feature folder is a defect.
+User-facing surfaces in `apps/app` use `@base-ui/react` components
+imported from `@oxagen/ui` (the coss/Base UI layer). The aesthetic is
+stock neutral — zero glass/translucency, zero brand gradient in the
+shell. Use `--primary` for brand colour accents; `--accent` is a
+neutral grey. Active state is signalled with `data-[active]`, not
+`data-[state]`. Both light and dark themes are supported. New
+components compose existing primitives from `@oxagen/ui`; copying a
+primitive into a feature folder is a defect. Do not introduce Radix
+UI, shadcn, or any glassmorphism treatment.
 
 ## Performance defaults
 

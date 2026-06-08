@@ -168,6 +168,55 @@ describe("envelope encryption", () => {
     );
   });
 
+  it("invalid DEK length on generateDataKey: encrypt throws /Expected 32-byte DEK/", async () => {
+    const badGenerateAdapter: KmsAdapter = {
+      async generateDataKey(_keyId: string) {
+        const plaintext = randomBytes(16); // Wrong length — should be 32.
+        return { plaintext, encrypted: randomBytes(16) };
+      },
+      async decryptDataKey(_encrypted: Uint8Array, _keyId: string) {
+        return randomBytes(32);
+      },
+    };
+
+    await expect(
+      encrypt("some-plaintext", FAKE_KEY_ID, { adapter: badGenerateAdapter }),
+    ).rejects.toThrow(/Expected 32-byte DEK/);
+  });
+
+  it("invalid DEK length on decryptDataKey: decrypt throws /Expected 32-byte DEK/", async () => {
+    const encryptAdapter = makeAdapter();
+    const ciphertext = await encrypt("some-plaintext", FAKE_KEY_ID, { adapter: encryptAdapter });
+
+    const badDecryptAdapter: KmsAdapter = {
+      async generateDataKey(_keyId: string) {
+        return { plaintext: randomBytes(32), encrypted: randomBytes(32) };
+      },
+      async decryptDataKey(_encrypted: Uint8Array, _keyId: string) {
+        return randomBytes(16); // Wrong length — should be 32.
+      },
+    };
+
+    await expect(
+      decrypt(ciphertext, FAKE_KEY_ID, { adapter: badDecryptAdapter }),
+    ).rejects.toThrow(/Expected 32-byte DEK/);
+  });
+
+  it("mid-parse truncation: header fields exceed remaining buffer → throws /truncated/", async () => {
+    // Build a buffer that passes the minimum header-length check (>= 9 bytes)
+    // but whose declared length fields sum to more bytes than are present.
+    const buf = Buffer.allocUnsafe(9 + 4); // 9-byte header + 4 payload bytes
+    let offset = 0;
+    buf.writeUInt8(0x01, offset); offset += 1;  // version
+    buf.writeUInt16BE(12, offset); offset += 2; // iv_len = 12
+    buf.writeUInt16BE(32, offset); offset += 2; // enc_dek_len = 32
+    buf.writeUInt32BE(100, offset);             // ct_len = 100 (far exceeds remaining 4 bytes)
+
+    await expect(
+      decrypt(buf, FAKE_KEY_ID, { adapter: makeAdapter() }),
+    ).rejects.toThrow(/truncated/);
+  });
+
   it("each encrypt call produces a different ciphertext (fresh IV + DEK)", async () => {
     const adapter = makeAdapter();
     const ct1 = await encrypt("same-plaintext", FAKE_KEY_ID, { adapter });
@@ -175,5 +224,43 @@ describe("envelope encryption", () => {
 
     // Different IVs and DEKs mean the ciphertext bytes must differ.
     expect(ct1.equals(ct2)).toBe(false);
+  });
+
+  it("wire-format: raw buffer fields match the documented layout", async () => {
+    // Verify that the binary layout produced by encrypt() matches the spec:
+    // [1 version][2 iv_len][2 enc_dek_len][4 ct_len][iv_len iv][enc_dek_len enc_dek][ct_len ct+tag]
+    const adapter = makeAdapter();
+    const plaintext = Buffer.from("wire-format-test", "utf8");
+    const ct = await encrypt(plaintext, FAKE_KEY_ID, { adapter });
+
+    let offset = 0;
+
+    const version = ct.readUInt8(offset); offset += 1;
+    expect(version).toBe(0x01);
+
+    const ivLen = ct.readUInt16BE(offset); offset += 2;
+    expect(ivLen).toBe(12); // AES-GCM 96-bit nonce is always 12 bytes
+
+    const encDekLen = ct.readUInt16BE(offset); offset += 2;
+    expect(encDekLen).toBeGreaterThan(0);
+
+    const ctLen = ct.readUInt32BE(offset); offset += 4;
+    // plaintext (16 bytes) + AES-GCM auth tag (16 bytes) = 32 bytes minimum
+    expect(ctLen).toBeGreaterThanOrEqual(32);
+
+    // Total buffer length should exactly match header + declared lengths.
+    expect(ct.length).toBe(offset + ivLen + encDekLen + ctLen);
+
+    // The iv field sits immediately after the header at the expected offset.
+    const iv = ct.subarray(offset, offset + ivLen);
+    expect(iv.length).toBe(12);
+    offset += ivLen;
+
+    const encDek = ct.subarray(offset, offset + encDekLen);
+    expect(encDek.length).toBe(encDekLen);
+    offset += encDekLen;
+
+    const ctWithTag = ct.subarray(offset, offset + ctLen);
+    expect(ctWithTag.length).toBe(ctLen);
   });
 });

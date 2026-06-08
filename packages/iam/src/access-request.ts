@@ -7,6 +7,7 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { ResolvedPrincipal } from "@oxagen/oxagen";
+import { logger } from "./logger";
 
 export interface CreateAccessRequestArgs {
   capability: string;
@@ -29,7 +30,8 @@ export async function createAccessRequest(
 
   if (!principal) {
     // Cannot create an access request without a resolved principal.
-    console.warn(
+    logger.warn(
+      { capability, orgId: ctx.orgId },
       "[iam:access-request] Cannot create access request — principal is null (IAM tables may not be applied). " +
         "Returning null requestId.",
     );
@@ -59,7 +61,7 @@ export async function createAccessRequest(
 
     return row?.publicId ?? null;
   } catch (err) {
-    console.error("[iam:access-request] Failed to create access request:", err);
+    logger.error({ err, capability, orgId: ctx.orgId }, "[iam:access-request] Failed to create access request");
     return null;
   }
 }

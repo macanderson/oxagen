@@ -143,8 +143,9 @@ export async function generateObjectFor<T>(
         created_at: new Date().toISOString(),
       },
     ]);
-  } catch {
+  } catch (err) {
     // Swallow — telemetry must never fail a capability call.
+    console.error("[oxagen/ai] generateObject telemetry write failed", err);
   }
 
   // Debit the org's credits for what this call cost us at the target margin.
@@ -155,8 +156,9 @@ export async function generateObjectFor<T>(
       referenceId: args.telemetry.messageId,
       ...usage,
     });
-  } catch {
+  } catch (err) {
     // Swallow — credit metering must never fail a capability call.
+    console.error("[oxagen/ai] generateObject credit charge failed", err);
   }
 
   return {

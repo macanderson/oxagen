@@ -1,3 +1,9 @@
+-- Migration 0000 / baseline. This file is re-applied idempotently on every
+-- migrate() run (all statements use CREATE TABLE IF NOT EXISTS). Numbered
+-- migrations in migrations/ start at 0002 because 0001 was folded into this
+-- baseline before versioned tracking began. Add new columns or tables via a
+-- new numbered migration file; do not edit this baseline.
+--
 -- Spec §7. Append-only telemetry. Monthly partitions, 90-day TTL on raw
 -- tables, materialized rollups retained longer (added in later migrations).
 

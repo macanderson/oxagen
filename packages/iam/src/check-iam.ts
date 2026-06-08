@@ -22,6 +22,7 @@ import { resolve, type ResolveResult } from "@oxagen/oxagen/iam";
 import { fetchAuthz } from "./fetch-authz";
 import { emitAudit } from "./emit-audit";
 import { resolveOrgTier, canAccessACL } from "@oxagen/billing";
+import { logger } from "./logger";
 
 /**
  * Capabilities in the `iam.*` namespace manage grants, roles, and access
@@ -99,7 +100,7 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
         trace: bypassResult.trace,
         rawInputJson,
       }).catch((err: unknown) => {
-        console.error("[iam:audit] CRITICAL — audit event emission failed:", err);
+        logger.error({ err, capability }, "[iam:audit] CRITICAL — audit event emission failed");
       });
       return { result: bypassResult, principal: null };
     }
@@ -154,7 +155,7 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
     rawInputJson,
   }).catch((err: unknown) => {
     // Audit failures must be loud but NEVER block the user path.
-    console.error("[iam:audit] CRITICAL — audit event emission failed:", err);
+    logger.error({ err, capability }, "[iam:audit] CRITICAL — audit event emission failed");
   });
 
   return { result, principal };

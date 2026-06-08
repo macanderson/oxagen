@@ -8,16 +8,17 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // Scope to the files that have tests; index.ts is a pure re-export barrel
-      // with a PORTS constant — no logic to assert, nothing to fail against.
-      include: ["src/env.ts"],
-      // lines floor 100 (measured 100); target 75 — already above target
-      // branches floor 100 (measured 100); target 70 — already above target
+      // Scope to all files with meaningful logic. index.ts itself is excluded
+      // because it is a re-export barrel (the platform version logic now lives
+      // in env.ts via stripOneQuotePair + platformVersion). registry.ts,
+      // domain.ts, and geo.ts export validators and option arrays; their tests
+      // already exist — this wires them to the gate so a regression is caught.
+      include: ["src/env.ts", "src/index.ts", "src/registry.ts", "src/domain.ts", "src/geo.ts"],
       thresholds: {
-        lines: 100,
-        branches: 100,
-        functions: 100,
-        statements: 100,
+        lines: 80,
+        branches: 80,
+        functions: 80,
+        statements: 80,
       },
     },
   },

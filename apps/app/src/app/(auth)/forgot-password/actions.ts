@@ -14,6 +14,7 @@
 
 import { z } from "zod";
 import { auth } from "@oxagen/auth";
+import { loadEnv } from "@oxagen/config/env";
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -58,7 +59,7 @@ export async function requestResetAction(
   }
 
   try {
-    const appBaseUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+    const appBaseUrl = loadEnv().BETTER_AUTH_URL;
 
     await auth.api.requestPasswordReset({
       body: {
