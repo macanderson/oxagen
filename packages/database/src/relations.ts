@@ -6,10 +6,9 @@ import {
   roleGrants,
   grants,
   accessRequests,
-  iamSessions,
 } from "./schema/iam";
 import { users, sessions, accounts, apiKeys, credentials } from "./schema/auth";
-import { workspaces, workspaceUsers, folders } from "./schema/workspace";
+import { workspaces, workspaceUsers } from "./schema/workspace";
 import {
   agents,
   agentVersions,
@@ -25,7 +24,6 @@ import {
 import {
 } from "./schema/workflow";
 import { conversations, messages } from "./schema/chat";
-import { files } from "./schema/content";
 import {
   plans,
   subscriptions,
@@ -82,7 +80,6 @@ export const accountsRelations = relations(accounts, ({ one }) => ({
 export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   org: one(organizations, { fields: [workspaces.orgId], references: [organizations.id] }),
   members: many(workspaceUsers),
-  folders: many(folders),
 }));
 
 export const workspaceUsersRelations = relations(workspaceUsers, ({ one }) => ({
@@ -90,14 +87,6 @@ export const workspaceUsersRelations = relations(workspaceUsers, ({ one }) => ({
   user: one(users, { fields: [workspaceUsers.userId], references: [users.id] }),
 }));
 
-export const foldersRelations = relations(folders, ({ one, many }) => ({
-  parent: one(folders, {
-    fields: [folders.parentFolderId],
-    references: [folders.id],
-    relationName: "folder_parent",
-  }),
-  children: many(folders, { relationName: "folder_parent" }),
-}));
 
 
 export const agentsRelations = relations(agents, ({ many }) => ({
@@ -191,10 +180,6 @@ export const messagesRelations = relations(messages, ({ one, many }) => ({
   children: many(messages, { relationName: "message_parent" }),
 }));
 
-export const filesRelations = relations(files, ({ many }) => ({
-}));
-
-
 export const plansRelations = relations(plans, ({ many }) => ({
   subscriptions: many(subscriptions),
 }));
@@ -261,7 +246,6 @@ export const stripeEventProcessingRelations = relations(stripeEventProcessing, (
 export const principalsRelations = relations(principals, ({ one, many }) => ({
   org: one(organizations, { fields: [principals.orgId], references: [organizations.id] }),
   grants: many(grants),
-  sessions: many(iamSessions),
   accessRequests: many(accessRequests),
 }));
 
@@ -289,9 +273,4 @@ export const grantsRelations = relations(grants, ({ one }) => ({
 export const accessRequestsRelations = relations(accessRequests, ({ one }) => ({
   requester: one(principals, { fields: [accessRequests.requesterId], references: [principals.id] }),
   org: one(organizations, { fields: [accessRequests.orgId], references: [organizations.id] }),
-}));
-
-export const iamSessionsRelations = relations(iamSessions, ({ one }) => ({
-  principal: one(principals, { fields: [iamSessions.principalId], references: [principals.id] }),
-  org: one(organizations, { fields: [iamSessions.orgId], references: [organizations.id] }),
 }));

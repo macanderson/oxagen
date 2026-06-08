@@ -37,7 +37,6 @@ describe("tenant policy manifest", () => {
     expect(tables).toContain("org.grants");
     expect(tables).toContain("org.policies");
     expect(tables).toContain("org.access_requests");
-    expect(tables).toContain("org.iam_sessions");
     expect(tables).toContain("org.principal_role_assignments");
     // No iam.* entries should exist
     expect(tables.every((t) => !t.startsWith("iam."))).toBe(true);

@@ -19,8 +19,6 @@ export { systemInstallInstructionsHandler } from "./system.install.instructions"
 export { orgMemberAddHandler } from "./org.member.add";
 export { orgMemberInviteAcceptHandler } from "./org.member.invite.accept";
 export { orgMemberInviteDeclineHandler } from "./org.member.invite.decline";
-export { serveFile, FileNotFoundError, FileForbiddenError } from "./file.serve";
-export type { FileServePrincipal, FileServeResult } from "./file.serve";
 export { persistGeneratedAsset, createPendingGeneratedAsset } from "./generated-asset.persist";
 export type {
   PersistGeneratedAssetArgs,

@@ -45,23 +45,3 @@ export const workspaceUsers = workspaceSchema.table(
     userIdx: index("workspace_users_user_idx").on(t.userId),
   }),
 );
-
-export const folders = workspaceSchema.table(
-  "folders",
-  {
-    ...idMixin("fld"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    parentFolderId: uuid("parent_folder_id"),
-    name: text("name").notNull(),
-    path: ltree("path").notNull(),
-  },
-  (t) => ({
-    orgIdx: index("folders_org_idx").on(t.orgId, t.workspaceId),
-    // GIST index on ltree path enables subtree containment queries
-    // (path <@ ancestor) without sequential scans. Hand-written in the
-    // initial migration since Drizzle has no first-class GIST helper.
-    pathIdx: index("folders_path_idx").on(t.path),
-  }),
-);
-

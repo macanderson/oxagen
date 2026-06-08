@@ -22,7 +22,6 @@ import type {
   grants,
   policies,
   accessRequests,
-  iamSessions,
   userPreferences,
   fontSizeEnum,
   densityEnum,
@@ -95,9 +94,6 @@ export type IamPolicyRow = InferSelectModel<typeof policies>;
 
 /** Row type for `org.access_requests`. */
 export type IamAccessRequestRow = InferSelectModel<typeof accessRequests>;
-
-/** Row type for `org.iam_sessions`. */
-export type IamSessionRow = InferSelectModel<typeof iamSessions>;
 
 // ── User preferences row types & enum unions ─────────────────────────────────
 // These are the canonical shared vocabulary for the preferences feature.

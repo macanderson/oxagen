@@ -39,7 +39,6 @@ import { orgMemberInviteAcceptRoute } from "./routes/v1/org.member.invite.accept
 import { orgMemberInviteDeclineRoute } from "./routes/v1/org.member.invite.decline";
 import { orgMemberRemoveRoute } from "./routes/v1/org.member.remove";
 import { orgMemberRoleChangeRoute } from "./routes/v1/org.member.role.change";
-import { filesServeRoute } from "./routes/v1/files.serve";
 import { userPreferencesReadRoute } from "./routes/v1/user.preferences.read";
 import { userPreferencesWriteRoute } from "./routes/v1/user.preferences.write";
 import { workspaceModelSettingsReadRoute } from "./routes/v1/workspace.model.settings.read";
@@ -147,7 +146,6 @@ orgScoped.route("/org/members/remove", orgMemberRemoveRoute);
 orgScoped.route("/org/members/role", orgMemberRoleChangeRoute);
 orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
-orgScoped.route("/files", filesServeRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsReadRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsWriteRoute);
 orgScoped.route("/asset/upload", assetUploadRoute);

@@ -245,39 +245,6 @@ export const accessRequests = orgSchema.table(
 //
 // APPEND-LEANING: no updated_at / updated_by columns. Sessions are created
 // once; revocation is tracked via revoked_at + revoked_by, never via UPDATE
-// to an existing record. Use iamSessions to avoid name collision with
-// auth.sessions (exported from auth.ts).
-// ---------------------------------------------------------------------------
-
-export const iamSessions = orgSchema.table(
-  "iam_sessions",
-  {
-    ...idMixin("ses"),
-    orgId: uuid("org_id").notNull(),
-    principalId: uuid("principal_id").notNull(),
-    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
-    ip: text("ip"),
-    userAgent: text("ua"),
-    idpSessionId: text("idp_session_id"),
-    revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
-    revokedBy: uuid("revoked_by"),
-    revokeReason: text("revoke_reason"),
-    // audit — created timestamp only (no updated_at per append-leaning policy)
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-    createdByUserId: uuid("created_by_user_id"),
-  },
-  (t) => ({
-    // Resolver hot path: "is this principal's session still active?"
-    principalIdx: index("iam_sessions_principal_idx").on(t.principalId),
-    orgIdx: index("iam_sessions_org_idx").on(t.orgId),
-  }),
-);
-
 // ---------------------------------------------------------------------------
 // principal_role_assignments — maps a principal to a role within an org
 // (and optionally a workspace) scope. Replaces the prior "grant everyone
@@ -356,9 +323,6 @@ export type NewIamPolicy = typeof policies.$inferInsert;
 
 export type IamAccessRequest = typeof accessRequests.$inferSelect;
 export type NewIamAccessRequest = typeof accessRequests.$inferInsert;
-
-export type IamSession = typeof iamSessions.$inferSelect;
-export type NewIamSession = typeof iamSessions.$inferInsert;
 
 export type IamPrincipalRoleAssignment = typeof principalRoleAssignments.$inferSelect;
 export type NewIamPrincipalRoleAssignment = typeof principalRoleAssignments.$inferInsert;

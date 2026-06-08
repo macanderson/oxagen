@@ -1,29 +1,7 @@
-import { bigint, check, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, check, index, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { contentSchema } from "./_schemas";
 import { auditMixin, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
-
-export const files = contentSchema.table(
-  "files",
-  {
-    ...idMixin("fil"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...softDeleteMixin(),
-    storageProvider: text("storage_provider").notNull(),
-    storageBucket: text("storage_bucket").notNull(),
-    storageKey: text("storage_key").notNull(),
-    mimeType: text("mime_type").notNull(),
-    sizeBytes: bigint("size_bytes", { mode: "bigint" }).notNull(),
-    checksumSha256: text("checksum_sha256").notNull(),
-    uploadedAt: timestamp("uploaded_at", { withTimezone: true, mode: "date" }).notNull(),
-  },
-  (t) => ({
-    storageIdx: uniqueIndex("files_storage_idx").on(t.storageProvider, t.storageBucket, t.storageKey),
-    orgIdx: index("files_org_idx").on(t.orgId, t.workspaceId),
-    checksumIdx: index("files_checksum_idx").on(t.orgId, t.checksumSha256),
-  }),
-);
 
 // AI-generated media assets (image / video) produced from the in-app agent.
 // The blob bytes live in file storage (Vercel Blob behind @oxagen/storage); this

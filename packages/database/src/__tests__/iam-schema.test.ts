@@ -5,17 +5,14 @@
  * no live DB, no network, no random/wall-clock values.
  *
  * Assertions:
- *  1. All 7 IAM tables are importable from schema/index.
- *  2. principals and iam_sessions carry no updated_at column (append-leaning
- *     for sessions; principals has it via auditMixin — but sessions MUST NOT).
- *  3. sessions table has no updated_at column.
- *  4. principals.kind CHECK constraint exists and covers all 3 values.
- *  5. grants.effect CHECK constraint exists and covers all 3 effect values.
- *  6. role_grants table has an org_id column.
- *  7. grants has a composite index whose columns include principal_id and scope_id.
- *  8. access_requests.status CHECK constraint exists and covers all 4 values.
- *  9. roles.scope_kind CHECK exists and includes both 'org' and 'workspace'.
- * 10. iam_sessions table has a principal_id column.
+ *  1. All 6 IAM tables are importable from schema/index.
+ *  2. principals carries an updated_at column via auditMixin.
+ *  3. principals.kind CHECK constraint exists and covers all 3 values.
+ *  4. grants.effect CHECK constraint exists and covers all 3 effect values.
+ *  5. role_grants table has an org_id column.
+ *  6. grants has a composite index whose columns include principal_id and scope_id.
+ *  7. access_requests.status CHECK constraint exists and covers all 4 values.
+ *  8. roles.scope_kind CHECK exists and includes both 'org' and 'workspace'.
  *
  * Uses the same queryChunks inspection technique as schema-append-only.test.ts.
  */
@@ -29,7 +26,6 @@ import {
   grants,
   policies,
   accessRequests,
-  iamSessions,
 } from "../schema/index";
 import { flattenCheckSql, sqlColumnNames, getChecks } from "./_test-helpers";
 
@@ -38,14 +34,13 @@ import { flattenCheckSql, sqlColumnNames, getChecks } from "./_test-helpers";
 // ---------------------------------------------------------------------------
 
 describe("IAM tables importable from schema/index", () => {
-  it("all 7 IAM tables are defined (not undefined)", () => {
+  it("all 6 IAM tables are defined (not undefined)", () => {
     expect(principals).toBeDefined();
     expect(roles).toBeDefined();
     expect(roleGrants).toBeDefined();
     expect(grants).toBeDefined();
     expect(policies).toBeDefined();
     expect(accessRequests).toBeDefined();
-    expect(iamSessions).toBeDefined();
   });
 
   const tables: Array<[string, Parameters<typeof getTableConfig>[0]]> = [
@@ -55,7 +50,6 @@ describe("IAM tables importable from schema/index", () => {
     ["grants", grants],
     ["policies", policies],
     ["accessRequests", accessRequests],
-    ["iamSessions", iamSessions],
   ];
 
   for (const [name, table] of tables) {
@@ -67,35 +61,7 @@ describe("IAM tables importable from schema/index", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. iam_sessions has no updated_at column (append-leaning policy)
-// ---------------------------------------------------------------------------
-
-describe("iam_sessions: append-leaning — no updated_at", () => {
-  it("iam_sessions has no updated_at column", () => {
-    const cols = sqlColumnNames(iamSessions);
-    expect(cols, "iam_sessions must not carry updated_at (append-leaning)").not.toContain(
-      "updated_at",
-    );
-  });
-
-  it("iam_sessions has no updated_by_user_id column", () => {
-    const cols = sqlColumnNames(iamSessions);
-    expect(cols).not.toContain("updated_by_user_id");
-  });
-
-  it("iam_sessions has a principal_id column", () => {
-    const cols = sqlColumnNames(iamSessions);
-    expect(cols).toContain("principal_id");
-  });
-
-  it("iam_sessions has a revoked_at column (revocation tracking)", () => {
-    const cols = sqlColumnNames(iamSessions);
-    expect(cols).toContain("revoked_at");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 3. principals.kind CHECK constraint
+// 2. principals.kind CHECK constraint
 // ---------------------------------------------------------------------------
 
 describe("principals.kind CHECK constraint", () => {
