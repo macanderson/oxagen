@@ -154,7 +154,6 @@ export const documentsPdfCreateHandler: CapabilityHandler<typeof documentsPdfCre
     bytes,
     prompt: `Generate PDF: ${title}`,
     model: "local",
-    conversationId: ctx.conversationId ?? undefined,
     messageId: ctx.messageId ?? undefined,
     accessPolicy: "org",
   });

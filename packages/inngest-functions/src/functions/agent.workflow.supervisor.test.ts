@@ -57,7 +57,7 @@ vi.mock("@oxagen/database", () => ({
       },
       update: (_table: unknown) => ({ set: mocks.dbUpdateSet }),
       insert: (_table: unknown) => ({ values: mocks.dbInsertValues }),
-      select: () => mocks.dbSelect(),
+      select: () => (mocks.dbSelect() as { from: ReturnType<typeof mocks.dbFrom> }),
     };
     return fn(tx);
   },
@@ -181,7 +181,7 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
   it("dispatches inngest events for each task", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     expect(mocks.inngestSend).toHaveBeenCalled();
-    const sendArg = mocks.inngestSend.mock.calls[0]![0] as Array<Record<string, unknown>>;
+    const sendArg: Array<Record<string, unknown>> = mocks.inngestSend.mock.calls[0]![0] as Array<Record<string, unknown>>;
     expect(Array.isArray(sendArg)).toBe(true);
     expect(sendArg[0]).toMatchObject({
       name: "agent/workflow.task.execute",

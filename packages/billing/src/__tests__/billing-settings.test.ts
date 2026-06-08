@@ -174,7 +174,10 @@ describe("updateAutoReloadSettings", () => {
 
   it("updates autoReloadEnabled to true", async () => {
     findFirstMock.mockResolvedValue(
-      makeSettingsRow({ autoReloadEnabled: true }),
+      makeSettingsRow({
+        autoReloadEnabled: true,
+        autoReloadPaymentMethodId: "pm-valid-123",
+      }),
     );
 
     const result = await updateAutoReloadSettings("org-001", { enabled: true });
