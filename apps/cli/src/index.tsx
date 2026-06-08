@@ -33,7 +33,10 @@ import { billingSubscriptionReadCommand } from "./commands/billing.subscription.
 import { agentMcpListCommand } from "./commands/agent.mcp.list.js";
 import { agentSkillListCommand } from "./commands/agent.skill.list.js";
 import { agentToolListCommand } from "./commands/agent.tool.list.js";
+import { agentApprovalResolveCommand } from "./commands/agent.approval.resolve.js";
 import { orgMemberRoleChangeCommand } from "./commands/org.member.role.change.js";
+import { archiveCreateCommand } from "./commands/archive.create.js";
+import { workflowRunCommand } from "./commands/workflow.run.js";
 
 const program = new Command();
 
@@ -116,6 +119,16 @@ const agentSkill = agent.command("skill").description("Agent skill management");
 agentSkill.addCommand(agentSkillListCommand);
 const agentTool = agent.command("tool").description("Agent tool management");
 agentTool.addCommand(agentToolListCommand);
+const agentApproval = agent.command("approval").description("Agent approval management");
+agentApproval.addCommand(agentApprovalResolveCommand);
+
+// archive
+const archive = program.command("archive").description("Archive management");
+archive.addCommand(archiveCreateCommand);
+
+// workflow
+const workflow = program.command("workflow").description("Workflow automation");
+workflow.addCommand(workflowRunCommand);
 
 program.parse(process.argv);
 
