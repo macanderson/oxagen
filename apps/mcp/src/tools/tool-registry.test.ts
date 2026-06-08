@@ -94,8 +94,6 @@ import { metadata as imageAnalyzeMetadata } from "./image.analyze";
 import { metadata as imageCreateMetadata } from "./image.create";
 import { metadata as imageListMetadata } from "./image.list";
 import { metadata as skillWorkspaceListMetadata } from "./skill.workspace.list";
-import { metadata as userPreferencesGetMetadata } from "./user.preferences.get";
-import { metadata as userPreferencesUpdateMetadata } from "./user.preferences.update";
 import { metadata as workspaceInviteSendMetadata } from "./workspace.invite.send";
 import { metadata as workspaceMemberListMetadata } from "./workspace.member.list";
 
@@ -180,8 +178,8 @@ const allToolMetadata = [
   imageCreateMetadata,
   imageListMetadata,
   skillWorkspaceListMetadata,
-  userPreferencesGetMetadata,
-  userPreferencesUpdateMetadata,
+  userPreferencesReadMetadata,
+  userPreferencesWriteMetadata,
   workspaceInviteSendMetadata,
   workspaceMemberListMetadata,
 ];
