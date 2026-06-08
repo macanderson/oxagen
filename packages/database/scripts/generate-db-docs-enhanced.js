@@ -146,42 +146,47 @@ function parseSchemaFiles() {
 function generateERD(schemas) {
   const schemaArray = Object.values(schemas);
 
-  // Start with entity relationship diagram
-  let mermaid = `erDiagram\n`;
+  // Use graph format instead of erDiagram since we need to show all entities
+  // erDiagram requires relationships for all entities
+  let mermaid = `graph TB\n`;
 
-  // Group tables by schema
-  const schemaGroups = {};
-  schemaArray.forEach((schema) => {
-    schemaGroups[schema.name] = schema.tables;
-  });
+  const addedSchemas = new Set();
 
-  // Add all entities
+  // Add schemas as subgraphs
   schemaArray.forEach((schema) => {
-    schema.tables.forEach((table) => {
-      // Format entity name
-      const entityName = `${schema.name}_${table.name}`.toUpperCase();
-      mermaid += `    ${entityName}\n`;
-    });
+    if (schema.tables.length > 0) {
+      mermaid += `\n  subgraph ${schema.name}["${schema.name.toUpperCase()}"]\n`;
+      schema.tables.forEach((table) => {
+        const tableId = `${schema.name}_${table.name}`;
+        mermaid += `    ${tableId}["${table.name}"]\n`;
+      });
+      mermaid += `  end\n`;
+    }
   });
 
   // Add relationships from foreign keys
+  const addedRelationships = new Set();
   schemaArray.forEach((schema) => {
     schema.tables.forEach((table) => {
       table.foreignKeys.forEach((fk) => {
-        const fromEntity = `${schema.name}_${table.name}`.toUpperCase();
+        const fromEntity = `${schema.name}_${table.name}`;
 
         // Find the referenced table's schema
         let toEntity = null;
         Object.values(schemas).forEach((refSchema) => {
           refSchema.tables.forEach((refTable) => {
             if (refTable.varName === fk.refTable) {
-              toEntity = `${refSchema.name}_${refTable.name}`.toUpperCase();
+              toEntity = `${refSchema.name}_${refTable.name}`;
             }
           });
         });
 
         if (toEntity) {
-          mermaid += `    ${fromEntity} ||--o| ${toEntity} : references\n`;
+          const relationshipKey = fromEntity + "->" + toEntity;
+          if (!addedRelationships.has(relationshipKey)) {
+            mermaid += `  ${fromEntity} -->|FK| ${toEntity}\n`;
+            addedRelationships.add(relationshipKey);
+          }
         }
       });
     });
