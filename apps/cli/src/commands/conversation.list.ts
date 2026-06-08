@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { apiRequest, requireAuth } from "../lib/api-client.js";
+import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
 
 interface Conversation {
   id?: string;
@@ -34,7 +34,7 @@ export const conversationListCommand = new Command("list")
         console.log(`  ${c.publicId ?? c.id ?? "unknown"}  ${c.title ?? "(untitled)"}`);
       }
     } catch (err) {
-      console.error(`Error: ${String(err)}`);
+      const _msg = err instanceof ApiError ? err.message : String(err); console.error(`Error: ${_msg}`);
       process.exit(1);
     }
   });

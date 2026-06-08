@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { apiRequest, requireAuth } from "../lib/api-client.js";
+import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
 
 interface WorkspaceResponse {
   workspace?: { slug?: string; id?: string; name?: string };
@@ -22,7 +22,7 @@ export const workspaceCreateCommand = new Command("create")
       const ws = data.workspace ?? data;
       console.log(`✓ Workspace created: ${(ws as WorkspaceResponse["workspace"])?.slug ?? (ws as WorkspaceResponse).slug ?? "unknown"}`);
     } catch (err) {
-      console.error(`Error: ${String(err)}`);
+      const _msg = err instanceof ApiError ? err.message : String(err); console.error(`Error: ${_msg}`);
       process.exit(1);
     }
   });

@@ -22,6 +22,11 @@ build
 coverage
 .vercel
 
+# Developer-local symlinks
+.cache
+.venv
+target
+
 # TS incremental
 *.tsbuildinfo
 

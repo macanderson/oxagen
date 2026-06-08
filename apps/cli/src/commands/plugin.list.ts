@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { apiRequest, requireAuth } from "../lib/api-client.js";
+import { apiRequest, requireAuth , ApiError } from "../lib/api-client.js";
 
 interface Plugin {
   id?: string;
@@ -32,7 +32,7 @@ export const pluginListCommand = new Command("list")
         console.log(`  - ${p.pluginId ?? p.id ?? "unknown"} [${status}]`);
       }
     } catch (err) {
-      console.error(`Error: ${String(err)}`);
+      const _msg = err instanceof ApiError ? err.message : String(err); console.error(`Error: ${_msg}`);
       process.exit(1);
     }
   });

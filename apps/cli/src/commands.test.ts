@@ -2460,7 +2460,7 @@ describe("branch coverage: empty/optional data branches", () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
     mockApiError(429, "Rate limit exceeded");
-    await expect(apiKeyCreateCommand.parseAsync(["node", "cli", "-n", "mykey"])).rejects.toThrow();
+    await expect(apiKeyCreateCommand.parseAsync(["node", "cli", "mykey"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith("Error: Rate limit exceeded");
     consoleSpy.mockRestore(); exitSpy.mockRestore();
   });
@@ -2487,7 +2487,7 @@ describe("branch coverage: empty/optional data branches", () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
     mockApiError(503, "Service unavailable");
-    await expect(chatSendCommand.parseAsync(["node", "cli", "-m", "test"])).rejects.toThrow();
+    await expect(chatSendCommand.parseAsync(["node", "cli", "test"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith("Error: Service unavailable");
     consoleSpy.mockRestore(); exitSpy.mockRestore();
   });
@@ -2512,7 +2512,7 @@ describe("branch coverage: empty/optional data branches", () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
     mockApiError(400, "Invalid workflow spec");
-    await expect(workflowRunCommand.parseAsync(["node", "cli", "-t", "My task"])).rejects.toThrow();
+    await expect(workflowRunCommand.parseAsync(["node", "cli", "-w", "wf1"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith("Error: Invalid workflow spec");
     consoleSpy.mockRestore(); exitSpy.mockRestore();
   });
