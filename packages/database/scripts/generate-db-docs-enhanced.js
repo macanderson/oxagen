@@ -775,21 +775,8 @@ function generateHTML(schemas) {
     <p>Generated from Drizzle ORM schema definitions • Last updated ${new Date().toLocaleDateString()}</p>
   </footer>
 
-  <script
-    src="https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.min.js"
-    integrity="sha384-DO5I13PxDVzV3/+foDrAjVrh1nQV7kqrDMYapI1XrXlBXezoLn1MAzVuQzDeIvDE"
-    crossorigin="anonymous"
-  ><\/script>
+  <script async src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"><\/script>
   <script>
-    // Initialize mermaid early
-    if (typeof mermaid !== 'undefined') {
-      mermaid.initialize({
-        startOnLoad: true,
-        theme: 'default',
-        securityLevel: 'loose'
-      });
-    }
-
     // Utility to safely escape HTML
     function escapeHtml(text) {
       if (!text) return '';
@@ -797,6 +784,23 @@ function generateHTML(schemas) {
       div.textContent = text;
       return div.innerHTML;
     }
+
+    // Initialize mermaid after DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof mermaid !== 'undefined') {
+        mermaid.initialize({
+          startOnLoad: true,
+          theme: 'default',
+          securityLevel: 'loose',
+          erDiagram: {
+            useMaxWidth: true
+          }
+        });
+        mermaid.contentLoaderMarked.cache = {};
+        mermaid.run();
+      }
+    });
+  </script>
 
     // Data
     const SCHEMAS = ${JSON.stringify(schemaList)};
@@ -1105,16 +1109,22 @@ function generateHTML(schemas) {
     function renderERD() {
       const mermaidDef = \`${erdDiagram}\`;
       const erdDiv = document.getElementById('erdDiagram');
-      erdDiv.innerHTML = '';
-      erdDiv.className = 'mermaid';
-      erdDiv.textContent = mermaidDef;
 
-      // Trigger mermaid rendering
-      setTimeout(() => {
-        if (typeof mermaid !== 'undefined' && mermaid.run) {
-          mermaid.run();
-        }
-      }, 100);
+      // Use innerHTML for Mermaid since this is generated content (not user input)
+      erdDiv.innerHTML = mermaidDef;
+      erdDiv.className = 'mermaid';
+
+      // Trigger mermaid rendering after content is set
+      if (typeof mermaid !== 'undefined' && mermaid.run) {
+        mermaid.run().catch(err => console.log('Mermaid render note:', err));
+      } else {
+        // Fallback: wait for Mermaid to load
+        setTimeout(() => {
+          if (typeof mermaid !== 'undefined' && mermaid.run) {
+            mermaid.run().catch(err => console.log('Mermaid render note:', err));
+          }
+        }, 500);
+      }
     }
 
     // Close modal on backdrop click
