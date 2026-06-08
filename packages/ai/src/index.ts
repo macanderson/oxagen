@@ -73,10 +73,13 @@ export {
   imageAnalyzePrompt,
   loadWorkspacePromptConfig,
   normalizePromptConfig,
+  enhancePromptIfInsufficient,
 } from "./prompts";
 export type {
   PromptKey,
   OverridablePromptKey,
   PromptConfig,
   SystemPromptContext,
+  EnhancePromptArgs,
+  EnhancePromptResult,
 } from "./prompts";

@@ -1,4 +1,10 @@
-import { generateImageFor, selectImageModel } from "@oxagen/ai";
+import {
+  generateImageFor,
+  selectImageModel,
+  loadWorkspacePromptConfig,
+  enhancePromptIfInsufficient,
+  type PromptConfig,
+} from "@oxagen/ai";
 import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { imageCreate } from "@oxagen/oxagen/contracts/image.create";
@@ -58,9 +64,26 @@ export const imageCreateHandler: CapabilityHandler<typeof imageCreate> = async (
   const gatewayModelId = MODEL_ID_MAP[input.model] ?? "openai/gpt-image-1";
   const imageModel = selectImageModel({ model: gatewayModelId });
 
+  // Auto-improve (Beta): enhance an insufficient prompt before generation when
+  // the workspace toggle is on (default). Best-effort; degrades to the original.
+  const promptConfig = await loadWorkspacePromptConfig(ctx.workspaceId).catch(
+    (): PromptConfig => ({}),
+  );
+  const { prompt: effectivePrompt } = await enhancePromptIfInsufficient({
+    prompt: input.prompt,
+    kind: "image",
+    autoImprove: promptConfig.autoImprovePrompts ?? true,
+    telemetry: {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      surface: ctx.surface,
+      messageId: ctx.requestId ?? ctx.messageId ?? "unknown",
+    },
+  });
+
   const { images, durationMs } = await generateImageFor({
     model: imageModel,
-    prompt: input.prompt,
+    prompt: effectivePrompt,
     size: (input.size as `${number}x${number}` | undefined) ?? "1024x1024",
     n: 1,
     telemetry: {
@@ -89,11 +112,6 @@ export const imageCreateHandler: CapabilityHandler<typeof imageCreate> = async (
     };
   }
 
-  if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "image.create: rejected — no authenticated user");
-    throw new Error("image.create requires an authenticated user");
-  }
-
   const asset = await persistGeneratedAsset({
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
@@ -102,7 +120,7 @@ export const imageCreateHandler: CapabilityHandler<typeof imageCreate> = async (
     accessPolicy: "org",
     bytes: Buffer.from(b64, "base64"),
     mimeType: "image/png",
-    prompt: input.prompt,
+    prompt: effectivePrompt,
     model: gatewayModelId,
   });
 

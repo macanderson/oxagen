@@ -12,6 +12,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@oxagen/ai", () => ({
   generateImageFor: mocks.generateImageFor,
   selectImageModel: mocks.selectImageModel,
+  // Auto-improve wiring (passthrough in tests).
+  loadWorkspacePromptConfig: vi.fn(async () => ({})),
+  enhancePromptIfInsufficient: vi.fn(async (a: { prompt: string }) => ({
+    prompt: a.prompt,
+    enhanced: false,
+  })),
 }));
 
 vi.mock("./generated-asset.persist", () => ({

@@ -13,6 +13,10 @@ vi.mock("@oxagen/ai", () => ({
   loadWorkspacePromptConfig: vi.fn(async () => ({})),
   resolvePrompt: (a: { baseline: string }) => a.baseline,
   svgGeneratePrompt: (w: number, h: number) => `svg baseline ${w}x${h}`,
+  enhancePromptIfInsufficient: vi.fn(async (a: { prompt: string }) => ({
+    prompt: a.prompt,
+    enhanced: false,
+  })),
 }));
 
 // ── import under test ─────────────────────────────────────────────────────────
