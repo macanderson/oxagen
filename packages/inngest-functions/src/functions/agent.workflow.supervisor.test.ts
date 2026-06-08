@@ -181,9 +181,11 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
   it("dispatches inngest events for each task", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     expect(mocks.inngestSend).toHaveBeenCalled();
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const calls = mocks.inngestSend.mock.calls[0] as unknown[];
-    const sendArg = calls?.[0] as Array<Record<string, unknown>> | undefined;
+    // vitest mock.calls[0] returns any[] — suppress eslint warnings for this assertion block
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const sendArg = mocks.inngestSend.mock.calls[0]?.[0] as
+      | Array<Record<string, unknown>>
+      | undefined;
     expect(sendArg).toBeDefined();
     expect(sendArg?.[0]).toMatchObject({
       name: "agent/workflow.task.execute",
