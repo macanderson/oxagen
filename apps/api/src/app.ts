@@ -71,6 +71,23 @@ import { pluginSettingsSetAuthAlertsRoute } from "./routes/v1/plugin.settings.se
 import { apiKeyCreateRoute } from "./routes/v1/api.key.create";
 import { apiKeyRevokeRoute } from "./routes/v1/api.key.revoke";
 import { workflowRoute } from "./routes/v1/workflow";
+import { userPreferencesGetRoute } from "./routes/v1/user.preferences.get";
+import { userPreferencesUpdateRoute } from "./routes/v1/user.preferences.update";
+import { workspaceMemberListRoute } from "./routes/v1/workspace.member.list";
+import { workspaceInviteSendRoute } from "./routes/v1/workspace.invite.send";
+import { conversationChatRoute } from "./routes/v1/conversation.chat";
+import { imageCreateRoute } from "./routes/v1/image.create";
+import { imageListRoute } from "./routes/v1/image.list";
+import { imageAnalyzeRoute } from "./routes/v1/image.analyze";
+import { documentCreateRoute } from "./routes/v1/document.create";
+import { documentListRoute } from "./routes/v1/document.list";
+import { documentReadRoute } from "./routes/v1/document.read";
+import { formCreateRoute } from "./routes/v1/form.create";
+import { formSubmitRoute } from "./routes/v1/form.submit";
+import { automationListRoute } from "./routes/v1/automation.list";
+import { automationCreateRoute } from "./routes/v1/automation.create";
+import { automationTriggerRoute } from "./routes/v1/automation.trigger";
+import { skillWorkspaceListRoute } from "./routes/v1/skill.workspace.list";
 
 export type AppEnv = {
   Variables: {
@@ -104,6 +121,8 @@ userScoped.use("*", authMiddleware);
 userScoped.route("/organizations", organizationCreateRoute);
 userScoped.route("/user/preferences", userPreferencesReadRoute);
 userScoped.route("/user/preferences", userPreferencesWriteRoute);
+userScoped.route("/user/preferences/get", userPreferencesGetRoute);
+userScoped.route("/user/preferences/update", userPreferencesUpdateRoute);
 app.route("/v1", userScoped);
 
 // /v1/:org_slug/:workspace_slug/* — org + workspace scoped routes.
@@ -171,4 +190,19 @@ orgScoped.route("/plugin/settings/auth-alerts", pluginSettingsSetAuthAlertsRoute
 orgScoped.route("/api-keys", apiKeyCreateRoute);
 orgScoped.route("/api-keys/revoke", apiKeyRevokeRoute);
 orgScoped.route("/workflows", workflowRoute);
+orgScoped.route("/workspace/member/list", workspaceMemberListRoute);
+orgScoped.route("/workspace/invite/send", workspaceInviteSendRoute);
+orgScoped.route("/conversation/chat", conversationChatRoute);
+orgScoped.route("/image/create", imageCreateRoute);
+orgScoped.route("/image/list", imageListRoute);
+orgScoped.route("/image/analyze", imageAnalyzeRoute);
+orgScoped.route("/document/create", documentCreateRoute);
+orgScoped.route("/document/list", documentListRoute);
+orgScoped.route("/document/read", documentReadRoute);
+orgScoped.route("/form/create", formCreateRoute);
+orgScoped.route("/form/submit", formSubmitRoute);
+orgScoped.route("/automation/list", automationListRoute);
+orgScoped.route("/automation/create", automationCreateRoute);
+orgScoped.route("/automation/trigger", automationTriggerRoute);
+orgScoped.route("/skill/workspace/list", skillWorkspaceListRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
