@@ -82,7 +82,7 @@ them too, so name the relevant skill in an agent's prompt.
 - **`oxagen-design-system`** — Oxagen's brand & visual identity (palette, the
   indigo→green gradient ring, Aeonik type, motion tokens, glass/card treatment,
   iconography, voice & casing). Use for any user-facing UI or product copy in
-  `apps/app` / `apps/website` so output reads as Oxagen.
+  `apps/app` so output reads as Oxagen.
 - **`coss-ui`** — the coss ui (Base UI) component system as implemented by
   `@oxagen/ui`: registry & import paths, `render`-not-`asChild` composition,
   `*Popup`/`*Panel`/`Menu*`/`TabsTab` naming, size scales & semantic tokens, and
@@ -329,11 +329,6 @@ Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level override
   only — no Node.js built-ins, no DB calls, no secrets. `middleware.ts` is
   no longer recognized; do not create one.
 
-### `apps/website`
-
-- Next.js. Static / minimal. Hello-world surface for the foundations
-  milestone — no interactive features.
-
 ### `apps/api`, `apps/mcp`
 
 - **`apps/api`** — Hono REST server. Routes live at
@@ -356,14 +351,6 @@ Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level override
 
 - Commander + Ink CLI. Entry: `apps/cli/src/index.tsx`. Provides the
   `oxagen dev` command (port-prober and dev-stack launcher).
-
-### `apps/admin`
-
-- Next.js. **Stub — landing page only** as of the foundations milestone (no
-  auth gate, no routes beyond `/`). The intended operator dashboard (tenant
-  management, billing overrides, feature-flag controls; auth-gated, never
-  exposed to customers) is planned but not yet implemented — don't treat it as
-  a real auth surface today.
 
 ### `apps/docs`
 

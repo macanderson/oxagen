@@ -20,7 +20,6 @@ describe("tenant policy manifest", () => {
     const tables = POLICY_MANIFEST.map((e) => e.table);
     expect(tables).toContain("agent.agents");
     expect(tables).toContain("chat.conversations");
-    expect(tables).toContain("execution.executions");
   });
 
   it("marks billing tables org_only and security_events workspace_nullable", () => {

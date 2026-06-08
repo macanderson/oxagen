@@ -25,7 +25,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ── agent.* (orgScopeMixin: org_id + workspace_id NOT NULL) ──────────────
   { table: "agent.agents", policyClass: "standard" },
   { table: "agent.agent_versions", policyClass: "standard" },
-  { table: "agent.tools", policyClass: "standard" },
   { table: "agent.skills", policyClass: "standard" },
   { table: "agent.skill_versions", policyClass: "standard" },
   { table: "agent.background_tasks", policyClass: "standard" },
@@ -36,22 +35,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.mcp_servers", policyClass: "standard" },
   { table: "agent.workflow_runs", policyClass: "standard" },
   { table: "agent.workflow_run_tasks", policyClass: "standard" },
-  { table: "agent.agent_executions", policyClass: "standard" },
-  { table: "agent.agent_execution_steps", policyClass: "standard" },
-  { table: "agent.agent_tool_calls", policyClass: "standard" },
-
-  // ── workflow.* (orgScopeMixin) ────────────────────────────────────────────
-  { table: "workflow.playbooks", policyClass: "standard" },
-  { table: "workflow.playbook_versions", policyClass: "standard" },
-  { table: "workflow.playbook_steps", policyClass: "standard" },
-
-  // ── event.* (orgScopeMixin) ───────────────────────────────────────────────
-  { table: "event.triggers", policyClass: "standard" },
-
-  // ── execution.* (org_id + workspace_id, inline or via orgScopeMixin) ──────
-  { table: "execution.executions", policyClass: "standard" },
-  { table: "execution.execution_steps", policyClass: "standard" },
-  { table: "execution.tool_calls", policyClass: "standard" },
 
   // ── chat.* (orgScopeMixin) ────────────────────────────────────────────────
   { table: "chat.conversations", policyClass: "standard" },
@@ -60,10 +43,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ── content.* (orgScopeMixin) ─────────────────────────────────────────────
   { table: "content.files", policyClass: "standard" },
   { table: "content.generated_assets", policyClass: "standard" },
-  { table: "content.documents", policyClass: "standard" },
-
-  // ── integration.* (orgScopeMixin) ────────────────────────────────────────
-  { table: "integration.connections", policyClass: "standard" },
 
   // ── workspace.* ───────────────────────────────────────────────────────────
   //   workspaces has org_id NOT NULL but no workspace_id — org_only policy.

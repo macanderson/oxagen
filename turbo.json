@@ -224,7 +224,9 @@
         "NEXT_PUBLIC_APP_URL",
         "NEXT_PUBLIC_API_URL",
         "LINEAR_API_KEY",
-        "LINEAR_PROJECT_ID"
+        "LINEAR_PROJECT_ID",
+        "STRIPE_TAX_ENABLED",
+        "LOG_LEVEL"
       ],
       "passThroughEnv": ["CI"]
     },

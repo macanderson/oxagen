@@ -8,7 +8,6 @@ export * from "./auth";
 export * from "./workspace";
 export * from "./integration";
 export * from "./agent";
-export * from "./agent-executions";
 export * from "./workflow";
 export * from "./event";
 export * from "./execution";

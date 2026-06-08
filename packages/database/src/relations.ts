@@ -23,11 +23,6 @@ import {
   planSteps,
 } from "./schema/agent";
 import {
-  agentExecutions,
-  agentExecutionSteps,
-  agentToolCalls,
-} from "./schema/agent-executions";
-import {
 } from "./schema/workflow";
 import { conversations, messages } from "./schema/chat";
 import { files } from "./schema/content";
@@ -167,32 +162,6 @@ export const subagentRunsRelations = relations(subagentRuns, ({ one }) => ({
     references: [subagentFanouts.id],
   }),
 }));
-
-// Canonical agent execution log relations
-export const agentExecutionsRelations = relations(agentExecutions, ({ one, many }) => ({
-  agent: one(agents, { fields: [agentExecutions.agentId], references: [agents.id] }),
-  agentVersion: one(agentVersions, {
-    fields: [agentExecutions.agentVersionId],
-    references: [agentVersions.id],
-  }),
-  steps: many(agentExecutionSteps),
-}));
-
-export const agentExecutionStepsRelations = relations(agentExecutionSteps, ({ one, many }) => ({
-  execution: one(agentExecutions, {
-    fields: [agentExecutionSteps.executionId],
-    references: [agentExecutions.id],
-  }),
-  toolCalls: many(agentToolCalls),
-}));
-
-export const agentToolCallsRelations = relations(agentToolCalls, ({ one }) => ({
-  step: one(agentExecutionSteps, {
-    fields: [agentToolCalls.executionStepId],
-    references: [agentExecutionSteps.id],
-  }),
-}));
-
 
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({

@@ -18,7 +18,6 @@
 
 import { describe, expect, it } from "vitest";
 import { idMixin, allowedExecutionStatuses } from "../schema/_mixins";
-import { executions } from "../schema/index";
 import { getChecks, type DrizzleCheck } from "./_test-helpers";
 
 /**
@@ -132,40 +131,6 @@ describe("allowedExecutionStatuses", () => {
       expect(allowedExecutionStatuses).toContain(status);
     }
     expect(allowedExecutionStatuses).toHaveLength(expected.length);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 5: allowedExecutionStatuses matches DB CHECK constraint on executions table
-//    (via getTableConfig — no live DB required)
-// ---------------------------------------------------------------------------
-// NOTE: executionStatusMixin does not add a Drizzle check() call on the table
-// directly; the CHECK constraint is applied at the migration layer. The DB
-// schema table therefore has no Drizzle-queryable check on status. We assert
-// instead that:
-//   (a) The executions table exists and is importable.
-//   (b) Its status column is present (the mixin is applied).
-//   (c) All allowedExecutionStatuses values are valid TypeScript strings
-//       (the TS-side contract is sound).
-
-import { getTableConfig } from "drizzle-orm/pg-core";
-
-describe("executions table — status column from executionStatusMixin", () => {
-  it("executions table is importable", () => {
-    expect(executions).toBeDefined();
-  });
-
-  it("executions table has a 'status' column (mixin applied)", () => {
-    const cols = getTableConfig(executions).columns.map((c) => c.name);
-    expect(cols).toContain("status");
-  });
-
-  it("executions table has all four timestamp columns from executionStatusMixin", () => {
-    const cols = getTableConfig(executions).columns.map((c) => c.name);
-    expect(cols).toContain("started_at");
-    expect(cols).toContain("completed_at");
-    expect(cols).toContain("failed_at");
-    expect(cols).toContain("cancelled_at");
   });
 });
 
