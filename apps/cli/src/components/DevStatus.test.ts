@@ -124,15 +124,13 @@ describe("SERVICES port contract", () => {
     mcp: 4100,
     runner: 4200,
     app: 3000,
-    website: 3100,
   };
 
-  it("defines exactly 5 services", () => {
-    expect(Object.keys(EXPECTED)).toHaveLength(5);
+  it("defines exactly 4 services", () => {
+    expect(Object.keys(EXPECTED)).toHaveLength(4);
   });
 
   it("app is on port 3000", () => expect(EXPECTED.app).toBe(3000));
-  it("website is on port 3100", () => expect(EXPECTED.website).toBe(3100));
   it("api is on port 4000", () => expect(EXPECTED.api).toBe(4000));
   it("mcp is on port 4100", () => expect(EXPECTED.mcp).toBe(4100));
   it("runner is on port 4200", () => expect(EXPECTED.runner).toBe(4200));

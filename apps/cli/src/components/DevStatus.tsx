@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import net from "node:net";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 // Services the dev stack exposes. Port values must stay in sync with the
 // turbo dev task config (apps/*/project.json + apps/*/next.config.ts).
@@ -9,7 +9,6 @@ const SERVICES: ReadonlyArray<{ name: string; port: number }> = [
   { name: "mcp", port: 4100 },
   { name: "runner", port: 4200 },
   { name: "app", port: 3000 },
-  { name: "website", port: 3100 },
 ];
 
 type PortState = "checking" | "up" | "down";
