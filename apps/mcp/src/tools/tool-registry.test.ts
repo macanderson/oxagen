@@ -178,8 +178,6 @@ const allToolMetadata = [
   imageCreateMetadata,
   imageListMetadata,
   skillWorkspaceListMetadata,
-  userPreferencesReadMetadata,
-  userPreferencesWriteMetadata,
   workspaceInviteSendMetadata,
   workspaceMemberListMetadata,
 ];

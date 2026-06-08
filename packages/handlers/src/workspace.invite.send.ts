@@ -1,11 +1,12 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceInviteSend } from "@oxagen/oxagen/contracts/workspace.invite.send";
+import { maskEmail } from "./logger";
 
 export const workspaceInviteSendHandler: CapabilityHandler<typeof workspaceInviteSend> = async (
   input,
   _ctx,
 ) => {
-  console.log(`[stub] workspace.invite.send email=${input.email} role=${input.role}`);
+  console.log(`[stub] workspace.invite.send email=${maskEmail(input.email)} role=${input.role}`);
   return {
     id: `inv_stub_${Date.now()}`,
     status: "pending",

@@ -1185,7 +1185,7 @@
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true
+        "mcp": false
       }
     },
     {
@@ -1217,7 +1217,7 @@
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true
+        "mcp": false
       }
     },
     {

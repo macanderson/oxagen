@@ -2,43 +2,6 @@ import { index, integer, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-cor
 import { workflowSchema } from "./_schemas";
 import { auditMixin, citext, idMixin, orgScopeMixin } from "./_mixins";
 
-// Workflow definition — repeatable template for a sequence of tasks.
-export const workflows = workflowSchema.table(
-  "workflows",
-  {
-    ...idMixin("wfl"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    name: text("name").notNull(),
-    description: text("description"),
-    // Workflow definition as JSONB — stores step definitions, parameterization, etc.
-    definitionJson: jsonb("definition_json").notNull(),
-  },
-  (t) => ({
-    orgIdx: index("workflows_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
-// Workflow step definition — individual step within a workflow.
-export const workflowSteps = workflowSchema.table(
-  "workflow_steps",
-  {
-    ...idMixin("wfs"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    workflowId: uuid("workflow_id").notNull(),
-    stepIndex: integer("step_index").notNull(),
-    title: text("title").notNull(),
-    description: text("description"),
-    // Step configuration as JSONB — tool call, parameters, etc.
-    stepJson: jsonb("step_json").notNull(),
-  },
-  (t) => ({
-    workflowIdx: index("workflow_steps_workflow_idx").on(t.workflowId),
-    orgIdx: index("workflow_steps_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
 // Workflow run — execution of a workflow definition. Tracks overall progress.
 export const workflowRuns = workflowSchema.table(
   "workflow_runs",
@@ -93,32 +56,5 @@ export const workflowRunTasks = workflowSchema.table(
     workflowRunIdx: index("workflow_run_tasks_run_idx").on(t.workflowRunId),
     orgStatusIdx: index("workflow_run_tasks_org_status_idx").on(t.orgId, t.workspaceId, t.status),
     orgIdx: index("workflow_run_tasks_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
-// Workflow step run — execution of a single predefined step within a workflow run.
-export const workflowStepRuns = workflowSchema.table(
-  "workflow_step_runs",
-  {
-    ...idMixin("wfr"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    workflowRunId: uuid("workflow_run_id").notNull(),
-    workflowStepId: uuid("workflow_step_id").notNull(),
-    stepIndex: integer("step_index").notNull(),
-    title: text("title").notNull(),
-    // CHECK pending|running|completed|failed|cancelled in migration.
-    status: citext("status").notNull().default("pending"),
-    inngestRunId: text("inngest_run_id"),
-    outputJson: jsonb("output_json"),
-    error: text("error"),
-    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
-    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
-  },
-  (t) => ({
-    workflowRunIdx: index("workflow_step_runs_workflow_run_idx").on(t.workflowRunId),
-    workflowStepIdx: index("workflow_step_runs_workflow_step_idx").on(t.workflowStepId),
-    orgStatusIdx: index("workflow_step_runs_org_status_idx").on(t.orgId, t.workspaceId, t.status),
-    orgIdx: index("workflow_step_runs_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
