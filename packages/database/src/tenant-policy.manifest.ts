@@ -31,7 +31,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.approval_requests", policyClass: "standard" },
   { table: "agent.subagent_fanouts", policyClass: "standard" },
   { table: "agent.subagent_runs", policyClass: "standard" },
-  { table: "agent.plan_steps", policyClass: "standard" },
+  // agent.plan_steps dropped in 0026 (orphan table, never wired to handler/route)
   { table: "agent.mcp_servers", policyClass: "standard" },
   { table: "agent.workflow_runs", policyClass: "standard" },
   { table: "agent.workflow_run_tasks", policyClass: "standard" },
@@ -68,8 +68,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "org.principal_role_assignments", policyClass: "workspace_nullable" },
   { table: "org.roles", policyClass: "org_only" },
   { table: "org.role_grants", policyClass: "org_only" },
-  { table: "org.grants", policyClass: "org_only" },
-  { table: "org.policies", policyClass: "org_only" },
+  // org.grants and org.policies dropped in 0027 (dead schema: zero write paths, read-only stubs)
   { table: "org.access_requests", policyClass: "org_only" },
   { table: "org.org_users", policyClass: "org_only" },
   { table: "org.invitations", policyClass: "org_only" },
