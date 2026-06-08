@@ -33,13 +33,13 @@ describe("readConfig", () => {
 
   it("parses and returns JSON config", () => {
     mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(JSON.stringify({ token: "tok123", orgSlug: "my-org" }) as unknown as Buffer);
+    mockReadFileSync.mockReturnValue(JSON.stringify({ token: "tok123", orgSlug: "my-org" }));
     expect(readConfig()).toEqual({ token: "tok123", orgSlug: "my-org" });
   });
 
   it("returns empty object on JSON parse error", () => {
     mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue("INVALID JSON {{{" as unknown as Buffer);
+    mockReadFileSync.mockReturnValue("INVALID JSON {{{");
     expect(readConfig()).toEqual({});
   });
 });
@@ -50,7 +50,7 @@ describe("writeConfig", () => {
     mockExistsSync
       .mockReturnValueOnce(true)   // readConfig file check
       .mockReturnValueOnce(false); // dir check in writeConfig
-    mockReadFileSync.mockReturnValue(JSON.stringify({ token: "old" }) as unknown as Buffer);
+    mockReadFileSync.mockReturnValue(JSON.stringify({ token: "old" }));
 
     writeConfig({ orgSlug: "new-org" });
 
@@ -62,7 +62,7 @@ describe("writeConfig", () => {
 
   it("skips mkdirSync when config dir already exists", () => {
     mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(JSON.stringify({}) as unknown as Buffer);
+    mockReadFileSync.mockReturnValue(JSON.stringify({}));
 
     writeConfig({ token: "new-tok" });
 
@@ -76,7 +76,7 @@ describe("clearConfig", () => {
   it("unsets token, orgSlug, workspaceSlug but preserves other fields", () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue(
-      JSON.stringify({ token: "t", orgSlug: "o", workspaceSlug: "w", apiUrl: "u" }) as unknown as Buffer
+      JSON.stringify({ token: "t", orgSlug: "o", workspaceSlug: "w", apiUrl: "u" })
     );
 
     clearConfig();
@@ -92,7 +92,7 @@ describe("clearConfig", () => {
 describe("getToken", () => {
   it("returns token from config", () => {
     mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(JSON.stringify({ token: "my-token" }) as unknown as Buffer);
+    mockReadFileSync.mockReturnValue(JSON.stringify({ token: "my-token" }));
     expect(getToken()).toBe("my-token");
   });
 
@@ -111,7 +111,7 @@ describe("getApiUrl", () => {
 
   it("returns config apiUrl when no env var", () => {
     mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(JSON.stringify({ apiUrl: "http://custom.api" }) as unknown as Buffer);
+    mockReadFileSync.mockReturnValue(JSON.stringify({ apiUrl: "http://custom.api" }));
     expect(getApiUrl()).toBe("http://custom.api");
   });
 

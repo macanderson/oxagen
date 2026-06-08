@@ -20,20 +20,6 @@
       }
     },
     {
-      "name": "agent.code.execute",
-      "file": "agent.code.execute.ts",
-      "domain": "agent",
-      "mode": "async",
-      "surfaces": [
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
       "name": "agent.mcp.list",
       "file": "agent.mcp.list.ts",
       "domain": "agent",
@@ -128,20 +114,6 @@
       }
     },
     {
-      "name": "agent.plan.create",
-      "file": "agent.plan.create.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
       "name": "agent.skill.list",
       "file": "agent.skill.list.ts",
       "domain": "agent",
@@ -157,48 +129,6 @@
         "mcp": true,
         "unit": true,
         "e2e": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "agent.skill.load",
-      "file": "agent.skill.load.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "agent.subagent.aggregate",
-      "file": "agent.subagent.aggregate.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "agent.subagent.dispatch",
-      "file": "agent.subagent.dispatch.ts",
-      "domain": "agent",
-      "mode": "async",
-      "surfaces": [
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "unit": true,
         "docs": true
       }
     },
@@ -276,20 +206,6 @@
         "unit": true,
         "e2e": true,
         "docs": true
-      }
-    },
-    {
-      "name": "agent.ui.render",
-      "file": "agent.ui.render.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "unit": false,
-        "docs": false
       }
     },
     {

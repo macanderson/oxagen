@@ -72,7 +72,7 @@ describe("assertCanStartTurn", () => {
 
   it("propagates BillingSuspendedError from assertOrgCanConsume", async () => {
     const { BillingSuspendedError } = await import("../dunning");
-    assertOrgCanConsumeMock.mockRejectedValue(new BillingSuspendedError());
+    assertOrgCanConsumeMock.mockRejectedValue(new BillingSuspendedError(null));
     await expect(assertCanStartTurn("org-4")).rejects.toBeInstanceOf(BillingSuspendedError);
     // auto-reload and balance check must NOT be called when dunning rejects
     expect(effectiveBalanceMock).not.toHaveBeenCalled();

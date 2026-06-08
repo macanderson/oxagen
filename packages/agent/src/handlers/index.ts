@@ -15,12 +15,8 @@ type LoaderEntry = () => Promise<{ default?: CapabilityHandlerFn } & Record<stri
 // Single source of truth mapping capability name → handler module.
 const LOADERS: Record<string, LoaderEntry> = {
   "agent.tool.list": () => import("./agent.tool.list"),
-  "agent.code.execute": () => import("./agent.code.execute"),
   "agent.mcp.register": () => import("./agent.mcp.register"),
   "agent.mcp.list": () => import("./agent.mcp.list"),
-  "agent.subagent.dispatch": () => import("./agent.subagent.dispatch"),
-  "agent.subagent.aggregate": () => import("./agent.subagent.aggregate"),
-  "agent.plan.create": () => import("./agent.plan.create"),
   "agent.plan.approve": () => import("./agent.plan.approve"),
   "agent.task.background.start": () => import("./agent.task.background.start"),
   "agent.task.background.read": () => import("./agent.task.background.read"),
@@ -29,7 +25,6 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.memory.write": () => import("./agent.memory.write"),
   "agent.approval.resolve": () => import("./agent.approval.resolve"),
   "agent.skill.list": () => import("./agent.skill.list"),
-  "agent.skill.load": () => import("./agent.skill.load"),
 };
 
 /** Capability names this package supplies handlers for. Consumed by

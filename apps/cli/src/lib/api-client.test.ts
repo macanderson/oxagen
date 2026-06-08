@@ -79,7 +79,8 @@ describe("apiRequest", () => {
       body: JSON.stringify({ name: "test" }),
     });
 
-    const [, init] = mockFetch.mock.calls[0];
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit | undefined];
     expect(init?.body).toBe(JSON.stringify({ name: "test" }));
   });
 });

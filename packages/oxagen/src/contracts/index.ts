@@ -13,8 +13,6 @@ import { apiKeyRevoke } from "./api.key.revoke";
 import { archiveCreate } from "./archive.create";
 import { assetUpload } from "./asset.upload";
 import { agentApprovalResolve } from "./agent.approval.resolve";
-import { agentCodeExecute } from "./agent.code.execute";
-import { agentUiRender } from "./agent.ui.render";
 import { brandkitApply } from "./brandkit.apply";
 import { documentsGenerate } from "./documents.generate";
 import { documentsPdfCreate } from "./documents.pdf.create";
@@ -23,11 +21,7 @@ import { agentMcpRegister } from "./agent.mcp.register";
 import { agentMemoryRecall } from "./agent.memory.recall";
 import { agentMemoryWrite } from "./agent.memory.write";
 import { agentPlanApprove } from "./agent.plan.approve";
-import { agentPlanCreate } from "./agent.plan.create";
 import { agentSkillList } from "./agent.skill.list";
-import { agentSkillLoad } from "./agent.skill.load";
-import { agentSubagentAggregate } from "./agent.subagent.aggregate";
-import { agentSubagentDispatch } from "./agent.subagent.dispatch";
 import { agentTaskBackgroundCancel } from "./agent.task.background.cancel";
 import { agentTaskBackgroundRead } from "./agent.task.background.read";
 import { agentTaskBackgroundStart } from "./agent.task.background.start";
@@ -86,8 +80,6 @@ export {
   archiveCreate,
   assetUpload,
   agentApprovalResolve,
-  agentCodeExecute,
-  agentUiRender,
   brandkitApply,
   documentsGenerate,
   documentsPdfCreate,
@@ -96,11 +88,7 @@ export {
   agentMemoryRecall,
   agentMemoryWrite,
   agentPlanApprove,
-  agentPlanCreate,
   agentSkillList,
-  agentSkillLoad,
-  agentSubagentAggregate,
-  agentSubagentDispatch,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
@@ -168,21 +156,15 @@ export const contracts = [
   archiveCreate,
   assetUpload,
   agentApprovalResolve,
-  agentUiRender,
   brandkitApply,
   documentsGenerate,
   documentsPdfCreate,
-  agentCodeExecute,
   agentMcpList,
   agentMcpRegister,
   agentMemoryRecall,
   agentMemoryWrite,
   agentPlanApprove,
-  agentPlanCreate,
   agentSkillList,
-  agentSkillLoad,
-  agentSubagentAggregate,
-  agentSubagentDispatch,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
