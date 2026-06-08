@@ -303,9 +303,10 @@ export async function grantProratedPlanUpgradeCredits(
 ): Promise<void> {
   const start = Date.now();
 
-  // Kernel/scoped path (called from changeOrgPlan): the active tenant scope is
-  // on ALS, so withTenantDb keeps these org_only reads/writes RLS-checked.
-  const [fromPlan, toPlan] = await withTenantDb((tx) =>
+  // billing.plans is a shared platform catalog (no org_id, RLS not enabled) —
+  // read via withSystemDb to match the catalog-read convention (see grantPlanCreditsForInvoicePaid
+  // line 205). reads/writes to credit_* tables stay on withTenantDb (org_only). — OXA-1515
+  const [fromPlan, toPlan] = await withSystemDb((tx) =>
     Promise.all([
       tx.query.plans.findFirst({ where: eq(schema.plans.id, fromPlanId), columns: { includedCreditCents: true } }),
       tx.query.plans.findFirst({ where: eq(schema.plans.id, toPlanId), columns: { includedCreditCents: true } }),
