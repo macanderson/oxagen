@@ -43,7 +43,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
 
   // ── content.* (orgScopeMixin) ─────────────────────────────────────────────
   // content.documents dropped in 0021 (orphan table, never wired to handler/route)
-  { table: "content.files", policyClass: "standard" },
+  // content.files dropped in 0022 (orphan table, never written to, file.serve always 404)
   { table: "content.generated_assets", policyClass: "standard" },
 
   // ── workspace.* ───────────────────────────────────────────────────────────
