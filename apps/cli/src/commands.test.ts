@@ -13,7 +13,7 @@ beforeEach(() => {
 describe("CLI Commands", () => {
   describe("auth login", () => {
     it("requires email and password", () => {
-      const consoleSpy = vi.spyOn(console, "error").mockImplementation();
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
         throw new Error("exit");
       });
@@ -31,7 +31,7 @@ describe("CLI Commands", () => {
     });
 
     it("accepts email and password options", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation();
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
       authLoginCommand.parse(["node", "cli", "--email", "user@example.com", "--password", "secret"]);
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Authenticating"));
@@ -43,7 +43,7 @@ describe("CLI Commands", () => {
 
   describe("auth logout", () => {
     it("logs out user", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation();
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
       authLogoutCommand.parse(["node", "cli"]);
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Signing out"));
@@ -55,7 +55,7 @@ describe("CLI Commands", () => {
 
   describe("auth whoami", () => {
     it("displays current user info", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation();
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
       authWhoamiCommand.parse(["node", "cli"]);
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("User:"));
@@ -68,7 +68,7 @@ describe("CLI Commands", () => {
 
   describe("org list", () => {
     it("displays organizations", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation();
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
       orgListCommand.parse(["node", "cli"]);
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Organizations"));
@@ -79,7 +79,7 @@ describe("CLI Commands", () => {
 
   describe("workspace list", () => {
     it("displays workspaces", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation();
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
       workspaceListCommand.parse(["node", "cli"]);
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Workspaces"));
@@ -90,7 +90,7 @@ describe("CLI Commands", () => {
 
   describe("chat send", () => {
     it("accepts message argument", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation();
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
       chatSendCommand.parse(["node", "cli", "hello world"]);
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Sending"));
