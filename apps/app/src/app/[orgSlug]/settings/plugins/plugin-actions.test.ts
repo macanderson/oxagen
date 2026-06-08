@@ -117,6 +117,7 @@ describe("resolveManagedOrgForPlugins gate — member role", () => {
     const res = await installPluginAction({
       orgSlug: "acme",
       catalogServerId: "cat-1",
+      pluginType: "mcp_server",
     });
     expect(res.ok).toBe(false);
     expect(res.error).toContain("permission");
@@ -166,7 +167,7 @@ describe("installPluginAction — owner role", () => {
   });
 
   it("returns ok:false on invalid input (missing orgSlug)", async () => {
-    const res = await installPluginAction({ orgSlug: "" });
+    const res = await installPluginAction({ orgSlug: "", pluginType: "mcp_server" });
     expect(res.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
   });
@@ -176,13 +177,14 @@ describe("installPluginAction — owner role", () => {
     const res = await installPluginAction({
       orgSlug: "acme",
       catalogServerId: "cat-1",
+      pluginType: "mcp_server",
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toBe("catalog error");
   });
 
   it("revalidates the plugins settings page on success", async () => {
-    await installPluginAction({ orgSlug: "acme", catalogServerId: "cat-1" });
+    await installPluginAction({ orgSlug: "acme", catalogServerId: "cat-1", pluginType: "mcp_server" });
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/settings/plugins");
   });
 });

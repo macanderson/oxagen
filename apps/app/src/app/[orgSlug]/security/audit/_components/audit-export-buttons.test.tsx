@@ -38,8 +38,8 @@ describe("AuditExportButtons", () => {
     );
     const buttons = getAllByRole("button");
     expect(buttons).toHaveLength(2);
-    expect(buttons[0]?.disabled).toBe(true);
-    expect(buttons[1]?.disabled).toBe(true);
+    expect((buttons[0] as HTMLButtonElement)?.disabled).toBe(true);
+    expect((buttons[1] as HTMLButtonElement)?.disabled).toBe(true);
     // Both buttons should have the title from disabledReason
     expect(buttons[0]?.getAttribute("title")).toBe("Upgrade to Enterprise to export");
   });
