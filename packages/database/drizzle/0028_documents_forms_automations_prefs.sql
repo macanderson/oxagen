@@ -13,6 +13,11 @@
 -- Forward migration — immutable after merge (OXA-1515 policy).
 BEGIN;
 
+-- Ensure the target schemas exist (idempotent). The baseline creates them on a
+-- fresh DB; this guard makes the migration self-sufficient on any DB state.
+CREATE SCHEMA IF NOT EXISTS content;
+CREATE SCHEMA IF NOT EXISTS workflow;
+
 -- ── content.documents ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS content.documents (
   id                 uuid PRIMARY KEY DEFAULT COALESCE(
