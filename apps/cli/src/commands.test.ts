@@ -524,9 +524,12 @@ describe("api-key create", () => {
   it("creates API key and displays secret", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     mockApiRequest.mockResolvedValueOnce({ id: "key_123", key: "oxk_abc123secret" });
+    const origIsTTY = process.stdout.isTTY;
+    process.stdout.isTTY = true; // Simulate interactive TTY to show full secret
 
     await apiKeyCreateCommand.parseAsync(["node", "cli", "my-key"]);
 
+    process.stdout.isTTY = origIsTTY; // Restore
     expect(mockApiRequest).toHaveBeenCalledWith("/api-keys", expect.objectContaining({ method: "POST" }));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("key_123"));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("oxk_abc123secret"));
