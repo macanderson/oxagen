@@ -16,13 +16,14 @@
  *   tsx tools/scripts/release.ts --set 0.2.0         # set an exact version
  *
  * Flags:
- *   --dry-run     compute + print, but write no files, no git, no Vercel
+ *   --dry-run     compute + print, but write no files, no git, no Vercel, no npm
  *   --set X.Y.Z   set an exact version instead of bumping
  *   --from <ref>  base ref for the notes diff (default: newest tag); use this to
  *                 regenerate notes for an already-tagged release
  *   --no-notes    skip the Anthropic release-notes generation (plain changelog)
  *   --no-git      skip the commit + tag
  *   --no-vercel   skip the Vercel PLATFORM_VERSION sync
+ *   --no-npm      skip the CLI build + npm publish (even if NPM_TOKEN is available)
  *   --yes         (reserved) non-interactive; this script is already non-interactive
  *
  * Release notes are AI-generated from the commit log + diffstat between the last

@@ -106,6 +106,14 @@ import { pluginOrgInstallBulkCommand } from "./commands/plugin.org.install_bulk.
 import { pluginOrgListCommand } from "./commands/plugin.org.list.js";
 import { pluginOrgSetEnabledCommand } from "./commands/plugin.org.set_enabled.js";
 import { pluginRegistryRemoveCommand } from "./commands/plugin.registry.remove.js";
+import { pluginRegistrySyncCommand } from "./commands/plugin.registry.sync.js";
+import { pluginSettingsSetAuthAlertsCommand } from "./commands/plugin.settings.set_auth_alerts.js";
+import { pluginWorkspaceSetEnabledCommand } from "./commands/plugin.workspace.set_enabled.js";
+import { systemInstallInstructionsCommand } from "./commands/system.install.instructions.js";
+import { userPreferencesReadCommand } from "./commands/user.preferences.read.js";
+import { userPreferencesWriteCommand } from "./commands/user.preferences.write.js";
+import { workflowCancelCommand } from "./commands/workflow.cancel.js";
+import { workflowStatusCommand } from "./commands/workflow.status.js";
 
 import * as apiClient from "./lib/api-client.js";
 import * as config from "./lib/config.js";
@@ -115,6 +123,12 @@ const mockRequireAuth = vi.mocked(apiClient.requireAuth);
 const mockWriteConfig = vi.mocked(config.writeConfig);
 const mockClearConfig = vi.mocked(config.clearConfig);
 const mockGetToken = vi.mocked(config.getToken);
+
+// Helper: throw an ApiError through apiRequest mock (covers instanceof branch in catch blocks)
+function mockApiError(status: number, message: string) {
+  const ApiErrorClass = apiClient.ApiError;
+  mockApiRequest.mockRejectedValueOnce(new ApiErrorClass(status, message));
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -2014,6 +2028,264 @@ describe("plugin registry remove", () => {
     const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Registry is global default"));
     await expect(pluginRegistryRemoveCommand.parseAsync(["node", "cli", "-r", "r1"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plugin registry sync
+// ---------------------------------------------------------------------------
+describe("plugin registry sync", () => {
+  it("triggers a registry sync", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ accepted: true });
+    await pluginRegistrySyncCommand.parseAsync(["node", "cli", "-r", "reg1"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/registry/sync", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Sync accepted"));
+    consoleSpy.mockRestore();
+  });
+
+  it("reports sync not accepted", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ accepted: false });
+    await pluginRegistrySyncCommand.parseAsync(["node", "cli", "-r", "reg1"]);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("not accepted"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles sync failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Registry not found"));
+    await expect(pluginRegistrySyncCommand.parseAsync(["node", "cli", "-r", "reg1"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Error:"));
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plugin settings set_auth_alerts
+// ---------------------------------------------------------------------------
+describe("plugin settings set_auth_alerts", () => {
+  it("updates auth alert settings", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ ok: true });
+    await pluginSettingsSetAuthAlertsCommand.parseAsync(["node", "cli", "--roles", "Owner,Admin"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/settings/set_auth_alerts", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("updated"));
+    consoleSpy.mockRestore();
+  });
+
+  it("reports update failed when ok=false", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ ok: false });
+    await pluginSettingsSetAuthAlertsCommand.parseAsync(["node", "cli", "--roles", "Owner"]);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Update failed"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Permission denied"));
+    await expect(pluginSettingsSetAuthAlertsCommand.parseAsync(["node", "cli", "--roles", "Owner"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plugin workspace set_enabled
+// ---------------------------------------------------------------------------
+describe("plugin workspace set_enabled", () => {
+  it("enables a plugin for workspace", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ workspaceServerId: "wsrv1" });
+    await pluginWorkspaceSetEnabledCommand.parseAsync(["node", "cli", "-l", "listing1", "--enabled", "true"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/workspace/set_enabled", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("enabled"));
+    consoleSpy.mockRestore();
+  });
+
+  it("disables a plugin for workspace (no server ID)", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ workspaceServerId: null });
+    await pluginWorkspaceSetEnabledCommand.parseAsync(["node", "cli", "-l", "listing1", "--enabled", "false"]);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("disabled"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Listing not found"));
+    await expect(pluginWorkspaceSetEnabledCommand.parseAsync(["node", "cli", "-l", "l1", "--enabled", "true"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// system install instructions
+// ---------------------------------------------------------------------------
+describe("system install instructions", () => {
+  it("shows installation steps", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      client: "claude-code",
+      steps: [
+        { label: "Install the CLI", command: "npm install -g @oxagen/cli" },
+        { label: "Authenticate", command: "oxagen auth login" },
+      ],
+    });
+    await systemInstallInstructionsCommand.parseAsync(["node", "cli", "-c", "claude-code"]);
+    expect(mockApiRequest).toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("claude-code"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles fetch failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Unknown client"));
+    await expect(systemInstallInstructionsCommand.parseAsync(["node", "cli", "-c", "unknown"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// user preferences read/write
+// ---------------------------------------------------------------------------
+describe("user preferences read", () => {
+  it("reads user preferences", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      fontSize: "medium",
+      density: "comfortable",
+      enterToSubmit: true,
+      pendingPromptBehavior: "queue",
+      defaultTextTier: "balanced",
+      defaultTextModel: "claude-haiku-4-5",
+      defaultImageModel: null,
+      defaultVideoModel: null,
+    });
+    await userPreferencesReadCommand.parseAsync(["node", "cli"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/user/preferences/read", expect.objectContaining({ method: "GET" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("preferences"));
+    consoleSpy.mockRestore();
+  });
+
+  it("shows optional fields when set", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      fontSize: "large",
+      density: "spacious",
+      enterToSubmit: false,
+      pendingPromptBehavior: "interrupt",
+      defaultTextTier: "precise",
+      defaultTextModel: "claude-sonnet-4-6",
+      defaultImageModel: "gpt-image-1",
+      defaultVideoModel: "veo-3.0",
+    });
+    await userPreferencesReadCommand.parseAsync(["node", "cli"]);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("gpt-image-1"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles read failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Unauthorized"));
+    await expect(userPreferencesReadCommand.parseAsync(["node", "cli"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+describe("user preferences write", () => {
+  it("updates user preferences", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      fontSize: "large",
+      density: "comfortable",
+      enterToSubmit: true,
+      pendingPromptBehavior: "queue",
+      defaultTextTier: null,
+      defaultTextModel: null,
+      defaultImageModel: null,
+      defaultVideoModel: null,
+    });
+    await userPreferencesWriteCommand.parseAsync(["node", "cli", "--font-size", "large"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/user/preferences/write", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("updated"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles write failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Validation failed"));
+    await expect(userPreferencesWriteCommand.parseAsync(["node", "cli", "--density", "bad"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// workflow cancel / status
+// ---------------------------------------------------------------------------
+describe("workflow cancel", () => {
+  it("cancels a workflow", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ cancelled: true });
+    await workflowCancelCommand.parseAsync(["node", "cli", "-w", "wfr_abc"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/workflow/cancel", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("cancelled"));
+    consoleSpy.mockRestore();
+  });
+
+  it("reports workflow could not be cancelled", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ cancelled: false });
+    await workflowCancelCommand.parseAsync(["node", "cli", "-w", "wfr_abc"]);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("could not be cancelled"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles cancel failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Not found"));
+    await expect(workflowCancelCommand.parseAsync(["node", "cli", "-w", "wfr_abc"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+describe("workflow status", () => {
+  it("shows workflow status and tasks", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      workflow: { id: "wf1", publicId: "wfr_abc", title: "Research task", status: "running", totalTasks: 5, completedTasks: 3, failedTasks: 0 },
+      tasks: [
+        { id: "t1", title: "Gather data", status: "completed" },
+        { id: "t2", title: "Analyze data", status: "running" },
+      ],
+    });
+    await workflowStatusCommand.parseAsync(["node", "cli", "-w", "wfr_abc"]);
+    expect(mockApiRequest).toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("running"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles status fetch failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Workflow not found"));
+    await expect(workflowStatusCommand.parseAsync(["node", "cli", "-w", "wfr_xyz"])).rejects.toThrow();
     consoleSpy.mockRestore();
     exitSpy.mockRestore();
   });
