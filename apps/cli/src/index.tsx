@@ -273,6 +273,7 @@ document.addCommand(documentListCommand);
 document.addCommand(documentReadCommand);
 const documents = program.command("documents").description("Document generation commands");
 documents.addCommand(documentsGenerateCommand);
+documents.addCommand(documentsPdfCreateCommand);
 
 // automation
 const automation = program.command("automation").description("Automation management commands");
@@ -284,6 +285,7 @@ automation.addCommand(automationTriggerCommand);
 const form = program.command("form").description("Form management commands");
 form.addCommand(formCreateCommand);
 form.addCommand(formSubmitCommand);
+form.addCommand(formFillCommand);
 
 // skill
 const skill = program.command("skill").description("Skill management commands");
