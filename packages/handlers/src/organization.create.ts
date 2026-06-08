@@ -148,8 +148,9 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
   // grantFreeCredits is idempotent — safe to re-run on retries.
   await grantFreeCredits(orgId).catch((err: unknown) => {
     // Log but do not fail org creation. The grant can be re-applied manually.
+    const errMsg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
     logger.error(
-      { err, orgId },
+      { err, errMsg, orgId },
       "organization.create: grantFreeCredits failed — org created, credits not granted",
     );
   });
