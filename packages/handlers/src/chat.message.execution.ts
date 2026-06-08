@@ -1,9 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { chatMessageExecution } from "@oxagen/oxagen/contracts/chat.message.execution";
-import { agentExecutionRecord } from "@oxagen/oxagen/contracts/agent.execution.record";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
-import { invoke } from "@oxagen/oxagen";
 import { logger } from "./logger";
 
 /**
@@ -34,39 +32,99 @@ export const chatMessageExecutionHandler: CapabilityHandler<typeof chatMessageEx
       throw new Error("message not found in this workspace");
     }
 
-    // 2. Delegate to agent.execution.record with chat origin
-    const executionResult = await invoke(agentExecutionRecord, {
-      agentId: input.agentId,
-      agentVersionId: input.agentVersionId,
-      originType: "chat",
-      originId: input.messageId,
-      status: input.status,
-      inputPayload: input.inputPayload,
-      outputPayload: input.outputPayload,
-      failureReason: input.failureReason,
-      startedAt: input.startedAt,
-      completedAt: input.completedAt,
-      latencyMs: input.latencyMs,
-      inputTokens: input.inputTokens,
-      outputTokens: input.outputTokens,
-      estimatedCostUsd: input.estimatedCostUsd,
-      steps: input.steps,
-    });
+    // 2. Write execution record in the same transaction (atomicity with message update)
+    const [execution] = await tx
+      .insert(schema.agentExecutions)
+      .values({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        agentId: input.agentId,
+        agentVersionId: input.agentVersionId,
+        originType: "chat",
+        originId: input.messageId,
+        status: input.status,
+        inputPayload: input.inputPayload,
+        outputPayload: input.outputPayload || null,
+        failureReason: input.failureReason || null,
+        startedAt: input.startedAt || null,
+        completedAt: input.completedAt || null,
+        latencyMs: input.latencyMs || null,
+        inputTokens: input.inputTokens || null,
+        outputTokens: input.outputTokens || null,
+        estimatedCostUsd: input.estimatedCostUsd || null,
+        syncedToGraphAt: null,
+        createdByUserId: ctx.userId || null,
+        updatedByUserId: ctx.userId || null,
+      })
+      .returning({ id: schema.agentExecutions.id, createdAt: schema.agentExecutions.createdAt });
 
-    // 3. Update message execution metadata if provided
+    if (!execution) throw new Error("execution insert returned no row");
+
+    // 3. Insert execution steps and tool calls (if provided)
+    if (input.steps && input.steps.length > 0) {
+      for (const step of input.steps) {
+        const [executionStep] = await tx
+          .insert(schema.agentExecutionSteps)
+          .values({
+            executionId: execution.id,
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            stepNumber: step.stepNumber,
+            stepType: step.stepType,
+            status: step.status,
+            inputPayload: step.inputPayload,
+            outputPayload: step.outputPayload || null,
+            failureReason: step.failureReason || null,
+            latencyMs: step.latencyMs || null,
+            inputTokens: step.inputTokens || null,
+            outputTokens: step.outputTokens || null,
+            createdByUserId: ctx.userId || null,
+            updatedByUserId: ctx.userId || null,
+          })
+          .returning({ id: schema.agentExecutionSteps.id });
+
+        if (!executionStep) throw new Error(`execution step ${step.stepNumber} insert returned no row`);
+
+        if (step.toolCalls && step.toolCalls.length > 0) {
+          await tx.insert(schema.agentToolCalls).values(
+            step.toolCalls.map((toolCall: any) => ({
+              executionStepId: executionStep.id,
+              orgId: ctx.orgId,
+              workspaceId: ctx.workspaceId,
+              toolName: toolCall.toolName,
+              toolType: toolCall.toolType,
+              requestPayload: toolCall.requestPayload,
+              responsePayload: toolCall.responsePayload || null,
+              status: toolCall.status,
+              latencyMs: toolCall.latencyMs || null,
+              inputTokens: toolCall.inputTokens || null,
+              outputTokens: toolCall.outputTokens || null,
+            })),
+          );
+        }
+      }
+    }
+
+    // 4. Update message execution metadata in same transaction (atomic with execution writes)
     if (input.updateMessageMetadata) {
       await tx
         .update(schema.messages)
         .set({
           metadata: {
-            executionId: executionResult.executionId,
-            status: executionResult.status,
-            completedAt: executionResult.createdAt,
+            executionId: execution.id,
+            status: input.status,
+            completedAt: execution.createdAt,
           },
           updatedByUserId: ctx.userId || null,
         })
         .where(eq(schema.messages.id, input.messageId));
     }
+
+    const executionResult = {
+      executionId: execution.id,
+      status: input.status,
+      createdAt: execution.createdAt,
+    };
 
     logger.info(
       {
