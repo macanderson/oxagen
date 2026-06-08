@@ -10,8 +10,6 @@ import {
 import { users, sessions, accounts, apiKeys, credentials } from "./schema/auth";
 import { workspaces, workspaceUsers } from "./schema/workspace";
 import {
-  agents,
-  agentVersions,
   mcpServers,
   skills,
   skillVersions,
@@ -87,20 +85,6 @@ export const workspaceUsersRelations = relations(workspaceUsers, ({ one }) => ({
   user: one(users, { fields: [workspaceUsers.userId], references: [users.id] }),
 }));
 
-
-
-export const agentsRelations = relations(agents, ({ many }) => ({
-  versions: many(agentVersions),
-}));
-
-export const agentVersionsRelations = relations(agentVersions, ({ one }) => ({
-  agent: one(agents, { fields: [agentVersions.agentId], references: [agents.id] }),
-  parentVersion: one(agentVersions, {
-    fields: [agentVersions.parentVersionId],
-    references: [agentVersions.id],
-    relationName: "agent_version_parent",
-  }),
-}));
 
 export const mcpServersRelations = relations(mcpServers, ({ one }) => ({
   org: one(organizations, { fields: [mcpServers.orgId], references: [organizations.id] }),

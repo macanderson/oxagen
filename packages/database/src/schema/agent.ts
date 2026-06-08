@@ -11,53 +11,10 @@ import {
   versionMixin,
 } from "./_mixins";
 
-export const agents = agentSchema.table(
-  "agents",
-  {
-    ...idMixin("agt"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...softDeleteMixin(),
-    name: text("name").notNull(),
-    slug: citext("slug").notNull(),
-    description: text("description"),
-    defaultModel: text("default_model").notNull(),
-    isSystemAgent: boolean("is_system_agent").notNull().default(false),
-  },
-  (t) => ({
-    orgSlugIdx: uniqueIndex("agents_org_slug_idx").on(t.orgId, t.slug),
-    orgIdx: index("agents_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
-export const agentVersions = agentSchema.table(
-  "agent_versions",
-  {
-    ...idMixin("agv"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...versionMixin(),
-    ...jsonContractMixin(),
-    agentId: uuid("agent_id").notNull(),
-    systemPrompt: text("system_prompt").notNull(),
-    model: text("model").notNull(),
-    temperature: numeric("temperature", { precision: 3, scale: 2 }).notNull(),
-    contextWindow: integer("context_window"),
-    toolChoicePolicy: text("tool_choice_policy").notNull(),
-    runtimeConfig: jsonb("runtime_config").notNull().default(sql`'{}'::jsonb`),
-  },
-  (t) => ({
-    agentIdx: index("agent_versions_agent_idx").on(t.agentId),
-    agentLatestIdx: uniqueIndex("agent_versions_agent_latest_idx")
-      .on(t.agentId)
-      .where(sql`is_latest = true`),
-    agentVersionIdx: uniqueIndex("agent_versions_agent_version_idx").on(t.agentId, t.versionNumber),
-    orgIdx: index("agent_versions_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
 // Skills (spec §6, agent-runtime epic). Logical identity + immutable
 // versions, mirroring the agents/tools/playbooks versioning pattern.
+// NOTE: agent.agents and agent.agent_versions tables were dropped in migration 0024
+// (orphaned schema with zero CRUD usage despite Drizzle definitions).
 export const skills = agentSchema.table(
   "skills",
   {

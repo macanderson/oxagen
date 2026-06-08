@@ -18,7 +18,7 @@ describe("tenant policy manifest", () => {
 
   it("includes the known standard owned tables", () => {
     const tables = POLICY_MANIFEST.map((e) => e.table);
-    expect(tables).toContain("agent.agents");
+    expect(tables).toContain("agent.skills");
     expect(tables).toContain("chat.conversations");
   });
 

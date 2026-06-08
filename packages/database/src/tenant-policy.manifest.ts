@@ -24,8 +24,7 @@ export interface PolicyEntry {
 export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ── agent.* (orgScopeMixin: org_id + workspace_id NOT NULL) ──────────────
   // agent.tools dropped in 0021 (orphan table, never wired to handler/route)
-  { table: "agent.agents", policyClass: "standard" },
-  { table: "agent.agent_versions", policyClass: "standard" },
+  // agent.agents + agent.agent_versions dropped in 0024 (orphan tables, zero CRUD refs)
   { table: "agent.skills", policyClass: "standard" },
   { table: "agent.skill_versions", policyClass: "standard" },
   { table: "agent.background_tasks", policyClass: "standard" },
