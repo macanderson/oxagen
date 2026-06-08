@@ -11,6 +11,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@oxagen/ai", () => ({
   generateObjectFor: mocks.generateObjectFor,
   selectModel: mocks.selectModel,
+  // Prompt-registry wiring (the analysis instruction now resolves through the
+  // registry so workspace overrides/append apply). Passthrough in tests.
+  loadWorkspacePromptConfig: vi.fn(async () => ({})),
+  resolvePrompt: (a: { baseline: string }) => a.baseline,
+  imageAnalyzePrompt: () => "analyze baseline",
 }));
 
 // Build a fake select chain for the asset lookup

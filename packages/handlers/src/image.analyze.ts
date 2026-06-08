@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { generateObjectFor, selectModel } from "@oxagen/ai";
+import {
+  generateObjectFor,
+  selectModel,
+  resolvePrompt,
+  imageAnalyzePrompt,
+  loadWorkspacePromptConfig,
+} from "@oxagen/ai";
 import { schema, withSystemDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -55,6 +61,15 @@ export const imageAnalyzeHandler: CapabilityHandler<typeof imageAnalyze> = async
   }
 
   // ── 2. Build the multimodal message ──────────────────────────────────────────
+  // The analysis instruction is the overridable "image.analyze" content prompt;
+  // resolve it through the registry so an enterprise workspace can tailor the
+  // analysis voice/focus and append workspace instructions.
+  const promptConfig = await loadWorkspacePromptConfig(ctx.workspaceId).catch(() => ({}));
+  const instruction = resolvePrompt({
+    key: "image.analyze",
+    baseline: imageAnalyzePrompt(),
+    config: promptConfig,
+  });
   const messages: ModelMessage[] = [
     {
       role: "user",
@@ -64,10 +79,7 @@ export const imageAnalyzeHandler: CapabilityHandler<typeof imageAnalyze> = async
           image: asset.storageUrl,
           mediaType: asset.mimeType as "image/png" | "image/jpeg" | "image/webp" | "image/gif",
         },
-        {
-          type: "text",
-          text: "Analyze this image. Return a detailed description of what you see, an array of relevant tags (keywords), and a concise analysis.",
-        },
+        { type: "text", text: instruction },
       ],
     },
   ];

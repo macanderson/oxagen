@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
-import { generateObjectFor, selectModel } from "@oxagen/ai";
+import {
+  generateObjectFor,
+  selectModel,
+  resolvePrompt,
+  conversationTitlePrompt,
+  loadWorkspacePromptConfig,
+} from "@oxagen/ai";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 
@@ -21,11 +27,19 @@ export async function autoTitleConversation(opts: {
   requestId: string;
 }): Promise<void> {
   try {
+    // Honor a workspace override/append for the (overridable) titler prompt.
+    const promptConfig = await runInTenantScope(
+      { orgId: opts.orgId, workspaceId: opts.workspaceId },
+      () => loadWorkspacePromptConfig(opts.workspaceId),
+    ).catch(() => ({}));
     const { object } = await generateObjectFor({
       schema: z.object({ title: z.string().max(80) }),
       model: selectModel({ tier: "fast" }),
-      system:
-        "You are a conversation titler. Respond with a concise title (≤6 words, Title Case, no trailing punctuation) that captures the main topic of the user message. Return only the title.",
+      system: resolvePrompt({
+        key: "conversation.title",
+        baseline: conversationTitlePrompt(),
+        config: promptConfig,
+      }),
       prompt: opts.firstUserMessage.slice(0, 500),
       temperature: 0.3,
       telemetry: {

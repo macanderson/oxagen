@@ -9,8 +9,11 @@ import {
   supportsReasoning,
   modelIdOf,
   loadEffectiveModelDefaults,
+  resolvePrompt,
+  chatSystemPrompt,
+  loadWorkspacePromptConfig,
 } from "@oxagen/ai";
-import { materializeTools, readWorkspaceContext, injectContext, buildChatSystemPrompt } from "@oxagen/agent";
+import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { randomUUID } from "node:crypto";
@@ -285,44 +288,55 @@ export async function POST(request: NextRequest): Promise<Response> {
         // when onApprovalRequired fires. runInTenantScope is required:
         // contributeMcpTools reads workspace MCP server listings via
         // withTenantDb, which needs an active ALS tenant scope.
-        const { tools: agentTools, nameMap: toolNameMap } = await runInTenantScope(
-          { orgId: tenant.id, workspaceId: workspace.id },
-          () =>
-            materializeTools(
-              {
-                orgId: tenant.id,
-                workspaceId: workspace.id,
-                userId: session.user.id,
-                apiKeyId: null,
-                requestId,
-                surface: "app",
-                messageId: parentMessageId ?? requestId,
-                clientIp,
-              },
-              {
-                onApprovalRequired: (approvalEvent) => {
-                  emit({
-                    type: "approval-required",
-                    approvalId: approvalEvent.approvalId,
-                    capability: approvalEvent.capability,
-                    inputPreview: approvalEvent.inputPreview,
-                    riskLevel: approvalEvent.riskLevel,
-                    expiresAt: approvalEvent.expiresAt,
-                  });
+        // Materialize tools AND load the workspace prompt config in the same
+        // tenant scope, in parallel — both read tenant-scoped tables via
+        // withTenantDb and need an active ALS scope. The prompt config lets a
+        // workspace append "additional instructions" to the (append-only) core
+        // chat prompt; a load failure degrades to the untouched baseline.
+        const [{ tools: agentTools, nameMap: toolNameMap }, promptConfig] =
+          await runInTenantScope({ orgId: tenant.id, workspaceId: workspace.id }, () =>
+            Promise.all([
+              materializeTools(
+                {
+                  orgId: tenant.id,
+                  workspaceId: workspace.id,
+                  userId: session.user.id,
+                  apiKeyId: null,
+                  requestId,
+                  surface: "app",
+                  messageId: parentMessageId ?? requestId,
+                  clientIp,
                 },
-              },
-            ),
-        );
+                {
+                  onApprovalRequired: (approvalEvent) => {
+                    emit({
+                      type: "approval-required",
+                      approvalId: approvalEvent.approvalId,
+                      capability: approvalEvent.capability,
+                      inputPreview: approvalEvent.inputPreview,
+                      riskLevel: approvalEvent.riskLevel,
+                      expiresAt: approvalEvent.expiresAt,
+                    });
+                  },
+                },
+              ),
+              loadWorkspacePromptConfig(workspace.id).catch(() => ({})),
+            ]),
+          );
 
         const result = streamAgentReply({
           messages: coreMessages,
           model: turnModel,
           tools: agentTools,
-          system: buildChatSystemPrompt({
-            orgSlug,
-            workspaceSlug,
-            orgName: tenant.name,
-            workspaceName: workspace.name,
+          system: resolvePrompt({
+            key: "chat.system",
+            baseline: chatSystemPrompt({
+              orgSlug,
+              workspaceSlug,
+              orgName: tenant.name,
+              workspaceName: workspace.name,
+            }),
+            config: promptConfig,
           }),
           ...(turnEffort ? { effort: turnEffort } : {}),
           telemetry: {

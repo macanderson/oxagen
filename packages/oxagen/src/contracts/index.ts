@@ -51,6 +51,8 @@ import { userPreferencesRead } from "./user.preferences.read";
 import { userPreferencesWrite } from "./user.preferences.write";
 import { workspaceModelSettingsRead } from "./workspace.model.settings.read";
 import { workspaceModelSettingsWrite } from "./workspace.model.settings.write";
+import { promptSettingsRead } from "./prompt.settings.read";
+import { promptSettingsWrite } from "./prompt.settings.write";
 import { notificationsList } from "./notifications.list";
 import { notificationsMark } from "./notifications.mark";
 import { pluginCatalogBrowse } from "./plugin.catalog.browse";
@@ -135,6 +137,8 @@ export {
   userPreferencesWrite,
   workspaceModelSettingsRead,
   workspaceModelSettingsWrite,
+  promptSettingsRead,
+  promptSettingsWrite,
   notificationsList,
   notificationsMark,
   pluginCatalogBrowse,
@@ -228,6 +232,8 @@ export const contracts = [
   userPreferencesWrite,
   workspaceModelSettingsRead,
   workspaceModelSettingsWrite,
+  promptSettingsRead,
+  promptSettingsWrite,
   notificationsList,
   notificationsMark,
   pluginCatalogBrowse,
