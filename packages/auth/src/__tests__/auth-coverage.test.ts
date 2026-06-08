@@ -120,7 +120,7 @@ describe("Auth Package Coverage Tests", () => {
 
     it("validates role-based access control", () => {
       const adminRole = "admin";
-      const guestRole = "guest";
+      const guestRole: string = "guest";
       const canDeleteWorkspace = adminRole === "admin" || adminRole === "owner";
       expect(canDeleteWorkspace).toBe(true);
       expect(guestRole === "admin").toBe(false);
@@ -130,7 +130,7 @@ describe("Auth Package Coverage Tests", () => {
   describe("Authentication Errors", () => {
     it("handles invalid credentials", () => {
       const email = "user@example.com";
-      const password = "wrong-password";
+      const password: string = "wrong-password";
       const authenticated = password === "correct";
       expect(authenticated).toBe(false);
     });
