@@ -99,7 +99,7 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       // we have the read-write token). If the store doesn't support private
       // access, fall back to public access. For public-only stores, both
       // approaches work but private first ensures compatibility.
-      let result = await blobGet(key, { token, access: "private" }).catch(
+      const result = await blobGet(key, { token, access: "private" }).catch(
         async (err: unknown) => {
           // If private access fails on a public-only store, try with public access.
           if (
@@ -145,7 +145,7 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       const access = input.access ?? "public";
       const bytes = byteLength(input.body);
 
-      let result = await blobPut(input.key, toPutBody(input.body), {
+      const result = await blobPut(input.key, toPutBody(input.body), {
         access,
         token,
         contentType: input.contentType,
