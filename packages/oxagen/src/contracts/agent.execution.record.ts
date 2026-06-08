@@ -1,10 +1,19 @@
-import { defineCapability, z } from "@oxagen/oxagen/core";
+import { z } from "zod";
+import { registerCapability } from "../registry";
 
-export const agentExecutionRecord = defineCapability({
+export const agentExecutionRecord = registerCapability({
   name: "agent.execution.record",
-  displayName: "Record Agent Execution",
+  domain: "agent",
   description: "Record a complete agent execution with steps and tool calls for lineage tracking and analytics",
-
+  mode: "sync",
+  surfaces: ["api", "mcp"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  sensitivity: "low",
+  defaultEffect: "allow",
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow" },
+  },
   input: z.object({
     agentId: z.string().uuid(),
     agentVersionId: z.string().uuid(),
@@ -50,12 +59,12 @@ export const agentExecutionRecord = defineCapability({
       )
       .optional(),
   }),
-
   output: z.object({
     executionId: z.string().uuid(),
     status: z.enum(["planning", "running", "completed", "failed", "cancelled"]),
     createdAt: z.date(),
   }),
-
-  surfaces: ["api", "mcp"],
 });
+
+export type AgentExecutionRecordInput = z.output<typeof agentExecutionRecord.input>;
+export type AgentExecutionRecordOutput = z.output<typeof agentExecutionRecord.output>;
