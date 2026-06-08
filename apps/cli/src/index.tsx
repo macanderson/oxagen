@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { render } from "ink";
 import React from "react";
 import { DevStatus } from "./components/DevStatus.js";
+import { version } from "../package.json" assert { type: "json" };
 import { authLoginCommand } from "./commands/auth.login.js";
 import { authLogoutCommand } from "./commands/auth.logout.js";
 import { authWhoamiCommand } from "./commands/auth.whoami.js";
@@ -101,7 +102,7 @@ const program = new Command();
 program
   .name("oxagen")
   .description("Oxagen developer CLI")
-  .version("0.2.0");
+  .version(version);
 
 program
   .command("dev")

@@ -21,6 +21,8 @@ import {
   ORG_TYPE_OPTIONS,
   INDUSTRY_VALUES,
   INDUSTRY_OPTIONS,
+  EMPLOYEE_SIZE_VALUES,
+  EMPLOYEE_SIZE_OPTIONS,
 } from "./domain";
 
 // ---------------------------------------------------------------------------
@@ -180,6 +182,37 @@ describe("INDUSTRY_VALUES ↔ INDUSTRY_OPTIONS parity", () => {
 
   it("INDUSTRY_OPTIONS has no duplicate values", () => {
     const values = INDUSTRY_OPTIONS.map((o) => o.value);
+    const unique = new Set(values);
+    expect(unique.size).toBe(values.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EMPLOYEE_SIZE parity
+// ---------------------------------------------------------------------------
+
+describe("EMPLOYEE_SIZE_VALUES ↔ EMPLOYEE_SIZE_OPTIONS parity", () => {
+  it("every EMPLOYEE_SIZE_OPTIONS value is in EMPLOYEE_SIZE_VALUES", () => {
+    const valSet = new Set<string>(EMPLOYEE_SIZE_VALUES);
+    for (const { value } of EMPLOYEE_SIZE_OPTIONS) {
+      expect(valSet.has(value), `EMPLOYEE_SIZE_OPTIONS value '${value}' missing from EMPLOYEE_SIZE_VALUES`).toBe(true);
+    }
+  });
+
+  it("every EMPLOYEE_SIZE_VALUES entry is in EMPLOYEE_SIZE_OPTIONS", () => {
+    const optSet = new Set<string>(EMPLOYEE_SIZE_OPTIONS.map((o) => o.value));
+    for (const val of EMPLOYEE_SIZE_VALUES) {
+      expect(optSet.has(val), `EMPLOYEE_SIZE_VALUES entry '${val}' missing from EMPLOYEE_SIZE_OPTIONS`).toBe(true);
+    }
+  });
+
+  it("EMPLOYEE_SIZE_VALUES has no duplicates", () => {
+    const unique = new Set<string>(EMPLOYEE_SIZE_VALUES);
+    expect(unique.size).toBe(EMPLOYEE_SIZE_VALUES.length);
+  });
+
+  it("EMPLOYEE_SIZE_OPTIONS has no duplicate values", () => {
+    const values = EMPLOYEE_SIZE_OPTIONS.map((o) => o.value);
     const unique = new Set(values);
     expect(unique.size).toBe(values.length);
   });

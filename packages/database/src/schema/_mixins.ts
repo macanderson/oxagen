@@ -37,7 +37,7 @@ export const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 // or the pg_uuidv7 extension; if neither is available we fall back to
 // uuid_generate_v4 from uuid-ossp (also installed by the initial
 // migration). Production should run on a Postgres that supports v7.
-const uuidv7Default = sql`COALESCE(
+export const uuidv7Default = sql`COALESCE(
   CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
     THEN uuid_generate_v7()
     ELSE uuid_generate_v4()

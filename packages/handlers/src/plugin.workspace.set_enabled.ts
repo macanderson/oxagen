@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { logger } from "./logger";
 
 /** Map authKind from the org listing to the authStrategy expected by connectMcp. */
 function mapAuthStrategy(
@@ -106,21 +107,37 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       return inserted ?? null;
     });
 
+    logger.info(
+      { orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId, workspaceServerId: row?.publicId ?? null },
+      "plugin.workspace.set_enabled: enabled",
+    );
     return { workspaceServerId: row?.publicId ?? null };
   } else {
     // Disable: set enabled=false on the workspace install row.
-    await withTenantDb(async (tx) => {
-      await tx
-        .update(schema.mcpServers)
-        .set({ enabled: false })
-        .where(
-          and(
-            eq(schema.mcpServers.workspaceId, ctx.workspaceId),
-            eq(schema.mcpServers.orgListingId, orgListingId),
-          ),
-        );
-    });
+    try {
+      await withTenantDb(async (tx) => {
+        await tx
+          .update(schema.mcpServers)
+          .set({ enabled: false })
+          .where(
+            and(
+              eq(schema.mcpServers.workspaceId, ctx.workspaceId),
+              eq(schema.mcpServers.orgListingId, orgListingId),
+            ),
+          );
+      });
+    } catch (err) {
+      logger.error(
+        { err, orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        "plugin.workspace.set_enabled: disable failed",
+      );
+      throw err;
+    }
 
+    logger.info(
+      { orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "plugin.workspace.set_enabled: disabled",
+    );
     return { workspaceServerId: null };
   }
 };

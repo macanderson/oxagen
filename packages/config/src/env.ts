@@ -202,6 +202,17 @@ export const baseEnvSchema = z.object({
 // touches these — never arbitrary env vars another tool may have set.
 const KNOWN_ENV_KEYS: ReadonlySet<string> = new Set(Object.keys(baseEnvSchema.shape));
 
+/**
+ * Strip one balanced surrounding double-quote pair from a string.
+ * Used by both `normalizeEnv` and `platformVersion` — extracted here to
+ * avoid duplicating the same one-liner in two places.
+ *
+ * @internal Not intended for public API use outside this package.
+ */
+export function stripOneQuotePair(s: string): string {
+  return s.length >= 2 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s;
+}
+
 export type Env = z.infer<typeof baseEnvSchema>;
 export type EnvKey = keyof Env;
 
@@ -222,23 +233,28 @@ export function normalizeEnv(source: NodeJS.ProcessEnv): Record<string, string |
   const out: Record<string, string | undefined> = {};
   const stripped: string[] = [];
   for (const [key, value] of Object.entries(source)) {
-    if (
-      KNOWN_ENV_KEYS.has(key) &&
-      typeof value === "string" &&
-      value.length >= 2 &&
-      value.startsWith('"') &&
-      value.endsWith('"')
-    ) {
-      out[key] = value.slice(1, -1);
-      stripped.push(key);
+    if (KNOWN_ENV_KEYS.has(key) && typeof value === "string") {
+      const stripped_value = stripOneQuotePair(value);
+      if (stripped_value !== value) {
+        out[key] = stripped_value;
+        stripped.push(key);
+      } else {
+        out[key] = value;
+      }
     } else {
       out[key] = value;
     }
   }
   if (stripped.length > 0) {
-    console.warn(
-      `[config] normalizeEnv stripped surrounding double-quotes from: ${stripped.join(", ")}. ` +
-        `These values are double-quoted at the source (e.g. the Vercel dashboard) — fix them there.`,
+    // packages/config is a root dependency that @oxagen/telemetry itself
+    // depends on; importing a logger here would be circular. process.stderr
+    // is the only viable output channel for this root package — intentional.
+    process.stderr.write(
+      JSON.stringify({
+        level: "warn",
+        pkg: "@oxagen/config",
+        msg: `normalizeEnv stripped surrounding double-quotes from: ${stripped.join(", ")}. These values are double-quoted at the source (e.g. the Vercel dashboard) — fix them there.`,
+      }) + "\n",
     );
   }
   return out;

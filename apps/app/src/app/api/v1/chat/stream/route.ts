@@ -3,6 +3,7 @@ import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import { logger } from "@oxagen/handlers/logger";
 import {
   streamAgentReply,
   selectModel,
@@ -398,7 +399,7 @@ export async function POST(request: NextRequest): Promise<Response> {
                 }),
             );
           } catch (persistErr) {
-            console.error("[chat/stream] failed to persist assistant reply:", persistErr);
+            logger.error({ err: persistErr }, "[chat/stream] failed to persist assistant reply");
           }
         }
 

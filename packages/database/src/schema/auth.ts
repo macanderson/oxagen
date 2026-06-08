@@ -1,6 +1,6 @@
-import { bigint, boolean, customType, index, integer, text, timestamp, uniqueIndex, uuid, jsonb } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, text, timestamp, uniqueIndex, uuid, jsonb } from "drizzle-orm/pg-core";
 import { authSchema } from "./_schemas";
-import { auditMixin, citext, idMixin, softDeleteMixin, orgScopeMixin } from "./_mixins";
+import { auditMixin, bytea, citext, idMixin, softDeleteMixin, orgScopeMixin } from "./_mixins";
 
 // ── User-preference enums ────────────────────────────────────────────────────
 // Declared in the auth schema so the type lives next to the table that owns it.
@@ -39,15 +39,6 @@ export const modelTierEnum = authSchema.enum("model_tier", [
   "balanced",
   "precise",
 ]);
-
-// bytea for encrypted columns — Drizzle has no first-class bytea helper, so
-// we declare it inline. KMS unwraps the payload at the service boundary; the
-// column is opaque to the rest of the app.
-const bytea = customType<{ data: Buffer; driverData: Buffer }>({
-  dataType() {
-    return "bytea";
-  },
-});
 
 export const users = authSchema.table(
   "users",

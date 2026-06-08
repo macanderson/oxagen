@@ -505,6 +505,16 @@ describe("notifications.list route", () => {
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.limit).toBe(10);
   });
+
+  it("?limit=abc → parseInt NaN → Zod validation → 400, invoke not called", async () => {
+    const res = await app.fetch(
+      makeRequest(`${BASE}/notifications?limit=abc`, {
+        headers: authHeaders(),
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
 });
 
 // ── notifications.mark ────────────────────────────────────────────────────

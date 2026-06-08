@@ -9,7 +9,7 @@
  */
 
 import { withTenantDb, schema } from "@oxagen/database";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { ensureStripeCustomer } from "./customers";
 import { logger } from "./logger";
@@ -160,34 +160,35 @@ export async function syncPaymentMethodsFromStripe(orgId: string): Promise<void>
 
   const providerIds = new Set(providerMethods.map((pm) => pm.id));
 
-  // Upsert each active card from Stripe.
-  for (const pm of providerMethods) {
-    const isDefault = pm.id === defaultPmId;
+  // Batch-upsert all active cards from Stripe in a single transaction.
+  if (providerMethods.length > 0) {
     await withTenantDb((tx) =>
       tx
         .insert(schema.paymentMethods)
-        .values({
-          orgId,
-          stripeCustomerId: customerId,
-          stripePaymentMethodId: pm.id,
-          type: pm.type,
-          brand: pm.brand,
-          last4: pm.last4,
-          expMonth: pm.expMonth,
-          expYear: pm.expYear,
-          isDefault,
-          deletedAt: null,
-          deletedByUserId: null,
-        })
-        .onConflictDoUpdate({
-          target: schema.paymentMethods.stripePaymentMethodId,
-          set: {
+        .values(
+          providerMethods.map((pm) => ({
+            orgId,
+            stripeCustomerId: customerId,
+            stripePaymentMethodId: pm.id,
             type: pm.type,
             brand: pm.brand,
             last4: pm.last4,
             expMonth: pm.expMonth,
             expYear: pm.expYear,
-            isDefault,
+            isDefault: pm.id === defaultPmId,
+            deletedAt: null,
+            deletedByUserId: null,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: schema.paymentMethods.stripePaymentMethodId,
+          set: {
+            type: sql`excluded.type`,
+            brand: sql`excluded.brand`,
+            last4: sql`excluded.last4`,
+            expMonth: sql`excluded.exp_month`,
+            expYear: sql`excluded.exp_year`,
+            isDefault: sql`excluded.is_default`,
             deletedAt: null, // Un-soft-delete if it re-appears.
             deletedByUserId: null,
             updatedAt: new Date(),
@@ -229,15 +230,16 @@ export async function syncPaymentMethodsFromStripe(orgId: string): Promise<void>
   );
 
   const now = new Date();
-  for (const row of existingRows) {
-    if (!providerIds.has(row.stripePaymentMethodId)) {
-      await withTenantDb((tx) =>
-        tx
-          .update(schema.paymentMethods)
-          .set({ deletedAt: now, updatedAt: now })
-          .where(eq(schema.paymentMethods.id, row.id)),
-      );
-    }
+  const staleIds = existingRows
+    .filter((r) => !providerIds.has(r.stripePaymentMethodId))
+    .map((r) => r.id);
+  if (staleIds.length > 0) {
+    await withTenantDb((tx) =>
+      tx
+        .update(schema.paymentMethods)
+        .set({ deletedAt: now, updatedAt: now })
+        .where(inArray(schema.paymentMethods.id, staleIds)),
+    );
   }
 
   logger.info(
@@ -245,9 +247,7 @@ export async function syncPaymentMethodsFromStripe(orgId: string): Promise<void>
       orgId,
       customerId,
       upserted: providerMethods.length,
-      softDeleted: existingRows.filter(
-        (r) => !providerIds.has(r.stripePaymentMethodId),
-      ).length,
+      softDeleted: staleIds.length,
       durationMs: Date.now() - start,
     },
     "billing: synced payment methods from Stripe",

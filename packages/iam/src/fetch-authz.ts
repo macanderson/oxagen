@@ -14,6 +14,7 @@ import { eq, and, inArray, isNull, or, gt, sql } from "drizzle-orm";
 import { schema } from "@oxagen/database";
 import type { Grant, Role, RoleGrant, Policy } from "@oxagen/oxagen/iam";
 import type { ResolvedPrincipal } from "@oxagen/oxagen";
+import { logger } from "./logger";
 
 export interface AuthzData {
   principal: ResolvedPrincipal | null;
@@ -64,7 +65,8 @@ export async function fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   } catch (err) {
     if (isUndefinedTable(err)) {
       // IAM migration not yet applied — log a warning and fall back.
-      console.warn(
+      logger.warn(
+        { err },
         "[iam] IAM tables not found (Postgres 42P01). Falling back to defaultEffect. " +
           "Run `pnpm db:migrate` to apply the IAM foundation migration.",
       );

@@ -64,7 +64,16 @@ export async function loadSkillFile(
     skill.references.map(async (ref) => ({
       path: ref.path,
       body: await readFile(resolvePath(baseDir, ref.path), "utf8").catch(
-        () => "",
+        (err: unknown) => {
+          const code = (err as NodeJS.ErrnoException).code;
+          if (code !== "ENOENT") {
+            console.warn("[skills] failed to read reference file", {
+              path: resolvePath(baseDir, ref.path),
+              error: err,
+            });
+          }
+          return "";
+        },
       ),
     })),
   );

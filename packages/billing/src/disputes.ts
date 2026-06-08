@@ -2,28 +2,14 @@
 // charge.refunded webhooks arrive with external Stripe ids; orgId is resolved from charge
 // metadata or prior billing_disputes rows before any tenant scope exists;
 // billing is org_only, no workspace_id) — OXA-1515
-import { createHash } from "node:crypto";
 import { withSystemDb, schema } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { and, eq, isNotNull } from "drizzle-orm";
+import { deterministicUuid } from "./internal/deterministic-uuid";
 import { consumeCredits } from "./credits";
 import { CREDIT_REASONS } from "./constants";
 import { logger } from "./logger";
 import type { BillingDispute, BillingRefundedCharge } from "./provider";
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Derive a deterministic UUID from any external provider id (e.g. `ch_xxx`,
- * `dp_xxx`) so the value fits the `uuid`-typed credit_ledger.reference_id
- * column and can key the partial-unique idempotency index.
- */
-function deterministicUuid(seed: string): string {
-  const h = createHash("sha256").update(seed).digest("hex");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
-}
 
 // ---------------------------------------------------------------------------
 // Org resolution helpers

@@ -73,13 +73,13 @@ Never throws for auth failures — callers map `kind` to appropriate errors.
 #### `resolveOrgScope(userId: string, slug: string): Promise<OrgScopeResolution>`
 
 Resolves an org slug to `{ orgId }`, enforcing that `userId` is a member of
-the org. Cross-tenant access is blocked: a user who is not a member of the org
-receives `{ ok: false, kind: "not_member" }`.
+the org. Both a missing org and non-membership return `not_found` to prevent
+org-existence enumeration.
 
 ```ts
 type OrgScopeResolution =
   | { ok: true; orgId: string }
-  | { ok: false; kind: "not_found" | "not_member" };
+  | { ok: false; kind: "not_found" };
 ```
 
 #### `resolveWorkspaceScope(orgId: string, slug: string): Promise<WorkspaceScopeResolution>`

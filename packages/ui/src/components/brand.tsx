@@ -10,10 +10,8 @@
  *   <BrandMark />                       // gradient tile + logomark, the app chrome lockup
  *   <OxagenLockup className="flex items-center gap-2" />
  *
- * `BrandMark` places the logomark inside a `.brand-gradient` rounded tile (the
- * indigo → green fill), which is the treatment used in the app shell topbar and
- * mobile nav. The gradient itself lives in globals.css; this component only
- * composes the tile.
+ * `BrandMark` places the logomark inside a neutral `bg-primary` rounded tile,
+ * which is the treatment used in the app shell topbar and mobile nav.
  */
 
 import { cn } from "../lib/utils";

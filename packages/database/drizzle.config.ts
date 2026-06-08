@@ -19,8 +19,6 @@ export default defineConfig({
     "event",
     "chat",
     "content",
-    "graph",
-    "evaluation",
     "billing",
     "security",
   ],

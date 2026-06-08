@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { IMAGES } from "./images";
 import type {
   SandboxDriver,
@@ -44,14 +45,16 @@ interface ModalRunRequest {
   image: string;
 }
 
-interface ModalRunResponse {
-  exit_code: number;
-  stdout: string;
-  stderr: string;
-  duration_ms: number;
-  timed_out: boolean;
-  oom_killed: boolean;
-}
+const ModalRunResponseSchema = z.object({
+  exit_code: z.number().int(),
+  stdout: z.string(),
+  stderr: z.string(),
+  duration_ms: z.number(),
+  timed_out: z.boolean(),
+  oom_killed: z.boolean(),
+});
+
+type ModalRunResponse = z.infer<typeof ModalRunResponseSchema>;
 
 function toRunnerBody(req: SandboxRequest): ModalRunRequest {
   const spec = IMAGES[req.language];
@@ -101,7 +104,7 @@ export function createModalSandbox(config: ModalSandboxConfig): SandboxDriver {
           const text = await res.text().catch(() => "");
           throw new Error(`modal runner ${res.status}: ${text.slice(0, 500)}`);
         }
-        const data = (await res.json()) as ModalRunResponse;
+        const data: ModalRunResponse = ModalRunResponseSchema.parse(await res.json());
         return {
           exitCode: data.exit_code,
           stdout: data.stdout,

@@ -5,8 +5,7 @@
  * - API-key short-circuit (orgId preset → next)
  * - Missing slug → 400
  * - Missing userId → 401
- * - not_found → 404 "Organization not found"
- * - not_member → 403 "Not a member of this organization" (cross-tenant)
+ * - not_found → 404 "Organization not found" (both org missing and non-member)
  * - assertNever unknown kind → 500
  */
 
@@ -65,7 +64,6 @@ import {
   makeSessionValid,
   makeOrgScopeOk,
   makeOrgNotFound,
-  makeOrgNotMember,
   makeWorkspaceScopeOk,
 } from "./_helpers";
 
@@ -123,16 +121,6 @@ describe("orgMiddleware — session-auth paths", () => {
     expect(body.error.message).toBe("Organization not found");
   });
 
-  it("org not_member → 403 'Not a member of this organization' (cross-tenant)", async () => {
-    mocks.resolveOrgScope.mockResolvedValue(makeOrgNotMember());
-
-    const res = await app.fetch(
-      makeRequest(orgWsPath("other-org"), { headers: sessionAuthHeaders() }),
-    );
-    expect(res.status).toBe(403);
-    const body = (await res.json()) as { error: { message: string } };
-    expect(body.error.message).toBe("Not a member of this organization");
-  });
 
   it("org resolution success → proceeds to workspace middleware", async () => {
     mocks.resolveOrgScope.mockResolvedValue(makeOrgScopeOk("org-111"));

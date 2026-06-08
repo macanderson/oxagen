@@ -28,12 +28,15 @@ per-row so future rotations can be tracked.
 ```
 [1  byte ] version      — always 0x01 for this format
 [2  bytes] iv_len       — uint16 big-endian, always 12
-[12 bytes] iv           — AES-GCM 96-bit nonce
 [2  bytes] enc_dek_len  — uint16 big-endian
-[N  bytes] enc_dek      — KEK-wrapped 256-bit data encryption key
 [4  bytes] ct_len       — uint32 big-endian
-[M  bytes] ct + tag     — AES-256-GCM ciphertext || 16-byte auth tag
+[12 bytes] iv           — AES-GCM 96-bit nonce  (iv_len bytes)
+[N  bytes] enc_dek      — KEK-wrapped 256-bit data encryption key  (enc_dek_len bytes)
+[M  bytes] ct + tag     — AES-256-GCM ciphertext || 16-byte auth tag  (ct_len bytes)
 ```
+
+All three length fields are packed into the fixed 9-byte header first (`1 + 2 + 2 + 4`);
+the variable-length payloads follow in order (iv, enc_dek, ct+tag).
 
 A new DEK is generated per `encrypt()` call.  The DEK is wrapped by the KEK
 adapter and stored inline in the ciphertext blob.  The plaintext DEK is zeroed

@@ -28,14 +28,6 @@ const dotColorMap: Record<NonNullable<TimelineItemProps["tone"]>, string> = {
   idle: "bg-muted-foreground/40",
 };
 
-const ringColorMap: Record<NonNullable<TimelineItemProps["tone"]>, string> = {
-  thinking: "bg-[#7182ff]",
-  running: "bg-[#7182ff]",
-  done: "bg-[#3cff52]",
-  failed: "bg-destructive",
-  idle: "bg-muted-foreground/40",
-};
-
 // ---------------------------------------------------------------------------
 // TimelineItem
 // ---------------------------------------------------------------------------
@@ -59,7 +51,7 @@ export function TimelineItem({
   const reducedMotion = useReducedMotion();
 
   const dotColor = dotColorMap[tone];
-  const ringColor = ringColorMap[tone];
+  const ringColor = dotColor;
 
   return (
     <motion.div

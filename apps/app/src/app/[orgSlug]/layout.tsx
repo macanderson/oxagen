@@ -74,7 +74,8 @@ export default async function OrgLayout({
               name: schema.workspaces.name,
             })
             .from(schema.workspaces)
-            .where(eq(schema.workspaces.orgId, org.id)),
+            .where(eq(schema.workspaces.orgId, org.id))
+            .limit(100), // cap for picker UX; search/scroll needed beyond this
         ),
     ),
     // Always-visible credit balance for the shell header. credit_lots is org_only

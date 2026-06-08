@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
 import { withTenantDb, withSystemDb, schema, type Tx } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, sql } from "drizzle-orm";
+import { deterministicUuid } from "./internal/deterministic-uuid";
 import { billingProvider } from "./client";
 import { syncSubscriptionFromStripe } from "./subscriptions";
 import { CREDIT_REASONS } from "./constants";
@@ -31,15 +31,6 @@ const SUBSCRIPTION_GRANT_REASONS: ReadonlySet<string> = new Set([
   "subscription_create",
   "subscription_cycle",
 ]);
-
-/**
- * A stable UUID derived from an external (non-UUID) provider id, so it can
- * live in the `uuid`-typed credit_ledger.reference_id and key idempotency.
- */
-function deterministicUuid(seed: string): string {
-  const h = createHash("sha256").update(seed).digest("hex");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
-}
 
 /** Drizzle transaction type alias — uses the Tx type from @oxagen/database. */
 type DbTx = Tx;

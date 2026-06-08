@@ -1,3 +1,4 @@
+import pino from "pino";
 import { experimental_generateVideo } from "ai";
 import type { Experimental_VideoModelV3 } from "@ai-sdk/provider";
 import { gateway } from "@ai-sdk/gateway";
@@ -7,6 +8,8 @@ import {
   type Surface,
 } from "@oxagen/telemetry";
 import { chargeVideoCredits, videoProviderCostUsdMicros } from "@oxagen/billing";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.video" } });
 
 /**
  * VideoModel mirrors the `VideoModel` type from the `ai` package (which is not
@@ -167,8 +170,9 @@ export async function generateVideoFor(
         created_at: new Date().toISOString(),
       },
     ]);
-  } catch {
+  } catch (err) {
     // Swallow — telemetry must never fail a capability call.
+    logger.error({ err }, "generateVideo telemetry write failed");
   }
 
   // Debit the org's credits at the target margin. chargeVideoCredits prices the
@@ -181,13 +185,10 @@ export async function generateVideoFor(
       model: resolvedModelId,
       durationSeconds: args.durationSeconds,
     });
-  } catch {
+  } catch (err) {
     // Swallow — credit metering must never fail a capability call.
+    logger.error({ err }, "generateVideo credit charge failed");
   }
 
   return { bytes, mimeType, durationMs };
 }
-
-// Re-export gateway for consumers that need to build a VideoModel directly
-// (e.g. tests or callers that want to bypass selectVideoModel).
-export { gateway };

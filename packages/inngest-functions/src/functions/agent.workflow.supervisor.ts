@@ -151,39 +151,8 @@ Return between 2 and ${effectiveMaxTasks} tasks. Number them starting from 0.`,
       );
     }
 
-    // ── Step 4: Aggregate ───────────────────────────────────────────────────
-    // Poll for all tasks completing (up to 1 hour via Inngest sleep).
-    // In production this is a waitForEvent pattern or a separate aggregation
-    // cron; for now we reload the run status after dispatch.
-    const aggregateResult = await step.run("aggregate", () =>
-      runInTenantScope({ orgId, workspaceId }, () =>
-        withTenantDb(async (tx) => {
-          const completedTasks = await tx
-            .select({
-              publicId: schema.workflowRunTasks.publicId,
-              taskIndex: schema.workflowRunTasks.taskIndex,
-              title: schema.workflowRunTasks.title,
-              outputJson: schema.workflowRunTasks.outputJson,
-              status: schema.workflowRunTasks.status,
-            })
-            .from(schema.workflowRunTasks)
-            .where(
-              and(
-                eq(schema.workflowRunTasks.workflowRunId, workflowRunId),
-                eq(schema.workflowRunTasks.orgId, orgId),
-              ),
-            );
-
-          const completedCount = completedTasks.filter((t) => t.status === "completed").length;
-          const failedCount = completedTasks.filter((t) => t.status === "failed").length;
-
-          return { completedCount, failedCount, total: completedTasks.length };
-        }),
-      ),
-    );
-
     logger.info(
-      { workflowRunId, orgId, ...aggregateResult },
+      { workflowRunId, orgId, tasksDispatched: tasks.length },
       "agent.workflow.supervisor: dispatched all tasks",
     );
 

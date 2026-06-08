@@ -1,7 +1,7 @@
 import { bigint, boolean, check, index, integer, jsonb, numeric, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { billingSchema } from "./_schemas";
-import { auditMixin, citext, idMixin } from "./_mixins";
+import { auditMixin, citext, idMixin, uuidv7Default } from "./_mixins";
 import { organizations } from "./org";
 
 // ── Append-only audit mixin (no updated_* columns) ──────────────────────────
@@ -148,13 +148,7 @@ export const invoices = billingSchema.table(
 export const invoiceLineItems = billingSchema.table(
   "invoice_line_items",
   {
-    id: uuid("id").primaryKey().default(sql`COALESCE(
-  CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
-    THEN uuid_generate_v7()
-    ELSE uuid_generate_v4()
-  END,
-  uuid_generate_v4()
-)`),
+    id: uuid("id").primaryKey().default(uuidv7Default),
     // FK → org.organizations.id — denormalized for tenant isolation.
     orgId: uuid("org_id")
       .notNull()
@@ -245,13 +239,7 @@ export const creditBalances = billingSchema.table(
 export const creditLedger = billingSchema.table(
   "credit_ledger",
   {
-    id: uuid("id").primaryKey().default(sql`COALESCE(
-  CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
-    THEN uuid_generate_v7()
-    ELSE uuid_generate_v4()
-  END,
-  uuid_generate_v4()
-)`),
+    id: uuid("id").primaryKey().default(uuidv7Default),
     // FK → org.organizations.id
     orgId: uuid("org_id")
       .notNull()
@@ -333,13 +321,7 @@ export const creditLots = billingSchema.table(
 export const stripeEvents = billingSchema.table(
   "stripe_events",
   {
-    id: uuid("id").primaryKey().default(sql`COALESCE(
-  CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
-    THEN uuid_generate_v7()
-    ELSE uuid_generate_v4()
-  END,
-  uuid_generate_v4()
-)`),
+    id: uuid("id").primaryKey().default(uuidv7Default),
     stripeEventId: text("stripe_event_id").notNull(),
     eventType: text("event_type").notNull(),
     apiVersion: text("api_version"),
@@ -361,13 +343,7 @@ export const stripeEvents = billingSchema.table(
 export const orgBillingProfiles = billingSchema.table(
   "org_billing_profiles",
   {
-    id: uuid("id").primaryKey().default(sql`COALESCE(
-  CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
-    THEN uuid_generate_v7()
-    ELSE uuid_generate_v4()
-  END,
-  uuid_generate_v4()
-)`),
+    id: uuid("id").primaryKey().default(uuidv7Default),
     // FK → org.organizations.id — CASCADE so the profile disappears when the
     // org is deleted. Policy §0 mandates FKs where the invariant exists.
     orgId: uuid("org_id")
@@ -405,13 +381,7 @@ export const orgBillingProfiles = billingSchema.table(
 export const orgBillingSettings = billingSchema.table(
   "org_billing_settings",
   {
-    id: uuid("id").primaryKey().default(sql`COALESCE(
-  CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
-    THEN uuid_generate_v7()
-    ELSE uuid_generate_v4()
-  END,
-  uuid_generate_v4()
-)`),
+    id: uuid("id").primaryKey().default(uuidv7Default),
     // FK → org.organizations.id — CASCADE so settings vanish with the org.
     orgId: uuid("org_id")
       .notNull()
@@ -498,13 +468,7 @@ export const billingDisputes = billingSchema.table(
 export const stripeEventProcessing = billingSchema.table(
   "stripe_event_processing",
   {
-    id: uuid("id").primaryKey().default(sql`COALESCE(
-  CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
-    THEN uuid_generate_v7()
-    ELSE uuid_generate_v4()
-  END,
-  uuid_generate_v4()
-)`),
+    id: uuid("id").primaryKey().default(uuidv7Default),
     // FK → billing.stripe_events.id
     stripeEventId: uuid("stripe_event_id")
       .notNull()

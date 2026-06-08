@@ -8,10 +8,10 @@ import {
   exportFilename,
   exportContentType,
   AUDIT_EXPORT_COLUMNS,
-  type AuditExportRow,
+  type AuditEventRow,
 } from "./audit-export";
 
-const ROW: AuditExportRow = {
+const ROW: AuditEventRow = {
   id: "evt-1",
   occurredAt: new Date("2026-06-01T03:00:00.000Z"),
   eventType: "auth.sign_in",

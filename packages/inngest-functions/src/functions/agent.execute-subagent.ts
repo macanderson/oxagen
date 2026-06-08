@@ -4,6 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { insertToolInvocation } from "@oxagen/telemetry";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { logger } from "../logger";
 import "@oxagen/oxagen";
 
 /** Pure helper — exported for unit testing. */
@@ -46,10 +47,7 @@ export const agentExecuteSubagent = inngest.createFunction(
 
     // ── Depth guard ─────────────────────────────────────────────────────────
     if (depth > MAX_FANOUT_DEPTH) {
-      console.warn(
-        `[agent.execute-subagent] Fanout depth ${depth} exceeds MAX_FANOUT_DEPTH=${MAX_FANOUT_DEPTH}. ` +
-          `fanoutId=${fanoutId} orgId=${orgId} — stopping to prevent infinite recursion.`,
-      );
+      logger.warn({ depth, fanoutId, orgId, maxFanoutDepth: MAX_FANOUT_DEPTH }, 'fanout depth exceeded — stopping to prevent infinite recursion');
       return { fanoutId, completed: 0, status: "failed", depthExceeded: true };
     }
 
@@ -131,8 +129,8 @@ export const agentExecuteSubagent = inngest.createFunction(
               provider: "",
               created_at: new Date().toISOString(),
             });
-          } catch {
-            /* telemetry must never fail the capability call */
+          } catch (telErr) {
+            logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
           }
           return true;
         } catch (err) {
@@ -172,8 +170,8 @@ export const agentExecuteSubagent = inngest.createFunction(
               provider: "",
               created_at: new Date().toISOString(),
             });
-          } catch {
-            /* swallow */
+          } catch (telErr) {
+            logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
           }
           return false;
         }

@@ -9,8 +9,8 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       // Scope coverage to the two files that have tests.
-      // The remaining components are Radix-based JSX that require a DOM renderer
-      // and @testing-library/react — tracked as a follow-up to add render tests.
+      // The remaining components are Base UI JSX that require a DOM renderer and
+      // @testing-library/react — tracked as a follow-up to add render tests.
       // Including them here would collapse coverage to ~6% and make CI useless.
       include: ["src/lib/utils.ts", "src/components/button.tsx"],
       // Current measured (2026-06-05):

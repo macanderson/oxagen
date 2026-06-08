@@ -93,6 +93,6 @@ ClickHouse is append-only telemetry (never a source of truth per the four-store 
 
 ## What this means for a SOC 2 audit
 
-The isolation guarantee is provable with a single integration test suite (`packages/database/integration/rls.test.ts`). The test seeds two organizations (A and B) with data, then runs deliberately unfiltered `SELECT * FROM <table>` queries under each org's GUC and asserts the other org's rows are never returned. The test covers every table policy class and the fail-closed case (no GUC set = zero rows).
+The isolation guarantee is provable with a single integration test suite. The test seeds two organizations (A and B) with data, then runs deliberately unfiltered `SELECT * FROM <table>` queries under each org's session scope and asserts the other org's rows are never returned. The test covers every table policy class and the fail-closed case (no scope set = zero rows).
 
-This is the SOC 2 "point to the proof" artifact: one integration test suite, one migration file defining all policies, one enforcement flag. Your auditor can read the migration, run the test, and be satisfied.
+This is the SOC 2 "point to the proof" artifact: one integration test suite, one migration file defining all policies, one enforcement flag. Your auditor can review the migration, run the test, and be satisfied.

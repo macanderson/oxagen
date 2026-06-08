@@ -17,6 +17,7 @@ import { and, eq } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { getSessionOrRedirect } from "@/lib/session";
+import { logger } from "@oxagen/handlers/logger";
 
 // Sentinel workspaceId for user-scoped actions. — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
@@ -75,7 +76,7 @@ export async function revokeOwnSessionAction(
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error({ sessionId, err: msg }, "revokeOwnSessionAction: db error");
+    logger.error({ sessionId, err: msg }, "revokeOwnSessionAction: db error");
     return { ok: false, code: "internal", error: "Failed to revoke session" };
   }
 

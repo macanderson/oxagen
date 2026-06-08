@@ -164,7 +164,7 @@ export const gatewayModels: GatewayModel[] = [
   },
   {
     id: "google/gemini-3.1-flash-image-preview",
-    name: "Nano Banana 2",
+    name: "Gemini 3.1 Flash Image",
     vendor: "google",
     released: "2026-04-02",
     capabilities: ["vision", "image"],

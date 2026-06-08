@@ -20,44 +20,43 @@ export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSub
       throw new Error("Forbidden: orgId is required to read billing data");
     }
 
-    // Single round trip per panel render: subscription + plan + credit
-    // balance. No N+1 — three indexed lookups, all bounded result sets.
-    const sub = await withTenantDb((tx) =>
-      tx.query.subscriptions.findFirst({
-        where: and(
-          eq(schema.subscriptions.orgId, ctx.orgId),
-          inArray(schema.subscriptions.status, ACTIVE_STATUSES),
-        ),
-        columns: {
-          publicId: true,
-          status: true,
-          billingInterval: true,
-          currentPeriodStart: true,
-          currentPeriodEnd: true,
-          cancelAtPeriodEnd: true,
-          seatCount: true,
-          planId: true,
-        },
-      }),
-    );
-
-    const planSlug = sub
-      ? (
-          await withTenantDb((tx) =>
-            tx.query.plans.findFirst({
-              where: eq(schema.plans.id, sub.planId),
+    // Two parallel round trips: subscription+plan (joined) and credit balance.
+    // The plan join eliminates the sequential N+1 lookup; sub and balance are
+    // always independent so they are fetched concurrently via Promise.all.
+    const [subWithPlan, balance] = await Promise.all([
+      withTenantDb((tx) =>
+        tx.query.subscriptions.findFirst({
+          where: and(
+            eq(schema.subscriptions.orgId, ctx.orgId),
+            inArray(schema.subscriptions.status, ACTIVE_STATUSES),
+          ),
+          columns: {
+            publicId: true,
+            status: true,
+            billingInterval: true,
+            currentPeriodStart: true,
+            currentPeriodEnd: true,
+            cancelAtPeriodEnd: true,
+            seatCount: true,
+            planId: true,
+          },
+          with: {
+            plan: {
               columns: { slug: true },
-            }),
-          )
-        )?.slug ?? "unknown"
-      : null;
+            },
+          },
+        }),
+      ),
+      withTenantDb((tx) =>
+        tx.query.creditBalances.findFirst({
+          where: eq(schema.creditBalances.orgId, ctx.orgId),
+          columns: { balanceCents: true },
+        }),
+      ),
+    ]);
 
-    const balance = await withTenantDb((tx) =>
-      tx.query.creditBalances.findFirst({
-        where: eq(schema.creditBalances.orgId, ctx.orgId),
-        columns: { balanceCents: true },
-      }),
-    );
+    const sub = subWithPlan ?? null;
+    const planSlug = sub ? (sub.plan?.slug ?? "unknown") : null;
 
     // OXA-1347: roll up the current billing period's token + cost totals
     // from ClickHouse when a subscription is active. Telemetry is best-

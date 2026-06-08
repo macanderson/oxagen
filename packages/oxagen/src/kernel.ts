@@ -32,12 +32,11 @@ export function clearBillingAdmissionGate(): void {
   _billingGate = null;
 }
 
-// ── IAM runtime injection (mirrors define-contract.ts pattern) ────────────────
+// ── IAM runtime injection ─────────────────────────────────────────────────────
 //
-// The kernel accepts the same IAMCheckFn / audit-emitter injection as
-// defineContract so the single kernel.invoke() dispatch path can run the
-// full IAM resolution + ClickHouse audit write on EVERY capability call,
-// including those that bypass defineContract().
+// The kernel accepts an injected IAMCheckFn / audit-emitter so the single
+// kernel.invoke() dispatch path can run the full IAM resolution + ClickHouse
+// audit write on EVERY capability call.
 //
 // ENFORCEMENT FLAG: the kernel always resolves authz and always emits the
 // audit event (SOC2 audit coverage from day 1). It only BLOCKS the call when
@@ -275,7 +274,7 @@ export interface InvokeOptions {
  *   - When an IAM check function is registered:
  *       ALWAYS resolves authz and emits the ClickHouse audit event.
  *       When enforcement=true (IAM_ENFORCEMENT_ENABLED=true):
- *         returns DenialResponse | throws on deny/pending_approval.
+ *         throws CapabilityError(code='authz_denied') on deny or pending_approval.
  *       When enforcement=false (default):
  *         logs would-deny decisions and proceeds — zero lockout risk.
  *   - When no IAM check function is registered: proceeds as before (no IAM).

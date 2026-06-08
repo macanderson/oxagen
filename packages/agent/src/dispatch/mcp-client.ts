@@ -3,6 +3,9 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import { tool, type Tool } from "ai";
 import { z } from "zod";
+import pino from "pino";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.mcp-client" } });
 
 export interface McpConnectArgs {
   endpointUrl: string;
@@ -73,7 +76,8 @@ export async function healthcheck(args: McpConnectArgs): Promise<{
     const tools = await listMcpTools(client);
     await client.close();
     return { status: "healthy", discoveredTools: tools };
-  } catch {
+  } catch (err) {
+    logger.warn({ endpointUrl: args.endpointUrl, err }, "MCP healthcheck failed; marking unreachable");
     return { status: "unreachable", discoveredTools: [] };
   }
 }

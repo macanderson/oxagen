@@ -41,7 +41,7 @@ export const imageGenerate = registerCapability({
     alt: z.string().optional(),
     /**
      * Image size to request.
-     * Only supported sizes for DALL-E 3 are: 1024x1024, 1792x1024, 1024x1792.
+     * Only supported sizes for gpt-image-1 are: 1024x1024, 1792x1024, 1024x1792.
      */
     size: z.enum(["1024x1024", "1792x1024", "1024x1792"]).optional(),
   }),

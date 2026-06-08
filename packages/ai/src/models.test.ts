@@ -7,17 +7,21 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   languageInstance: { modelId: "anthropic/claude-sonnet-4.6" },
   imageInstance: { modelId: "openai/gpt-image-1" },
+  videoInstance: { modelId: "google/veo-3.0-fast-generate-001" },
   languageModel: vi.fn(),
   imageModel: vi.fn(),
+  video: vi.fn(),
 }));
 
 mocks.languageModel.mockReturnValue(mocks.languageInstance);
 mocks.imageModel.mockReturnValue(mocks.imageInstance);
+mocks.video.mockReturnValue(mocks.videoInstance);
 
 vi.mock("@ai-sdk/gateway", () => ({
   gateway: {
     languageModel: mocks.languageModel,
     imageModel: mocks.imageModel,
+    video: mocks.video,
   },
 }));
 
@@ -32,6 +36,7 @@ vi.mock("@oxagen/config/env", () => ({
 import {
   selectModel,
   selectImageModel,
+  selectVideoModel,
   imageTierModelId,
   videoTierModelId,
   resolvedTierCatalog,
@@ -42,8 +47,10 @@ import {
 const resetMocks = () => {
   mocks.languageModel.mockClear();
   mocks.imageModel.mockClear();
+  mocks.video.mockClear();
   mocks.languageModel.mockReturnValue(mocks.languageInstance);
   mocks.imageModel.mockReturnValue(mocks.imageInstance);
+  mocks.video.mockReturnValue(mocks.videoInstance);
 };
 
 const TIER_ENV = {
@@ -132,5 +139,29 @@ describe("media tier resolution (@oxagen/ai)", () => {
       image: { basic: "openai/gpt-image-1", advanced: "bfl/flux-2-max" },
       video: { basic: "google/veo-3.0-fast-generate-001", advanced: "google/veo-3.0-generate-001" },
     });
+  });
+});
+
+describe("selectVideoModel (@oxagen/ai) — gateway only", () => {
+  beforeEach(resetMocks);
+
+  it("defaults to the basic tier Veo fast model", () => {
+    envValues = { ...MEDIA_ENV };
+    const model = selectVideoModel();
+    expect(mocks.video).toHaveBeenCalledTimes(1);
+    expect(mocks.video).toHaveBeenCalledWith("google/veo-3.0-fast-generate-001");
+    expect(model).toBe(mocks.videoInstance);
+  });
+
+  it("resolves the advanced tier to OXAGEN_LLM_VIDEO_ADVANCED", () => {
+    envValues = { ...MEDIA_ENV };
+    selectVideoModel({ tier: "advanced" });
+    expect(mocks.video).toHaveBeenCalledWith("google/veo-3.0-generate-001");
+  });
+
+  it("an explicit model id wins over a tier", () => {
+    envValues = { ...MEDIA_ENV };
+    selectVideoModel({ model: "google/veo-3.0-generate-001", tier: "basic" });
+    expect(mocks.video).toHaveBeenCalledWith("google/veo-3.0-generate-001");
   });
 });

@@ -80,7 +80,7 @@ Both stores receive every security event via the same `emitSecurityEvent()` call
 | `org.member_removed` | Member removed |
 | `org.role_changed` | Role assignment changed |
 
-Adding a new event kind requires a single edit to `packages/compliance/src/security-event-types.ts`. A CI test verifies that the Postgres CHECK constraint and ClickHouse schema match this source file — schema drift fails CI.
+Adding a new event kind requires a single edit to the event taxonomy source file. A CI test verifies that the Postgres CHECK constraint and ClickHouse schema match this source file — schema drift fails CI.
 
 ## The completeness guarantee
 

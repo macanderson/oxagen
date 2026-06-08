@@ -50,11 +50,5 @@ export const EdgeTypes = {
 } as const;
 export type EdgeType = (typeof EdgeTypes)[keyof typeof EdgeTypes];
 
-// Spec §8.1 vector index registry. One entry per (label, property) pair;
-// migrate.ts iterates this so adding a new embedding source is a one-line
-// change.
-export const VectorIndexes = [
-  { label: "Document", property: "embedding", name: "document_embedding_index", dimensions: 1536, similarity: "cosine" },
-  { label: "AgentMemory", property: "embedding", name: "memory_embedding_index", dimensions: 1536, similarity: "cosine" },
-  { label: "Message", property: "embedding", name: "message_embedding_index", dimensions: 1536, similarity: "cosine" },
-] as const;
+// Vector index definitions are authoritative in src/schema.cypher.
+// See the CREATE VECTOR INDEX statements there (spec §8.1).

@@ -1,5 +1,11 @@
 import type { ModelMessage } from "ai";
+import pino from "pino";
 import type { CapabilityContext } from "../types";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.knowledge-graph" } });
+
+// Fire the OXA-1508 warn at most once per process to avoid log noise on every turn.
+let _warnedOxa1508 = false;
 
 /**
  * A single context block surfaced from the knowledge graph to be injected
@@ -43,11 +49,13 @@ export async function readWorkspaceContext(
   // Cypher query is not yet implemented (OXA-1508). Log clearly so operators
   // know the graph is reachable but context injection is dormant, then return
   // an empty set — no silent fake data, no crash.
-  console.warn(
-    `[knowledge-graph] readWorkspaceContext — KG enabled but workspace-context query not yet wired (OXA-1508). ` +
-      `orgId=${ctx.orgId} workspaceId=${ctx.workspaceId} userId=${ctx.userId ?? "null"}. ` +
-      `Returning [] until OXA-1508 is resolved.`,
-  );
+  if (!_warnedOxa1508) {
+    _warnedOxa1508 = true;
+    logger.warn(
+      { oxa: "OXA-1508", orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "readWorkspaceContext — KG enabled but workspace-context query not yet wired; returning [] until OXA-1508 is resolved",
+    );
+  }
   return [];
 }
 

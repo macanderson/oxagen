@@ -14,6 +14,7 @@ import { withSystemDb, schema } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertSecurityManager } from "@/lib/resolve-org";
+import { logger } from "@oxagen/handlers/logger";
 
 // Sentinel workspaceId for org-only actions. — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
@@ -96,7 +97,7 @@ export async function saveMfaPolicyAction(
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error({ orgSlug, err: msg }, "mfa-policy: saveMfaPolicyAction failed");
+    logger.error({ orgSlug, err: msg }, "mfa-policy: saveMfaPolicyAction failed");
     return { ok: false, code: "internal", error: "Failed to save MFA policy" };
   }
 }

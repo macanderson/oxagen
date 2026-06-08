@@ -302,11 +302,11 @@ describe("resolveOrgScope", () => {
     expect(mockQuery.orgUsers.findFirst).not.toHaveBeenCalled();
   });
 
-  it("returns not_member when the user is not in the org", async () => {
+  it("returns not_found when the user is not in the org", async () => {
     mockQuery.organizations.findFirst.mockResolvedValueOnce({ id: "org_real" });
     mockQuery.orgUsers.findFirst.mockResolvedValueOnce(undefined);
     const result = await resolveOrgScope("usr_stranger", "real-org");
-    expect(result).toEqual({ ok: false, kind: "not_member" });
+    expect(result).toEqual({ ok: false, kind: "not_found" });
   });
 
   it("returns orgId when the user is a member", async () => {
@@ -328,7 +328,7 @@ describe("resolveOrgScope", () => {
 
     const result = await resolveOrgScope("usr_a", "org-b-slug");
 
-    expect(result).toEqual({ ok: false, kind: "not_member" });
+    expect(result).toEqual({ ok: false, kind: "not_found" });
 
     // Ensure the membership query was scoped to org_b — the mock validates
     // that it was called once (if it had been skipped, cross-tenant data
@@ -350,7 +350,7 @@ describe("resolveOrgScope", () => {
 
     // Call 2: same user tries org_b — must be rejected.
     const resultB = await resolveOrgScope("usr_a", "org-b-slug");
-    expect(resultB).toEqual({ ok: false, kind: "not_member" });
+    expect(resultB).toEqual({ ok: false, kind: "not_found" });
   });
 });
 

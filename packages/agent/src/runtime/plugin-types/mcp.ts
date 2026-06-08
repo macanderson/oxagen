@@ -9,12 +9,15 @@
  * needs_reauth and that server is skipped for this turn.
  */
 import { and, eq, isNull } from "drizzle-orm";
+import pino from "pino";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { schema, withTenantDb } from "@oxagen/database";
 import { getWorkspaceSecret, DbOAuthClientProvider, markCredentialNeedsReauth } from "@oxagen/plugins";
 import type { CapabilityContext } from "../../types";
 import { connectMcp, materializeMcpTools } from "../../dispatch/mcp-client";
 import { registerPluginType, type ContributedRawTool } from "../plugin-type";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.plugin-types.mcp" } });
 
 async function contributeMcpTools(ctx: CapabilityContext): Promise<ContributedRawTool[]> {
   if (!ctx.workspaceId) return [];
@@ -130,17 +133,18 @@ async function contributeMcpTools(ctx: CapabilityContext): Promise<ContributedRa
             err.message.includes("unauthorized")));
 
       if (isAuthError && server.orgListingId) {
-        console.warn(
-          `[plugin-types/mcp] Auth failure for server ${server.id} (${server.name}); marking needs_reauth`,
+        logger.warn(
+          { serverId: server.id, serverName: server.name },
+          "auth failure for MCP server; marking needs_reauth",
         );
         await markCredentialNeedsReauth(ctx.workspaceId, server.orgListingId).catch((e) => {
-          console.error("[plugin-types/mcp] Failed to mark needs_reauth:", e);
+          logger.error({ serverId: server.id, err: e }, "failed to mark needs_reauth");
         });
       } else {
         // Per-server non-auth failure is isolated — log and continue.
-        console.error(
-          `[plugin-types/mcp] Failed to load MCP tools from server ${server.id} (${server.name}):`,
-          err,
+        logger.error(
+          { serverId: server.id, serverName: server.name, err },
+          "failed to load MCP tools from server",
         );
       }
     }

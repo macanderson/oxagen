@@ -1,14 +1,7 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { Inngest } from "inngest";
-import { requireEnv } from "@oxagen/config/env";
-
-const env = requireEnv(["INNGEST_EVENT_KEY"] as const);
-
-// Shared Inngest client. Same `id` as @oxagen/inngest-functions so events
-// route to the registered handlers (served from apps/api /api/inngest).
-const inngest = new Inngest({ id: "oxagen-runner", eventKey: env.INNGEST_EVENT_KEY });
+import { getInngestClient } from "./inngest-client";
 
 export interface FanoutChild {
   capability: string;
@@ -69,7 +62,7 @@ export async function dispatchFanout(args: DispatchFanoutArgs): Promise<Dispatch
   // Carry depth in the event payload so the executor can enforce the depth
   // guard without a DB column (OXA-1498: infinite fanout protection).
   const currentDepth = args.depth ?? 0;
-  await inngest.send({
+  await getInngestClient().send({
     name: "agent/subagent.dispatch",
     data: {
       orgId: args.orgId,

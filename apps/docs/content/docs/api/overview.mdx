@@ -15,7 +15,7 @@ All endpoints are under `/v1/`. The version prefix is required.
 
 **Capability parity.** Every capability available via the REST API is also available via the MCP server and the in-app agent. The underlying contract registry is the single source of truth for all three surfaces. If you build an automation with the API, it works identically if you switch to MCP.
 
-**Thin shell, shared logic.** The API server (`apps/api`, Hono) is a thin routing layer over the shared `packages/` library. Business logic lives in the packages, not in route handlers. This means API behavior is consistent with app behavior — no divergence.
+**Thin shell, shared logic.** The API server is a thin routing layer over the shared platform library. Business logic lives in the shared layer, not in route handlers. This means API behavior is consistent with app behavior — no divergence.
 
 **Versioned.** All endpoints carry the `/v1/` prefix. Breaking changes will be introduced in a new version with a parallel migration window.
 
@@ -61,7 +61,7 @@ Common error codes:
 
 See [Capabilities](/docs/api/capabilities) for the full list of available capabilities and their REST routes.
 
-Note: some UI-only actions (plan approval flows, billing page interactions) are not available via the API because they do not have corresponding contract declarations. Run `pnpm check:manifest` on a local clone to get the current parity gap list.
+Note: some UI-only actions (plan approval flows, billing page interactions) are not available via the API because they do not have corresponding contract declarations. See [Capabilities](/docs/api/capabilities) for the current parity gap list.
 
 ## Rate limits
 

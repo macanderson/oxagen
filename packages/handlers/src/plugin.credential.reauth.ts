@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { logger } from "./logger";
 
 /**
  * Returns the OAuth authorize URL for re-authenticating a plugin credential.
@@ -17,27 +18,33 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   }
 
   // Resolve org slug + workspace slug from the context ids.
-  const slugs = await withSystemDb(async (tx) => {
-    const [orgRow] = await tx
-      .select({ slug: schema.organizations.slug })
-      .from(schema.organizations)
-      .where(eq(schema.organizations.id, ctx.orgId))
-      .limit(1);
-    const [wsRow] = await tx
-      .select({ slug: schema.workspaces.slug })
-      .from(schema.workspaces)
-      .where(
-        and(
-          eq(schema.workspaces.id, ctx.workspaceId!),
-          eq(schema.workspaces.orgId, ctx.orgId),
-        ),
-      )
-      .limit(1);
-    return {
-      orgSlug: orgRow?.slug ?? null,
-      workspaceSlug: wsRow?.slug ?? null,
-    };
-  });
+  let slugs: { orgSlug: string | null; workspaceSlug: string | null };
+  try {
+    slugs = await withSystemDb(async (tx) => {
+      const [orgRow] = await tx
+        .select({ slug: schema.organizations.slug })
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, ctx.orgId))
+        .limit(1);
+      const [wsRow] = await tx
+        .select({ slug: schema.workspaces.slug })
+        .from(schema.workspaces)
+        .where(
+          and(
+            eq(schema.workspaces.id, ctx.workspaceId!),
+            eq(schema.workspaces.orgId, ctx.orgId),
+          ),
+        )
+        .limit(1);
+      return {
+        orgSlug: orgRow?.slug ?? null,
+        workspaceSlug: wsRow?.slug ?? null,
+      };
+    });
+  } catch (err) {
+    logger.error({ err, orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "plugin.credential.reauth: slug lookup failed");
+    throw err;
+  }
 
   if (!slugs.orgSlug || !slugs.workspaceSlug) {
     throw new Error("[plugin.credential.reauth] could not resolve org or workspace slug");
@@ -55,5 +62,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   });
   const authorizeUrl = `${appUrl}/api/v1/mcp/oauth/authorize?${params.toString()}`;
 
+  logger.info(
+    { orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+    "plugin.credential.reauth: ok",
+  );
   return { authorizeUrl };
 };

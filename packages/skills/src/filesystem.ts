@@ -16,7 +16,10 @@ async function walk(dir: string, out: Skill[]): Promise<void> {
   let entries: import("node:fs").Dirent[] = [];
   try {
     entries = await readdir(dir, { withFileTypes: true });
-  } catch {
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.warn("[skills] failed to read directory", { dir, error: err });
+    }
     return;
   }
   for (const entry of entries) {

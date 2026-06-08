@@ -14,6 +14,8 @@ import { loadEnv } from "@oxagen/config/env";
 import { getSession } from "@/lib/session";
 import { resolveOrg, assertBillingManager } from "@/lib/resolve-org";
 
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
+
 const BodySchema = z.object({
   orgSlug: z.string(),
   planSlug: z.string(),
@@ -44,7 +46,7 @@ export async function POST(req: Request) {
 
   const ctx = {
     orgId: tenant.id,
-    workspaceId: "",
+    workspaceId: ORG_ONLY_WS,
     userId: session.user.id,
     apiKeyId: null as string | null,
     requestId: crypto.randomUUID(),

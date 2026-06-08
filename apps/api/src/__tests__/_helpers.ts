@@ -73,14 +73,9 @@ export function makeOrgScopeOk(orgId = "org-id-test"): OrgScopeResolution {
   return { ok: true, orgId };
 }
 
-/** Org not found in DB. */
+/** Org not found or user not a member (resolver merges both cases). */
 export function makeOrgNotFound(): OrgScopeResolution {
   return { ok: false, kind: "not_found" };
-}
-
-/** User is not a member of the org. */
-export function makeOrgNotMember(): OrgScopeResolution {
-  return { ok: false, kind: "not_member" };
 }
 
 /** Successful workspace scope resolution. */

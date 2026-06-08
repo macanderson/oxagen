@@ -15,6 +15,12 @@ export interface LowBalanceBannerProps {
   balanceCents: number;
   /** Threshold below which the banner is shown (in cents). */
   thresholdCents: number;
+  /**
+   * Optional callback invoked when the user clicks "Buy credits". The billing
+   * page passes a handler that scrolls to / focuses the buy-credits widget.
+   * Makes the dependency explicit and testable instead of relying on a DOM id.
+   */
+  onBuyCredits?: () => void;
 }
 
 const SESSION_KEY_PREFIX = "oxagen:low-balance-dismissed:";
@@ -32,6 +38,7 @@ export function LowBalanceBanner({
   orgSlug,
   balanceCents,
   thresholdCents,
+  onBuyCredits,
 }: LowBalanceBannerProps) {
   const sessionKey = `${SESSION_KEY_PREFIX}${orgSlug}`;
 
@@ -54,18 +61,6 @@ export function LowBalanceBanner({
     setDismissed(true);
   }
 
-  function handleBuyCredits() {
-    const el = document.getElementById("buy-credits");
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-      // Focus the first interactive element inside the widget if available.
-      const focusable = el.querySelector<HTMLElement>(
-        "button, input, select, textarea, [tabindex]",
-      );
-      focusable?.focus();
-    }
-  }
-
   return (
     <Alert variant="warning" className="relative">
       <AlertTriangle className="h-4 w-4" />
@@ -78,7 +73,7 @@ export function LowBalanceBanner({
               variant="link"
               size="sm"
               className="h-auto p-0 text-sm font-medium underline-offset-2"
-              onClick={handleBuyCredits}
+              onClick={onBuyCredits}
             >
               Buy credits
             </Button>{" "}

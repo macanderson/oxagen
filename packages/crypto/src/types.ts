@@ -4,13 +4,16 @@
  *
  * Wire format (all big-endian):
  *
- *   [1 byte  version ]
- *   [2 bytes iv_len  ]
- *   [12 bytes iv     ]   (always AES-GCM 96-bit nonce)
- *   [2 bytes key_len ]
- *   [N bytes enc_dek ]   (KMS-wrapped 256-bit data encryption key)
- *   [4 bytes ct_len  ]
- *   [M bytes ct+tag  ]   (AES-256-GCM ciphertext || 16-byte auth tag)
+ *   [1 byte  version    ]
+ *   [2 bytes iv_len     ]   uint16 BE, always 12
+ *   [2 bytes enc_dek_len]   uint16 BE
+ *   [4 bytes ct_len     ]   uint32 BE
+ *   [iv_len  bytes iv   ]   AES-GCM 96-bit nonce
+ *   [enc_dek_len bytes  ]   KMS-wrapped 256-bit data encryption key
+ *   [ct_len  bytes      ]   AES-256-GCM ciphertext || 16-byte auth tag
+ *
+ * All three length fields are packed into the fixed-size header first; the
+ * variable-length payloads follow in order (iv, enc_dek, ct+tag).
  *
  * The version byte lets us migrate the format in the future without
  * re-encrypting all existing rows (just add a decoder branch).

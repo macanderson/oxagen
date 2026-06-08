@@ -9,6 +9,10 @@ import type {
   SandboxStreamChunk,
 } from "./types";
 
+// Maximum characters allowed in stdout or stderr from a single run().
+// Mirrors the Docker driver's 8 MB cap (docker.ts:29).
+const MAX_OUTPUT_CHARS = 8_388_608; // 8 MB
+
 // @vercel/sandbox supports node24 and python3.13 runtimes only (see ADR-011).
 // Shell scripts are executed via /bin/sh on the node24 runtime.
 const LANGUAGE_RUNTIMES: Record<SandboxLanguage, string> = {
@@ -107,7 +111,7 @@ export function createVercelSandbox(config: VercelSandboxConfig): SandboxDriver 
       );
     }
 
-    const start = Date.now();
+    const wallStart = Date.now();
     const networkPolicy = networkPolicyFor(req.network);
     const runtime = runtimeFor(req.language);
     const filePath = codePathFor(req.language);
@@ -124,25 +128,36 @@ export function createVercelSandbox(config: VercelSandboxConfig): SandboxDriver 
 
     const sandbox = await Sandbox.create(createParams);
     let finished: CommandFinished;
+    let execStart: number;
     try {
       await sandbox.fs.writeFile(filePath, req.code, "utf8");
+      // Measure execution time starting after file upload so that
+      // Sandbox.create() + fs.writeFile() warmup (typically 1–3 s) is
+      // excluded from the timedOut heuristic (ADR-011, 2026-06-07).
+      execStart = Date.now();
       finished = await sandbox.runCommand({ cmd, args, env: req.env });
     } finally {
       await sandbox.stop().catch(() => undefined);
     }
 
-    const durationMs = Date.now() - start;
-    // Heuristic: treat the run as timed-out when wall-clock (including
-    // Sandbox.create() + fs.writeFile() warmup) meets or exceeds the
-    // configured limit. This can produce false positives for fast sandboxes
-    // that exit near the boundary, and false negatives when warmup consumes
-    // significant time.
-    // TODO: adopt a dedicated timeout signal from @vercel/sandbox when the
-    // SDK exposes one on CommandFinished (track via @vercel/sandbox release notes).
-    const timedOut = durationMs >= req.timeoutMs;
+    const durationMs = Date.now() - wallStart;
+    const execDurationMs = Date.now() - execStart!;
+    // Heuristic: treat the run as timed-out when execution time (excluding
+    // sandbox warmup) meets or exceeds the configured limit.
+    // ADR-011 (2026-06-07): @vercel/sandbox does not expose a dedicated
+    // timeout signal on CommandFinished; revisit when the SDK adds one.
+    const timedOut = execDurationMs >= req.timeoutMs;
 
-    const stdout = await finished.stdout().catch(() => "");
-    const stderr = await finished.stderr().catch(() => "");
+    const rawStdout = await finished.stdout().catch(() => "");
+    const rawStderr = await finished.stderr().catch(() => "");
+    const stdoutTruncated = rawStdout.length > MAX_OUTPUT_CHARS;
+    const stderrTruncated = rawStderr.length > MAX_OUTPUT_CHARS;
+    const stdout = stdoutTruncated
+      ? rawStdout.slice(0, MAX_OUTPUT_CHARS) + "\n[output truncated: exceeded 8 MB limit]"
+      : rawStdout;
+    const stderr = stderrTruncated
+      ? rawStderr.slice(0, MAX_OUTPUT_CHARS) + "\n[output truncated: exceeded 8 MB limit]"
+      : rawStderr;
 
     return {
       exitCode: finished.exitCode,
@@ -182,10 +197,23 @@ export function createVercelSandbox(config: VercelSandboxConfig): SandboxDriver 
     try {
       await sandbox.fs.writeFile(filePath, req.code, "utf8");
       const command = await sandbox.runCommand({ cmd, args, env: req.env, detached: true });
+      let streamedBytes = 0;
       for await (const log of command.logs()) {
+        if (streamedBytes >= MAX_OUTPUT_CHARS) {
+          yield {
+            channel: log.stream,
+            data: "\n[output truncated: exceeded 8 MB limit]",
+            at: Date.now(),
+          };
+          break;
+        }
+        const chunk = log.data.length > MAX_OUTPUT_CHARS - streamedBytes
+          ? log.data.slice(0, MAX_OUTPUT_CHARS - streamedBytes)
+          : log.data;
+        streamedBytes += chunk.length;
         yield {
           channel: log.stream,
-          data: log.data,
+          data: chunk,
           at: Date.now(),
         };
       }

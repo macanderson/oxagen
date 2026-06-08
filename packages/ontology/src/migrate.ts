@@ -35,11 +35,13 @@ if (isDirectRun) {
   migrate()
     .then(() => closeDriver())
     .then(() => {
-      console.log("Neo4j migration complete");
+      process.stdout.write(JSON.stringify({ level: "info", msg: "Neo4j migration complete" }) + "\n");
       process.exit(0);
     })
-    .catch((err) => {
-      console.error("Neo4j migration failed:", err);
+    .catch((err: unknown) => {
+      process.stderr.write(
+        JSON.stringify({ level: "error", msg: "Neo4j migration failed", err: String(err) }) + "\n",
+      );
       process.exit(1);
     });
 }

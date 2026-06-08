@@ -1,6 +1,6 @@
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import type { BillingInvoice } from "./provider";
 
@@ -259,17 +259,16 @@ export async function sweepDunning(): Promise<{ suspended: number }> {
       return { suspended: 0 };
     }
 
-    let suspended = 0;
+    await tx
+      .update(schema.orgBillingSettings)
+      .set({
+        dunningState: "suspended",
+        suspendedAt: now,
+        updatedAt: now,
+      })
+      .where(inArray(schema.orgBillingSettings.id, toSuspend.map((r) => r.id)));
+    const suspended = toSuspend.length;
     for (const row of toSuspend) {
-      await tx
-        .update(schema.orgBillingSettings)
-        .set({
-          dunningState: "suspended",
-          suspendedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(schema.orgBillingSettings.id, row.id));
-      suspended++;
       logger.warn(
         { orgId: row.orgId, graceEndsAt: row.graceEndsAt },
         "billing: dunning sweep — org suspended (grace period elapsed)",

@@ -3,7 +3,7 @@ import "@oxagen/handlers/register";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen";
-import type { FormFillOutput } from "@oxagen/oxagen/contracts/form.fill";
+import { formFill, type FormFillOutput } from "@oxagen/oxagen/contracts/form.fill";
 import { logger } from "@oxagen/handlers/logger";
 import type { FillableFormSpec, FormFillResult } from "./fill-types";
 
@@ -59,7 +59,7 @@ export async function fillFormAction(input: FillFormActionInput): Promise<FormFi
       messageId: null as string | null,
     };
 
-    const result = await invoke(
+    const rawResult = await invoke(
       "form.fill",
       {
         route: input.context.route,
@@ -76,7 +76,8 @@ export async function fillFormAction(input: FillFormActionInput): Promise<FormFi
       },
       ctx,
       { surface: "agent" },
-    ) as FormFillOutput;
+    );
+    const result: FormFillOutput = formFill.output.parse(rawResult);
 
     // Explicitly map to FieldDiff to satisfy required `current` / `proposed`
     // (the Zod-inferred type treats z.unknown() as optional).

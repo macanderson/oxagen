@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const {
@@ -13,49 +14,55 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     reason?: string;
   };
 
-  await withSystemDb(async (tx) => {
-    // Insert denylist row (idempotent).
-    await tx
-      .insert(schema.pluginOrgDenylist)
-      .values({
-        orgId: ctx.orgId,
-        pluginType,
-        serverName,
-        reason: reason ?? null,
-      })
-      .onConflictDoNothing();
-
-    // Cascade: disable matching org listings.
-    await tx
-      .update(schema.pluginOrgListings)
-      .set({ enabled: false })
-      .where(
-        and(
-          eq(schema.pluginOrgListings.orgId, ctx.orgId),
-          eq(schema.pluginOrgListings.pluginType, pluginType),
-          eq(schema.pluginOrgListings.name, serverName),
-        ),
-      );
-
-    // Cascade: delete dependent workspace installs for any matching listing
-    // (the subquery approach — fetch listing ids first, then delete installs).
-    const matchingListings = await tx
-      .select({ id: schema.pluginOrgListings.id })
-      .from(schema.pluginOrgListings)
-      .where(
-        and(
-          eq(schema.pluginOrgListings.orgId, ctx.orgId),
-          eq(schema.pluginOrgListings.pluginType, pluginType),
-          eq(schema.pluginOrgListings.name, serverName),
-        ),
-      );
-
-    for (const listing of matchingListings) {
+  try {
+    await withSystemDb(async (tx) => {
+      // Insert denylist row (idempotent).
       await tx
-        .delete(schema.mcpServers)
-        .where(eq(schema.mcpServers.orgListingId, listing.id));
-    }
-  });
+        .insert(schema.pluginOrgDenylist)
+        .values({
+          orgId: ctx.orgId,
+          pluginType,
+          serverName,
+          reason: reason ?? null,
+        })
+        .onConflictDoNothing();
 
+      // Cascade: disable matching org listings.
+      await tx
+        .update(schema.pluginOrgListings)
+        .set({ enabled: false })
+        .where(
+          and(
+            eq(schema.pluginOrgListings.orgId, ctx.orgId),
+            eq(schema.pluginOrgListings.pluginType, pluginType),
+            eq(schema.pluginOrgListings.name, serverName),
+          ),
+        );
+
+      // Cascade: delete dependent workspace installs for any matching listing
+      // (the subquery approach — fetch listing ids first, then delete installs).
+      const matchingListings = await tx
+        .select({ id: schema.pluginOrgListings.id })
+        .from(schema.pluginOrgListings)
+        .where(
+          and(
+            eq(schema.pluginOrgListings.orgId, ctx.orgId),
+            eq(schema.pluginOrgListings.pluginType, pluginType),
+            eq(schema.pluginOrgListings.name, serverName),
+          ),
+        );
+
+      for (const listing of matchingListings) {
+        await tx
+          .delete(schema.mcpServers)
+          .where(eq(schema.mcpServers.orgListingId, listing.id));
+      }
+    });
+  } catch (err) {
+    logger.error({ err, orgId: ctx.orgId, pluginType, serverName }, "plugin.denylist.add: failed");
+    throw err;
+  }
+
+  logger.info({ orgId: ctx.orgId, pluginType, serverName }, "plugin.denylist.add: ok");
   return { ok: true };
 };

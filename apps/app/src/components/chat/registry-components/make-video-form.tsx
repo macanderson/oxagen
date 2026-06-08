@@ -139,7 +139,7 @@ export default function MakeVideoForm({
             </p>
           </div>
           <Badge variant="muted" className="ml-auto shrink-0">
-            Coming soon
+            Preview
           </Badge>
         </div>
         <p className="text-xs text-muted-foreground italic">
@@ -168,7 +168,7 @@ export default function MakeVideoForm({
         />
         <span className="text-sm font-semibold text-foreground">Generate video</span>
         <Badge variant="muted" className="ml-auto text-xs">
-          Coming soon &mdash; preview
+          Preview
         </Badge>
       </div>
 
