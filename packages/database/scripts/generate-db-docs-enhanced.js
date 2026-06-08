@@ -776,11 +776,20 @@ function generateHTML(schemas) {
   </footer>
 
   <script
-    src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"
+    src="https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.min.js"
     integrity="sha384-DO5I13PxDVzV3/+foDrAjVrh1nQV7kqrDMYapI1XrXlBXezoLn1MAzVuQzDeIvDE"
     crossorigin="anonymous"
   ><\/script>
   <script>
+    // Initialize mermaid early
+    if (typeof mermaid !== 'undefined') {
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: 'default',
+        securityLevel: 'loose'
+      });
+    }
+
     // Utility to safely escape HTML
     function escapeHtml(text) {
       if (!text) return '';
@@ -1097,21 +1106,15 @@ function generateHTML(schemas) {
       const mermaidDef = \`${erdDiagram}\`;
       const erdDiv = document.getElementById('erdDiagram');
       erdDiv.innerHTML = '';
-      erdDiv.classList.add('mermaid');
+      erdDiv.className = 'mermaid';
       erdDiv.textContent = mermaidDef;
 
-      // Initialize mermaid with proper configuration
-      if (mermaid) {
-        mermaid.initialize({
-          startOnLoad: true,
-          theme: 'default',
-          erDiagram: {
-            arrowMarkerAbsolute: true
-          }
-        });
-        mermaid.contentLoaderMarked.cache = {};
-        mermaid.run();
-      }
+      // Trigger mermaid rendering
+      setTimeout(() => {
+        if (typeof mermaid !== 'undefined' && mermaid.run) {
+          mermaid.run();
+        }
+      }, 100);
     }
 
     // Close modal on backdrop click
