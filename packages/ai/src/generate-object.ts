@@ -115,7 +115,11 @@ export async function generateObjectFor<T>(
   // AI SDK v6: usage fields renamed to inputTokens/outputTokens.
   const inputTokens = result.usage.inputTokens ?? 0;
   const outputTokens = result.usage.outputTokens ?? 0;
-  const usage = { model: modelId, inputTokens, outputTokens };
+  // Prompt-cache reads (AI SDK v6 normalizes the provider's count). Forward so
+  // the rate card prices cached tokens at the cheaper rate; 0 when caching
+  // didn't engage. See stream.ts for the rationale.
+  const cachedTokens = result.usage.cachedInputTokens ?? 0;
+  const usage = { model: modelId, inputTokens, outputTokens, cachedTokens };
   const costUsdMicros = providerCostUsdMicros(usage);
 
   // Telemetry write is best-effort; if ClickHouse is unreachable the caller
