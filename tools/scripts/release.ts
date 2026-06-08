@@ -511,6 +511,14 @@ async function main(): Promise<void> {
     }
   }
 
+  // ── npm CLI publish ──
+  if (opts.npm && !opts.dryRun) {
+    await publishCliToNpm(next);
+  } else if (opts.npm && opts.dryRun) {
+    const cfg = npmCfg();
+    if (cfg) console.log(kleur.dim("\n  npm CLI publish: would build and publish @oxagen/cli to npm"));
+  }
+
   console.log(kleur.bold(kleur.green(`\n  ✓ release ${next} ${opts.dryRun ? "previewed" : "prepared"}\n`)));
 }
 
