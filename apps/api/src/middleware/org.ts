@@ -33,8 +33,6 @@ export const orgMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   switch (kind) {
     case "not_found":
       throw new HTTPException(404, { message: "Organization not found" });
-    case "not_member":
-      throw new HTTPException(403, { message: "Not a member of this organization" });
     default:
       // Exhaustiveness guard: a new OrgScopeResolutionError kind fails to
       // compile here, and at runtime throws 500 rather than silently calling

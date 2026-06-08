@@ -1,7 +1,10 @@
+import pino from "pino";
 import { embed } from "ai";
 import { gateway } from "@ai-sdk/gateway";
 import { insertTokenUsage, providerFromModelId, hashPrompt, type Surface } from "@oxagen/telemetry";
 import { providerCostUsdMicros } from "@oxagen/billing";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.embed" } });
 
 // Match the 1536-dim AgentMemory vector index. Swapping models requires a
 // re-index, so we pin here and treat the index name as the contract. `MODEL` is
@@ -67,7 +70,7 @@ export async function embedText(text: string, opts: EmbedTextOpts): Promise<numb
     ]);
   } catch (err) {
     // Telemetry is best-effort; never fail the caller.
-    console.error("[oxagen/ai] embedText telemetry write failed", err);
+    logger.error({ err }, "embedText telemetry write failed");
   }
 
   return embedding;

@@ -1,3 +1,4 @@
+import pino from "pino";
 import { streamText, type ModelMessage, type LanguageModel, type ToolSet, type StreamTextResult } from "ai";
 import type { JSONObject } from "@ai-sdk/provider";
 import {
@@ -9,6 +10,8 @@ import {
 import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
 import { defaultModel, modelIdOf } from "./models";
 import type { EffortLevel } from "./catalog";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.stream" } });
 
 // ── Reasoning token budget per effort level (tokens allocated to thinking) ──
 const REASONING_BUDGET: Record<EffortLevel, number> = {
@@ -255,7 +258,7 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
         ]);
       } catch (err) {
         // Swallow — telemetry must never fail the chat turn.
-        console.error("[oxagen/ai] stream telemetry write failed", err);
+        logger.error({ err }, "stream telemetry write failed");
       }
 
       // The gate: debit the org's credits for what this call cost us, marked
@@ -271,7 +274,7 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
         });
       } catch (err) {
         // Swallow — credit metering must never fail the chat turn.
-        console.error("[oxagen/ai] stream credit charge failed", err);
+        logger.error({ err }, "stream credit charge failed");
       }
       await args.onFinish?.({
         text: event.text,

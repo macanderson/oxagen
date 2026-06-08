@@ -15,9 +15,7 @@ export interface OrgScopeResult {
   orgId: string;
 }
 
-export type OrgScopeResolutionError =
-  | { kind: "not_found" }
-  | { kind: "not_member" };
+export type OrgScopeResolutionError = { kind: "not_found" };
 
 export type OrgScopeResolution =
   | ({ ok: true } & OrgScopeResult)

@@ -1,3 +1,4 @@
+import pino from "pino";
 import { generateObject, type LanguageModel, type ModelMessage } from "ai";
 import { z } from "zod";
 import {
@@ -8,6 +9,8 @@ import {
 } from "@oxagen/telemetry";
 import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
 import { defaultModel, modelIdOf } from "./models";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.object" } });
 
 export interface GenerateObjectArgs<T> {
   /**
@@ -145,7 +148,7 @@ export async function generateObjectFor<T>(
     ]);
   } catch (err) {
     // Swallow — telemetry must never fail a capability call.
-    console.error("[oxagen/ai] generateObject telemetry write failed", err);
+    logger.error({ err }, "generateObject telemetry write failed");
   }
 
   // Debit the org's credits for what this call cost us at the target margin.
@@ -158,7 +161,7 @@ export async function generateObjectFor<T>(
     });
   } catch (err) {
     // Swallow — credit metering must never fail a capability call.
-    console.error("[oxagen/ai] generateObject credit charge failed", err);
+    logger.error({ err }, "generateObject credit charge failed");
   }
 
   return {

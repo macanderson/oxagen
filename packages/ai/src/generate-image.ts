@@ -1,3 +1,4 @@
+import pino from "pino";
 import { generateImage, type ImageModel } from "ai";
 import {
   insertTokenUsage,
@@ -5,6 +6,8 @@ import {
   type Surface,
 } from "@oxagen/telemetry";
 import { chargeImageCredits, imageProviderCostUsdMicros } from "@oxagen/billing";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.image" } });
 
 // Image models bill PER IMAGE, not per token. The real per-image cost (by model
 // + size) lives in IMAGE_RATE_CARD in @oxagen/billing; this module reads it via
@@ -134,7 +137,7 @@ export async function generateImageFor(
     ]);
   } catch (err) {
     // Swallow — telemetry must never fail a capability call.
-    console.error("[oxagen/ai] generateImage telemetry write failed", err);
+    logger.error({ err }, "generateImage telemetry write failed");
   }
 
   // Debit the org's credits at the target margin. chargeImageCredits prices the
@@ -150,7 +153,7 @@ export async function generateImageFor(
     });
   } catch (err) {
     // Swallow — credit metering must never fail a capability call.
-    console.error("[oxagen/ai] generateImage credit charge failed", err);
+    logger.error({ err }, "generateImage credit charge failed");
   }
 
   return {
