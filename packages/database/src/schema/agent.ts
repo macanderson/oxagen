@@ -56,29 +56,6 @@ export const agentVersions = agentSchema.table(
   }),
 );
 
-export const tools = agentSchema.table(
-  "tools",
-  {
-    ...idMixin("tol"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    name: text("name").notNull(),
-    slug: citext("slug").notNull(),
-    toolType: text("tool_type").notNull(),
-    description: text("description").notNull(),
-    isEnabled: boolean("is_enabled").notNull().default(true),
-    // Agent-runtime extensions (spec §6). risk_level is constrained via
-    // CHECK in the migration; Drizzle treats it as free-text citext.
-    requiresApproval: boolean("requires_approval").notNull().default(false),
-    riskLevel: citext("risk_level").notNull().default("low"),
-    category: text("category"),
-  },
-  (t) => ({
-    orgSlugIdx: uniqueIndex("tools_org_slug_idx").on(t.orgId, t.slug),
-    orgIdx: index("tools_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
 // Skills (spec §6, agent-runtime epic). Logical identity + immutable
 // versions, mirroring the agents/tools/playbooks versioning pattern.
 export const skills = agentSchema.table(

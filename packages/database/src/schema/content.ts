@@ -84,24 +84,3 @@ export const generatedAssets = contentSchema.table(
   }),
 );
 
-export const documents = contentSchema.table(
-  "documents",
-  {
-    ...idMixin("doc"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...softDeleteMixin(),
-    fileId: uuid("file_id").notNull(),
-    folderId: uuid("folder_id"),
-    title: text("title").notNull(),
-    documentType: text("document_type").notNull(),
-    embeddingStatus: text("embedding_status").notNull(),
-  },
-  (t) => ({
-    orgIdx: index("documents_org_idx").on(t.orgId, t.workspaceId),
-    fileIdx: index("documents_file_idx").on(t.fileId),
-    folderIdx: index("documents_folder_idx").on(t.folderId),
-    embeddingStatusIdx: index("documents_embedding_status_idx").on(t.embeddingStatus),
-  }),
-);
-

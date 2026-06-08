@@ -10,7 +10,6 @@ import {
 } from "./schema/iam";
 import { users, sessions, accounts, apiKeys, credentials } from "./schema/auth";
 import { workspaces, workspaceUsers, folders } from "./schema/workspace";
-import { connections } from "./schema/integration";
 import {
   agents,
   agentVersions,
@@ -29,13 +28,9 @@ import {
   agentToolCalls,
 } from "./schema/agent-executions";
 import {
-  playbooks,
-  playbookVersions,
-  playbookSteps,
 } from "./schema/workflow";
-import { triggers } from "./schema/event";
 import { conversations, messages } from "./schema/chat";
-import { files, documents } from "./schema/content";
+import { files } from "./schema/content";
 import {
   plans,
   subscriptions,
@@ -107,15 +102,8 @@ export const foldersRelations = relations(folders, ({ one, many }) => ({
     relationName: "folder_parent",
   }),
   children: many(folders, { relationName: "folder_parent" }),
-  documents: many(documents),
 }));
 
-export const connectionsRelations = relations(connections, ({ one }) => ({
-  credential: one(credentials, {
-    fields: [connections.credentialId],
-    references: [credentials.id],
-  }),
-}));
 
 export const agentsRelations = relations(agents, ({ many }) => ({
   versions: many(agentVersions),
@@ -205,25 +193,7 @@ export const agentToolCallsRelations = relations(agentToolCalls, ({ one }) => ({
   }),
 }));
 
-export const playbooksRelations = relations(playbooks, ({ many }) => ({
-  versions: many(playbookVersions),
-}));
 
-export const playbookVersionsRelations = relations(playbookVersions, ({ one, many }) => ({
-  playbook: one(playbooks, { fields: [playbookVersions.playbookId], references: [playbooks.id] }),
-  steps: many(playbookSteps),
-}));
-
-export const playbookStepsRelations = relations(playbookSteps, ({ one }) => ({
-  version: one(playbookVersions, {
-    fields: [playbookSteps.playbookVersionId],
-    references: [playbookVersions.id],
-  }),
-}));
-
-// triggers has no Drizzle relations after workflow_triggers was dropped
-// (release-audit Check 4). The table is retained for its own CRUD surface.
-export const triggersRelations = relations(triggers, () => ({}));
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
   user: one(users, { fields: [conversations.userId], references: [users.id] }),
@@ -256,10 +226,6 @@ export const filesRelations = relations(files, ({ many }) => ({
   documents: many(documents),
 }));
 
-export const documentsRelations = relations(documents, ({ one }) => ({
-  file: one(files, { fields: [documents.fileId], references: [files.id] }),
-  folder: one(folders, { fields: [documents.folderId], references: [folders.id] }),
-}));
 
 export const plansRelations = relations(plans, ({ many }) => ({
   subscriptions: many(subscriptions),
