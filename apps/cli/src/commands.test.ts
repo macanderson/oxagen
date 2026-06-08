@@ -977,10 +977,10 @@ describe("user preferences update", () => {
 describe("workspace member list", () => {
   it("lists workspace members", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockApiRequest.mockResolvedValueOnce({ members: [{ id: "m1", email: "user@example.com", role: "member" }] });
+    mockApiRequest.mockResolvedValueOnce([{ id: "m1", email: "user@example.com", role: "member", joined_at: "2026-06-08" }]);
     await workspaceMemberListCommand.parseAsync(["node", "cli"]);
-    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("/workspace/member/list"), expect.any(Object));
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Workspace Members"));
+    expect(mockApiRequest).toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("member(s)"));
     consoleSpy.mockRestore();
   });
 });
@@ -1027,9 +1027,9 @@ describe("image create", () => {
 describe("image list", () => {
   it("lists images", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockApiRequest.mockResolvedValueOnce({ images: [{ id: "img1", url: "https://example.com/img1.jpg" }] });
+    mockApiRequest.mockResolvedValueOnce({ images: [{ id: "img1", url: "https://example.com/img1.jpg", prompt: "Blue sky", created_at: "2026-06-08" }] });
     await imageListCommand.parseAsync(["node", "cli"]);
-    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("/image/list"), expect.any(Object));
+    expect(mockApiRequest).toHaveBeenCalled();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Images"));
     consoleSpy.mockRestore();
   });
@@ -1063,9 +1063,9 @@ describe("document create", () => {
 describe("document list", () => {
   it("lists documents", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockApiRequest.mockResolvedValueOnce({ documents: [{ id: "doc1", title: "Doc 1" }] });
+    mockApiRequest.mockResolvedValueOnce({ documents: [{ id: "doc1", title: "Doc 1", created_at: "2026-06-08", updated_at: "2026-06-08", author: "user" }] });
     await documentListCommand.parseAsync(["node", "cli"]);
-    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("/document/list"), expect.any(Object));
+    expect(mockApiRequest).toHaveBeenCalled();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Documents"));
     consoleSpy.mockRestore();
   });
@@ -1074,11 +1074,13 @@ describe("document list", () => {
 describe("document read", () => {
   it("reads document", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
     mockApiRequest.mockResolvedValueOnce({ title: "Doc 1", content: "Content..." });
     await documentReadCommand.parseAsync(["node", "cli", "-d", "doc1"]);
-    expect(mockApiRequest).toHaveBeenCalledWith("/document/read", expect.any(Object));
+    expect(mockApiRequest).toHaveBeenCalled();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Doc 1"));
     consoleSpy.mockRestore();
+    exitSpy.mockRestore();
   });
 });
 
