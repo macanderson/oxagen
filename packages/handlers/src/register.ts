@@ -296,4 +296,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./skill.workspace.list")).skillWorkspaceListHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "agent.execution.record",
+    async () =>
+      (await import("./agent.execution.record")).agentExecutionRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "chat.message.execution",
+    async () =>
+      (await import("./chat.message.execution")).chatMessageExecutionHandler as CapabilityHandlerFn,
+  );
 });
