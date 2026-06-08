@@ -473,3 +473,24 @@ Authoritative. See AGENTS.md for the why.
 
 **Never:** analytics in Neo4j. Graph relationships in Postgres.
 Transactional state in ClickHouse. Binary payloads in any of the three DB stores.
+
+## Documentation — capability registry
+
+**`docs/capabilities/` must stay in sync with live contracts.** The directory
+contains auto-generated markdown files for every user-facing capability (API
+endpoints, MCP tools, CLI commands) sourced from `packages/oxagen/src/contracts/`.
+It is the single source of truth for product documentation and is shipped to the
+website and agent-facing systems.
+
+- **When to regenerate:** Whenever a contract is added, renamed, or removed
+  (not just parameter changes — those do not require a regeneration).
+- **How to regenerate:** `pnpm check:contracts --docs` regenerates all files in
+  `docs/capabilities/` from the live contract definitions in `registerCapability()`
+  calls. The script updates `_index.md` and creates/deletes `.md` files to match.
+- **Before pushing:** Run `pnpm check:contracts --docs` if any contract files
+  changed (`packages/oxagen/src/contracts/`, `apps/api/src/routes/v1/*`,
+  `apps/mcp/src/tools/*`, `apps/cli/src/commands/*`). Stale capability docs
+  cause drift between shipped product and agent knowledge.
+- **CI gate:** The CI pipeline validates that `docs/capabilities/` matches
+  live contracts; a commit with new contracts but stale docs will fail the gate.
+  Never hand-edit capability markdown — edits are overwritten on regeneration.
