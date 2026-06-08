@@ -1,5 +1,4 @@
 import { bigint, boolean, customType, index, integer, text, timestamp, uniqueIndex, uuid, jsonb } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
 import { authSchema } from "./_schemas";
 import { auditMixin, citext, idMixin, softDeleteMixin, orgScopeMixin } from "./_mixins";
 
@@ -253,14 +252,6 @@ export const userPreferences = authSchema.table(
     defaultTextModel: text("default_text_model"),
     defaultImageModel: text("default_image_model"),
     defaultVideoModel: text("default_video_model"),
-    // Account-level preferences (distinct from the UI/model prefs above) —
-    // surfaced by user.preferences.get / user.preferences.update.
-    theme: text("theme").notNull().default("system"),
-    language: text("language").notNull().default("en"),
-    timezone: text("timezone").notNull().default("UTC"),
-    notificationSettings: jsonb("notification_settings")
-      .notNull()
-      .default(sql`'{}'::jsonb`),
   },
   (t) => ({
     // Enforces the 1:1 relationship — one preferences row per user.

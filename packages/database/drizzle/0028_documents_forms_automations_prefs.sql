@@ -1,9 +1,9 @@
--- 0026_documents_forms_automations_prefs.sql
+-- 0028_documents_forms_automations_prefs.sql
 --
 -- Program 0 — make the contract-declared stub capabilities real. Creates the
 -- backing tables for document.*, form.*, and automation.* (previously stubs
--- returning fake data), and adds the columns user.preferences.get/update and
--- skill.workspace.list need.
+-- returning fake data), and adds the agent.skills.enabled column that
+-- skill.workspace.list needs.
 --
 -- Tables declared in packages/database/src/schema/{content,workflow}.ts. RLS
 -- policies use the standard bypass-aware tenant_isolation form (mirrors 0016);
@@ -159,13 +159,6 @@ BEGIN
   END IF;
 END;
 $$;
-
--- ── auth.user_preferences: account-level prefs for user.preferences.get/update ─
-ALTER TABLE auth.user_preferences
-  ADD COLUMN IF NOT EXISTS theme                 text  NOT NULL DEFAULT 'system',
-  ADD COLUMN IF NOT EXISTS language              text  NOT NULL DEFAULT 'en',
-  ADD COLUMN IF NOT EXISTS timezone              text  NOT NULL DEFAULT 'UTC',
-  ADD COLUMN IF NOT EXISTS notification_settings jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 -- ── agent.skills: per-workspace enable toggle for skill.workspace.list ─────────
 ALTER TABLE agent.skills

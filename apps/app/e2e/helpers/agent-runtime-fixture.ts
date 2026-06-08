@@ -170,109 +170,10 @@ export async function setupAgentRuntimeFixture(
   `;
 
   // ─── Seed deterministic execution scenario rows ────────────────────────────
-  // These rows represent the state the agent runtime would produce when the
-  // scripted scenario executes. The UI layer is mocked (interceptAgentStream),
-  // so the runtime never runs; we seed the expected final DB state here so the
-  // Postgres assertions in the spec pass deterministically.
-
-  // 1. Stub agent tools (one per capability used in scenario).
-  // agent.tool_versions was dropped (release-audit Check 4 — dead schema).
-  // tool_calls.tool_version_id now carries tool IDs directly (app-enforced
-  // reference; no DB-level FK constraint was ever present).
-  const capabilities = [
-    { id: SCENARIO_IDS.toolMemoryRecall, tvId: SCENARIO_IDS.toolVersionMemoryRecall, name: "agent.memory.recall", slug: "e2e-memory-recall", toolType: "capability" },
-    { id: SCENARIO_IDS.toolMemoryWrite,  tvId: SCENARIO_IDS.toolVersionMemoryWrite,  name: "agent.memory.write",  slug: "e2e-memory-write",  toolType: "capability" },
-    { id: SCENARIO_IDS.toolCodeExecute,  tvId: SCENARIO_IDS.toolVersionCodeExecute,  name: "agent.code.execute",  slug: "e2e-code-execute",  toolType: "capability" },
-  ] as const;
-
-  for (const cap of capabilities) {
-    await sql`
-      INSERT INTO agent.tools (id, public_id, org_id, workspace_id, name, slug, tool_type, description, is_enabled, requires_approval, risk_level)
-      VALUES (
-        ${cap.id}::uuid,
-        'tol_e2e_' || ${cap.slug},
-        ${orgId},
-        ${workspaceId},
-        ${cap.name},
-        ${cap.slug},
-        ${cap.toolType},
-        ${"E2E stub for " + cap.name},
-        true,
-        false,
-        'low'
-      )
-      ON CONFLICT (id) DO NOTHING
-    `;
-  }
-
-  // 2. A single execution context for the scenario.
-  await sql`
-    INSERT INTO execution.executions (id, public_id, status, org_id, workspace_id, playbook_version_id, input_payload)
-    VALUES (
-      ${SCENARIO_IDS.execution}::uuid,
-      'exc_e2e_runtime',
-      'completed',
-      ${orgId},
-      ${workspaceId},
-      gen_random_uuid(),   -- playbook_version_id: no FK, any UUID works
-      '{}'::jsonb
-    )
-    ON CONFLICT (id) DO NOTHING
-  `;
-
-  // 3. Execution steps — one per tool call in the scenario.
-  const steps = [
-    { id: SCENARIO_IDS.stepRecall, tvId: SCENARIO_IDS.toolVersionMemoryRecall },
-    { id: SCENARIO_IDS.stepCode1,  tvId: SCENARIO_IDS.toolVersionCodeExecute },
-    { id: SCENARIO_IDS.stepCode2,  tvId: SCENARIO_IDS.toolVersionCodeExecute },
-    { id: SCENARIO_IDS.stepCode3,  tvId: SCENARIO_IDS.toolVersionCodeExecute },
-    { id: SCENARIO_IDS.stepWrite,  tvId: SCENARIO_IDS.toolVersionMemoryWrite  },
-  ] as const;
-
-  for (const step of steps) {
-    await sql`
-      INSERT INTO execution.execution_steps (id, public_id, status, execution_id, playbook_step_id, agent_version_id, attempt_number, input_payload, org_id, workspace_id)
-      VALUES (
-        ${step.id}::uuid,
-        'est_e2e_' || ${step.id.slice(-8)},
-        'completed',
-        ${SCENARIO_IDS.execution}::uuid,
-        gen_random_uuid(),  -- playbook_step_id: no FK, any UUID works
-        gen_random_uuid(),  -- agent_version_id: no FK, any UUID works
-        1,
-        '{}'::jsonb,
-        ${orgId},
-        ${workspaceId}
-      )
-      ON CONFLICT (id) DO NOTHING
-    `;
-  }
-
-  // 4. Tool call rows — one per tool-call-start/end event in the scenario.
-  const toolCallRows = [
-    { id: SCENARIO_IDS.tcRecall, stepId: SCENARIO_IDS.stepRecall, tvId: SCENARIO_IDS.toolVersionMemoryRecall },
-    { id: SCENARIO_IDS.tcCode1,  stepId: SCENARIO_IDS.stepCode1,  tvId: SCENARIO_IDS.toolVersionCodeExecute  },
-    { id: SCENARIO_IDS.tcCode2,  stepId: SCENARIO_IDS.stepCode2,  tvId: SCENARIO_IDS.toolVersionCodeExecute  },
-    { id: SCENARIO_IDS.tcCode3,  stepId: SCENARIO_IDS.stepCode3,  tvId: SCENARIO_IDS.toolVersionCodeExecute  },
-    { id: SCENARIO_IDS.tcWrite,  stepId: SCENARIO_IDS.stepWrite,  tvId: SCENARIO_IDS.toolVersionMemoryWrite  },
-  ] as const;
-
-  for (const tc of toolCallRows) {
-    await sql`
-      INSERT INTO execution.tool_calls (id, public_id, execution_step_id, tool_version_id, request_payload, status, org_id, workspace_id)
-      VALUES (
-        ${tc.id}::uuid,
-        'tcl_e2e_' || ${tc.id.slice(-8)},
-        ${tc.stepId}::uuid,
-        ${tc.tvId}::uuid,
-        '{}'::jsonb,
-        'completed',
-        ${orgId},
-        ${workspaceId}
-      )
-      ON CONFLICT (id) DO NOTHING
-    `;
-  }
+  // agent.tools, execution.executions, execution.execution_steps, and
+  // execution.tool_calls were all dropped (migrations 0020–0021). Tool-call
+  // tracking now lives in ClickHouse telemetry. Only approval_requests,
+  // subagent_fanouts, and subagent_runs still live in Postgres and are seeded.
 
   // 5. Approval request — mirrors the `approval-required` scripted event.
   // The `message_id` column is a UUID; we use a deterministic UUID derived
@@ -409,24 +310,10 @@ export async function setupAgentRuntimeFixture(
     orgSlug: opts.orgSlug,
     workspaceSlug: opts.workspaceSlug,
     async queryDbState(): Promise<DbState> {
-      // Query tool calls with their capability names. `tool_version_id` on
-      // `execution.tool_calls` carries the tool ID directly (agent.tool_versions
-      // was dropped in migration 0004 — release-audit Check 4). The e2e fixture
-      // seeds tool_calls with tvId === tool.id so the direct join works here.
-      const toolCalls = await sql<
-        { id: string; capability: string; status: string }[]
-      >`
-        SELECT tc.id::text AS id,
-               COALESCE(t.name, 'unknown') AS capability,
-               tc.status
-        FROM execution.tool_calls tc
-        LEFT JOIN agent.tools t ON t.id = tc.tool_version_id
-        WHERE tc.created_at > now() - interval '10 minutes'
-      `;
+      // execution.tool_calls and agent.tools were dropped (migrations 0020–0021).
+      // Tool-call tracking is now in ClickHouse telemetry.
+      const toolCalls: Array<{ id: string; capability: string; status: string }> = [];
       const byCap: Record<string, number> = {};
-      for (const r of toolCalls) {
-        byCap[r.capability] = (byCap[r.capability] ?? 0) + 1;
-      }
 
       const approvalRequests = await sql<
         { id: string; resolution: string | null }[]
@@ -502,18 +389,7 @@ export async function teardownFixture(opts: {
   `;
   if (t) {
     const orgId = t.id;
-    // Order matters where FKs are app-enforced rather than DB-enforced.
-    // Tool calls must be deleted before execution steps, steps before executions.
-    await sql`DELETE FROM execution.tool_calls WHERE execution_step_id IN (
-      SELECT id FROM execution.execution_steps WHERE execution_id IN (
-        SELECT id FROM execution.executions WHERE org_id = ${orgId}
-      )
-    )`;
-    await sql`DELETE FROM execution.execution_steps WHERE execution_id IN (
-      SELECT id FROM execution.executions WHERE org_id = ${orgId}
-    )`;
-    await sql`DELETE FROM execution.executions WHERE org_id = ${orgId}`;
-    await sql`DELETE FROM agent.tools WHERE org_id = ${orgId}`;
+    // execution.* and agent.tools were dropped (migrations 0020–0021).
     await sql`DELETE FROM agent.subagent_runs WHERE fanout_id IN (
       SELECT id FROM agent.subagent_fanouts WHERE org_id = ${orgId}
     )`;

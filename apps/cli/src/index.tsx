@@ -67,6 +67,34 @@ import { pluginCredentialReauthCommand } from "./commands/plugin.credential.reau
 import { imageGenerateCommand } from "./commands/image.generate.js";
 import { documentsGenerateCommand } from "./commands/documents.generate.js";
 import { pluginRegistryAddCommand } from "./commands/plugin.registry.add.js";
+import { agentMcpRegisterCommand } from "./commands/agent.mcp.register.js";
+import { agentPlanApproveCommand } from "./commands/agent.plan.approve.js";
+import { agentTaskBackgroundReadCommand } from "./commands/agent.task.background.read.js";
+import { agentTaskBackgroundStartCommand } from "./commands/agent.task.background.start.js";
+import { agentTaskBackgroundCancelCommand } from "./commands/agent.task.background.cancel.js";
+import { assetUploadCommand } from "./commands/asset.upload.js";
+import { billingSubscriptionUpgradeStartCommand } from "./commands/billing.subscription.upgrade.start.js";
+import { brandkitApplyCommand } from "./commands/brandkit.apply.js";
+import { conversationPurgeCommand } from "./commands/conversation.purge.js";
+import { documentsPdfCreateCommand } from "./commands/documents.pdf.create.js";
+import { formFillCommand } from "./commands/form.fill.js";
+import { orgMemberInviteDeclineCommand } from "./commands/org.member.invite.decline.js";
+import { organizationCreateCommand } from "./commands/organization.create.js";
+import { pluginCredentialSetSecretCommand } from "./commands/plugin.credential.set_secret.js";
+import { pluginDenylistAddCommand } from "./commands/plugin.denylist.add.js";
+import { pluginDenylistRemoveCommand } from "./commands/plugin.denylist.remove.js";
+import { pluginOrgInstallBulkCommand } from "./commands/plugin.org.install_bulk.js";
+import { pluginOrgListCommand } from "./commands/plugin.org.list.js";
+import { pluginOrgSetEnabledCommand } from "./commands/plugin.org.set_enabled.js";
+import { pluginRegistryRemoveCommand } from "./commands/plugin.registry.remove.js";
+import { pluginRegistrySyncCommand } from "./commands/plugin.registry.sync.js";
+import { pluginSettingsSetAuthAlertsCommand } from "./commands/plugin.settings.set_auth_alerts.js";
+import { pluginWorkspaceSetEnabledCommand } from "./commands/plugin.workspace.set_enabled.js";
+import { systemInstallInstructionsCommand } from "./commands/system.install.instructions.js";
+import { workflowCancelCommand } from "./commands/workflow.cancel.js";
+import { workflowStatusCommand } from "./commands/workflow.status.js";
+import { userPreferencesReadCommand } from "./commands/user.preferences.read.js";
+import { userPreferencesWriteCommand } from "./commands/user.preferences.write.js";
 
 const program = new Command();
 
@@ -99,6 +127,8 @@ orgMember.addCommand(orgMemberRemoveCommand);
 orgMember.addCommand(orgMemberRoleChangeCommand);
 const orgMemberInvite = orgMember.command("invite").description("Org member invitations");
 orgMemberInvite.addCommand(orgMemberInviteAcceptCommand);
+orgMemberInvite.addCommand(orgMemberInviteDeclineCommand);
+org.addCommand(organizationCreateCommand);
 
 // workspace
 const workspace = program.command("workspace").description("Workspace commands");
@@ -140,14 +170,28 @@ pluginCatalog.addCommand(pluginCatalogBrowseCommand);
 const pluginRegistry = plugin.command("registry").description("Plugin registry management");
 pluginRegistry.addCommand(pluginRegistryListCommand);
 pluginRegistry.addCommand(pluginRegistryAddCommand);
+pluginRegistry.addCommand(pluginRegistryRemoveCommand);
+pluginRegistry.addCommand(pluginRegistrySyncCommand);
 const pluginCredential = plugin.command("credential").description("Plugin credential management");
 pluginCredential.addCommand(pluginCredentialReauthCommand);
+pluginCredential.addCommand(pluginCredentialSetSecretCommand);
+const pluginDenylist = plugin.command("denylist").description("Plugin denylist management");
+pluginDenylist.addCommand(pluginDenylistAddCommand);
+pluginDenylist.addCommand(pluginDenylistRemoveCommand);
+pluginOrg.addCommand(pluginOrgInstallBulkCommand);
+pluginOrg.addCommand(pluginOrgListCommand);
+pluginOrg.addCommand(pluginOrgSetEnabledCommand);
+const pluginSettings = plugin.command("settings").description("Plugin settings");
+pluginSettings.addCommand(pluginSettingsSetAuthAlertsCommand);
+pluginOrg.addCommand(pluginWorkspaceSetEnabledCommand);
 
 // billing
 const billing = program.command("billing").description("Billing and subscription commands");
 billing.addCommand(billingStatusCommand);
 billing.addCommand(billingCreditsPurchaseCommand);
 billing.addCommand(billingSubscriptionReadCommand);
+const billingSubscription = billing.command("subscription").description("Subscription management");
+billingSubscription.addCommand(billingSubscriptionUpgradeStartCommand);
 
 // agent
 const agent = program.command("agent").description("Agent commands");
@@ -162,20 +206,44 @@ agentApproval.addCommand(agentApprovalResolveCommand);
 const agentMemory = agent.command("memory").description("Agent memory management");
 agentMemory.addCommand(agentMemoryRecallCommand);
 agentMemory.addCommand(agentMemoryWriteCommand);
+agentMcp.addCommand(agentMcpRegisterCommand);
+const agentPlan = agent.command("plan").description("Agent plan management");
+agentPlan.addCommand(agentPlanApproveCommand);
+const agentTask = agent.command("task").description("Agent task management");
+const agentTaskBackground = agentTask.command("background").description("Background task management");
+agentTaskBackground.addCommand(agentTaskBackgroundReadCommand);
+agentTaskBackground.addCommand(agentTaskBackgroundStartCommand);
+agentTaskBackground.addCommand(agentTaskBackgroundCancelCommand);
 
 // archive
 const archive = program.command("archive").description("Archive management");
 archive.addCommand(archiveCreateCommand);
 
+// asset
+const asset = program.command("asset").description("Asset management");
+asset.addCommand(assetUploadCommand);
+
+// brandkit
+const brandkit = program.command("brandkit").description("Brand kit commands");
+brandkit.addCommand(brandkitApplyCommand);
+
 // workflow
 const workflow = program.command("workflow").description("Workflow automation");
 workflow.addCommand(workflowRunCommand);
+workflow.addCommand(workflowCancelCommand);
+workflow.addCommand(workflowStatusCommand);
+
+// system
+const system = program.command("system").description("System commands");
+system.addCommand(systemInstallInstructionsCommand);
 
 // user
 const user = program.command("user").description("User account commands");
 const userPreferences = user.command("preferences").description("User preference management");
 userPreferences.addCommand(userPreferencesGetCommand);
 userPreferences.addCommand(userPreferencesUpdateCommand);
+userPreferences.addCommand(userPreferencesReadCommand);
+userPreferences.addCommand(userPreferencesWriteCommand);
 
 // workspace member + invite
 const workspaceMember = workspace.command("member").description("Workspace member management");
@@ -187,8 +255,9 @@ const workspaceModelSettings = workspaceModel.command("settings").description("M
 workspaceModelSettings.addCommand(workspaceModelSettingsReadCommand);
 workspaceModelSettings.addCommand(workspaceModelSettingsWriteCommand);
 
-// conversation chat
+// conversation chat + purge
 conversation.addCommand(conversationChatCommand);
+conversation.addCommand(conversationPurgeCommand);
 
 // image
 const image = program.command("image").description("Image generation commands");

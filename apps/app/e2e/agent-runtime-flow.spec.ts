@@ -104,10 +104,9 @@ test.describe("agent runtime end-to-end", () => {
     // 11. Final assistant text confirms completion.
     await expect(page.getByText("Done.")).toBeVisible();
 
-    // 12. Postgres assertions: tool_calls / approvals / fanouts / runs.
+    // 12. Postgres assertions: approvals / fanouts / runs.
+    // (execution.tool_calls was dropped in migration 0020; tool-call tracking is in ClickHouse)
     const dbState = await fixture.queryDbState();
-    expect(dbState.toolCalls.length).toBeGreaterThanOrEqual(5);
-    expect(dbState.toolCallsByCapability["agent.code.execute"] ?? 0).toBe(3);
     expect(dbState.approvalRequests.length).toBeGreaterThanOrEqual(1);
     expect(
       dbState.approvalRequests.some((a) => a.resolution === "approved"),
