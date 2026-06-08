@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { apiRequest, requireAuth } from "../lib/api-client.js";
+import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
 
 interface OrgResponse {
   organization?: { slug?: string; id?: string; name?: string };
@@ -20,7 +20,7 @@ export const orgCreateCommand = new Command("create")
       const org = data.organization ?? data;
       console.log(`✓ Organization created: ${(org as OrgResponse["organization"])?.slug ?? (org as OrgResponse).slug ?? "unknown"}`);
     } catch (err) {
-      console.error(`Error: ${String(err)}`);
+      const _msg = err instanceof ApiError ? err.message : String(err); console.error(`Error: ${_msg}`);
       process.exit(1);
     }
   });

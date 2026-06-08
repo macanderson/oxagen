@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { apiRequest, requireAuth } from "../lib/api-client.js";
+import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
 
 export const apiKeyRevokeCommand = new Command("revoke")
   .description("Revoke an API key")
@@ -10,7 +10,7 @@ export const apiKeyRevokeCommand = new Command("revoke")
       await apiRequest(`/api-keys/${id}`, { method: "DELETE" });
       console.log(`✓ API key ${id} revoked`);
     } catch (err) {
-      console.error(`Error: ${String(err)}`);
+      const _msg = err instanceof ApiError ? err.message : String(err); console.error(`Error: ${_msg}`);
       process.exit(1);
     }
   });

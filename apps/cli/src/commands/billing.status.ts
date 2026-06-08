@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { apiRequest, requireAuth } from "../lib/api-client.js";
+import { apiRequest, requireAuth , ApiError } from "../lib/api-client.js";
 
 interface SubscriptionResponse {
   subscription?: {
@@ -30,7 +30,7 @@ export const billingStatusCommand = new Command("status")
       const balance = data.creditBalance?.balanceUsd ?? data.credits?.balance;
       if (balance !== undefined) console.log(`Credits: $${balance.toFixed(2)}`);
     } catch (err) {
-      console.error(`Error: ${String(err)}`);
+      const _msg = err instanceof ApiError ? err.message : String(err); console.error(`Error: ${_msg}`);
       process.exit(1);
     }
   });

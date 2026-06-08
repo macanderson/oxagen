@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { apiRequest, requireAuth } from "../lib/api-client.js";
+import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
 
 export const orgMemberRemoveCommand = new Command("remove")
   .description("Remove a member from the organization")
@@ -14,7 +14,7 @@ export const orgMemberRemoveCommand = new Command("remove")
       });
       console.log(`✓ Removed ${email} from organization`);
     } catch (err) {
-      console.error(`Error: ${String(err)}`);
+      const _msg = err instanceof ApiError ? err.message : String(err); console.error(`Error: ${_msg}`);
       process.exit(1);
     }
   });

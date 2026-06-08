@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { apiRequest, requireAuth } from "../lib/api-client.js";
+import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
 
 export const conversationArchiveCommand = new Command("archive")
   .description("Archive a conversation")
@@ -15,7 +15,7 @@ export const conversationArchiveCommand = new Command("archive")
       const action = options.unarchive ? "unarchived" : "archived";
       console.log(`✓ Conversation ${id} ${action}`);
     } catch (err) {
-      console.error(`Error: ${String(err)}`);
+      const _msg = err instanceof ApiError ? err.message : String(err); console.error(`Error: ${_msg}`);
       process.exit(1);
     }
   });

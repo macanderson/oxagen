@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { apiRequest, requireAuth } from "../lib/api-client.js";
+import { apiRequest, requireAuth , ApiError } from "../lib/api-client.js";
 
 interface Org {
   id?: string;
@@ -28,7 +28,7 @@ export const orgListCommand = new Command("list")
         console.log(`  - ${org.slug ?? org.id ?? "unknown"} (${org.name ?? ""})`);
       }
     } catch (err) {
-      console.error(`Error: ${String(err)}`);
+      const _msg = err instanceof ApiError ? err.message : String(err); console.error(`Error: ${_msg}`);
       process.exit(1);
     }
   });

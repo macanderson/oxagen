@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { apiRequest, requireAuth } from "../lib/api-client.js";
+import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
 import { readConfig } from "../lib/config.js";
 
 interface MeResponse {
@@ -19,7 +19,7 @@ export const authWhoamiCommand = new Command("whoami")
       console.log(`Organization: ${data.org?.slug ?? cfg.orgSlug ?? "none"}`);
       console.log(`Workspace: ${data.workspace?.slug ?? cfg.workspaceSlug ?? "none"}`);
     } catch (err) {
-      console.error(`Error: ${String(err)}`);
+      const _msg = err instanceof ApiError ? err.message : String(err); console.error(`Error: ${_msg}`);
       process.exit(1);
     }
   });
