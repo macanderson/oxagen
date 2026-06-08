@@ -235,7 +235,9 @@ export const agentExecutionSteps = agentSchema.table(
   {
     ...idMixin("aes"),
     ...auditMixin(),
-    executionId: uuid("execution_id").notNull(),
+    executionId: uuid("execution_id")
+      .notNull()
+      .references(() => agentExecutions.id),
     ...orgScopeMixin(),
     stepNumber: integer("step_number").notNull(),
     stepType: citext("step_type").notNull(),
@@ -257,7 +259,9 @@ export const agentToolCalls = agentSchema.table(
   "agent_tool_calls",
   {
     ...idMixin("atc"),
-    executionStepId: uuid("execution_step_id").notNull(),
+    executionStepId: uuid("execution_step_id")
+      .notNull()
+      .references(() => agentExecutionSteps.id),
     ...orgScopeMixin(),
     toolName: text("tool_name").notNull(),
     toolType: citext("tool_type").notNull(),

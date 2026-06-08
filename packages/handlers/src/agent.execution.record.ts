@@ -25,17 +25,17 @@ export const agentExecutionRecordHandler: CapabilityHandler<typeof agentExecutio
         originId: input.originId,
         status: input.status,
         inputPayload: input.inputPayload,
-        outputPayload: input.outputPayload || null,
-        failureReason: input.failureReason || null,
-        startedAt: input.startedAt || null,
-        completedAt: input.completedAt || null,
+        outputPayload: input.outputPayload ?? null,
+        failureReason: input.failureReason ?? null,
+        startedAt: input.startedAt ?? null,
+        completedAt: input.completedAt ?? null,
         latencyMs: input.latencyMs ?? null,
         inputTokens: input.inputTokens ?? null,
         outputTokens: input.outputTokens ?? null,
         estimatedCostUsd: input.estimatedCostUsd ?? null,
         syncedToGraphAt: null, // Synced asynchronously by Inngest worker
-        createdByUserId: ctx.userId || null,
-        updatedByUserId: ctx.userId || null,
+        createdByUserId: ctx.userId ?? null,
+        updatedByUserId: ctx.userId ?? null,
       })
       .returning({ id: schema.agentExecutions.id, createdAt: schema.agentExecutions.createdAt });
 
@@ -55,13 +55,13 @@ export const agentExecutionRecordHandler: CapabilityHandler<typeof agentExecutio
             stepType: step.stepType,
             status: step.status,
             inputPayload: step.inputPayload,
-            outputPayload: step.outputPayload || null,
-            failureReason: step.failureReason || null,
-            latencyMs: step.latencyMs || null,
-            inputTokens: step.inputTokens || null,
-            outputTokens: step.outputTokens || null,
-            createdByUserId: ctx.userId || null,
-            updatedByUserId: ctx.userId || null,
+            outputPayload: step.outputPayload ?? null,
+            failureReason: step.failureReason ?? null,
+            latencyMs: step.latencyMs ?? null,
+            inputTokens: step.inputTokens ?? null,
+            outputTokens: step.outputTokens ?? null,
+            createdByUserId: ctx.userId ?? null,
+            updatedByUserId: ctx.userId ?? null,
           })
           .returning({ id: schema.agentExecutionSteps.id });
 
@@ -70,18 +70,18 @@ export const agentExecutionRecordHandler: CapabilityHandler<typeof agentExecutio
         // 3. Insert tool calls for this step
         if (step.toolCalls && step.toolCalls.length > 0) {
           await tx.insert(schema.agentToolCalls).values(
-            step.toolCalls.map((toolCall) => ({
+            step.toolCalls.map((toolCall: any) => ({
               executionStepId: executionStep.id,
               orgId: ctx.orgId,
               workspaceId: ctx.workspaceId,
               toolName: toolCall.toolName,
               toolType: toolCall.toolType,
               requestPayload: toolCall.requestPayload,
-              responsePayload: toolCall.responsePayload || null,
+              responsePayload: toolCall.responsePayload ?? null,
               status: toolCall.status,
-              latencyMs: toolCall.latencyMs || null,
-              inputTokens: toolCall.inputTokens || null,
-              outputTokens: toolCall.outputTokens || null,
+              latencyMs: toolCall.latencyMs ?? null,
+              inputTokens: toolCall.inputTokens ?? null,
+              outputTokens: toolCall.outputTokens ?? null,
             })),
           );
         }
