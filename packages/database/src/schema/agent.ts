@@ -26,6 +26,9 @@ export const skills = agentSchema.table(
     description: text("description"),
     // builtin = shipped in packages/skills; tenant = workspace-authored.
     source: citext("source").notNull(),
+    // Per-workspace enable toggle (distinct from soft-delete). Disabled skills
+    // are excluded from agent tool materialization but remain authorable.
+    enabled: boolean("enabled").notNull().default(true),
   },
   (t) => ({
     workspaceSlugIdx: uniqueIndex("skills_workspace_slug_idx").on(t.workspaceId, t.slug),

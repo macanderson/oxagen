@@ -1,6 +1,7 @@
-import { index, integer, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, index, integer, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { workflowSchema } from "./_schemas";
-import { auditMixin, citext, idMixin, orgScopeMixin } from "./_mixins";
+import { auditMixin, citext, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
 
 // Workflow definition — repeatable template for a sequence of tasks.
 export const workflows = workflowSchema.table(
@@ -120,5 +121,56 @@ export const workflowStepRuns = workflowSchema.table(
     workflowStepIdx: index("workflow_step_runs_workflow_step_idx").on(t.workflowStepId),
     orgStatusIdx: index("workflow_step_runs_org_status_idx").on(t.orgId, t.workspaceId, t.status),
     orgIdx: index("workflow_step_runs_org_idx").on(t.orgId, t.workspaceId),
+  }),
+);
+
+// Automation — a saved trigger→action rule (distinct from workflows, which are
+// multi-step task templates). `triggerConfig` holds the trigger descriptors
+// surfaced as `triggers: string[]`; `actionConfig` the action payload.
+// Backs automation.create / automation.list.
+export const automations = workflowSchema.table(
+  "automations",
+  {
+    ...idMixin("aut"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...softDeleteMixin(),
+    name: text("name").notNull(),
+    // CHECK active|paused|archived enforced in migration.
+    status: citext("status").notNull().default("active"),
+    triggerConfig: jsonb("trigger_config").notNull().default(sql`'[]'::jsonb`),
+    actionConfig: jsonb("action_config").notNull().default(sql`'{}'::jsonb`),
+  },
+  (t) => ({
+    orgIdx: index("automations_org_idx").on(t.orgId, t.workspaceId),
+    statusCheck: check(
+      "automations_status_check",
+      sql`${t.status} IN ('active', 'paused', 'archived')`,
+    ),
+  }),
+);
+
+// Automation run — a single execution of an automation. Backs automation.trigger.
+export const automationRuns = workflowSchema.table(
+  "automation_runs",
+  {
+    ...idMixin("aur"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    automationId: uuid("automation_id").notNull(),
+    // CHECK running|completed|failed|cancelled enforced in migration.
+    status: citext("status").notNull().default("running"),
+    payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    automationIdx: index("automation_runs_automation_idx").on(t.automationId),
+    orgStatusIdx: index("automation_runs_org_status_idx").on(t.orgId, t.workspaceId, t.status),
+    orgIdx: index("automation_runs_org_idx").on(t.orgId, t.workspaceId),
+    statusCheck: check(
+      "automation_runs_status_check",
+      sql`${t.status} IN ('running', 'completed', 'failed', 'cancelled')`,
+    ),
   }),
 );
