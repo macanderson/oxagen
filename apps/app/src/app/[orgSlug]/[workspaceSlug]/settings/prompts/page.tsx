@@ -1,0 +1,94 @@
+/**
+ * page.tsx — Workspace → Settings → Prompts.
+ *
+ * Reads current prompt settings via the `prompt.settings.read` capability and
+ * renders the PromptSettingsForm. Mirrors the workspace model settings page
+ * structure (auth, resolve org/workspace, heading + form).
+ */
+import type { Metadata } from "next";
+import { and, eq } from "drizzle-orm";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
+import { invoke } from "@oxagen/oxagen";
+import "@oxagen/handlers/register";
+import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import { getSessionOrRedirect } from "@/lib/session";
+import { PromptSettingsForm } from "./prompt-settings-form";
+import type { PromptSettingsReadOutput } from "./prompt-settings-action";
+
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Prompt Settings — Workspace Settings",
+};
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface PageProps {
+  params: Promise<{ orgSlug: string; workspaceSlug: string }>;
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default async function WorkspacePromptsPage({ params }: PageProps) {
+  const { orgSlug, workspaceSlug } = await params;
+  const session = await getSessionOrRedirect();
+
+  const org = await resolveOrg(orgSlug);
+  const ws = await resolveWorkspace(org.id, workspaceSlug);
+
+  await assertOrgMember(org.id, session.user.id);
+
+  const ctx = {
+    orgId: org.id,
+    workspaceId: ws.id,
+    userId: session.user.id,
+    apiKeyId: null as string | null,
+    requestId: crypto.randomUUID(),
+    surface: "app" as const,
+    messageId: null as string | null,
+  };
+
+  const { settings, canEdit } = await runInTenantScope(
+    { orgId: org.id, workspaceId: ws.id },
+    async () => {
+      // Read current settings via capability.
+      const promptSettings = (await invoke(
+        "prompt.settings.read",
+        {},
+        ctx,
+        { surface: "agent" },
+      )) as PromptSettingsReadOutput;
+
+      // Re-read the caller's workspace role to determine edit permission.
+      const wsRoleRows = await withTenantDb((tx) =>
+        tx
+          .select({ role: schema.workspaceUsers.role })
+          .from(schema.workspaceUsers)
+          .where(
+            and(
+              eq(schema.workspaceUsers.workspaceId, ws.id),
+              eq(schema.workspaceUsers.userId, session.user.id),
+            ),
+          )
+          .limit(1),
+      );
+
+      const wsRole = wsRoleRows[0]?.role ?? "";
+      const canEditSettings = ["owner", "admin"].includes(wsRole.toLowerCase());
+
+      return { settings: promptSettings, canEdit: canEditSettings };
+    },
+  );
+
+  return (
+    <div className="flex flex-col gap-8 max-w-2xl">
+      <PromptSettingsForm
+        initial={settings}
+        canEdit={canEdit}
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+      />
+    </div>
+  );
+}
