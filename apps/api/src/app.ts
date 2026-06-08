@@ -117,8 +117,6 @@ app.route("/api/inngest", inngestRoute);
 const userScoped = new Hono<AppEnv>();
 userScoped.use("*", authMiddleware);
 userScoped.route("/organizations", organizationCreateRoute);
-userScoped.route("/user/preferences", userPreferencesReadRoute);
-userScoped.route("/user/preferences", userPreferencesWriteRoute);
 userScoped.route("/user/preferences/read", userPreferencesReadRoute);
 userScoped.route("/user/preferences/write", userPreferencesWriteRoute);
 app.route("/v1", userScoped);

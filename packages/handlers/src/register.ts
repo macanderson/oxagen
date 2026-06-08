@@ -223,16 +223,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () => (await import("./workflow.cancel")).workflowCancelHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "user.preferences.read",
-    async () =>
-      (await import("./user.preferences.read")).userPreferencesReadHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "user.preferences.write",
-    async () =>
-      (await import("./user.preferences.write")).userPreferencesWriteHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "workspace.member.list",
     async () =>
       (await import("./workspace.member.list")).workspaceMemberListHandler as CapabilityHandlerFn,
