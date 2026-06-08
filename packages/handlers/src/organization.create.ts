@@ -1,6 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
 import { schema, withSystemDb } from "@oxagen/database";
+import { recordSecurityEventAsync } from "@oxagen/telemetry";
 import { eq } from "drizzle-orm";
 import { grantFreeCredits } from "@oxagen/billing";
 import { logger } from "./logger";
@@ -134,6 +135,16 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
       { orgId: txResult.id, slug: txResult.slug, surface: ctx.surface },
       "organization.create: organization created successfully",
     );
+    // Record security event for org creation (privileged mutation).
+    recordSecurityEventAsync({
+      eventType: "organization.created",
+      actorUserId: ctx.userId!,
+      orgId: txResult.id,
+      workspaceId: null,
+      metadata: { slug: txResult.slug, type: txResult.type },
+    }).catch((err: unknown) => {
+      logger.error({ err, orgId: txResult.id }, "organization.create: failed to record security event");
+    });
   } catch (err) {
     if (isSlugConflict(err)) {
       logger.warn({ slug: input.slug, orgId: ctx.orgId }, "organization.create: slug conflict");

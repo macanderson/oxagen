@@ -1,6 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { schema, withTenantDb } from "@oxagen/database";
+import { recordSecurityEventAsync } from "@oxagen/telemetry";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -47,8 +48,9 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
     throw new Error(`slug "${input.slug}" already in use for this tenant`);
   }
 
+  let workspaceId: string;
   try {
-    return await withTenantDb(async (tx) => {
+    const result = await withTenantDb(async (tx) => {
       const [ws] = await tx
         .insert(schema.workspaces)
         .values({
@@ -88,8 +90,22 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
         { workspaceId: ws.id, orgId: ctx.orgId, slug: ws.slug, surface: ctx.surface },
         "workspace.create: workspace created successfully",
       );
+      workspaceId = ws.id;
       return result;
     });
+
+    // Record security event for workspace creation (privileged mutation).
+    recordSecurityEventAsync({
+      eventType: "workspace.created",
+      actorUserId: ctx.userId!,
+      orgId: ctx.orgId,
+      workspaceId,
+      metadata: { slug: input.slug },
+    }).catch((err: unknown) => {
+      logger.error({ err, orgId: ctx.orgId, workspaceId }, "workspace.create: failed to record security event");
+    });
+
+    return result;
   } catch (err) {
     if (isSlugConflict(err)) {
       logger.warn({ orgId: ctx.orgId, slug: input.slug }, "workspace.create: slug conflict (race)");
