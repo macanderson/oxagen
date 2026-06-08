@@ -1,7 +1,6 @@
 {
   "name": "@oxagen/cli",
   "version": "0.2.2",
-  "private": true,
   "type": "module",
   "bin": {
     "oxagen": "./dist/index.js"
