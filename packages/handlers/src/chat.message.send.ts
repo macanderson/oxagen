@@ -34,7 +34,6 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
           orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
           userId: ctx.userId!,
-          agentVersionId: input.agentVersionId,
           title: null,
           status: "active",
           createdByUserId: ctx.userId,

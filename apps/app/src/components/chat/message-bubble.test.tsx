@@ -140,7 +140,7 @@ describe("MessageBubble", () => {
           ...baseMessage,
           role: "assistant",
           contentBlocks: [
-            { type: "reasoning", text: "thinking…", status: "done" },
+            { type: "reasoning", reasoningId: "r1", text: "thinking…" },
             { type: "text", text: "answer" },
           ],
         }}

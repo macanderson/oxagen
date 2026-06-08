@@ -142,7 +142,6 @@ export async function wandSendAction(
   // Verify the capability input before entering the tenant scope.
   const capabilityInput = chatMessageSend.input.safeParse({
     conversationId,
-    agentVersionId: null,
     parentMessageId,
     branchReason,
     content,

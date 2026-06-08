@@ -5,7 +5,6 @@ describe("chat.message.send capability", () => {
   it("parses a valid input starting a new conversation", () => {
     const parsed = chatMessageSend.input.parse({
       conversationId: null,
-      agentVersionId: null,
       parentMessageId: null,
       branchReason: null,
       content: "Hello",
@@ -16,7 +15,6 @@ describe("chat.message.send capability", () => {
   it("parses a regenerate branch", () => {
     const parsed = chatMessageSend.input.parse({
       conversationId: "c1",
-      agentVersionId: "av1",
       parentMessageId: "m1",
       branchReason: "regenerate",
       content: "Try again",
@@ -29,7 +27,6 @@ describe("chat.message.send capability", () => {
     expect(() =>
       chatMessageSend.input.parse({
         conversationId: null,
-        agentVersionId: null,
         parentMessageId: null,
         branchReason: null,
         content: "",
@@ -41,7 +38,6 @@ describe("chat.message.send capability", () => {
     expect(() =>
       chatMessageSend.input.parse({
         conversationId: "c1",
-        agentVersionId: null,
         parentMessageId: "m1",
         branchReason: "rewind",
         content: "x",

@@ -181,7 +181,7 @@ describe("chat.message.send schema", () => {
   it("accepts a minimal valid new-conversation message", () => {
     const result = Schema.parse({
       conversationId: null,
-      agentVersionId: null,
+
       parentMessageId: null,
       branchReason: null,
       content: "Hello, Oxagen!",
@@ -193,7 +193,7 @@ describe("chat.message.send schema", () => {
     expect(() =>
       Schema.parse({
         conversationId: "conv-1",
-        agentVersionId: "ver-1",
+
         parentMessageId: "msg-1",
         branchReason: "edit",
         content: "Updated message",
@@ -206,7 +206,7 @@ describe("chat.message.send schema", () => {
     expect(() =>
       Schema.parse({
         conversationId: null,
-        agentVersionId: null,
+  
         parentMessageId: null,
         branchReason: null,
         content: "",
@@ -218,7 +218,7 @@ describe("chat.message.send schema", () => {
     expect(() =>
       Schema.parse({
         conversationId: null,
-        agentVersionId: null,
+  
         parentMessageId: null,
         branchReason: "bad_reason",
         content: "Hello",
@@ -231,7 +231,7 @@ describe("chat.message.send schema", () => {
       expect(() =>
         Schema.parse({
           conversationId: "c",
-          agentVersionId: null,
+    
           parentMessageId: "p",
           branchReason,
           content: "Hi",

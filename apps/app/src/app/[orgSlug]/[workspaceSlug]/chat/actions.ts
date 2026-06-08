@@ -53,7 +53,6 @@ export async function sendMessageAction(
 
   const capabilityInput = chatMessageSend.input.safeParse({
     conversationId: parsed.data.conversationId,
-    agentVersionId: null,
     parentMessageId: parsed.data.parentMessageId,
     branchReason: parsed.data.branchReason,
     content: parsed.data.content,

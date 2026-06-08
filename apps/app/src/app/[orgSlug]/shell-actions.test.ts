@@ -151,7 +151,6 @@ vi.mock("@oxagen/oxagen/contracts/chat.message.send", () => ({
           success: true,
           data: {
             conversationId: null,
-            agentVersionId: null,
             parentMessageId: null,
             branchReason: null,
             content: r.content,
@@ -243,7 +242,7 @@ describe("wandResolveApprovalAction", () => {
       "approved",
     );
     expect(res.ok).toBe(false);
-    expect(res.error).toContain("workspace");
+    if (!res.ok) expect(res.error).toContain("workspace");
   });
 
   it("returns ok:true and calls invoke for a valid approval", async () => {
@@ -293,7 +292,7 @@ describe("wandResolvePlanAction", () => {
     dbState.wsRows = [];
     const res = await wandResolvePlanAction("acme", "main", "plan-1", "approved");
     expect(res.ok).toBe(false);
-    expect(res.error).toContain("workspace");
+    if (!res.ok) expect(res.error).toContain("workspace");
   });
 
   it("returns ok:true for an approved decision", async () => {

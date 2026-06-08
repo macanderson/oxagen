@@ -133,7 +133,7 @@ describe("NewOrgForm — submission", () => {
 
 describe("NewOrgForm — prefill", () => {
   it("shows attribution when provider is 'google'", () => {
-    render(<NewOrgForm action={vi.fn()} prefill={{ provider: "google" }} />);
+    render(<NewOrgForm action={vi.fn()} prefill={{ provider: "google", name: "", email: "", avatarUrl: "", suggestedBusinessName: "", suggestedWebsite: "" }} />);
     expect(screen.getByText(/prefilled from your google account/i)).toBeInTheDocument();
   });
 

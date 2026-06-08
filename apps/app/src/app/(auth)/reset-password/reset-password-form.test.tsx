@@ -71,7 +71,7 @@ vi.mock("@/components/ui/button", () => ({
       return React.cloneElement(renderProp, {}, children);
     }
     return (
-      <button type={type ?? "button"} onClick={onClick} disabled={disabled}>
+      <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} disabled={disabled}>
         {children}
       </button>
     );

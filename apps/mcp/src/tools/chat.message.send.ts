@@ -9,9 +9,6 @@ export const schema = {
   conversationId: chatMessageSend.input.shape.conversationId.describe(
     "Existing conversation ID, or null to start a new conversation",
   ),
-  agentVersionId: chatMessageSend.input.shape.agentVersionId.describe(
-    "Agent version to use, or null for the workspace default",
-  ),
   parentMessageId: chatMessageSend.input.shape.parentMessageId.describe(
     "Parent message ID for branching, or null",
   ),

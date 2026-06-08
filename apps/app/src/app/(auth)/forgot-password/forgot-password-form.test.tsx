@@ -45,7 +45,7 @@ vi.mock("@/components/ui/button", () => ({
     size?: string;
     className?: string;
   }) => (
-    <button type={type ?? "button"} onClick={onClick} disabled={disabled}>
+    <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} disabled={disabled}>
       {children}
     </button>
   ),

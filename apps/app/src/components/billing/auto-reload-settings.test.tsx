@@ -33,10 +33,17 @@ vi.mock("@/components/ui/toast", () => ({
 }));
 
 const settings: OrgBillingSettings = {
+  orgId: "org-test",
   autoReloadEnabled: false,
   autoReloadThresholdCents: 500, // $5.00
   autoReloadAmountCents: 2000,   // $20.00
   autoReloadPaymentMethodId: null,
+  lastAutoReloadAt: null,
+  lowBalanceThresholdCents: 500,
+  dunningState: "active",
+  delinquentSince: null,
+  graceEndsAt: null,
+  suspendedAt: null,
 };
 
 const enabledSettings: OrgBillingSettings = {

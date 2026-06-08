@@ -45,8 +45,8 @@ const makeActions = (): ConversationNavActions => ({
 const now = new Date().toISOString();
 
 const conversations = [
-  { publicId: "c-1", title: "Alpha chat", archivedAt: null, updatedAt: now },
-  { publicId: "c-2", title: "Beta chat", archivedAt: null, updatedAt: now },
+  { publicId: "c-1", title: "Alpha chat", archivedAt: null, updatedAt: now, createdAt: now, status: "active" },
+  { publicId: "c-2", title: "Beta chat", archivedAt: null, updatedAt: now, createdAt: now, status: "active" },
 ];
 
 describe("ConversationList — rendering", () => {

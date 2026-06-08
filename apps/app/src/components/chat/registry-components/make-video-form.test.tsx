@@ -34,7 +34,7 @@ vi.mock("@/components/ui/button", () => ({
     type?: string;
     "aria-busy"?: boolean;
   }) => (
-    <button type={type ?? "button"} onClick={onClick} disabled={disabled} aria-busy={ariaBusy}>
+    <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} disabled={disabled} aria-busy={ariaBusy}>
       {children}
     </button>
   ),
@@ -97,7 +97,7 @@ vi.mock("@/lib/utils", () => ({
 describe("MakeVideoForm", () => {
   it("renders form with aria-label 'Generate video'", async () => {
     const { videoGenerateAction } = await import("@/app/actions/video.generate.action");
-    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, jobId: "job_123" });
+    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, queued: true, jobId: "job_123" });
 
     const { default: MakeVideoForm } = await import("./make-video-form");
     render(<MakeVideoForm />);
@@ -106,7 +106,7 @@ describe("MakeVideoForm", () => {
 
   it("renders Prompt textarea", async () => {
     const { videoGenerateAction } = await import("@/app/actions/video.generate.action");
-    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, jobId: "job_123" });
+    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, queued: true, jobId: "job_123" });
 
     const { default: MakeVideoForm } = await import("./make-video-form");
     render(<MakeVideoForm />);
@@ -117,7 +117,7 @@ describe("MakeVideoForm", () => {
 
   it("pre-fills prompt from props", async () => {
     const { videoGenerateAction } = await import("@/app/actions/video.generate.action");
-    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, jobId: "job_123" });
+    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, queued: true, jobId: "job_123" });
 
     const { default: MakeVideoForm } = await import("./make-video-form");
     render(<MakeVideoForm prompt="A sunset over the ocean" />);
@@ -129,7 +129,7 @@ describe("MakeVideoForm", () => {
 
   it("submit button is disabled when prompt is empty", async () => {
     const { videoGenerateAction } = await import("@/app/actions/video.generate.action");
-    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, jobId: "job_123" });
+    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, queued: true, jobId: "job_123" });
 
     const { default: MakeVideoForm } = await import("./make-video-form");
     render(<MakeVideoForm />);
@@ -138,7 +138,7 @@ describe("MakeVideoForm", () => {
 
   it("submit button is enabled when prompt has text", async () => {
     const { videoGenerateAction } = await import("@/app/actions/video.generate.action");
-    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, jobId: "job_123" });
+    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, queued: true, jobId: "job_123" });
 
     const { default: MakeVideoForm } = await import("./make-video-form");
     render(<MakeVideoForm prompt="A sunset over the ocean" />);
@@ -147,7 +147,7 @@ describe("MakeVideoForm", () => {
 
   it("renders duration and aspect ratio inputs", async () => {
     const { videoGenerateAction } = await import("@/app/actions/video.generate.action");
-    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, jobId: "job_123" });
+    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, queued: true, jobId: "job_123" });
 
     const { default: MakeVideoForm } = await import("./make-video-form");
     render(<MakeVideoForm />);
@@ -172,7 +172,7 @@ describe("MakeVideoForm", () => {
 
   it("shows queued state when action succeeds", async () => {
     const { videoGenerateAction } = await import("@/app/actions/video.generate.action");
-    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, jobId: "job_abc" });
+    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, queued: true, jobId: "job_abc" });
 
     const { default: MakeVideoForm } = await import("./make-video-form");
     render(<MakeVideoForm prompt="A sunrise" orgSlug="my-org" />);
@@ -184,7 +184,7 @@ describe("MakeVideoForm", () => {
 
   it("shows jobId in queued state", async () => {
     const { videoGenerateAction } = await import("@/app/actions/video.generate.action");
-    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, jobId: "job_abc" });
+    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, queued: true, jobId: "job_abc" });
 
     const { default: MakeVideoForm } = await import("./make-video-form");
     render(<MakeVideoForm prompt="A sunrise" orgSlug="my-org" />);
@@ -196,7 +196,7 @@ describe("MakeVideoForm", () => {
 
   it("shows prompt in the queued state as italic caption", async () => {
     const { videoGenerateAction } = await import("@/app/actions/video.generate.action");
-    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, jobId: "job_abc" });
+    vi.mocked(videoGenerateAction).mockResolvedValue({ ok: true, queued: true, jobId: "job_abc" });
 
     const { default: MakeVideoForm } = await import("./make-video-form");
     render(<MakeVideoForm prompt="A sunrise" orgSlug="my-org" />);

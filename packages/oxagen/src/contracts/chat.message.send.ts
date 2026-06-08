@@ -21,7 +21,6 @@ export const chatMessageSend = registerCapability({
   },
   input: z.object({
     conversationId: z.string().nullable(),
-    agentVersionId: z.string().nullable(),
     parentMessageId: z.string().nullable(),
     branchReason: z.enum(["edit", "regenerate", "tool_retry", "manual_fork"]).nullable(),
     content: z.string().min(1),

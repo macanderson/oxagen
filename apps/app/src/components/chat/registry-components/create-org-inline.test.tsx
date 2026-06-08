@@ -34,7 +34,7 @@ vi.mock("@/components/ui/button", () => ({
     type?: string;
     "aria-busy"?: boolean;
   }) => (
-    <button type={type ?? "button"} onClick={onClick} disabled={disabled} aria-busy={ariaBusy}>
+    <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} disabled={disabled} aria-busy={ariaBusy}>
       {children}
     </button>
   ),

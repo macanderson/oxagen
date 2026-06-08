@@ -10,7 +10,6 @@ export const conversations = chatSchema.table(
     ...auditMixin(),
     ...orgScopeMixin(),
     userId: uuid("user_id").notNull(),
-    agentVersionId: uuid("agent_version_id"),
     title: text("title"),
     status: text("status").notNull(),
     activeLeafMessageId: uuid("active_leaf_message_id"),

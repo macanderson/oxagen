@@ -66,7 +66,7 @@ describe("MarkdownMessage", () => {
 
   it("renders markdown content as-is through the Streamdown stub", async () => {
     const { MarkdownMessage } = await import("./markdown-message");
-    render(<MarkdownMessage>## Heading{"\n\nParagraph"}</MarkdownMessage>);
+    render(<MarkdownMessage>{"## Heading\n\nParagraph"}</MarkdownMessage>);
     expect(screen.getByTestId("streamdown")).toHaveTextContent("## Heading");
   });
 });

@@ -81,7 +81,6 @@ vi.mock("@oxagen/database", () => ({
       orgId: "orgId",
       workspaceId: "workspaceId",
       userId: "userId",
-      agentVersionId: "agentVersionId",
       title: "title",
       status: "status",
       createdByUserId: "createdByUserId",
@@ -129,7 +128,6 @@ const CTX: CapabilityContext = {
 
 const BASE_INPUT = {
   conversationId: null as string | null,
-  agentVersionId: null as string | null,
   parentMessageId: null as string | null,
   content: "Hello, assistant",
   contentBlocks: [] as unknown[],

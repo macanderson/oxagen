@@ -46,7 +46,7 @@ vi.mock("@/components/ui/button", () => ({
     className,
     ...rest
   }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button type={type ?? "button"} onClick={onClick} className={className} {...rest}>
+    <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} className={className} {...rest}>
       {children}
     </button>
   ),

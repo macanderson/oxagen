@@ -278,6 +278,7 @@ describe("addDenylistAction", () => {
     const res = await addDenylistAction({
       orgSlug: "acme",
       serverName: "some-server",
+      pluginType: "mcp_server",
     });
     expect(res.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
@@ -297,6 +298,7 @@ describe("removeDenylistAction", () => {
     const res = await removeDenylistAction({
       orgSlug: "acme",
       serverName: "old-server",
+      pluginType: "mcp_server",
     });
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
@@ -398,7 +400,7 @@ describe("installBulkPluginAction", () => {
     setRole("member");
     const res = await installBulkPluginAction({
       orgSlug: "acme",
-      items: [{ catalogServerId: "cat-1" }],
+      items: [{ catalogServerId: "cat-1", pluginType: "mcp_server" as const }],
     });
     expect(res.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();

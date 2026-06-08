@@ -214,7 +214,6 @@ describe("chat.message.send handler", () => {
 
     const args = {
       conversationId: null,
-      agentVersionId: null,
       parentMessageId: null,
       branchReason: null,
       content: "Hello!",

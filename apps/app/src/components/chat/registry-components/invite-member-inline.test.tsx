@@ -33,7 +33,7 @@ vi.mock("@/components/ui/button", () => ({
     type?: string;
     "aria-busy"?: boolean;
   }) => (
-    <button type={type ?? "button"} onClick={onClick} disabled={disabled} aria-busy={ariaBusy}>
+    <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} disabled={disabled} aria-busy={ariaBusy}>
       {children}
     </button>
   ),
@@ -121,7 +121,7 @@ describe("InviteMemberInline", () => {
 
   it("shows error when inviteMemberAction fails", async () => {
     const { inviteMemberAction } = await import("@/app/[orgSlug]/members/actions");
-    vi.mocked(inviteMemberAction).mockResolvedValue({ ok: false, error: "User already invited" });
+    vi.mocked(inviteMemberAction).mockResolvedValue({ ok: false, code: "internal", error: "User already invited" });
 
     const { default: InviteMemberInline } = await import("./invite-member-inline");
     render(<InviteMemberInline suggestedEmail="alice@example.com" orgSlug="my-org" />);

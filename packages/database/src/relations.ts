@@ -139,10 +139,6 @@ export const subagentRunsRelations = relations(subagentRuns, ({ one }) => ({
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
   user: one(users, { fields: [conversations.userId], references: [users.id] }),
-  agentVersion: one(agentVersions, {
-    fields: [conversations.agentVersionId],
-    references: [agentVersions.id],
-  }),
   activeLeafMessage: one(messages, {
     fields: [conversations.activeLeafMessageId],
     references: [messages.id],

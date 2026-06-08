@@ -35,7 +35,7 @@ vi.mock("@/components/ui/button", () => ({
     type?: string;
     "aria-busy"?: boolean;
   }) => (
-    <button type={type ?? "button"} onClick={onClick} disabled={disabled} aria-busy={ariaBusy}>
+    <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} disabled={disabled} aria-busy={ariaBusy}>
       {children}
     </button>
   ),
@@ -58,7 +58,7 @@ vi.mock("@/lib/utils", () => ({
 describe("BillingUpgradeInline", () => {
   it("renders plan options", async () => {
     const { changePlanAction } = await import("@/app/[orgSlug]/billing/actions");
-    vi.mocked(changePlanAction).mockResolvedValue({ ok: true });
+    vi.mocked(changePlanAction).mockResolvedValue({ ok: true, url: null });
 
     const { default: BillingUpgradeInline } = await import("./billing-upgrade-inline");
     render(<BillingUpgradeInline />);
@@ -69,7 +69,7 @@ describe("BillingUpgradeInline", () => {
 
   it("renders the upgrade form with aria-label", async () => {
     const { changePlanAction } = await import("@/app/[orgSlug]/billing/actions");
-    vi.mocked(changePlanAction).mockResolvedValue({ ok: true });
+    vi.mocked(changePlanAction).mockResolvedValue({ ok: true, url: null });
 
     const { default: BillingUpgradeInline } = await import("./billing-upgrade-inline");
     render(<BillingUpgradeInline />);
@@ -78,7 +78,7 @@ describe("BillingUpgradeInline", () => {
 
   it("defaults to 'build' plan when no suggestedPlan", async () => {
     const { changePlanAction } = await import("@/app/[orgSlug]/billing/actions");
-    vi.mocked(changePlanAction).mockResolvedValue({ ok: true });
+    vi.mocked(changePlanAction).mockResolvedValue({ ok: true, url: null });
 
     const { default: BillingUpgradeInline } = await import("./billing-upgrade-inline");
     render(<BillingUpgradeInline />);
@@ -92,7 +92,7 @@ describe("BillingUpgradeInline", () => {
 
   it("uses suggestedPlan to pre-select a plan", async () => {
     const { changePlanAction } = await import("@/app/[orgSlug]/billing/actions");
-    vi.mocked(changePlanAction).mockResolvedValue({ ok: true });
+    vi.mocked(changePlanAction).mockResolvedValue({ ok: true, url: null });
 
     const { default: BillingUpgradeInline } = await import("./billing-upgrade-inline");
     render(<BillingUpgradeInline suggestedPlan="scale" />);
@@ -119,7 +119,7 @@ describe("BillingUpgradeInline", () => {
 
   it("shows success/redirecting state on successful submit", async () => {
     const { changePlanAction } = await import("@/app/[orgSlug]/billing/actions");
-    vi.mocked(changePlanAction).mockResolvedValue({ ok: true });
+    vi.mocked(changePlanAction).mockResolvedValue({ ok: true, url: null });
     // Stub window.location.assign
     const assign = vi.fn();
     Object.defineProperty(window, "location", {

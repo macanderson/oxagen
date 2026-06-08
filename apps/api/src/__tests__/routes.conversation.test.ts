@@ -255,7 +255,6 @@ describe("chat.message.send route", () => {
   const PATH = "/chat/messages";
   const VALID_BODY = {
     conversationId: null,
-    agentVersionId: null,
     parentMessageId: null,
     branchReason: null,
     content: "Hello, world!",

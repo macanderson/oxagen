@@ -73,8 +73,8 @@ describe("ConversationNav — mobile trigger", () => {
 describe("ConversationNav — with conversations", () => {
   it("renders conversation titles via ConversationList", () => {
     const conversations = [
-      { publicId: "c-1", title: "First chat", archivedAt: null, updatedAt: new Date().toISOString() },
-      { publicId: "c-2", title: "Second chat", archivedAt: null, updatedAt: new Date().toISOString() },
+      { publicId: "c-1", title: "First chat", archivedAt: null, updatedAt: new Date().toISOString(), createdAt: new Date().toISOString(), status: "active" },
+      { publicId: "c-2", title: "Second chat", archivedAt: null, updatedAt: new Date().toISOString(), createdAt: new Date().toISOString(), status: "active" },
     ];
     render(<ConversationNav {...defaultProps} initialActive={conversations} />);
     // ConversationList renders each title

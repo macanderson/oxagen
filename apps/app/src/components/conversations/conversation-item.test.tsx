@@ -47,6 +47,8 @@ const baseConversation = {
   title: "Hello world",
   archivedAt: null,
   updatedAt: minutesAgo(0), // just now
+  createdAt: minutesAgo(1),
+  status: "active",
 };
 
 const baseProps = {

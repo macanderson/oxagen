@@ -39,8 +39,8 @@ vi.mock("@/components/workspace/new-workspace-dialog", () => ({
   NewWorkspaceDialog: () => <div data-testid="new-workspace-dialog" />,
 }));
 
-const org = { publicId: "org-1", slug: "acme", name: "Acme Corp" };
-const workspace = { publicId: "ws-1", slug: "prod", name: "Production" };
+const org = { id: "org-id-1", publicId: "org-1", slug: "acme", name: "Acme Corp" };
+const workspace = { id: "ws-id-1", publicId: "ws-1", orgId: "org-id-1", slug: "prod", name: "Production" };
 const availableOrgs = [{ publicId: "org-1", slug: "acme", name: "Acme Corp" }];
 const availableWorkspaces = [{ publicId: "ws-1", slug: "prod", name: "Production" }];
 const ctx = { orgSlug: "acme", workspaceSlug: "prod" };
