@@ -341,10 +341,18 @@ Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level override
   wired into BOTH `apps/api/src/routes/v1/` and `apps/mcp/src/tools/`.
   Run `pnpm check:manifest` to verify parity after adding a contract.
 - **Parity caveat:** *contract-declared* capabilities are symmetric between
-  API and MCP. However, several UI-only billing/settings/profile actions are
-  not yet contracted (tracked in Linear) and therefore NOT reachable from
-  the MCP surface. Do not assume full API↔MCP parity — run `check:manifest`
-  to get the current gap list.
+  API and MCP. However, a large number of UI sections are intentional static
+  mocks with no backing contracts yet: `knowledge.*`, `automation.*`,
+  `access.*`, `security.*`, `activity.*`, `tools/studio.*`, and several
+  `billing/settings/profile` actions. These stub pages are tracked in Linear
+  and must NOT be wired to live data until a contract exists. The correct
+  order is: contract → API route → MCP tool → UI wire-up. Run
+  `pnpm check:manifest` to get the current gap list.
+- **`check:manifest` combined-route false positive** — the manifest script
+  expects one file per capability (e.g. `workflow.run.ts`). When three
+  capabilities share a combined route file (e.g. `workflow.ts`), the script
+  reports a false-positive `api` gap for each. Verify by reading the
+  combined file before filing a parity ticket.
 
 ### `apps/cli`
 
@@ -366,9 +374,14 @@ pnpm check:manifest              # verify API↔MCP capability parity (warn-only
 pnpm check:manifest --json       # machine-readable parity output
 pnpm check:contracts             # verify contract definitions
 pnpm env:check                   # validate .env.local against schema
+pnpm release:patch               # bump all packages to next patch version, tag, sync PLATFORM_VERSION to Vercel
+pnpm release:minor               # bump all packages to next minor version
+pnpm release:major               # bump all packages to next major version
 pnpm db:migrate                  # apply pending Postgres migrations
 pnpm db:lint-migrations          # verify migration file names and checksums
 pnpm db:seed-iam                 # seed IAM roles and permissions
+pnpm db:seed-skills              # seed agent skill definitions
+pnpm db:backfill-iam             # backfill org IAM for existing orgs
 pnpm gate                        # run full CI suite locally (lint + typecheck + test + build)
 pnpm kill                        # kill all background processes (dev, docker, etc.)
 pnpm env:pull                    # pull Vercel env vars to .env.local (dev only)
@@ -396,6 +409,22 @@ git fetch origin && git rebase origin/main  # sync before pushing (avoids force-
 - **Rebase before pushing to main** — other agents/users push to main
   concurrently; always `git fetch origin && git rebase origin/main` before
   `git push` to avoid non-fast-forward errors.
+- **`apps/app` does not bootstrap IAM** — `invoke()` calls that originate
+  inside `apps/app` (server actions, RSC data fetches) skip IAM role checks
+  because `apps/app` never loads the IAM bootstrap. Only `apps/api` and
+  `apps/mcp` enforce roles. When routing app code through `invoke()`, add
+  explicit `assertBillingManager` / `assertOrgMember` gates at the call
+  site; do not rely on the kernel to enforce them.
+- **Better Auth `rateLimits` plural — prod-only 500** — `drizzleAdapter`
+  with `usePlural: true` pluralizes `rateLimit` → `rateLimits`. The wrong
+  table name produces a 500 on ALL auth calls in production but passes dev
+  and e2e because rate-limiting is disabled locally. Always verify auth
+  changes against a production-equivalent environment.
+- **`tsx --env-file` does NOT override a shell `DATABASE_URL`** — seeding
+  and migration scripts invoked with `tsx --env-file-if-exists=.env.local`
+  use local DB even when `DATABASE_URL` is set in the shell. For prod DB
+  operations, explicitly `unset DATABASE_URL` before running the script or
+  use the Vercel env-scoped workflow (`gh workflow run ci.yml --ref main`).
 - **Stripe webhook tunnel** — `pnpm dev` auto-starts the Stripe CLI tunnel
   (`stripe listen --forward-to ...`) via `tools/scripts/stripe-tunnel.ts`.
   If you restart `apps/api` in isolation (e.g. direct `tsx` invocation, not
