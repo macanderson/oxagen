@@ -70,7 +70,7 @@ export const agentExecutionRecordHandler: CapabilityHandler<typeof agentExecutio
         // 3. Insert tool calls for this step
         if (step.toolCalls && step.toolCalls.length > 0) {
           await tx.insert(schema.agentToolCalls).values(
-            step.toolCalls.map((toolCall: any) => ({
+            step.toolCalls.map((toolCall) => ({
               executionStepId: executionStep.id,
               orgId: ctx.orgId,
               workspaceId: ctx.workspaceId,

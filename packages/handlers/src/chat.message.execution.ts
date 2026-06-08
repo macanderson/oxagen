@@ -86,8 +86,8 @@ export const chatMessageExecutionHandler: CapabilityHandler<typeof chatMessageEx
         if (!executionStep) throw new Error(`execution step ${step.stepNumber} insert returned no row`);
 
         if (step.toolCalls && step.toolCalls.length > 0) {
-          await tx.insert(schema.agentToolCalls).values(
-            step.toolCalls.map((toolCall: any) => ({
+          for (const toolCall of step.toolCalls) {
+            await tx.insert(schema.agentToolCalls).values({
               executionStepId: executionStep.id,
               orgId: ctx.orgId,
               workspaceId: ctx.workspaceId,
@@ -99,8 +99,8 @@ export const chatMessageExecutionHandler: CapabilityHandler<typeof chatMessageEx
               latencyMs: toolCall.latencyMs ?? null,
               inputTokens: toolCall.inputTokens ?? null,
               outputTokens: toolCall.outputTokens ?? null,
-            })),
-          );
+            });
+          }
         }
       }
     }

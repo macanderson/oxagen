@@ -259,6 +259,7 @@ export const agentToolCalls = agentSchema.table(
   "agent_tool_calls",
   {
     ...idMixin("atc"),
+    ...auditMixin(),
     executionStepId: uuid("execution_step_id")
       .notNull()
       .references(() => agentExecutionSteps.id),
