@@ -27,9 +27,6 @@ describe("apiRequest", () => {
 
     const result = await apiRequest("/conversations");
 
-    const calls = mockFetch.mock.calls as unknown[][];
-    const init = calls[0]?.[1] as Record<string, unknown> | undefined;
-    const headers = init?.headers as Record<string, string> | undefined;
     expect(mockFetch).toHaveBeenCalledWith(
       "http://localhost:4000/api/v1/conversations",
       expect.objectContaining({
@@ -45,8 +42,9 @@ describe("apiRequest", () => {
 
     await apiRequest("/health");
 
-    const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
-    expect(headers["Authorization"]).toBeUndefined();
+    const callInit = (mockFetch.mock.calls[0] as [string, RequestInit | undefined])[1];
+    const headers = callInit?.headers as Record<string, string> | undefined;
+    expect(headers?.["Authorization"]).toBeUndefined();
   });
 
   it("throws ApiError with status on non-ok response", async () => {
@@ -82,7 +80,6 @@ describe("apiRequest", () => {
       body: JSON.stringify({ name: "test" }),
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit | undefined];
     expect(init?.body).toBe(JSON.stringify({ name: "test" }));
   });

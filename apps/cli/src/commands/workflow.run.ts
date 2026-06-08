@@ -17,7 +17,7 @@ export const workflowRunCommand = new Command("run")
       let input: Record<string, unknown> = {};
       if (options.input) {
         try {
-          input = JSON.parse(options.input);
+          input = JSON.parse(options.input) as Record<string, unknown>;
         } catch {
           throw new Error("Invalid input JSON");
         }

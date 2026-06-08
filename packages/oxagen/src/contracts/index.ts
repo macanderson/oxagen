@@ -73,6 +73,23 @@ import { pluginWorkspaceSetEnabled } from "./plugin.workspace.set_enabled";
 import { workflowRun } from "./workflow.run";
 import { workflowStatus } from "./workflow.status";
 import { workflowCancel } from "./workflow.cancel";
+import { userPreferencesGet } from "./user.preferences.get";
+import { userPreferencesUpdate } from "./user.preferences.update";
+import { workspaceMemberList } from "./workspace.member.list";
+import { workspaceInviteSend } from "./workspace.invite.send";
+import { conversationChat } from "./conversation.chat";
+import { imageCreate } from "./image.create";
+import { imageList } from "./image.list";
+import { imageAnalyze } from "./image.analyze";
+import { documentCreate } from "./document.create";
+import { documentList } from "./document.list";
+import { documentRead } from "./document.read";
+import { formCreate } from "./form.create";
+import { formSubmit } from "./form.submit";
+import { automationList } from "./automation.list";
+import { automationCreate } from "./automation.create";
+import { automationTrigger } from "./automation.trigger";
+import { skillWorkspaceList } from "./skill.workspace.list";
 
 export {
   apiKeyCreate,
@@ -140,6 +157,23 @@ export {
   workflowRun,
   workflowStatus,
   workflowCancel,
+  userPreferencesGet,
+  userPreferencesUpdate,
+  workspaceMemberList,
+  workspaceInviteSend,
+  conversationChat,
+  imageCreate,
+  imageList,
+  imageAnalyze,
+  documentCreate,
+  documentList,
+  documentRead,
+  formCreate,
+  formSubmit,
+  automationList,
+  automationCreate,
+  automationTrigger,
+  skillWorkspaceList,
 };
 
 /**
@@ -216,4 +250,21 @@ export const contracts = [
   workflowRun,
   workflowStatus,
   workflowCancel,
+  userPreferencesGet,
+  userPreferencesUpdate,
+  workspaceMemberList,
+  workspaceInviteSend,
+  conversationChat,
+  imageCreate,
+  imageList,
+  imageAnalyze,
+  documentCreate,
+  documentList,
+  documentRead,
+  formCreate,
+  formSubmit,
+  automationList,
+  automationCreate,
+  automationTrigger,
+  skillWorkspaceList,
 ] as const;

@@ -222,4 +222,80 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "workflow.cancel",
     async () => (await import("./workflow.cancel")).workflowCancelHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "user.preferences.get",
+    async () =>
+      (await import("./user.preferences.get")).userPreferencesGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "user.preferences.update",
+    async () =>
+      (await import("./user.preferences.update")).userPreferencesUpdateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "workspace.member.list",
+    async () =>
+      (await import("./workspace.member.list")).workspaceMemberListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "workspace.invite.send",
+    async () =>
+      (await import("./workspace.invite.send")).workspaceInviteSendHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "conversation.chat",
+    async () =>
+      (await import("./conversation.chat")).conversationChatHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "image.create",
+    async () => (await import("./image.create")).imageCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "image.list",
+    async () => (await import("./image.list")).imageListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "image.analyze",
+    async () => (await import("./image.analyze")).imageAnalyzeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "document.create",
+    async () => (await import("./document.create")).documentCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "document.list",
+    async () => (await import("./document.list")).documentListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "document.read",
+    async () => (await import("./document.read")).documentReadHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "form.create",
+    async () => (await import("./form.create")).formCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "form.submit",
+    async () => (await import("./form.submit")).formSubmitHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "automation.list",
+    async () => (await import("./automation.list")).automationListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "automation.create",
+    async () =>
+      (await import("./automation.create")).automationCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "automation.trigger",
+    async () =>
+      (await import("./automation.trigger")).automationTriggerHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "skill.workspace.list",
+    async () =>
+      (await import("./skill.workspace.list")).skillWorkspaceListHandler as CapabilityHandlerFn,
+  );
 });

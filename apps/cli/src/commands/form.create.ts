@@ -16,7 +16,7 @@ export const formCreateCommand = new Command("create")
       let fields: unknown[] = [];
       if (options.fields) {
         try {
-          fields = JSON.parse(options.fields);
+          fields = JSON.parse(options.fields) as unknown[];
         } catch {
           throw new Error("Invalid fields JSON");
         }

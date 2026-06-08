@@ -66,6 +66,17 @@ export default tseslint.config(
       "no-restricted-imports": ["error", tenancySeamRestrictedImports],
     },
   },
+  // Test files: relax unsafe-assignment/member-access/call warnings — vitest's
+  // asymmetric matchers (expect.objectContaining, expect.any, etc.) are typed
+  // as `any` by design; suppressing per-line is noisy and adds no safety.
+  {
+    files: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+    rules: {
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+    },
+  },
   // The seam-owning packages legitimately use their own raw clients.
   {
     files: [

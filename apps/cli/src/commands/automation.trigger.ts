@@ -15,7 +15,7 @@ export const automationTriggerCommand = new Command("trigger")
       let payload: Record<string, unknown> = {};
       if (options.payload) {
         try {
-          payload = JSON.parse(options.payload);
+          payload = JSON.parse(options.payload) as Record<string, unknown>;
         } catch {
           throw new Error("Invalid payload JSON");
         }

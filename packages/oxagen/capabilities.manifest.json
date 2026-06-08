@@ -277,6 +277,54 @@
       }
     },
     {
+      "name": "automation.create",
+      "file": "automation.create.ts",
+      "domain": "automation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
+      "name": "automation.list",
+      "file": "automation.list.ts",
+      "domain": "automation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
+      "name": "automation.trigger",
+      "file": "automation.trigger.ts",
+      "domain": "automation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
       "name": "billing.credits.purchase",
       "file": "billing.credits.purchase.ts",
       "domain": "billing",
@@ -388,6 +436,22 @@
       }
     },
     {
+      "name": "conversation.chat",
+      "file": "conversation.chat.ts",
+      "domain": "conversation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
       "name": "conversation.delete",
       "file": "conversation.delete.ts",
       "domain": "conversation",
@@ -459,6 +523,54 @@
       }
     },
     {
+      "name": "document.create",
+      "file": "document.create.ts",
+      "domain": "document",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
+      "name": "document.list",
+      "file": "document.list.ts",
+      "domain": "document",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
+      "name": "document.read",
+      "file": "document.read.ts",
+      "domain": "document",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
       "name": "documents.generate",
       "file": "documents.generate.ts",
       "domain": "documents",
@@ -495,6 +607,22 @@
       }
     },
     {
+      "name": "form.create",
+      "file": "form.create.ts",
+      "domain": "form",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
       "name": "form.fill",
       "file": "form.fill.ts",
       "domain": "form",
@@ -513,6 +641,54 @@
       }
     },
     {
+      "name": "form.submit",
+      "file": "form.submit.ts",
+      "domain": "form",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
+      "name": "image.analyze",
+      "file": "image.analyze.ts",
+      "domain": "image",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
+      "name": "image.create",
+      "file": "image.create.ts",
+      "domain": "image",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
       "name": "image.generate",
       "file": "image.generate.ts",
       "domain": "image",
@@ -528,6 +704,22 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "image.list",
+      "file": "image.list.ts",
+      "domain": "image",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
       }
     },
     {
@@ -943,6 +1135,22 @@
       }
     },
     {
+      "name": "skill.workspace.list",
+      "file": "skill.workspace.list.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
       "name": "svg.generate",
       "file": "svg.generate.ts",
       "domain": "svg",
@@ -979,6 +1187,22 @@
       }
     },
     {
+      "name": "user.preferences.get",
+      "file": "user.preferences.get.ts",
+      "domain": "user",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
       "name": "user.preferences.read",
       "file": "user.preferences.read.ts",
       "domain": "user",
@@ -993,6 +1217,22 @@
         "api": true,
         "mcp": true,
         "unit": true
+      }
+    },
+    {
+      "name": "user.preferences.update",
+      "file": "user.preferences.update.ts",
+      "domain": "user",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
       }
     },
     {
@@ -1101,6 +1341,38 @@
         "unit": true,
         "e2e": true,
         "docs": true
+      }
+    },
+    {
+      "name": "workspace.invite.send",
+      "file": "workspace.invite.send.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
+      }
+    },
+    {
+      "name": "workspace.member.list",
+      "file": "workspace.member.list.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false
       }
     },
     {

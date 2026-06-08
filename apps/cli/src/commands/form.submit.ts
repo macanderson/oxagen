@@ -16,7 +16,7 @@ export const formSubmitCommand = new Command("submit")
       let responses: Record<string, unknown> = {};
       if (options.responses) {
         try {
-          responses = JSON.parse(options.responses);
+          responses = JSON.parse(options.responses) as Record<string, unknown>;
         } catch {
           throw new Error("Invalid responses JSON");
         }
