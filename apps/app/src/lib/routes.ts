@@ -147,6 +147,7 @@ export const workspace = {
     modelKeys: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/model-keys`,
     brandKits: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/brand-kits`,
     integrations: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/integrations`,
+    prompts: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/prompts`,
   },
 } as const;
 
