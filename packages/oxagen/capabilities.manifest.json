@@ -1174,21 +1174,6 @@
       }
     },
     {
-      "name": "user.preferences.get",
-      "file": "user.preferences.get.ts",
-      "domain": "user",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": false
-      }
-    },
-    {
       "name": "user.preferences.read",
       "file": "user.preferences.read.ts",
       "domain": "user",
@@ -1203,21 +1188,6 @@
         "api": true,
         "mcp": true,
         "unit": true
-      }
-    },
-    {
-      "name": "user.preferences.update",
-      "file": "user.preferences.update.ts",
-      "domain": "user",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": false
       }
     },
     {
@@ -1269,7 +1239,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -1287,7 +1257,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -1305,7 +1275,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },

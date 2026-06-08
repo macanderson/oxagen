@@ -71,8 +71,6 @@ import { pluginSettingsSetAuthAlertsRoute } from "./routes/v1/plugin.settings.se
 import { apiKeyCreateRoute } from "./routes/v1/api.key.create";
 import { apiKeyRevokeRoute } from "./routes/v1/api.key.revoke";
 import { workflowRoute } from "./routes/v1/workflow";
-import { userPreferencesGetRoute } from "./routes/v1/user.preferences.get";
-import { userPreferencesUpdateRoute } from "./routes/v1/user.preferences.update";
 import { workspaceMemberListRoute } from "./routes/v1/workspace.member.list";
 import { workspaceInviteSendRoute } from "./routes/v1/workspace.invite.send";
 import { conversationChatRoute } from "./routes/v1/conversation.chat";
@@ -121,8 +119,8 @@ userScoped.use("*", authMiddleware);
 userScoped.route("/organizations", organizationCreateRoute);
 userScoped.route("/user/preferences", userPreferencesReadRoute);
 userScoped.route("/user/preferences", userPreferencesWriteRoute);
-userScoped.route("/user/preferences/get", userPreferencesGetRoute);
-userScoped.route("/user/preferences/update", userPreferencesUpdateRoute);
+userScoped.route("/user/preferences/read", userPreferencesReadRoute);
+userScoped.route("/user/preferences/write", userPreferencesWriteRoute);
 app.route("/v1", userScoped);
 
 // /v1/:org_slug/:workspace_slug/* — org + workspace scoped routes.
