@@ -13,6 +13,7 @@ import { apiKeyRevoke } from "./api.key.revoke";
 import { archiveCreate } from "./archive.create";
 import { assetUpload } from "./asset.upload";
 import { agentApprovalResolve } from "./agent.approval.resolve";
+import { agentExecutionRecord } from "./agent.execution.record";
 import { brandkitApply } from "./brandkit.apply";
 import { documentsGenerate } from "./documents.generate";
 import { documentsPdfCreate } from "./documents.pdf.create";
@@ -29,6 +30,7 @@ import { agentToolList } from "./agent.tool.list";
 import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription.upgrade.start";
+import { chatMessageExecution } from "./chat.message.execution";
 import { chatMessageSend } from "./chat.message.send";
 import { conversationArchive } from "./conversation.archive";
 import { conversationDelete } from "./conversation.delete";
@@ -97,6 +99,7 @@ export {
   archiveCreate,
   assetUpload,
   agentApprovalResolve,
+  agentExecutionRecord,
   brandkitApply,
   documentsGenerate,
   documentsPdfCreate,
@@ -113,6 +116,7 @@ export {
   billingCreditsPurchase,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
+  chatMessageExecution,
   chatMessageSend,
   conversationArchive,
   conversationDelete,
@@ -206,6 +210,7 @@ export const contracts = [
   billingCreditsPurchase,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
+  chatMessageExecution,
   chatMessageSend,
   conversationArchive,
   conversationDelete,
@@ -267,4 +272,6 @@ export const contracts = [
   workspaceMemberList,
   workspaceInviteSend,
   skillWorkspaceList,
+  agentExecutionRecord,
+  chatMessageExecution,
 ] as const;
