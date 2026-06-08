@@ -27,6 +27,9 @@ describe("apiRequest", () => {
 
     const result = await apiRequest("/conversations");
 
+    const calls = mockFetch.mock.calls as unknown[][];
+    const init = calls[0]?.[1] as Record<string, unknown> | undefined;
+    const headers = init?.headers as Record<string, string> | undefined;
     expect(mockFetch).toHaveBeenCalledWith(
       "http://localhost:4000/api/v1/conversations",
       expect.objectContaining({

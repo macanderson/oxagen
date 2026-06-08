@@ -373,7 +373,9 @@ describe("chat send", () => {
 
     await chatSendCommand.parseAsync(["node", "cli", "hi", "--conversation", "cnv_abc"]);
 
-    const callBody = JSON.parse((mockApiRequest.mock.calls[0]?.[1] as RequestInit)?.body as string);
+    const calls = mockApiRequest.mock.calls as unknown[][];
+    const init = calls[0]?.[1] as Record<string, unknown> | undefined;
+    const callBody = JSON.parse(init?.body as string) as Record<string, unknown>;
     expect(callBody.conversationId).toBe("cnv_abc");
     consoleSpy.mockRestore();
   });

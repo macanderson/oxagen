@@ -56,7 +56,8 @@ describe("writeConfig", () => {
 
     expect(mockMkdirSync).toHaveBeenCalled();
     expect(mockWriteFileSync).toHaveBeenCalled();
-    const written = JSON.parse(mockWriteFileSync.mock.calls[0]?.[1] as string);
+    const calls = mockWriteFileSync.mock.calls as unknown[][];
+    const written = JSON.parse(calls[0]?.[1] as string) as Record<string, unknown>;
     expect(written).toMatchObject({ token: "old", orgSlug: "new-org" });
   });
 
@@ -67,7 +68,8 @@ describe("writeConfig", () => {
     writeConfig({ token: "new-tok" });
 
     expect(mockMkdirSync).not.toHaveBeenCalled();
-    const written = JSON.parse(mockWriteFileSync.mock.calls[0]?.[1] as string);
+    const calls = mockWriteFileSync.mock.calls as unknown[][];
+    const written = JSON.parse(calls[0]?.[1] as string) as Record<string, unknown>;
     expect(written.token).toBe("new-tok");
   });
 });
@@ -81,7 +83,8 @@ describe("clearConfig", () => {
 
     clearConfig();
 
-    const written = JSON.parse(mockWriteFileSync.mock.calls[0]?.[1] as string);
+    const calls = mockWriteFileSync.mock.calls as unknown[][];
+    const written = JSON.parse(calls[0]?.[1] as string) as Record<string, unknown>;
     expect(written.token).toBeUndefined();
     expect(written.orgSlug).toBeUndefined();
     expect(written.workspaceSlug).toBeUndefined();
