@@ -39,9 +39,6 @@ const CTX = {
 describe("agent.plan.approve handler", () => {
   beforeEach(() => {
     executeSpy.mockClear();
-    updateMock.mockClear();
-    setMock.mockClear();
-    whereMock.mockClear();
   });
 
   it("issues pg_notify with planId and status as bound parameters", async () => {
