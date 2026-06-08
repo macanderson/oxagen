@@ -8,13 +8,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // lines floor 44 (measured 49.73); target 90 — raise in follow-up
-      // branches floor 86 (measured 91.80); target 85 — already above target, keep at measured-5
+      // lines floor 50 (measured 49.75); auth.ts is Better Auth config (not unit-testable)
+      // branches floor 94 (measured 94.28); above target of 85
       thresholds: {
-        lines: 44,
-        branches: 86,
-        functions: 34,
-        statements: 44,
+        lines: 50,
+        branches: 94,
+        functions: 85,
+        statements: 50,
       },
     },
   },

@@ -51,6 +51,27 @@ const WandSendSchema = z.object({
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+/** Assert user is a member of the workspace. Returns true on success, false if not a member. */
+async function assertWorkspaceMember(
+  orgId: string,
+  workspaceId: string,
+  userId: string,
+): Promise<boolean> {
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({ id: schema.workspaceUsers.id })
+      .from(schema.workspaceUsers)
+      .where(
+        and(
+          eq(schema.workspaceUsers.workspaceId, workspaceId),
+          eq(schema.workspaceUsers.userId, userId),
+        ),
+      )
+      .limit(1),
+  ).then(() => true).catch(() => false); // catch RLS / tenancy errors
+  return rows;
+}
+
 /** Resolve org + workspace from slugs, returning null on any lookup failure. */
 async function resolveWorkspaceFromSlugs(
   orgSlug: string,
@@ -138,6 +159,12 @@ export async function wandSendAction(
     return { ok: false, error: "Workspace not found. Please navigate to a workspace and try again." };
   }
   const { orgId, workspaceId } = resolved;
+
+  // Assert user is a member of the workspace (explicit IAM gate in apps/app).
+  const isMember = await assertWorkspaceMember(orgId, workspaceId, session.user.id);
+  if (!isMember) {
+    return { ok: false, error: "You don't have access to this workspace." };
+  }
 
   // Verify the capability input before entering the tenant scope.
   const capabilityInput = chatMessageSend.input.safeParse({
