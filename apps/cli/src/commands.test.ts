@@ -1209,7 +1209,7 @@ describe("agent memory recall", () => {
 
   it("handles recall failure", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Network error"));
     await expect(agentMemoryRecallCommand.parseAsync(["node", "cli", "-a", "agent1", "-q", "query"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to recall"), expect.any(Error));
@@ -1233,14 +1233,14 @@ describe("agent memory write", () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     mockApiRequest.mockResolvedValueOnce({ id: "obs3", status: "stored" });
     await agentMemoryWriteCommand.parseAsync(["node", "cli", "-a", "agent1", "-t", "Uses dark mode", "--tags", "ui,preferences"]);
-    const callBody = JSON.parse(mockApiRequest.mock.calls[0][1]?.body as string);
+    const callBody = JSON.parse((mockApiRequest.mock.calls[0][1] as { body: string }).body);
     expect(callBody.tags).toEqual(["ui", "preferences"]);
     consoleSpy.mockRestore();
   });
 
   it("handles write failure", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Network error"));
     await expect(agentMemoryWriteCommand.parseAsync(["node", "cli", "-a", "agent1", "-t", "text"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to write"), expect.any(Error));
@@ -1265,7 +1265,7 @@ describe("documents generate", () => {
 
   it("fails on invalid JSON context", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     await expect(documentsGenerateCommand.parseAsync(["node", "cli", "-t", "report", "-c", "not-json"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Invalid JSON"), expect.anything());
     consoleSpy.mockRestore();
@@ -1274,7 +1274,7 @@ describe("documents generate", () => {
 
   it("handles generate failure", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Template not found"));
     await expect(documentsGenerateCommand.parseAsync(["node", "cli", "-t", "report", "-c", '{}'])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to generate"), expect.any(Error));
@@ -1299,7 +1299,7 @@ describe("image generate", () => {
 
   it("handles generate failure", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Model not found"));
     await expect(imageGenerateCommand.parseAsync(["node", "cli", "-p", "a cat"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to generate"), expect.any(Error));
@@ -1323,7 +1323,7 @@ describe("org member invite accept", () => {
 
   it("handles accept failure", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Invitation expired"));
     await expect(orgMemberInviteAcceptCommand.parseAsync(["node", "cli", "-i", "inv1"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to accept"), expect.any(Error));
@@ -1348,7 +1348,7 @@ describe("plugin catalog browse", () => {
 
   it("handles browse failure", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Service unavailable"));
     await expect(pluginCatalogBrowseCommand.parseAsync(["node", "cli"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to browse"), expect.any(Error));
@@ -1372,7 +1372,7 @@ describe("plugin credential reauth", () => {
 
   it("handles reauth failure", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("OAuth error"));
     await expect(pluginCredentialReauthCommand.parseAsync(["node", "cli", "-p", "slack"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to re-authenticate"), expect.any(Error));
@@ -1396,7 +1396,7 @@ describe("plugin registry list", () => {
 
   it("handles list failure", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Network error"));
     await expect(pluginRegistryListCommand.parseAsync(["node", "cli"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to list"), expect.any(Error));
@@ -1417,7 +1417,7 @@ describe("plugin registry add", () => {
 
   it("handles add failure", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Registry already exists"));
     await expect(pluginRegistryAddCommand.parseAsync(["node", "cli", "-n", "Private", "-u", "https://x.com"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to add"), expect.any(Error));
@@ -1441,7 +1441,7 @@ describe("svg generate", () => {
 
   it("handles generate failure", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Generation failed"));
     await expect(svgGenerateCommand.parseAsync(["node", "cli", "-d", "circle"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to generate"), expect.any(Error));
@@ -1465,7 +1465,7 @@ describe("video generate", () => {
 
   it("handles generate failure", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Model not available"));
     await expect(videoGenerateCommand.parseAsync(["node", "cli", "-p", "a cat"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to generate"), expect.any(Error));
@@ -1489,7 +1489,7 @@ describe("workspace model settings read", () => {
 
   it("handles read failure", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Workspace not found"));
     await expect(workspaceModelSettingsReadCommand.parseAsync(["node", "cli"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to read"), expect.any(Error));
@@ -1510,10 +1510,510 @@ describe("workspace model settings write", () => {
 
   it("handles write failure", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => { throw new Error("process.exit"); });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Invalid setting key"));
     await expect(workspaceModelSettingsWriteCommand.parseAsync(["node", "cli", "-k", "badKey", "-v", "value"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to write"), expect.any(Error));
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// agent mcp register
+// ---------------------------------------------------------------------------
+describe("agent mcp register", () => {
+  it("registers an MCP server", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ mcpServerId: "mcp1", healthStatus: "healthy", discoveredTools: ["tool1", "tool2"] });
+    await agentMcpRegisterCommand.parseAsync(["node", "cli", "-n", "My MCP", "-u", "https://mcp.example.com", "-t", "streamable-http"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/agent/mcp/register", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("mcp1"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles registration failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Bad URL"));
+    await expect(agentMcpRegisterCommand.parseAsync(["node", "cli", "-n", "M", "-u", "http://x", "-t", "stdio"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Error:"), expect.anything());
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// agent plan approve
+// ---------------------------------------------------------------------------
+describe("agent plan approve", () => {
+  it("approves a plan", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ planId: "plan1", status: "approved" });
+    await agentPlanApproveCommand.parseAsync(["node", "cli", "-p", "plan1", "-d", "approve"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/agent/plan/approve", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("approved"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles approval failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Plan not found"));
+    await expect(agentPlanApproveCommand.parseAsync(["node", "cli", "-p", "p1", "-d", "deny"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// agent task background
+// ---------------------------------------------------------------------------
+describe("agent task background start", () => {
+  it("starts a background task", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ taskId: "task1", inngestRunId: "run1" });
+    await agentTaskBackgroundStartCommand.parseAsync(["node", "cli", "-k", "research", "--payload", '{"query":"test"}']);
+    expect(mockApiRequest).toHaveBeenCalledWith("/agent/task/background/start", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("task1"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles start failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Queue full"));
+    await expect(agentTaskBackgroundStartCommand.parseAsync(["node", "cli", "-k", "kind", "--payload", "{}"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+describe("agent task background read", () => {
+  it("reads task status", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ taskId: "task1", kind: "research", status: "completed", label: "My task", resultPayload: { answer: "42" }, failureReason: null, createdAt: "2026-06-08", startedAt: "2026-06-08", completedAt: "2026-06-08" });
+    await agentTaskBackgroundReadCommand.parseAsync(["node", "cli", "-t", "task1"]);
+    expect(mockApiRequest).toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("completed"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles read failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Not found"));
+    await expect(agentTaskBackgroundReadCommand.parseAsync(["node", "cli", "-t", "t1"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+describe("agent task background cancel", () => {
+  it("cancels a background task", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ cancelled: true });
+    await agentTaskBackgroundCancelCommand.parseAsync(["node", "cli", "-t", "task1"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/agent/task/background/cancel", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("cancelled"));
+    consoleSpy.mockRestore();
+  });
+
+  it("reports task could not be cancelled", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ cancelled: false });
+    await agentTaskBackgroundCancelCommand.parseAsync(["node", "cli", "-t", "task1"]);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("could not be cancelled"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles cancel failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Not found"));
+    await expect(agentTaskBackgroundCancelCommand.parseAsync(["node", "cli", "-t", "t1"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// asset upload
+// ---------------------------------------------------------------------------
+describe("asset upload", () => {
+  it("uploads an asset", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ url: "https://cdn.example.com/img.png", key: "img/abc.png", contentType: "image/png", bytes: 12345 });
+    await assetUploadCommand.parseAsync(["node", "cli", "-s", "https://example.com/img.png", "-k", "image"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/asset/upload", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Asset uploaded"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles upload failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Source URL unreachable"));
+    await expect(assetUploadCommand.parseAsync(["node", "cli", "-s", "https://bad.url", "-k", "image"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// billing subscription upgrade start
+// ---------------------------------------------------------------------------
+describe("billing subscription upgrade start", () => {
+  it("starts a checkout session", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ checkoutUrl: "https://checkout.stripe.com/pay/cs_test_123", planSlug: "scale", interval: "month" });
+    await billingSubscriptionUpgradeStartCommand.parseAsync(["node", "cli", "-p", "scale", "-i", "month", "--success-url", "https://app.oxagen.ai/success", "--cancel-url", "https://app.oxagen.ai/cancel"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/billing/subscription/upgrade/start", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Checkout session created"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles upgrade failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Stripe error"));
+    await expect(billingSubscriptionUpgradeStartCommand.parseAsync(["node", "cli", "-p", "scale", "-i", "month", "--success-url", "https://a.com/ok", "--cancel-url", "https://a.com/cancel"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// brandkit apply
+// ---------------------------------------------------------------------------
+describe("brandkit apply", () => {
+  it("applies a brand kit", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ stub: true, applied: false, brandKitId: "bk1", targetFileId: "file1" });
+    await brandkitApplyCommand.parseAsync(["node", "cli", "-b", "bk1", "-f", "file1", "-w", "ws1"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/brandkit/apply", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("stub"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles apply failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Brand kit not found"));
+    await expect(brandkitApplyCommand.parseAsync(["node", "cli", "-b", "bk1", "-f", "f1", "-w", "ws1"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// conversation purge
+// ---------------------------------------------------------------------------
+describe("conversation purge", () => {
+  it("purges archived conversations with --yes", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ deleted: 5 });
+    await conversationPurgeCommand.parseAsync(["node", "cli", "-w", "ws1", "--yes"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/conversation/purge", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Purged 5"));
+    consoleSpy.mockRestore();
+  });
+
+  it("exits without --yes", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    await expect(conversationPurgeCommand.parseAsync(["node", "cli", "-w", "ws1"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Pass --yes to confirm"));
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
+  it("handles purge failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Workspace not found"));
+    await expect(conversationPurgeCommand.parseAsync(["node", "cli", "-w", "ws1", "--yes"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// documents pdf create
+// ---------------------------------------------------------------------------
+describe("documents pdf create", () => {
+  it("creates a PDF document", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ assetId: "asset1", publicId: "pub1", kind: "pdf", mimeType: "application/pdf", sizeBytes: 50000, url: "https://blob.example.com/doc.pdf", serveUrl: "https://api.example.com/assets/asset1" });
+    await documentsPdfCreateCommand.parseAsync(["node", "cli", "-t", "Q1 Report"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/documents/pdf/create", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("PDF created"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles pdf create failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Generation failed"));
+    await expect(documentsPdfCreateCommand.parseAsync(["node", "cli", "-t", "Report"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// form fill
+// ---------------------------------------------------------------------------
+describe("form fill", () => {
+  it("fills form fields", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const fields = [{ name: "firstName", label: "First Name", type: "text", current: "", changed: false, proposed: "Alice", reason: "Inferred from instruction" }];
+    mockApiRequest.mockResolvedValueOnce({ fields });
+    await formFillCommand.parseAsync(["node", "cli", "-r", "/profile", "-i", "Fill with Alice's info", "--fields", '[{"name":"firstName","label":"First Name","type":"text","current":""}]']);
+    expect(mockApiRequest).toHaveBeenCalledWith("/form/fill", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Form fill suggestion"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles form fill failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("LLM error"));
+    await expect(formFillCommand.parseAsync(["node", "cli", "-r", "/p", "-i", "fill", "--fields", "[]"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// org member invite decline
+// ---------------------------------------------------------------------------
+describe("org member invite decline", () => {
+  it("declines an invitation", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ invitationPublicId: "inv1", status: "declined" });
+    await orgMemberInviteDeclineCommand.parseAsync(["node", "cli", "-i", "inv1"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/org/member/invite/decline", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("declined"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles decline failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Invitation not found"));
+    await expect(orgMemberInviteDeclineCommand.parseAsync(["node", "cli", "-i", "inv1"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// organization create
+// ---------------------------------------------------------------------------
+describe("organization create", () => {
+  it("creates an organization", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ publicId: "org1", name: "Acme Corp", slug: "acme-corp", type: "business", createdAt: "2026-06-08" });
+    await organizationCreateCommand.parseAsync(["node", "cli", "-n", "Acme Corp", "-s", "acme-corp"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/organization/create", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Organization created"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles create failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Slug already taken"));
+    await expect(organizationCreateCommand.parseAsync(["node", "cli", "-n", "Acme", "-s", "acme"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plugin credential set_secret
+// ---------------------------------------------------------------------------
+describe("plugin credential set_secret", () => {
+  it("stores a credential", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ ok: true });
+    await pluginCredentialSetSecretCommand.parseAsync(["node", "cli", "-l", "listing1", "-a", "secret", "--secret", "my-secret"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/credential/set_secret", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Credential stored"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles credential failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Listing not found"));
+    await expect(pluginCredentialSetSecretCommand.parseAsync(["node", "cli", "-l", "l1", "-a", "secret"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plugin denylist
+// ---------------------------------------------------------------------------
+describe("plugin denylist add", () => {
+  it("adds a server to the denylist", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ ok: true });
+    await pluginDenylistAddCommand.parseAsync(["node", "cli", "-s", "bad-server"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/denylist/add", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("bad-server"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles denylist add failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Server not found"));
+    await expect(pluginDenylistAddCommand.parseAsync(["node", "cli", "-s", "srv"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+describe("plugin denylist remove", () => {
+  it("removes a server from the denylist", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ ok: true });
+    await pluginDenylistRemoveCommand.parseAsync(["node", "cli", "-s", "bad-server"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/denylist/remove", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("bad-server"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles denylist remove failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Entry not found"));
+    await expect(pluginDenylistRemoveCommand.parseAsync(["node", "cli", "-s", "srv"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plugin org install bulk
+// ---------------------------------------------------------------------------
+describe("plugin org install bulk", () => {
+  it("bulk installs plugins", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ installed: [{ catalogServerId: "srv1", orgListingId: "listing1", error: null }] });
+    await pluginOrgInstallBulkCommand.parseAsync(["node", "cli", "--items", '[{"catalogServerId":"srv1"}]']);
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/org/install_bulk", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("1 succeeded"));
+    consoleSpy.mockRestore();
+  });
+
+  it("reports partial failures", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ installed: [{ catalogServerId: "srv1", orgListingId: null, error: "Not found" }] });
+    await pluginOrgInstallBulkCommand.parseAsync(["node", "cli", "--items", '[{"catalogServerId":"srv1"}]']);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("0 succeeded, 1 failed"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles bulk install failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Bad request"));
+    await expect(pluginOrgInstallBulkCommand.parseAsync(["node", "cli", "--items", "[]"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plugin org list
+// ---------------------------------------------------------------------------
+describe("plugin org list", () => {
+  it("lists org plugins", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      listings: [{ id: "l1", publicId: "pub1", name: "Slack", pluginType: "mcp_server", enabled: true }],
+      denylist: [],
+    });
+    await pluginOrgListCommand.parseAsync(["node", "cli"]);
+    expect(mockApiRequest).toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Slack"));
+    consoleSpy.mockRestore();
+  });
+
+  it("shows denylist when populated", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      listings: [],
+      denylist: [{ id: "d1", serverName: "bad-server", pluginType: "mcp_server", reason: "Security risk" }],
+    });
+    await pluginOrgListCommand.parseAsync(["node", "cli"]);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Denylist"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles list failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Unauthorized"));
+    await expect(pluginOrgListCommand.parseAsync(["node", "cli"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plugin org set_enabled
+// ---------------------------------------------------------------------------
+describe("plugin org set_enabled", () => {
+  it("enables a plugin listing", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ ok: true });
+    await pluginOrgSetEnabledCommand.parseAsync(["node", "cli", "-l", "listing1", "--enabled", "true"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/org/set_enabled", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("enabled"));
+    consoleSpy.mockRestore();
+  });
+
+  it("disables a plugin listing", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ ok: true });
+    await pluginOrgSetEnabledCommand.parseAsync(["node", "cli", "-l", "listing1", "--enabled", "false"]);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("disabled"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles set_enabled failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Listing not found"));
+    await expect(pluginOrgSetEnabledCommand.parseAsync(["node", "cli", "-l", "l1", "--enabled", "true"])).rejects.toThrow();
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plugin registry remove
+// ---------------------------------------------------------------------------
+describe("plugin registry remove", () => {
+  it("removes a registry", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ ok: true });
+    await pluginRegistryRemoveCommand.parseAsync(["node", "cli", "-r", "reg1"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/registry/remove", expect.objectContaining({ method: "DELETE" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("reg1 removed"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles remove failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Registry is global default"));
+    await expect(pluginRegistryRemoveCommand.parseAsync(["node", "cli", "-r", "r1"])).rejects.toThrow();
     consoleSpy.mockRestore();
     exitSpy.mockRestore();
   });
