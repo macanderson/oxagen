@@ -138,7 +138,7 @@ export async function generateObjectFor<T>(
         provider,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
-        cached_tokens: 0,
+        cached_tokens: cachedTokens,
         cost_usd_micros: costUsdMicros,
         duration_ms: durationMs,
         surface: args.telemetry.surface,

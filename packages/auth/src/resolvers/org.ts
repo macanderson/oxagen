@@ -30,7 +30,7 @@ export type OrgScopeResolution =
  * @param slug - The org slug from the request path (case-insensitive via
  *   citext column).
  * @returns OrgScopeResolution — ok:true with orgId on success, ok:false with
- *   a typed error kind (not_found | not_member) on failure.
+ *   kind: "not_found" on failure (missing org or non-member both return not_found).
  */
 export async function resolveOrgScope(
   userId: string,
