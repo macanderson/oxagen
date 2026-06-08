@@ -37,6 +37,23 @@ import { agentApprovalResolveCommand } from "./commands/agent.approval.resolve.j
 import { orgMemberRoleChangeCommand } from "./commands/org.member.role.change.js";
 import { archiveCreateCommand } from "./commands/archive.create.js";
 import { workflowRunCommand } from "./commands/workflow.run.js";
+import { userPreferencesGetCommand } from "./commands/user.preferences.get.js";
+import { userPreferencesUpdateCommand } from "./commands/user.preferences.update.js";
+import { workspaceMemberListCommand } from "./commands/workspace.member.list.js";
+import { workspaceInviteSendCommand } from "./commands/workspace.invite.send.js";
+import { conversationChatCommand } from "./commands/conversation.chat.js";
+import { imageCreateCommand } from "./commands/image.create.js";
+import { documentCreateCommand } from "./commands/document.create.js";
+import { automationListCommand } from "./commands/automation.list.js";
+import { imageListCommand } from "./commands/image.list.js";
+import { imageAnalyzeCommand } from "./commands/image.analyze.js";
+import { documentListCommand } from "./commands/document.list.js";
+import { documentReadCommand } from "./commands/document.read.js";
+import { formCreateCommand } from "./commands/form.create.js";
+import { formSubmitCommand } from "./commands/form.submit.js";
+import { automationCreateCommand } from "./commands/automation.create.js";
+import { automationTriggerCommand } from "./commands/automation.trigger.js";
+import { skillWorkspaceListCommand } from "./commands/skill.workspace.list.js";
 
 const program = new Command();
 
@@ -129,6 +146,49 @@ archive.addCommand(archiveCreateCommand);
 // workflow
 const workflow = program.command("workflow").description("Workflow automation");
 workflow.addCommand(workflowRunCommand);
+
+// user
+const user = program.command("user").description("User account commands");
+const userPreferences = user.command("preferences").description("User preference management");
+userPreferences.addCommand(userPreferencesGetCommand);
+userPreferences.addCommand(userPreferencesUpdateCommand);
+
+// workspace member + invite
+const workspaceMember = workspace.command("member").description("Workspace member management");
+workspaceMember.addCommand(workspaceMemberListCommand);
+const workspaceInvite = workspace.command("invite").description("Workspace invitation management");
+workspaceInvite.addCommand(workspaceInviteSendCommand);
+
+// conversation chat
+conversation.addCommand(conversationChatCommand);
+
+// image
+const image = program.command("image").description("Image generation commands");
+image.addCommand(imageCreateCommand);
+image.addCommand(imageListCommand);
+image.addCommand(imageAnalyzeCommand);
+
+// document
+const document = program.command("document").description("Document management commands");
+document.addCommand(documentCreateCommand);
+document.addCommand(documentListCommand);
+document.addCommand(documentReadCommand);
+
+// automation
+const automation = program.command("automation").description("Automation management commands");
+automation.addCommand(automationListCommand);
+automation.addCommand(automationCreateCommand);
+automation.addCommand(automationTriggerCommand);
+
+// form
+const form = program.command("form").description("Form management commands");
+form.addCommand(formCreateCommand);
+form.addCommand(formSubmitCommand);
+
+// skill
+const skill = program.command("skill").description("Skill management commands");
+const skillWorkspace = skill.command("workspace").description("Workspace skill management");
+skillWorkspace.addCommand(skillWorkspaceListCommand);
 
 program.parse(process.argv);
 

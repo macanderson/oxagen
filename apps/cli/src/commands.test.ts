@@ -53,6 +53,26 @@ import { agentMcpListCommand } from "./commands/agent.mcp.list.js";
 import { agentSkillListCommand } from "./commands/agent.skill.list.js";
 import { agentToolListCommand } from "./commands/agent.tool.list.js";
 import { orgMemberRoleChangeCommand } from "./commands/org.member.role.change.js";
+import { agentApprovalResolveCommand } from "./commands/agent.approval.resolve.js";
+import { archiveCreateCommand } from "./commands/archive.create.js";
+import { workflowRunCommand } from "./commands/workflow.run.js";
+import { userPreferencesGetCommand } from "./commands/user.preferences.get.js";
+import { userPreferencesUpdateCommand } from "./commands/user.preferences.update.js";
+import { workspaceMemberListCommand } from "./commands/workspace.member.list.js";
+import { workspaceInviteSendCommand } from "./commands/workspace.invite.send.js";
+import { conversationChatCommand } from "./commands/conversation.chat.js";
+import { imageCreateCommand } from "./commands/image.create.js";
+import { documentCreateCommand } from "./commands/document.create.js";
+import { automationListCommand } from "./commands/automation.list.js";
+import { imageListCommand } from "./commands/image.list.js";
+import { imageAnalyzeCommand } from "./commands/image.analyze.js";
+import { documentListCommand } from "./commands/document.list.js";
+import { documentReadCommand } from "./commands/document.read.js";
+import { formCreateCommand } from "./commands/form.create.js";
+import { formSubmitCommand } from "./commands/form.submit.js";
+import { automationCreateCommand } from "./commands/automation.create.js";
+import { automationTriggerCommand } from "./commands/automation.trigger.js";
+import { skillWorkspaceListCommand } from "./commands/skill.workspace.list.js";
 
 import * as apiClient from "./lib/api-client.js";
 import * as config from "./lib/config.js";
@@ -873,6 +893,266 @@ describe("org member role change", () => {
 
     expect(mockApiRequest).toHaveBeenCalledWith("/org/member/role-change", expect.objectContaining({ method: "POST" }));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Role updated"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// agent approval resolve
+// ---------------------------------------------------------------------------
+describe("agent approval resolve", () => {
+  it("resolves approval with approve decision", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ id: "apr1", status: "approved" });
+    await agentApprovalResolveCommand.parseAsync(["node", "cli", "-a", "apr1", "-d", "approve"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/agent/approval/resolve", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("approved"));
+    consoleSpy.mockRestore();
+  });
+  it("rejects invalid decision", async () => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
+    await expect(() =>
+      agentApprovalResolveCommand.parseAsync(["node", "cli", "-a", "apr1", "-d", "invalid"])
+    ).rejects.toThrow();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// archive create
+// ---------------------------------------------------------------------------
+describe("archive create", () => {
+  it("creates archive from conversation", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ id: "arc1", name: "Archive 1", status: "created" });
+    await archiveCreateCommand.parseAsync(["node", "cli", "-c", "conv1", "-n", "My Archive"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/archive/create", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Archive created"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// workflow run
+// ---------------------------------------------------------------------------
+describe("workflow run", () => {
+  it("runs workflow with input", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ id: "run1", status: "started" });
+    await workflowRunCommand.parseAsync(["node", "cli", "-w", "wf1", "--input", '{"key":"value"}']);
+    expect(mockApiRequest).toHaveBeenCalledWith("/workflow/run", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("started"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// user preferences
+// ---------------------------------------------------------------------------
+describe("user preferences get", () => {
+  it("fetches user preferences", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ theme: "dark", language: "en" });
+    await userPreferencesGetCommand.parseAsync(["node", "cli"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/user/preferences/get", expect.any(Object));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("dark"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("user preferences update", () => {
+  it("updates user preferences", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ theme: "light" });
+    await userPreferencesUpdateCommand.parseAsync(["node", "cli", "-t", "light"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/user/preferences/update", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("light"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// workspace management
+// ---------------------------------------------------------------------------
+describe("workspace member list", () => {
+  it("lists workspace members", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ members: [{ id: "m1", email: "user@example.com", role: "member" }] });
+    await workspaceMemberListCommand.parseAsync(["node", "cli"]);
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("/workspace/member/list"), expect.any(Object));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Workspace Members"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("workspace invite send", () => {
+  it("sends workspace invitation", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ id: "inv1", status: "sent" });
+    await workspaceInviteSendCommand.parseAsync(["node", "cli", "-e", "user@example.com"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/workspace/invite/send", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Invitation sent"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// conversation chat
+// ---------------------------------------------------------------------------
+describe("conversation chat", () => {
+  it("sends chat message", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ id: "msg1", created_at: "2026-06-08T00:00:00Z" });
+    await conversationChatCommand.parseAsync(["node", "cli", "-c", "conv1", "-m", "Hello"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/conversation/chat", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Message sent"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// image management
+// ---------------------------------------------------------------------------
+describe("image create", () => {
+  it("creates image from prompt", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ id: "img1", url: "https://example.com/img1.jpg" });
+    await imageCreateCommand.parseAsync(["node", "cli", "-p", "A blue sky"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/image/create", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Image created"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("image list", () => {
+  it("lists images", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ images: [{ id: "img1", url: "https://example.com/img1.jpg" }] });
+    await imageListCommand.parseAsync(["node", "cli"]);
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("/image/list"), expect.any(Object));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Images"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("image analyze", () => {
+  it("analyzes image", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ analysis: "sky", tags: ["nature", "outdoor"] });
+    await imageAnalyzeCommand.parseAsync(["node", "cli", "-i", "img1"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/image/analyze", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Analysis"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// document management
+// ---------------------------------------------------------------------------
+describe("document create", () => {
+  it("creates document", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ id: "doc1", title: "My Doc" });
+    await documentCreateCommand.parseAsync(["node", "cli", "-t", "My Doc"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/document/create", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Document created"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("document list", () => {
+  it("lists documents", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ documents: [{ id: "doc1", title: "Doc 1" }] });
+    await documentListCommand.parseAsync(["node", "cli"]);
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("/document/list"), expect.any(Object));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Documents"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("document read", () => {
+  it("reads document", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ title: "Doc 1", content: "Content..." });
+    await documentReadCommand.parseAsync(["node", "cli", "-d", "doc1"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/document/read", expect.any(Object));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Doc 1"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// form management
+// ---------------------------------------------------------------------------
+describe("form create", () => {
+  it("creates form", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ id: "form1", title: "Survey" });
+    await formCreateCommand.parseAsync(["node", "cli", "-t", "Survey"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/form/create", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Form created"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("form submit", () => {
+  it("submits form", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ id: "sub1", status: "submitted" });
+    await formSubmitCommand.parseAsync(["node", "cli", "-f", "form1"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/form/submit", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("submitted"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// automation management
+// ---------------------------------------------------------------------------
+describe("automation list", () => {
+  it("lists automations", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ automations: [{ id: "auto1", name: "Auto 1", status: "active" }] });
+    await automationListCommand.parseAsync(["node", "cli"]);
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("/automation/list"), expect.any(Object));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Automations"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("automation create", () => {
+  it("creates automation", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ id: "auto1", name: "My Automation" });
+    await automationCreateCommand.parseAsync(["node", "cli", "-n", "My Automation"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/automation/create", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Automation created"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("automation trigger", () => {
+  it("triggers automation", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ id: "exec1", status: "running" });
+    await automationTriggerCommand.parseAsync(["node", "cli", "-a", "auto1"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/automation/trigger", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("running"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// skill management
+// ---------------------------------------------------------------------------
+describe("skill workspace list", () => {
+  it("lists workspace skills", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ skills: [{ id: "skill1", name: "Research", enabled: true }] });
+    await skillWorkspaceListCommand.parseAsync(["node", "cli"]);
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("/skill/workspace/list"), expect.any(Object));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Skills"));
     consoleSpy.mockRestore();
   });
 });
