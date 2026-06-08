@@ -81,6 +81,23 @@ import { metadata as workspaceModelSettingsWriteMetadata } from "./workspace.mod
 import { metadata as workflowRunMetadata } from "./workflow.run";
 import { metadata as workflowStatusMetadata } from "./workflow.status";
 import { metadata as workflowCancelMetadata } from "./workflow.cancel";
+import { metadata as automationCreateMetadata } from "./automation.create";
+import { metadata as automationListMetadata } from "./automation.list";
+import { metadata as automationTriggerMetadata } from "./automation.trigger";
+import { metadata as conversationChatMetadata } from "./conversation.chat";
+import { metadata as documentCreateMetadata } from "./document.create";
+import { metadata as documentListMetadata } from "./document.list";
+import { metadata as documentReadMetadata } from "./document.read";
+import { metadata as formCreateMetadata } from "./form.create";
+import { metadata as formSubmitMetadata } from "./form.submit";
+import { metadata as imageAnalyzeMetadata } from "./image.analyze";
+import { metadata as imageCreateMetadata } from "./image.create";
+import { metadata as imageListMetadata } from "./image.list";
+import { metadata as skillWorkspaceListMetadata } from "./skill.workspace.list";
+import { metadata as userPreferencesGetMetadata } from "./user.preferences.get";
+import { metadata as userPreferencesUpdateMetadata } from "./user.preferences.update";
+import { metadata as workspaceInviteSendMetadata } from "./workspace.invite.send";
+import { metadata as workspaceMemberListMetadata } from "./workspace.member.list";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -150,6 +167,23 @@ const allToolMetadata = [
   workflowRunMetadata,
   workflowStatusMetadata,
   workflowCancelMetadata,
+  automationCreateMetadata,
+  automationListMetadata,
+  automationTriggerMetadata,
+  conversationChatMetadata,
+  documentCreateMetadata,
+  documentListMetadata,
+  documentReadMetadata,
+  formCreateMetadata,
+  formSubmitMetadata,
+  imageAnalyzeMetadata,
+  imageCreateMetadata,
+  imageListMetadata,
+  skillWorkspaceListMetadata,
+  userPreferencesGetMetadata,
+  userPreferencesUpdateMetadata,
+  workspaceInviteSendMetadata,
+  workspaceMemberListMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────
