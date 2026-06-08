@@ -21,6 +21,7 @@ export default async function SettingsLayout({
     { label: "Model Keys", href: workspace.settings.modelKeys(ctx) },
     { label: "Brand Kits", href: workspace.settings.brandKits(ctx) },
     { label: "Integrations", href: workspace.settings.integrations(ctx) },
+    { label: "Prompts", href: workspace.settings.prompts(ctx) },
   ];
 
   return (
