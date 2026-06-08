@@ -43,7 +43,16 @@ import { notificationsMarkCommand } from "./commands/notifications.mark.js";
 import { pluginListCommand } from "./commands/plugin.list.js";
 import { pluginInstallCommand } from "./commands/plugin.install.js";
 import { pluginUninstallCommand } from "./commands/plugin.uninstall.js";
+import { pluginOrgInstallCommand } from "./commands/plugin.org.install.js";
+import { pluginOrgUninstallCommand } from "./commands/plugin.org.uninstall.js";
+import { pluginCatalogGetCommand } from "./commands/plugin.catalog.get.js";
 import { billingStatusCommand } from "./commands/billing.status.js";
+import { billingCreditsPurchaseCommand } from "./commands/billing.credits.purchase.js";
+import { billingSubscriptionReadCommand } from "./commands/billing.subscription.read.js";
+import { agentMcpListCommand } from "./commands/agent.mcp.list.js";
+import { agentSkillListCommand } from "./commands/agent.skill.list.js";
+import { agentToolListCommand } from "./commands/agent.tool.list.js";
+import { orgMemberRoleChangeCommand } from "./commands/org.member.role.change.js";
 
 import * as apiClient from "./lib/api-client.js";
 import * as config from "./lib/config.js";
@@ -697,5 +706,173 @@ describe("billing status", () => {
     await expect(() => billingStatusCommand.parseAsync(["node", "cli"])).rejects.toThrow("exit");
     consoleSpy.mockRestore();
     exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// agent mcp list
+// ---------------------------------------------------------------------------
+describe("agent mcp list", () => {
+  it("lists MCP servers successfully", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      servers: [{ id: "mcp1", name: "claude", status: "active" }],
+    });
+
+    await agentMcpListCommand.parseAsync(["node", "cli"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/agent/mcp/list?", expect.objectContaining({ method: "GET" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("MCP Servers"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// agent skill list
+// ---------------------------------------------------------------------------
+describe("agent skill list", () => {
+  it("lists agent skills successfully", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      skills: [{ id: "skill1", name: "memory", description: "Memory management" }],
+    });
+
+    await agentSkillListCommand.parseAsync(["node", "cli"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/agent/skill/list?", expect.objectContaining({ method: "GET" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Agent Skills"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// agent tool list
+// ---------------------------------------------------------------------------
+describe("agent tool list", () => {
+  it("lists agent tools successfully", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      tools: [{ id: "tool1", name: "search", description: "Search capability" }],
+    });
+
+    await agentToolListCommand.parseAsync(["node", "cli"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/agent/tool/list?", expect.objectContaining({ method: "GET" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Agent Tools"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// billing credits purchase
+// ---------------------------------------------------------------------------
+describe("billing credits purchase", () => {
+  it("purchases credits successfully", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      credits: 100,
+      totalCost: 10,
+    });
+
+    await billingCreditsPurchaseCommand.parseAsync(["node", "cli", "-a", "100"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/billing/credits/purchase", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Purchase initiated"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// billing subscription read
+// ---------------------------------------------------------------------------
+describe("billing subscription read", () => {
+  it("reads subscription details successfully", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      subscription: { id: "sub1", plan: "scale", status: "active" },
+    });
+
+    await billingSubscriptionReadCommand.parseAsync(["node", "cli"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/billing/subscription/read?", expect.objectContaining({ method: "GET" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Current Subscription"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plugin org install
+// ---------------------------------------------------------------------------
+describe("plugin org install", () => {
+  it("installs plugin for organization", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      id: "plugin1",
+      name: "github",
+      status: "installed",
+    });
+
+    await pluginOrgInstallCommand.parseAsync(["node", "cli", "-n", "github"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/org/install", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Plugin installed"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plugin org uninstall
+// ---------------------------------------------------------------------------
+describe("plugin org uninstall", () => {
+  it("uninstalls plugin from organization", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      id: "plugin1",
+      status: "uninstalled",
+    });
+
+    await pluginOrgUninstallCommand.parseAsync(["node", "cli", "-p", "plugin1"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/org/uninstall", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Plugin uninstalled"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plugin catalog get
+// ---------------------------------------------------------------------------
+describe("plugin catalog get", () => {
+  it("browses plugin catalog", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      plugins: [{ id: "p1", name: "github", description: "GitHub integration", category: "vcs" }],
+    });
+
+    await pluginCatalogGetCommand.parseAsync(["node", "cli"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/catalog/get?", expect.objectContaining({ method: "GET" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Available Plugins"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// org member role change
+// ---------------------------------------------------------------------------
+describe("org member role change", () => {
+  it("changes member role successfully", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      userId: "user1",
+      role: "admin",
+      updated: true,
+    });
+
+    await orgMemberRoleChangeCommand.parseAsync(["node", "cli", "-u", "user1", "-r", "admin"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/org/member/role-change", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Role updated"));
+    consoleSpy.mockRestore();
   });
 });

@@ -24,7 +24,16 @@ import { notificationsMarkCommand } from "./commands/notifications.mark.js";
 import { pluginListCommand } from "./commands/plugin.list.js";
 import { pluginInstallCommand } from "./commands/plugin.install.js";
 import { pluginUninstallCommand } from "./commands/plugin.uninstall.js";
+import { pluginOrgInstallCommand } from "./commands/plugin.org.install.js";
+import { pluginOrgUninstallCommand } from "./commands/plugin.org.uninstall.js";
+import { pluginCatalogGetCommand } from "./commands/plugin.catalog.get.js";
 import { billingStatusCommand } from "./commands/billing.status.js";
+import { billingCreditsPurchaseCommand } from "./commands/billing.credits.purchase.js";
+import { billingSubscriptionReadCommand } from "./commands/billing.subscription.read.js";
+import { agentMcpListCommand } from "./commands/agent.mcp.list.js";
+import { agentSkillListCommand } from "./commands/agent.skill.list.js";
+import { agentToolListCommand } from "./commands/agent.tool.list.js";
+import { orgMemberRoleChangeCommand } from "./commands/org.member.role.change.js";
 
 const program = new Command();
 
@@ -54,6 +63,7 @@ org.addCommand(orgCreateCommand);
 const orgMember = org.command("member").description("Org member management");
 orgMember.addCommand(orgMemberAddCommand);
 orgMember.addCommand(orgMemberRemoveCommand);
+orgMember.addCommand(orgMemberRoleChangeCommand);
 
 // workspace
 const workspace = program.command("workspace").description("Workspace commands");
@@ -86,10 +96,26 @@ const plugin = program.command("plugin").description("Plugin marketplace command
 plugin.addCommand(pluginListCommand);
 plugin.addCommand(pluginInstallCommand);
 plugin.addCommand(pluginUninstallCommand);
+const pluginOrg = plugin.command("org").description("Plugin organization management");
+pluginOrg.addCommand(pluginOrgInstallCommand);
+pluginOrg.addCommand(pluginOrgUninstallCommand);
+const pluginCatalog = plugin.command("catalog").description("Plugin catalog");
+pluginCatalog.addCommand(pluginCatalogGetCommand);
 
 // billing
 const billing = program.command("billing").description("Billing and subscription commands");
 billing.addCommand(billingStatusCommand);
+billing.addCommand(billingCreditsPurchaseCommand);
+billing.addCommand(billingSubscriptionReadCommand);
+
+// agent
+const agent = program.command("agent").description("Agent commands");
+const agentMcp = agent.command("mcp").description("MCP server management");
+agentMcp.addCommand(agentMcpListCommand);
+const agentSkill = agent.command("skill").description("Agent skill management");
+agentSkill.addCommand(agentSkillListCommand);
+const agentTool = agent.command("tool").description("Agent tool management");
+agentTool.addCommand(agentToolListCommand);
 
 program.parse(process.argv);
 
