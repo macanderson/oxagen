@@ -22,7 +22,13 @@ export const apiKeyCreateCommand = new Command("create")
       });
       const secret = data.key ?? data.token;
       console.log(`✓ API key created: ${data.id ?? "unknown"}`);
-      if (secret) console.log(`  Key: ${secret}`);
+      if (secret) {
+        // Only show the full secret in interactive TTY; redact in CI/pipes to prevent credential leakage to logs.
+        const displaySecret = process.stdout.isTTY
+          ? secret
+          : `${secret.slice(0, 4)}...${secret.slice(-4)}`;
+        console.log(`  Key: ${displaySecret}`);
+      }
     } catch (err) {
       console.error(`Error: ${String(err)}`);
       process.exit(1);

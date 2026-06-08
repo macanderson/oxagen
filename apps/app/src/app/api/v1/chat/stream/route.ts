@@ -1,73 +1,30 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import {
   streamAgentReply,
   selectModel,
-  selectImageModel,
-  imageTierModelId,
-  videoTierModelId,
-  generateImageFor,
-  generateObjectFor,
   supportsReasoning,
   modelIdOf,
   loadEffectiveModelDefaults,
 } from "@oxagen/ai";
 import { materializeTools, readWorkspaceContext, injectContext, buildChatSystemPrompt } from "@oxagen/agent";
-import { persistGeneratedAsset, createPendingGeneratedAsset } from "@oxagen/handlers";
-import { inngest } from "@oxagen/inngest-functions/client";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { randomUUID } from "node:crypto";
 import type { ModelMessage } from "ai";
-import type {
-  AssistantContentBlock,
-  RenderDirective,
-  StreamEvent,
-} from "@/components/chat/stream-event-types";
+import type { StreamEvent } from "@/components/chat/stream-event-types";
+import { autoTitleConversation } from "./auto-title";
+import { streamMediaGeneration } from "./media-generation";
+import { translateAgentStream } from "./translate-stream";
 
 // Side-effect imports: bind every handler into the shared kernel BEFORE
 // materializeTools runs so invoke() can resolve both agent.* and all
 // non-agent.* agent-surface capabilities (form.fill, svg.generate, etc.).
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
-
-/**
- * Concrete shapes for the `fullStream` parts we process. We iterate
- * `result.fullStream as AsyncIterable<unknown>` and type-narrow each part
- * via `isStreamPart` rather than relying on the SDK's
- * `TextStreamPart<ToolSet>` generic, which does not resolve the `tool-result`
- * arm to a concrete narrowable shape when TOOLS is the wide `ToolSet` alias.
- */
-interface TextDeltaPart { type: "text-delta"; text: string }
-interface ReasoningDeltaPart { type: "reasoning-delta"; id: string; text: string }
-interface ReasoningBoundaryPart { type: "reasoning-start" | "reasoning-end"; id: string }
-interface ToolInputStartPart { type: "tool-input-start"; id: string; toolName: string }
-interface ToolInputDeltaPart { type: "tool-input-delta"; id: string; delta: string }
-interface ToolCallPart { type: "tool-call"; toolCallId: string; toolName: string; input: unknown }
-interface ToolResultPart { type: "tool-result"; toolCallId: string; toolName: string; output: unknown }
-interface ToolErrorPart { type: "tool-error"; toolCallId: string; toolName: string; error: unknown }
-interface FinishPart { type: "finish"; totalUsage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }
-
-function partType(p: unknown): string | undefined {
-  return typeof p === "object" && p !== null && "type" in p
-    ? String((p as { type: unknown }).type)
-    : undefined;
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
-
-function errorMessageOf(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : typeof error === "string"
-      ? error
-      : "Tool execution failed";
-}
 
 const BodySchema = z.object({
   content: z.string().min(1),
@@ -97,60 +54,10 @@ const BodySchema = z.object({
   newConversation: z.boolean().default(false),
 });
 
-// Generates a short title for a newly created conversation (fire-and-forget).
-// Uses the fast (Haiku) model since title generation is pure infrastructure.
-// Guards against overwriting an already-set title via isNull predicate.
-async function autoTitleConversation(opts: {
-  conversationId: string;
-  firstUserMessage: string;
-  orgId: string;
-  workspaceId: string;
-  requestId: string;
-}): Promise<void> {
-  try {
-    const { object } = await generateObjectFor({
-      schema: z.object({ title: z.string().max(80) }),
-      model: selectModel({ tier: "fast" }),
-      system:
-        "You are a conversation titler. Respond with a concise title (≤6 words, Title Case, no trailing punctuation) that captures the main topic of the user message. Return only the title.",
-      prompt: opts.firstUserMessage.slice(0, 500),
-      temperature: 0.3,
-      telemetry: {
-        orgId: opts.orgId,
-        workspaceId: opts.workspaceId,
-        surface: "app",
-        messageId: opts.requestId,
-      },
-    });
-
-    const title = object.title?.trim();
-    if (!title) return;
-
-    await runInTenantScope(
-      { orgId: opts.orgId, workspaceId: opts.workspaceId },
-      () =>
-        withTenantDb((tx) =>
-          tx
-            .update(schema.conversations)
-            .set({ title, updatedAt: new Date() })
-            .where(
-              and(
-                eq(schema.conversations.id, opts.conversationId),
-                isNull(schema.conversations.title),
-              ),
-            ),
-        ),
-    );
-  } catch {
-    // Best-effort — title generation failure must never affect the chat turn.
-  }
-}
-
-// Maximum number of prior messages to include in the context window.
-// Keeps prompt size bounded while preserving enough history for coherent
-// multi-turn conversations. The newest HISTORY_LIMIT messages are taken
-// (ORDER BY createdAt DESC + LIMIT, then reversed in JS so the model sees
-// them chronologically oldest→newest).
+// Maximum number of prior messages to include in the context window. Keeps
+// prompt size bounded while preserving enough history for coherent multi-turn
+// conversations. The newest HISTORY_LIMIT messages are taken (DESC + LIMIT,
+// then reversed so the model sees them chronologically oldest→newest).
 const HISTORY_LIMIT = 50;
 
 // Valid CoreMessage roles. Guards against malformed DB rows reaching the SDK.
@@ -158,21 +65,18 @@ const VALID_ROLES = new Set(["user", "assistant", "system"]);
 
 // POST /api/v1/chat/stream
 //
-// Streams the agent reply as text/event-stream with StreamEvent payloads.
-// Each SSE line has the form:
-//   data: <JSON-encoded StreamEvent>\n\n
-// followed by a terminal sentinel:
-//   event: done\ndata: [DONE]\n\n
+// Streams the agent reply as text/event-stream with StreamEvent payloads. Each
+// SSE line has the form `data: <JSON StreamEvent>\n\n` followed by a terminal
+// `event: done\ndata: [DONE]\n\n` sentinel.
 //
-// The Playwright e2e mock (`e2e/helpers/agent-stream-mock.ts`) intercepts
-// this URL and returns a deterministic scripted response so no LLM call
-// is made during e2e runs.
+// The Playwright e2e mock (`e2e/helpers/agent-stream-mock.ts`) intercepts this
+// URL and returns a deterministic scripted response so no LLM call is made
+// during e2e runs.
 //
-// This route is the SINGLE LLM caller per turn (OXA-1509). The server
-// action (`sendMessageAction`) handles Postgres persistence only — it no
-// longer calls the model. History is loaded here directly from the
-// messages table, scoped to the resolved workspace and ordered
-// deterministically by createdAt.
+// This route is the SINGLE LLM caller per turn (OXA-1509). The server action
+// (`sendMessageAction`) handles Postgres persistence only — it no longer calls
+// the model. History is loaded here directly from the messages table, scoped to
+// the resolved workspace and ordered deterministically by createdAt.
 export async function POST(request: NextRequest): Promise<Response> {
   // Auth: reject unauthenticated requests before consuming the body.
   let session: Awaited<ReturnType<typeof getSessionOrRedirect>>;
@@ -216,9 +120,9 @@ export async function POST(request: NextRequest): Promise<Response> {
   let workspace: Awaited<ReturnType<typeof resolveWorkspace>>;
   try {
     tenant = await resolveOrg(orgSlug);
-    // Membership gate: any authenticated user can submit a request to any
-    // org slug — assert they are actually a member before we touch any
-    // org-scoped data (IDOR guard).
+    // Membership gate: any authenticated user can submit a request to any org
+    // slug — assert they are actually a member before we touch any org-scoped
+    // data (IDOR guard).
     await assertOrgMember(tenant.id, session.user.id);
     workspace = await resolveWorkspace(tenant.id, workspaceSlug);
   } catch {
@@ -228,12 +132,11 @@ export async function POST(request: NextRequest): Promise<Response> {
   // Resolve the language model for this turn from the picker selection. An
   // explicit gateway model id wins; otherwise the white-labeled tier; otherwise
   // fall back to the effective workspace/user defaults (safety net for direct
-  // API callers that omit both model and tier); finally selectModel() falls
-  // back to the balanced-tier system default.
+  // API callers that omit both); finally selectModel() falls back to the
+  // balanced-tier system default.
   let resolvedModel = model;
   let resolvedTier = tier;
   if (!resolvedModel && !resolvedTier) {
-    // Neither supplied — look up effective defaults for this session.
     // Best-effort: ignore errors so a missing prefs row never breaks the turn.
     try {
       const defaults = await loadEffectiveModelDefaults({
@@ -251,23 +154,15 @@ export async function POST(request: NextRequest): Promise<Response> {
     ...(resolvedModel ? { model: resolvedModel } : resolvedTier ? { tier: resolvedTier } : {}),
   });
 
-  // Reasoning effort is only valid on reasoning-capable models. The picker
-  // already gates the control, but re-check server-side against the catalog
-  // (keyed by the resolved gateway model id) so a stray `effort` for a
-  // non-reasoning model is dropped rather than forwarded and rejected upstream.
-  const turnEffort =
-    effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
+  // Reasoning effort is only valid on reasoning-capable models. Re-check
+  // server-side against the catalog (keyed by the resolved gateway model id) so
+  // a stray `effort` for a non-reasoning model is dropped rather than forwarded.
+  const turnEffort = effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
 
   // ── Media-generation branch ───────────────────────────────────────────────
-  //
   // When the composer requests image/video generation, this turn does NOT run
-  // the text agent. It resolves the media model with the precedence:
-  //   1. Explicit per-turn `mediaModel` from the request (user picked one).
-  //   2. Effective workspace/user default for the dimension (image or video).
-  //   3. Tier-derived default (imageTierModelId / videoTierModelId).
-  //
-  // The effective-defaults lookup mirrors the text-path pattern (best-effort,
-  // errors swallowed so a missing prefs row never crashes the turn).
+  // the text agent. Resolve the media model (explicit per-turn → effective
+  // workspace/user default → tier default inside streamMediaGeneration).
   if (generate) {
     let resolvedMediaModel = mediaModel;
     if (!resolvedMediaModel) {
@@ -284,7 +179,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         // Fall through to tier default inside streamMediaGeneration.
       }
     }
-    const mediaResponse = streamMediaGeneration({
+    return streamMediaGeneration({
       kind: generate,
       prompt: content,
       mediaModel: resolvedMediaModel,
@@ -298,28 +193,16 @@ export async function POST(request: NextRequest): Promise<Response> {
         executionStepId: parentMessageId ?? randomUUID(),
       },
     });
-    return mediaResponse;
   }
 
-  // Load full conversation history from Postgres so the model has context
-  // for every prior turn. Without this, the model has no memory of prior
-  // messages in the conversation (SSE amnesia, OXA-1509).
+  // Load conversation history from Postgres so the model has context for every
+  // prior turn (without this the model has SSE amnesia, OXA-1509).
   //
-  // Strategy:
-  //   1. If conversationId is provided, load the most-recent HISTORY_LIMIT
-  //      rows (DESC + LIMIT) scoped to the resolved workspace, then reverse
-  //      to chronological order. The current user message may not yet be
-  //      persisted (sendMessageAction runs concurrently), so we always
-  //      append it explicitly at the end.
-  //   2. If no conversationId yet (first message), skip the DB read — the
-  //      coreMessages array will contain only the current user message.
-  //
-  // Knowledge-graph context injection: readWorkspaceContext is a no-op
-  // seam today (returns []) when KNOWLEDGE_GRAPH_ENABLED is not set or
-  // Neo4j is not configured. injectContext prepends a system message
-  // from blocks only when blocks is non-empty — also a no-op today.
-  // Both functions exist so the wiring is in place for the next phase.
-  const blocks = await readWorkspaceContext({
+  // Knowledge-graph context injection: readWorkspaceContext is a no-op seam
+  // today (returns []) when KNOWLEDGE_GRAPH_ENABLED is not set or Neo4j is not
+  // configured; injectContext prepends a system message only when blocks is
+  // non-empty. Both exist so the wiring is in place for the next phase.
+  const contextBlocks = await readWorkspaceContext({
     orgId: tenant.id,
     workspaceId: workspace.id,
     userId: session.user.id,
@@ -327,17 +210,13 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   let historyMessages: ModelMessage[] = [];
   if (conversationId) {
-    // Fetch the most-recent HISTORY_LIMIT rows by ordering DESC + LIMIT,
-    // then reverse in JS so they end up chronological (oldest→newest). This
-    // keeps the prompt size predictable while always retaining recent context.
+    // Fetch the most-recent HISTORY_LIMIT rows (DESC + LIMIT), then reverse in
+    // JS so they end up chronological (oldest→newest). ASC + LIMIT would return
+    // the OLDEST N rows and drop all recent context.
     //
-    // Tenant isolation: this read is wrapped in runInTenantScope + withTenantDb
-    // so the Postgres RLS policies (spec §6.3, OXA-1515) enforce isolation at
-    // the DB layer. The eq(orgId) / eq(workspaceId) predicates below are kept
-    // as belt-and-suspenders planner hints (decided permanently, spec §8 §15.3).
-    // This supersedes the interim defense-in-depth comment that previously lived
-    // here — RLS is now the load-bearing boundary once TENANT_RLS_ENFORCEMENT_ENABLED
-    // is flipped; the manual predicates remain non-load-bearing and redundant.
+    // Tenant isolation: wrapped in runInTenantScope + withTenantDb so the
+    // Postgres RLS policies (OXA-1515) enforce isolation at the DB layer. The
+    // eq(orgId)/eq(workspaceId) predicates are belt-and-suspenders planner hints.
     const rows = await runInTenantScope(
       { orgId: tenant.id, workspaceId: workspace.id },
       () =>
@@ -355,9 +234,6 @@ export async function POST(request: NextRequest): Promise<Response> {
                 eq(schema.messages.workspaceId, workspace.id),
               ),
             )
-            // Take the most-recent HISTORY_LIMIT rows (DESC + LIMIT), then reverse to
-            // chronological order so the model reads them oldest→newest. Ordering ASC
-            // with LIMIT would return the OLDEST N rows and drop all recent context.
             .orderBy(desc(schema.messages.createdAt))
             .limit(HISTORY_LIMIT),
         ),
@@ -369,30 +245,26 @@ export async function POST(request: NextRequest): Promise<Response> {
       .reverse();
   }
 
-  // Append the current user message. sendMessageAction persists this same
-  // message concurrently, so depending on which commits first it may ALREADY
-  // be the trailing row in `historyMessages`. Only append it when it isn't
-  // already there, otherwise the model receives the current turn twice (once
-  // from history, once from the explicit append) in the same request.
+  // Append the current user message unless sendMessageAction (running
+  // concurrently) already persisted it as the trailing row — otherwise the
+  // model would receive the current turn twice in the same request.
   const lastHistory = historyMessages[historyMessages.length - 1];
   const currentAlreadyInHistory =
-    lastHistory !== undefined &&
-    lastHistory.role === "user" &&
-    lastHistory.content === content;
+    lastHistory !== undefined && lastHistory.role === "user" && lastHistory.content === content;
 
   const messagesWithCurrent: ModelMessage[] = currentAlreadyInHistory
     ? historyMessages
     : [...historyMessages, { role: "user", content }];
 
   // Inject knowledge-graph context as a leading system message (no-op when
-  // blocks is empty, which is the default until Neo4j is configured).
-  const coreMessages: ModelMessage[] = injectContext(messagesWithCurrent, blocks);
+  // blocks is empty, the default until Neo4j is configured).
+  const coreMessages: ModelMessage[] = injectContext(messagesWithCurrent, contextBlocks);
 
   const requestId = randomUUID();
 
-  // Extract client IP for IAM ip_ranges condition evaluation.
-  // x-forwarded-for is set by Vercel and Next.js edge; take the first hop
-  // (leftmost = original client). Falls back to x-real-ip, then null.
+  // Extract client IP for IAM ip_ranges condition evaluation. x-forwarded-for
+  // is set by Vercel/Next.js edge; take the first hop (leftmost = original
+  // client), fall back to x-real-ip, then null.
   // SECURITY: used only for IAM condition evaluation, never authentication.
   const xffRaw = request.headers.get("x-forwarded-for");
   const clientIp: string | null =
@@ -409,19 +281,10 @@ export async function POST(request: NextRequest): Promise<Response> {
       }
 
       try {
-        // materializeTools is called inside start() so the emit() function is
-        // already live when onApprovalRequired fires. Tools are built here and
-        // used immediately below — no async gap between build and use.
-        //
-        // onApprovalRequired: called synchronously inside each tool's execute()
-        // closure, BEFORE waitForApproval() blocks the execution. This emits
-        // the `approval-required` SSE event to the client so the approval card
-        // renders while the stream is paused waiting for user decision.
-        //
-        // runInTenantScope is required here: contributeMcpTools (called inside
-        // materializeTools) reads workspace MCP server listings via withTenantDb,
-        // which requires an active ALS tenant scope. The outer route does not
-        // establish one before entering the ReadableStream callback.
+        // materializeTools is called inside start() so emit() is already live
+        // when onApprovalRequired fires. runInTenantScope is required:
+        // contributeMcpTools reads workspace MCP server listings via
+        // withTenantDb, which needs an active ALS tenant scope.
         const { tools: agentTools, nameMap: toolNameMap } = await runInTenantScope(
           { orgId: tenant.id, workspaceId: workspace.id },
           () =>
@@ -470,278 +333,20 @@ export async function POST(request: NextRequest): Promise<Response> {
           },
         });
 
-        // Iterate result.fullStream so we see every event type:
-        //   text-delta   → emit "text"
-        //   tool-call    → emit "tool-call-start"
-        //   tool-result  → emit "tool-call-end" + optional "component" (render directive)
-        //   finish       → emit "usage"
-        //
-        // We iterate as AsyncIterable<unknown> and use partType() to narrow
-        // because the SDK's TextStreamPart<ToolSet> generic does not produce a
-        // concrete discriminated union when TOOLS is the wide ToolSet alias —
-        // the tool-result arm becomes an unresolvable intersection.
-        const toolStartedAt: Record<string, number> = {};
-        // Accumulate the assistant's text so we can persist the full reply
-        // (content column + next turn's history context).
-        let assistantText = "";
+        // Consume fullStream: emit SSE events + accumulate the ordered assistant
+        // content blocks for refresh re-render and history.
+        const { assistantText, persistedBlocks } = await translateAgentStream({
+          fullStream: result.fullStream as AsyncIterable<unknown>,
+          requestId,
+          toolNameMap,
+          orgSlug,
+          workspaceSlug,
+          emit,
+        });
 
-        // ── Ordered content-block accumulator ────────────────────────────────
-        // Build the assistant message's content_blocks in true stream order so
-        // a page refresh re-renders the exact chain of thought/action (reasoning
-        // → tool calls → text), not just the final text. `currentText` buffers
-        // contiguous text deltas; flushText() commits them as a block whenever a
-        // structural event (reasoning/tool/component) interrupts the prose.
-        const blocks: AssistantContentBlock[] = [];
-        let currentText = "";
-        const flushText = (): void => {
-          if (currentText.length > 0) {
-            blocks.push({ type: "text", text: currentText });
-            currentText = "";
-          }
-        };
-        // Index maps so terminal events can update the block pushed earlier.
-        const reasoningBlockIndex: Record<string, number> = {};
-        const reasoningStartedAt: Record<string, number> = {};
-        const toolBlockIndex: Record<string, number> = {};
-        // Multi-step boundary counter (start-step/finish-step).
-        let stepIndex = -1;
-
-        for await (const raw of result.fullStream as AsyncIterable<unknown>) {
-          const pType = partType(raw);
-          if (pType === "text-delta") {
-            const part = raw as TextDeltaPart;
-            assistantText += part.text;
-            currentText += part.text;
-            emit({ type: "text", messageId: requestId, text: part.text });
-          } else if (pType === "reasoning-start") {
-            const part = raw as ReasoningBoundaryPart;
-            flushText();
-            reasoningStartedAt[part.id] = Date.now();
-            // Reserve the block slot now so reasoning keeps its place in order.
-            reasoningBlockIndex[part.id] = blocks.length;
-            blocks.push({ type: "reasoning", reasoningId: part.id, text: "" });
-            emit({ type: "reasoning-start", messageId: requestId, reasoningId: part.id });
-          } else if (pType === "reasoning-delta") {
-            const part = raw as ReasoningDeltaPart;
-            const idx = reasoningBlockIndex[part.id];
-            if (idx !== undefined) {
-              const blk = blocks[idx];
-              if (blk && blk.type === "reasoning") blk.text += part.text;
-            }
-            emit({ type: "reasoning-delta", reasoningId: part.id, text: part.text });
-          } else if (pType === "reasoning-end") {
-            const part = raw as ReasoningBoundaryPart;
-            const durationMs =
-              reasoningStartedAt[part.id] !== undefined
-                ? Date.now() - (reasoningStartedAt[part.id] as number)
-                : 0;
-            const idx = reasoningBlockIndex[part.id];
-            if (idx !== undefined) {
-              const blk = blocks[idx];
-              if (blk && blk.type === "reasoning") blk.durationMs = durationMs;
-            }
-            emit({ type: "reasoning-end", reasoningId: part.id, durationMs });
-          } else if (pType === "start-step") {
-            stepIndex += 1;
-            flushText();
-            emit({ type: "step-start", messageId: requestId, stepIndex });
-          } else if (pType === "finish-step") {
-            if (stepIndex >= 0) emit({ type: "step-finish", stepIndex });
-          } else if (pType === "tool-input-start") {
-            const part = raw as ToolInputStartPart;
-            flushText();
-            emit({
-              type: "tool-input-start",
-              messageId: requestId,
-              toolCallId: part.id,
-              capability: toolNameMap[part.toolName] ?? part.toolName,
-            });
-          } else if (pType === "tool-input-delta") {
-            const part = raw as ToolInputDeltaPart;
-            emit({ type: "tool-input-delta", toolCallId: part.id, delta: part.delta });
-          } else if (pType === "tool-call") {
-            const part = raw as ToolCallPart;
-            toolStartedAt[part.toolCallId] = Date.now();
-            // Translate the model-safe tool name back to the real dotted
-            // capability name so the UI labels and routes (e.g.
-            // agent.code.execute → CodeExecuteCard) on the real name.
-            const capability = toolNameMap[part.toolName] ?? part.toolName;
-            flushText();
-            // Reserve a terminal block; tool-result/tool-error fills it in.
-            toolBlockIndex[part.toolCallId] = blocks.length;
-            if (capability === "agent.code.execute") {
-              const inp = isRecord(part.input) ? part.input : {};
-              blocks.push({
-                type: "code-execute",
-                toolCallId: part.toolCallId,
-                language: typeof inp.language === "string" ? inp.language : "node",
-                code: typeof inp.code === "string" ? inp.code : "",
-                status: "running",
-              });
-            } else {
-              blocks.push({
-                type: "tool-call",
-                toolCallId: part.toolCallId,
-                capability,
-                inputPreview: part.input,
-                riskLevel: "low",
-                status: "running",
-              });
-            }
-            emit({
-              type: "tool-call-start",
-              messageId: requestId,
-              toolCallId: part.toolCallId,
-              capability,
-              inputPreview: part.input,
-              // Default risk level; capabilities may override via tool metadata.
-              riskLevel: "low",
-            });
-          } else if (pType === "tool-result") {
-            const part = raw as ToolResultPart;
-            const durationMs =
-              toolStartedAt[part.toolCallId] !== undefined
-                ? Date.now() - (toolStartedAt[part.toolCallId] as number)
-                : 0;
-            // Update the terminal block with the result.
-            const idx = toolBlockIndex[part.toolCallId];
-            if (idx !== undefined) {
-              const blk = blocks[idx];
-              if (blk && blk.type === "tool-call") {
-                blk.status = "completed";
-                blk.output = part.output;
-                blk.durationMs = durationMs;
-              } else if (blk && blk.type === "code-execute") {
-                const out = isRecord(part.output) ? part.output : {};
-                blk.status = "completed";
-                if (typeof out.stdout === "string") blk.stdout = out.stdout;
-                if (typeof out.stderr === "string") blk.stderr = out.stderr;
-                if (typeof out.exitCode === "number") blk.exitCode = out.exitCode;
-                if (typeof out.oomKilled === "boolean") blk.oomKilled = out.oomKilled;
-                blk.durationMs = durationMs;
-              }
-            }
-            emit({
-              type: "tool-call-end",
-              toolCallId: part.toolCallId,
-              status: "completed",
-              output: part.output,
-              durationMs,
-            });
-            // If the tool result carries a render directive, emit a "component"
-            // event so the client renders the typed React component inline.
-            const rawResult = part.output;
-            if (rawResult !== null && rawResult !== undefined && typeof rawResult === "object") {
-              const render = (rawResult as Record<string, unknown>)["render"] as
-                | RenderDirective
-                | undefined;
-              if (
-                render !== undefined &&
-                typeof render.componentId === "string" &&
-                render.props !== null &&
-                typeof render.props === "object"
-              ) {
-                // Merge org+workspace slugs into render props so that any
-                // registry component that needs to call a scoped server action
-                // (e.g. make-video-form → videoGenerateAction) has real tenant
-                // context and does not fall back to a stub / empty context.
-                const props = {
-                  ...(render.props as Record<string, unknown>),
-                  orgSlug,
-                  workspaceSlug,
-                };
-                blocks.push({
-                  type: "component",
-                  toolCallId: part.toolCallId,
-                  componentId: render.componentId,
-                  props,
-                });
-                emit({
-                  type: "component",
-                  toolCallId: part.toolCallId,
-                  componentId: render.componentId,
-                  props,
-                });
-              }
-            }
-          } else if (pType === "tool-error") {
-            // A tool whose execute() THREW surfaces as a `tool-error` part (not
-            // `tool-result`). Without this arm the client's tool card would spin
-            // "running" forever. Emit a failed tool-call-end and mark the block.
-            const part = raw as ToolErrorPart;
-            const durationMs =
-              toolStartedAt[part.toolCallId] !== undefined
-                ? Date.now() - (toolStartedAt[part.toolCallId] as number)
-                : 0;
-            const errorReason = errorMessageOf(part.error);
-            const idx = toolBlockIndex[part.toolCallId];
-            if (idx !== undefined) {
-              const blk = blocks[idx];
-              if (blk && (blk.type === "tool-call" || blk.type === "code-execute")) {
-                blk.status = "failed";
-                blk.durationMs = durationMs;
-                if (blk.type === "tool-call") blk.errorReason = errorReason;
-                else blk.stderr = (blk.stderr ?? "") + errorReason;
-              }
-            }
-            emit({
-              type: "tool-call-end",
-              toolCallId: part.toolCallId,
-              status: "failed",
-              errorReason,
-              durationMs,
-            });
-          } else if (pType === "finish") {
-            const part = raw as FinishPart;
-            // Emit usage so the client can show credits consumed this turn.
-            emit({
-              type: "usage",
-              usage: {
-                promptTokens: part.totalUsage.inputTokens ?? 0,
-                completionTokens: part.totalUsage.outputTokens ?? 0,
-                totalTokens: part.totalUsage.totalTokens ?? 0,
-              },
-            });
-          } else if (pType === "error") {
-            // streamText surfaces provider/gateway failures (e.g. a 400 from a
-            // bad request, auth, or rate limit) as an `error` PART rather than
-            // throwing — iterating fullStream never rejects. If we don't
-            // forward it the turn produces zero output and the user sees
-            // nothing at all. Surface it as a text event (same shape the outer
-            // catch uses) so the failure is visible instead of silent.
-            const errVal = (raw as { error?: unknown }).error;
-            const message =
-              errVal instanceof Error
-                ? errVal.message
-                : typeof errVal === "string"
-                  ? errVal
-                  : "Stream error";
-            // Show the failure live but do NOT fold it into assistantText —
-            // persisting "[Error: …]" as the assistant reply would feed the
-            // error back into the next turn's history context.
-            emit({ type: "text", messageId: requestId, text: `\n\n[Error: ${message}]` });
-          }
-          // tool-input-end, source, raw, abort — intentionally not forwarded.
-        }
-        // Commit any trailing prose as the final text block.
-        flushText();
-        // Keep reasoning blocks that actually happened — either they carry
-        // summary text (OpenAI/Google) or they completed with a duration
-        // (Anthropic adaptive thinking redacts the content but still reports the
-        // time spent, which the ReasoningCard renders as a "Thought for Xs"
-        // pill). Drop only orphan reasoning-start blocks that never ended.
-        const persistedBlocks = blocks.filter(
-          (b) =>
-            b.type !== "reasoning" || b.text.length > 0 || b.durationMs !== undefined,
-        );
-
-        // Persist the assistant reply so it survives a page refresh and is
-        // included in the next turn's history (OXA-1509). sendMessageAction
-        // already wrote the user message and resolved the conversation; this
-        // is the matching assistant row, threaded under the user message.
-        // Token usage is metered separately by streamAgentReply.onFinish.
-        // Best-effort: a DB failure here must NOT corrupt the SSE response the
-        // client already consumed, so it is isolated and only logged.
+        // Persist the assistant reply so it survives a refresh and is included
+        // in the next turn's history (OXA-1509). Best-effort: a DB failure here
+        // must NOT corrupt the SSE response the client already consumed.
         if (conversationId && (assistantText.length > 0 || persistedBlocks.length > 0)) {
           try {
             await runInTenantScope(
@@ -769,8 +374,8 @@ export async function POST(request: NextRequest): Promise<Response> {
                     })
                     .returning({ id: schema.messages.id });
                   if (assistantMsg) {
-                    // Advance the conversation's active leaf to the assistant reply
-                    // so the next turn threads from here.
+                    // Advance the conversation's active leaf to the assistant
+                    // reply so the next turn threads from here.
                     await tx
                       .update(schema.conversations)
                       .set({ activeLeafMessageId: assistantMsg.id, updatedAt: new Date() })
@@ -784,8 +389,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         }
 
         // Auto-title new conversations using the fast model (fire-and-forget).
-        // Only fires on the first turn; the isNull predicate in autoTitleConversation
-        // makes concurrent calls idempotent.
+        // Only fires on the first turn; the isNull predicate in
+        // autoTitleConversation makes concurrent calls idempotent.
         if (newConversation && conversationId) {
           void autoTitleConversation({
             conversationId,
@@ -799,166 +404,6 @@ export async function POST(request: NextRequest): Promise<Response> {
         // Surface stream errors as a text event so the client can show them.
         const message = err instanceof Error ? err.message : "Stream error";
         emit({ type: "text", messageId: requestId, text: `\n\n[Error: ${message}]` });
-      } finally {
-        try {
-          controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
-        } catch {
-          // Controller may already be errored.
-        }
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(responseStream, {
-    headers: {
-      "content-type": "text/event-stream",
-      "cache-control": "no-cache",
-      connection: "keep-alive",
-    },
-  });
-}
-
-// Stream a media-generation turn as text/event-stream, mirroring the text path's
-// SSE framing (data: <StreamEvent>\n\n … event: done\ndata: [DONE]\n\n) so the
-// client's `useToolStream` consumes both paths identically.
-//
-//  - image: resolve the media model (explicit id or basic/advanced tier), call
-//    the @oxagen/ai image chokepoint (telemetry + billing live inside it), and
-//    emit a `component` event the registry renders via "image-preview".
-//  - video: there is no AI SDK v4 video primitive yet, so this is a wired stub
-//    (per the documented stub policy): it resolves the configured video model
-//    for the record and emits the existing "make-video-form" component, whose
-//    bound server action returns a queued result. Tracked for the real pipeline.
-function streamMediaGeneration(args: {
-  kind: "image" | "video";
-  prompt: string;
-  mediaModel: string | null;
-  mediaTier: "basic" | "advanced";
-  userId: string;
-  conversationId: string | null;
-  messageId: string | null;
-  telemetry: { orgId: string; workspaceId: string; executionStepId: string };
-}): Response {
-  const encoder = new TextEncoder();
-  const responseStream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      function emit(event: StreamEvent): void {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-      }
-      const toolCallId = randomUUID();
-      try {
-        if (args.kind === "image") {
-          const modelId =
-            args.mediaModel ?? imageTierModelId(args.mediaTier);
-          const imageModel = selectImageModel({ model: modelId });
-          try {
-            const { images } = await generateImageFor({
-              model: imageModel,
-              prompt: args.prompt,
-              n: 1,
-              size: "1024x1024",
-              telemetry: {
-                orgId: args.telemetry.orgId,
-                workspaceId: args.telemetry.workspaceId,
-                surface: "app",
-                executionStepId: args.telemetry.executionStepId,
-              },
-            });
-            const b64 = images[0];
-            if (!b64) {
-              emit({
-                type: "component",
-                toolCallId,
-                componentId: "image-preview",
-                props: { placeholder: true, prompt: args.prompt, alt: args.prompt },
-              });
-            } else {
-              // Persist to blob storage + a generated_assets row, then render via
-              // the access-controlled serving route (never the raw blob URL).
-              const asset = await persistGeneratedAsset({
-                orgId: args.telemetry.orgId,
-                workspaceId: args.telemetry.workspaceId,
-                userId: args.userId,
-                kind: "image",
-                accessPolicy: "org",
-                bytes: Buffer.from(b64, "base64"),
-                mimeType: "image/png",
-                prompt: args.prompt,
-                model: modelId,
-                conversationId: args.conversationId,
-                messageId: args.messageId,
-              });
-              emit({
-                type: "component",
-                toolCallId,
-                componentId: "image-preview",
-                props: { url: asset.serveUrl, alt: args.prompt },
-              });
-            }
-          } catch (genErr) {
-            // Generation failed (no key / unsupported model / provider error):
-            // render the image-preview empty-state with the reason instead of
-            // failing the turn.
-            const reason =
-              genErr instanceof Error ? genErr.message : "Generation failed";
-            emit({
-              type: "component",
-              toolCallId,
-              componentId: "image-preview",
-              props: {
-                placeholder: true,
-                prompt: args.prompt,
-                alt: args.prompt,
-                errorReason: reason,
-              },
-            });
-          }
-        } else {
-          // video — asynchronous render. Veo renders take minutes, so we don't
-          // block the request: create a pending generated_assets row, dispatch
-          // the `agent/video.render` Inngest job (which generates, uploads to
-          // blob, and flips the row to `ready`), and emit a video-result
-          // component that polls the serving route until the asset is ready.
-          const modelId = args.mediaModel ?? videoTierModelId(args.mediaTier);
-          const pending = await createPendingGeneratedAsset({
-            orgId: args.telemetry.orgId,
-            workspaceId: args.telemetry.workspaceId,
-            userId: args.userId,
-            kind: "video",
-            accessPolicy: "org",
-            mimeType: "video/mp4",
-            prompt: args.prompt,
-            model: modelId,
-            conversationId: args.conversationId,
-            messageId: args.messageId,
-          });
-          await inngest.send({
-            name: "agent/video.render",
-            data: {
-              assetId: pending.id,
-              orgId: args.telemetry.orgId,
-              workspaceId: args.telemetry.workspaceId,
-              userId: args.userId,
-              prompt: args.prompt,
-              model: modelId,
-              mediaTier: args.mediaTier,
-            },
-          });
-          emit({
-            type: "component",
-            toolCallId,
-            componentId: "video-result",
-            props: { url: pending.serveUrl, prompt: args.prompt },
-          });
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Generation error";
-        emit({
-          type: "text",
-          messageId: toolCallId,
-          text: `\n\n[Error: ${message}]`,
-        });
       } finally {
         try {
           controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
