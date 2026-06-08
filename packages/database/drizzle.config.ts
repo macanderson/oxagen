@@ -17,7 +17,6 @@ export default defineConfig({
     "agent",
     "workflow",
     "event",
-    "execution",
     "chat",
     "content",
     "graph",

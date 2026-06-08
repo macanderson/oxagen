@@ -34,7 +34,6 @@ import {
   playbookSteps,
 } from "./schema/workflow";
 import { triggers } from "./schema/event";
-import { executions, executionSteps, toolCalls } from "./schema/execution";
 import { conversations, messages } from "./schema/chat";
 import { files, documents } from "./schema/content";
 import {
@@ -181,13 +180,6 @@ export const subagentRunsRelations = relations(subagentRuns, ({ one }) => ({
   }),
 }));
 
-export const planStepsRelations = relations(planSteps, ({ one }) => ({
-  executionStep: one(executionSteps, {
-    fields: [planSteps.executionStepId],
-    references: [executionSteps.id],
-  }),
-}));
-
 // Canonical agent execution log relations
 export const agentExecutionsRelations = relations(agentExecutions, ({ one, many }) => ({
   agent: one(agents, { fields: [agentExecutions.agentId], references: [agents.id] }),
@@ -232,38 +224,6 @@ export const playbookStepsRelations = relations(playbookSteps, ({ one }) => ({
 // triggers has no Drizzle relations after workflow_triggers was dropped
 // (release-audit Check 4). The table is retained for its own CRUD surface.
 export const triggersRelations = relations(triggers, () => ({}));
-
-export const executionsRelations = relations(executions, ({ one, many }) => ({
-  playbookVersion: one(playbookVersions, {
-    fields: [executions.playbookVersionId],
-    references: [playbookVersions.id],
-  }),
-  triggeredByMessage: one(messages, {
-    fields: [executions.triggeredByMessageId],
-    references: [messages.id],
-  }),
-  steps: many(executionSteps),
-}));
-
-export const executionStepsRelations = relations(executionSteps, ({ one, many }) => ({
-  execution: one(executions, { fields: [executionSteps.executionId], references: [executions.id] }),
-  playbookStep: one(playbookSteps, {
-    fields: [executionSteps.playbookStepId],
-    references: [playbookSteps.id],
-  }),
-  agentVersion: one(agentVersions, {
-    fields: [executionSteps.agentVersionId],
-    references: [agentVersions.id],
-  }),
-  toolCalls: many(toolCalls),
-}));
-
-export const toolCallsRelations = relations(toolCalls, ({ one }) => ({
-  step: one(executionSteps, {
-    fields: [toolCalls.executionStepId],
-    references: [executionSteps.id],
-  }),
-}));
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
   user: one(users, { fields: [conversations.userId], references: [users.id] }),
