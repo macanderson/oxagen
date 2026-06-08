@@ -1,6 +1,45 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// ── hoisted stubs ──────────────────────────────────────────────────────────────
+const mocks = vi.hoisted(() => ({
+  requireEnv: vi.fn(),
+  createPendingGeneratedAsset: vi.fn(),
+  inngestSend: vi.fn(),
+  videoTierModelId: vi.fn(),
+}));
+
+// Default: gateway key present, pending asset created, inngest queued.
+mocks.requireEnv.mockReturnValue({ AI_GATEWAY_API_KEY: "test-key" });
+mocks.videoTierModelId.mockReturnValue("google/veo-3.0");
+mocks.createPendingGeneratedAsset.mockResolvedValue({
+  id: "uuid-asset-1",
+  publicId: "vas_ABC",
+  serveUrl: "/api/v1/assets/vas_ABC",
+});
+mocks.inngestSend.mockResolvedValue(undefined);
+
+vi.mock("@oxagen/config/env", () => ({
+  requireEnv: mocks.requireEnv,
+}));
+
+vi.mock("@oxagen/ai", () => ({
+  videoTierModelId: mocks.videoTierModelId,
+}));
+
+vi.mock("./generated-asset.persist", () => ({
+  createPendingGeneratedAsset: mocks.createPendingGeneratedAsset,
+}));
+
+vi.mock("@oxagen/inngest-functions/client", () => ({
+  inngest: {
+    send: mocks.inngestSend,
+  },
+}));
+
 import { videoGenerateHandler } from "./video.generate";
 import type { CapabilityContext } from "@oxagen/oxagen";
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const CTX: CapabilityContext = {
   orgId: "org_1",
@@ -12,115 +51,81 @@ const CTX: CapabilityContext = {
   messageId: null,
 };
 
-describe("videoGenerateHandler", () => {
+describe("videoGenerateHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
-    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.clearAllMocks();
+    mocks.requireEnv.mockReturnValue({ AI_GATEWAY_API_KEY: "test-key" });
+    mocks.videoTierModelId.mockReturnValue("google/veo-3.0");
+    mocks.createPendingGeneratedAsset.mockResolvedValue({
+      id: "uuid-asset-1",
+      publicId: "vas_ABC",
+      serveUrl: "/api/v1/assets/vas_ABC",
+    });
+    mocks.inngestSend.mockResolvedValue(undefined);
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+  // ── gateway key absent ──────────────────────────────────────────────────────
 
-  // ── stub shape ──────────────────────────────────────────────────────────────
-
-  it("returns stub: true and status: queued without throwing", async () => {
-    const result = await videoGenerateHandler({ prompt: "Ocean waves" }, CTX);
-
-    expect(result.stub).toBe(true);
-    expect(result.status).toBe("queued");
-  });
-
-  it("returns a non-empty jobId prefixed with 'stub_'", async () => {
-    const result = await videoGenerateHandler({ prompt: "Sunset" }, CTX);
-    expect(result.jobId).toMatch(/^stub_/);
-  });
-
-  it("returns a render directive with componentId 'make-video-form'", async () => {
-    const result = await videoGenerateHandler({ prompt: "City timelapse" }, CTX);
-    expect(result.render.componentId).toBe("make-video-form");
-  });
-
-  // ── render props echo ───────────────────────────────────────────────────────
-
-  it("echoes prompt into render props", async () => {
-    const result = await videoGenerateHandler({ prompt: "Flying drones" }, CTX);
-    expect(result.render.props.prompt).toBe("Flying drones");
-  });
-
-  it("echoes optional fields into render props when provided", async () => {
-    const result = await videoGenerateHandler(
-      { prompt: "Forest", durationSeconds: 20, aspectRatio: "9:16", style: "lo-fi" },
-      CTX,
+  it("throws when AI_GATEWAY_API_KEY is not configured", async () => {
+    mocks.requireEnv.mockImplementationOnce(() => { throw new Error("missing"); });
+    await expect(videoGenerateHandler({ prompt: "Ocean waves" }, CTX)).rejects.toThrow(
+      "AI_GATEWAY_API_KEY is not configured",
     );
-    expect(result.render.props.durationSeconds).toBe(20);
-    expect(result.render.props.aspectRatio).toBe("9:16");
-    expect(result.render.props.style).toBe("lo-fi");
   });
 
-  it("omits optional fields from render props when absent", async () => {
-    const result = await videoGenerateHandler({ prompt: "Stars" }, CTX);
-    expect(result.render.props.durationSeconds).toBeUndefined();
-    expect(result.render.props.aspectRatio).toBeUndefined();
-    expect(result.render.props.style).toBeUndefined();
+  // ── auth guard ──────────────────────────────────────────────────────────────
+
+  it("throws when userId is null", async () => {
+    const anonCtx: CapabilityContext = { ...CTX, userId: null };
+    await expect(videoGenerateHandler({ prompt: "Test" }, anonCtx)).rejects.toThrow(
+      "video.generate requires an authenticated user",
+    );
   });
 
-  // ── uniqueness ──────────────────────────────────────────────────────────────
+  // ── happy path ──────────────────────────────────────────────────────────────
 
-  it("returns a unique jobId on each call", async () => {
+  it("returns status: queued, jobId, serveUrl, and render directive", async () => {
+    const result = await videoGenerateHandler({ prompt: "Ocean waves" }, CTX);
+    expect(result.status).toBe("queued");
+    expect(result.jobId).toBe("vas_ABC");
+    expect(result.serveUrl).toBe("/api/v1/assets/vas_ABC");
+    expect(result.render.componentId).toBe("video-result");
+    expect(result.render.props.prompt).toBe("Ocean waves");
+    expect(result.render.props.url).toBe("/api/v1/assets/vas_ABC");
+  });
+
+  it("creates a pending asset row before queuing render", async () => {
+    await videoGenerateHandler({ prompt: "Forest" }, CTX);
+    expect(mocks.createPendingGeneratedAsset).toHaveBeenCalledTimes(1);
+  });
+
+  it("dispatches the inngest render event after creating the asset", async () => {
+    await videoGenerateHandler({ prompt: "Forest" }, CTX);
+    expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
+    const sentEvent = mocks.inngestSend.mock.calls[0]![0];
+    expect(sentEvent.name).toBe("agent/video.render");
+    expect(sentEvent.data.prompt).toBe("Forest");
+  });
+
+  it("passes durationSeconds to inngest when provided", async () => {
+    await videoGenerateHandler({ prompt: "Waves", durationSeconds: 20 }, CTX);
+    const sentEvent = mocks.inngestSend.mock.calls[0]![0];
+    expect(sentEvent.data.durationSeconds).toBe(20);
+  });
+
+  it("passes aspectRatio to inngest when provided", async () => {
+    await videoGenerateHandler({ prompt: "Waves", aspectRatio: "9:16" }, CTX);
+    const sentEvent = mocks.inngestSend.mock.calls[0]![0];
+    expect(sentEvent.data.aspectRatio).toBe("9:16");
+  });
+
+  it("returns a unique jobId per call", async () => {
+    mocks.createPendingGeneratedAsset
+      .mockResolvedValueOnce({ id: "uuid-1", publicId: "vas_1", serveUrl: "/api/v1/assets/vas_1" })
+      .mockResolvedValueOnce({ id: "uuid-2", publicId: "vas_2", serveUrl: "/api/v1/assets/vas_2" });
+
     const a = await videoGenerateHandler({ prompt: "A" }, CTX);
     const b = await videoGenerateHandler({ prompt: "B" }, CTX);
     expect(a.jobId).not.toBe(b.jobId);
-  });
-
-  // ── logging ─────────────────────────────────────────────────────────────────
-
-  it("logs the stub intent with the prompt", async () => {
-    const spy = vi.spyOn(console, "log");
-    await videoGenerateHandler({ prompt: "A volcano erupting" }, CTX);
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining("[stub] video.generate"));
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining("A volcano erupting"));
-  });
-
-  it("includes duration in the log when provided", async () => {
-    const spy = vi.spyOn(console, "log");
-    await videoGenerateHandler({ prompt: "Waves", durationSeconds: 30 }, CTX);
-    const calls = spy.mock.calls.flat().join("\n");
-    expect(calls).toContain("30s");
-  });
-
-  it("includes aspect ratio in the log when provided", async () => {
-    const spy = vi.spyOn(console, "log");
-    await videoGenerateHandler({ prompt: "Waves", aspectRatio: "1:1" }, CTX);
-    const calls = spy.mock.calls.flat().join("\n");
-    expect(calls).toContain("1:1");
-  });
-
-  it("includes style in the log when provided", async () => {
-    const spy = vi.spyOn(console, "log");
-    await videoGenerateHandler({ prompt: "Waves", style: "cinematic" }, CTX);
-    const calls = spy.mock.calls.flat().join("\n");
-    expect(calls).toContain("cinematic");
-  });
-
-  it("includes brandKitId in the log when provided", async () => {
-    const spy = vi.spyOn(console, "log");
-    await videoGenerateHandler({ prompt: "Waves", brandKitId: "bk_xyz" }, CTX);
-    const calls = spy.mock.calls.flat().join("\n");
-    expect(calls).toContain("bk_xyz");
-  });
-
-  // ── never throws ────────────────────────────────────────────────────────────
-
-  it("never throws with minimal input", async () => {
-    await expect(videoGenerateHandler({ prompt: "T" }, CTX)).resolves.not.toThrow();
-  });
-
-  it("never throws with fully-populated input", async () => {
-    await expect(
-      videoGenerateHandler(
-        { prompt: "Full", durationSeconds: 60, aspectRatio: "16:9", style: "anime", brandKitId: "bk_1" },
-        CTX,
-      ),
-    ).resolves.not.toThrow();
   });
 });

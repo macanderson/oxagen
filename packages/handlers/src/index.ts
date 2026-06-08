@@ -15,6 +15,9 @@ export { brandkitApplyHandler } from "./brandkit.apply";
 export { videoGenerateHandler } from "./video.generate";
 export { svgGenerateHandler } from "./svg.generate";
 export { imageGenerateHandler } from "./image.generate";
+export { imageCreateHandler } from "./image.create";
+export { imageListHandler } from "./image.list";
+export { imageAnalyzeHandler } from "./image.analyze";
 export { systemInstallInstructionsHandler } from "./system.install.instructions";
 export { orgMemberAddHandler } from "./org.member.add";
 export { orgMemberInviteAcceptHandler } from "./org.member.invite.accept";
@@ -34,3 +37,9 @@ export {
   GeneratedAssetForbiddenError,
 } from "./generated-asset.serve";
 export type { AssetServePrincipal, AssetServeResult } from "./generated-asset.serve";
+export { workspaceMemberListHandler } from "./workspace.member.list";
+export { workspaceInviteSendHandler } from "./workspace.invite.send";
+export { userPreferencesGetHandler } from "./user.preferences.get";
+export { userPreferencesUpdateHandler } from "./user.preferences.update";
+export { skillWorkspaceListHandler } from "./skill.workspace.list";
+export { conversationChatHandler } from "./conversation.chat";

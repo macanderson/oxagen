@@ -62,54 +62,63 @@ describe("video.generate capability", () => {
 
   // ── output validation ───────────────────────────────────────────────────────
 
-  it("parses a valid stub output", () => {
+  it("parses a valid queued output", () => {
     const parsed = videoGenerate.output.parse({
-      stub: true,
       status: "queued",
-      jobId: "job_abc123",
+      jobId: "gen_abc123",
+      serveUrl: "/api/v1/assets/gen_abc123",
       render: {
-        componentId: "make-video-form",
-        props: { prompt: "test" },
+        componentId: "video-result",
+        props: { url: "/api/v1/assets/gen_abc123", prompt: "A sunset" },
       },
     });
-    expect(parsed.stub).toBe(true);
     expect(parsed.status).toBe("queued");
-    expect(parsed.jobId).toBe("job_abc123");
-    expect(parsed.render.componentId).toBe("make-video-form");
+    expect(parsed.jobId).toBe("gen_abc123");
+    expect(parsed.serveUrl).toBe("/api/v1/assets/gen_abc123");
+    expect(parsed.render.componentId).toBe("video-result");
   });
 
-  it("parses a valid stub output with fully populated render props", () => {
+  it("parses a valid output with full render props", () => {
     const parsed = videoGenerate.output.parse({
-      stub: true,
       status: "queued",
-      jobId: "job_xyz",
+      jobId: "gen_xyz",
+      serveUrl: "/api/v1/assets/gen_xyz",
       render: {
-        componentId: "make-video-form",
-        props: { prompt: "ocean", durationSeconds: 10, aspectRatio: "9:16", style: "lo-fi" },
+        componentId: "video-result",
+        props: { url: "/api/v1/assets/gen_xyz", prompt: "ocean waves" },
       },
     });
-    expect(parsed.render.props.prompt).toBe("ocean");
-    expect(parsed.render.props.durationSeconds).toBe(10);
+    expect(parsed.render.props.prompt).toBe("ocean waves");
+    expect(parsed.render.props.url).toBe("/api/v1/assets/gen_xyz");
   });
 
-  it("rejects output where render.componentId is not make-video-form", () => {
+  it("rejects output where render.componentId is not video-result", () => {
     expect(() =>
       videoGenerate.output.parse({
-        stub: true,
         status: "queued",
-        jobId: "job_abc",
-        render: { componentId: "svg-preview", props: {} },
+        jobId: "gen_abc",
+        serveUrl: "/api/v1/assets/gen_abc",
+        render: { componentId: "svg-preview", props: { url: "/u", prompt: "p" } },
       }),
     ).toThrow();
   });
 
-  it("rejects output where stub is false", () => {
+  it("rejects output missing required jobId", () => {
     expect(() =>
       videoGenerate.output.parse({
-        stub: false,
         status: "queued",
-        jobId: "job_abc",
-        render: { componentId: "make-video-form", props: {} },
+        serveUrl: "/api/v1/assets/gen_abc",
+        render: { componentId: "video-result", props: { url: "/u", prompt: "p" } },
+      }),
+    ).toThrow();
+  });
+
+  it("rejects output missing required serveUrl", () => {
+    expect(() =>
+      videoGenerate.output.parse({
+        status: "queued",
+        jobId: "gen_abc",
+        render: { componentId: "video-result", props: { url: "/u", prompt: "p" } },
       }),
     ).toThrow();
   });

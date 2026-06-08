@@ -1,6 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { brandkitApplyHandler } from "./brandkit.apply";
+import { logger } from "./logger";
 import type { CapabilityContext } from "@oxagen/oxagen";
+
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
 
 const CTX: CapabilityContext = {
   orgId: "org_1",
@@ -19,12 +24,8 @@ const BASE_INPUT = {
 };
 
 describe("brandkitApplyHandler", () => {
-  beforeEach(() => {
-    vi.spyOn(console, "log").mockImplementation(() => undefined);
-  });
-
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("returns a typed stub without throwing", async () => {
@@ -36,14 +37,18 @@ describe("brandkitApplyHandler", () => {
     expect(result.targetFileId).toBe("file_xyz");
   });
 
-  it("logs the intent to console", async () => {
-    const spy = vi.spyOn(console, "log");
+  it("logs the stub invocation via the structured logger with PII-free identifiers", async () => {
     await brandkitApplyHandler(BASE_INPUT, CTX);
 
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining("[stub] brandkit.apply"));
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining("bk_abc"));
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining("file_xyz"));
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining("ws_1"));
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        brandKitId: "bk_abc",
+        targetFileId: "file_xyz",
+        workspaceId: "ws_1",
+        stub: true,
+      }),
+      expect.stringContaining("brandkit.apply"),
+    );
   });
 
   it("echoes brandKitId and targetFileId from input", async () => {
