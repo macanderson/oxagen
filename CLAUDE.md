@@ -253,8 +253,9 @@ the signup flow below and update `creds.json` (keep the same email/password so
 it stays stable).
 
 **Spin up the stack.** The dev server is usually already running:
-- `apps/app` → `http://localhost:3000` (check `lsof -ti:3000` first; the repo
-  runs all three Next apps on 3000/3100/3200 via `pnpm dev`).
+- `apps/app` → `http://localhost:3000` (check `lsof -ti:3000` first).
+- `apps/docs` → `http://localhost:3300` (Fumadocs; statically served).
+  `pnpm dev` starts both Next apps plus the API (4000) and MCP (4100) servers.
 - Local Postgres is on `:5433` (Docker). `pnpm dev` brings up Docker + env.
 - If port 3000 is free, run `pnpm dev` (needs Docker running).
 
@@ -385,9 +386,6 @@ git fetch origin && git rebase origin/main  # sync before pushing (avoids force-
 - **`invoke()` needs handler registration** — any file that calls `invoke()`
   must `import "@oxagen/handlers/register"` before the call; forgetting it
   silently no-ops the metering/IAM layer.
-- **`invoke()` needs handler registration** — any file that calls `invoke()`
-  must `import "@oxagen/handlers/register"` before the call; forgetting it
-  silently no-ops the metering/IAM layer.
 - **Turbopack extensionless imports** — Next.js 16 + Turbopack requires
   extension-free imports (e.g. `import Foo from "./Foo"` not `"./Foo.tsx"`).
 - **`proxy.ts` not `middleware.ts`** — Next.js 16 renamed the interception
@@ -398,10 +396,12 @@ git fetch origin && git rebase origin/main  # sync before pushing (avoids force-
 - **Rebase before pushing to main** — other agents/users push to main
   concurrently; always `git fetch origin && git rebase origin/main` before
   `git push` to avoid non-fast-forward errors.
-- **Stripe webhook tunnel** — the local Stripe CLI webhook tunnel (`stripe listen`)
-  must be running alongside `pnpm dev` for the API to receive Stripe events.
-  Restarting the API without restarting the tunnel causes signature verification
-  failures. Either restart both together or maintain the tunnel in a separate tab.
+- **Stripe webhook tunnel** — `pnpm dev` auto-starts the Stripe CLI tunnel
+  (`stripe listen --forward-to ...`) via `tools/scripts/stripe-tunnel.ts`.
+  If you restart `apps/api` in isolation (e.g. direct `tsx` invocation, not
+  via `pnpm dev`), the tunnel stays alive but the per-session signing secret
+  injected into `process.env.STRIPE_WEBHOOK_SECRET` is lost — restart the
+  whole stack via `pnpm dev` to re-sync it.
 - **AI Gateway slug drift** — gateway model slugs can be dropped/renamed
   silently; always use `modelIdOf()` to resolve handles, never hard-code
   slugs. Verify against live `/v1/models` when adding a new model.
