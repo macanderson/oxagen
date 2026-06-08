@@ -39,7 +39,5 @@ export {
 export type { AssetServePrincipal, AssetServeResult } from "./generated-asset.serve";
 export { workspaceMemberListHandler } from "./workspace.member.list";
 export { workspaceInviteSendHandler } from "./workspace.invite.send";
-export { userPreferencesGetHandler } from "./user.preferences.get";
-export { userPreferencesUpdateHandler } from "./user.preferences.update";
 export { skillWorkspaceListHandler } from "./skill.workspace.list";
 export { conversationChatHandler } from "./conversation.chat";

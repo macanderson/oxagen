@@ -359,6 +359,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@oxagen/cli':
+        specifier: workspace:*
+        version: 'link:'
       '@oxagen/config':
         specifier: workspace:*
         version: link:../../packages/config
