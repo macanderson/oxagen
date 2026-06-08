@@ -338,12 +338,13 @@ Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level override
   Connect at `/mcp` over streamable HTTP.
 - **Capability parity rule:** any new user-facing action must also be a
   contract in `packages/oxagen/src/contracts/` (via `registerCapability`)
-  wired into BOTH `apps/api/src/routes/v1/` and `apps/mcp/src/tools/`.
-  Run `pnpm check:manifest` to verify parity after adding a contract.
+  wired into `apps/api/src/routes/v1/`, `apps/mcp/src/tools/`, and
+  `apps/cli/src/commands/`. Run `pnpm check:manifest` to verify API↔MCP parity
+  after adding a contract (CLI parity is tracked separately in Linear).
 - **Parity caveat:** *contract-declared* capabilities are symmetric between
   API and MCP. However, a large number of UI sections are intentional static
   mocks with no backing contracts yet: `knowledge.*`, `access.*`, `security.*`,
-  `activity.*`, `tools/studio.*`, and several `billing/settings/profile`
+  `activity.*`, `developer.*`, `tools/studio.*`, and several `billing/settings/profile`
   actions. These stub pages are tracked in Linear
   and must NOT be wired to live data until a contract exists. The correct
   order is: contract → API route → MCP tool → UI wire-up. Run
@@ -496,8 +497,10 @@ tracked in Linear.
   in `packages/oxagen/src/contracts/`, `apps/api/src/routes/v1/*`,
   `apps/mcp/src/tools/*`, and `apps/cli/src/commands/*`. Stale or missing docs
   cause drift between shipped product and agent knowledge.
-- **Gaps:** As of 2026-06-08, 15 wired capabilities lack docs (workflow.cancel,
-  workflow.run, workflow.status, and automation.*, conversation.chat,
-  document.*, form.*, image.*, skill.workspace.list, workspace.invite.send,
-  workspace.member.list). Automation of docs regeneration is tracked in Linear;
-  for now maintain docs as you ship new contracts.
+- **Gaps:** As of 2026-06-08, 18 wired capabilities lack docs (workflow.cancel,
+  workflow.run, workflow.status, automation.*, conversation.chat, document.*,
+  form.*, image.*, video.generate, agent.memory, agent.task, agent.plan,
+  skill.workspace.list, workspace.invite.send, workspace.member.list,
+  workspace.invite.accept, org.member.invite, workspace.model.settings).
+  Automation of docs regeneration is tracked in Linear; for now maintain docs
+  as you ship new contracts.
