@@ -73,10 +73,6 @@ import { pluginWorkspaceSetEnabled } from "./plugin.workspace.set_enabled";
 import { workflowRun } from "./workflow.run";
 import { workflowStatus } from "./workflow.status";
 import { workflowCancel } from "./workflow.cancel";
-import { userPreferencesGet } from "./user.preferences.get";
-import { userPreferencesUpdate } from "./user.preferences.update";
-import { workspaceMemberList } from "./workspace.member.list";
-import { workspaceInviteSend } from "./workspace.invite.send";
 import { conversationChat } from "./conversation.chat";
 import { imageCreate } from "./image.create";
 import { imageList } from "./image.list";
@@ -89,6 +85,8 @@ import { formSubmit } from "./form.submit";
 import { automationList } from "./automation.list";
 import { automationCreate } from "./automation.create";
 import { automationTrigger } from "./automation.trigger";
+import { workspaceMemberList } from "./workspace.member.list";
+import { workspaceInviteSend } from "./workspace.invite.send";
 import { skillWorkspaceList } from "./skill.workspace.list";
 
 export {
@@ -157,10 +155,6 @@ export {
   workflowRun,
   workflowStatus,
   workflowCancel,
-  userPreferencesGet,
-  userPreferencesUpdate,
-  workspaceMemberList,
-  workspaceInviteSend,
   conversationChat,
   imageCreate,
   imageList,
@@ -173,6 +167,8 @@ export {
   automationList,
   automationCreate,
   automationTrigger,
+  workspaceMemberList,
+  workspaceInviteSend,
   skillWorkspaceList,
 };
 
@@ -250,10 +246,6 @@ export const contracts = [
   workflowRun,
   workflowStatus,
   workflowCancel,
-  userPreferencesGet,
-  userPreferencesUpdate,
-  workspaceMemberList,
-  workspaceInviteSend,
   conversationChat,
   imageCreate,
   imageList,
@@ -266,5 +258,7 @@ export const contracts = [
   automationList,
   automationCreate,
   automationTrigger,
+  workspaceMemberList,
+  workspaceInviteSend,
   skillWorkspaceList,
 ] as const;

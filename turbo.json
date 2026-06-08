@@ -87,7 +87,9 @@
         "NEXT_PUBLIC_API_URL",
         "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
         "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
-        "GOOGLE_MAPS_URL_SIGNING_SECRET"
+        "GOOGLE_MAPS_URL_SIGNING_SECRET",
+        "AUDIT_EXPORT_SIGNING_SECRET",
+        "OXAGEN_API_URL"
       ]
     },
 
@@ -170,7 +172,9 @@
         "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
         "GOOGLE_MAPS_URL_SIGNING_SECRET",
         "LINEAR_API_KEY",
-        "LINEAR_PROJECT_ID"
+        "LINEAR_PROJECT_ID",
+        "AUDIT_EXPORT_SIGNING_SECRET",
+        "OXAGEN_API_URL"
       ],
       "passThroughEnv": ["CI"]
     },
@@ -226,7 +230,9 @@
         "LINEAR_API_KEY",
         "LINEAR_PROJECT_ID",
         "STRIPE_TAX_ENABLED",
-        "LOG_LEVEL"
+        "LOG_LEVEL",
+        "AUDIT_EXPORT_SIGNING_SECRET",
+        "OXAGEN_API_URL"
       ],
       "passThroughEnv": ["CI"]
     },
