@@ -19,7 +19,7 @@ describe("CLI Commands", () => {
       });
 
       expect(() => {
-        authLoginCommand.parse([]);
+        authLoginCommand.parse(["node", "cli"]);
       }).toThrow();
 
       expect(consoleSpy).toHaveBeenCalledWith(
