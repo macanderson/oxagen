@@ -1074,13 +1074,11 @@ describe("document list", () => {
 describe("document read", () => {
   it("reads document", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
-    mockApiRequest.mockResolvedValueOnce({ title: "Doc 1", content: "Content..." });
+    mockApiRequest.mockResolvedValueOnce({ title: "Doc 1", content: "Content...", metadata: {}, created_at: "2026-06-08" });
     await documentReadCommand.parseAsync(["node", "cli", "-d", "doc1"]);
     expect(mockApiRequest).toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Doc 1"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Title:"));
     consoleSpy.mockRestore();
-    exitSpy.mockRestore();
   });
 });
 
@@ -1115,10 +1113,10 @@ describe("form submit", () => {
 describe("automation list", () => {
   it("lists automations", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockApiRequest.mockResolvedValueOnce({ automations: [{ id: "auto1", name: "Auto 1", status: "active", triggers: [], actions: [] }] });
+    mockApiRequest.mockResolvedValueOnce([{ id: "auto1", name: "Auto 1", status: "active", triggers: ["event1"] }]);
     await automationListCommand.parseAsync(["node", "cli"]);
     expect(mockApiRequest).toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Automations"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("automation(s)"));
     consoleSpy.mockRestore();
   });
 });
@@ -1154,7 +1152,7 @@ describe("skill workspace list", () => {
     mockApiRequest.mockResolvedValueOnce({ skills: [{ id: "skill1", name: "Research", enabled: true, description: "Research skill" }] });
     await skillWorkspaceListCommand.parseAsync(["node", "cli"]);
     expect(mockApiRequest).toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Skills"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Workspace skills"));
     consoleSpy.mockRestore();
   });
 });
