@@ -78,7 +78,7 @@ vi.mock("@oxagen/database", () => ({
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return { eq: orig.eq };
+  return { eq: orig.eq, sql: orig.sql };
 });
 
 // Stub the billing package so grantFreeCredits doesn't open a second

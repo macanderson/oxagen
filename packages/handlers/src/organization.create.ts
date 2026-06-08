@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
 import { schema, withSystemDb } from "@oxagen/database";
-import { recordSecurityEventAsync } from "@oxagen/telemetry";
+import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { eq } from "drizzle-orm";
 import { grantFreeCredits } from "@oxagen/billing";
 import { logger } from "./logger";
@@ -136,12 +136,16 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
       "organization.create: organization created successfully",
     );
     // Record security event for org creation (privileged mutation).
-    recordSecurityEventAsync({
+    emitSecurityEventAsync({
       eventType: "organization.created",
       actorUserId: ctx.userId!,
       orgId: txResult.id,
       workspaceId: null,
-      metadata: { slug: txResult.slug, type: txResult.type },
+      outcome: "success",
+      capability: null,
+      ip: null,
+      userAgent: null,
+      requestId: ctx.requestId,
     }).catch((err: unknown) => {
       logger.error({ err, orgId: txResult.id }, "organization.create: failed to record security event");
     });

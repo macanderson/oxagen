@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { schema, withTenantDb } from "@oxagen/database";
-import { recordSecurityEventAsync } from "@oxagen/telemetry";
+import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -48,7 +48,7 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
     throw new Error(`slug "${input.slug}" already in use for this tenant`);
   }
 
-  let workspaceId: string;
+  let workspaceId: string = "";
   try {
     const result = await withTenantDb(async (tx) => {
       const [ws] = await tx
@@ -95,12 +95,16 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
     });
 
     // Record security event for workspace creation (privileged mutation).
-    recordSecurityEventAsync({
+    emitSecurityEventAsync({
       eventType: "workspace.created",
       actorUserId: ctx.userId!,
       orgId: ctx.orgId,
       workspaceId,
-      metadata: { slug: input.slug },
+      outcome: "success",
+      capability: null,
+      ip: null,
+      userAgent: null,
+      requestId: ctx.requestId,
     }).catch((err: unknown) => {
       logger.error({ err, orgId: ctx.orgId, workspaceId }, "workspace.create: failed to record security event");
     });

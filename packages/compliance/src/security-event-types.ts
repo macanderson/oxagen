@@ -51,6 +51,9 @@ export const SECURITY_EVENT_TYPES = [
   "capability.invoke_allowed",
   "capability.invoke_denied",
   "capability.invoke_error",
+  // Org lifecycle
+  "organization.created",
+  "workspace.created",
   // Admin / org management
   "org.member_invited",
   "org.member_removed",
