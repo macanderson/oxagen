@@ -142,57 +142,26 @@ function parseSchemaFiles() {
   return schemas;
 }
 
-// Generate ERD in Mermaid format with better relationship visualization
+// Generate schema overview (simple, valid Mermaid syntax without relationships)
 function generateERD(schemas) {
   const schemaArray = Object.values(schemas);
 
-  // Use graph format instead of erDiagram since we need to show all entities
-  // erDiagram requires relationships for all entities
-  let mermaid = `graph TB\n`;
+  // Simple list of schemas and their tables
+  let html = '<div style="padding: 20px; font-family: monospace; line-height: 1.8;">';
 
-  const addedSchemas = new Set();
-
-  // Add schemas as subgraphs
   schemaArray.forEach((schema) => {
     if (schema.tables.length > 0) {
-      mermaid += `\n  subgraph ${schema.name}["${schema.name.toUpperCase()}"]\n`;
+      html += `<div style="margin-bottom: 20px;">`;
+      html += `<strong style="color: var(--primary); font-size: 1.1em;">${schema.name.toUpperCase()}</strong> (${schema.tables.length} tables)<br/>`;
       schema.tables.forEach((table) => {
-        const tableId = `${schema.name}_${table.name}`;
-        mermaid += `    ${tableId}["${table.name}"]\n`;
+        html += `&nbsp;&nbsp;• ${table.name}<br/>`;
       });
-      mermaid += `  end\n`;
+      html += `</div>`;
     }
   });
 
-  // Add relationships from foreign keys
-  const addedRelationships = new Set();
-  schemaArray.forEach((schema) => {
-    schema.tables.forEach((table) => {
-      table.foreignKeys.forEach((fk) => {
-        const fromEntity = `${schema.name}_${table.name}`;
-
-        // Find the referenced table's schema
-        let toEntity = null;
-        Object.values(schemas).forEach((refSchema) => {
-          refSchema.tables.forEach((refTable) => {
-            if (refTable.varName === fk.refTable) {
-              toEntity = `${refSchema.name}_${refTable.name}`;
-            }
-          });
-        });
-
-        if (toEntity) {
-          const relationshipKey = fromEntity + "->" + toEntity;
-          if (!addedRelationships.has(relationshipKey)) {
-            mermaid += `  ${fromEntity} -->|FK| ${toEntity}\n`;
-            addedRelationships.add(relationshipKey);
-          }
-        }
-      });
-    });
-  });
-
-  return mermaid;
+  html += '</div>';
+  return html;
 }
 
 // Generate HTML documentation
@@ -1110,26 +1079,10 @@ function generateHTML(schemas) {
       \`).join('');
     }
 
-    // Render ERD diagram
+    // Render schema overview
     function renderERD() {
-      const mermaidDef = \`${erdDiagram}\`;
       const erdDiv = document.getElementById('erdDiagram');
-
-      // Use innerHTML for Mermaid since this is generated content (not user input)
-      erdDiv.innerHTML = mermaidDef;
-      erdDiv.className = 'mermaid';
-
-      // Trigger mermaid rendering after content is set
-      if (typeof mermaid !== 'undefined' && mermaid.run) {
-        mermaid.run().catch(err => console.log('Mermaid render note:', err));
-      } else {
-        // Fallback: wait for Mermaid to load
-        setTimeout(() => {
-          if (typeof mermaid !== 'undefined' && mermaid.run) {
-            mermaid.run().catch(err => console.log('Mermaid render note:', err));
-          }
-        }, 500);
-      }
+      erdDiv.innerHTML = \`${erdDiagram}\`;
     }
 
     // Close modal on backdrop click
