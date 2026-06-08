@@ -68,12 +68,12 @@ export function createSmtpTransport(config: SmtpTransportConfig): EmailTransport
           accepted: toAddressStrings(info.accepted),
           rejected: toAddressStrings(info.rejected),
         };
-        // Instrument every send — addresses, subject, counts, latency, outcome.
-        // Never the body or headers (PII / compliance non-negotiable).
+        // Instrument every send — recipient count, subject, latency, outcome.
+        // Never email addresses or body (PII / compliance non-negotiable).
         logger.info(
           {
             driver: "smtp",
-            to,
+            recipientCount: to.length,
             subject: input.subject,
             accepted: result.accepted.length,
             rejected: result.rejected.length,
@@ -84,7 +84,7 @@ export function createSmtpTransport(config: SmtpTransportConfig): EmailTransport
         return result;
       } catch (err) {
         logger.error(
-          { driver: "smtp", to, subject: input.subject, err, durationMs: Date.now() - start },
+          { driver: "smtp", recipientCount: to.length, subject: input.subject, err, durationMs: Date.now() - start },
           "notifications.email.send: failed",
         );
         throw err;

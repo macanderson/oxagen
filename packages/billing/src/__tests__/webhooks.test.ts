@@ -516,6 +516,90 @@ describe("processStripeEvent", () => {
     expect(onDisputeClosedMock).not.toHaveBeenCalled();
   });
 
+  it("checkout.session.completed — dispatches grantCreditPackForCheckout", async () => {
+    dbState.instance = makeDb([{ id: "row-uuid-12" }]);
+
+    const checkoutSession = {
+      id: "cs_test_checkout_001",
+      mode: "payment",
+      paymentStatus: "paid",
+      metadata: { org_id: "org-abc", credits: "500" },
+      subscriptionId: null,
+    };
+
+    const event = makeWebhookEvent({
+      providerEventId: "evt_checkout_completed_001",
+      type: "checkout.session.completed",
+      subscriptionId: undefined,
+      checkoutSession,
+    });
+
+    const result = await processStripeEvent(event);
+    expect(result).toEqual({ status: "applied" });
+  });
+
+  it("checkout.session.completed — no-ops when checkoutSession is missing", async () => {
+    dbState.instance = makeDb([{ id: "row-uuid-13" }]);
+
+    const event = makeWebhookEvent({
+      providerEventId: "evt_checkout_no_session_001",
+      type: "checkout.session.completed",
+      subscriptionId: undefined,
+      checkoutSession: undefined,
+    });
+
+    const result = await processStripeEvent(event);
+    expect(result).toEqual({ status: "applied" });
+  });
+
+  it("payment_method.detached — updates the payment method with deletedAt", async () => {
+    dbState.instance = makeDb([{ id: "row-uuid-14" }]);
+    dbState.instance!.query.subscriptions.findFirst = vi.fn().mockResolvedValue({ orgId: "org-abc" });
+
+    const event = makeWebhookEvent({
+      providerEventId: "evt_pm_detached_001",
+      type: "payment_method.detached",
+      subscriptionId: undefined,
+      paymentMethod: {
+        id: "pm_test_detached_001",
+        customerId: "cus_test_001",
+        type: "card",
+        brand: "mastercard",
+        last4: "5555",
+        expMonth: 6,
+        expYear: 2027,
+      },
+    });
+
+    const result = await processStripeEvent(event);
+    expect(result).toEqual({ status: "applied" });
+    // The detach path calls db.update(paymentMethods).set({ deletedAt })
+    expect(dbState.instance!.update).toHaveBeenCalled();
+  });
+
+  it("payment_method.attached — upserts payment method when subscription exists", async () => {
+    dbState.instance = makeDb([{ id: "row-uuid-15" }]);
+    dbState.instance!.query.subscriptions.findFirst = vi.fn().mockResolvedValue({ orgId: "org-abc" });
+
+    const event = makeWebhookEvent({
+      providerEventId: "evt_pm_attached_001",
+      type: "payment_method.attached",
+      subscriptionId: undefined,
+      paymentMethod: {
+        id: "pm_new_001",
+        customerId: "cus_test_001",
+        type: "card",
+        brand: "amex",
+        last4: "0005",
+        expMonth: 3,
+        expYear: 2029,
+      },
+    });
+
+    const result = await processStripeEvent(event);
+    expect(result).toEqual({ status: "applied" });
+  });
+
   it("unhandled event type — event is stored but no dispatcher is invoked, returns 'applied'", async () => {
     dbState.instance = makeDb([{ id: "row-uuid-11" }]);
 

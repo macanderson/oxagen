@@ -1,102 +1,699 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { authLoginCommand } from "./commands/auth.login";
-import { authLogoutCommand } from "./commands/auth.logout";
-import { authWhoamiCommand } from "./commands/auth.whoami";
-import { orgListCommand } from "./commands/org.list";
-import { workspaceListCommand } from "./commands/workspace.list";
-import { chatSendCommand } from "./commands/chat.send";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+// Mock config and api-client before importing commands that use them
+vi.mock("./lib/config.js", () => ({
+  getToken: vi.fn(() => "test-token"),
+  getApiUrl: vi.fn(() => "http://localhost:4000"),
+  readConfig: vi.fn(() => ({ token: "test-token", orgSlug: "my-org", workspaceSlug: "default" })),
+  writeConfig: vi.fn(),
+  clearConfig: vi.fn(),
+}));
+
+vi.mock("./lib/api-client.js", () => ({
+  apiRequest: vi.fn(),
+  requireAuth: vi.fn(),
+  ApiError: class ApiError extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.status = status;
+      this.name = "ApiError";
+    }
+  },
+}));
+
+import { authLoginCommand } from "./commands/auth.login.js";
+import { authLogoutCommand } from "./commands/auth.logout.js";
+import { authWhoamiCommand } from "./commands/auth.whoami.js";
+import { orgListCommand } from "./commands/org.list.js";
+import { orgCreateCommand } from "./commands/org.create.js";
+import { orgMemberAddCommand } from "./commands/org.member.add.js";
+import { orgMemberRemoveCommand } from "./commands/org.member.remove.js";
+import { workspaceListCommand } from "./commands/workspace.list.js";
+import { workspaceCreateCommand } from "./commands/workspace.create.js";
+import { chatSendCommand } from "./commands/chat.send.js";
+import { conversationListCommand } from "./commands/conversation.list.js";
+import { conversationDeleteCommand } from "./commands/conversation.delete.js";
+import { conversationArchiveCommand } from "./commands/conversation.archive.js";
+import { conversationRenameCommand } from "./commands/conversation.rename.js";
+import { apiKeyCreateCommand } from "./commands/api-key.create.js";
+import { apiKeyRevokeCommand } from "./commands/api-key.revoke.js";
+import { notificationsListCommand } from "./commands/notifications.list.js";
+import { notificationsMarkCommand } from "./commands/notifications.mark.js";
+import { pluginListCommand } from "./commands/plugin.list.js";
+import { pluginInstallCommand } from "./commands/plugin.install.js";
+import { pluginUninstallCommand } from "./commands/plugin.uninstall.js";
+import { billingStatusCommand } from "./commands/billing.status.js";
+
+import * as apiClient from "./lib/api-client.js";
+import * as config from "./lib/config.js";
+
+const mockApiRequest = vi.mocked(apiClient.apiRequest);
+const mockRequireAuth = vi.mocked(apiClient.requireAuth);
+const mockWriteConfig = vi.mocked(config.writeConfig);
+const mockClearConfig = vi.mocked(config.clearConfig);
+const mockGetToken = vi.mocked(config.getToken);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockRequireAuth.mockImplementation(() => {});
 });
 
-describe("CLI Commands", () => {
-  describe("auth login", () => {
-    it("requires email and password", () => {
-      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
-        throw new Error("exit");
-      });
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
-      expect(() => {
-        authLoginCommand.parse(["node", "cli"]);
-      }).toThrow();
+// ---------------------------------------------------------------------------
+// auth login
+// ---------------------------------------------------------------------------
+describe("auth login", () => {
+  it("exits 1 if email or password is missing", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("email and password are required")
-      );
+    await expect(() =>
+      authLoginCommand.parseAsync(["node", "cli"])
+    ).rejects.toThrow("exit");
 
-      consoleSpy.mockRestore();
-      exitSpy.mockRestore();
-    });
-
-    it("accepts email and password options", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-      authLoginCommand.parse(["node", "cli", "--email", "user@example.com", "--password", "secret"]);
-
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Authenticating"));
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("success"));
-
-      consoleSpy.mockRestore();
-    });
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("email and password are required"));
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
   });
 
-  describe("auth logout", () => {
-    it("logs out user", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-      authLogoutCommand.parse(["node", "cli"]);
+  it("calls API with credentials and stores token", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ token: "new-token", user: { email: "user@example.com" } });
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Signing out"));
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("success"));
+    await authLoginCommand.parseAsync(["node", "cli", "--email", "user@example.com", "--password", "secret"]);
 
-      consoleSpy.mockRestore();
-    });
+    expect(mockApiRequest).toHaveBeenCalledWith("/auth/sign-in/email", expect.objectContaining({ method: "POST" }));
+    expect(mockWriteConfig).toHaveBeenCalledWith(expect.objectContaining({ token: "new-token" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Authenticated"));
+    consoleSpy.mockRestore();
   });
 
-  describe("auth whoami", () => {
-    it("displays current user info", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-      authWhoamiCommand.parse(["node", "cli"]);
+  it("exits 1 on API error during login", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Unauthorized"));
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("User:"));
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Organization:"));
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Workspace:"));
+    await expect(() =>
+      authLoginCommand.parseAsync(["node", "cli", "--email", "a@b.com", "--password", "pw"])
+    ).rejects.toThrow("exit");
 
-      consoleSpy.mockRestore();
-    });
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Error:"));
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
   });
 
-  describe("org list", () => {
-    it("displays organizations", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-      orgListCommand.parse(["node", "cli"]);
+  it("handles response with session.token shape", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ session: { token: "session-tok" } });
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Organizations"));
+    await authLoginCommand.parseAsync(["node", "cli", "-e", "a@b.com", "-p", "pw"]);
 
-      consoleSpy.mockRestore();
-    });
+    expect(mockWriteConfig).toHaveBeenCalledWith(expect.objectContaining({ token: "session-tok" }));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// auth logout
+// ---------------------------------------------------------------------------
+describe("auth logout", () => {
+  it("clears config and reports success", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockGetToken.mockReturnValue("old-token");
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await authLogoutCommand.parseAsync(["node", "cli"]);
+
+    expect(mockClearConfig).toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Signing out"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Signed out"));
+    consoleSpy.mockRestore();
   });
 
-  describe("workspace list", () => {
-    it("displays workspaces", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-      workspaceListCommand.parse(["node", "cli"]);
+  it("clears config even if sign-out API fails", async () => {
+    mockGetToken.mockReturnValue("tok");
+    mockApiRequest.mockRejectedValueOnce(new Error("network error"));
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Workspaces"));
-
-      consoleSpy.mockRestore();
-    });
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    await authLogoutCommand.parseAsync(["node", "cli"]);
+    expect(mockClearConfig).toHaveBeenCalled();
+    consoleSpy.mockRestore();
   });
 
-  describe("chat send", () => {
-    it("accepts message argument", () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-      chatSendCommand.parse(["node", "cli", "hello world"]);
+  it("skips sign-out API call when no token is stored", async () => {
+    mockGetToken.mockReturnValue(undefined);
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Sending"));
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("hello world"));
+    await authLogoutCommand.parseAsync(["node", "cli"]);
 
-      consoleSpy.mockRestore();
+    expect(mockApiRequest).not.toHaveBeenCalled();
+    expect(mockClearConfig).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// auth whoami
+// ---------------------------------------------------------------------------
+describe("auth whoami", () => {
+  it("displays user, org, and workspace", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      user: { email: "mac@example.com" },
+      org: { slug: "my-org" },
+      workspace: { slug: "default" },
     });
+
+    await authWhoamiCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("mac@example.com"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("my-org"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("default"));
+    consoleSpy.mockRestore();
+  });
+
+  it("falls back to config values for org/workspace", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ user: { email: "mac@example.com" } });
+    vi.mocked(config.readConfig).mockReturnValue({ orgSlug: "cfg-org", workspaceSlug: "cfg-ws" });
+
+    await authWhoamiCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("cfg-org"));
+    consoleSpy.mockRestore();
+  });
+
+  it("exits 1 on API error", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Forbidden"));
+
+    await expect(() => authWhoamiCommand.parseAsync(["node", "cli"])).rejects.toThrow("exit");
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// org list
+// ---------------------------------------------------------------------------
+describe("org list", () => {
+  it("prints organization list", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      organizations: [{ slug: "acme", name: "ACME Corp" }],
+    });
+
+    await orgListCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Organizations"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("acme"));
+    consoleSpy.mockRestore();
+  });
+
+  it("prints empty message when no orgs", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ organizations: [] });
+
+    await orgListCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("No organizations"));
+    consoleSpy.mockRestore();
+  });
+
+  it("handles data array shape from API", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ data: [{ id: "id1", slug: "org-1", name: "Org 1" }] });
+
+    await orgListCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("org-1"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// org create
+// ---------------------------------------------------------------------------
+describe("org create", () => {
+  it("creates org and prints slug", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ organization: { slug: "new-org", name: "New Org" } });
+
+    await orgCreateCommand.parseAsync(["node", "cli", "New Org"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/organizations", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("new-org"));
+    consoleSpy.mockRestore();
+  });
+
+  it("exits 1 on API error", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Conflict"));
+
+    await expect(() => orgCreateCommand.parseAsync(["node", "cli", "Dup"])).rejects.toThrow("exit");
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// org member add / remove
+// ---------------------------------------------------------------------------
+describe("org member add", () => {
+  it("adds member and confirms", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await orgMemberAddCommand.parseAsync(["node", "cli", "new@example.com", "--role", "admin"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/org/members", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("new@example.com"));
+    consoleSpy.mockRestore();
+  });
+
+  it("defaults role to member when no --role flag given", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await orgMemberAddCommand.parseAsync(["node", "cli", "x@example.com", "--role", "member"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("member"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("org member remove", () => {
+  it("removes member and confirms", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await orgMemberRemoveCommand.parseAsync(["node", "cli", "old@example.com"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/org/members", expect.objectContaining({ method: "DELETE" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("old@example.com"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// workspace list / create
+// ---------------------------------------------------------------------------
+describe("workspace list", () => {
+  it("prints workspace list", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      workspaces: [{ slug: "default", name: "Default" }],
+    });
+
+    await workspaceListCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Workspaces"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("default"));
+    consoleSpy.mockRestore();
+  });
+
+  it("prints empty message when no workspaces", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ workspaces: [] });
+
+    await workspaceListCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("No workspaces"));
+    consoleSpy.mockRestore();
+  });
+
+  it("passes org query param when provided", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ workspaces: [] });
+
+    await workspaceListCommand.parseAsync(["node", "cli", "--org", "my-org"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("my-org"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("workspace create", () => {
+  it("creates workspace and prints slug", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ workspace: { slug: "my-ws", name: "My WS" } });
+
+    await workspaceCreateCommand.parseAsync(["node", "cli", "My WS"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/workspaces", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("my-ws"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chat send
+// ---------------------------------------------------------------------------
+describe("chat send", () => {
+  it("sends message and prints response", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ content: "Hello back!" });
+
+    await chatSendCommand.parseAsync(["node", "cli", "hello"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("hello"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Hello back!"));
+    consoleSpy.mockRestore();
+  });
+
+  it("passes conversation id when provided", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ content: "response" });
+
+    await chatSendCommand.parseAsync(["node", "cli", "hi", "--conversation", "cnv_abc"]);
+
+    const callBody = JSON.parse((mockApiRequest.mock.calls[0]?.[1] as RequestInit)?.body as string);
+    expect(callBody.conversationId).toBe("cnv_abc");
+    consoleSpy.mockRestore();
+  });
+
+  it("exits 1 on API error", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("timeout"));
+
+    await expect(() => chatSendCommand.parseAsync(["node", "cli", "msg"])).rejects.toThrow("exit");
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// conversation commands
+// ---------------------------------------------------------------------------
+describe("conversation list", () => {
+  it("lists conversations", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      conversations: [{ publicId: "cnv_1", title: "First conversation" }],
+    });
+
+    await conversationListCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Conversations"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("cnv_1"));
+    consoleSpy.mockRestore();
+  });
+
+  it("shows empty message when no conversations", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ conversations: [] });
+
+    await conversationListCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("No conversations"));
+    consoleSpy.mockRestore();
+  });
+
+  it("passes filter and limit params", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ conversations: [] });
+
+    await conversationListCommand.parseAsync(["node", "cli", "--filter", "archived", "--limit", "5"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("archived"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("conversation delete", () => {
+  it("deletes conversation and confirms", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await conversationDeleteCommand.parseAsync(["node", "cli", "cnv_abc"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/conversations/cnv_abc", expect.objectContaining({ method: "DELETE" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("cnv_abc"));
+    consoleSpy.mockRestore();
+  });
+
+  it("exits 1 on not found", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Not found"));
+
+    await expect(() => conversationDeleteCommand.parseAsync(["node", "cli", "bad"])).rejects.toThrow("exit");
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+describe("conversation archive", () => {
+  it("archives conversation", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await conversationArchiveCommand.parseAsync(["node", "cli", "cnv_abc"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/conversations/cnv_abc/archive", expect.anything());
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("archived"));
+    consoleSpy.mockRestore();
+  });
+
+  it("unarchives when --unarchive flag is set", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await conversationArchiveCommand.parseAsync(["node", "cli", "cnv_abc", "--unarchive"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("unarchived"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("conversation rename", () => {
+  it("renames conversation", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await conversationRenameCommand.parseAsync(["node", "cli", "cnv_abc", "New Title"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/conversations/cnv_abc/rename", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("New Title"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// api-key
+// ---------------------------------------------------------------------------
+describe("api-key create", () => {
+  it("creates API key and displays secret", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ id: "key_123", key: "oxk_abc123secret" });
+
+    await apiKeyCreateCommand.parseAsync(["node", "cli", "my-key"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/api-keys", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("key_123"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("oxk_abc123secret"));
+    consoleSpy.mockRestore();
+  });
+
+  it("exits 1 on API error", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Quota exceeded"));
+
+    await expect(() => apiKeyCreateCommand.parseAsync(["node", "cli", "key"])).rejects.toThrow("exit");
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+describe("api-key revoke", () => {
+  it("revokes API key", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await apiKeyRevokeCommand.parseAsync(["node", "cli", "key_123"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/api-keys/key_123", expect.objectContaining({ method: "DELETE" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("key_123"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// notifications
+// ---------------------------------------------------------------------------
+describe("notifications list", () => {
+  it("lists notifications with unread marker", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      notifications: [
+        { publicId: "ntf_1", title: "New member joined", readAt: null },
+        { publicId: "ntf_2", title: "Subscription renewed", readAt: "2026-06-01" },
+      ],
+    });
+
+    await notificationsListCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("ntf_1"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("ntf_2"));
+    consoleSpy.mockRestore();
+  });
+
+  it("shows empty message when none", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ notifications: [] });
+
+    await notificationsListCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("No notifications"));
+    consoleSpy.mockRestore();
+  });
+
+  it("passes unread filter", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ notifications: [] });
+
+    await notificationsListCommand.parseAsync(["node", "cli", "--unread"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("unread"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("notifications mark", () => {
+  it("marks notification as read", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await notificationsMarkCommand.parseAsync(["node", "cli", "ntf_1"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/notifications/ntf_1/mark", expect.anything());
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("read"));
+    consoleSpy.mockRestore();
+  });
+
+  it("marks notification as unread with --unread flag", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await notificationsMarkCommand.parseAsync(["node", "cli", "ntf_1", "--unread"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("unread"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plugin
+// ---------------------------------------------------------------------------
+describe("plugin list", () => {
+  it("lists installed plugins", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      plugins: [{ pluginId: "github", enabled: true }, { pluginId: "slack", enabled: false }],
+    });
+
+    await pluginListCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("github"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("enabled"));
+    consoleSpy.mockRestore();
+  });
+
+  it("shows empty message when no plugins", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ plugins: [] });
+
+    await pluginListCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("No plugins"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("plugin install", () => {
+  it("installs plugin", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await pluginInstallCommand.parseAsync(["node", "cli", "github"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugins/install", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("github"));
+    consoleSpy.mockRestore();
+  });
+
+  it("exits 1 on install failure", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Not found in catalog"));
+
+    await expect(() => pluginInstallCommand.parseAsync(["node", "cli", "bad-plugin"])).rejects.toThrow("exit");
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+});
+
+describe("plugin uninstall", () => {
+  it("uninstalls plugin", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await pluginUninstallCommand.parseAsync(["node", "cli", "slack"]);
+
+    expect(mockApiRequest).toHaveBeenCalledWith("/plugins/uninstall", expect.objectContaining({ method: "POST" }));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("slack"));
+    consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// billing status
+// ---------------------------------------------------------------------------
+describe("billing status", () => {
+  it("shows subscription plan and status", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      subscription: {
+        plan: { name: "Scale" },
+        status: "active",
+        currentPeriodEnd: "2026-07-01",
+      },
+      creditBalance: { balanceUsd: 42.5 },
+    });
+
+    await billingStatusCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Scale"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("active"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("42.50"));
+    consoleSpy.mockRestore();
+  });
+
+  it("shows 'No active subscription' when absent", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({});
+
+    await billingStatusCommand.parseAsync(["node", "cli"]);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("No active subscription"));
+    consoleSpy.mockRestore();
+  });
+
+  it("exits 1 on API error", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
+    mockApiRequest.mockRejectedValueOnce(new Error("Forbidden"));
+
+    await expect(() => billingStatusCommand.parseAsync(["node", "cli"])).rejects.toThrow("exit");
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
   });
 });
