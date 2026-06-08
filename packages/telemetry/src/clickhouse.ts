@@ -75,8 +75,8 @@ export async function sumTokenUsage(args: {
     `,
     query_params: {
       orgId: args.orgId,
-      periodStart: args.periodStart.toISOString(),
-      periodEnd: args.periodEnd.toISOString(),
+      periodStart: args.periodStart.toISOString().replace('Z', ''),
+      periodEnd: args.periodEnd.toISOString().replace('Z', ''),
     },
     format: "JSONEachRow",
   });
