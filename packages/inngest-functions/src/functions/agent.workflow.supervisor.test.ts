@@ -181,9 +181,11 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
   it("dispatches inngest events for each task", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     expect(mocks.inngestSend).toHaveBeenCalled();
-    const sendArg: Array<Record<string, unknown>> = mocks.inngestSend.mock.calls[0]![0] as Array<Record<string, unknown>>;
-    expect(Array.isArray(sendArg)).toBe(true);
-    expect(sendArg[0]).toMatchObject({
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const calls = mocks.inngestSend.mock.calls[0] as unknown[];
+    const sendArg = calls?.[0] as Array<Record<string, unknown>> | undefined;
+    expect(sendArg).toBeDefined();
+    expect(sendArg?.[0]).toMatchObject({
       name: "agent/workflow.task.execute",
       data: expect.objectContaining({ orgId: "org-1", workflowRunId: "wfr-uuid-1" }),
     });

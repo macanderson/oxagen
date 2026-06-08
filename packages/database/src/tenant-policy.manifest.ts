@@ -23,6 +23,7 @@ export interface PolicyEntry {
 // (orgSchema from _schemas.ts). Table names are confirmed from schema/*.ts.
 export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ── agent.* (orgScopeMixin: org_id + workspace_id NOT NULL) ──────────────
+  // agent.tools dropped in 0021 (orphan table, never wired to handler/route)
   { table: "agent.agents", policyClass: "standard" },
   { table: "agent.agent_versions", policyClass: "standard" },
   { table: "agent.skills", policyClass: "standard" },
@@ -41,6 +42,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "chat.messages", policyClass: "standard" },
 
   // ── content.* (orgScopeMixin) ─────────────────────────────────────────────
+  // content.documents dropped in 0021 (orphan table, never wired to handler/route)
   { table: "content.files", policyClass: "standard" },
   { table: "content.generated_assets", policyClass: "standard" },
 
