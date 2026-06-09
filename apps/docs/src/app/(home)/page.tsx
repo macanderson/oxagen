@@ -1,7 +1,8 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { MarketingHeroPage } from "@oxagen/ui";
 
-export default function HomePage() {
+export default function HomePage(): ReactNode {
   return (
     <div className="min-h-screen flex flex-col">
       <div className="mb-12">
