@@ -77,7 +77,7 @@ function getNeo(): Driver {
 
 // Deterministic UUIDs for the scenario fixture rows.
 // Using name-based (v5-style) stable IDs so reruns are idempotent.
-const SCENARIO_IDS = {
+const _SCENARIO_IDS = {
   toolMemoryRecall: "00000000-e2e0-0000-0000-000000000001",
   toolMemoryWrite: "00000000-e2e0-0000-0000-000000000002",
   toolCodeExecute: "00000000-e2e0-0000-0000-000000000003",
