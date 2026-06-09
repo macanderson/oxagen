@@ -8,6 +8,8 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
+      include: ["src/**/*.ts"],
+      exclude: ["src/**/*.test.ts", "src/**/*.spec.ts", "src/**/*.mock.ts"],
       // lines floor 33 (measured 34.18 after workflow schema added without tests;
       //   schema definitions are compile-time artifacts — raise when dedicated
       //   schema smoke tests are added). branches/functions still healthy.
