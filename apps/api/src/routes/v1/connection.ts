@@ -1,0 +1,92 @@
+import { Hono } from "hono";
+import { connectionList } from "@oxagen/oxagen/contracts/connection.list";
+import { connectionCreate } from "@oxagen/oxagen/contracts/connection.create";
+import { connectionGet } from "@oxagen/oxagen/contracts/connection.get";
+import { connectionDelete } from "@oxagen/oxagen/contracts/connection.delete";
+import { connectionPreview } from "@oxagen/oxagen/contracts/connection.preview";
+import { connectionMappingsSuggest } from "@oxagen/oxagen/contracts/connection.mappings.suggest";
+import { connectionMappingsGet } from "@oxagen/oxagen/contracts/connection.mappings.get";
+import { connectionMappingsSet } from "@oxagen/oxagen/contracts/connection.mappings.set";
+import { invoke } from "@oxagen/oxagen/kernel";
+import { capabilityContext } from "../../lib/context";
+import type { AppEnv } from "../../app";
+
+export const connectionRoute = new Hono<AppEnv>();
+
+// GET /connections — list connections for workspace
+connectionRoute.get("/", async (c) => {
+  const body = connectionList.input.parse({
+    status: c.req.query("status"),
+    connectorId: c.req.query("connectorId"),
+  });
+  const ctx = capabilityContext(c);
+  const out = await invoke(connectionList.name, body, ctx, { surface: "api" });
+  return c.json(out);
+});
+
+// POST /connections — create new connection
+connectionRoute.post("/", async (c) => {
+  const body = connectionCreate.input.parse(await c.req.json());
+  const ctx = capabilityContext(c);
+  const out = await invoke(connectionCreate.name, body, ctx, { surface: "api" });
+  return c.json(out, 201);
+});
+
+// GET /connections/:id — get connection details
+connectionRoute.get("/:id", async (c) => {
+  const body = connectionGet.input.parse({ connectionId: c.req.param("id") });
+  const ctx = capabilityContext(c);
+  const out = await invoke(connectionGet.name, body, ctx, { surface: "api" });
+  return c.json(out);
+});
+
+// DELETE /connections/:id — delete connection (mode query param)
+connectionRoute.delete("/:id", async (c) => {
+  const body = connectionDelete.input.parse({
+    connectionId: c.req.param("id"),
+    mode: c.req.query("mode") ?? "full",
+  });
+  const ctx = capabilityContext(c);
+  const out = await invoke(connectionDelete.name, body, ctx, { surface: "api" });
+  return c.json(out);
+});
+
+// GET /connections/:id/preview — preview sample records
+connectionRoute.get("/:id/preview", async (c) => {
+  const body = connectionPreview.input.parse({ connectionId: c.req.param("id") });
+  const ctx = capabilityContext(c);
+  const out = await invoke(connectionPreview.name, body, ctx, { surface: "api" });
+  return c.json(out);
+});
+
+// POST /connections/:id/suggest-mappings — LLM-suggested entity type mappings
+connectionRoute.post("/:id/suggest-mappings", async (c) => {
+  const json = await c.req.json();
+  const body = connectionMappingsSuggest.input.parse({
+    connectionId: c.req.param("id"),
+    ...json,
+  });
+  const ctx = capabilityContext(c);
+  const out = await invoke(connectionMappingsSuggest.name, body, ctx, { surface: "api" });
+  return c.json(out);
+});
+
+// GET /connections/:id/mappings — get current entity type mappings
+connectionRoute.get("/:id/mappings", async (c) => {
+  const body = connectionMappingsGet.input.parse({ connectionId: c.req.param("id") });
+  const ctx = capabilityContext(c);
+  const out = await invoke(connectionMappingsGet.name, body, ctx, { surface: "api" });
+  return c.json(out);
+});
+
+// PUT /connections/:id/mappings — save confirmed entity type mappings
+connectionRoute.put("/:id/mappings", async (c) => {
+  const json = await c.req.json();
+  const body = connectionMappingsSet.input.parse({
+    connectionId: c.req.param("id"),
+    ...json,
+  });
+  const ctx = capabilityContext(c);
+  const out = await invoke(connectionMappingsSet.name, body, ctx, { surface: "api" });
+  return c.json(out);
+});

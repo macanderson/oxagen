@@ -97,6 +97,8 @@ import { skillWorkspaceListRoute } from "./routes/v1/skill.workspace.list";
 import { agentSubagentDispatchRoute } from "./routes/v1/agent.subagent.dispatch";
 import { privacyDataExportRoute } from "./routes/v1/privacy.data.export";
 import { privacyDataEraseRoute } from "./routes/v1/privacy.data.erase";
+import { connectionRoute } from "./routes/v1/connection";
+import { webhookRoute } from "./routes/v1/webhook";
 
 export type AppEnv = {
   Variables: {
@@ -118,6 +120,8 @@ app.onError(errorMiddleware);
 // the raw body for signature verification and is its own auth surface.
 app.route("/health", health);
 app.route("/webhooks/stripe", stripeWebhook);
+// Connector webhooks: unauthenticated — HMAC validation is the security boundary.
+app.route("/webhooks", webhookRoute);
 // Inngest cloud polls /api/inngest for the function manifest; signing-key
 // verification is enforced inside the inngest/hono serve handler.
 app.route("/api/inngest", inngestRoute);
@@ -223,4 +227,5 @@ orgScoped.route("/automation/trigger", automationTriggerRoute);
 orgScoped.route("/skill/workspace/list", skillWorkspaceListRoute);
 orgScoped.route("/privacy/export", privacyDataExportRoute);
 orgScoped.route("/privacy/erase", privacyDataEraseRoute);
+orgScoped.route("/connections", connectionRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

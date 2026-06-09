@@ -183,37 +183,11 @@ vi.mock("@oxagen/oxagen/contracts/agent.plan.approve", () => ({
 }));
 
 import {
-  orgShellSendAction,
-  orgShellResolveApprovalAction,
-  orgShellResolvePlanAction,
   wandResolveApprovalAction,
   wandResolvePlanAction,
 } from "./shell-actions";
 
 const SESSION = { user: { id: "user-1" } };
-
-// ---------------------------------------------------------------------------
-// Tests — stub actions
-// ---------------------------------------------------------------------------
-
-describe("stub actions (always return ok:false)", () => {
-  it("orgShellSendAction returns {ok:false} with a select-workspace message", async () => {
-    const fd = new FormData();
-    const res = await orgShellSendAction(fd);
-    expect(res.ok).toBe(false);
-    expect(res.error).toContain("workspace");
-  });
-
-  it("orgShellResolveApprovalAction returns {ok:false}", async () => {
-    const res = await orgShellResolveApprovalAction("appr-1", "approved");
-    expect(res.ok).toBe(false);
-  });
-
-  it("orgShellResolvePlanAction returns {ok:false}", async () => {
-    const res = await orgShellResolvePlanAction("plan-1", "approved");
-    expect(res.ok).toBe(false);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Tests — wandResolveApprovalAction

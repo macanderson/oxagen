@@ -35,7 +35,10 @@ export async function requestUserDataExportAction(): Promise<ExportResult> {
     {
       userId: session.user.id,
       orgId,
-      workspaceId: null,
+      workspaceId: "00000000-0000-0000-0000-000000000000",
+      apiKeyId: null,
+      requestId: crypto.randomUUID(),
+      messageId: null,
       surface: "app",
     },
     { surface: "api" },
@@ -61,7 +64,10 @@ export async function requestUserDataEraseAction(): Promise<EraseResult> {
     {
       userId: session.user.id,
       orgId,
-      workspaceId: null,
+      workspaceId: "00000000-0000-0000-0000-000000000000",
+      apiKeyId: null,
+      requestId: crypto.randomUUID(),
+      messageId: null,
       surface: "app",
     },
     { surface: "api" },

@@ -90,8 +90,8 @@ describe("privacy.data.erase capability", () => {
     expect(privacyDataErase.agent?.requiresApproval).toBe(true);
   });
 
-  it("has critical sensitivity", () => {
-    expect(privacyDataErase.sensitivity).toBe("critical");
+  it("has destructive sensitivity", () => {
+    expect(privacyDataErase.sensitivity).toBe("destructive");
   });
 
   it("is in the privacy domain", () => {

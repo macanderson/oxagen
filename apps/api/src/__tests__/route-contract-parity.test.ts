@@ -115,6 +115,7 @@ function contractNameToPathSegment(name: string): string {
     "api.key": "api-keys",
     workflow: "workflows",
     archive: "archive",
+    connection: "connections",
   };
 
   // Try progressively shorter prefixes

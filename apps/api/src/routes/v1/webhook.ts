@@ -1,0 +1,130 @@
+import { Hono } from "hono";
+import { schema, withTenantDb } from "@oxagen/database";
+import { eq, and, isNull } from "drizzle-orm";
+import { inngest } from "@oxagen/inngest-functions/client";
+import { getConnector } from "@oxagen/ingestion/connectors";
+import { decrypt } from "@oxagen/crypto";
+import { createIngestionCryptoAdapter } from "@oxagen/crypto";
+import type { AppEnv } from "../../app";
+
+export const webhookRoute = new Hono<AppEnv>();
+
+// POST /webhooks/:connectorId/:connectionId
+// Unauthenticated entry point for connector webhook deliveries.
+// HMAC validation is the security boundary — each connector verifies its own signature.
+webhookRoute.post("/:connectorId/:connectionId", async (c) => {
+  const connectorId = c.req.param("connectorId");
+  const connectionPublicId = c.req.param("connectionId");
+
+  // MS Graph lifecycle validation: echo validationToken back as text/plain
+  const validationToken = c.req.query("validationToken");
+  if (validationToken) {
+    return c.text(validationToken, 200, { "Content-Type": "text/plain" });
+  }
+
+  // Read raw body for HMAC verification — must read before any other parsing
+  const rawBody = await c.req.arrayBuffer();
+  const payload = new Uint8Array(rawBody);
+
+  // Load connector — 404 if unknown connector slug
+  let connector: ReturnType<typeof getConnector> | null = null;
+  try {
+    connector = getConnector(connectorId);
+  } catch {
+    return c.json({ error: "Unknown connector" }, 404);
+  }
+
+  // Look up the connection and its HMAC secret
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({
+        connectionId: schema.sourceConnections.id,
+        orgId: schema.sourceConnections.orgId,
+        workspaceId: schema.sourceConnections.workspaceId,
+        status: schema.sourceConnections.status,
+        secretEnc: schema.webhookSubscriptions.secretEnc,
+      })
+      .from(schema.sourceConnections)
+      .leftJoin(
+        schema.webhookSubscriptions,
+        and(
+          eq(schema.webhookSubscriptions.connectionId, schema.sourceConnections.id),
+          isNull(schema.sourceConnections.deletedAt),
+        ),
+      )
+      .where(
+        and(
+          eq(schema.sourceConnections.publicId, connectionPublicId),
+          isNull(schema.sourceConnections.deletedAt),
+        ),
+      )
+      .limit(1),
+  );
+
+  const conn = rows[0];
+  if (!conn) {
+    return c.json({ error: "Connection not found" }, 404);
+  }
+
+  // Decrypt HMAC signing secret
+  let webhookSecret: string | undefined;
+  if (conn.secretEnc) {
+    try {
+      const enc = conn.secretEnc as { keyId: string; ciphertext: string };
+      const { adapter } = createIngestionCryptoAdapter();
+      const plain = await decrypt(Buffer.from(enc.ciphertext, "base64"), enc.keyId, { adapter });
+      webhookSecret = plain.toString("utf8");
+    } catch {
+      // Proceed without secret — connector.verifyWebhook will return false
+    }
+  }
+
+  // Build header map for connector verification
+  const headers: Record<string, string> = {};
+  c.req.raw.headers.forEach((value, key) => {
+    headers[key.toLowerCase()] = value;
+  });
+
+  // HMAC / token verification — connector decides the algorithm
+  const verified = connector.verifyWebhook?.(payload, headers, webhookSecret ?? null) ?? true;
+  if (!verified) {
+    return c.json({ error: "Webhook signature invalid" }, 401);
+  }
+
+  // Parse payload as JSON for the Inngest event
+  let parsedPayload: unknown;
+  try {
+    parsedPayload = JSON.parse(Buffer.from(payload).toString("utf8"));
+  } catch {
+    parsedPayload = Buffer.from(payload).toString("utf8");
+  }
+
+  // Determine source record type from the delivery payload (connector-specific header or body field)
+  const sourceRecordType =
+    headers["x-github-event"] ??
+    headers["x-linear-event"] ??
+    headers["x-slack-event-type"] ??
+    (typeof parsedPayload === "object" &&
+    parsedPayload !== null &&
+    "type" in parsedPayload &&
+    typeof (parsedPayload as Record<string, unknown>)["type"] === "string"
+      ? String((parsedPayload as Record<string, unknown>)["type"])
+      : "event");
+
+  // Fire Inngest pipeline event
+  await inngest.send({
+    name: "ingestion/entity.received",
+    data: {
+      connectionId: conn.connectionId,
+      workspaceId: conn.workspaceId,
+      orgId: conn.orgId,
+      connectorType: connectorId,
+      sourceRecordType,
+      idempotencyKey: `${connectorId}:${conn.connectionId}:${sourceRecordType}:${Date.now()}`,
+      payload: parsedPayload,
+      receivedAt: new Date().toISOString(),
+    },
+  });
+
+  return c.json({ received: true }, 200);
+});

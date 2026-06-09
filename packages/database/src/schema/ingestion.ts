@@ -1,0 +1,239 @@
+import { boolean, index, integer, jsonb, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgSchema } from "drizzle-orm/pg-core";
+import { citext, idMixin, uuidv7Default } from "./_mixins";
+
+export const ingestionSchema = pgSchema("ingestion");
+
+// ── ingestion.source_connections ─────────────────────────────────────────────
+
+export const sourceConnections = ingestionSchema.table(
+  "source_connections",
+  {
+    ...idMixin("con"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    workspaceId: uuid("workspace_id").notNull(),
+    orgId: uuid("org_id").notNull(),
+    connectorId: text("connector_id").notNull(),
+    displayName: text("display_name").notNull(),
+    authScheme: text("auth_scheme").notNull(),
+    deliveryMethod: text("delivery_method").notNull(),
+    deliveryConfig: jsonb("delivery_config"),
+    status: citext("status").notNull().default("pending_setup"),
+    entityCount: integer("entity_count").notNull().default(0),
+    cursor: jsonb("cursor"),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true, mode: "date" }),
+    errorMessage: text("error_message"),
+    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
+    deletedBy: uuid("deleted_by"),
+    oauthAccountId: uuid("oauth_account_id"),
+  },
+  (t) => ({
+    workspaceOrgIdx: index("source_connections_workspace_org_idx").on(t.workspaceId, t.orgId),
+    connectorIdx: index("source_connections_connector_idx").on(t.connectorId),
+    statusIdx: index("source_connections_status_idx").on(t.status),
+    oauthAccountIdx: index("source_connections_oauth_account_idx").on(t.oauthAccountId),
+  }),
+);
+
+// ── ingestion.auth_credentials ───────────────────────────────────────────────
+
+export const authCredentials = ingestionSchema.table("auth_credentials", {
+  connectionId: uuid("connection_id").primaryKey(),
+  authScheme: text("auth_scheme").notNull(),
+  encryptedPayload: jsonb("encrypted_payload").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});
+
+// ── ingestion.oauth_tokens ────────────────────────────────────────────────────
+
+export const oauthTokens = ingestionSchema.table(
+  "oauth_tokens",
+  {
+    connectionId: uuid("connection_id").primaryKey(),
+    accessTokenEnc: jsonb("access_token_enc").notNull(),
+    refreshTokenEnc: jsonb("refresh_token_enc"),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+    tokenType: text("token_type").notNull().default("Bearer"),
+    scopes: text("scopes").array().notNull().default(sql`'{}'`),
+    providerUserId: text("provider_user_id"),
+    providerAccountId: text("provider_account_id"),
+    lastRefreshedAt: timestamp("last_refreshed_at", { withTimezone: true, mode: "date" }),
+    refreshFailureCount: integer("refresh_failure_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    expiresAtIdx: index("oauth_tokens_expires_at_idx").on(t.expiresAt),
+  }),
+);
+
+// ── ingestion.webhook_subscriptions ──────────────────────────────────────────
+
+export const webhookSubscriptions = ingestionSchema.table(
+  "webhook_subscriptions",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    publicId: citext("public_id").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    connectionId: uuid("connection_id").notNull(),
+    webhookPath: text("webhook_path").notNull().unique(),
+    secretEnc: jsonb("secret_enc"),
+    hmacAlgorithm: text("hmac_algorithm"),
+    hmacHeader: text("hmac_header"),
+    providerSubscriptionId: text("provider_subscription_id"),
+    recordTypes: text("record_types").array().notNull().default(sql`'{}'`),
+    status: citext("status").notNull().default("active"),
+    lastReceivedAt: timestamp("last_received_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    connectionIdx: index("webhook_subscriptions_connection_idx").on(t.connectionId),
+    statusIdx: index("webhook_subscriptions_status_idx").on(t.status),
+  }),
+);
+
+// ── ingestion.oauth_accounts ──────────────────────────────────────────────────
+
+export const oauthAccounts = ingestionSchema.table(
+  "oauth_accounts",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    publicId: citext("public_id").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    orgId: uuid("org_id").notNull(),
+    provider: text("provider").notNull(),
+    providerUserId: text("provider_user_id").notNull(),
+    providerUserEmail: text("provider_user_email"),
+    providerUserName: text("provider_user_name"),
+    accessTokenEnc: jsonb("access_token_enc").notNull(),
+    refreshTokenEnc: jsonb("refresh_token_enc"),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+    tokenType: text("token_type").notNull().default("Bearer"),
+    scopes: text("scopes").array().notNull().default(sql`'{}'`),
+    lastRefreshedAt: timestamp("last_refreshed_at", { withTimezone: true, mode: "date" }),
+    refreshFailureCount: integer("refresh_failure_count").notNull().default(0),
+  },
+  (t) => ({
+    orgProviderIdx: index("oauth_accounts_org_provider_idx").on(t.orgId, t.provider),
+    expiresAtIdx: index("oauth_accounts_expires_at_idx").on(t.expiresAt),
+    orgProviderUserUniq: unique("oauth_accounts_org_provider_user_uq").on(
+      t.orgId,
+      t.provider,
+      t.providerUserId,
+    ),
+  }),
+);
+
+// ── ingestion.entity_types ────────────────────────────────────────────────────
+
+export const entityTypes = ingestionSchema.table(
+  "entity_types",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    publicId: citext("public_id").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    workspaceId: uuid("workspace_id").notNull(),
+    orgId: uuid("org_id").notNull(),
+    name: text("name").notNull(),
+    displayName: text("display_name").notNull(),
+    description: text("description"),
+    commonPropertyKeys: text("common_property_keys").array().notNull().default(sql`'{}'`),
+    expectedEdges: jsonb("expected_edges").notNull().default(sql`'[]'::jsonb`),
+    rowCount: integer("row_count").notNull().default(0),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" }),
+    isCustom: boolean("is_custom").notNull().default(false),
+  },
+  (t) => ({
+    workspaceOrgIdx: index("entity_types_workspace_org_idx").on(t.workspaceId, t.orgId),
+    lastSeenIdx: index("entity_types_last_seen_idx").on(t.lastSeenAt),
+    workspaceNameUniq: unique("entity_types_workspace_name_uniq").on(t.workspaceId, t.name),
+  }),
+);
+
+// ── ingestion.entity_type_mappings ────────────────────────────────────────────
+
+export const entityTypeMappings = ingestionSchema.table(
+  "entity_type_mappings",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    publicId: citext("public_id").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    connectionId: uuid("connection_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+    orgId: uuid("org_id").notNull(),
+    sourceRecordType: text("source_record_type").notNull(),
+    oxagenEntityType: text("oxagen_entity_type").notNull(),
+    propertyMappings: jsonb("property_mappings").notNull().default(sql`'{}'::jsonb`),
+    isActive: boolean("is_active").notNull().default(true),
+  },
+  (t) => ({
+    connectionIdx: index("entity_type_mappings_connection_idx").on(t.connectionId),
+    workspaceTypeIdx: index("entity_type_mappings_workspace_type_idx").on(
+      t.workspaceId,
+      t.oxagenEntityType,
+    ),
+    connectionTypeUniq: unique("entity_type_mappings_connection_type_uniq").on(
+      t.connectionId,
+      t.sourceRecordType,
+    ),
+  }),
+);
+
+// ── ingestion.setup_suggestions ───────────────────────────────────────────────
+
+export const setupSuggestions = ingestionSchema.table(
+  "setup_suggestions",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    publicId: citext("public_id").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    connectionId: uuid("connection_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+    sourceRecordType: text("source_record_type").notNull(),
+    suggestedEntityType: text("suggested_entity_type").notNull(),
+    suggestedPropertyMappings: jsonb("suggested_property_mappings")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    reasoning: text("reasoning"),
+    status: citext("status").notNull().default("pending"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
+    resolvedBy: uuid("resolved_by"),
+  },
+  (t) => ({
+    connectionIdx: index("setup_suggestions_connection_idx").on(t.connectionId),
+    statusIdx: index("setup_suggestions_status_idx").on(t.status),
+  }),
+);
+
+// ── ingestion.deletion_jobs ────────────────────────────────────────────────────
+
+export const deletionJobs = ingestionSchema.table(
+  "deletion_jobs",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    publicId: citext("public_id").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    connectionId: uuid("connection_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+    orgId: uuid("org_id").notNull(),
+    deleteMode: text("delete_mode").notNull(),
+    requestedBy: uuid("requested_by").notNull(),
+    totalEntities: integer("total_entities"),
+    deletedEntities: integer("deleted_entities").notNull().default(0),
+    aliasPromotions: integer("alias_promotions").notNull().default(0),
+    status: text("status").notNull().default("running"),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    error: text("error"),
+  },
+  (t) => ({
+    connectionIdx: index("deletion_jobs_connection_idx").on(t.connectionId),
+    workspaceIdx: index("deletion_jobs_workspace_idx").on(t.workspaceId),
+    statusIdx: index("deletion_jobs_status_idx").on(t.status),
+  }),
+);

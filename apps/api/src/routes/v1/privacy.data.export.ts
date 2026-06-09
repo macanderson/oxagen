@@ -20,6 +20,8 @@ privacyDataExportRoute.post("/", async (c) => {
 privacyDataExportRoute.get("/:exportId", async (c) => {
   const exportId = c.req.param("exportId");
   const ctx = capabilityContext(c);
+  const userId = ctx.userId;
+  if (!userId) return c.json({ error: "unauthorized" }, 401);
   const rows = await withSystemDb((tx) =>
     tx
       .select({
@@ -32,7 +34,7 @@ privacyDataExportRoute.get("/:exportId", async (c) => {
       .where(
         and(
           eq(schema.privacyExportRequests.id, exportId),
-          eq(schema.privacyExportRequests.userId, ctx.userId),
+          eq(schema.privacyExportRequests.userId, userId),
         ),
       )
       .limit(1),

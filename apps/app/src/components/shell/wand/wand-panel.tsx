@@ -45,6 +45,9 @@ import { Button } from "@/components/ui/button";
 import { wandSendAction, wandResolveApprovalAction, wandResolvePlanAction } from "@/app/[orgSlug]/shell-actions";
 import type { ComposerAction } from "@/components/chat/message-composer";
 import type { ChatShellProps } from "@/components/chat/chat-shell";
+import type { ChatMessage } from "@/components/chat/message-bubble";
+
+const EMPTY_MESSAGES: ChatMessage[] = [];
 
 // ---------------------------------------------------------------------------
 // Props
@@ -212,7 +215,7 @@ function WandChatShell({
         conversationId={null}
         conversationPublicId={null}
         activeLeafMessageId={null}
-        messages={[]}
+        messages={EMPTY_MESSAGES}
         sendAction={sendAction}
         resolveApprovalAction={resolveApprovalAction}
         resolvePlanAction={resolvePlanAction}

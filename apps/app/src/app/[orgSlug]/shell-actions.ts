@@ -363,29 +363,5 @@ export async function wandResolvePlanAction(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Stub actions retained for the existing AskDrawer (non-functional by design).
-// The wand panel uses wandSendAction above instead.
-// ---------------------------------------------------------------------------
 
-export async function orgShellSendAction(
-  _formData: FormData,
-): Promise<{ ok: false; error: string }> {
-  return { ok: false, error: "Select a workspace to start chatting." };
-}
-
-export async function orgShellResolveApprovalAction(
-  _approvalId: string,
-  _decision: "approved" | "denied",
-): Promise<{ ok: false; error: string }> {
-  return { ok: false, error: "No active workspace." };
-}
-
-export async function orgShellResolvePlanAction(
-  _planId: string,
-  _decision: "approved" | "denied" | "amended",
-  _amendedSteps?: import("@/components/chat/stream-event-types").PlanStep[],
-): Promise<{ ok: false; error: string }> {
-  return { ok: false, error: "No active workspace." };
-}
 

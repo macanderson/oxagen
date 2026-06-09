@@ -13,11 +13,6 @@ import { PageContextProvider } from "@/lib/page-context";
 import { AskDrawer } from "@/components/shell/ask/ask-drawer";
 import { CommandMenu } from "@/components/shell/ask/command-menu";
 import { FillOverlay } from "@/components/shell/ask/fill-overlay";
-import {
-  orgShellSendAction,
-  orgShellResolveApprovalAction,
-  orgShellResolvePlanAction,
-} from "./shell-actions";
 import { resolvedTierCatalog } from "@oxagen/ai";
 import { WandButton, WandPanel } from "@/components/shell/wand";
 
@@ -125,10 +120,8 @@ export default async function OrgLayout({
 
       {/* Ask drawer — mounted once at the org shell boundary. */}
       <AskDrawer
-        ctx={ctx}
-        sendAction={orgShellSendAction}
-        resolveApprovalAction={orgShellResolveApprovalAction}
-        resolvePlanAction={orgShellResolvePlanAction}
+        orgSlug={orgSlug}
+        availableWorkspaces={workspacesRows}
         modelConfig={resolvedTierCatalog()}
       />
 

@@ -307,4 +307,12 @@ export const contracts = [
   agentExecutionRecord,
   agentSubagentAggregate,
   agentSubagentDispatch,
+  connectionList,
+  connectionCreate,
+  connectionGet,
+  connectionDelete,
+  connectionPreview,
+  connectionMappingsSuggest,
+  connectionMappingsGet,
+  connectionMappingsSet,
 ] as const;

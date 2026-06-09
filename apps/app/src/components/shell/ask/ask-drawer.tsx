@@ -2,19 +2,10 @@
 /**
  * AskDrawer — right-side Sheet that wraps ChatShellClient.
  *
- * The drawer persists across page navigations within the PageContextProvider
- * (the open/close state lives in PageContext, not in local component state).
- *
- * The "pop out" button navigates to /{org}/{ws}/chat so the user gets the
- * full chat experience.
- *
- * The drawer does NOT own a conversation — it passes a null conversationId and
- * a minimal set of props to ChatShellClient so it bootstraps a new conversation
- * for each session. This is intentional: the drawer is a quick-access surface,
- * not a persistent conversation view.
- *
- * Page context (entity summary + current route) is forwarded to the chat
- * action as a system prompt prefix via the seeded message in the composer.
+ * Workspace resolution mirrors WandPanel: mounted at the [orgSlug] layout
+ * boundary, so we resolve the active workspace from usePathname() via
+ * resolveSidebarCtx(), falling back to the first available workspace when the
+ * current path is org-level (no workspace in the URL).
  */
 
 import * as React from "react";
@@ -23,7 +14,8 @@ import Link from "next/link";
 import { ArrowUpRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePageContext } from "@/lib/page-context";
-import type { ScopeContext } from "@/lib/scope";
+import { usePathname } from "next/navigation";
+import { resolveSidebarCtx } from "@/lib/sidebar";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 import {
   Sheet,
@@ -32,62 +24,83 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import {
+  wandSendAction,
+  wandResolveApprovalAction,
+  wandResolvePlanAction,
+} from "@/app/[orgSlug]/shell-actions";
+import type { ComposerAction } from "@/components/chat/message-composer";
+import type { ChatShellProps } from "@/components/chat/chat-shell";
+import type { ChatMessage } from "@/components/chat/message-bubble";
+
+const EMPTY_MESSAGES: ChatMessage[] = [];
 
 export interface AskDrawerProps {
-  ctx: ScopeContext;
-  /**
-   * The server actions forwarded to ChatShellClient.
-   * We accept them as props so the drawer can be placed in the app-shell
-   * layout and reused across all pages without re-resolving the actions.
-   */
-  sendAction: import("@/components/chat/message-composer").ComposerAction;
-  resolveApprovalAction: import("@/components/chat/chat-shell").ChatShellProps["resolveApprovalAction"];
-  resolvePlanAction: import("@/components/chat/chat-shell").ChatShellProps["resolvePlanAction"];
-  /** Resolved tier→model map from the server, forwarded to the composer. */
+  orgSlug: string;
+  availableWorkspaces: { slug: string; name: string; publicId: string }[];
   modelConfig: ResolvedTierCatalog;
 }
 
-export function AskDrawer({
-  ctx,
-  sendAction,
-  resolveApprovalAction,
-  resolvePlanAction,
-  modelConfig,
-}: AskDrawerProps) {
+export function AskDrawer({ orgSlug, availableWorkspaces, modelConfig }: AskDrawerProps) {
   const { isAskOpen, closeAsk } = usePageContext();
+  const pathname = usePathname();
 
-  const chatHref =
-    ctx.workspaceSlug
-      ? `/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`
-      : `/${ctx.orgSlug}`;
+  const ctx = resolveSidebarCtx(pathname, { orgSlug });
+  const activeWorkspaceSlug =
+    ctx.workspaceSlug ?? availableWorkspaces[0]?.slug ?? "";
+
+  const chatHref = activeWorkspaceSlug
+    ? `/${orgSlug}/${activeWorkspaceSlug}/ask`
+    : `/${orgSlug}`;
+
+  const scopedSendAction = React.useCallback<ComposerAction>(
+    async (formData: FormData) => {
+      formData.set("orgSlug", orgSlug);
+      formData.set("workspaceSlug", activeWorkspaceSlug);
+      return wandSendAction(formData);
+    },
+    [orgSlug, activeWorkspaceSlug],
+  );
+
+  const scopedResolveApprovalAction = React.useCallback<
+    ChatShellProps["resolveApprovalAction"]
+  >(
+    async (approvalId, decision) =>
+      wandResolveApprovalAction(orgSlug, activeWorkspaceSlug, approvalId, decision),
+    [orgSlug, activeWorkspaceSlug],
+  );
+
+  const scopedResolvePlanAction = React.useCallback<ChatShellProps["resolvePlanAction"]>(
+    async (planId, decision, amendedSteps) =>
+      wandResolvePlanAction(orgSlug, activeWorkspaceSlug, planId, decision, amendedSteps),
+    [orgSlug, activeWorkspaceSlug],
+  );
 
   return (
     <Sheet
       open={isAskOpen}
       onOpenChange={(open) => !open && closeAsk()}
-      // Keep the drawer open on outside clicks — closed only via the buttons.
       disablePointerDismissal
     >
       <SheetPopup
         side="right"
         className={cn(
-          // ~480px on desktop, full-width on mobile
           "flex flex-col p-0",
           "w-full sm:w-[480px] sm:max-w-[480px]",
-          // Override default sm:max-w-sm from sheet variants
           "[&]:sm:max-w-[480px]",
         )}
       >
-        {/* Header */}
         <SheetHeader className="flex flex-row items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="inline-flex size-7 items-center justify-center rounded-lg border border-border bg-muted" aria-hidden="true">
+            <span
+              className="inline-flex size-7 items-center justify-center rounded-lg border border-border bg-muted"
+              aria-hidden="true"
+            >
               <Sparkles className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             </span>
             <SheetTitle className="text-sm font-medium">Ask Oxagen</SheetTitle>
           </div>
           <div className="flex items-center gap-1 pr-6">
-            {/* Pop out to full chat — the Sheet's built-in close handles dismissal. */}
             <Button
               variant="ghost"
               size="icon"
@@ -100,13 +113,13 @@ export function AskDrawer({
           </div>
         </SheetHeader>
 
-        {/* Chat shell */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
           <AskDrawerChatShell
-            ctx={ctx}
-            sendAction={sendAction}
-            resolveApprovalAction={resolveApprovalAction}
-            resolvePlanAction={resolvePlanAction}
+            orgSlug={orgSlug}
+            workspaceSlug={activeWorkspaceSlug}
+            sendAction={scopedSendAction}
+            resolveApprovalAction={scopedResolveApprovalAction}
+            resolvePlanAction={scopedResolvePlanAction}
             modelConfig={modelConfig}
           />
         </div>
@@ -115,12 +128,6 @@ export function AskDrawer({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Inner component — lazily imports ChatShellClient to avoid bundling it
-// into the topbar chunk when the drawer is closed.
-// ---------------------------------------------------------------------------
-
-// React.lazy defers the chat bundle until the drawer first opens.
 const LazyChatShellClient = React.lazy(() =>
   import("@/components/chat/chat-shell-client").then((m) => ({
     default: m.ChatShellClient,
@@ -128,23 +135,28 @@ const LazyChatShellClient = React.lazy(() =>
 );
 
 function AskDrawerChatShell({
-  ctx,
+  orgSlug,
+  workspaceSlug,
   sendAction,
   resolveApprovalAction,
   resolvePlanAction,
   modelConfig,
 }: {
-  ctx: ScopeContext;
-  sendAction: import("@/components/chat/message-composer").ComposerAction;
-  resolveApprovalAction: import("@/components/chat/chat-shell").ChatShellProps["resolveApprovalAction"];
-  resolvePlanAction: import("@/components/chat/chat-shell").ChatShellProps["resolvePlanAction"];
+  orgSlug: string;
+  workspaceSlug: string;
+  sendAction: ComposerAction;
+  resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
+  resolvePlanAction: ChatShellProps["resolvePlanAction"];
   modelConfig: ResolvedTierCatalog;
 }) {
   return (
     <Suspense
       fallback={
         <div className="flex flex-1 items-center justify-center">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-foreground" aria-label="Loading" />
+          <div
+            className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-foreground"
+            aria-label="Loading AI agent"
+          />
         </div>
       }
     >
@@ -152,12 +164,12 @@ function AskDrawerChatShell({
         conversationId={null}
         conversationPublicId={null}
         activeLeafMessageId={null}
-        messages={[]}
+        messages={EMPTY_MESSAGES}
         sendAction={sendAction}
         resolveApprovalAction={resolveApprovalAction}
         resolvePlanAction={resolvePlanAction}
-        orgSlug={ctx.orgSlug}
-        workspaceSlug={ctx.workspaceSlug ?? ""}
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
         modelConfig={modelConfig}
       />
     </Suspense>

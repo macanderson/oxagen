@@ -27,7 +27,7 @@ export async function requestOrgDataExportAction(orgSlug: string): Promise<Expor
   const result = await invoke(
     "privacy.data.export",
     { scope: "org", orgId: org.id },
-    { userId: session.user.id, orgId: org.id, workspaceId: null, surface: "app" },
+    { userId: session.user.id, orgId: org.id, workspaceId: "00000000-0000-0000-0000-000000000000", apiKeyId: null, surface: "app", requestId: crypto.randomUUID(), messageId: null },
     { surface: "api" },
   );
   return result as ExportResult;
@@ -52,7 +52,7 @@ export async function requestOrgDataEraseAction(orgSlug: string): Promise<EraseR
   const result = await invoke(
     "privacy.data.erase",
     { scope: "org", orgId: org.id, confirm: true },
-    { userId: session.user.id, orgId: org.id, workspaceId: null, surface: "app" },
+    { userId: session.user.id, orgId: org.id, workspaceId: "00000000-0000-0000-0000-000000000000", apiKeyId: null, surface: "app", requestId: crypto.randomUUID(), messageId: null },
     { surface: "api" },
   );
   return result as EraseResult;

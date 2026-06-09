@@ -6,11 +6,6 @@ import { PageContextProvider } from "@/lib/page-context";
 import { AskDrawer } from "@/components/shell/ask/ask-drawer";
 import { CommandMenu } from "@/components/shell/ask/command-menu";
 import { FillOverlay } from "@/components/shell/ask/fill-overlay";
-import {
-  orgShellSendAction,
-  orgShellResolveApprovalAction,
-  orgShellResolvePlanAction,
-} from "@/app/[orgSlug]/shell-actions";
 import type { ResolvedOrg } from "@/lib/resolve-org";
 import { resolvedTierCatalog } from "@oxagen/ai";
 
@@ -77,10 +72,8 @@ export default async function AccountLayout({
 
       {/* Ask drawer — mounted at the account shell boundary. */}
       <AskDrawer
-        ctx={ctx}
-        sendAction={orgShellSendAction}
-        resolveApprovalAction={orgShellResolveApprovalAction}
-        resolvePlanAction={orgShellResolvePlanAction}
+        orgSlug={primaryOrg.slug}
+        availableWorkspaces={[]}
         modelConfig={resolvedTierCatalog()}
       />
 
