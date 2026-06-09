@@ -4,6 +4,7 @@
 // (or the gate) to regenerate after adding or removing a contract.
 
 import "./contracts/agent.approval.resolve";
+import "./contracts/agent.execution.record";
 import "./contracts/agent.mcp.list";
 import "./contracts/agent.mcp.register";
 import "./contracts/agent.memory.recall";
@@ -14,6 +15,7 @@ import "./contracts/agent.task.background.cancel";
 import "./contracts/agent.task.background.read";
 import "./contracts/agent.task.background.start";
 import "./contracts/agent.tool.list";
+import "./contracts/agent.ui.render";
 import "./contracts/api.key.create";
 import "./contracts/api.key.revoke";
 import "./contracts/archive.create";
@@ -25,6 +27,7 @@ import "./contracts/billing.credits.purchase";
 import "./contracts/billing.subscription.read";
 import "./contracts/billing.subscription.upgrade.start";
 import "./contracts/brandkit.apply";
+import "./contracts/chat.message.execution";
 import "./contracts/chat.message.send";
 import "./contracts/conversation.archive";
 import "./contracts/conversation.chat";

@@ -9,10 +9,12 @@ const mocks = vi.hoisted(() => ({
   loggerInfo: vi.fn(),
 }));
 
-let capturedHandler: ((ctx: {
+type InngestContext = {
   event: { data: unknown };
   step: { run: (name: string, fn: () => unknown) => unknown };
-}) => unknown) | null = null;
+};
+
+let capturedHandler: ((ctx: InngestContext) => unknown) | null = null;
 
 mocks.createFunction.mockImplementation((_opts: unknown, _trigger: unknown, handler: typeof capturedHandler) => {
   capturedHandler = handler;
@@ -81,7 +83,7 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
         {
           event: { data: EXEC_PAYLOAD },
           step: mockStep,
-        } as any,
+        } as InngestContext,
       );
 
       expect(mocks.recordExecutionInGraph).toHaveBeenCalledWith(EXEC_PAYLOAD);
@@ -96,7 +98,7 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
         {
           event: { data: EXEC_PAYLOAD },
           step: mockStep,
-        } as any,
+        } as InngestContext,
       );
 
       const call = mocks.recordExecutionInGraph.mock.calls[0]![0];
@@ -122,7 +124,7 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
         {
           event: { data: minimalPayload },
           step: mockStep,
-        } as any,
+        } as InngestContext,
       );
 
       expect(mocks.recordExecutionInGraph).toHaveBeenCalledWith(minimalPayload);
@@ -144,7 +146,7 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
         {
           event: { data: EXEC_PAYLOAD },
           step: mockStep,
-        } as any,
+        } as InngestContext,
       );
 
       // Verify step.run was called for both "write-neo4j" and "stamp-synced-at"
@@ -164,7 +166,7 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
         {
           event: { data: EXEC_PAYLOAD },
           step: mockStep,
-        } as any,
+        } as InngestContext,
       );
 
       expect(mocks.runInTenantScope).toHaveBeenCalledWith(
@@ -185,7 +187,7 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
         {
           event: { data: orgAPayload },
           step: mockStep,
-        } as any,
+        } as InngestContext,
       );
 
       mockStep.run.mockClear();
@@ -195,7 +197,7 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
         {
           event: { data: orgBPayload },
           step: mockStep,
-        } as any,
+        } as InngestContext,
       );
 
       expect(mocks.recordExecutionInGraph).toHaveBeenCalledTimes(2);
@@ -215,14 +217,14 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
         {
           event: { data: EXEC_PAYLOAD },
           step: mockStep,
-        } as any,
+        } as InngestContext,
       );
 
       await capturedHandler!(
         {
           event: { data: EXEC_PAYLOAD },
           step: mockStep,
-        } as any,
+        } as InngestContext,
       );
 
       expect(mocks.recordExecutionInGraph).toHaveBeenCalledTimes(2);
@@ -243,7 +245,7 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
           {
             event: { data: EXEC_PAYLOAD },
             step: mockStep,
-          } as any,
+          } as InngestContext,
         ),
       ).rejects.toThrow("Neo4j connection refused");
     });
@@ -263,7 +265,7 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
           {
             event: { data: EXEC_PAYLOAD },
             step: mockStep,
-          } as any,
+          } as InngestContext,
         ),
       ).rejects.toThrow("DB connection lost");
     });

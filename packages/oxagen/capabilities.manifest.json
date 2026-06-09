@@ -20,6 +20,24 @@
       }
     },
     {
+      "name": "agent.execution.record",
+      "file": "agent.execution.record.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
       "name": "agent.mcp.list",
       "file": "agent.mcp.list.ts",
       "domain": "agent",
@@ -209,6 +227,19 @@
       }
     },
     {
+      "name": "agent.ui.render",
+      "file": "agent.ui.render.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "docs": false
+      }
+    },
+    {
       "name": "api.key.create",
       "file": "api.key.create.ts",
       "domain": "api_key",
@@ -394,6 +425,24 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "chat.message.execution",
+      "file": "chat.message.execution.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
       }
     },
     {
@@ -1274,7 +1323,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1292,7 +1341,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1310,7 +1359,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
