@@ -17,7 +17,7 @@ export const workflowCancel = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    workflowId: z.string().describe("Public ID (wfr_*) or internal UUID of the workflow run"),
+    workflowId: z.string().min(1).describe("Public ID (wfr_*) or internal UUID of the workflow run"),
   }),
   output: z.object({
     cancelled: z.boolean(),

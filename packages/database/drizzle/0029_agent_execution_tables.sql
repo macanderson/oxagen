@@ -17,7 +17,7 @@ BEGIN;
 CREATE SCHEMA IF NOT EXISTS agent;
 
 -- ── agent.agent_executions ───────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS agent.agent_executions (
+CREATE TABLE agent.agent_executions (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   created_at           timestamptz NOT NULL DEFAULT now(),
   updated_at           timestamptz NOT NULL DEFAULT now(),
@@ -50,23 +50,23 @@ CREATE TABLE IF NOT EXISTS agent.agent_executions (
   FOREIGN KEY (workspace_id) REFERENCES workspace.workspaces(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS agent_executions_org_status_idx
+CREATE INDEX agent_executions_org_status_idx
   ON agent.agent_executions(org_id, workspace_id, status);
-CREATE INDEX IF NOT EXISTS agent_executions_origin_idx
+CREATE INDEX agent_executions_origin_idx
   ON agent.agent_executions(origin_type, origin_id);
-CREATE INDEX IF NOT EXISTS agent_executions_agent_idx
+CREATE INDEX agent_executions_agent_idx
   ON agent.agent_executions(agent_id);
-CREATE INDEX IF NOT EXISTS agent_executions_created_at_idx
+CREATE INDEX agent_executions_created_at_idx
   ON agent.agent_executions(created_at);
 
 ALTER TABLE agent.agent_executions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent.agent_executions FORCE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS agent_executions_tenant_isolation ON agent.agent_executions
+CREATE POLICY agent_executions_tenant_isolation ON agent.agent_executions
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid));
 
 -- ── agent.agent_execution_steps ───────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS agent.agent_execution_steps (
+CREATE TABLE agent.agent_execution_steps (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   created_at           timestamptz NOT NULL DEFAULT now(),
   updated_at           timestamptz NOT NULL DEFAULT now(),
@@ -94,19 +94,19 @@ CREATE TABLE IF NOT EXISTS agent.agent_execution_steps (
   FOREIGN KEY (workspace_id) REFERENCES workspace.workspaces(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS agent_execution_steps_execution_idx
+CREATE INDEX agent_execution_steps_execution_idx
   ON agent.agent_execution_steps(execution_id);
-CREATE INDEX IF NOT EXISTS agent_execution_steps_org_idx
+CREATE INDEX agent_execution_steps_org_idx
   ON agent.agent_execution_steps(org_id, workspace_id);
 
 ALTER TABLE agent.agent_execution_steps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent.agent_execution_steps FORCE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS agent_execution_steps_tenant_isolation ON agent.agent_execution_steps
+CREATE POLICY agent_execution_steps_tenant_isolation ON agent.agent_execution_steps
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid));
 
 -- ── agent.agent_tool_calls ───────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS agent.agent_tool_calls (
+CREATE TABLE agent.agent_tool_calls (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   created_at           timestamptz NOT NULL DEFAULT now(),
   updated_at           timestamptz NOT NULL DEFAULT now(),
@@ -133,14 +133,14 @@ CREATE TABLE IF NOT EXISTS agent.agent_tool_calls (
   FOREIGN KEY (workspace_id) REFERENCES workspace.workspaces(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS agent_tool_calls_step_idx
+CREATE INDEX agent_tool_calls_step_idx
   ON agent.agent_tool_calls(execution_step_id);
-CREATE INDEX IF NOT EXISTS agent_tool_calls_org_idx
+CREATE INDEX agent_tool_calls_org_idx
   ON agent.agent_tool_calls(org_id, workspace_id);
 
 ALTER TABLE agent.agent_tool_calls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent.agent_tool_calls FORCE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS agent_tool_calls_tenant_isolation ON agent.agent_tool_calls
+CREATE POLICY agent_tool_calls_tenant_isolation ON agent.agent_tool_calls
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid));
 

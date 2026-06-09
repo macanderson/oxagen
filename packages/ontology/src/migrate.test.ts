@@ -50,7 +50,10 @@ describe("migrate() (@oxagen/ontology)", () => {
 
   it("passes each Cypher statement as the first argument to session.run()", async () => {
     await migrate();
-    const calls = runFn.mock.calls.map((c) => (c[0] as string).trim());
+    const calls = (runFn.mock.calls as Array<unknown[]>)
+      .flatMap((c) => {
+        return typeof c[0] === "string" ? [(c[0] as string).trim()] : [];
+      });
     expect(calls[0]).toContain("CREATE CONSTRAINT a");
     expect(calls[1]).toContain("CREATE INDEX b");
   });
@@ -71,7 +74,10 @@ describe("splitStatements (via migrate behaviour)", () => {
   it("strips comment-only lines before splitting", async () => {
     await migrate();
     // If comments were not stripped, runFn would see a comment fragment; it must not.
-    const calls = runFn.mock.calls.map((c) => c[0] as string);
+    const calls = (runFn.mock.calls as Array<unknown[]>)
+      .flatMap((c) => {
+        return typeof c[0] === "string" ? [c[0] as string] : [];
+      });
     for (const stmt of calls) {
       expect(stmt).not.toMatch(/^\s*\/\//);
     }
@@ -79,7 +85,10 @@ describe("splitStatements (via migrate behaviour)", () => {
 
   it("produces no empty statements", async () => {
     await migrate();
-    const calls = runFn.mock.calls.map((c) => (c[0] as string).trim());
+    const calls = (runFn.mock.calls as Array<unknown[]>)
+      .flatMap((c) => {
+        return typeof c[0] === "string" ? [(c[0] as string).trim()] : [];
+      });
     for (const stmt of calls) {
       expect(stmt.length).toBeGreaterThan(0);
     }
