@@ -108,6 +108,7 @@ vi.mock("@oxagen/database", () => ({
 vi.mock("drizzle-orm", () => ({
   eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
   isNull: (col: unknown) => ({ $type: "isNull", col }),
+  inArray: (col: unknown, vals: unknown) => ({ $type: "inArray", col, vals }),
   and: (...args: unknown[]) => ({ $type: "and", args }),
   sql: (parts: TemplateStringsArray, ...vals: unknown[]) => ({
     $type: "sql",
@@ -255,9 +256,13 @@ describe("syncPaymentMethodsFromStripe", () => {
 
     await syncPaymentMethodsFromStripe("org-001");
 
-    // Two upserts — one per card.
-    expect(insertMock).toHaveBeenCalledTimes(2);
-    expect(onConflictDoUpdateMock).toHaveBeenCalledTimes(2);
+    // Batch upsert — both cards in a single insert().values().onConflictDoUpdate().
+    expect(insertMock).toHaveBeenCalledTimes(1);
+    expect(insertValuesMock).toHaveBeenCalledTimes(1);
+    expect(onConflictDoUpdateMock).toHaveBeenCalledTimes(1);
+    // Verify both cards were included in the batch.
+    const valuesCall = insertValuesMock.mock.calls[0]!;
+    expect(valuesCall[0]).toHaveLength(2);
   });
 
   it("soft-deletes DB rows for cards no longer in Stripe", async () => {

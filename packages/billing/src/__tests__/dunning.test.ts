@@ -21,6 +21,7 @@ vi.mock("drizzle-orm", () => ({
   eq: (a: unknown, b: unknown) => ({ _eq: [a, b] }),
   and: (...args: unknown[]) => ({ _and: args }),
   lt: (a: unknown, b: unknown) => ({ _lt: [a, b] }),
+  inArray: (a: unknown, b: unknown) => ({ _inArray: [a, b] }),
   sql: Object.assign(
     (strings: TemplateStringsArray, ...vals: unknown[]) => ({ _sql: [strings, vals] }),
     { raw: (s: string) => ({ _sqlRaw: s }) },
@@ -393,11 +394,9 @@ describe("sweepDunning", () => {
 
     const result = await sweepDunning();
     expect(result.suspended).toBe(2);
-    // Each org should have been updated to suspended.
-    expect(state.updateSets.length).toBe(2);
-    for (const updateSet of state.updateSets) {
-      expect(updateSet.dunningState).toBe("suspended");
-      expect(updateSet.suspendedAt).toBeDefined();
-    }
+    // Single update call suspends both orgs via inArray.
+    expect(state.updateSets.length).toBe(1);
+    expect(state.updateSets[0]!.dunningState).toBe("suspended");
+    expect(state.updateSets[0]!.suspendedAt).toBeDefined();
   });
 });

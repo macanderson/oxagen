@@ -23,7 +23,31 @@ const mockQuery = {
   workspaces: { findFirst: vi.fn() },
 };
 
-const fakeTx = { query: mockQuery };
+// Mock for Drizzle query builder used in resolveOrgScope (org.ts)
+let selectMockResult: unknown[] = [];
+
+const createMockBuilder = () => {
+  const self = {
+    from: vi.fn(function () {
+      return self;
+    }),
+    innerJoin: vi.fn(function () {
+      return self;
+    }),
+    where: vi.fn(function () {
+      return self;
+    }),
+    limit: vi.fn(async function () {
+      return selectMockResult;
+    }),
+  };
+  return self;
+};
+
+const fakeTx = {
+  query: mockQuery,
+  select: vi.fn(() => createMockBuilder()),
+};
 
 vi.mock("@oxagen/database", () => ({
   db: () => fakeTx,
@@ -293,25 +317,25 @@ describe("resolveApiKey", () => {
 // ---------------------------------------------------------------------------
 
 describe("resolveOrgScope", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    selectMockResult = [];
+  });
 
   it("returns not_found when the org slug does not exist", async () => {
-    mockQuery.organizations.findFirst.mockResolvedValueOnce(undefined);
+    selectMockResult = [];
     const result = await resolveOrgScope("usr_1", "ghost-org");
     expect(result).toEqual({ ok: false, kind: "not_found" });
-    expect(mockQuery.orgUsers.findFirst).not.toHaveBeenCalled();
   });
 
   it("returns not_found when the user is not in the org", async () => {
-    mockQuery.organizations.findFirst.mockResolvedValueOnce({ id: "org_real" });
-    mockQuery.orgUsers.findFirst.mockResolvedValueOnce(undefined);
+    selectMockResult = [];
     const result = await resolveOrgScope("usr_stranger", "real-org");
     expect(result).toEqual({ ok: false, kind: "not_found" });
   });
 
   it("returns orgId when the user is a member", async () => {
-    mockQuery.organizations.findFirst.mockResolvedValueOnce({ id: "org_real" });
-    mockQuery.orgUsers.findFirst.mockResolvedValueOnce({ id: "oru_1" });
+    selectMockResult = [{ orgId: "org_real" }];
     const result = await resolveOrgScope("usr_member", "real-org");
     expect(result).toEqual({ ok: true, orgId: "org_real" });
   });
@@ -321,36 +345,21 @@ describe("resolveOrgScope", () => {
   // they are a member of org A and org B exists.
   // -------------------------------------------------------------------------
   it("cross-tenant isolation: user from org A cannot resolve org B", async () => {
-    // Simulate org B existing and the membership check returning no row,
-    // because user_a is NOT a member of org B.
-    mockQuery.organizations.findFirst.mockResolvedValueOnce({ id: "org_b" });
-    mockQuery.orgUsers.findFirst.mockResolvedValueOnce(undefined);
-
+    selectMockResult = [];
     const result = await resolveOrgScope("usr_a", "org-b-slug");
-
     expect(result).toEqual({ ok: false, kind: "not_found" });
-
-    // Ensure the membership query was scoped to org_b — the mock validates
-    // that it was called once (if it had been skipped, cross-tenant data
-    // would be accessible without a membership check).
-    expect(mockQuery.orgUsers.findFirst).toHaveBeenCalledOnce();
   });
 
   it("cross-tenant isolation: two calls in sequence are independently scoped", async () => {
     // Call 1: user_a resolves org_a (member).
-    mockQuery.organizations.findFirst
-      .mockResolvedValueOnce({ id: "org_a" })
-      .mockResolvedValueOnce({ id: "org_b" });
-    mockQuery.orgUsers.findFirst
-      .mockResolvedValueOnce({ id: "oru_member_a" }) // user_a IS member of org_a
-      .mockResolvedValueOnce(undefined); // user_a is NOT member of org_b
+    selectMockResult = [{ orgId: "org_a" }];
+    const result1 = await resolveOrgScope("usr_a", "org-a-slug");
+    expect(result1).toEqual({ ok: true, orgId: "org_a" });
 
-    const resultA = await resolveOrgScope("usr_a", "org-a-slug");
-    expect(resultA).toEqual({ ok: true, orgId: "org_a" });
-
-    // Call 2: same user tries org_b — must be rejected.
-    const resultB = await resolveOrgScope("usr_a", "org-b-slug");
-    expect(resultB).toEqual({ ok: false, kind: "not_found" });
+    // Call 2: same user tries to resolve org_b (not a member).
+    selectMockResult = [];
+    const result2 = await resolveOrgScope("usr_a", "org-b-slug");
+    expect(result2).toEqual({ ok: false, kind: "not_found" });
   });
 });
 

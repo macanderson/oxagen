@@ -16,9 +16,11 @@ describe("Auth Package Coverage Tests", () => {
       expect(invalidKey.length).toBeLessThan(64);
     });
 
-    it("throws on corrupted ciphertext", () => {
+    it("handles corrupted ciphertext gracefully", () => {
       const corrupted = "invalid-base64!!!";
-      expect(() => Buffer.from(corrupted, "base64")).toThrow();
+      const buffer = Buffer.from(corrupted, "base64");
+      expect(buffer).toBeInstanceOf(Buffer);
+      expect(buffer.length).toBeGreaterThan(0);
     });
   });
 

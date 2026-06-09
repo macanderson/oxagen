@@ -273,5 +273,4 @@ export const contracts = [
   workspaceInviteSend,
   skillWorkspaceList,
   agentExecutionRecord,
-  chatMessageExecution,
 ] as const;

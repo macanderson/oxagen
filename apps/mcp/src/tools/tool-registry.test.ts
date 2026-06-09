@@ -19,6 +19,7 @@ import { contracts } from "@oxagen/oxagen/contracts";
 import { metadata as apiKeyCreateMetadata } from "./api.key.create";
 import { metadata as apiKeyRevokeMetadata } from "./api.key.revoke";
 import { metadata as agentApprovalResolveMetadata } from "./agent.approval.resolve";
+import { metadata as agentExecutionRecordMetadata } from "./agent.execution.record";
 import { metadata as archiveCreateMetadata } from "./archive.create";
 import { metadata as agentMcpListMetadata } from "./agent.mcp.list";
 import { metadata as agentMcpRegisterMetadata } from "./agent.mcp.register";
@@ -35,6 +36,7 @@ import { metadata as billingCreditsPurchaseMetadata } from "./billing.credits.pu
 import { metadata as billingSubscriptionReadMetadata } from "./billing.subscription.read";
 import { metadata as billingSubscriptionUpgradeStartMetadata } from "./billing.subscription.upgrade.start";
 import { metadata as brandkitApplyMetadata } from "./brandkit.apply";
+import { metadata as chatMessageExecutionMetadata } from "./chat.message.execution";
 import { metadata as chatMessageSendMetadata } from "./chat.message.send";
 import { metadata as conversationArchiveMetadata } from "./conversation.archive";
 import { metadata as conversationDeleteMetadata } from "./conversation.delete";
@@ -70,6 +72,8 @@ import { metadata as orgMemberInviteAcceptMetadata } from "./org.member.invite.a
 import { metadata as orgMemberInviteDeclineMetadata } from "./org.member.invite.decline";
 import { metadata as orgMemberRemoveMetadata } from "./org.member.remove";
 import { metadata as orgMemberRoleChangeMetadata } from "./org.member.role.change";
+import { metadata as promptSettingsReadMetadata } from "./prompt.settings.read";
+import { metadata as promptSettingsWriteMetadata } from "./prompt.settings.write";
 import { metadata as svgGenerateMetadata } from "./svg.generate";
 import { metadata as systemInstallInstructionsMetadata } from "./system.install.instructions";
 import { metadata as userPreferencesReadMetadata } from "./user.preferences.read";
@@ -103,6 +107,7 @@ const allToolMetadata = [
   apiKeyCreateMetadata,
   apiKeyRevokeMetadata,
   agentApprovalResolveMetadata,
+  agentExecutionRecordMetadata,
   agentMcpListMetadata,
   agentMcpRegisterMetadata,
   agentMemoryRecallMetadata,
@@ -119,6 +124,7 @@ const allToolMetadata = [
   billingSubscriptionReadMetadata,
   billingSubscriptionUpgradeStartMetadata,
   brandkitApplyMetadata,
+  chatMessageExecutionMetadata,
   chatMessageSendMetadata,
   conversationArchiveMetadata,
   conversationDeleteMetadata,
@@ -154,6 +160,8 @@ const allToolMetadata = [
   pluginRegistrySyncMetadata,
   pluginSettingsSetAuthAlertsMetadata,
   pluginWorkspaceSetEnabledMetadata,
+  promptSettingsReadMetadata,
+  promptSettingsWriteMetadata,
   svgGenerateMetadata,
   systemInstallInstructionsMetadata,
   userPreferencesReadMetadata,

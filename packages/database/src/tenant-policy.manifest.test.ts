@@ -34,10 +34,13 @@ describe("tenant policy manifest", () => {
     expect(tables).toContain("org.principals");
     expect(tables).toContain("org.roles");
     expect(tables).toContain("org.role_grants");
-    expect(tables).toContain("org.grants");
-    expect(tables).toContain("org.policies");
     expect(tables).toContain("org.access_requests");
     expect(tables).toContain("org.principal_role_assignments");
+    expect(tables).toContain("org.org_users");
+    expect(tables).toContain("org.invitations");
+    // org.grants and org.policies dropped in 0027 (dead schema: zero write paths, read-only stubs)
+    expect(tables).not.toContain("org.grants");
+    expect(tables).not.toContain("org.policies");
     // No iam.* entries should exist
     expect(tables.every((t) => !t.startsWith("iam."))).toBe(true);
   });

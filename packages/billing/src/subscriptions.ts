@@ -5,7 +5,6 @@ import { billingProvider } from "./client";
 import { logger } from "./logger";
 import { getOrgSeatUsage, SeatLimitError } from "./seats";
 import { meetsMinimumTier } from "./entitlements";
-import type { PlanTier } from "@oxagen/oxagen/types";
 
 // Type assertion helper - works around TypeScript type inference issue with database strings
 function checkPlanTier(actual: string, minimum: string): boolean {
@@ -325,7 +324,7 @@ export async function changeOrgPlan(
 
   // Active subscription — swap the price in-place.
   // Determine proration behavior by comparing tier order.
-  const isUpgrade = checkPlanTier(currentPlanRow?.tier || "free", targetPlan.tier);
+  const isUpgrade = checkPlanTier(targetPlan.tier, currentPlanRow?.tier || "free");
   const prorationBehavior: "always_invoice" | "none" = isUpgrade ? "always_invoice" : "none";
 
   // Use activeSubRow from now on (renamed to avoid confusion).
@@ -649,7 +648,7 @@ export async function previewPlanChange(
     }),
   );
 
-  const isUpgrade = checkPlanTier(currentPlanRow?.tier || "free", targetPlan.tier);
+  const isUpgrade = checkPlanTier(targetPlan.tier, currentPlanRow?.tier || "free");
   const prorationBehavior: "always_invoice" | "none" = isUpgrade
     ? "always_invoice"
     : "none";

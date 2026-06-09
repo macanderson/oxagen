@@ -25,6 +25,7 @@ import { agentTaskBackgroundCancelRoute } from "./routes/v1/agent.task.backgroun
 import { agentMemoryRecallRoute } from "./routes/v1/agent.memory.recall";
 import { agentMemoryWriteRoute } from "./routes/v1/agent.memory.write";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
+import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { formFillRoute } from "./routes/v1/form.fill";
 import { archiveCreateRoute } from "./routes/v1/archive.create";
 import { documentsGenerateRoute } from "./routes/v1/documents.generate";
@@ -149,6 +150,7 @@ orgScoped.route("/agent/tasks/cancel", agentTaskBackgroundCancelRoute);
 orgScoped.route("/agent/memory/recall", agentMemoryRecallRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
+orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
 orgScoped.route("/forms/fill", formFillRoute);
 orgScoped.route("/archive/create", archiveCreateRoute);
 orgScoped.route("/documents/generate", documentsGenerateRoute);

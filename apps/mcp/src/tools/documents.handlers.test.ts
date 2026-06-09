@@ -327,12 +327,12 @@ describe("video.generate handler", () => {
 
   it("calls invoke with video generation args", async () => {
     const fakeOutput = {
-      stub: true as const,
       status: "queued" as const,
       jobId: "job_vid_1",
+      serveUrl: "https://app.example.com/api/v1/assets/vid_1",
       render: {
-        componentId: "make-video-form" as const,
-        props: { prompt: "A sunset over mountains", durationSeconds: 5 },
+        componentId: "video-result" as const,
+        props: { url: "https://app.example.com/api/v1/assets/vid_1", prompt: "A sunset over mountains" },
       },
     };
     mocks.invoke.mockResolvedValue(fakeOutput);

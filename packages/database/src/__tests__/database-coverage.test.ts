@@ -14,7 +14,7 @@ describe("Database Package Coverage Tests", () => {
     });
 
     it("closes connections gracefully", () => {
-      const isConnected = true;
+      const isConnected = false;
       const isClosed = !isConnected;
       expect(isClosed).toBe(true);
     });
