@@ -15,6 +15,7 @@ import { agentWorkflowTaskExecute } from "./functions/agent.workflow.task.execut
 import { agentSyncExecutionToGraph } from "./functions/agent.sync-execution-to-graph";
 import { privacyExportProcess, privacyExportProcessOnFailure } from "./functions/privacy.export.process";
 import { privacyErasureExecute, privacyErasureExecuteOnFailure } from "./functions/privacy.erasure.execute";
+import { authSessionExpiryAudit } from "./functions/auth.session-expiry-audit";
 
 export const functions = [
   billingRollupUsage,
@@ -37,4 +38,5 @@ export const functions = [
   privacyExportProcessOnFailure,
   privacyErasureExecute,
   privacyErasureExecuteOnFailure,
+  authSessionExpiryAudit,
 ];
