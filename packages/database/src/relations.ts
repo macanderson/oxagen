@@ -4,7 +4,7 @@ import {
   principals,
   roles,
   roleGrants,
-  grants,
+  principalRoleAssignments,
   accessRequests,
 } from "./schema/iam";
 import { users, sessions, accounts, apiKeys } from "./schema/auth";
@@ -224,13 +224,14 @@ export const stripeEventProcessingRelations = relations(stripeEventProcessing, (
 
 export const principalsRelations = relations(principals, ({ one, many }) => ({
   org: one(organizations, { fields: [principals.orgId], references: [organizations.id] }),
-  grants: many(grants),
+  roleAssignments: many(principalRoleAssignments),
   accessRequests: many(accessRequests),
 }));
 
 export const rolesRelations = relations(roles, ({ one, many }) => ({
   org: one(organizations, { fields: [roles.orgId], references: [organizations.id] }),
   roleGrants: many(roleGrants),
+  principalAssignments: many(principalRoleAssignments),
   parentRole: one(roles, {
     fields: [roles.parentRoleId],
     references: [roles.id],
@@ -244,9 +245,10 @@ export const roleGrantsRelations = relations(roleGrants, ({ one }) => ({
   org: one(organizations, { fields: [roleGrants.orgId], references: [organizations.id] }),
 }));
 
-export const grantsRelations = relations(grants, ({ one }) => ({
-  principal: one(principals, { fields: [grants.principalId], references: [principals.id] }),
-  org: one(organizations, { fields: [grants.orgId], references: [organizations.id] }),
+export const principalRoleAssignmentsRelations = relations(principalRoleAssignments, ({ one }) => ({
+  principal: one(principals, { fields: [principalRoleAssignments.principalId], references: [principals.id] }),
+  role: one(roles, { fields: [principalRoleAssignments.roleId], references: [roles.id] }),
+  org: one(organizations, { fields: [principalRoleAssignments.orgId], references: [organizations.id] }),
 }));
 
 export const accessRequestsRelations = relations(accessRequests, ({ one }) => ({

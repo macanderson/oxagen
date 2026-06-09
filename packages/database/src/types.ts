@@ -19,8 +19,7 @@ import type {
   principals,
   roles,
   roleGrants,
-  grants,
-  policies,
+  principalRoleAssignments,
   accessRequests,
   userPreferences,
   fontSizeEnum,
@@ -86,11 +85,8 @@ export type IamRoleRow = InferSelectModel<typeof roles>;
 /** Row type for `org.role_grants`. */
 export type IamRoleGrantRow = InferSelectModel<typeof roleGrants>;
 
-/** Row type for `org.grants`. */
-export type IamGrantRow = InferSelectModel<typeof grants>;
-
-/** Row type for `org.policies`. */
-export type IamPolicyRow = InferSelectModel<typeof policies>;
+/** Row type for `org.principal_role_assignments`. */
+export type IamPrincipalRoleAssignmentRow = InferSelectModel<typeof principalRoleAssignments>;
 
 /** Row type for `org.access_requests`. */
 export type IamAccessRequestRow = InferSelectModel<typeof accessRequests>;
