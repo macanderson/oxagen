@@ -32,7 +32,7 @@ export const agentExecutionRecordHandler: CapabilityHandler<typeof agentExecutio
         latencyMs: input.latencyMs ?? null,
         inputTokens: input.inputTokens ?? null,
         outputTokens: input.outputTokens ?? null,
-        estimatedCostUsd: input.estimatedCostUsd ?? null,
+        estimatedCostUsd: input.estimatedCostUsd !== undefined ? String(input.estimatedCostUsd) : null,
         syncedToGraphAt: null, // Synced asynchronously by Inngest worker
         createdByUserId: ctx.userId ?? null,
         updatedByUserId: ctx.userId ?? null,
