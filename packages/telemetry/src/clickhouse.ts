@@ -162,7 +162,7 @@ export interface ApiKeyEventRow {
   created_at: string;
 }
 
-export type Surface = "api" | "mcp" | "app" | "runner" | "";
+export type Surface = "api" | "mcp" | "app" | "runner" | "ingestion" | "";
 // The provider that billed us for a call. Text models are Anthropic/OpenAI;
 // image & video generation reach Google, Black Forest Labs (bfl), and xAI
 // through the gateway, so the label set spans every vendor @oxagen/ai can route
