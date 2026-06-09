@@ -1,6 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingSubscriptionUpgradeStart } from "@oxagen/oxagen/contracts/billing.subscription.upgrade.start";
 import { createCheckoutSession } from "@oxagen/billing";
+import { emitSecurityEvent } from "@oxagen/database/security";
 import { logger } from "./logger";
 
 export const billingSubscriptionUpgradeStartHandler: CapabilityHandler<
@@ -26,6 +27,19 @@ export const billingSubscriptionUpgradeStartHandler: CapabilityHandler<
       successUrl: input.successUrl,
       cancelUrl: input.cancelUrl,
     });
+    // ── Emit audit event (fire-and-forget) ────────────────────────────────────
+    emitSecurityEvent({
+      eventType: "billing.checkout_initiated",
+      actorUserId: ctx.userId ?? null,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId ?? null,
+      capability: "billing.subscription.upgrade.start",
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: ctx.requestId ?? null,
+    });
+
     logger.info(
       { orgId: ctx.orgId, planSlug: input.planSlug, interval: input.interval, surface: ctx.surface },
       "billing.subscription.upgrade.start: checkout session created successfully",

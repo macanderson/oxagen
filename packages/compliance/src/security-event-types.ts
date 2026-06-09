@@ -39,6 +39,7 @@ export const SECURITY_EVENT_TYPES = [
   // Billing mutations
   "billing.access_denied",
   "billing.auto_reload_updated",
+  "billing.checkout_initiated",
   "billing.credits_purchased",
   "billing.payment_method_added",
   "billing.payment_method_default_changed",

@@ -1,6 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingCreditsPurchase } from "@oxagen/oxagen/contracts/billing.credits.purchase";
 import { createUsageCreditCheckout } from "@oxagen/billing";
+import { emitSecurityEvent } from "@oxagen/database/security";
 import { logger } from "./logger";
 
 export const billingCreditsPurchaseHandler: CapabilityHandler<
@@ -31,6 +32,19 @@ export const billingCreditsPurchaseHandler: CapabilityHandler<
       grantCents,
       successUrl: input.successUrl,
       cancelUrl: input.cancelUrl,
+    });
+
+    // ── Emit audit event (fire-and-forget) ────────────────────────────────────
+    emitSecurityEvent({
+      eventType: "billing.checkout_initiated",
+      actorUserId: ctx.userId ?? null,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId ?? null,
+      capability: "billing.credits.purchase",
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: ctx.requestId ?? null,
     });
 
     logger.info(
