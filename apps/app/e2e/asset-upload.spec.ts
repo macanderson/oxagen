@@ -83,7 +83,7 @@ test.describe("asset.upload — authenticated surface", () => {
         },
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${fixture.sessionToken}`,
+          cookie: `oxagen.session_token=${fixture.sessionToken}`,
         },
         failOnStatusCode: false,
       },
@@ -114,7 +114,7 @@ test.describe("asset.upload — authenticated surface", () => {
         },
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${fixture.sessionToken}`,
+          cookie: `oxagen.session_token=${fixture.sessionToken}`,
         },
         failOnStatusCode: false,
       },
