@@ -110,6 +110,49 @@ type Events = {
       scheduledAt: string;
     };
   };
+  // ── Ingestion pipeline ─────────────────────────────────────────────────────
+
+  // Stage 1: raw record arrives from a connector (webhook or poller).
+  // The 6-stage pipeline (normalize → map → dedup → embed → infer) runs next.
+  "ingestion/entity.received": {
+    data: {
+      connectionId: string;
+      workspaceId: string;
+      orgId: string;
+      connectorType: string;
+      sourceRecordType: string;
+      idempotencyKey: string;
+      payload: unknown;
+      receivedAt: string; // ISO-8601
+    };
+  };
+
+  // Stage 6: async semantic inference after a node has been embedded.
+  // LLM worker infers IMPLEMENTS / PART_OF / ASSIGNED_TO / etc. edges.
+  "ingestion/entity.infer": {
+    data: {
+      nodeId: string;
+      entityType: string;
+      propertiesSnapshot: Record<string, unknown>;
+      workspaceId: string;
+      orgId: string;
+      contextHops?: number;
+    };
+  };
+
+  // Async deletion job: remove a connection and optionally its ingested graph data.
+  "ingestion/connection.delete": {
+    data: {
+      connectionId: string;
+      orgId: string;
+      workspaceId: string;
+      requestedBy: string; // userId
+      mode: "connection_only" | "data_only" | "full";
+      requestedAt: string; // ISO-8601
+    };
+  };
+
+  // ── Execution graph sync ────────────────────────────────────────────────────
   // Fired by recordExecution() after a completed execution row is committed to
   // Postgres. The Inngest worker picks this up and mirrors the execution to
   // the Neo4j knowledge graph (async, best-effort, 24 h retry window).
