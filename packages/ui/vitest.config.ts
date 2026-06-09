@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    clearMocks: true,
     environment: "node",
     globals: false,
     // Include both .ts and .tsx test files (buttonVariants test is .tsx)

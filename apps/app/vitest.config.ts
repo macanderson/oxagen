@@ -5,6 +5,7 @@ export default defineConfig({
   // explicit `import React` (matches the app's Next.js/tsconfig JSX setting).
   esbuild: { jsx: "automatic", jsxImportSource: "react" },
   test: {
+    clearMocks: true,
     environment: "node",
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
