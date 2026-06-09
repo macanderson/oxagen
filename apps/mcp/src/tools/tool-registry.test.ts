@@ -105,16 +105,14 @@ import { metadata as imageListMetadata } from "./image.list";
 import { metadata as skillWorkspaceListMetadata } from "./skill.workspace.list";
 import { metadata as workspaceInviteSendMetadata } from "./workspace.invite.send";
 import { metadata as workspaceMemberListMetadata } from "./workspace.member.list";
-import {
-  connectionListMetadata,
-  connectionCreateMetadata,
-  connectionGetMetadata,
-  connectionDeleteMetadata,
-  connectionPreviewMetadata,
-  connectionMappingsSuggestMetadata,
-  connectionMappingsGetMetadata,
-  connectionMappingsSetMetadata,
-} from "./connection";
+import { metadata as connectionListMetadata } from "./connection.list";
+import { metadata as connectionCreateMetadata } from "./connection.create";
+import { metadata as connectionGetMetadata } from "./connection.get";
+import { metadata as connectionDeleteMetadata } from "./connection.delete";
+import { metadata as connectionPreviewMetadata } from "./connection.preview";
+import { metadata as connectionMappingsSuggestMetadata } from "./connection.mappings.suggest";
+import { metadata as connectionMappingsGetMetadata } from "./connection.mappings.get";
+import { metadata as connectionMappingsSetMetadata } from "./connection.mappings.set";
 import { metadata as privacyDataEraseMetadata } from "./privacy.data.erase";
 import { metadata as privacyDataExportMetadata } from "./privacy.data.export";
 
