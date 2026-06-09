@@ -125,45 +125,20 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
     // roleIds from query 3 is available. This collapses 4 serial round-trips into
     // 2 parallel batches, yielding ~3–4x latency reduction on the hot IAM path.
 
-    // Batch 1: grants + roles + policies fire concurrently.
+    // Batch 1: roles fire; grants + policies tables were dropped in migration
+    // 0027 (grants/policies replaced by role-based IAM). Return empty arrays so
+    // the resolver falls through to role-based evaluation (rules 4–6).
     const [grantRows, roleRows, policyRows] = await Promise.all([
-      // Query 2 — direct grants for this principal and capability.
-      tx
-        .select()
-        .from(schema.grants)
-        .where(
-          and(
-            eq(schema.grants.principalId, principalRow.id),
-            eq(schema.grants.capabilityId, capability),
-            eq(schema.grants.orgId, orgId),
-          ),
-        ),
+      Promise.resolve([] as Grant[]),
       // Query 3 — all roles in this org (roleGrants depends on these ids).
       tx
         .select()
         .from(schema.roles)
         .where(eq(schema.roles.orgId, orgId)),
-      // Query 5 — policies for this capability and org.
-      tx
-        .select()
-        .from(schema.policies)
-        .where(
-          and(
-            eq(schema.policies.orgId, orgId),
-            eq(schema.policies.capabilityId, capability),
-          ),
-        ),
+      Promise.resolve([] as Policy[]),
     ]);
 
-    const grants: Grant[] = grantRows.map((g) => ({
-      principalId: g.principalId,
-      capabilityId: g.capabilityId,
-      scopeKind: g.scopeKind as "org" | "workspace",
-      scopeId: g.scopeId,
-      effect: g.effect as "allow" | "deny" | "require_approval",
-      conditionsJsonb: g.conditionsJsonb,
-      expiresAt: g.expiresAt,
-    }));
+    const grants: Grant[] = grantRows;
 
     // Batch 2: roleGrants depends on roleIds from the roles query above.
     // Also load principal_role_assignments for this principal to determine
@@ -237,14 +212,7 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
       effect: rg.effect as "allow" | "deny" | "require_approval",
     }));
 
-    const policies: Policy[] = policyRows.map((p) => ({
-      capabilityId: p.capabilityId,
-      scopeKind: p.scopeKind as "org" | "workspace",
-      scopeId: p.scopeId,
-      effect: p.effect as "allow" | "deny" | "require_approval",
-      enforced: p.enforced === true,
-      conditionsJsonb: p.conditionsJsonb,
-    }));
+    const policies: Policy[] = policyRows;
 
     return { principal, grants, roles, roleGrants, policies };
   });
