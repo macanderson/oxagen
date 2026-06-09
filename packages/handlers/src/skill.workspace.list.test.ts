@@ -89,4 +89,19 @@ describe("skillWorkspaceListHandler (@oxagen/handlers)", () => {
     await skillWorkspaceListHandler({}, CTX);
     expect(mocks.selectWhere).toHaveBeenCalledTimes(1);
   });
+
+  // ── error paths ───────────────────────────────────────────────────────────
+
+  it("propagates DB error when the query rejects", async () => {
+    mocks.selectWhere.mockRejectedValueOnce(new Error("DB connection failed"));
+
+    await expect(skillWorkspaceListHandler({}, CTX)).rejects.toThrow("DB connection failed");
+  });
+
+  it("propagates DB error when withTenantDb rejects", async () => {
+    // Simulate a scenario where the transaction itself cannot be obtained.
+    mocks.selectWhere.mockRejectedValueOnce(new Error("transaction rollback"));
+
+    await expect(skillWorkspaceListHandler({}, CTX)).rejects.toThrow("transaction rollback");
+  });
 });

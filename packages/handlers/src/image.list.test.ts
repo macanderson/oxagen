@@ -98,4 +98,26 @@ describe("imageListHandler", () => {
     // If withTenantDb was called and returned data, we have rows
     expect(result.images).toHaveLength(1);
   });
+
+  // ── error paths ───────────────────────────────────────────────────────────
+
+  it("propagates DB error when the query throws", async () => {
+    // Cause makeTx(mocks.selectRows()) to throw inside withTenantDb.
+    // withTenantDb is async so a synchronous throw inside its body becomes a rejection.
+    mocks.selectRows.mockImplementationOnce(() => {
+      throw new Error("DB connection failed");
+    });
+
+    await expect(imageListHandler({}, CTX)).rejects.toThrow("DB connection failed");
+  });
+
+  it("throws when createdAt is null (non-nullable field returned as null)", async () => {
+    // Simulate a corrupted DB row where createdAt is unexpectedly null.
+    // The handler calls r.createdAt.toISOString() without a null guard — this
+    // should surface as a TypeError so callers know the data is corrupt.
+    const row = makeRow({ createdAt: null });
+    mocks.selectRows.mockReturnValueOnce([row]);
+
+    await expect(imageListHandler({}, CTX)).rejects.toThrow(TypeError);
+  });
 });

@@ -83,4 +83,20 @@ describe("workspaceMemberListHandler (@oxagen/handlers)", () => {
     await workspaceMemberListHandler({}, CTX);
     expect(mocks.selectWhere).toHaveBeenCalledTimes(1);
   });
+
+  // ── error paths ───────────────────────────────────────────────────────────
+
+  it("propagates DB error when the query rejects", async () => {
+    mocks.selectWhere.mockRejectedValueOnce(new Error("DB connection failed"));
+
+    await expect(workspaceMemberListHandler({}, CTX)).rejects.toThrow("DB connection failed");
+  });
+
+  it("throws when joinedAt is null (non-nullable field returned as null)", async () => {
+    // The handler calls r.joinedAt.toISOString() without a null guard.
+    // A corrupted DB row where joinedAt is null surfaces as a TypeError.
+    mocks.selectWhere.mockResolvedValueOnce([makeRow({ joinedAt: null })]);
+
+    await expect(workspaceMemberListHandler({}, CTX)).rejects.toThrow(TypeError);
+  });
 });

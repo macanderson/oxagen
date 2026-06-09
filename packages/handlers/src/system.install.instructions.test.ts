@@ -100,4 +100,21 @@ describe("systemInstallInstructionsHandler", () => {
       .join("\n");
     expect(allCommands).toContain("<your-workspace-slug>");
   });
+
+  // ── error path ────────────────────────────────────────────────────────────
+
+  it("throws TypeError when an unsupported client bypasses Zod validation", async () => {
+    // The Zod contract enum validates client at the boundary, but the handler
+    // does a direct map lookup: STEP_BUILDERS[input.client]. An unknown client
+    // key returns undefined, and calling undefined() throws a TypeError.
+    // This test documents the handler's behaviour when called without schema
+    // validation (e.g., direct unit-test invocation or contract bypass).
+    await expect(
+      systemInstallInstructionsHandler(
+        // @ts-expect-error — intentionally passing an unsupported client
+        { client: "unknown-client" },
+        CTX,
+      ),
+    ).rejects.toThrow(TypeError);
+  });
 });
