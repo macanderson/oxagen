@@ -25,7 +25,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { seedPlugin, type PluginFixture } from "./helpers/seed-plugin";
-import { loginAs } from "./helpers/auth";
+import { loginAs, E2E_TEST_PASSWORD } from "./helpers/auth";
 import { interceptAgentStream } from "./helpers/agent-stream-mock";
 import { randomBytes } from "node:crypto";
 
@@ -54,7 +54,7 @@ test.describe("mcp-agent-integration", () => {
     page,
     context,
   }) => {
-    await loginAs(context, fixture.sessionToken);
+    await loginAs(context, fixture.userEmail, E2E_TEST_PASSWORD);
 
     const TOOL_CALL_ID = "tcl_e2e_ping";
     const PARENT_MSG_ID = "msg_e2e_int";

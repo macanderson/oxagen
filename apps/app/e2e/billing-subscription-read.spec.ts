@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import postgres from "postgres";
-import { loginAs } from "./helpers/auth";
+import { loginAs, E2E_TEST_PASSWORD } from "./helpers/auth";
 import {
   setupAgentRuntimeFixture,
   teardownFixture,
@@ -185,7 +185,7 @@ test.describe("billing.subscription.read — authenticated, seeded state", () =>
     context,
     baseURL,
   }) => {
-    await loginAs(context, billingFixture.sessionToken, baseURL);
+    await loginAs(context, billingFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
     await page.goto(`/${BILLING_ORG_SLUG}/billing/subscription`);
     await expect(page).not.toHaveURL(/\/login/);
 
@@ -210,7 +210,7 @@ test.describe("billing.subscription.read — authenticated, seeded state", () =>
     context,
     baseURL,
   }) => {
-    await loginAs(context, billingFixture.sessionToken, baseURL);
+    await loginAs(context, billingFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
     await page.goto(`/${BILLING_ORG_SLUG}/billing/subscription`);
     await expect(page).not.toHaveURL(/\/login/);
 
@@ -226,7 +226,7 @@ test.describe("billing.subscription.read — authenticated, seeded state", () =>
     context,
     baseURL,
   }) => {
-    await loginAs(context, billingFixture.sessionToken, baseURL);
+    await loginAs(context, billingFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
     await page.goto(`/${BILLING_ORG_SLUG}/billing/subscription`);
     await expect(page).not.toHaveURL(/\/login/);
 
@@ -245,7 +245,7 @@ test.describe("billing.subscription.read — authenticated, seeded state", () =>
     context,
     baseURL,
   }) => {
-    await loginAs(context, billingFixture.sessionToken, baseURL);
+    await loginAs(context, billingFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
     // PlansGrid lives on the dedicated Plans tab; the Subscription tab no longer
     // duplicates it. The seeded canonical `build-v2` plan passes the page's
     // source-of-truth slug filter and renders here.

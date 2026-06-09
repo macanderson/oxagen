@@ -21,7 +21,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { seedPlugin, type PluginFixture } from "./helpers/seed-plugin";
-import { loginAs } from "./helpers/auth";
+import { loginAs, E2E_TEST_PASSWORD } from "./helpers/auth";
 import { randomBytes } from "node:crypto";
 import postgres from "postgres";
 
@@ -114,7 +114,7 @@ test.describe("mcp-oauth-connect", () => {
     page,
     context,
   }) => {
-    await loginAs(context, fixture.sessionToken);
+    await loginAs(context, fixture.userEmail, E2E_TEST_PASSWORD);
 
     // Navigate to workspace integrations.
     await page.goto(`/${fixture.orgSlug}/${fixture.workspaceSlug}/settings/integrations`);

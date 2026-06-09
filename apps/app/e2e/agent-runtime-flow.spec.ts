@@ -8,7 +8,7 @@ import {
   interceptAgentStream,
   scriptedScenarioEvents,
 } from "./helpers/agent-stream-mock";
-import { loginAs } from "./helpers/auth";
+import { loginAs, E2E_TEST_PASSWORD } from "./helpers/auth";
 
 // Implements docs/epics/agent-runtime/spec.md §10 acceptance test #1:
 // the agent plans → requests approval → fans out three subagents in
@@ -44,7 +44,7 @@ test.describe("agent runtime end-to-end", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, fixture.sessionToken, baseURL);
+    await loginAs(context, fixture.userEmail, E2E_TEST_PASSWORD, baseURL);
 
     const parentMessageId = "msg_root";
     await interceptAgentStream(page, {

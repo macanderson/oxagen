@@ -20,7 +20,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { seedPlugin, type PluginFixture } from "./helpers/seed-plugin";
-import { loginAs } from "./helpers/auth";
+import { loginAs, E2E_TEST_PASSWORD } from "./helpers/auth";
 import { randomBytes } from "node:crypto";
 
 function uid(): string {
@@ -48,7 +48,7 @@ test.describe("mcp-workspace-enable", () => {
     page,
     context,
   }) => {
-    await loginAs(context, fixture.sessionToken);
+    await loginAs(context, fixture.userEmail, E2E_TEST_PASSWORD);
 
     // Step 1: Enable the org listing at the org layer first.
     await page.goto(`/${fixture.orgSlug}/settings/plugins`);

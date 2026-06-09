@@ -31,6 +31,7 @@ export interface AgentRuntimeFixture {
   orgId: string;
   workspaceId: string;
   userId: string;
+  userEmail: string;
   sessionToken: string;
   orgSlug: string;
   workspaceSlug: string;
@@ -306,6 +307,7 @@ export async function setupAgentRuntimeFixture(
     orgId,
     workspaceId,
     userId,
+    userEmail: opts.userEmail,
     sessionToken,
     orgSlug: opts.orgSlug,
     workspaceSlug: opts.workspaceSlug,

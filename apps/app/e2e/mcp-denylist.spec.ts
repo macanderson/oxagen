@@ -25,7 +25,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { seedPlugin, type PluginFixture } from "./helpers/seed-plugin";
-import { loginAs } from "./helpers/auth";
+import { loginAs, E2E_TEST_PASSWORD } from "./helpers/auth";
 import { randomBytes } from "node:crypto";
 
 function uid(): string {
@@ -53,7 +53,7 @@ test.describe("mcp-denylist", () => {
     page,
     context,
   }) => {
-    await loginAs(context, fixture.sessionToken);
+    await loginAs(context, fixture.userEmail, E2E_TEST_PASSWORD);
     await page.goto(`/${fixture.orgSlug}/settings/plugins`);
     await expect(page).not.toHaveURL(/\/login/);
 

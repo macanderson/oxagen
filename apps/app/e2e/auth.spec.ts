@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { loginAs } from "./helpers/auth";
+import { loginAs, E2E_TEST_PASSWORD } from "./helpers/auth";
 import {
   setupAgentRuntimeFixture,
   teardownFixture,
@@ -69,7 +69,7 @@ test.describe("auth — successful sign-in journey", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, authFixture.sessionToken, baseURL);
+    await loginAs(context, authFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
 
     // Navigate to the org root — auth gate should pass.
     await page.goto(`/${AUTH_ORG_SLUG}`);
@@ -86,7 +86,7 @@ test.describe("auth — successful sign-in journey", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, authFixture.sessionToken, baseURL);
+    await loginAs(context, authFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
 
     // Start at org root.
     await page.goto(`/${AUTH_ORG_SLUG}`);
@@ -105,7 +105,7 @@ test.describe("auth — successful sign-in journey", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, authFixture.sessionToken, baseURL);
+    await loginAs(context, authFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
     await page.goto(`/${AUTH_ORG_SLUG}/${AUTH_WS_SLUG}/chat`);
     await expect(page).not.toHaveURL(/\/login/);
 
