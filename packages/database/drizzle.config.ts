@@ -21,6 +21,7 @@ export default defineConfig({
     "content",
     "billing",
     "security",
+    "ingestion",
   ],
   verbose: true,
   strict: true,
