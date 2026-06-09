@@ -231,8 +231,9 @@ Do **not** parallelize when:
 - Match model to task — don't run Opus on a one-line rename.
 - For contract introspection, use `pnpm check:manifest --json` (cheap,
   accurate). For codebase exploration, batch file reads in one turn.
-  The `code.*` / `ontology.*` graph query layer is **not yet shipped**
-  — do not attempt those calls; they will fail.
+  The `ontology.*` graph query layer is **not yet shipped** — do not
+  attempt those calls; they will fail. `agent.code.execute` IS wired
+  (sandbox runner); use the contract, not raw `code.*` calls.
 - Batch independent reads into one turn; don't chain them.
 - A subagent is a context isolation tool, not a default. Use it when
   results would blow up the parent's context or when work is parallelizable.
@@ -357,11 +358,11 @@ Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level override
 
 ### `apps/cli`
 
-- Commander + Ink CLI. Entry: `apps/cli/src/index.tsx`. Ships 40+ commands
-  covering auth, orgs, workspaces, chat, conversations, API keys, plugins,
-  billing, agents, workflows, images, documents, automation, forms, skills,
-  and user preferences. Primary command: `oxagen dev` (port-prober and
-  dev-stack launcher).
+- Commander + Ink CLI. Entry: `apps/cli/src/index.tsx`. Ships 93 command
+  files covering auth, orgs, workspaces, chat, conversations, API keys,
+  plugins, billing, agents, workflows, images, documents, automation, forms,
+  skills, and user preferences. `oxagen dev` is the dev-stack launcher and
+  port-prober.
 
 ### `apps/docs`
 
@@ -438,6 +439,9 @@ git fetch origin && git rebase origin/main  # sync before pushing (avoids force-
 - **AI Gateway slug drift** — gateway model slugs can be dropped/renamed
   silently; always use `modelIdOf()` to resolve handles, never hard-code
   slugs. Verify against live `/v1/models` when adding a new model.
+- **`agent.subagent.dispatch` / `agent.subagent.aggregate`** — platform-level parallel orchestration. `dispatch` fans out sub-tasks and returns a run-ID per branch; `aggregate` collects results when all branches settle. Use these contracts instead of hand-rolling fan-out inside a handler; they emit proper lineage and metering through `invoke()`.
+- **`prompt.settings.read` / `prompt.settings.write`** — platform-level prompt configuration, org+workspace scoped, stored in Postgres. When adding system-prompt customisation or model-behaviour knobs, reach for these contracts rather than hard-coding strings. They are metered and IAM-gated.
+- **`agent.ui.render`** — generative UI contract. The model returns `generateObject` structured output; the client maps it to React components via the chat component registry. Never use `ai/rsc` or server-render React trees; this contract is the only approved path for model-driven UI generation.
 
 ## Infrastructure boundaries
 
@@ -497,10 +501,4 @@ tracked in Linear.
   in `packages/oxagen/src/contracts/`, `apps/api/src/routes/v1/*`,
   `apps/mcp/src/tools/*`, and `apps/cli/src/commands/*`. Stale or missing docs
   cause drift between shipped product and agent knowledge.
-- **Gaps:** As of 2026-06-08, 18 wired capabilities lack docs (workflow.cancel,
-  workflow.run, workflow.status, automation.*, conversation.chat, document.*,
-  form.*, image.*, video.generate, agent.memory, agent.task, agent.plan,
-  skill.workspace.list, workspace.invite.send, workspace.member.list,
-  workspace.invite.accept, org.member.invite, workspace.model.settings).
-  Automation of docs regeneration is tracked in Linear; for now maintain docs
-  as you ship new contracts.
+- **Gaps:** As of 2026-06-09, 18 wired capabilities lack docs: `agent.execution.record`, `agent.plan.create`, `agent.subagent.aggregate`, `agent.subagent.dispatch`, `agent.ui.render`, `chat.message.execution`, `document.create`, `document.list`, `document.read`, `form.create`, `form.submit`, `image.analyze`, `image.create`, `image.list`, `prompt.settings.read`, `prompt.settings.write`, `skill.workspace.list`, `workspace.member.list`. Automation of docs regeneration is tracked in Linear; maintain docs as you ship new contracts.

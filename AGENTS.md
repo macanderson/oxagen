@@ -34,7 +34,7 @@ Enterprise agent platform. Monorepo. Built around three primitives:
 - `mcp` — MCP server exposing platform capabilities
 - `api` — HTTP API exposing the same capabilities
 - `app` — web app; hosts the interactive enterprise AI platform
-- `cli` — developer utility (Commander + Ink); currently one command, `oxagen dev`, that probes local dev-stack ports. A first-class streaming CLI product is planned, not yet shipped.
+- `cli` — Commander + Ink CLI; `apps/cli/src/index.tsx`. Ships 93 command files covering auth, orgs, workspaces, chat, conversations, API keys, plugins, billing, agents, workflows, images, documents, automation, forms, skills, and user preferences. `oxagen dev` is the dev-stack launcher and port-prober.
 - `docs` — Fumadocs/MDX documentation site; statically generated, deployed as `oxagen-v2-docs.vercel.app`
 
 ## When adding a capability
