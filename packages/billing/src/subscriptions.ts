@@ -320,7 +320,7 @@ export async function changeOrgPlan(
 
   // Active subscription — swap the price in-place.
   // Determine proration behavior by comparing tier order.
-  const currentTier = (currentPlanRow?.tier ?? "free") as PlanTier;
+  const currentTier = (currentPlanRow?.tier ?? "free") as const;
   const isUpgrade = meetsMinimumTier(targetPlan.tier, currentTier);
   const prorationBehavior: "always_invoice" | "none" = isUpgrade ? "always_invoice" : "none";
 
@@ -645,7 +645,7 @@ export async function previewPlanChange(
     }),
   );
 
-  const currentTier = (currentPlanRow?.tier ?? "free") as PlanTier;
+  const currentTier = (currentPlanRow?.tier ?? "free") as const;
   const isUpgrade = meetsMinimumTier(targetPlan.tier, currentTier);
   const prorationBehavior: "always_invoice" | "none" = isUpgrade
     ? "always_invoice"
