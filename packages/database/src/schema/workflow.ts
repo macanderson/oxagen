@@ -3,43 +3,6 @@ import { sql } from "drizzle-orm";
 import { agentSchema, workflowSchema } from "./_schemas";
 import { auditMixin, citext, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
 
-// Workflow definition — repeatable template for a sequence of tasks.
-export const workflows = workflowSchema.table(
-  "workflows",
-  {
-    ...idMixin("wfl"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    name: text("name").notNull(),
-    description: text("description"),
-    // Workflow definition as JSONB — stores step definitions, parameterization, etc.
-    definitionJson: jsonb("definition_json").notNull(),
-  },
-  (t) => ({
-    orgIdx: index("workflows_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
-// Workflow step definition — individual step within a workflow.
-export const workflowSteps = workflowSchema.table(
-  "workflow_steps",
-  {
-    ...idMixin("wfs"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    workflowId: uuid("workflow_id").notNull(),
-    stepIndex: integer("step_index").notNull(),
-    title: text("title").notNull(),
-    description: text("description"),
-    // Step configuration as JSONB — tool call, parameters, etc.
-    stepJson: jsonb("step_json").notNull(),
-  },
-  (t) => ({
-    workflowIdx: index("workflow_steps_workflow_idx").on(t.workflowId),
-    orgIdx: index("workflow_steps_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
 // Workflow run — execution of a workflow definition. Tracks overall progress.
 // Table lives in the `agent` schema in Postgres (agent.workflow_runs).
 export const workflowRuns = agentSchema.table(

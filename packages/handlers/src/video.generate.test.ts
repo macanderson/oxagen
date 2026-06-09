@@ -40,23 +40,9 @@ import { videoGenerateHandler } from "./video.generate";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
-<<<<<<< HEAD
 
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
-=======
-
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
-
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 describe("videoGenerateHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
     vi.clearAllMocks();

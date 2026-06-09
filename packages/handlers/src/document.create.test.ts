@@ -21,26 +21,10 @@ const mocks = vi.hoisted(() => ({
   insertReturning: vi.fn(),
 }));
 
-<<<<<<< HEAD
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-=======
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    documents: {
-      publicId: "documents.publicId",
-      title: "documents.title",
-      createdAt: "documents.createdAt",
-      orgId: "documents.orgId",
-      workspaceId: "documents.workspaceId",
-      createdByUserId: "documents.createdByUserId",
-      updatedByUserId: "documents.updatedByUserId",
-      content: "documents.content",
-    },
-  },
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       insert: () => ({
@@ -49,32 +33,14 @@ vi.mock("@oxagen/database", () => ({
         }),
       }),
     }),
-<<<<<<< HEAD
 
   };
 });
-=======
-}));
-
-vi.mock("drizzle-orm", () => ({}));
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 import { documentCreateHandler } from "./document.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
-<<<<<<< HEAD
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
-=======
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -15,14 +15,10 @@ mocks.insertReturning.mockResolvedValue([{ publicId: "aur_exec1", status: "runni
 // We track how many times it's been called and route accordingly.
 let withTenantDbCallCount = 0;
 
-<<<<<<< HEAD
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-=======
-vi.mock("@oxagen/database", () => ({
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
     withTenantDbCallCount++;
     if (withTenantDbCallCount % 2 === 1) {
@@ -42,36 +38,8 @@ vi.mock("@oxagen/database", () => ({
       }),
     });
   },
-<<<<<<< HEAD
 
   };
-=======
-  schema: {
-    automations: {
-      publicId: "publicId",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      deletedAt: "deletedAt",
-      id: "id",
-    },
-    automationRuns: {
-      publicId: "publicId",
-      status: "status",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      automationId: "automationId",
-      payload: "payload",
-      startedAt: "startedAt",
-      createdByUserId: "createdByUserId",
-      updatedByUserId: "updatedByUserId",
-    },
-  },
-}));
-
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return { and: orig.and, eq: orig.eq, isNull: orig.isNull };
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 });
 
 import { automationTriggerHandler } from "./automation.trigger";
@@ -79,19 +47,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-<<<<<<< HEAD
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
-=======
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 const BASE_INPUT = {
   automation_id: "aut_abc",

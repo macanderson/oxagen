@@ -351,10 +351,15 @@ Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level override
   order is: contract → API route → MCP tool → UI wire-up. Run
   `pnpm check:manifest` to get the current gap list.
 - **`check:manifest` combined-route false positive** — the manifest script
-  expects one file per capability (e.g. `workflow.run.ts`). When three
-  capabilities share a combined route file (e.g. `workflow.ts`), the script
-  reports a false-positive `api` gap for each. Verify by reading the
-  combined file before filing a parity ticket.
+  expects one file per capability (e.g. `workflow.run.ts`). When capabilities
+  share a combined route file, the script reports a false-positive gap for each.
+  Combined files currently in use:
+  - `apps/api/src/routes/v1/workflow.ts` — covers `workflow.run`, `workflow.cancel`,
+    `workflow.status` (false-positive `api` gap for each).
+  - `apps/api/src/routes/v1/connection.ts` + `apps/mcp/src/tools/connection.ts`
+    — covers all 8 `connection.*` capabilities (false-positive `api` **and** `mcp`
+    gap for each).
+  Verify by reading the combined file before filing a parity ticket.
 
 ### `apps/cli`
 
@@ -506,4 +511,13 @@ tracked in Linear.
   in `packages/oxagen/src/contracts/`, `apps/api/src/routes/v1/*`,
   `apps/mcp/src/tools/*`, and `apps/cli/src/commands/*`. Stale or missing docs
   cause drift between shipped product and agent knowledge.
-- **Gaps (last audited 2026-06-09):** 18 wired capabilities lack docs: `agent.execution.record`, `agent.plan.create`, `agent.subagent.aggregate`, `agent.subagent.dispatch`, `agent.ui.render`, `chat.message.execution`, `document.create`, `document.list`, `document.read`, `form.create`, `form.submit`, `image.analyze`, `image.create`, `image.list`, `prompt.settings.read`, `prompt.settings.write`, `skill.workspace.list`, `workspace.member.list`. Run `pnpm check:manifest` for the current gap list — this count drifts; do not hard-code it in commit messages or tickets. Automation of docs regeneration is tracked in Linear.
+- **Gaps (last audited 2026-06-09):** `pnpm check:manifest` reports **14** missing-docs
+  entries: `agent.execution.record`, `agent.plan.create`, `agent.subagent.aggregate`,
+  `agent.subagent.dispatch`, `agent.ui.render`, `chat.message.execution`, and all 8
+  `connection.*` capabilities. A further **12** capabilities have no `docs/capabilities/`
+  file but omit `"docs"` from their contract `layers[]`, making them invisible to
+  `check:manifest`: `document.create`, `document.list`, `document.read`, `form.create`,
+  `form.submit`, `image.analyze`, `image.create`, `image.list`, `prompt.settings.read`,
+  `prompt.settings.write`, `skill.workspace.list`, `workspace.member.list`. True total
+  ~26 undocumented. Run `pnpm check:manifest` for tracked gaps; for the untracked 12,
+  add `"docs"` to their contract `layers[]`. This count drifts; do not hard-code it.

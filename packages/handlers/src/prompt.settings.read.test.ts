@@ -14,19 +14,7 @@ vi.mock("@oxagen/ai", () => ({
 
 import { promptSettingsReadHandler } from "./prompt.settings.read";
 
-<<<<<<< HEAD
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
-=======
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 beforeEach(() => mocks.loadWorkspacePromptConfig.mockReset());
 

@@ -123,4 +123,17 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "mcp.credentials", policyClass: "standard" }, // encrypted OAuth tokens — org+workspace scoped
   { table: "mcp.registries", policyClass: "org_or_global" }, // NULL org_id = global default seed
   { table: "notification.notifications", policyClass: "workspace_nullable" },
+
+  // ── ingestion.* — connection-ingestion epic ───────────────────────────────
+  //   Added by migrations 0001–0004 AFTER the 0001 RLS baseline and 0005 grants.
+  //   RLS applied by forward migration 0029_ingestion_rls.sql.
+  //   Child tables (auth_credentials, oauth_tokens, webhook_subscriptions,
+  //   setup_suggestions) have no direct org_id column; isolation is transitive
+  //   through source_connections. They are intentionally excluded here because
+  //   manifest-coverage.test.ts only checks tables with an org_id column.
+  { table: "ingestion.source_connections", policyClass: "standard" },
+  { table: "ingestion.entity_types", policyClass: "standard" },
+  { table: "ingestion.entity_type_mappings", policyClass: "standard" },
+  { table: "ingestion.deletion_jobs", policyClass: "standard" },
+  { table: "ingestion.oauth_accounts", policyClass: "org_only" }, // stores encrypted OAuth tokens + PII
 ];

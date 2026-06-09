@@ -29,33 +29,10 @@ const mocks = vi.hoisted(() => ({
   callCount: { value: 0 },
 }));
 
-<<<<<<< HEAD
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-=======
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    forms: {
-      publicId: "forms.publicId",
-      workspaceId: "forms.workspaceId",
-      deletedAt: "forms.deletedAt",
-      id: "forms.id",
-    },
-    formSubmissions: {
-      publicId: "formSubmissions.publicId",
-      status: "formSubmissions.status",
-      createdAt: "formSubmissions.createdAt",
-      orgId: "formSubmissions.orgId",
-      workspaceId: "formSubmissions.workspaceId",
-      formId: "formSubmissions.formId",
-      responses: "formSubmissions.responses",
-      createdByUserId: "formSubmissions.createdByUserId",
-      updatedByUserId: "formSubmissions.updatedByUserId",
-    },
-  },
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
     mocks.callCount.value += 1;
     if (mocks.callCount.value % 2 === 1) {
@@ -80,37 +57,14 @@ vi.mock("@oxagen/database", () => ({
       });
     }
   },
-<<<<<<< HEAD
 
-=======
-}));
-
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return {
-    and: orig.and,
-    eq: orig.eq,
-    isNull: orig.isNull,
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
   };
 });
 
 import { formSubmitHandler } from "./form.submit";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
-<<<<<<< HEAD
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
-=======
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 beforeEach(() => {
   vi.clearAllMocks();

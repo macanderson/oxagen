@@ -4,13 +4,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { logger, maskEmail } from "./logger";
 
-<<<<<<< HEAD
-=======
-/**
- * Map the workspace-level invite role to the org-level role stored in
- * `org.invitations.role`. Org roles are title-cased; invite input is lower.
- */
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
+/** Map workspace-level invite role to title-cased org-level role. */
 function mapRole(role: "member" | "admin" | "owner"): string {
   const map: Record<string, string> = {
     member: "Member",
@@ -33,12 +27,6 @@ export const workspaceInviteSendHandler: CapabilityHandler<typeof workspaceInvit
   const orgRole = mapRole(input.role);
 
   const row = await withTenantDb(async (tx) => {
-<<<<<<< HEAD
-=======
-    // Attempt insert; the partial unique index on (org_id, email) WHERE
-    // status='pending' prevents duplicate pending invites. Use
-    // onConflictDoNothing and fall back to reading the existing row.
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
     const inserted = await tx
       .insert(schema.invitations)
       .values({
@@ -62,10 +50,7 @@ export const workspaceInviteSendHandler: CapabilityHandler<typeof workspaceInvit
       return inserted[0];
     }
 
-<<<<<<< HEAD
-=======
     // A pending invite for this (org, email) already exists — return it.
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
     const existing = await tx.query.invitations.findFirst({
       where: and(
         eq(schema.invitations.orgId, ctx.orgId),

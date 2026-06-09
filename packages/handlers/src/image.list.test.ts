@@ -16,38 +16,12 @@ function makeTx(rows: unknown[]): unknown {
   return { select };
 }
 
-<<<<<<< HEAD
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx(mocks.selectRows())),
 
-=======
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx(mocks.selectRows())),
-  schema: {
-    generatedAssets: {
-      publicId: "publicId",
-      storageUrl: "storageUrl",
-      createdAt: "createdAt",
-      prompt: "prompt",
-      kind: "kind",
-      workspaceId: "workspaceId",
-      status: "status",
-      deletedAt: "deletedAt",
-    },
-  },
-}));
-
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return {
-    and: orig.and,
-    eq: orig.eq,
-    desc: orig.desc,
-    isNull: orig.isNull,
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
   };
 });
 
@@ -58,19 +32,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
-<<<<<<< HEAD
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
-=======
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 function makeRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -136,7 +98,6 @@ describe("imageListHandler", () => {
     // If withTenantDb was called and returned data, we have rows
     expect(result.images).toHaveLength(1);
   });
-<<<<<<< HEAD
 
   // ── error paths ───────────────────────────────────────────────────────────
 
@@ -159,6 +120,4 @@ describe("imageListHandler", () => {
 
     await expect(imageListHandler({}, CTX)).rejects.toThrow(TypeError);
   });
-=======
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 });

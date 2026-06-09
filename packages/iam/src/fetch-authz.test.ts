@@ -90,18 +90,14 @@ function buildDbMock(overrides: {
       selectCallIdx++;
       // Call order based on _fetchAuthz's query sequence:
       // 1: principals (with limit 1)
-      // 2: grants (batch1)
-      // 3: roles (batch1)
-      // 4: policies (batch1)
-      // 5: roleGrants (batch2)
-      // 6: pra (batch2)
+      // 2: roles (batch1 — grants/policies are Promise.resolve([]), not DB queries)
+      // 3: roleGrants (batch2, only if roleIds.length > 0)
+      // 4: pra (batch2, always)
       switch (selectCallIdx) {
         case 1: return makeChain(principals);
-        case 2: return makeChainNoLimit(grants);
-        case 3: return makeChainNoLimit(roles);
-        case 4: return makeChainNoLimit(policies);
-        case 5: return makeChainNoLimit(roleGrants);
-        case 6: return makeChainNoLimit(pra);
+        case 2: return makeChainNoLimit(roles);
+        case 3: return makeChainNoLimit(roleGrants);
+        case 4: return makeChainNoLimit(pra);
         default: return makeChain([]);
       }
     },
@@ -251,31 +247,13 @@ describe("fetchAuthz()", () => {
       capabilityId: "chat.message.send",
       effect: "allow",
     };
-    const grantRow = {
-      principalId: "prn_internal",
-      capabilityId: "chat.message.send",
-      scopeKind: "org",
-      scopeId: "org_1",
-      effect: "allow",
-      conditionsJsonb: null,
-      expiresAt: null,
-    };
-    const policyRow = {
-      capabilityId: "chat.message.send",
-      scopeKind: "org",
-      scopeId: "org_1",
-      effect: "allow",
-      enforced: false,
-      conditionsJsonb: null,
-    };
-
+    // grants/policies tables were dropped in migration 0027 (replaced by
+    // role-based IAM). fetchAuthz() returns [] for both unconditionally.
     mocks.dbFn.mockReturnValue(
       buildDbMock({
         roles: [roleRow],
         pra: [praRow],
         roleGrants: [roleGrantRow],
-        grants: [grantRow],
-        policies: [policyRow],
       }),
     );
 
@@ -289,11 +267,10 @@ describe("fetchAuthz()", () => {
 
     expect(result.principal?.id).toBe("prn_internal");
     expect(result.principal?.kind).toBe("human");
-    expect(result.grants).toHaveLength(1);
-    expect(result.grants[0]?.effect).toBe("allow");
+    expect(result.grants).toHaveLength(0);
     expect(result.roleGrants).toHaveLength(1);
     expect(result.roleGrants[0]?.effect).toBe("allow");
-    expect(result.policies).toHaveLength(1);
+    expect(result.policies).toHaveLength(0);
     expect(result.roles).toHaveLength(1);
   });
 });

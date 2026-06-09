@@ -17,25 +17,10 @@ const mocks = vi.hoisted(() => ({
 
 mocks.selectQuery.mockResolvedValue([]);
 
-<<<<<<< HEAD
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-=======
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    documents: {
-      publicId: "documents.publicId",
-      title: "documents.title",
-      content: "documents.content",
-      metadata: "documents.metadata",
-      createdAt: "documents.createdAt",
-      workspaceId: "documents.workspaceId",
-      deletedAt: "documents.deletedAt",
-    },
-  },
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       select: () => ({
@@ -46,37 +31,14 @@ vi.mock("@oxagen/database", () => ({
         }),
       }),
     }),
-<<<<<<< HEAD
 
-=======
-}));
-
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return {
-    and: orig.and,
-    eq: orig.eq,
-    isNull: orig.isNull,
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
   };
 });
 
 import { documentReadHandler } from "./document.read";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
-<<<<<<< HEAD
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
-=======
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 const makeRow = (overrides: Record<string, unknown> = {}) => ({
   title: "My Document",

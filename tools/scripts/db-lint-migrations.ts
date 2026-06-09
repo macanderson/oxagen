@@ -34,6 +34,17 @@ const NAME_RE = /^(\d{4})_[a-z0-9]+(?:_[a-z0-9]+)*\.sql$/;
  */
 const FROZEN_DUPLICATE_ORDINALS = new Set<number>();
 
+/**
+ * Ordinals that were squashed into the 0000_baseline.sql snapshot and will
+ * therefore never appear as individual files. These represent migrations from
+ * the initial development phase (0005–0027) that were consolidated into the
+ * baseline re-stamp and archived under packages/database/drizzle/migration_archive/.
+ * New migrations start at 0028 and proceed sequentially from there.
+ */
+const SQUASHED_ORDINALS = new Set<number>(
+  Array.from({ length: 23 }, (_, i) => i + 5), // 5..27 inclusive
+);
+
 function main(): void {
   const files = readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith(".sql"))
@@ -66,16 +77,22 @@ function main(): void {
     }
   }
 
-  // Gap detection — the ordinal sequence must be contiguous from 0.
-  for (let i = 0; i < ordinals.length; i++) {
-    if (ordinals[i] !== i) {
-      errors.push(
-        `gap in ordinal sequence: expected ${String(i).padStart(4, "0")}, found ${String(
-          ordinals[i],
-        ).padStart(4, "0")}`,
-      );
-      break;
+  // Gap detection — the ordinal sequence must be contiguous, accounting for
+  // squashed ordinals (5–27) that are permanently absent because they were
+  // folded into the 0000_baseline.sql snapshot.
+  let expectedOrdinal = 0;
+  for (const actual of ordinals) {
+    while (expectedOrdinal < actual) {
+      if (!SQUASHED_ORDINALS.has(expectedOrdinal)) {
+        errors.push(
+          `gap in ordinal sequence: expected ${String(expectedOrdinal).padStart(4, "0")}, found ${String(actual).padStart(4, "0")}`,
+        );
+        break;
+      }
+      expectedOrdinal++;
     }
+    if (errors.length > 0) break;
+    expectedOrdinal = actual + 1;
   }
 
   if (errors.length > 0) {

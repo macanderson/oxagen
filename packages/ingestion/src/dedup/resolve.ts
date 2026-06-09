@@ -44,15 +44,21 @@ import { ALIAS_THRESHOLD, CONFIRM_THRESHOLD } from "../types";
  *   - scoreCandidate() combining embedding + property match
  *   - createPrincipalNode() / createAliasEdge() Neo4j mutations
  */
+// TODO(OXA-ingestion): implement entity dedup — for now pass-through
+// Requires scopedSession() from @oxagen/ontology/tenant, embedText() from @oxagen/ai/embed,
+// Neo4j MERGE on naturalKey (Pass A), and vector similarity query (Pass B).
 export async function resolveEntity(
-  _mutation: EntityMutation,
+  mutation: EntityMutation,
   _orgId: string,
 ): Promise<DeduplicationResult> {
-  // TODO(ingestion): implement entity resolution
-  // Pass A: exact naturalKey lookup
-  // Pass B: embedding similarity + property match
-  // See the algorithm described in the module docblock above.
-  throw new Error("resolveEntity: not yet implemented");
+  // Pass-through: treat every entity as a new principal until dedup is implemented.
+  // This allows the pipeline to run without blocking on the Neo4j integration.
+  console.warn("[ingestion] resolveEntity is a pass-through stub — entity dedup not yet implemented");
+  return {
+    principalNodeId: mutation.naturalKey,
+    action: "created_principal",
+    confidence: 1.0,
+  };
 }
 
 /**

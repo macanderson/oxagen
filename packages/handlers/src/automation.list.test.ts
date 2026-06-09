@@ -7,14 +7,10 @@ const mocks = vi.hoisted(() => ({
 
 mocks.selectOrderBy.mockResolvedValue([]);
 
-<<<<<<< HEAD
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-=======
-vi.mock("@oxagen/database", () => ({
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       select: (_cols: unknown) => ({
@@ -25,28 +21,8 @@ vi.mock("@oxagen/database", () => ({
         }),
       }),
     }),
-<<<<<<< HEAD
 
   };
-=======
-  schema: {
-    automations: {
-      publicId: "publicId",
-      name: "name",
-      status: "status",
-      triggerConfig: "triggerConfig",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      deletedAt: "deletedAt",
-      createdAt: "createdAt",
-    },
-  },
-}));
-
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return { and: orig.and, eq: orig.eq, desc: orig.desc, isNull: orig.isNull };
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 });
 
 import { automationListHandler } from "./automation.list";
@@ -54,19 +30,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-<<<<<<< HEAD
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
-=======
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 const makeRow = (overrides: Record<string, unknown> = {}) => ({
   publicId: "aut_abc",

@@ -17,23 +17,10 @@ const DEFAULT_ROW = {
 mocks.insertReturning.mockResolvedValue([DEFAULT_ROW]);
 mocks.findFirst.mockResolvedValue(null);
 
-<<<<<<< HEAD
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-=======
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    invitations: {
-      publicId: "invitations.publicId",
-      status: "invitations.status",
-      expiresAt: "invitations.expiresAt",
-      orgId: "invitations.orgId",
-      email: "invitations.email",
-    },
-  },
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       insert: () => ({
@@ -47,36 +34,15 @@ vi.mock("@oxagen/database", () => ({
         invitations: { findFirst: mocks.findFirst },
       },
     }),
-<<<<<<< HEAD
 
   };
 });
-=======
-}));
-
-vi.mock("drizzle-orm", () => ({
-  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
-  and: (...args: unknown[]) => ({ $type: "and", args }),
-}));
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 import { workspaceInviteSendHandler } from "./workspace.invite.send";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-<<<<<<< HEAD
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
-=======
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 describe("workspaceInviteSendHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
