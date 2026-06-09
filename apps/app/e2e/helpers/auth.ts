@@ -106,3 +106,27 @@ export async function loginAs(
 // Password used for all seeded E2E test accounts.
 // Must match what seedPlugin / setupAgentRuntimeFixture seed into auth.accounts.
 export const E2E_TEST_PASSWORD = "E2eTestPassword123!";
+
+// Inject a pre-seeded session token directly as a cookie, bypassing the
+// email/password flow. Use this when the fixture seeds auth.sessions but not
+// auth.accounts (credential rows). The cookie prefix "oxagen" must match the
+// cookiePrefix in packages/auth/src/auth.ts.
+export async function loginWithSession(
+  context: BrowserContext,
+  sessionToken: string,
+  baseUrl: string = "http://localhost:3000",
+): Promise<void> {
+  const url = new URL(baseUrl);
+  await context.addCookies([
+    {
+      name: "oxagen.session_token",
+      value: sessionToken,
+      domain: url.hostname,
+      path: "/",
+      httpOnly: true,
+      secure: false,
+      sameSite: "Lax",
+      expires: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
+    },
+  ]);
+}

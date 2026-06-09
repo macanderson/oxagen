@@ -28,7 +28,7 @@ export function LoginForm({ mode = "signin" }: { mode?: "signin" | "signup" }) {
         const res = await authClient.signIn.email({ email, password });
         if (res.error) throw new Error(res.error.message);
       }
-      router.push("/");
+      router.push(mode === "signup" ? "/new-organization" : "/");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

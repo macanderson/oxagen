@@ -8,7 +8,7 @@ import {
   interceptAgentStream,
   scriptedScenarioEvents,
 } from "./helpers/agent-stream-mock";
-import { loginAs, E2E_TEST_PASSWORD } from "./helpers/auth";
+import { loginWithSession } from "./helpers/auth";
 
 // ─── Agent plan approval — end-to-end human-in-the-loop flow ─────────────────
 //
@@ -64,7 +64,7 @@ test.describe("agent.plan.approve — authenticated, interactive flow", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, planFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, planFixture.sessionToken, baseURL);
 
     const parentMessageId = "msg_plan_approve_test";
     await interceptAgentStream(page, {
@@ -91,7 +91,7 @@ test.describe("agent.plan.approve — authenticated, interactive flow", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, planFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, planFixture.sessionToken, baseURL);
 
     const parentMessageId = "msg_plan_approval_card";
     await interceptAgentStream(page, {
@@ -122,7 +122,7 @@ test.describe("agent.plan.approve — authenticated, interactive flow", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, planFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, planFixture.sessionToken, baseURL);
 
     const parentMessageId = "msg_plan_approve_action";
     await interceptAgentStream(page, {
@@ -158,7 +158,7 @@ test.describe("agent.plan.approve — authenticated, interactive flow", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, planFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, planFixture.sessionToken, baseURL);
 
     // Build a truncated event stream that fires plan-proposed + approval-required
     // but no approval-resolved — the user supplies the resolution via the Deny button.

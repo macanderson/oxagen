@@ -57,10 +57,9 @@ export async function signUpFreshUser(
   await page.fill('input[name="password"]', password);
   await page.getByRole("button", { name: /create account/i }).click();
 
-  // Better Auth sets the session cookies and the client calls router.push("/"),
-  // which causes a full server-side redirect chain: / → /new-organization.
-  // Wait for the full navigation (this is a real Playwright-observable event
-  // because it's a server-side redirect).
+  // Better Auth sets the session cookies and the client calls
+  // router.push("/new-organization") directly (signup path). This is a
+  // client-side History API navigation — Playwright observes it reliably.
   await page.waitForURL(
     (url) => url.pathname === "/new-organization",
     { timeout: 20_000 },
@@ -119,14 +118,16 @@ export async function signUpFreshUser(
     throw new Error(`signUpFreshUser: org creation failed — ${errText}`);
   }
 
-  // Explicitly navigate to the newly created org (bypasses client-router
-  // timing issues — the session cookies are set and the DB is consistent).
-  await page.goto(`/${orgSlug}/default`);
+  // Navigate directly to the ask page — /{orgSlug}/default redirects to
+  // /{orgSlug}/default/ask via a server-side 307, which causes Playwright to
+  // throw "navigation interrupted by another navigation". Going straight to /ask
+  // avoids the interrupt entirely.
+  await page.goto(`/${orgSlug}/default/ask`);
 
   // Verify auth gate passed.
   if (page.url().includes("/login")) {
     throw new Error(
-      `signUpFreshUser: session not valid after signup (redirected to /login from /${orgSlug}/default)`,
+      `signUpFreshUser: session not valid after signup (redirected to /login from /${orgSlug}/default/ask)`,
     );
   }
 

@@ -103,7 +103,7 @@ test.describe("asset.upload — authenticated surface", () => {
 
     const apiBase = (baseURL ?? "http://localhost:3000").replace(
       /:\d+$/,
-      ":3100",
+      ":4000",
     );
     const res = await request.post(
       `${apiBase}/v1/${ORG_SLUG}/${WS_SLUG}/assets/upload`,

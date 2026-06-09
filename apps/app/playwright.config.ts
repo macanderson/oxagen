@@ -83,16 +83,29 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  webServer: {
-    // In CI we serve a production build (`next start`); the gate builds the
-    // app in a prior step so this just boots it. Locally we use the dev
-    // server for fast iteration.
-    command: process.env.CI ? "pnpm start" : "pnpm dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    // E2E serves a production build over http; tell Better Auth not to use
-    // `__Secure-` cookies so the auth helper's injected session is honored.
-    env: { ...process.env, E2E_TEST: "true" },
-  },
+  webServer: [
+    {
+      // In CI we serve a production build (`next start`); the gate builds the
+      // app in a prior step so this just boots it. Locally we use the dev
+      // server for fast iteration.
+      command: process.env.CI ? "pnpm start" : "pnpm dev",
+      url: "http://localhost:3000",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      // E2E serves a production build over http; tell Better Auth not to use
+      // `__Secure-` cookies so the auth helper's injected session is honored.
+      env: { ...process.env, E2E_TEST: "true" },
+    },
+    {
+      // API server (Hono, port 4000) — required by asset-upload e2e tests.
+      // tsx inherits process.env which playwright.config.ts already populates
+      // from .env.local via loadEnvLocal(), so no --env-file flag is needed.
+      command: "pnpm --filter @oxagen/api exec tsx src/index.ts",
+      cwd: resolve(dirname(fileURLToPath(import.meta.url)), "../.."),
+      url: "http://localhost:4000/health",
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+      env: { ...process.env, E2E_TEST: "true" },
+    },
+  ],
 });
