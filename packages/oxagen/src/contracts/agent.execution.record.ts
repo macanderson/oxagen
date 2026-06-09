@@ -1,8 +1,8 @@
-import { defineCapability, z } from "@oxagen/oxagen/core";
+import { z } from "zod";
+import { registerCapability } from "../registry";
 
-export const agentExecutionRecord = defineCapability({
+export const agentExecutionRecord = registerCapability({
   name: "agent.execution.record",
-  displayName: "Record Agent Execution",
   description: "Record a complete agent execution with steps and tool calls for lineage tracking and analytics",
 
   input: z.object({

@@ -14,9 +14,9 @@ interface TelemetryData {
   status?: 'success' | 'error';
 }
 
-const CLICKHOUSE_URL = 'https://xao3dt0f2y.us-east-1.aws.clickhouse.cloud:8443';
-const CLICKHOUSE_USERNAME = 'default';
-const CLICKHOUSE_PASSWORD = 'OL1RXiIa.jg7h';
+const CLICKHOUSE_URL = process.env.CLICKHOUSE_URL ?? 'https://xao3dt0f2y.us-east-1.aws.clickhouse.cloud:8443';
+const CLICKHOUSE_USERNAME = process.env.CLICKHOUSE_USERNAME ?? 'default';
+const CLICKHOUSE_PASSWORD = process.env.CLICKHOUSE_PASSWORD ?? '';
 
 async function writeTelemetry(data: TelemetryData): Promise<void> {
   return new Promise((resolve, reject) => {

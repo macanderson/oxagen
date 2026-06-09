@@ -1,9 +1,5 @@
-<<<<<<< HEAD
-import { bigint, boolean, index, integer, text, timestamp, uniqueIndex, uuid, jsonb } from "drizzle-orm/pg-core";
-=======
 import { bigint, boolean, customType, index, integer, text, timestamp, uniqueIndex, uuid, jsonb } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
->>>>>>> feat/hardening-cost-prompts-motion-rebrand
 import { authSchema } from "./_schemas";
 import { auditMixin, bytea, citext, idMixin, softDeleteMixin, orgScopeMixin } from "./_mixins";
 

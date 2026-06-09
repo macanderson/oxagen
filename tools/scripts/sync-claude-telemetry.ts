@@ -4,9 +4,9 @@ import os from 'os';
 import https from 'https';
 import readline from 'readline';
 
-const CLICKHOUSE_URL = 'https://xao3dt0f2y.us-east-1.aws.clickhouse.cloud:8443';
-const CLICKHOUSE_USERNAME = 'default';
-const CLICKHOUSE_PASSWORD = 'OL1RXiIa.jg7h';
+const CLICKHOUSE_URL = process.env.CLICKHOUSE_URL ?? 'https://xao3dt0f2y.us-east-1.aws.clickhouse.cloud:8443';
+const CLICKHOUSE_USERNAME = process.env.CLICKHOUSE_USERNAME ?? 'default';
+const CLICKHOUSE_PASSWORD = process.env.CLICKHOUSE_PASSWORD ?? '';
 
 const TELEMETRY_LOG = path.join(os.homedir(), '.claude', 'claude-code-telemetry.jsonl');
 const SYNCED_LOG = path.join(os.homedir(), '.claude', 'claude-code-telemetry.synced');

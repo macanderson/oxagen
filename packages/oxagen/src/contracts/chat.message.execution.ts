@@ -1,9 +1,9 @@
-import { defineCapability, z } from "@oxagen/oxagen/core";
+import { z } from "zod";
+import { registerCapability } from "../registry";
 import { agentExecutionRecord } from "./agent.execution.record";
 
-export const chatMessageExecution = defineCapability({
+export const chatMessageExecution = registerCapability({
   name: "chat.message.execution",
-  displayName: "Record Chat Message Execution",
   description:
     "Record agent execution within a chat message context, linking execution lineage to conversation history",
 
