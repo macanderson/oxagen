@@ -5,16 +5,18 @@
  * no live DB, no network, no random/wall-clock values.
  *
  * Assertions:
- *  1. All 6 IAM tables are importable from schema/index.
+ *  1. All 5 current IAM tables are importable from schema/index.
  *  2. principals carries an updated_at column via auditMixin.
  *  3. principals.kind CHECK constraint exists and covers all 3 values.
- *  4. grants.effect CHECK constraint exists and covers all 3 effect values.
- *  5. role_grants table has an org_id column.
- *  6. grants has a composite index whose columns include principal_id and scope_id.
+ *  4. roleGrants.effect CHECK constraint exists and covers all 3 effect values.
+ *  5. role_grants table has org_id, role_id, capability_id columns.
+ *  6. principalRoleAssignments has a composite unique index on (principal_id, role_id, org_id).
  *  7. access_requests.status CHECK constraint exists and covers all 4 values.
  *  8. roles.scope_kind CHECK exists and includes both 'org' and 'workspace'.
  *
- * Uses the same queryChunks inspection technique as schema-append-only.test.ts.
+ * Phase 3 (OXA-1390): a `grants` (direct principal→scope effect) table and a
+ * `policies` (ABAC policy) table are planned but not yet implemented.
+ * Tests for those tables will be added when the migrations land.
  */
 
 import { describe, it, expect } from "vitest";
@@ -23,23 +25,21 @@ import {
   principals,
   roles,
   roleGrants,
-  grants,
-  policies,
+  principalRoleAssignments,
   accessRequests,
 } from "../schema/index";
 import { flattenCheckSql, sqlColumnNames, getChecks } from "./_test-helpers";
 
 // ---------------------------------------------------------------------------
-// 1. All 7 IAM tables are importable from schema/index
+// 1. All 5 current IAM tables are importable from schema/index
 // ---------------------------------------------------------------------------
 
 describe("IAM tables importable from schema/index", () => {
-  it("all 6 IAM tables are defined (not undefined)", () => {
+  it("all 5 IAM tables are defined (not undefined)", () => {
     expect(principals).toBeDefined();
     expect(roles).toBeDefined();
     expect(roleGrants).toBeDefined();
-    expect(grants).toBeDefined();
-    expect(policies).toBeDefined();
+    expect(principalRoleAssignments).toBeDefined();
     expect(accessRequests).toBeDefined();
   });
 
@@ -47,8 +47,7 @@ describe("IAM tables importable from schema/index", () => {
     ["principals", principals],
     ["roles", roles],
     ["roleGrants", roleGrants],
-    ["grants", grants],
-    ["policies", policies],
+    ["principalRoleAssignments", principalRoleAssignments],
     ["accessRequests", accessRequests],
   ];
 
@@ -95,11 +94,11 @@ describe("principals.kind CHECK constraint", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. grants.effect CHECK constraint
+// 4. roleGrants.effect CHECK constraint
 // ---------------------------------------------------------------------------
 
-describe("grants.effect CHECK constraint", () => {
-  const checks = getChecks(grants);
+describe("roleGrants.effect CHECK constraint", () => {
+  const checks = getChecks(roleGrants);
 
   it("CHECK constraint name includes 'effect_check'", () => {
     const names = checks.map((c) => c.name);
@@ -129,7 +128,7 @@ describe("grants.effect CHECK constraint", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. role_grants has org_id column
+// 5. role_grants has org_id, role_id, capability_id columns
 // ---------------------------------------------------------------------------
 
 describe("role_grants columns", () => {
@@ -150,22 +149,32 @@ describe("role_grants columns", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. grants has a composite index including principal_id and scope_id
+// 6. principalRoleAssignments has composite unique index on (principal_id, role_id, org_id)
 // ---------------------------------------------------------------------------
 
-describe("grants resolver hot-path index", () => {
-  it("has a composite index whose columns include principal_id and scope_id", () => {
-    const cfg = getTableConfig(grants);
+describe("principalRoleAssignments unique index", () => {
+  it("has a composite index whose columns include principal_id and role_id", () => {
+    const cfg = getTableConfig(principalRoleAssignments);
     const compositeIndex = cfg.indexes.find((idx) => {
       const colNames = idx.config.columns
         .filter((c): c is { name: string } => typeof c === "object" && c !== null && "name" in c)
         .map((c) => c.name);
-      return colNames.includes("principal_id") && colNames.includes("scope_id");
+      return colNames.includes("principal_id") && colNames.includes("role_id");
     });
     expect(
       compositeIndex,
-      "Expected a composite index on (principal_id, scope_id) in grants",
+      "Expected a composite index on (principal_id, role_id) in principalRoleAssignments",
     ).toBeDefined();
+  });
+
+  it("has an org_id column", () => {
+    const cols = sqlColumnNames(principalRoleAssignments);
+    expect(cols).toContain("org_id");
+  });
+
+  it("has an assigned_at column", () => {
+    const cols = sqlColumnNames(principalRoleAssignments);
+    expect(cols).toContain("assigned_at");
   });
 });
 
