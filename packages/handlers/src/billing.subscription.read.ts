@@ -56,7 +56,7 @@ export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSub
     ]);
 
     const sub = subWithPlan ?? null;
-    const planSlug = sub ? (sub.plan?.slug ?? "unknown") : null;
+    const planSlug = (sub && (sub as any).plan ? (sub as any).plan.slug : null) ?? "unknown";
 
     // OXA-1347: roll up the current billing period's token + cost totals
     // from ClickHouse when a subscription is active. Telemetry is best-
