@@ -36,6 +36,12 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.mcp_servers", policyClass: "standard" },
   { table: "agent.workflow_runs", policyClass: "standard" },
   { table: "agent.workflow_run_tasks", policyClass: "standard" },
+  // agent.agent_executions / agent_execution_steps / agent_tool_calls — added in
+  // 0030 (re-introduced after 0020 dropped them). Migration 0032 upgrades their
+  // RLS policies from org-only to the standard org+workspace predicate.
+  { table: "agent.agent_executions", policyClass: "standard" },
+  { table: "agent.agent_execution_steps", policyClass: "standard" },
+  { table: "agent.agent_tool_calls", policyClass: "standard" },
 
   // ── chat.* (orgScopeMixin) ────────────────────────────────────────────────
   { table: "chat.conversations", policyClass: "standard" },

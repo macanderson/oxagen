@@ -13,8 +13,6 @@
 //   principals               → prn_
 //   roles                    → rol_
 //   role_grants              → rlg_
-//   grants                   → grn_
-//   policies                 → pol_
 //   access_requests          → arq_
 //   sessions (IAM)           → ses_   (distinct from auth.sessions, export as iamSessions)
 //   principal_role_assignments → pra_  (OXA-1498)
@@ -129,82 +127,6 @@ export const roleGrants = orgSchema.table(
 );
 
 // ---------------------------------------------------------------------------
-// grants — direct principal → capability grants (not via role)
-// ---------------------------------------------------------------------------
-
-export const grants = orgSchema.table(
-  "grants",
-  {
-    ...idMixin("grn"),
-    ...auditMixin(),
-    orgId: uuid("org_id").notNull(),
-    principalId: uuid("principal_id").notNull(),
-    capabilityId: text("capability_id").notNull(),
-    // CHECK: scope_kind IN ('org','workspace')
-    scopeKind: text("scope_kind").notNull(),
-    // The specific org or workspace UUID this grant is scoped to.
-    scopeId: uuid("scope_id").notNull(),
-    // CHECK: effect IN ('allow','deny','require_approval')
-    effect: text("effect").notNull(),
-    conditionsJsonb: jsonb("conditions_jsonb"),
-    grantedBy: uuid("granted_by"),
-    grantedAt: timestamp("granted_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
-  },
-  (t) => ({
-    // Resolver hot path: "what grants does principal X have in scope S?"
-    principalScopeIdx: index("grants_principal_scope_idx").on(t.principalId, t.scopeId),
-    capabilityIdx: index("grants_capability_idx").on(t.capabilityId),
-    effectCheck: check(
-      "grants_effect_check",
-      sql`${t.effect} IN ('allow', 'deny', 'require_approval')`,
-    ),
-    scopeKindCheck: check(
-      "grants_scope_kind_check",
-      sql`${t.scopeKind} IN ('org', 'workspace')`,
-    ),
-  }),
-);
-
-// ---------------------------------------------------------------------------
-// policies — conditional grants with enforcement flag + sensitivity tags
-// ---------------------------------------------------------------------------
-
-export const policies = orgSchema.table(
-  "policies",
-  {
-    ...idMixin("pol"),
-    ...auditMixin(),
-    orgId: uuid("org_id").notNull(),
-    name: text("name").notNull(),
-    capabilityId: text("capability_id").notNull(),
-    // CHECK: scope_kind IN ('org','workspace')
-    scopeKind: text("scope_kind").notNull(),
-    scopeId: uuid("scope_id"),
-    // CHECK: effect IN ('allow','deny','require_approval')
-    effect: text("effect").notNull(),
-    // When true this policy is hard-enforced and cannot be overridden by a
-    // lower-precedence grant. Analogous to an IAM "deny policy" in cloud IAM.
-    enforced: boolean("enforced").notNull().default(false),
-    conditionsJsonb: jsonb("conditions_jsonb"),
-    sensitivityTag: text("sensitivity_tag"),
-  },
-  (t) => ({
-    orgCapabilityIdx: index("policies_org_capability_idx").on(t.orgId, t.capabilityId),
-    effectCheck: check(
-      "policies_effect_check",
-      sql`${t.effect} IN ('allow', 'deny', 'require_approval')`,
-    ),
-    scopeKindCheck: check(
-      "policies_scope_kind_check",
-      sql`${t.scopeKind} IN ('org', 'workspace')`,
-    ),
-  }),
-);
-
-// ---------------------------------------------------------------------------
 // access_requests — JIT access requests
 // ---------------------------------------------------------------------------
 
@@ -314,12 +236,6 @@ export type NewIamRole = typeof roles.$inferInsert;
 
 export type IamRoleGrant = typeof roleGrants.$inferSelect;
 export type NewIamRoleGrant = typeof roleGrants.$inferInsert;
-
-export type IamGrant = typeof grants.$inferSelect;
-export type NewIamGrant = typeof grants.$inferInsert;
-
-export type IamPolicy = typeof policies.$inferSelect;
-export type NewIamPolicy = typeof policies.$inferInsert;
 
 export type IamAccessRequest = typeof accessRequests.$inferSelect;
 export type NewIamAccessRequest = typeof accessRequests.$inferInsert;
