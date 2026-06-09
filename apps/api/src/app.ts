@@ -14,10 +14,12 @@ import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.r
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription.upgrade.start";
 import { billingCreditsPurchaseRoute } from "./routes/v1/billing.credits.purchase";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
+import { agentCodeExecuteRoute } from "./routes/v1/agent.code.execute";
 import { agentToolListRoute } from "./routes/v1/agent.tool.list";
 import { agentMcpRegisterRoute } from "./routes/v1/agent.mcp.register";
 import { agentMcpListRoute } from "./routes/v1/agent.mcp.list";
 import { agentSkillListRoute } from "./routes/v1/agent.skill.list";
+import { agentSkillLoadRoute } from "./routes/v1/agent.skill.load";
 import { agentPlanApproveRoute } from "./routes/v1/agent.plan.approve";
 import { agentTaskBackgroundStartRoute } from "./routes/v1/agent.task.background.start";
 import { agentTaskBackgroundReadRoute } from "./routes/v1/agent.task.background.read";
@@ -26,6 +28,7 @@ import { agentMemoryRecallRoute } from "./routes/v1/agent.memory.recall";
 import { agentMemoryWriteRoute } from "./routes/v1/agent.memory.write";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
+import { agentSubagentAggregateRoute } from "./routes/v1/agent.subagent.aggregate";
 import { formFillRoute } from "./routes/v1/form.fill";
 import { archiveCreateRoute } from "./routes/v1/archive.create";
 import { documentsGenerateRoute } from "./routes/v1/documents.generate";
@@ -89,6 +92,7 @@ import { automationListRoute } from "./routes/v1/automation.list";
 import { automationCreateRoute } from "./routes/v1/automation.create";
 import { automationTriggerRoute } from "./routes/v1/automation.trigger";
 import { skillWorkspaceListRoute } from "./routes/v1/skill.workspace.list";
+import { agentSubagentDispatchRoute } from "./routes/v1/agent.subagent.dispatch";
 
 export type AppEnv = {
   Variables: {
@@ -139,10 +143,12 @@ orgScoped.route("/conversations/delete", conversationDeleteRoute);
 orgScoped.route("/conversations/purge", conversationPurgeRoute);
 // Agent-runtime routes live under the org + workspace scope so the runner
 // inherits the same auth, isolation, and audit envelope as every other v1 call.
+orgScoped.route("/agent/code/execute", agentCodeExecuteRoute);
 orgScoped.route("/agent/tools", agentToolListRoute);
 orgScoped.route("/agent/mcp-servers", agentMcpRegisterRoute);
 orgScoped.route("/agent/mcp-servers", agentMcpListRoute);
 orgScoped.route("/agent/skills", agentSkillListRoute);
+orgScoped.route("/agent/skills/load", agentSkillLoadRoute);
 orgScoped.route("/agent/plans/approve", agentPlanApproveRoute);
 orgScoped.route("/agent/tasks", agentTaskBackgroundStartRoute);
 orgScoped.route("/agent/tasks", agentTaskBackgroundReadRoute);
@@ -151,6 +157,8 @@ orgScoped.route("/agent/memory/recall", agentMemoryRecallRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
+orgScoped.route("/agent/subagent/aggregate", agentSubagentAggregateRoute);
+orgScoped.route("/agent/subagent/dispatch", agentSubagentDispatchRoute);
 orgScoped.route("/forms/fill", formFillRoute);
 orgScoped.route("/archive/create", archiveCreateRoute);
 orgScoped.route("/documents/generate", documentsGenerateRoute);

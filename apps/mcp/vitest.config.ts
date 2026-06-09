@@ -22,6 +22,7 @@ export default defineConfig({
         "src/tools/agent.memory.write.ts",
         "src/tools/agent.plan.approve.ts",
         "src/tools/agent.skill.list.ts",
+        "src/tools/agent.skill.load.ts",
         "src/tools/agent.task.background.cancel.ts",
         "src/tools/agent.task.background.read.ts",
         "src/tools/agent.task.background.start.ts",
