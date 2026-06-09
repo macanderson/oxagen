@@ -2,6 +2,7 @@ import { inngest } from "../inngest";
 import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { generateVideoFor, selectVideoModel } from "@oxagen/ai";
+import type { MediaTier } from "@oxagen/ai";
 import { storage } from "@oxagen/storage";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "../logger";
@@ -58,7 +59,7 @@ export const agentVideoRender = inngest.createFunction(
       workspaceId: string;
       prompt: string;
       model?: string;
-      mediaTier?: string;
+      mediaTier?: MediaTier;
       durationSeconds?: number;
       aspectRatio?: string;
     };

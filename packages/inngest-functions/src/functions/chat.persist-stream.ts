@@ -1,7 +1,7 @@
 import { inngest } from "../inngest";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
-import { insertTokenUsage } from "@oxagen/telemetry";
+import { insertTokenUsage, type Surface } from "@oxagen/telemetry";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "../logger";
 
@@ -31,7 +31,7 @@ export const chatPersistStream = inngest.createFunction(
         cachedTokens?: number;
         costMicros: number;
         durationMs?: number;
-        surface?: string;
+        surface?: Surface;
         promptHash?: string;
       } | null;
     };
