@@ -16,3 +16,6 @@ export * from "./iam";
 export * from "./mcp";
 export * from "./plugin";
 export * from "./notification";
+
+// Relations must be exported for Drizzle to include them in the schema
+export * from "../relations";
