@@ -14,6 +14,7 @@ import { archiveCreate } from "./archive.create";
 import { assetUpload } from "./asset.upload";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentExecutionRecord } from "./agent.execution.record";
+import { agentUiRender } from "./agent.ui.render";
 import { brandkitApply } from "./brandkit.apply";
 import { documentsGenerate } from "./documents.generate";
 import { documentsPdfCreate } from "./documents.pdf.create";
@@ -100,6 +101,7 @@ export {
   assetUpload,
   agentApprovalResolve,
   agentExecutionRecord,
+  agentUiRender,
   brandkitApply,
   documentsGenerate,
   documentsPdfCreate,
@@ -194,6 +196,7 @@ export const contracts = [
   archiveCreate,
   assetUpload,
   agentApprovalResolve,
+  agentUiRender,
   brandkitApply,
   documentsGenerate,
   documentsPdfCreate,
