@@ -1,12 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock external dependencies before importing the module under test.
-vi.mock("@oxagen/ontology", () => ({
+// Capture the handler at module-load time by mocking inngest.createFunction.
+const mocks = vi.hoisted(() => ({
+  createFunction: vi.fn(),
   recordExecutionInGraph: vi.fn().mockResolvedValue(undefined),
+  withTenantDb: vi.fn(),
+  runInTenantScope: vi.fn(),
+  loggerInfo: vi.fn(),
+}));
+
+let capturedHandler: ((ctx: {
+  event: { data: unknown };
+  step: { run: (name: string, fn: () => unknown) => unknown };
+}) => unknown) | null = null;
+
+mocks.createFunction.mockImplementation((_opts: unknown, _trigger: unknown, handler: typeof capturedHandler) => {
+  capturedHandler = handler;
+  return {};
+});
+
+vi.mock("../inngest", () => ({
+  inngest: { createFunction: mocks.createFunction },
+}));
+
+vi.mock("@oxagen/ontology", () => ({
+  recordExecutionInGraph: mocks.recordExecutionInGraph,
 }));
 
 vi.mock("@oxagen/database", () => ({
-  withTenantDb: vi.fn().mockImplementation((fn: (tx: unknown) => unknown) =>
+  withTenantDb: mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
     fn({
       execute: vi.fn().mockResolvedValue({ rowCount: 1 }),
     }),
@@ -14,21 +36,15 @@ vi.mock("@oxagen/database", () => ({
 }));
 
 vi.mock("@oxagen/tenancy", () => ({
-  runInTenantScope: vi.fn().mockImplementation((_scope: unknown, fn: () => unknown) => fn()),
+  runInTenantScope: mocks.runInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn()),
 }));
 
 vi.mock("../logger", () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+  logger: { info: mocks.loggerInfo, error: vi.fn(), warn: vi.fn() },
 }));
 
-import { recordExecutionInGraph } from "@oxagen/ontology";
-import { withTenantDb } from "@oxagen/database";
-import { runInTenantScope } from "@oxagen/tenancy";
-import { agentSyncExecutionToGraph } from "./agent.sync-execution-to-graph";
-
-const mockRecordExecution = vi.mocked(recordExecutionInGraph);
-const mockWithTenantDb = vi.mocked(withTenantDb);
-const mockRunInTenantScope = vi.mocked(runInTenantScope);
+// Import module to trigger createFunction call.
+await import("./agent.sync-execution-to-graph");
 
 const EXEC_PAYLOAD = {
   executionId: "aex-test-123",
@@ -58,36 +74,32 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
   describe("recordExecutionInGraph integration", () => {
     it("calls recordExecutionInGraph with full payload", async () => {
       const mockStep = {
-        run: vi.fn((name: string, fn: () => unknown) => fn()),
+        run: vi.fn((_name: string, fn: () => unknown) => fn()),
       };
 
-      await agentSyncExecutionToGraph.fn(
+      await capturedHandler!(
         {
           event: { data: EXEC_PAYLOAD },
           step: mockStep,
         } as any,
-        undefined,
-        undefined,
       );
 
-      expect(mockRecordExecution).toHaveBeenCalledWith(EXEC_PAYLOAD);
+      expect(mocks.recordExecutionInGraph).toHaveBeenCalledWith(EXEC_PAYLOAD);
     });
 
     it("passes toolCalls array to recordExecutionInGraph", async () => {
       const mockStep = {
-        run: vi.fn((name: string, fn: () => unknown) => fn()),
+        run: vi.fn((_name: string, fn: () => unknown) => fn()),
       };
 
-      await agentSyncExecutionToGraph.fn(
+      await capturedHandler!(
         {
           event: { data: EXEC_PAYLOAD },
           step: mockStep,
         } as any,
-        undefined,
-        undefined,
       );
 
-      const call = mockRecordExecution.mock.calls[0]![0];
+      const call = mocks.recordExecutionInGraph.mock.calls[0]![0];
       expect(call.toolCalls).toHaveLength(2);
       expect(call.toolCalls![0]).toEqual({ toolName: "web.search", toolType: "builtin" });
     });
@@ -103,65 +115,59 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
       };
 
       const mockStep = {
-        run: vi.fn((name: string, fn: () => unknown) => fn()),
+        run: vi.fn((_name: string, fn: () => unknown) => fn()),
       };
 
-      await agentSyncExecutionToGraph.fn(
+      await capturedHandler!(
         {
           event: { data: minimalPayload },
           step: mockStep,
         } as any,
-        undefined,
-        undefined,
       );
 
-      expect(mockRecordExecution).toHaveBeenCalledWith(minimalPayload);
+      expect(mocks.recordExecutionInGraph).toHaveBeenCalledWith(minimalPayload);
     });
   });
 
   describe("stamp-synced-at step", () => {
     it("calls withTenantDb to update synced_to_graph_at via step.run", async () => {
       const mockExecute = vi.fn().mockResolvedValue({ rowCount: 1 });
-      mockWithTenantDb.mockImplementation((fn) =>
-        fn({ execute: mockExecute } as unknown as Parameters<typeof fn>[0]),
+      mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+        fn({ execute: mockExecute }),
       );
 
       const mockStep = {
-        run: vi.fn((name: string, fn: () => unknown) => fn()),
+        run: vi.fn((_name: string, fn: () => unknown) => fn()),
       };
 
-      await agentSyncExecutionToGraph.fn(
+      await capturedHandler!(
         {
           event: { data: EXEC_PAYLOAD },
           step: mockStep,
         } as any,
-        undefined,
-        undefined,
       );
 
       // Verify step.run was called for both "write-neo4j" and "stamp-synced-at"
       expect(mockStep.run).toHaveBeenCalledTimes(2);
       expect(mockStep.run).toHaveBeenNthCalledWith(2, "stamp-synced-at", expect.any(Function));
-      expect(mockWithTenantDb).toHaveBeenCalled();
+      expect(mocks.withTenantDb).toHaveBeenCalled();
     });
   });
 
   describe("tenant scope isolation", () => {
     it("runs Neo4j write inside runInTenantScope with correct orgId/workspaceId", async () => {
       const mockStep = {
-        run: vi.fn((name: string, fn: () => unknown) => fn()),
+        run: vi.fn((_name: string, fn: () => unknown) => fn()),
       };
 
-      await agentSyncExecutionToGraph.fn(
+      await capturedHandler!(
         {
           event: { data: EXEC_PAYLOAD },
           step: mockStep,
         } as any,
-        undefined,
-        undefined,
       );
 
-      expect(mockRunInTenantScope).toHaveBeenCalledWith(
+      expect(mocks.runInTenantScope).toHaveBeenCalledWith(
         { orgId: EXEC_PAYLOAD.orgId, workspaceId: EXEC_PAYLOAD.workspaceId },
         expect.any(Function),
       );
@@ -172,32 +178,28 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
       const orgBPayload = { ...EXEC_PAYLOAD, orgId: "org-b", workspaceId: "ws-b", executionId: "aex-b" };
 
       const mockStep = {
-        run: vi.fn((name: string, fn: () => unknown) => fn()),
+        run: vi.fn((_name: string, fn: () => unknown) => fn()),
       };
 
-      await agentSyncExecutionToGraph.fn(
+      await capturedHandler!(
         {
           event: { data: orgAPayload },
           step: mockStep,
         } as any,
-        undefined,
-        undefined,
       );
 
       mockStep.run.mockClear();
-      mockRunInTenantScope.mockClear();
+      mocks.runInTenantScope.mockClear();
 
-      await agentSyncExecutionToGraph.fn(
+      await capturedHandler!(
         {
           event: { data: orgBPayload },
           step: mockStep,
         } as any,
-        undefined,
-        undefined,
       );
 
-      expect(mockRecordExecution).toHaveBeenCalledTimes(2);
-      const [call1, call2] = mockRecordExecution.mock.calls;
+      expect(mocks.recordExecutionInGraph).toHaveBeenCalledTimes(2);
+      const [call1, call2] = mocks.recordExecutionInGraph.mock.calls;
       expect(call1![0].orgId).toBe("org-a");
       expect(call2![0].orgId).toBe("org-b");
     });
@@ -206,70 +208,62 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
   describe("idempotency", () => {
     it("can be called multiple times with same executionId without error", async () => {
       const mockStep = {
-        run: vi.fn((name: string, fn: () => unknown) => fn()),
+        run: vi.fn((_name: string, fn: () => unknown) => fn()),
       };
 
-      await agentSyncExecutionToGraph.fn(
+      await capturedHandler!(
         {
           event: { data: EXEC_PAYLOAD },
           step: mockStep,
         } as any,
-        undefined,
-        undefined,
       );
 
-      await agentSyncExecutionToGraph.fn(
+      await capturedHandler!(
         {
           event: { data: EXEC_PAYLOAD },
           step: mockStep,
         } as any,
-        undefined,
-        undefined,
       );
 
-      expect(mockRecordExecution).toHaveBeenCalledTimes(2);
+      expect(mocks.recordExecutionInGraph).toHaveBeenCalledTimes(2);
       // Both calls identical — MERGE in Neo4j handles idempotency
     });
   });
 
   describe("error handling", () => {
     it("propagates Neo4j errors so Inngest can retry", async () => {
-      mockRecordExecution.mockRejectedValueOnce(new Error("Neo4j connection refused"));
+      mocks.recordExecutionInGraph.mockRejectedValueOnce(new Error("Neo4j connection refused"));
 
       const mockStep = {
-        run: vi.fn((name: string, fn: () => unknown) => fn()),
+        run: vi.fn((_name: string, fn: () => unknown) => fn()),
       };
 
       await expect(
-        agentSyncExecutionToGraph.fn(
+        capturedHandler!(
           {
             event: { data: EXEC_PAYLOAD },
             step: mockStep,
           } as any,
-          undefined,
-          undefined,
         ),
       ).rejects.toThrow("Neo4j connection refused");
     });
 
     it("propagates DB errors on stamp step so Inngest can retry", async () => {
       const mockExecute = vi.fn().mockRejectedValueOnce(new Error("DB connection lost"));
-      mockWithTenantDb.mockImplementation((fn) =>
-        fn({ execute: mockExecute } as unknown as Parameters<typeof fn>[0]),
+      mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+        fn({ execute: mockExecute }),
       );
 
       const mockStep = {
-        run: vi.fn((name: string, fn: () => unknown) => fn()),
+        run: vi.fn((_name: string, fn: () => unknown) => fn()),
       };
 
       await expect(
-        agentSyncExecutionToGraph.fn(
+        capturedHandler!(
           {
             event: { data: EXEC_PAYLOAD },
             step: mockStep,
           } as any,
-          undefined,
-          undefined,
         ),
       ).rejects.toThrow("DB connection lost");
     });

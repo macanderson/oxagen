@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { render } from "ink";
 import React from "react";
 import { DevStatus } from "./components/DevStatus.js";
-import { version } from "../package.json" assert { type: "json" };
+import { version } from "../package.json" with { type: "json" };
 import { authLoginCommand } from "./commands/auth.login.js";
 import { authLogoutCommand } from "./commands/auth.logout.js";
 import { authWhoamiCommand } from "./commands/auth.whoami.js";
