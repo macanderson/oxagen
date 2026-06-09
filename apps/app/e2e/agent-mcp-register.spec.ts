@@ -19,9 +19,11 @@ test.describe("agent.mcp.register — authenticated", () => {
   test("developer area is reachable for a fresh org", async ({ page }) => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "mcp-reg" });
 
-    // Navigate to the developer section — the MCP register form lives here.
-    await page.goto(`/${orgSlug}/developer/mcp-servers`);
+    // Navigate to the developer MCP page (correct route: /developer/mcp).
+    await page.goto(`/${orgSlug}/developer/mcp`);
     await expect(page).not.toHaveURL(/\/login/);
-    await expect(page).toHaveURL(new RegExp(orgSlug));
+    await expect(page).toHaveURL(new RegExp(`${orgSlug}/developer/mcp`));
+    // MCP server heading confirms the install page rendered.
+    await expect(page.getByText("MCP server")).toBeVisible();
   });
 });

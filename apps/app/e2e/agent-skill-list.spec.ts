@@ -24,6 +24,8 @@ test.describe("agent.skill.list — authenticated", () => {
     // The skills surface is accessible from within the chat workspace shell.
     await page.goto(`/${orgSlug}/default/chat`);
     await expect(page).not.toHaveURL(/\/login/);
-    await expect(page).toHaveURL(new RegExp(`${orgSlug}/default`));
+    await expect(page).toHaveURL(new RegExp(`${orgSlug}/default/chat`));
+    // Chat composer must be visible — it is the entry point for skill invocation.
+    await expect(page.getByPlaceholder(/send a message/i)).toBeVisible();
   });
 });

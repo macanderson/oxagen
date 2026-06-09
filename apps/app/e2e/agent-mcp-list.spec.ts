@@ -19,11 +19,11 @@ test.describe("agent.mcp.list — authenticated", () => {
   test("MCP servers panel is reachable and renders for a fresh org", async ({ page }) => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "mcp-list" });
 
-    // Navigate to the MCP servers section (org-scoped developer area).
-    await page.goto(`/${orgSlug}/developer/mcp-servers`);
+    // Navigate to the MCP developer page (correct route: /developer/mcp).
+    await page.goto(`/${orgSlug}/developer/mcp`);
     await expect(page).not.toHaveURL(/\/login/);
-
-    // The page must render — at minimum the URL contains the org slug.
-    await expect(page).toHaveURL(new RegExp(orgSlug));
+    await expect(page).toHaveURL(new RegExp(`${orgSlug}/developer/mcp`));
+    // MCP server heading confirms the page rendered.
+    await expect(page.getByText("MCP server")).toBeVisible();
   });
 });

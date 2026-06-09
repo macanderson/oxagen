@@ -164,8 +164,6 @@ test("billing plans page: selecting Build plan initiates Stripe checkout", async
 
   if (await selectBtn.isVisible().catch(() => false)) {
     await selectBtn.click();
-    // Wait briefly for the action to fire.
-    await page.waitForTimeout(2_000);
   }
 
   // The action may redirect to checkout.stripe.com, or return an error if

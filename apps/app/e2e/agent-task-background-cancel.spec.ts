@@ -23,6 +23,9 @@ test.describe("agent.task.background.cancel — authenticated", () => {
 
     await page.goto(`/${orgSlug}/default/activity`);
     await expect(page).not.toHaveURL(/\/login/);
-    await expect(page).toHaveURL(new RegExp(`${orgSlug}/default`));
+    // Activity root redirects to /activity/runs.
+    await expect(page).toHaveURL(/activity\/runs/);
+    // Cancel action surfaces in the runs list — confirm it rendered.
+    await expect(page.getByText("Recent runs")).toBeVisible();
   });
 });

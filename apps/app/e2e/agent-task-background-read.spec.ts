@@ -23,6 +23,9 @@ test.describe("agent.task.background.read — authenticated", () => {
 
     await page.goto(`/${orgSlug}/default/activity`);
     await expect(page).not.toHaveURL(/\/login/);
-    await expect(page).toHaveURL(new RegExp(`${orgSlug}/default`));
+    // Activity root redirects to /activity/runs.
+    await expect(page).toHaveURL(/activity\/runs/);
+    // Mock runs table heading is visible — confirms the page rendered.
+    await expect(page.getByText("Recent runs")).toBeVisible();
   });
 });

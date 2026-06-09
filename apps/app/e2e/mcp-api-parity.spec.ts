@@ -36,17 +36,23 @@ async function getSessionCookieValue(
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+/** Derive the API base URL from the Playwright baseURL (app is on :3000, API on :4000). */
+function apiBaseFrom(baseURL: string | undefined): string {
+  return (baseURL ?? "http://localhost:3000").replace(/:\d+$/, ":4000");
+}
 
 /**
  * Assert the API server is reachable. Called in beforeAll for every suite
  * that sends requests to the external API. Fails with a clear message rather
  * than silently skipping so parity regressions are never hidden.
  */
-async function assertApiIsUp(request: import("@playwright/test").APIRequestContext): Promise<void> {
+async function assertApiIsUp(
+  request: import("@playwright/test").APIRequestContext,
+  apiBase: string,
+): Promise<void> {
   let reachable = false;
   try {
-    const probe = await request.get(`${API_BASE}/health`, { timeout: 5_000 });
+    const probe = await request.get(`${apiBase}/health`, { timeout: 5_000 });
     // Accept any non-5xx response — the route may not exist, but that proves
     // the server is listening.
     reachable = probe.status() < 500;
@@ -55,15 +61,15 @@ async function assertApiIsUp(request: import("@playwright/test").APIRequestConte
   }
   if (!reachable) {
     throw new Error(
-      `API server at ${API_BASE} is not reachable. ` +
+      `API server at ${apiBase} is not reachable. ` +
         "Start it with `pnpm --filter @oxagen/api dev` before running parity tests.",
     );
   }
 }
 
 test.describe("MCP-API parity: agent.tool.list", () => {
-  test.beforeAll(async ({ request }) => {
-    await assertApiIsUp(request);
+  test.beforeAll(async ({ request, baseURL }) => {
+    await assertApiIsUp(request, apiBaseFrom(baseURL));
   });
 
   test("agent.tool.list via API route returns authorized response", async ({
@@ -83,7 +89,7 @@ test.describe("MCP-API parity: agent.tool.list", () => {
 
     // The workspace was created as "default" by createOrgAction.
     const workspaceSlug = "default";
-    const apiUrl = `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/agent/tools`;
+    const apiUrl = `${apiBaseFrom(baseURL)}/v1/${orgSlug}/${workspaceSlug}/agent/tools`;
 
     // POST to the API with the session cookie.
     const response = await page.request.post(apiUrl, {
@@ -122,15 +128,16 @@ test.describe("MCP-API parity: agent.tool.list", () => {
 });
 
 test.describe("MCP-API parity: org.member.add endpoint is auth-gated", () => {
-  test.beforeAll(async ({ request }) => {
-    await assertApiIsUp(request);
+  test.beforeAll(async ({ request, baseURL }) => {
+    await assertApiIsUp(request, apiBaseFrom(baseURL));
   });
 
   test("org.member.add via API requires auth — 401 without credentials", async ({
     page,
+    baseURL,
   }) => {
     // Use a known-fake org/workspace slug — we only care that 401 is returned.
-    const apiUrl = `${API_BASE}/v1/fake-org/fake-ws/org/members`;
+    const apiUrl = `${apiBaseFrom(baseURL)}/v1/fake-org/fake-ws/org/members`;
 
     const response = await page.request.post(apiUrl, {
       headers: { "Content-Type": "application/json" },
@@ -154,7 +161,7 @@ test.describe("MCP-API parity: org.member.add endpoint is auth-gated", () => {
 
     expect(rawCookieValue).not.toBeNull();
 
-    const apiUrl = `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/org/members`;
+    const apiUrl = `${apiBaseFrom(baseURL)}/v1/${orgSlug}/${workspaceSlug}/org/members`;
 
     const response = await page.request.post(apiUrl, {
       headers: {

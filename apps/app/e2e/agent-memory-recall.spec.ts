@@ -22,6 +22,9 @@ test.describe("agent.memory.recall — authenticated", () => {
     // Memory recall surfaces in the workspace knowledge area.
     await page.goto(`/${orgSlug}/default/knowledge`);
     await expect(page).not.toHaveURL(/\/login/);
-    await expect(page).toHaveURL(new RegExp(`${orgSlug}/default`));
+    // Knowledge root redirects to /knowledge/sources.
+    await expect(page).toHaveURL(/knowledge\/sources/);
+    // Sources section heading confirms the page rendered.
+    await expect(page.getByText("Sources").first()).toBeVisible();
   });
 });

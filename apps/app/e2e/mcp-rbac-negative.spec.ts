@@ -20,7 +20,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { seedPlugin, type PluginFixture } from "./helpers/seed-plugin";
-import { loginAs } from "./helpers/auth";
+import { loginWithSession } from "./helpers/auth";
 import { randomBytes } from "node:crypto";
 import postgres from "postgres";
 
@@ -97,8 +97,9 @@ test.describe("mcp-rbac-negative", () => {
   test("Member-role user: plugin management UI is not visible on settings page", async ({
     page,
     context,
+    baseURL,
   }) => {
-    await loginAs(context, memberSessionToken);
+    await loginWithSession(context, memberSessionToken, baseURL);
     await page.goto(`/${fixture.orgSlug}/settings/plugins`);
 
     // Member is authenticated — should NOT redirect to /login.
@@ -117,17 +118,19 @@ test.describe("mcp-rbac-negative", () => {
   test("Member-role user: plugin.org.install API route returns 403", async ({
     page,
     context,
+    baseURL,
   }) => {
-    await loginAs(context, memberSessionToken);
+    await loginWithSession(context, memberSessionToken, baseURL);
 
     // Construct the API URL. The route in apps/app/src/app/api/v1/plugin/ handles
     // plugin install and enforces org-level owner/admin only via IAM.
-    // We send the session cookie that loginAs injected.
-    const cookies = await context.cookies("http://localhost:3000");
+    // We send the session cookie that loginWithSession injected.
+    const appBase = baseURL ?? "http://localhost:3000";
+    const cookies = await context.cookies(appBase);
     const sessionCookie = cookies.find((c) => c.name === "oxagen.session_token");
 
     const response = await page.request.post(
-      `http://localhost:3000/api/v1/${fixture.orgSlug}/default/plugins/org/install`,
+      `${appBase}/api/v1/${fixture.orgSlug}/default/plugins/org/install`,
       {
         headers: {
           "content-type": "application/json",
