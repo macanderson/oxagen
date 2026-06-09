@@ -22,7 +22,10 @@ export async function loginAs(
 
   const res = await fetch(signInUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Origin: baseUrl,
+    },
     body: JSON.stringify({ email, password }),
     // Do NOT follow redirects — we want the raw Set-Cookie headers.
     redirect: "manual",

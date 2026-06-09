@@ -4,13 +4,18 @@
 // (or the gate) to regenerate after adding or removing a contract.
 
 import "./contracts/agent.approval.resolve";
+import "./contracts/agent.code.execute";
 import "./contracts/agent.execution.record";
 import "./contracts/agent.mcp.list";
 import "./contracts/agent.mcp.register";
 import "./contracts/agent.memory.recall";
 import "./contracts/agent.memory.write";
 import "./contracts/agent.plan.approve";
+import "./contracts/agent.plan.create";
 import "./contracts/agent.skill.list";
+import "./contracts/agent.skill.load";
+import "./contracts/agent.subagent.aggregate";
+import "./contracts/agent.subagent.dispatch";
 import "./contracts/agent.task.background.cancel";
 import "./contracts/agent.task.background.read";
 import "./contracts/agent.task.background.start";

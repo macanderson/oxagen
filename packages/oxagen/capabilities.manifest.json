@@ -20,6 +20,24 @@
       }
     },
     {
+      "name": "agent.code.execute",
+      "file": "agent.code.execute.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.execution.record",
       "file": "agent.execution.record.ts",
       "domain": "agent",
@@ -132,6 +150,24 @@
       }
     },
     {
+      "name": "agent.plan.create",
+      "file": "agent.plan.create.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
       "name": "agent.skill.list",
       "file": "agent.skill.list.ts",
       "domain": "agent",
@@ -148,6 +184,63 @@
         "unit": true,
         "e2e": true,
         "docs": true
+      }
+    },
+    {
+      "name": "agent.skill.load",
+      "file": "agent.skill.load.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "agent.subagent.aggregate",
+      "file": "agent.subagent.aggregate.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.subagent.dispatch",
+      "file": "agent.subagent.dispatch.ts",
+      "domain": "agent",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
       }
     },
     {
