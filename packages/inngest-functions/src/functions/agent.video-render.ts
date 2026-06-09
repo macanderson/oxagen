@@ -52,7 +52,16 @@ export const agentVideoRender = inngest.createFunction(
       mediaTier,
       durationSeconds,
       aspectRatio,
-    } = event.data;
+    } = event.data as {
+      assetId: string;
+      orgId: string;
+      workspaceId: string;
+      prompt: string;
+      model?: string;
+      mediaTier?: string;
+      durationSeconds?: number;
+      aspectRatio?: string;
+    };
 
     // ── Steps 1+2: generate the video and upload in a single step ───────────
     //
@@ -143,20 +152,22 @@ export const agentVideoRenderOnFailure = inngest.createFunction(
   { id: "agent.video-render.on-failure" },
   { event: "inngest/function.failed", if: "event.data.function_id == 'agent.video-render'" },
   async ({ event, step }) => {
-    const originalData = event.data.event?.data as
-      | { assetId?: string; orgId?: string; workspaceId?: string }
-      | undefined;
+    const failureData = event.data as {
+      event?: { data?: { assetId?: string; orgId?: string; workspaceId?: string } };
+      error?: unknown;
+    };
+    const originalData = failureData.event?.data;
     const assetId = originalData?.assetId;
     if (!assetId) return;
     const orgId = originalData?.orgId;
     const workspaceId = originalData?.workspaceId;
 
     const errorMessage =
-      typeof event.data.error === "object" &&
-      event.data.error !== null &&
-      "message" in event.data.error
-        ? String((event.data.error as { message: unknown }).message)
-        : String(event.data.error ?? "unknown error");
+      typeof failureData.error === "object" &&
+      failureData.error !== null &&
+      "message" in failureData.error
+        ? String((failureData.error as { message: unknown }).message)
+        : String(failureData.error ?? "unknown error");
 
     await step.run("mark-failed", async () => {
       // Scope tightly around the DB update only (no LLM/IO here).

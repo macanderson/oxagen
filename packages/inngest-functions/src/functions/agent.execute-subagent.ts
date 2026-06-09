@@ -40,10 +40,15 @@ export const agentExecuteSubagent = inngest.createFunction(
   { id: "agent.execute-subagent", retries: 0, concurrency: { limit: 8, key: "event.data.orgId" } },
   { event: "agent/subagent.dispatch" },
   async ({ event, step }) => {
-    const { orgId, workspaceId, fanoutId } = event.data;
+    const { orgId, workspaceId, fanoutId, depth: rawDepth } = event.data as {
+      orgId: string;
+      workspaceId: string;
+      fanoutId: string;
+      depth?: number;
+    };
     // Depth is optional for backwards-compatibility with events emitted before
     // the guard was added. Treat absence as depth 0 (root).
-    const depth: number = typeof event.data.depth === "number" ? event.data.depth : 0;
+    const depth: number = typeof rawDepth === "number" ? rawDepth : 0;
 
     // ── Depth guard ─────────────────────────────────────────────────────────
     if (depth > MAX_FANOUT_DEPTH) {

@@ -36,7 +36,12 @@ export const agentBackgroundTaskExecute = inngest.createFunction(
   },
   { event: "agent/task.background.start" },
   async ({ event, step }) => {
-    const { orgId, workspaceId, taskId, payload } = event.data;
+    const { orgId, workspaceId, taskId, payload } = event.data as {
+      orgId: string;
+      workspaceId: string;
+      taskId: string;
+      payload?: Record<string, unknown>;
+    };
     const p = (payload ?? {}) as BgPayload;
 
     await step.run("mark-running", () =>

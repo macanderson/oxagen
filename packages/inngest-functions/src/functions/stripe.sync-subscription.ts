@@ -10,10 +10,11 @@ export const stripeSyncSubscription = inngest.createFunction(
   { id: "stripe.sync-subscription", retries: 5 },
   { event: "stripe/subscription.updated" },
   async ({ event, step }) => {
+    const { stripeSubscriptionId } = event.data as { stripeSubscriptionId: string };
     await step.run("sync", async () => {
-      await syncSubscriptionFromStripe(event.data.stripeSubscriptionId);
+      await syncSubscriptionFromStripe(stripeSubscriptionId);
     });
-    logger.info({ stripeSubscriptionId: event.data.stripeSubscriptionId }, "stripe.sync-subscription complete");
-    return { synced: event.data.stripeSubscriptionId };
+    logger.info({ stripeSubscriptionId }, "stripe.sync-subscription complete");
+    return { synced: stripeSubscriptionId };
   },
 );

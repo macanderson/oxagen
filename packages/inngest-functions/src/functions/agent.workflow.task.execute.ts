@@ -28,7 +28,15 @@ export const agentWorkflowTaskExecute = inngest.createFunction(
   { event: "agent/workflow.task.execute" },
   async ({ event, step }) => {
     const { orgId, workspaceId, workflowRunId, taskId, taskIndex, goal, outputFormat } =
-      event.data;
+      event.data as {
+        orgId: string;
+        workspaceId: string;
+        workflowRunId: string;
+        taskId: string;
+        taskIndex: number;
+        goal: string;
+        outputFormat: string;
+      };
 
     const invocationId = crypto.randomUUID();
     const startedAt = Date.now();

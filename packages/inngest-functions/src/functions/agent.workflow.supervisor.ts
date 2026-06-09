@@ -35,7 +35,13 @@ export const agentWorkflowSupervisor = inngest.createFunction(
   },
   { event: "agent/workflow.supervisor.start" },
   async ({ event, step }) => {
-    const { orgId, workspaceId, workflowRunId, maxParallelism, maxTasksGuard } = event.data;
+    const { orgId, workspaceId, workflowRunId, maxParallelism, maxTasksGuard } = event.data as {
+      orgId: string;
+      workspaceId: string;
+      workflowRunId: string;
+      maxParallelism: number;
+      maxTasksGuard?: number;
+    };
     const effectiveMaxTasks = Math.min(maxTasksGuard ?? MAX_TASKS_PER_WORKFLOW, MAX_TASKS_PER_WORKFLOW);
 
     const run = await step.run("load-run", () =>

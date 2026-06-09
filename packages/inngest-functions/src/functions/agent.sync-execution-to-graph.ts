@@ -41,7 +41,22 @@ export const agentSyncExecutionToGraph = inngest.createFunction(
       outputTokens,
       estimatedCostUsd,
       toolCalls,
-    } = event.data;
+    } = event.data as {
+      executionId: string;
+      orgId: string;
+      workspaceId: string;
+      status: string;
+      originType: string;
+      originId: string;
+      agentId?: string;
+      startedAt?: string;
+      completedAt?: string;
+      latencyMs?: number;
+      inputTokens?: number;
+      outputTokens?: number;
+      estimatedCostUsd?: string;
+      toolCalls?: Array<{ toolName: string; toolType: string }>;
+    };
 
     await step.run("write-neo4j", () =>
       runInTenantScope({ orgId, workspaceId }, () =>

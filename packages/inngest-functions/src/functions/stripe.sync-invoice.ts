@@ -6,10 +6,11 @@ export const stripeSyncInvoice = inngest.createFunction(
   { id: "stripe.sync-invoice", retries: 5 },
   { event: "stripe/invoice.updated" },
   async ({ event, step }) => {
+    const { stripeInvoiceId } = event.data as { stripeInvoiceId: string };
     await step.run("sync", async () => {
-      await syncInvoiceFromStripe(event.data.stripeInvoiceId);
+      await syncInvoiceFromStripe(stripeInvoiceId);
     });
-    logger.info({ stripeInvoiceId: event.data.stripeInvoiceId }, "stripe.sync-invoice complete");
-    return { synced: event.data.stripeInvoiceId };
+    logger.info({ stripeInvoiceId }, "stripe.sync-invoice complete");
+    return { synced: stripeInvoiceId };
   },
 );
