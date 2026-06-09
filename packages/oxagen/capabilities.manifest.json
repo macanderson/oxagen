@@ -460,7 +460,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": false,
+        "e2e": true,
         "docs": true
       }
     },
@@ -533,7 +533,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -1262,6 +1262,42 @@
         "api": true,
         "mcp": true,
         "unit": true
+      }
+    },
+    {
+      "name": "privacy.data.erase",
+      "file": "privacy.data.erase.ts",
+      "domain": "privacy",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "privacy.data.export",
+      "file": "privacy.data.export.ts",
+      "domain": "privacy",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {

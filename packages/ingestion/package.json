@@ -1,0 +1,32 @@
+{
+  "name": "@oxagen/ingestion",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./connectors": "./src/connectors/types.ts",
+    "./pipeline": "./src/pipeline.ts",
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --max-warnings 0",
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@oxagen/ai": "workspace:*",
+    "@oxagen/config": "workspace:*",
+    "@oxagen/ontology": "workspace:*",
+    "@oxagen/telemetry": "workspace:*",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vitest": "2.1.9",
+    "@vitest/coverage-v8": "2.1.9"
+  }
+}

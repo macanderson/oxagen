@@ -43,6 +43,19 @@ CREATE INDEX message_conversation IF NOT EXISTS FOR (n:Message) ON (n.conversati
 CREATE INDEX agent_memory_org IF NOT EXISTS FOR (n:AgentMemory) ON (n.orgId);
 CREATE INDEX background_task_org IF NOT EXISTS FOR (n:BackgroundTask) ON (n.orgId);
 
+// --- Ingestion pipeline — constraints on naturalKey (pipeline §3) ---
+// naturalKey = "{connectorType}:{entityType}:{connectionId}:{externalId}"
+CREATE CONSTRAINT source_connection_id IF NOT EXISTS FOR (n:SourceConnection) REQUIRE n.id IS UNIQUE;
+CREATE INDEX ingestion_natural_key_pr IF NOT EXISTS FOR (n:PullRequest) ON (n.naturalKey);
+CREATE INDEX ingestion_natural_key_commit IF NOT EXISTS FOR (n:GitCommit) ON (n.naturalKey);
+CREATE INDEX ingestion_natural_key_issue_gh IF NOT EXISTS FOR (n:GithubIssue) ON (n.naturalKey);
+CREATE INDEX ingestion_natural_key_issue_linear IF NOT EXISTS FOR (n:LinearIssue) ON (n.naturalKey);
+CREATE INDEX ingestion_natural_key_drive IF NOT EXISTS FOR (n:DriveFile) ON (n.naturalKey);
+CREATE INDEX ingestion_natural_key_slack_msg IF NOT EXISTS FOR (n:SlackMessage) ON (n.naturalKey);
+CREATE INDEX ingestion_natural_key_notion IF NOT EXISTS FOR (n:NotionPage) ON (n.naturalKey);
+CREATE INDEX ingestion_natural_key_jira IF NOT EXISTS FOR (n:JiraIssue) ON (n.naturalKey);
+CREATE INDEX ingestion_org_source IF NOT EXISTS FOR (n:SourceConnection) ON (n.orgId);
+
 // --- Vector indexes (spec §8.1) ---
 CREATE VECTOR INDEX document_embedding_index IF NOT EXISTS
 FOR (n:Document) ON (n.embedding)
@@ -54,4 +67,34 @@ OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`
 
 CREATE VECTOR INDEX message_embedding_index IF NOT EXISTS
 FOR (n:Message) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+// Ingestion pipeline vector indexes — one per high-cardinality ingested entity type.
+// 1536 dims = text-embedding-3-small via Vercel AI Gateway.
+CREATE VECTOR INDEX pull_request_embedding_index IF NOT EXISTS
+FOR (n:PullRequest) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+CREATE VECTOR INDEX linear_issue_embedding_index IF NOT EXISTS
+FOR (n:LinearIssue) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+CREATE VECTOR INDEX github_issue_embedding_index IF NOT EXISTS
+FOR (n:GithubIssue) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+CREATE VECTOR INDEX drive_file_embedding_index IF NOT EXISTS
+FOR (n:DriveFile) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+CREATE VECTOR INDEX notion_page_embedding_index IF NOT EXISTS
+FOR (n:NotionPage) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+CREATE VECTOR INDEX confluence_page_embedding_index IF NOT EXISTS
+FOR (n:ConfluencePage) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+CREATE VECTOR INDEX salesforce_contact_embedding_index IF NOT EXISTS
+FOR (n:SalesforceContact) ON (n.embedding)
 OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
