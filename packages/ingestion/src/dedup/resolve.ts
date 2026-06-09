@@ -121,7 +121,6 @@ function levenshtein(a: string, b: string): number {
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
       // Bounds are guaranteed by loop construction; non-null assertions are safe.
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       dp[i]![j] =
         a[i - 1] === b[j - 1]
           ? dp[i - 1]![j - 1]!
