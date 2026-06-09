@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E2E Audit — oxagen-monorepo @ 62dee9d</title>
+<style>
+  :root {
+    --bg: #0B1020;
+    --surface: #141830;
+    --border: #1E2A45;
+    --pass: #3CFF52;
+    --warn: #FFC53C;
+    --fail: #FF5C7A;
+    --info: #60A5FA;
+    --text: #E2E8F0;
+    --muted: #64748B;
+    --partial: #F97316;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.6; padding: 32px; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: var(--info); text-transform: uppercase; letter-spacing: 0.08em; }
+  h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .header { margin-bottom: 32px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
+  .meta { color: var(--muted); font-size: 12px; display: flex; gap: 24px; flex-wrap: wrap; margin-top: 8px; }
+  .meta span { display: flex; align-items: center; gap: 6px; }
+  .section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 24px; }
+  .coverage-band { display: flex; align-items: center; gap: 20px; padding: 20px 24px; border-radius: 10px; margin-bottom: 24px; border: 1px solid var(--border); }
+  .coverage-band.green { background: rgba(60,255,82,0.08); border-color: rgba(60,255,82,0.3); }
+  .coverage-band.yellow { background: rgba(255,197,60,0.08); border-color: rgba(255,197,60,0.3); }
+  .coverage-band.red { background: rgba(255,92,122,0.08); border-color: rgba(255,92,122,0.3); }
+  .score-big { font-size: 48px; font-weight: 800; }
+  .score-big.green { color: var(--pass); }
+  .score-big.yellow { color: var(--warn); }
+  .score-big.red { color: var(--fail); }
+  .score-label { font-size: 13px; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border); color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.06em; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+  .badge-covered { background: rgba(60,255,82,0.15); color: var(--pass); border: 1px solid rgba(60,255,82,0.3); }
+  .badge-partial { background: rgba(249,115,22,0.15); color: var(--partial); border: 1px solid rgba(249,115,22,0.3); }
+  .badge-missing { background: rgba(255,92,122,0.15); color: var(--fail); border: 1px solid rgba(255,92,122,0.3); }
+  .badge-pass { background: rgba(60,255,82,0.15); color: var(--pass); border: 1px solid rgba(60,255,82,0.3); }
+  .badge-warn { background: rgba(255,197,60,0.15); color: var(--warn); border: 1px solid rgba(255,197,60,0.3); }
+  .badge-fail { background: rgba(255,92,122,0.15); color: var(--fail); border: 1px solid rgba(255,92,122,0.3); }
+  .badge-info { background: rgba(96,165,250,0.15); color: var(--info); border: 1px solid rgba(96,165,250,0.3); }
+  .file-tag { font-family: 'Menlo', 'Monaco', monospace; font-size: 11px; color: var(--info); background: rgba(96,165,250,0.1); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+  .note { color: var(--muted); font-size: 12px; }
+  details { margin-bottom: 12px; background: rgba(30,42,69,0.4); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  summary { padding: 12px 16px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 10px; user-select: none; }
+  summary:hover { background: rgba(255,255,255,0.03); }
+  .details-body { padding: 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text); line-height: 1.7; }
+  .details-body strong { color: var(--info); }
+  .details-body .spec-section { margin-bottom: 12px; }
+  .details-body .spec-label { color: var(--warn); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  ul.blockers li, ul.warnings li { margin-bottom: 6px; }
+  ul.blockers { list-style: none; }
+  ul.warnings { list-style: none; }
+  ul.blockers li::before { content: "✗ "; color: var(--fail); font-weight: 700; }
+  ul.warnings li::before { content: "⚠ "; color: var(--warn); font-weight: 700; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .stat-value { font-size: 28px; font-weight: 700; color: var(--info); }
+  .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  code { font-family: 'Menlo', monospace; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>E2E Test Coverage Audit</h1>
+  <div class="meta">
+    <span>📦 Repo: <strong>oxagen-monorepo</strong></span>
+    <span>🌿 Branch: <strong>main</strong></span>
+    <span>🔖 SHA: <strong><code>62dee9d</code></strong></span>
+    <span>🕐 Timestamp: <strong>2026-06-09T18:59:21Z</strong></span>
+    <span>📁 Spec dir: <code>apps/app/e2e/</code></span>
+  </div>
+</div>
+
+<!-- Stats Row -->
+<div class="stat-grid">
+  <div class="stat-card"><div class="stat-value">44</div><div class="stat-label">Spec files</div></div>
+  <div class="stat-card"><div class="stat-value">128</div><div class="stat-label">Total tests</div></div>
+  <div class="stat-card"><div class="stat-value" style="color:var(--pass)">10</div><div class="stat-label">Critical paths covered</div></div>
+  <div class="stat-card"><div class="stat-value" style="color:var(--partial)">1</div><div class="stat-label">Partial</div></div>
+  <div class="stat-card"><div class="stat-value" style="color:var(--fail)">1</div><div class="stat-label">Missing</div></div>
+  <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">CI shards</div></div>
+</div>
+
+<!-- Coverage Band -->
+<div id="coverage-band"></div>
+
+<!-- Critical Path Table -->
+<div class="section">
+  <h2>Critical Path Inventory</h2>
+  <table id="critical-table">
+    <thead>
+      <tr><th>#</th><th>Flow</th><th>Status</th><th>Test File(s)</th><th>Notes</th></tr>
+    </thead>
+    <tbody id="critical-tbody"></tbody>
+  </table>
+</div>
+
+<!-- Quality Findings -->
+<div class="section">
+  <h2>Quality Findings</h2>
+  <table id="quality-table">
+    <thead>
+      <tr><th>File</th><th>Issue</th><th>Line</th><th>Severity</th></tr>
+    </thead>
+    <tbody id="quality-tbody"></tbody>
+  </table>
+</div>
+
+<!-- CI Lane Assessment -->
+<div class="section">
+  <h2>CI Lane Assessment</h2>
+  <table id="ci-table">
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Finding</th></tr>
+    </thead>
+    <tbody id="ci-tbody"></tbody>
+  </table>
+</div>
+
+<!-- Gap Specs -->
+<div class="section">
+  <h2>Gap Remediation Specs</h2>
+  <div id="gap-specs"></div>
+</div>
+
+<!-- Blockers & Warnings -->
+<div class="section">
+  <h2>Blockers (FAIL)</h2>
+  <ul class="blockers" id="blockers-list"></ul>
+</div>
+
+<div class="section">
+  <h2>Warnings</h2>
+  <ul class="warnings" id="warnings-list"></ul>
+</div>
+
+<script>
+const DATA = {
+  criticalPaths: [
+    {
+      id: 1,
+      flow: "Auth — Sign Up (/signup → org creation → workspace landing)",
+      status: "Covered",
+      files: ["auth.spec.ts", "organization-create.spec.ts", "workspace-create.spec.ts"],
+      notes: "signUpFreshUser helper drives real /signup form → org creation → workspace landing. Also covered in chat-message-send, billing-*, and many others via signUpFreshUser."
+    },
+    {
+      id: 2,
+      flow: "Auth — Log In / Log Out (email+password, session persistence)",
+      status: "Covered",
+      files: ["auth.spec.ts"],
+      notes: "auth.spec.ts has dedicated describe blocks: cookie-injection session, session-persists-across-nav, email+password login form with explicit logout (clearCookies → /login redirect → re-login via form). 7 assertions cover the full round-trip."
+    },
+    {
+      id: 3,
+      flow: "Auth — Social OAuth (Google, GitHub)",
+      status: "Partial",
+      files: ["auth.spec.ts"],
+      notes: "auth.spec.ts asserts the Google and GitHub OAuth buttons are visible on /login. No end-to-end OAuth flow is exercised (can't mock third-party IdP redirect in CI). Button presence is the practical maximum for external OAuth — acceptable for pre-launch."
+    },
+    {
+      id: 4,
+      flow: "Tenant Isolation — cross-org data denial",
+      status: "Covered",
+      files: ["tenant-isolation.spec.ts"],
+      notes: "Seeds two fully-independent orgs (Org A member, Org B non-member). Asserts 404 (not /login) for all Org B routes. Verifies Org A content is not leaked in Org B 404 surface. 8 tests with direct DB seeding + teardown."
+    },
+    {
+      id: 5,
+      flow: "Workspace Isolation — members see only their workspace resources",
+      status: "Missing",
+      files: [],
+      notes: "No spec validates that a user who is a member of Org A / Workspace A cannot access Org A / Workspace B resources or see another workspace's conversations, tools, or settings. tenant-isolation.spec.ts only tests org-boundary denial, not intra-org workspace-boundary enforcement."
+    },
+    {
+      id: 6,
+      flow: "Chat / Agent Send — streamed reply + tool call card",
+      status: "Covered",
+      files: ["chat-message-send.spec.ts", "chat-streaming-fresh-user.spec.ts", "agent-runtime-flow.spec.ts", "mcp-agent-integration.spec.ts"],
+      notes: "chat-streaming-fresh-user.spec.ts intercepts /api/v1/chat/stream SSE and asserts: streaming bubble appears, composer disabled during stream, re-enables after done. agent-runtime-flow.spec.ts covers full plan→approve→fanout→code→memory cycle including Neo4j/Postgres state. mcp-agent-integration asserts tool-call card renders."
+    },
+    {
+      id: 7,
+      flow: "MCP Parity Surface — capability via MCP endpoint",
+      status: "Covered",
+      files: ["mcp-api-parity.spec.ts", "mcp-agent-integration.spec.ts"],
+      notes: "mcp-api-parity.spec.ts exercises agent.tool.list via the direct API (POST /v1/:org/:ws/agent/tools) with the signed session cookie and asserts 200/non-401 JSON response. mcp-agent-integration exercises an MCP tool call through the chat stream surface."
+    },
+    {
+      id: 8,
+      flow: "Billing — upgrade flow starts Stripe Checkout session",
+      status: "Covered",
+      files: ["billing-seats-flow.spec.ts", "billing-subscription-upgrade-start.spec.ts"],
+      notes: "billing-seats-flow.spec.ts intercepts navigation intent for checkout.stripe.com or /api/v1/stripe/checkout requests on plan selection. Post-payment state is seeded via seedSubscription helper. Covers seat-at-limit warning, invite unlock, seat stepper error, and invoices tab (29 assertions, 5 tests)."
+    },
+    {
+      id: 9,
+      flow: "API Key Create + Revoke — full lifecycle via settings UI",
+      status: "Missing",
+      files: [],
+      notes: "No spec file covers the API key developer settings flow. There is no api-key*.spec.ts in apps/app/e2e/. The create-key dialog, copy-to-clipboard pattern, and revoke-with-confirm dialog are all untested."
+    },
+    {
+      id: 10,
+      flow: "Plugin Install — browse catalog, install, verify in workspace tools",
+      status: "Covered",
+      files: ["mcp-marketplace-install.spec.ts", "mcp-workspace-enable.spec.ts", "mcp-uninstall.spec.ts"],
+      notes: "mcp-marketplace-install.spec.ts covers single install and bulk multi-select install via seedPlugin fixture + mock MCP server. mcp-workspace-enable covers enabling at workspace level. mcp-uninstall covers removal. Full lifecycle present."
+    },
+    {
+      id: 11,
+      flow: "File / Asset Upload — upload + access-controlled asset route",
+      status: "Covered",
+      files: ["asset-upload.spec.ts"],
+      notes: "Covers unauthenticated 401 guard, SSRF private-IP rejection (400+), and happy-path public PNG ingestion via the real API (POST /v1/:org/:ws/assets/upload). Asserts url, key, contentType, bytes in response. CI_OFFLINE skip guard is appropriate. test.skip is conditional (not unconditional) — not a FAIL."
+    },
+    {
+      id: 12,
+      flow: "Conversation History — archive, delete, rename, state persists on refresh",
+      status: "Covered",
+      files: ["conversation-list.spec.ts", "conversation-delete-confirm.spec.ts"],
+      notes: "conversation-list.spec.ts: nav renders, New conversation resets route, archive is immediate (no dialog). conversation-delete-confirm.spec.ts: confirm-delete removes row (durable after reload), cancel preserves. Rename is not explicitly tested (no conversation rename spec) but archive/delete are solid. Minor gap on rename only."
+    }
+  ],
+
+  qualityFindings: [
+    {
+      file: "billing-seats-flow.spec.ts",
+      issue: "page.waitForTimeout(2_000) — brittle timing, not event-driven",
+      line: 168,
+      severity: "warn"
+    },
+    {
+      file: "asset-upload.spec.ts",
+      issue: "Hard-coded localhost port in apiBase construction (.replace(/:d+$/, ':4000'))",
+      line: 38,
+      severity: "warn"
+    },
+    {
+      file: "asset-upload.spec.ts",
+      issue: "test.skip inside test body (conditional skip) — acceptable but non-standard pattern; may silently pass on CI",
+      line: 99,
+      severity: "warn"
+    },
+    {
+      file: "mobile-nav.spec.ts",
+      issue: "5 of 6 tests call test.skip() dynamically on unauthenticated state — critical-path tests effectively never run without pre-loaded auth state",
+      line: "26,36,53,67,78",
+      severity: "fail"
+    },
+    {
+      file: "mobile-nav.spec.ts",
+      issue: "No fixture/loginAs setup — tests assume pre-existing authenticated session they never create; all 5 auth-dependent tests silently skip every run",
+      line: "1–85",
+      severity: "fail"
+    },
+    {
+      file: "test-env.spec.ts",
+      issue: "Stub test — only expect(1).toBe(1). No real assertion or capability coverage. Should be removed or replaced.",
+      line: 3,
+      severity: "warn"
+    },
+    {
+      file: "billing-seats-flow.spec.ts",
+      issue: "Hard-coded localhost fallback in DATABASE_URL deQuote default string",
+      line: 28,
+      severity: "warn"
+    },
+    {
+      file: "mcp-api-parity.spec.ts",
+      issue: "Hard-coded localhost:4000 fallback (API_BASE) — should use env var only; test fails if API is on different port",
+      line: 39,
+      severity: "warn"
+    },
+    {
+      file: "mcp-rbac-negative.spec.ts",
+      issue: "Hard-coded localhost in multiple API URL constructions",
+      line: "varies",
+      severity: "warn"
+    },
+    {
+      file: "mcp-oauth-connect.spec.ts",
+      issue: "Hard-coded localhost:9999 for MOCK_MCP_URL fallback — should be env-var only",
+      line: 1,
+      severity: "warn"
+    },
+    {
+      file: "agent-approval-resolve.spec.ts",
+      issue: "Only 3 expect() calls across 2 tests — assertion-light (1.5 per test, below threshold of 3)",
+      line: "all",
+      severity: "warn"
+    },
+    {
+      file: "agent-mcp-list.spec.ts",
+      issue: "Only 3 expect() calls across 2 tests — assertion-light",
+      line: "all",
+      severity: "warn"
+    },
+    {
+      file: "agent-memory-recall.spec.ts",
+      issue: "Only 3 expect() calls across 2 tests — assertion-light",
+      line: "all",
+      severity: "warn"
+    },
+    {
+      file: "agent-memory-write.spec.ts",
+      issue: "Only 3 expect() calls across 2 tests — assertion-light",
+      line: "all",
+      severity: "warn"
+    },
+    {
+      file: "agent-mcp-register.spec.ts",
+      issue: "Only 3 expect() calls across 2 tests — assertion-light",
+      line: "all",
+      severity: "warn"
+    },
+    {
+      file: "agent-skill-list.spec.ts",
+      issue: "Only 3 expect() calls across 2 tests — assertion-light",
+      line: "all",
+      severity: "warn"
+    },
+    {
+      file: "agent-task-background-*.spec.ts (3 files)",
+      issue: "Only 3 expect() calls across 2 tests per file — assertion-light; task background flows need DB/ClickHouse state assertions",
+      line: "all",
+      severity: "warn"
+    },
+    {
+      file: "agent-tool-list.spec.ts",
+      issue: "Only 3 expect() calls across 2 tests — assertion-light",
+      line: "all",
+      severity: "warn"
+    },
+    {
+      file: "mcp-uninstall.spec.ts",
+      issue: "Only 3 expect() calls in a single test — uninstall action needs a post-uninstall DOM assertion confirming the org listing row is absent",
+      line: "all",
+      severity: "warn"
+    }
+  ],
+
+  ciChecks: [
+    {
+      check: "E2E runs on PRs",
+      result: "pass",
+      finding: "e2e job triggers on pull_request and push to main. Well-structured."
+    },
+    {
+      check: "Unconditional run (should be affected-only)",
+      result: "warn",
+      finding: "e2e job uses turbo --filter='...[TURBO_BASE]' for build but passes shard flag directly to playwright. If the app package is touched (common), all 44 specs run — no path-level affected filtering within the spec suite itself."
+    },
+    {
+      check: "Sharding (>20 specs should shard)",
+      result: "pass",
+      finding: "Suite has 44 spec files / 128 tests. CI uses strategy.matrix.shard: [1,2,3,4] (4 shards). Correctly sized."
+    },
+    {
+      check: "Playwright HTML reporter",
+      result: "pass",
+      finding: "playwright.config.ts sets reporter: 'html'. Artifacts written to playwright-report/** per turbo.json outputs. Captured on CI failure."
+    },
+    {
+      check: "No .only / .fixme on critical-path tests",
+      result: "fail",
+      finding: "mobile-nav.spec.ts has 5 dynamic test.skip() calls that fire unconditionally for any unauthenticated run, silently voiding 5/6 mobile-nav tests every CI run."
+    },
+    {
+      check: "CI workers=1 for serial e2e",
+      result: "warn",
+      finding: "playwright.config.ts sets workers: process.env.CI ? 1 : undefined. With 4 shards and workers=1 each, there is no intra-shard parallelism. Consider workers:2 per shard to cut wall-clock by ~30%."
+    },
+    {
+      check: "webServer starts API for parity tests",
+      result: "pass",
+      finding: "playwright.config.ts boots both apps/app (3000) and apps/api (4000) as webServer entries. Parity specs can reach the API without separate CI setup."
+    },
+    {
+      check: "Retries on CI",
+      result: "pass",
+      finding: "retries: process.env.CI ? 2 : 0. Reasonable flakiness mitigation."
+    },
+    {
+      check: "forbidOnly in CI",
+      result: "pass",
+      finding: "forbidOnly: !!process.env.CI prevents accidental .only from merging."
+    },
+    {
+      check: "E2E job runs migrate (always)",
+      result: "pass",
+      finding: "e2e job runs pnpm db:migrate unconditionally (comment: 'always for fresh e2e database'), ensuring test containers have the latest schema."
+    }
+  ],
+
+  gaps: [
+    {
+      flow: "Workspace Isolation",
+      id: 5,
+      spec: `
+        <div class="spec-section">
+          <div class="spec-label">Setup / Fixtures</div>
+          <p>Create a single org with two workspaces: <code>ws-a</code> (the user is a member) and <code>ws-b</code> (the user is NOT a member). Use <code>setupAgentRuntimeFixture</code> for <code>ws-a</code> and insert the <code>ws-b</code> workspace row directly via <code>postgres</code> SQL without a corresponding <code>workspace_members</code> row for the test user. Seed a conversation in <code>ws-a</code> to serve as the isolation target.</p>
+        </div>
+        <div class="spec-section">
+          <div class="spec-label">What it Exercises</div>
+          <p>After <code>loginAs</code>: (1) Navigate to <code>/{org}/ws-a/chat</code> — expect 200 / authenticated shell. (2) Navigate to <code>/{org}/ws-b/chat</code> — expect 404 (workspace guard fires <code>notFound()</code>) or redirect to the org root. (3) Directly request <code>GET /v1/{org}/ws-b/conversations</code> via the API with the session cookie — expect 403 or 404. (4) Confirm the conversation seeded in <code>ws-a</code> is NOT present when navigating to <code>ws-b</code>.</p>
+        </div>
+        <div class="spec-section">
+          <div class="spec-label">Assertions</div>
+          <p><code>expect(resp.status()).toBe(404)</code> for the ws-b page. <code>expect(page).not.toHaveURL(/\\/login/)</code> (not a login redirect — a proper denial). API 403/404 for ws-b conversations. Body of ws-b denial must not contain ws-a conversation text. After reload to ws-a, all ws-a conversations still present.</p>
+        </div>
+      `
+    },
+    {
+      flow: "API Key Create + Revoke",
+      id: 9,
+      spec: `
+        <div class="spec-section">
+          <div class="spec-label">Setup / Fixtures</div>
+          <p>Sign up a fresh user via <code>signUpFreshUser</code> with prefix <code>apikey-test</code>. Navigate to <code>/{org}/settings/api-keys</code> (the developer settings page). No pre-seeded key rows required — the test creates them through the UI.</p>
+        </div>
+        <div class="spec-section">
+          <div class="spec-label">What it Exercises</div>
+          <p>(1) Assert the API keys settings page renders with a "Create API Key" / "New Key" button. (2) Click the button, fill in a key name ("e2e-test-key"), submit. (3) Assert the one-time reveal dialog appears containing the generated token string. Copy / dismiss. (4) Assert the new key row appears in the keys table with the name "e2e-test-key" and status "Active". (5) Reload to confirm persistence. (6) Click Revoke on the row, confirm the revoke dialog, submit. (7) Assert the key row transitions to "Revoked" state or disappears from the active list.</p>
+        </div>
+        <div class="spec-section">
+          <div class="spec-label">Assertions</div>
+          <p><code>expect(revealDialog).toContainText(/sk_live_/i)</code> or similar token prefix. <code>expect(keyRow).toBeVisible()</code> after reload. <code>expect(revokeDialog).toContainText(/revoke/i)</code>. After confirm: <code>expect(keyRow.getByText('Active')).not.toBeVisible()</code> OR the row is absent. Network assertion: intercept <code>POST /api/v1/.../api-keys</code> and confirm 201 response; intercept <code>DELETE /api/v1/.../api-keys/:id</code> and confirm 200.</p>
+        </div>
+      `
+    }
+  ],
+
+  blockers: [
+    "mobile-nav.spec.ts: 5 of 6 auth-dependent tests call test.skip() unconditionally (no loginAs/signUp setup), silently voiding mobile nav coverage on every CI run.",
+    "mobile-nav.spec.ts: No fixture setup means mobile nav has never been tested in CI since the file was created — a hidden dead zone in the test suite."
+  ],
+
+  warnings: [
+    "billing-seats-flow.spec.ts:168 — page.waitForTimeout(2_000) is a brittle timing anchor; replace with waitForRequest / waitForResponse on the Stripe redirect URL.",
+    "test-env.spec.ts — stub test (expect(1).toBe(1)) adds to spec count without coverage value; remove or replace.",
+    "8 agent task/memory/skill/tool spec files — assertion-light (avg 1.5 expect/test); these tests only navigate + check the page is not /login; no DB state or DOM content assertions.",
+    "mcp-api-parity.spec.ts, mcp-rbac-negative.spec.ts, mcp-oauth-connect.spec.ts, asset-upload.spec.ts — hard-coded localhost port numbers; consolidate to NEXT_PUBLIC_API_URL / process.env.MOCK_MCP_URL.",
+    "billing-seats-flow.spec.ts:28 — hard-coded postgres://oxagen:oxagen@localhost:5432/oxagen fallback in DATABASE_URL; if CI environment has a different URL the test will silently use the wrong DB.",
+    "Workspace Isolation (flow #5) — no spec; intra-org workspace boundary enforcement is untested.",
+    "API Key lifecycle (flow #9) — no spec; create/revoke/persist is untested.",
+    "Conversation rename — partially missing; conversation-list.spec.ts and conversation-delete-confirm.spec.ts cover archive/delete but not rename/retitle.",
+    "Social OAuth end-to-end — OAuth button presence is verified but no mock IdP redirect flow is exercised; acceptable for pre-launch but a gap for launch readiness.",
+    "CI workers=1 per shard; with 128 tests / 4 shards = ~32 tests per shard running serially — consider workers:2 to halve wall-clock."
+  ]
+};
+
+// ── Render helpers ────────────────────────────────────────────────────────────
+
+function badge(status) {
+  const map = {
+    Covered: 'badge-covered', Partial: 'badge-partial', Missing: 'badge-missing',
+    pass: 'badge-pass', warn: 'badge-warn', fail: 'badge-fail', info: 'badge-info',
+    PASS: 'badge-pass', WARN: 'badge-warn', FAIL: 'badge-fail'
+  };
+  const cls = map[status] || 'badge-info';
+  return `<span class="badge ${cls}">${status}</span>`;
+}
+
+function fileTag(name) {
+  if (!name) return '—';
+  return `<span class="file-tag">${name}</span>`;
+}
+
+// Coverage band
+const covered = DATA.criticalPaths.filter(p => p.status === 'Covered').length;
+const partial = DATA.criticalPaths.filter(p => p.status === 'Partial').length;
+const total = DATA.criticalPaths.length;
+const score = covered + partial * 0.5;
+const pct = Math.round((score / total) * 100);
+let bandClass = pct >= 83 ? 'green' : pct >= 58 ? 'yellow' : 'red';
+let scoreClass = bandClass;
+
+document.getElementById('coverage-band').innerHTML = `
+  <div class="coverage-band ${bandClass}">
+    <div class="score-big ${scoreClass}">${pct}%</div>
+    <div>
+      <div style="font-size:18px;font-weight:700;">${covered} Covered · ${partial} Partial · ${total - covered - partial} Missing of ${total} critical flows</div>
+      <div class="score-label" style="margin-top:4px;">Coverage ≥83% = green · 58–82% = yellow · <58% = red &nbsp;|&nbsp; 44 spec files · 128 tests · 4 CI shards</div>
+    </div>
+  </div>`;
+
+// Critical path table
+const ctbody = document.getElementById('critical-tbody');
+DATA.criticalPaths.forEach(row => {
+  const files = row.files.length ? row.files.map(f => fileTag(f)).join(' ') : '—';
+  ctbody.innerHTML += `<tr>
+    <td style="color:var(--muted);font-weight:700;">${row.id}</td>
+    <td style="font-weight:500;">${row.flow}</td>
+    <td>${badge(row.status)}</td>
+    <td>${files}</td>
+    <td class="note">${row.notes}</td>
+  </tr>`;
+});
+
+// Quality findings table
+const qtbody = document.getElementById('quality-tbody');
+DATA.qualityFindings.forEach(row => {
+  qtbody.innerHTML += `<tr>
+    <td>${fileTag(row.file)}</td>
+    <td>${row.issue}</td>
+    <td style="color:var(--muted);font-size:12px;">${row.line}</td>
+    <td>${badge(row.severity)}</td>
+  </tr>`;
+});
+
+// CI lane table
+const citbody = document.getElementById('ci-tbody');
+DATA.ciChecks.forEach(row => {
+  citbody.innerHTML += `<tr>
+    <td style="font-weight:500;">${row.check}</td>
+    <td>${badge(row.result.toUpperCase())}</td>
+    <td class="note">${row.finding}</td>
+  </tr>`;
+});
+
+// Gap specs
+const gapContainer = document.getElementById('gap-specs');
+if (DATA.gaps.length === 0) {
+  gapContainer.innerHTML = '<p style="color:var(--pass)">No missing critical-path flows — no gap specs required.</p>';
+} else {
+  DATA.gaps.forEach(gap => {
+    gapContainer.innerHTML += `
+      <details>
+        <summary>${badge('Missing')} &nbsp;Flow #${gap.id}: ${gap.flow}</summary>
+        <div class="details-body">${gap.spec}</div>
+      </details>`;
+  });
+}
+
+// Blockers
+const blockersList = document.getElementById('blockers-list');
+if (DATA.blockers.length === 0) {
+  blockersList.innerHTML = '<li style="color:var(--pass)">No blockers.</li>';
+} else {
+  DATA.blockers.forEach(b => {
+    blockersList.innerHTML += `<li>${b}</li>`;
+  });
+}
+
+// Warnings
+const warningsList = document.getElementById('warnings-list');
+DATA.warnings.forEach(w => {
+  warningsList.innerHTML += `<li>${w}</li>`;
+});
+</script>
+</body>
+</html>
