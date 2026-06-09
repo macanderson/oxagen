@@ -24,7 +24,8 @@ export const workspaceMemberListCommand = new Command("list")
       }
       console.log(`✓ ${data.length} member(s)`);
       for (const m of data) {
-        console.log(`  ${m.email}  role=${m.role}  joined=${m.joined_at}  id=${m.id}`);
+        const emailPart = process.stdout.isTTY ? `${m.email}  ` : "";
+        console.log(`  ${emailPart}role=${m.role}  joined=${m.joined_at}  id=${m.id}`);
       }
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : String(err);

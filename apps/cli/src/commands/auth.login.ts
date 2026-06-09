@@ -17,7 +17,7 @@ export const authLoginCommand = new Command("login")
       console.error("Error: email and password are required");
       process.exit(1);
     }
-    console.log(`Authenticating as ${options.email}...`);
+    if (process.stdout.isTTY) console.log(`Authenticating as ${options.email}...`);
     try {
       const data = await apiRequest<LoginResponse>("/auth/sign-in/email", {
         method: "POST",
