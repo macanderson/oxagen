@@ -1,10 +1,11 @@
 import { check, index, integer, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { workflowSchema } from "./_schemas";
+import { agentSchema, workflowSchema } from "./_schemas";
 import { auditMixin, citext, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
 
 // Workflow run — execution of a workflow definition. Tracks overall progress.
-export const workflowRuns = workflowSchema.table(
+// Table lives in the `agent` schema in Postgres (agent.workflow_runs).
+export const workflowRuns = agentSchema.table(
   "workflow_runs",
   {
     ...idMixin("wfr"),
@@ -34,7 +35,8 @@ export const workflowRuns = workflowSchema.table(
 );
 
 // Workflow run task — dynamic task dispatched by the AI planner for a workflow run.
-export const workflowRunTasks = workflowSchema.table(
+// Table lives in the `agent` schema in Postgres (agent.workflow_run_tasks).
+export const workflowRunTasks = agentSchema.table(
   "workflow_run_tasks",
   {
     ...idMixin("wft"),

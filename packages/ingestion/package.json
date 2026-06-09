@@ -9,7 +9,9 @@
     ".": "./src/index.ts",
     "./connectors": "./src/connectors/types.ts",
     "./pipeline": "./src/pipeline.ts",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./embed": "./src/embed/index.ts",
+    "./mutations": "./src/mutations/upsert-entity.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

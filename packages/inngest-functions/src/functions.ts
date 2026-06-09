@@ -16,6 +16,9 @@ import { agentSyncExecutionToGraph } from "./functions/agent.sync-execution-to-g
 import { privacyExportProcess, privacyExportProcessOnFailure } from "./functions/privacy.export.process";
 import { privacyErasureExecute, privacyErasureExecuteOnFailure } from "./functions/privacy.erasure.execute";
 import { authSessionExpiryAudit } from "./functions/auth.session-expiry-audit";
+import { ingestionPipeline } from "./functions/ingestion.pipeline";
+import { ingestionDeleteConnection } from "./functions/ingestion.delete";
+import { ingestionOauthRefresh } from "./functions/ingestion.oauth-refresh";
 
 export const functions = [
   billingRollupUsage,
@@ -39,4 +42,7 @@ export const functions = [
   privacyErasureExecute,
   privacyErasureExecuteOnFailure,
   authSessionExpiryAudit,
+  ingestionPipeline,
+  ingestionDeleteConnection,
+  ingestionOauthRefresh,
 ];

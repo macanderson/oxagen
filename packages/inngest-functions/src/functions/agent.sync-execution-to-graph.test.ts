@@ -33,12 +33,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
-    fn({
-      execute: vi.fn().mockResolvedValue({ rowCount: 1 }),
-    }),
-  ),
-
+    withTenantDb: mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn({
+        execute: vi.fn().mockResolvedValue({ rowCount: 1 }),
+      }),
+    ),
   };
 });
 

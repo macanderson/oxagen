@@ -98,6 +98,14 @@ import { workspaceInviteSend } from "./workspace.invite.send";
 import { skillWorkspaceList } from "./skill.workspace.list";
 import { agentSubagentAggregate } from "./agent.subagent.aggregate";
 import { agentSubagentDispatch } from "./agent.subagent.dispatch";
+import { connectionList } from "./connection.list";
+import { connectionCreate } from "./connection.create";
+import { connectionGet } from "./connection.get";
+import { connectionDelete } from "./connection.delete";
+import { connectionPreview } from "./connection.preview";
+import { connectionMappingsSuggest } from "./connection.mappings.suggest";
+import { connectionMappingsGet } from "./connection.mappings.get";
+import { connectionMappingsSet } from "./connection.mappings.set";
 
 export {
   apiKeyCreate,
@@ -190,6 +198,14 @@ export {
   skillWorkspaceList,
   agentSubagentAggregate,
   agentSubagentDispatch,
+  connectionList,
+  connectionCreate,
+  connectionGet,
+  connectionDelete,
+  connectionPreview,
+  connectionMappingsSuggest,
+  connectionMappingsGet,
+  connectionMappingsSet,
 };
 
 /**
