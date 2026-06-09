@@ -60,5 +60,5 @@ export async function resolveOrgScope(
 
   if (rows.length === 0) return { ok: false, kind: "not_found" };
 
-  return { ok: true, orgId: rows[0].orgId };
+  return { ok: true, orgId: rows[0]!.orgId };
 }

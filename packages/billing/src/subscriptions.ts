@@ -5,6 +5,7 @@ import { billingProvider } from "./client";
 import { logger } from "./logger";
 import { getOrgSeatUsage, SeatLimitError } from "./seats";
 import { meetsMinimumTier } from "./entitlements";
+import type { PlanTier } from "@oxagen/oxagen/types";
 
 /**
  * Pulls the canonical subscription record from the billing provider and
@@ -319,7 +320,7 @@ export async function changeOrgPlan(
 
   // Active subscription — swap the price in-place.
   // Determine proration behavior by comparing tier order.
-  const currentTier = currentPlanRow?.tier ?? "free";
+  const currentTier = (currentPlanRow?.tier ?? "free") as PlanTier;
   const isUpgrade = meetsMinimumTier(targetPlan.tier, currentTier);
   const prorationBehavior: "always_invoice" | "none" = isUpgrade ? "always_invoice" : "none";
 
@@ -644,7 +645,7 @@ export async function previewPlanChange(
     }),
   );
 
-  const currentTier = currentPlanRow?.tier ?? "free";
+  const currentTier = (currentPlanRow?.tier ?? "free") as PlanTier;
   const isUpgrade = meetsMinimumTier(targetPlan.tier, currentTier);
   const prorationBehavior: "always_invoice" | "none" = isUpgrade
     ? "always_invoice"

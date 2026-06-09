@@ -10,7 +10,7 @@ export const agentUiRender = registerCapability({
   layers: ["schema", "docs"],
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "ui" },
-  sensitivity: "public",
+  sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow" },
