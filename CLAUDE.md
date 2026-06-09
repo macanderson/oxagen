@@ -358,7 +358,7 @@ Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level override
 
 ### `apps/cli`
 
-- Commander + Ink CLI. Entry: `apps/cli/src/index.tsx`. Ships 93 command
+- Commander + Ink CLI. Entry: `apps/cli/src/index.tsx`. Ships 95 command
   files covering auth, orgs, workspaces, chat, conversations, API keys,
   plugins, billing, agents, workflows, images, documents, automation, forms,
   skills, and user preferences. `oxagen dev` is the dev-stack launcher and
@@ -442,6 +442,11 @@ git fetch origin && git rebase origin/main  # sync before pushing (avoids force-
 - **`agent.subagent.dispatch` / `agent.subagent.aggregate`** — platform-level parallel orchestration. `dispatch` fans out sub-tasks and returns a run-ID per branch; `aggregate` collects results when all branches settle. Use these contracts instead of hand-rolling fan-out inside a handler; they emit proper lineage and metering through `invoke()`.
 - **`prompt.settings.read` / `prompt.settings.write`** — platform-level prompt configuration, org+workspace scoped, stored in Postgres. When adding system-prompt customisation or model-behaviour knobs, reach for these contracts rather than hard-coding strings. They are metered and IAM-gated.
 - **`agent.ui.render`** — generative UI contract. The model returns `generateObject` structured output; the client maps it to React components via the chat component registry. Never use `ai/rsc` or server-render React trees; this contract is the only approved path for model-driven UI generation.
+- **`agent.ui.render` is agent-surface only** — its contract declares `surfaces: ["agent"]`; it has no MCP tool file and no API route by design. `pnpm check:manifest` will report a false-positive parity gap for it — this is expected. Do not add an MCP/API wrapper for this capability.
+
+## All LLM calls must go through `@oxagen/ai`
+
+Token metering (`token_usage` ClickHouse table), duration tracking, surface tagging, and prompt hashing are emitted **only** by the wrappers in `packages/ai/src/` (`generateObject`, `streamText` via `stream.ts`, `generateImage`, `generateVideo`, `embed`). Calling AI SDK (`ai`, `@ai-sdk/gateway`) directly bypasses all metering. Never import `generateText` / `streamText` / `generateObject` directly from `ai` inside a handler or route — always use the `@oxagen/ai` re-exports.
 
 ## Infrastructure boundaries
 
@@ -501,4 +506,4 @@ tracked in Linear.
   in `packages/oxagen/src/contracts/`, `apps/api/src/routes/v1/*`,
   `apps/mcp/src/tools/*`, and `apps/cli/src/commands/*`. Stale or missing docs
   cause drift between shipped product and agent knowledge.
-- **Gaps:** As of 2026-06-09, 18 wired capabilities lack docs: `agent.execution.record`, `agent.plan.create`, `agent.subagent.aggregate`, `agent.subagent.dispatch`, `agent.ui.render`, `chat.message.execution`, `document.create`, `document.list`, `document.read`, `form.create`, `form.submit`, `image.analyze`, `image.create`, `image.list`, `prompt.settings.read`, `prompt.settings.write`, `skill.workspace.list`, `workspace.member.list`. Automation of docs regeneration is tracked in Linear; maintain docs as you ship new contracts.
+- **Gaps (last audited 2026-06-09):** 18 wired capabilities lack docs: `agent.execution.record`, `agent.plan.create`, `agent.subagent.aggregate`, `agent.subagent.dispatch`, `agent.ui.render`, `chat.message.execution`, `document.create`, `document.list`, `document.read`, `form.create`, `form.submit`, `image.analyze`, `image.create`, `image.list`, `prompt.settings.read`, `prompt.settings.write`, `skill.workspace.list`, `workspace.member.list`. Run `pnpm check:manifest` for the current gap list — this count drifts; do not hard-code it in commit messages or tickets. Automation of docs regeneration is tracked in Linear.
