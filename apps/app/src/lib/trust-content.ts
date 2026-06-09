@@ -51,7 +51,7 @@ export const SUB_PROCESSORS: SubProcessor[] = [
     name: "Google Cloud",
     category: "Infrastructure",
     purpose:
-      "AlloyDB (managed Postgres) for the primary transactional database. Neo4j Aura for the knowledge graph. Both are provisioned in US regions.",
+      "Neon serverless Postgres for the primary transactional database. Neo4j for the knowledge graph. All infrastructure provisioned in US regions.",
     dataRegion: "us-central1 / us-east1",
     certifications: ["SOC 2 Type II", "ISO 27001", "HIPAA BAA available"],
     privacyUrl: "https://cloud.google.com/terms/cloud-privacy-notice",

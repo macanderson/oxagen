@@ -106,6 +106,7 @@
 
     "test": {
       "dependsOn": ["test:unit"],
+      "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },
 
@@ -247,7 +248,7 @@
     },
 
     "test:e2e": {
-      "dependsOn": ["build"],
+      "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "e2e/**", "playwright.config.*"],
       "outputs": ["playwright-report/**", "test-results/**"],
       "env": [
