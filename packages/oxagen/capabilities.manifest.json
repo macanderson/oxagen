@@ -40,13 +40,20 @@
     {
       "name": "agent.execution.record",
       "file": "agent.execution.record.ts",
-      "domain": "unknown",
+      "domain": "agent",
       "mode": "sync",
       "surfaces": [
         "api",
         "mcp"
       ],
-      "layers": {}
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
     },
     {
       "name": "agent.mcp.list",
@@ -516,13 +523,20 @@
     {
       "name": "chat.message.execution",
       "file": "chat.message.execution.ts",
-      "domain": "unknown",
+      "domain": "chat",
       "mode": "sync",
       "surfaces": [
         "api",
         "mcp"
       ],
-      "layers": {}
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": false,
+        "docs": false
+      }
     },
     {
       "name": "chat.message.send",
@@ -555,7 +569,7 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": false,
+        "mcp": true,
         "unit": true,
         "docs": false
       }
@@ -573,7 +587,7 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": false,
+        "mcp": true,
         "unit": true,
         "docs": false
       }
@@ -591,7 +605,7 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": false,
+        "mcp": true,
         "unit": true,
         "docs": false
       }
@@ -609,7 +623,7 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": false,
+        "mcp": true,
         "unit": true,
         "docs": false
       }
@@ -627,7 +641,7 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": false,
+        "mcp": true,
         "unit": true,
         "docs": false
       }
@@ -645,7 +659,7 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": false,
+        "mcp": true,
         "unit": true,
         "docs": false
       }
@@ -663,7 +677,7 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": false,
+        "mcp": true,
         "unit": true,
         "docs": false
       }
@@ -681,7 +695,7 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": false,
+        "mcp": true,
         "unit": false,
         "docs": false
       }
