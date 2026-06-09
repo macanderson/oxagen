@@ -11,7 +11,7 @@
  * and thread the result through CapabilityContext.planTier.
  */
 import { and, eq } from "drizzle-orm";
-import { withTenantDb, schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
 import type { PlanTier } from "@oxagen/oxagen/types";
 
 const VALID_TIERS = new Set<PlanTier>(["free", "build", "scale", "enterprise"]);
@@ -28,7 +28,7 @@ function isTier(value: unknown): value is PlanTier {
  * un-subscribed orgs are always in the most restricted tier (fail-safe).
  */
 export async function resolveOrgTier(orgId: string): Promise<PlanTier> {
-  const { activeSub, org } = await withTenantDb(async (tx) => {
+  const { activeSub, org } = await withSystemDb(async (tx) => {
     const sub = await tx
       .select({ tier: schema.plans.tier })
       .from(schema.subscriptions)
