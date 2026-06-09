@@ -287,5 +287,6 @@ export const contracts = [
   workspaceInviteSend,
   skillWorkspaceList,
   agentExecutionRecord,
+  agentPlanCreate,
   agentSubagentDispatch,
 ] as const;
