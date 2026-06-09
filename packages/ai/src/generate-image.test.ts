@@ -25,7 +25,7 @@ mocks.chargeImageCredits.mockResolvedValue({
 vi.mock("ai", () => ({ generateImage: mocks.generateImage }));
 
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return {
     ...real,
     insertTokenUsage: mocks.insertTokenUsage,
@@ -34,7 +34,7 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
 });
 
 vi.mock("@oxagen/billing", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/billing")>();
   return {
     ...real,
     chargeImageCredits: mocks.chargeImageCredits,

@@ -104,7 +104,7 @@ describe("subagent dispatch", () => {
     expect((mocks.txInsertCalls[1]!.values as unknown[]).length).toBe(3);
 
     expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
-    const evt = (mocks.inngestSend.mock.calls[0] as [{ name: string; data: Record<string, unknown> }])[0]!
+    const evt = (mocks.inngestSend.mock.calls[0] as unknown as [{ name: string; data: Record<string, unknown> }])[0]!
     expect(evt.name).toBe("agent/subagent.dispatch");
     expect(evt.data.fanoutId).toBe("fan_123");
     expect(evt.data.orgId).toBe("ten_1");

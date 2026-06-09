@@ -44,7 +44,7 @@ vi.mock("@oxagen/iam", () => ({
 }));
 
 vi.mock("@oxagen/billing", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/billing")>();
   return {
     ...real,
     bootstrapBillingRuntime: mocks.bootstrapBillingRuntime,
@@ -60,7 +60,7 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
 }));
 
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return {
     ...real,
     recordSecurityEvent: mocks.recordSecurityEvent,

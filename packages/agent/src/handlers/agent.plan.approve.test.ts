@@ -36,7 +36,7 @@ describe("agent.plan.approve handler", () => {
     );
     expect(res).toEqual({ planId: "plan_abc", status: "approved" });
     expect(executeSpy).toHaveBeenCalledTimes(1);
-    const rawCall = (executeSpy.mock.calls[0] as [unknown])!;
+    const rawCall = (executeSpy.mock.calls[0] as unknown as [unknown])!;
     const sqlObj = rawCall[0] as { queryChunks: Array<{ value?: string[] } | string> };
     expect(sqlObj).toHaveProperty("queryChunks");
     const chunks = sqlObj.queryChunks;
@@ -66,7 +66,7 @@ describe("agent.plan.approve handler", () => {
     expect(res.planId).toBe(hostilePlanId);
     expect(res.status).toBe("approved");
     expect(executeSpy).toHaveBeenCalledTimes(1);
-    const rawCall2 = (executeSpy.mock.calls[0] as [unknown])!;
+    const rawCall2 = (executeSpy.mock.calls[0] as unknown as [unknown])!;
     const sqlObj = rawCall2[0] as { queryChunks: Array<{ value?: string[] } | string> };
     expect(sqlObj).toHaveProperty("queryChunks");
     const chunks = sqlObj.queryChunks;

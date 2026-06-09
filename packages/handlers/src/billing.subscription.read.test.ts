@@ -31,7 +31,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return {
     ...real,
     sumTokenUsage: vi.fn(),

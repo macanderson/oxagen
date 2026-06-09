@@ -14,7 +14,7 @@ const { mockCreateCheckoutSession } = vi.hoisted(() => ({
 
 // ── module mocks ──────────────────────────────────────────────────────────────
 vi.mock("@oxagen/billing", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/billing")>();
   return {
     ...real,
     createCheckoutSession: mockCreateCheckoutSession,

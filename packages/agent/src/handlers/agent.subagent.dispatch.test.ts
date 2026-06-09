@@ -63,7 +63,7 @@ describe("agent.subagent.dispatch handler", () => {
     expect(result.totalTasks).toBe(2);
     expect(result.status).toBe("pending");
     expect(inngestSendSpy).toHaveBeenCalledTimes(1);
-    const sentEvent = (inngestSendSpy.mock.calls[0] as [{ name: string; data: { dispatchId: string; maxParallel: number } }])[0];
+    const sentEvent = (inngestSendSpy.mock.calls[0] as unknown as [{ name: string; data: { dispatchId: string; maxParallel: number } }])[0];
     expect(sentEvent.name).toBe("agent/subagent.dispatch");
     expect(sentEvent.data.dispatchId).toBe("fan_123");
     expect(sentEvent.data.maxParallel).toBe(5);
@@ -93,7 +93,7 @@ describe("agent.subagent.dispatch handler", () => {
       },
       CTX,
     );
-    const sentEvent = (inngestSendSpy.mock.calls[0] as [{ name: string; data: { maxParallel: number } }])[0];
+    const sentEvent = (inngestSendSpy.mock.calls[0] as unknown as [{ name: string; data: { maxParallel: number } }])[0];
     expect(sentEvent.data.maxParallel).toBe(10);
   });
 });

@@ -39,7 +39,7 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
 }));
 
 vi.mock("@oxagen/billing", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/billing")>();
   return {
     ...real,
     verifyStripeSignature: mocks.verifyStripeSignature,

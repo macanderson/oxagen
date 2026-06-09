@@ -17,7 +17,7 @@ const { mockResolveOrgTier, mockMeetsMinimumTier, mockRequireTier } = vi.hoisted
 // Mocks
 // ---------------------------------------------------------------------------
 vi.mock("@oxagen/billing", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/billing")>();
   return {
     ...real,
     resolveOrgTier: mockResolveOrgTier,

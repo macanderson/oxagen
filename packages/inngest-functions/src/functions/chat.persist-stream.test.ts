@@ -35,7 +35,7 @@ vi.mock("@oxagen/tenancy", () => ({
 }));
 
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return {
     ...real,
     insertTokenUsage: mocks.insertTokenUsage,

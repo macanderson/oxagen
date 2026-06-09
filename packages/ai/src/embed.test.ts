@@ -23,7 +23,7 @@ mocks.hashPrompt.mockResolvedValue("deadbeefdeadbeef");
 vi.mock("ai", () => ({ embed: mocks.embed }));
 vi.mock("@ai-sdk/gateway", () => ({ gateway: { embeddingModel: mocks.embeddingModel } }));
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return {
     ...real,
     insertTokenUsage: mocks.insertTokenUsage,

@@ -25,7 +25,7 @@ vi.mock("./fetch-authz", () => ({ fetchAuthz: mocks.fetchAuthz }));
 vi.mock("./emit-audit", () => ({ emitAudit: mocks.emitAudit }));
 vi.mock("@oxagen/oxagen/iam", () => ({ resolve: mocks.resolve }));
 vi.mock("@oxagen/billing", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/billing")>();
   return {
     ...real,
     resolveOrgTier: mocks.resolveOrgTier,

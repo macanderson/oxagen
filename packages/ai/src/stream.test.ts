@@ -31,7 +31,7 @@ mocks.chargeUsageCredits.mockResolvedValue({
 
 vi.mock("ai", () => ({ streamText: mocks.streamText }));
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return {
     ...real,
     hashPrompt: mocks.hashPrompt,
@@ -40,7 +40,7 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
   };
 });
 vi.mock("@oxagen/billing", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/billing")>();
   return {
     ...real,
     providerCostUsdMicros: mocks.providerCostUsdMicros,

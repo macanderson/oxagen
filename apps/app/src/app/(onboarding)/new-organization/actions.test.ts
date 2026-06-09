@@ -55,7 +55,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 vi.mock("@oxagen/billing", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/billing")>();
   return {
     ...real,
     grantFreeCredits: mockGrantFreeCredits,

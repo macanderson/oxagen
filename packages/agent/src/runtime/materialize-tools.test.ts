@@ -153,7 +153,7 @@ vi.mock("./approval", () => ({
 }));
 
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return {
     ...real,
     insertToolInvocation: mocks.insertToolInvocation,
@@ -458,7 +458,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
     // vi.fn() mock.calls has an inferred tuple type that TypeScript tightens
     // to [] in hoisted mocks. Cast through unknown to access the call arg.
-    const call = (mocks.insertToolInvocation.mock.calls[0] as [unknown])?.[0] as Record<string, unknown>;
+    const call = (mocks.insertToolInvocation.mock.calls[0] as unknown as [unknown])?.[0] as Record<string, unknown>;
     expect(call.status).toBe("failed");
     expect(call.error_class).toBe("IamDenied");
     expect(call.capability_name).toBe(`mcp.${MCP_SERVER.id}.list_pull_requests`);
@@ -472,7 +472,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     await t.execute!({});
     expect(fakeExecute).toHaveBeenCalledTimes(1);
     expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
-    const call = (mocks.insertToolInvocation.mock.calls[0] as [unknown])?.[0] as Record<string, unknown>;
+    const call = (mocks.insertToolInvocation.mock.calls[0] as unknown as [unknown])?.[0] as Record<string, unknown>;
     expect(call.status).toBe("completed");
     expect(call.capability_name).toBe(`mcp.${MCP_SERVER.id}.list_pull_requests`);
   });

@@ -74,7 +74,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 // covered by @oxagen/billing's own test suite.
 mocks.grantFreeCredits.mockResolvedValue(undefined);
 vi.mock("@oxagen/billing", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/billing")>();
   return {
     ...real,
     grantFreeCredits: mocks.grantFreeCredits,

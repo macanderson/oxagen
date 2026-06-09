@@ -45,7 +45,7 @@ vi.mock("@oxagen/ai", () => ({
 }));
 
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return {
     ...real,
     insertToolInvocation: mocks.insertToolInvocation,
