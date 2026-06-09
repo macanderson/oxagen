@@ -4,7 +4,7 @@ import { apiRequest } from "../lib/api-client.js";
 export const pluginRegistryListCommand = new Command("list")
   .description("List available plugin registries")
   .option("-o, --org-scoped", "Show only org-scoped registries")
-  .action(async (options: Record<string, unknown>) => {
+  .action(async (_options: Record<string, unknown>) => {
     try {
       const result = await apiRequest("/plugin/registry/list", {
         method: "GET",

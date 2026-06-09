@@ -111,7 +111,7 @@ describe("CLI Command Parity Tests", () => {
     ];
 
     it("all CLI parity commands are properly registered", () => {
-      commands.forEach(({ name, command }) => {
+      commands.forEach(({ command }) => {
         expect(command).toBeDefined();
         expect(command.name()).toBeTruthy();
       });
@@ -119,7 +119,7 @@ describe("CLI Command Parity Tests", () => {
 
     it("each command has a description", () => {
       commands.forEach(({ command }) => {
-        expect((command as any)._description).toBeTruthy();
+        expect((command as unknown as Record<string, unknown>)._description).toBeTruthy();
       });
     });
   });

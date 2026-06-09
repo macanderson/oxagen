@@ -7,7 +7,7 @@ export const pluginCatalogBrowseCommand = new Command("browse")
   .option("-q, --query <search>", "Search query")
   .option("-p, --page <n>", "Page number", "1")
   .option("-l, --limit <n>", "Results per page", "20")
-  .action(async (options: Record<string, unknown>) => {
+  .action(async (_options: Record<string, unknown>) => {
     try {
       const result = await apiRequest("/plugin/catalog/browse", {
         method: "GET",

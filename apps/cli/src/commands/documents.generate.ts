@@ -9,10 +9,10 @@ export const documentsGenerateCommand = new Command("generate")
   .option("-a, --async", "Run asynchronously")
   .action(async (options: Record<string, unknown>) => {
     try {
-      let context;
+      let context: unknown;
       try {
         context = JSON.parse(String(options.context));
-      } catch (e) {
+      } catch (_e) {
         console.error("Invalid JSON context:", options.context);
         process.exit(1);
       }
