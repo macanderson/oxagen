@@ -76,28 +76,6 @@ function getNeo(): Driver {
   return neoDriver;
 }
 
-// Deterministic UUIDs for the scenario fixture rows.
-// Using name-based (v5-style) stable IDs so reruns are idempotent.
-const _SCENARIO_IDS = {
-  toolMemoryRecall: "00000000-e2e0-0000-0000-000000000001",
-  toolMemoryWrite: "00000000-e2e0-0000-0000-000000000002",
-  toolCodeExecute: "00000000-e2e0-0000-0000-000000000003",
-  toolVersionMemoryRecall: "00000000-e2e0-0000-0001-000000000001",
-  toolVersionMemoryWrite: "00000000-e2e0-0000-0001-000000000002",
-  toolVersionCodeExecute: "00000000-e2e0-0000-0001-000000000003",
-  execution: "00000000-e2e0-0000-0002-000000000001",
-  stepRecall: "00000000-e2e0-0000-0003-000000000001",
-  stepCode1: "00000000-e2e0-0000-0003-000000000002",
-  stepCode2: "00000000-e2e0-0000-0003-000000000003",
-  stepCode3: "00000000-e2e0-0000-0003-000000000004",
-  stepWrite: "00000000-e2e0-0000-0003-000000000005",
-  tcRecall: "00000000-e2e0-0000-0004-000000000001",
-  tcCode1: "00000000-e2e0-0000-0004-000000000002",
-  tcCode2: "00000000-e2e0-0000-0004-000000000003",
-  tcCode3: "00000000-e2e0-0000-0004-000000000004",
-  tcWrite: "00000000-e2e0-0000-0004-000000000005",
-} as const;
-
 export async function setupAgentRuntimeFixture(
   opts: FixtureOptions,
 ): Promise<AgentRuntimeFixture> {
