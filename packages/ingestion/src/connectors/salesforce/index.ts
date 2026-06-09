@@ -17,10 +17,6 @@ function asString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
-function asArray(v: unknown): unknown[] {
-  return Array.isArray(v) ? v : [];
-}
-
 const salesforce: ConnectorDefinition<Config> = {
   connectorId: "salesforce",
   displayName: "Salesforce",

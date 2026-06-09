@@ -105,6 +105,18 @@ import { metadata as imageListMetadata } from "./image.list";
 import { metadata as skillWorkspaceListMetadata } from "./skill.workspace.list";
 import { metadata as workspaceInviteSendMetadata } from "./workspace.invite.send";
 import { metadata as workspaceMemberListMetadata } from "./workspace.member.list";
+import {
+  connectionListMetadata,
+  connectionCreateMetadata,
+  connectionGetMetadata,
+  connectionDeleteMetadata,
+  connectionPreviewMetadata,
+  connectionMappingsSuggestMetadata,
+  connectionMappingsGetMetadata,
+  connectionMappingsSetMetadata,
+} from "./connection";
+import { metadata as privacyDataEraseMetadata } from "./privacy.data.erase";
+import { metadata as privacyDataExportMetadata } from "./privacy.data.export";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -198,6 +210,16 @@ const allToolMetadata = [
   skillWorkspaceListMetadata,
   workspaceInviteSendMetadata,
   workspaceMemberListMetadata,
+  connectionListMetadata,
+  connectionCreateMetadata,
+  connectionGetMetadata,
+  connectionDeleteMetadata,
+  connectionPreviewMetadata,
+  connectionMappingsSuggestMetadata,
+  connectionMappingsGetMetadata,
+  connectionMappingsSetMetadata,
+  privacyDataEraseMetadata,
+  privacyDataExportMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────

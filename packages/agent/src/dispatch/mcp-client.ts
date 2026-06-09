@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
-import { tool, type Tool } from "ai";
+import { tool, type Tool } from "@oxagen/ai";
 import { z } from "zod";
 import pino from "pino";
 

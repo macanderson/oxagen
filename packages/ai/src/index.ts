@@ -83,3 +83,8 @@ export type {
   EnhancePromptArgs,
   EnhancePromptResult,
 } from "./prompts";
+
+// Tool descriptor builder — re-exported here so agent domain code doesn't
+// import directly from "ai", keeping @oxagen/ai as the single AI SDK chokepoint.
+export { tool } from "ai";
+export type { Tool, ToolSet } from "ai";

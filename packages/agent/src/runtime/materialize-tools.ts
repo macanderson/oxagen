@@ -1,4 +1,4 @@
-import { tool, type Tool, type ToolSet } from "ai";
+import { tool, type Tool, type ToolSet } from "@oxagen/ai";
 import { z, type ZodTypeAny } from "zod";
 import pino from "pino";
 import { insertToolInvocation, type ToolInvocationRow } from "@oxagen/telemetry";

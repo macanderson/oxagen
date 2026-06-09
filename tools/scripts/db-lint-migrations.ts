@@ -37,12 +37,12 @@ const FROZEN_DUPLICATE_ORDINALS = new Set<number>();
 /**
  * Ordinals that were squashed into the 0000_baseline.sql snapshot and will
  * therefore never appear as individual files. These represent migrations from
- * the initial development phase (0005–0027) that were consolidated into the
+ * the initial development phase (0011–0027) that were consolidated into the
  * baseline re-stamp and archived under packages/database/drizzle/migration_archive/.
- * New migrations start at 0028 and proceed sequentially from there.
+ * Migrations 0001–0010 exist as individual files; 0028+ continue from there.
  */
 const SQUASHED_ORDINALS = new Set<number>(
-  Array.from({ length: 23 }, (_, i) => i + 5), // 5..27 inclusive
+  Array.from({ length: 17 }, (_, i) => i + 11), // 11..27 inclusive
 );
 
 function main(): void {
