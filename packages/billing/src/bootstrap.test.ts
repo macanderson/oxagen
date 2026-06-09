@@ -5,17 +5,20 @@
  *  - bootstrapBillingRuntime calls setBillingAdmissionGate on first call
  *  - bootstrapBillingRuntime is idempotent (second call is a no-op)
  *  - The gate function delegate calls assertCanStartTurn
+ *
+ * Each test gets a fresh module import so the `booted` module-level flag is
+ * reset between tests. vi.resetModules() is called in beforeEach to ensure
+ * the module cache is cleared and the mock factories run again.
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Top-level mocks are hoisted by vitest — they apply to all dynamic imports.
 const setBillingAdmissionGateMock = vi.fn();
-
 vi.mock("@oxagen/oxagen/kernel", () => ({
   setBillingAdmissionGate: setBillingAdmissionGateMock,
 }));
 
 const assertCanStartTurnMock = vi.fn().mockResolvedValue(undefined);
-
 vi.mock("./metering", () => ({
   assertCanStartTurn: assertCanStartTurnMock,
 }));
@@ -24,18 +27,19 @@ vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-// Each test imports a fresh module (vi.resetModules between tests would be
-// needed for true isolation of the `booted` flag, but since the module is
-// cached we just verify idempotency by inspecting call counts).
-const { bootstrapBillingRuntime } = await import("./bootstrap");
-
 describe("bootstrapBillingRuntime", () => {
-  it("calls setBillingAdmissionGate once", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("calls setBillingAdmissionGate once", async () => {
+    const { bootstrapBillingRuntime } = await import("./bootstrap");
     bootstrapBillingRuntime();
     expect(setBillingAdmissionGateMock).toHaveBeenCalledTimes(1);
   });
 
-  it("is idempotent — second call does not call setBillingAdmissionGate again", () => {
+  it("is idempotent — second call does not call setBillingAdmissionGate again", async () => {
+    const { bootstrapBillingRuntime } = await import("./bootstrap");
     bootstrapBillingRuntime();
     bootstrapBillingRuntime();
     // Still only 1 call total (module-level booted flag prevents re-registration).
@@ -43,6 +47,8 @@ describe("bootstrapBillingRuntime", () => {
   });
 
   it("the registered gate delegates to assertCanStartTurn", async () => {
+    const { bootstrapBillingRuntime } = await import("./bootstrap");
+    bootstrapBillingRuntime();
     // The gate function was registered in the call above — extract it.
     const gateFn = setBillingAdmissionGateMock.mock.calls[0]?.[0] as
       | ((orgId: string) => Promise<void>)
