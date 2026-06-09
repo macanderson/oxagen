@@ -116,6 +116,7 @@ function contractNameToPathSegment(name: string): string {
     workflow: "workflows",
     archive: "archive",
     connection: "connections",
+    "privacy.data": "privacy",
   };
 
   // Try progressively shorter prefixes
