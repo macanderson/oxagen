@@ -370,20 +370,20 @@ describe("security event emission — billing.access_denied on gate failure", ()
     await cancelSubscriptionAction({ orgSlug: "acme" });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(event.eventType).toBe("billing.access_denied");
     expect(event.outcome).toBe("deny");
   });
 
   it("emits actorUserId from session on denial", async () => {
     await cancelSubscriptionAction({ orgSlug: "acme" });
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(event.actorUserId).toBe("user-1");
   });
 
   it("emits orgId from resolved org on denial", async () => {
     await cancelSubscriptionAction({ orgSlug: "acme" });
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(event.orgId).toBe("org-1");
   });
 });
@@ -398,7 +398,7 @@ describe("security event emission — billing.subscription_canceled on success",
     await cancelSubscriptionAction({ orgSlug: "acme" });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(event.eventType).toBe("billing.subscription_canceled");
     expect(event.outcome).toBe("success");
     expect(event.actorUserId).toBe("user-1");
@@ -422,7 +422,7 @@ describe("security event emission — billing.subscription_reactivated on succes
     await reactivateSubscriptionAction({ orgSlug: "acme" });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(event.eventType).toBe("billing.subscription_reactivated");
     expect(event.outcome).toBe("success");
   });
@@ -436,7 +436,7 @@ describe("security event emission — billing.seats_changed on success", () => {
     await setSeatsAction({ orgSlug: "acme", seats: 3 });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(event.eventType).toBe("billing.seats_changed");
     expect(event.outcome).toBe("success");
   });
@@ -456,7 +456,7 @@ describe("security event emission — billing.auto_reload_updated on success", (
     await updateAutoReloadAction({ orgSlug: "acme", enabled: true });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(event.eventType).toBe("billing.auto_reload_updated");
     expect(event.outcome).toBe("success");
   });
@@ -471,7 +471,7 @@ describe("security event emission — billing.payment_method_default_changed on 
     await setDefaultPaymentMethodAction({ orgSlug: "acme", paymentMethodId: "pm_abc" });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(event.eventType).toBe("billing.payment_method_default_changed");
     expect(event.outcome).toBe("success");
   });
@@ -486,7 +486,7 @@ describe("security event emission — billing.payment_method_removed on success"
     await removePaymentMethodAction({ orgSlug: "acme", paymentMethodId: "pm_xyz" });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(event.eventType).toBe("billing.payment_method_removed");
     expect(event.outcome).toBe("success");
   });
@@ -501,7 +501,7 @@ describe("security event emission — billing.payment_method_added on setup-inte
     await createSetupIntentAction({ orgSlug: "acme" });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(event.eventType).toBe("billing.payment_method_added");
     expect(event.outcome).toBe("success");
   });

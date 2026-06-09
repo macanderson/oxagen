@@ -6,7 +6,7 @@ afterEach(() => vi.unstubAllGlobals());
 function stubReadme(md: string, ok = true) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => ({ ok, status: ok ? 200 : 404, text: async () => md })) as unknown as typeof fetch,
+    vi.fn(async () => ({ ok, status: ok ? 200 : 404, text: async () => md })),
   );
 }
 

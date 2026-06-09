@@ -119,7 +119,7 @@ describe("CLI Command Parity Tests", () => {
 
     it("each command has a description", () => {
       commands.forEach(({ command }) => {
-        expect((command as unknown as Record<string, unknown>)._description).toBeTruthy();
+        expect(command.description()).toBeTruthy();
       });
     });
   });

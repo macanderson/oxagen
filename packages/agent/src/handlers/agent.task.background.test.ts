@@ -94,7 +94,7 @@ describe("agentTaskBackgroundStartHandler", () => {
     expect(mocks.insertSpy).toHaveBeenCalledTimes(1);
     expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
 
-    const inngestArg = (mocks.inngestSend.mock.calls[0] as unknown as [Record<string, unknown>])[0];
+    const inngestArg = (mocks.inngestSend.mock.calls[0] as [Record<string, unknown>])[0];
     expect(inngestArg.name).toBe("agent/task.background.start");
     const data = inngestArg.data as Record<string, unknown>;
     expect(data.orgId).toBe("org_1");
@@ -204,7 +204,7 @@ describe("agentTaskBackgroundCancelHandler", () => {
     expect(mocks.updateSpy).toHaveBeenCalledTimes(1);
     expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
 
-    const inngestArg = (mocks.inngestSend.mock.calls[0] as unknown as [Record<string, unknown>])[0];
+    const inngestArg = (mocks.inngestSend.mock.calls[0] as [Record<string, unknown>])[0];
     expect(inngestArg.name).toBe("agent/task.background.cancel");
     const data = inngestArg.data as Record<string, unknown>;
     expect(data.orgId).toBe("org_1");

@@ -95,8 +95,7 @@ describe("approval runtime", () => {
   it("notifyResolution issues pg_notify on the approval channel", async () => {
     await notifyResolution({ approvalId: "appr_1", resolution: "approved", note: null });
     expect(executeSpy).toHaveBeenCalledTimes(1);
-    const calls = executeSpy.mock.calls as unknown as Array<[{ queryChunks: unknown[] }]>;
-    const sqlObj = calls[0]?.[0];
+    const sqlObj = (executeSpy.mock.calls[0] as [{ queryChunks: unknown[] }])?.[0];
     // The drizzle sql tagged-template produces an object with queryChunks, not a raw string.
     expect(sqlObj).toBeTruthy();
     expect(sqlObj).toHaveProperty("queryChunks");
@@ -127,8 +126,7 @@ describe("approval runtime", () => {
       note: hostileNote,
     });
     expect(executeSpy).toHaveBeenCalledTimes(1);
-    const calls = executeSpy.mock.calls as unknown as Array<[{ queryChunks: unknown[] }]>;
-    const sqlObj = calls[0]?.[0];
+    const sqlObj = (executeSpy.mock.calls[0] as [{ queryChunks: unknown[] }])?.[0];
     expect(sqlObj).toHaveProperty("queryChunks");
     const chunks = sqlObj!.queryChunks as Array<{ value?: string[] } | string>;
     // Static SQL text (literal parts) must NOT contain any hostile content.

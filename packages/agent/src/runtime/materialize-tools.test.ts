@@ -458,8 +458,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
     // vi.fn() mock.calls has an inferred tuple type that TypeScript tightens
     // to [] in hoisted mocks. Cast through unknown to access the call arg.
-    const calls0 = (mocks.insertToolInvocation.mock.calls as unknown as [unknown][]);
-    const call = calls0[0]?.[0] as Record<string, unknown>;
+    const call = (mocks.insertToolInvocation.mock.calls[0] as [unknown])?.[0] as Record<string, unknown>;
     expect(call.status).toBe("failed");
     expect(call.error_class).toBe("IamDenied");
     expect(call.capability_name).toBe(`mcp.${MCP_SERVER.id}.list_pull_requests`);
@@ -473,8 +472,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     await t.execute!({});
     expect(fakeExecute).toHaveBeenCalledTimes(1);
     expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
-    const calls0 = (mocks.insertToolInvocation.mock.calls as unknown as [unknown][]);
-    const call = calls0[0]?.[0] as Record<string, unknown>;
+    const call = (mocks.insertToolInvocation.mock.calls[0] as [unknown])?.[0] as Record<string, unknown>;
     expect(call.status).toBe("completed");
     expect(call.capability_name).toBe(`mcp.${MCP_SERVER.id}.list_pull_requests`);
   });
@@ -483,8 +481,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     const { tools } = await materializeTools(CTX);
     const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
     await (tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
-    const authCalls = vi.mocked(authorizeExternalCapability).mock.calls as unknown as [string, unknown, string][];
-    const [capName, , defaultEffect] = authCalls[0] ?? [];
+    const [capName, , defaultEffect] = (vi.mocked(authorizeExternalCapability).mock.calls[0] ?? []) as [string, unknown, string];
     expect(capName).toBe(`mcp.${MCP_SERVER.id}.list_pull_requests`);
     expect(defaultEffect).toBe("allow");
   });

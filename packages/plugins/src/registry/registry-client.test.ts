@@ -11,7 +11,7 @@ function mockFetchOnce(body: unknown, ok = true) {
       status: ok ? 200 : 500,
       json: async () => body,
       text: async () => JSON.stringify(body),
-    })) as unknown as typeof fetch,
+    })),
   );
 }
 
@@ -38,7 +38,7 @@ describe("registry-client", () => {
       json: async () => ({ servers: [] }),
       text: async () => "{}",
     }));
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock);
     await listServers(BASE, { cursor: "c1", search: "git", updatedSince: "2026-01-01T00:00:00Z" });
     const calledUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");
     expect(calledUrl).toContain("cursor=c1");

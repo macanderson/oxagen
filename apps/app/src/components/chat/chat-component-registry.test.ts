@@ -12,7 +12,7 @@
  *   5. CHAT_COMPONENTS does not contain a key for an unknown componentId
  */
 
-import { describe, it, expect, vi, beforeEach, type MockInstance } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock react before importing the registry (which uses React.lazy)
 vi.mock("react", () => ({
@@ -80,7 +80,7 @@ describe("logUnknownComponent", () => {
   it("calls console.warn containing the componentId", () => {
     logUnknownComponent("mystery-widget");
     expect(console.warn).toHaveBeenCalledOnce();
-    const warnMock = vi.mocked(console.warn) as unknown as MockInstance;
+    const warnMock = vi.mocked(console.warn);
     const args = warnMock.mock.calls[0] as unknown[];
     const combined = args?.join(" ") ?? "";
     expect(combined).toContain("mystery-widget");
@@ -99,7 +99,7 @@ describe("logUnknownComponent", () => {
 
   it("includes the literal string '[chat-component-registry]' in the warning", () => {
     logUnknownComponent("x");
-    const warnMock = vi.mocked(console.warn) as unknown as MockInstance;
+    const warnMock = vi.mocked(console.warn);
     const args = warnMock.mock.calls[0] as unknown[];
     const combined = args?.join(" ") ?? "";
     expect(combined).toContain("[chat-component-registry]");
