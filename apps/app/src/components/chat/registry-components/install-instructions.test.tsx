@@ -18,11 +18,15 @@ import InstallInstructions from "./install-instructions";
 
 afterEach(cleanup);
 
-vi.mock("lucide-react", () => ({
-  Copy: () => <span data-testid="icon-copy" />,
-  Check: () => <span data-testid="icon-check" />,
-  Terminal: () => <span data-testid="icon-terminal" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    Copy: vi.fn(() => <span data-testid="icon-copy" />),
+    Check: vi.fn(() => <span data-testid="icon-check" />),
+    Terminal: vi.fn(() => <span data-testid="icon-terminal" />),
+  };
+});
 
 const STEPS = [
   { label: "Install Node.js", command: "npm install -g @oxagen/cli" },

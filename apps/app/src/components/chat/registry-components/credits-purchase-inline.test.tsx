@@ -51,11 +51,15 @@ vi.mock("@/components/ui/input", () => ({
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
 }));
 
-vi.mock("lucide-react", () => ({
-  Coins: () => <span />,
-  CheckCircle2: () => <span data-testid="icon-check" />,
-  ArrowUpRight: () => <span />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    Coins: vi.fn(() => <span />),
+    CheckCircle2: vi.fn(() => <span data-testid="icon-check" />),
+    ArrowUpRight: vi.fn(() => <span />),
+  };
+});
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),

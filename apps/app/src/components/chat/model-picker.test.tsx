@@ -68,10 +68,14 @@ vi.mock("@/components/ui/menu", () => ({
   MenuSubPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock("lucide-react", () => ({
-  Check: () => <span data-testid="icon-check" />,
-  ChevronDown: () => <span data-testid="icon-chevron-down" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    Check: vi.fn(() => <span data-testid="icon-check" />),
+    ChevronDown: vi.fn(() => <span data-testid="icon-chevron-down" />),
+  };
+});
 
 // modelConfig.text[tier] is expected to be a string model ID by the component
 const DEFAULT_MODEL_CONFIG = {

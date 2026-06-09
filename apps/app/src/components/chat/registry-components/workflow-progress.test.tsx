@@ -16,16 +16,20 @@ import { render, screen, cleanup, waitFor } from "@testing-library/react";
 
 afterEach(cleanup);
 
-vi.mock("lucide-react", () => ({
-  CheckCircle2: () => <span data-testid="icon-check" />,
-  XCircle: () => <span data-testid="icon-xcircle" />,
-  Loader2: () => <span data-testid="icon-loader" />,
-  CircleDot: () => <span data-testid="icon-circledot" />,
-  Download: () => <span data-testid="icon-download" />,
-  X: () => <span data-testid="icon-x" />,
-  BarChart3: () => <span data-testid="icon-barchart" />,
-  Clock: () => <span data-testid="icon-clock" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    CheckCircle2: vi.fn(() => <span data-testid="icon-check" />),
+    XCircle: vi.fn(() => <span data-testid="icon-xcircle" />),
+    Loader2: vi.fn(() => <span data-testid="icon-loader" />),
+    CircleDot: vi.fn(() => <span data-testid="icon-circledot" />),
+    Download: vi.fn(() => <span data-testid="icon-download" />),
+    X: vi.fn(() => <span data-testid="icon-x" />),
+    BarChart3: vi.fn(() => <span data-testid="icon-barchart" />),
+    Clock: vi.fn(() => <span data-testid="icon-clock" />),
+  };
+});
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),

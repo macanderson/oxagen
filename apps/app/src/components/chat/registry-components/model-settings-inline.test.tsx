@@ -67,10 +67,14 @@ vi.mock("@/components/ui/select", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () => ({
-  Cpu: () => <span />,
-  CheckCircle2: () => <span data-testid="icon-check" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    Cpu: vi.fn(() => <span />),
+    CheckCircle2: vi.fn(() => <span data-testid="icon-check" />),
+  };
+});
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),

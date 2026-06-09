@@ -13,54 +13,21 @@ import { StatusIcon } from "./status-icon";
 afterEach(cleanup);
 
 // Stub lucide icons to simple spans with the label text
-vi.mock("lucide-react", () => ({
-  Check: ({ "aria-label": label }: { "aria-label"?: string }) => <span aria-label={label}>✓</span>,
-  Loader2: ({ "aria-label": label }: { "aria-label"?: string }) => <span aria-label={label}>○</span>,
-  X: ({ "aria-label": label }: { "aria-label"?: string }) => <span aria-label={label}>✗</span>,
-  // Other icons used by other components - stub safely
-  ChevronDown: () => <span />,
-  ChevronRight: () => <span />,
-  Brain: () => <span />,
-  ShieldAlert: () => <span />,
-  Users: () => <span />,
-  ListChecks: () => <span />,
-  GripVertical: () => <span />,
-  MoveRight: () => <span />,
-  Plus: () => <span />,
-  Trash2: () => <span />,
-  AlertTriangle: () => <span />,
-  Film: () => <span />,
-  Send: () => <span />,
-  ImageIcon: () => <span />,
-  Video: () => <span />,
-  ChevronUp: () => <span />,
-  Paperclip: () => <span />,
-  LoaderCircle: () => <span />,
-  FileText: () => <span />,
-  FileArchive: () => <span />,
-  File: () => <span />,
-  Image: () => <span />,
-  ExternalLink: () => <span />,
-  CheckCircle2: () => <span />,
-  XCircle: () => <span />,
-  CircleDot: () => <span />,
-  Download: () => <span />,
-  BarChart3: () => <span />,
-  Clock: () => <span />,
-  Copy: () => <span />,
-  Terminal: () => <span />,
-  UserPlus: () => <span />,
-  Building2: () => <span />,
-  FolderPlus: () => <span />,
-  Cpu: () => <span />,
-  Coins: () => <span />,
-  CreditCard: () => <span />,
-  ArrowUpRight: () => <span />,
-  VideoOff: () => <span />,
-  ImageOff: () => <span />,
-  Wand2: () => <span />,
-  LayoutTemplate: () => <span />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  // Stub every export as a vi.fn returning null, then override the three
+  // icons StatusIcon uses that need to pass aria-label through.
+  const stubs = Object.fromEntries(
+    Object.keys(real).map((k) => [k, vi.fn(() => null)])
+  );
+  return {
+    ...real,
+    ...stubs,
+    Check: vi.fn(({ "aria-label": label }: { "aria-label"?: string }) => <span aria-label={label}>✓</span>),
+    Loader2: vi.fn(({ "aria-label": label }: { "aria-label"?: string }) => <span aria-label={label}>○</span>),
+    X: vi.fn(({ "aria-label": label }: { "aria-label"?: string }) => <span aria-label={label}>✗</span>),
+  };
+});
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: string[]) => args.filter(Boolean).join(" "),

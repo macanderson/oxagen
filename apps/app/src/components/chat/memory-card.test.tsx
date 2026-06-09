@@ -21,9 +21,13 @@ vi.mock("@/components/ui/badge", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () => ({
-  Brain: () => <span aria-hidden="true" data-testid="brain-icon" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    Brain: vi.fn(() => <span aria-hidden="true" data-testid="brain-icon" />),
+  };
+});
 
 const makeMemory = (id: string, lesson: string, weight: string, score: number, nodeRef?: string) => ({
   id,

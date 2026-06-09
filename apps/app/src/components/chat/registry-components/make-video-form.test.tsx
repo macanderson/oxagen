@@ -82,13 +82,17 @@ vi.mock("@/components/ui/select", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () => ({
-  Film: () => <span />,
-  Clock: () => <span />,
-  LayoutTemplate: () => <span />,
-  Wand2: () => <span />,
-  CheckCircle2: () => <span data-testid="icon-check" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    Film: vi.fn(() => <span />),
+    Clock: vi.fn(() => <span />),
+    LayoutTemplate: vi.fn(() => <span />),
+    Wand2: vi.fn(() => <span />),
+    CheckCircle2: vi.fn(() => <span data-testid="icon-check" />),
+  };
+});
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),

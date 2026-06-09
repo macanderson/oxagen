@@ -25,10 +25,14 @@ vi.mock("@/components/ui/badge", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () => ({
-  ChevronDown: () => <span data-testid="chevron-down" />,
-  ChevronRight: () => <span data-testid="chevron-right" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    ChevronDown: vi.fn(() => <span data-testid="chevron-down" />),
+    ChevronRight: vi.fn(() => <span data-testid="chevron-right" />),
+  };
+});
 
 vi.mock("./risk-badge", () => ({
   RiskBadge: ({ risk }: { risk: string }) => <span data-testid="risk-badge">{risk}</span>,

@@ -58,16 +58,20 @@ vi.mock("@/components/ui/sheet", () => ({
   SheetTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock("lucide-react", () => ({
-  FileText: () => <span data-testid="icon-file-text" />,
-  FileArchive: () => <span data-testid="icon-file-archive" />,
-  File: () => <span data-testid="icon-file" />,
-  Image: () => <span data-testid="icon-image" />,
-  Video: () => <span data-testid="icon-video" />,
-  ExternalLink: () => <span data-testid="icon-external-link" />,
-  Paperclip: () => <span data-testid="icon-paperclip" />,
-  LoaderCircle: () => <span data-testid="icon-loader" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    FileText: vi.fn(() => <span data-testid="icon-file-text" />),
+    FileArchive: vi.fn(() => <span data-testid="icon-file-archive" />),
+    File: vi.fn(() => <span data-testid="icon-file" />),
+    Image: vi.fn(() => <span data-testid="icon-image" />),
+    Video: vi.fn(() => <span data-testid="icon-video" />),
+    ExternalLink: vi.fn(() => <span data-testid="icon-external-link" />),
+    Paperclip: vi.fn(() => <span data-testid="icon-paperclip" />),
+    LoaderCircle: vi.fn(() => <span data-testid="icon-loader" />),
+  };
+});
 
 const MOCK_ASSETS = [
   {

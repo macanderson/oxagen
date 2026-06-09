@@ -15,11 +15,15 @@ import VideoResult from "./video-result";
 
 afterEach(cleanup);
 
-vi.mock("lucide-react", () => ({
-  Film: () => <span data-testid="icon-film" />,
-  Loader2: () => <span data-testid="icon-loader" />,
-  VideoOff: () => <span data-testid="icon-video-off" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    Film: vi.fn(() => <span data-testid="icon-film" />),
+    Loader2: vi.fn(() => <span data-testid="icon-loader" />),
+    VideoOff: vi.fn(() => <span data-testid="icon-video-off" />),
+  };
+});
 
 describe("VideoResult", () => {
   it("renders 'Generating video…' in initial rendering phase", () => {

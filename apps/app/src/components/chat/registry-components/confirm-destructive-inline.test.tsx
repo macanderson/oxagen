@@ -34,11 +34,15 @@ vi.mock("@/components/ui/button", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () => ({
-  AlertTriangle: () => <span data-testid="icon-alert" />,
-  CheckCircle2: () => <span data-testid="icon-check" />,
-  XCircle: () => <span data-testid="icon-x-circle" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    AlertTriangle: vi.fn(() => <span data-testid="icon-alert" />),
+    CheckCircle2: vi.fn(() => <span data-testid="icon-check" />),
+    XCircle: vi.fn(() => <span data-testid="icon-x-circle" />),
+  };
+});
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),

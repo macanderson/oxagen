@@ -48,11 +48,15 @@ vi.mock("@/components/ui/button", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () => ({
-  Check: () => <span data-testid="icon-check" />,
-  ShieldAlert: () => <span data-testid="icon-shield" />,
-  X: () => <span data-testid="icon-x" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    Check: vi.fn(() => <span data-testid="icon-check" />),
+    ShieldAlert: vi.fn(() => <span data-testid="icon-shield" />),
+    X: vi.fn(() => <span data-testid="icon-x" />),
+  };
+});
 
 vi.mock("./risk-badge", () => ({
   RiskBadge: ({ risk }: { risk: string }) => <span data-testid="risk-badge">{risk}</span>,

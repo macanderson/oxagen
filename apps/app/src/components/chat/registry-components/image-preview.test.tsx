@@ -29,9 +29,13 @@ vi.mock("next/image", () => ({
   }) => <img src={src} alt={alt} {...rest} />,
 }));
 
-vi.mock("lucide-react", () => ({
-  ImageOff: () => <span data-testid="icon-image-off" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    ImageOff: vi.fn(() => <span data-testid="icon-image-off" />),
+  };
+});
 
 describe("ImagePreview", () => {
   it("renders the placeholder state when placeholder=true", () => {

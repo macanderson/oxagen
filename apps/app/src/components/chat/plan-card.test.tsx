@@ -112,16 +112,20 @@ vi.mock("@/components/ui/menu", () => ({
     renderProp ?? null,
 }));
 
-vi.mock("lucide-react", () => ({
-  ChevronDown: () => <span />,
-  ChevronRight: () => <span />,
-  GripVertical: () => <span />,
-  ListChecks: () => <span />,
-  MoveRight: () => <span />,
-  Plus: () => <span />,
-  Trash2: () => <span />,
-  AlertTriangle: () => <span />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    ChevronDown: vi.fn(() => <span />),
+    ChevronRight: vi.fn(() => <span />),
+    GripVertical: vi.fn(() => <span />),
+    ListChecks: vi.fn(() => <span />),
+    MoveRight: vi.fn(() => <span />),
+    Plus: vi.fn(() => <span />),
+    Trash2: vi.fn(() => <span />),
+    AlertTriangle: vi.fn(() => <span />),
+  };
+});
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),

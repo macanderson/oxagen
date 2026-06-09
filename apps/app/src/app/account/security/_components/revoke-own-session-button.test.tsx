@@ -31,9 +31,13 @@ vi.mock("../actions", () => ({
 }));
 
 // Lucide icon — rendered as a plain span in tests
-vi.mock("lucide-react", () => ({
-  CircleSlash: () => <span data-testid="circle-slash-icon" aria-hidden="true" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    CircleSlash: vi.fn(() => <span data-testid="circle-slash-icon" aria-hidden="true" />),
+  };
+});
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({

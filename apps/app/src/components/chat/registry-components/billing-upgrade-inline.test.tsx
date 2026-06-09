@@ -45,11 +45,15 @@ vi.mock("@/components/ui/badge", () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 
-vi.mock("lucide-react", () => ({
-  CreditCard: () => <span />,
-  CheckCircle2: () => <span data-testid="icon-check" />,
-  ArrowUpRight: () => <span />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    CreditCard: vi.fn(() => <span />),
+    CheckCircle2: vi.fn(() => <span data-testid="icon-check" />),
+    ArrowUpRight: vi.fn(() => <span />),
+  };
+});
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),

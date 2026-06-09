@@ -27,12 +27,16 @@ vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
 }));
 
-vi.mock("lucide-react", () => ({
-  Check: () => <span data-testid="icon-check" />,
-  Loader2: () => <span data-testid="icon-loader" />,
-  Users: () => <span data-testid="icon-users" />,
-  X: () => <span data-testid="icon-x" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    Check: vi.fn(() => <span data-testid="icon-check" />),
+    Loader2: vi.fn(() => <span data-testid="icon-loader" />),
+    Users: vi.fn(() => <span data-testid="icon-users" />),
+    X: vi.fn(() => <span data-testid="icon-x" />),
+  };
+});
 
 vi.mock("./tool-call-card", () => ({
   safeJson: (v: unknown) => JSON.stringify(v),

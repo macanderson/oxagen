@@ -46,14 +46,18 @@ vi.mock("@/components/ui/button", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () => ({
-  ChevronDown: () => <span data-testid="chevron-down" />,
-  ChevronUp: () => <span data-testid="chevron-up" />,
-  Loader2: ({ className }: { className?: string }) => (
-    <span data-testid="loader2" className={className} />
-  ),
-  X: () => <span data-testid="icon-x" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    ChevronDown: vi.fn(() => <span data-testid="chevron-down" />),
+    ChevronUp: vi.fn(() => <span data-testid="chevron-up" />),
+    Loader2: vi.fn(({ className }: { className?: string }) => (
+      <span data-testid="loader2" className={className} />
+    )),
+    X: vi.fn(() => <span data-testid="icon-x" />),
+  };
+});
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),

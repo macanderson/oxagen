@@ -31,11 +31,15 @@ vi.mock("motion/react", () => ({
   useReducedMotion: () => true, // use reduced motion in tests to bypass animation
 }));
 
-vi.mock("lucide-react", () => ({
-  Brain: () => <span data-testid="icon-brain" />,
-  ChevronDown: () => <span data-testid="icon-chevron-down" />,
-  ChevronRight: () => <span data-testid="icon-chevron-right" />,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const real = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...real,
+    Brain: vi.fn(() => <span data-testid="icon-brain" />),
+    ChevronDown: vi.fn(() => <span data-testid="icon-chevron-down" />),
+    ChevronRight: vi.fn(() => <span data-testid="icon-chevron-right" />),
+  };
+});
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
