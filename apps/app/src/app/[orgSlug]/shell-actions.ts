@@ -57,17 +57,19 @@ async function assertWorkspaceMember(
   workspaceId: string,
   userId: string,
 ): Promise<boolean> {
-  const rows = await withTenantDb((tx) =>
-    tx
-      .select({ id: schema.workspaceUsers.id })
-      .from(schema.workspaceUsers)
-      .where(
-        and(
-          eq(schema.workspaceUsers.workspaceId, workspaceId),
-          eq(schema.workspaceUsers.userId, userId),
-        ),
-      )
-      .limit(1),
+  const rows = await runInTenantScope({ orgId, workspaceId }, () =>
+    withTenantDb((tx) =>
+      tx
+        .select({ id: schema.workspaceUsers.id })
+        .from(schema.workspaceUsers)
+        .where(
+          and(
+            eq(schema.workspaceUsers.workspaceId, workspaceId),
+            eq(schema.workspaceUsers.userId, userId),
+          ),
+        )
+        .limit(1),
+    ),
   ).then(() => true).catch(() => false); // catch RLS / tenancy errors
   return rows;
 }
