@@ -209,6 +209,7 @@ describe("security_events event_type CHECK constraint — billing.* types presen
     const expected = [
       "billing.access_denied",
       "billing.auto_reload_updated",
+      "billing.checkout_initiated",
       "billing.credits_purchased",
       "billing.payment_method_added",
       "billing.payment_method_default_changed",
