@@ -72,6 +72,7 @@ const DEPLOYED: EnvName[] = ["preview", "production"];
 
 const APP_PROD_URL = "https://oxagen-v2-app.vercel.app";
 const API_PROD_URL = "https://oxagen-v2-api.vercel.app";
+const MCP_PROD_URL = "https://oxagen-v2-mcp.vercel.app";
 
 /**
  * The registry. Ordered for `.env.example` layout. `services`/`requiredIn`
@@ -697,6 +698,16 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "static",
     staticValue: { development: "http://localhost:3000", production: APP_PROD_URL },
+  },
+  MCP_URL: {
+    group: "Public URLs",
+    description: "MCP server origin used to build install instructions and client connections.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:4100", production: MCP_PROD_URL },
   },
 
   // ── IAM enforcement ─────────────────────────────────────────────────────────
