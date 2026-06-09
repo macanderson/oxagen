@@ -19,6 +19,7 @@ import { contracts } from "@oxagen/oxagen/contracts";
 import { metadata as apiKeyCreateMetadata } from "./api.key.create";
 import { metadata as apiKeyRevokeMetadata } from "./api.key.revoke";
 import { metadata as agentApprovalResolveMetadata } from "./agent.approval.resolve";
+import { metadata as agentCodeExecuteMetadata } from "./agent.code.execute";
 import { metadata as agentExecutionRecordMetadata } from "./agent.execution.record";
 import { metadata as archiveCreateMetadata } from "./archive.create";
 import { metadata as agentMcpListMetadata } from "./agent.mcp.list";
@@ -26,10 +27,14 @@ import { metadata as agentMcpRegisterMetadata } from "./agent.mcp.register";
 import { metadata as agentMemoryRecallMetadata } from "./agent.memory.recall";
 import { metadata as agentMemoryWriteMetadata } from "./agent.memory.write";
 import { metadata as agentPlanApproveMetadata } from "./agent.plan.approve";
+import { metadata as agentPlanCreateMetadata } from "./agent.plan.create";
 import { metadata as agentSkillListMetadata } from "./agent.skill.list";
+import { metadata as agentSkillLoadMetadata } from "./agent.skill.load";
 import { metadata as agentTaskBackgroundCancelMetadata } from "./agent.task.background.cancel";
 import { metadata as agentTaskBackgroundReadMetadata } from "./agent.task.background.read";
 import { metadata as agentTaskBackgroundStartMetadata } from "./agent.task.background.start";
+import { metadata as agentSubagentAggregateMetadata } from "./agent.subagent.aggregate";
+import { metadata as agentSubagentDispatchMetadata } from "./agent.subagent.dispatch";
 import { metadata as agentToolListMetadata } from "./agent.tool.list";
 import { metadata as assetUploadMetadata } from "./asset.upload";
 import { metadata as billingCreditsPurchaseMetadata } from "./billing.credits.purchase";
@@ -107,16 +112,21 @@ const allToolMetadata = [
   apiKeyCreateMetadata,
   apiKeyRevokeMetadata,
   agentApprovalResolveMetadata,
+  agentCodeExecuteMetadata,
   agentExecutionRecordMetadata,
   agentMcpListMetadata,
   agentMcpRegisterMetadata,
   agentMemoryRecallMetadata,
   agentMemoryWriteMetadata,
   agentPlanApproveMetadata,
+  agentPlanCreateMetadata,
   agentSkillListMetadata,
+  agentSkillLoadMetadata,
   agentTaskBackgroundCancelMetadata,
   agentTaskBackgroundReadMetadata,
   agentTaskBackgroundStartMetadata,
+  agentSubagentAggregateMetadata,
+  agentSubagentDispatchMetadata,
   agentToolListMetadata,
   archiveCreateMetadata,
   assetUploadMetadata,

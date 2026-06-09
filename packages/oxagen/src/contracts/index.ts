@@ -96,6 +96,7 @@ import { automationTrigger } from "./automation.trigger";
 import { workspaceMemberList } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
 import { skillWorkspaceList } from "./skill.workspace.list";
+import { agentSubagentAggregate } from "./agent.subagent.aggregate";
 import { agentSubagentDispatch } from "./agent.subagent.dispatch";
 
 export {
@@ -187,6 +188,7 @@ export {
   workspaceMemberList,
   workspaceInviteSend,
   skillWorkspaceList,
+  agentSubagentAggregate,
   agentSubagentDispatch,
 };
 
@@ -287,6 +289,6 @@ export const contracts = [
   workspaceInviteSend,
   skillWorkspaceList,
   agentExecutionRecord,
-  agentPlanCreate,
+  agentSubagentAggregate,
   agentSubagentDispatch,
 ] as const;
