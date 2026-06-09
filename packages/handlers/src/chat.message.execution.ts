@@ -51,7 +51,7 @@ export const chatMessageExecutionHandler: CapabilityHandler<typeof chatMessageEx
         latencyMs: input.latencyMs ?? null,
         inputTokens: input.inputTokens ?? null,
         outputTokens: input.outputTokens ?? null,
-        estimatedCostUsd: input.estimatedCostUsd !== undefined ? String(input.estimatedCostUsd) : null,
+        estimatedCostUsd: input.estimatedCostUsd ?? null,
         syncedToGraphAt: null,
         createdByUserId: ctx.userId ?? null,
         updatedByUserId: ctx.userId ?? null,

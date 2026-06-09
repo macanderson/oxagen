@@ -531,7 +531,7 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
+        "api": true,
         "mcp": true,
         "unit": true,
         "e2e": false,
@@ -554,6 +554,150 @@
         "unit": true,
         "e2e": true,
         "docs": true
+      }
+    },
+    {
+      "name": "connection.create",
+      "file": "connection.create.ts",
+      "domain": "connection",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
+      "name": "connection.delete",
+      "file": "connection.delete.ts",
+      "domain": "connection",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
+      "name": "connection.get",
+      "file": "connection.get.ts",
+      "domain": "connection",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
+      "name": "connection.list",
+      "file": "connection.list.ts",
+      "domain": "connection",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
+      "name": "connection.mappings.get",
+      "file": "connection.mappings.get.ts",
+      "domain": "connection",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
+      "name": "connection.mappings.set",
+      "file": "connection.mappings.set.ts",
+      "domain": "connection",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
+      "name": "connection.mappings.suggest",
+      "file": "connection.mappings.suggest.ts",
+      "domain": "connection",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
+      "name": "connection.preview",
+      "file": "connection.preview.ts",
+      "domain": "connection",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {

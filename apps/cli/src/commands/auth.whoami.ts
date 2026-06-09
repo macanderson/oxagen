@@ -15,7 +15,7 @@ export const authWhoamiCommand = new Command("whoami")
     try {
       const data = await apiRequest<MeResponse>("/auth/me");
       const cfg = readConfig();
-      if (process.stdout.isTTY) console.log(`User: ${data.user?.email ?? "unknown"}`);
+      console.log(`User: ${data.user?.email ?? "unknown"}`);
       console.log(`Organization: ${data.org?.slug ?? cfg.orgSlug ?? "none"}`);
       console.log(`Workspace: ${data.workspace?.slug ?? cfg.workspaceSlug ?? "none"}`);
     } catch (err) {

@@ -33,6 +33,10 @@ vi.mock("@oxagen/config/env", () => ({
   requireEnv: () => envValues,
 }));
 
+vi.mock("ai", () => ({
+  wrapLanguageModel: (opts: { model: unknown }) => opts.model,
+}));
+
 import {
   selectModel,
   selectImageModel,

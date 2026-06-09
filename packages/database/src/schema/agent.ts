@@ -280,6 +280,7 @@ export const agentToolCalls = agentSchema.table(
     orgIdx: index("agent_tool_calls_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
+<<<<<<< HEAD
 
 // Agent plans: structured execution plans with approval gates.
 // Status flow: draft → awaiting_approval → approved | denied | amended → executing → completed.
@@ -307,3 +308,5 @@ export const agentPlans = agentSchema.table(
     messageIdx: index("agent_plans_message_idx").on(t.messageId),
   }),
 );
+=======
+>>>>>>> worktree-record-execution-tasks
