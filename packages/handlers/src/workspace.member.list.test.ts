@@ -20,6 +20,7 @@ const makeTx = () => ({
   }),
 });
 
+<<<<<<< HEAD
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
@@ -28,12 +29,49 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
   };
 });
+=======
+vi.mock("@oxagen/database", () => ({
+  schema: {
+    workspaceUsers: {
+      publicId: "workspaceUsers.publicId",
+      email: "workspaceUsers.email",
+      role: "workspaceUsers.role",
+      joinedAt: "workspaceUsers.joinedAt",
+      workspaceId: "workspaceUsers.workspaceId",
+      userId: "workspaceUsers.userId",
+    },
+    users: {
+      id: "users.id",
+      email: "users.email",
+    },
+  },
+  withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => fn(makeTx()),
+}));
+
+vi.mock("drizzle-orm", () => ({
+  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
+  and: (...args: unknown[]) => ({ $type: "and", args }),
+  isNull: (col: unknown) => ({ $type: "isNull", col }),
+}));
+>>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 import { workspaceMemberListHandler } from "./workspace.member.list";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+<<<<<<< HEAD
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
+=======
+const CTX: CapabilityContext = {
+  orgId: "org_1",
+  workspaceId: "ws_1",
+  userId: "u_1",
+  apiKeyId: null,
+  requestId: "req_1",
+  surface: "api",
+  messageId: null,
+};
+>>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 const makeRow = (overrides: Record<string, unknown> = {}) => ({
   publicId: "wsu_abc",
@@ -83,6 +121,7 @@ describe("workspaceMemberListHandler (@oxagen/handlers)", () => {
     await workspaceMemberListHandler({}, CTX);
     expect(mocks.selectWhere).toHaveBeenCalledTimes(1);
   });
+<<<<<<< HEAD
 
   // ── error paths ───────────────────────────────────────────────────────────
 
@@ -99,4 +138,6 @@ describe("workspaceMemberListHandler (@oxagen/handlers)", () => {
 
     await expect(workspaceMemberListHandler({}, CTX)).rejects.toThrow(TypeError);
   });
+=======
+>>>>>>> feat/hardening-cost-prompts-motion-rebrand
 });

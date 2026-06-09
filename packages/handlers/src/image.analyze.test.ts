@@ -26,6 +26,7 @@ function makeSelectBuilder(rows: unknown[]): unknown {
   return { from };
 }
 
+<<<<<<< HEAD
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
@@ -35,14 +36,52 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
   };
 });
+=======
+vi.mock("@oxagen/database", () => ({
+  withSystemDb: async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
+    fn({ select: mocks.dbSelect } as unknown as Record<string, unknown>),
+  schema: {
+    generatedAssets: {
+      publicId: "ga.publicId",
+      workspaceId: "ga.workspaceId",
+      status: "ga.status",
+      deletedAt: "ga.deletedAt",
+      storageUrl: "ga.storageUrl",
+      mimeType: "ga.mimeType",
+    },
+  },
+}));
+
+vi.mock("drizzle-orm", () => ({
+  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
+  and: (...args: unknown[]) => ({ $type: "and", args }),
+  isNull: (col: unknown) => ({ $type: "isNull", col }),
+}));
+>>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 // ── import under test ─────────────────────────────────────────────────────────
 
 import { imageAnalyzeHandler } from "./image.analyze";
+<<<<<<< HEAD
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
+=======
+import type { CapabilityContext } from "@oxagen/oxagen";
+
+// ── fixtures ──────────────────────────────────────────────────────────────────
+
+const CTX: CapabilityContext = {
+  orgId: "org_1",
+  workspaceId: "ws_1",
+  userId: "u_1",
+  apiKeyId: null,
+  requestId: "req_1",
+  surface: "api",
+  messageId: "msg_1",
+};
+>>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 const FAKE_MODEL = { modelId: "anthropic/claude-sonnet-4.6" };
 
@@ -88,7 +127,11 @@ describe("imageAnalyzeHandler", () => {
   });
 
   it("forwards telemetry context to generateObjectFor", async () => {
+<<<<<<< HEAD
     await imageAnalyzeHandler({ image_id: "gen_abc" }, { ...CTX, messageId: "msg_1" });
+=======
+    await imageAnalyzeHandler({ image_id: "gen_abc" }, CTX);
+>>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
     const call = mocks.generateObjectFor.mock.calls[0]![0] as {
       telemetry: Record<string, unknown>;

@@ -40,20 +40,13 @@
     {
       "name": "agent.execution.record",
       "file": "agent.execution.record.ts",
-      "domain": "agent",
+      "domain": "unknown",
       "mode": "sync",
       "surfaces": [
         "api",
         "mcp"
       ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "e2e": false,
-        "docs": false
-      }
+      "layers": {}
     },
     {
       "name": "agent.mcp.list",
@@ -523,20 +516,13 @@
     {
       "name": "chat.message.execution",
       "file": "chat.message.execution.ts",
-      "domain": "agent",
+      "domain": "unknown",
       "mode": "sync",
       "surfaces": [
         "api",
         "mcp"
       ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": false
-      }
+      "layers": {}
     },
     {
       "name": "chat.message.send",

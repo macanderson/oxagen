@@ -106,6 +106,8 @@ import { connectionPreview } from "./connection.preview";
 import { connectionMappingsSuggest } from "./connection.mappings.suggest";
 import { connectionMappingsGet } from "./connection.mappings.get";
 import { connectionMappingsSet } from "./connection.mappings.set";
+import { privacyDataExport } from "./privacy.data.export";
+import { privacyDataErase } from "./privacy.data.erase";
 
 export {
   apiKeyCreate,
@@ -206,6 +208,8 @@ export {
   connectionMappingsSuggest,
   connectionMappingsGet,
   connectionMappingsSet,
+  privacyDataExport,
+  privacyDataErase,
 };
 
 /**
@@ -315,4 +319,6 @@ export const contracts = [
   connectionMappingsSuggest,
   connectionMappingsGet,
   connectionMappingsSet,
+  privacyDataExport,
+  privacyDataErase,
 ] as const;

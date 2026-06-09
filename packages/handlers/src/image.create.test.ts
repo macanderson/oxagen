@@ -35,7 +35,19 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
+<<<<<<< HEAD
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
+=======
+const CTX: CapabilityContext = {
+  orgId: "org_1",
+  workspaceId: "ws_1",
+  userId: "u_1",
+  apiKeyId: null,
+  requestId: "req_1",
+  surface: "api",
+  messageId: "msg_1",
+};
+>>>>>>> feat/hardening-cost-prompts-motion-rebrand
 
 const FAKE_MODEL = { modelId: "openai/gpt-image-1" };
 const FAKE_ASSET = {
