@@ -11,7 +11,7 @@ export const privacyDataErase = registerCapability({
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "privacy" },
-  sensitivity: "critical",
+  sensitivity: "destructive",
   defaultEffect: "deny",
   defaultRoles: {
     // User-scope erasure: any authenticated user can erase their own account.

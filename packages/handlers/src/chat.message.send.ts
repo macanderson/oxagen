@@ -2,6 +2,8 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+import { generateObjectFor } from "@oxagen/ai";
 import { logger } from "./logger";
 
 /**
@@ -14,6 +16,10 @@ import { logger } from "./logger";
  * The Vercel AI SDK integration lands with the agent epic — wiring the
  * trigger here keeps the contract stable so UI work can proceed against
  * the right shape today.
+ *
+ * For new conversations with a non-empty first message, a title is
+ * generated asynchronously using generateObjectFor. This happens in the
+ * background and doesn't block the message send response.
  */
 export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> = async (
   input,
@@ -24,9 +30,10 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
     throw new Error("chat.message.send requires an authenticated user");
   }
 
-  return await withTenantDb(async (tx) => {
+  const result = await withTenantDb(async (tx) => {
     // 1. Resolve or create the conversation.
     let conversationId = input.conversationId;
+    let isNewConversation = false;
     if (!conversationId) {
       const [conv] = await tx
         .insert(schema.conversations)
@@ -42,6 +49,7 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
         .returning({ id: schema.conversations.id });
       if (!conv) throw new Error("conversation insert returned no row");
       conversationId = conv.id;
+      isNewConversation = true;
     } else {
       // Confirm the conversation belongs to this tenant. Cross-tenant
       // lookup would be a leak; the tenant scope is part of the index.
@@ -102,12 +110,6 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
       .set({ activeLeafMessageId: assistantMessage.id, updatedAt: new Date() })
       .where(eq(schema.conversations.id, conversationId));
 
-    const result = {
-      conversationId,
-      userMessageId: userMessage.id,
-      assistantMessageId: assistantMessage.id,
-      activeLeafMessageId: assistantMessage.id,
-    };
     logger.info(
       {
         conversationId,
@@ -119,6 +121,86 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
       },
       "chat.message.send: message persisted successfully",
     );
-    return result;
+    return {
+      conversationId,
+      userMessageId: userMessage.id,
+      assistantMessageId: assistantMessage.id,
+      activeLeafMessageId: assistantMessage.id,
+      isNewConversation,
+    };
   });
+
+  // After persisting the message, asynchronously generate a title for new conversations
+  // with a non-empty message. This runs outside the transaction so it doesn't block
+  // the message persistence, and only happens once per conversation.
+  if (result.isNewConversation && input.content.trim()) {
+    generateConversationTitleAsync(
+      result.conversationId,
+      input.content,
+      ctx.orgId,
+      ctx.workspaceId,
+      ctx.userId!,
+    ).catch((err) => {
+      logger.error(
+        { conversationId: result.conversationId, err, orgId: ctx.orgId },
+        "chat.message.send: title generation failed",
+      );
+      // Swallow the error — title generation failure must not fail the message send.
+    });
+  }
+
+  return {
+    conversationId: result.conversationId,
+    userMessageId: result.userMessageId,
+    assistantMessageId: result.assistantMessageId,
+    activeLeafMessageId: result.activeLeafMessageId,
+  };
 };
+
+async function generateConversationTitleAsync(
+  conversationId: string,
+  userMessage: string,
+  orgId: string,
+  workspaceId: string,
+  userId: string,
+): Promise<void> {
+  try {
+    const titleSchema = z.object({
+      title: z.string().describe("A concise 3-8 word title for this conversation"),
+    });
+
+    const { object } = await generateObjectFor({
+      schema: titleSchema,
+      prompt: `Generate a concise 3-8 word title for a conversation that starts with: "${userMessage.substring(0, 200)}"`,
+      telemetry: {
+        orgId,
+        workspaceId,
+        surface: "runner",
+        messageId: conversationId,
+      },
+    });
+
+    // Update the conversation with the generated title
+    await withTenantDb(async (tx) => {
+      await tx
+        .update(schema.conversations)
+        .set({
+          title: object.title,
+          updatedByUserId: userId,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.conversations.id, conversationId));
+    });
+
+    logger.info(
+      { conversationId, title: object.title, orgId },
+      "chat.message.send: conversation title generated",
+    );
+  } catch (err) {
+    // Log the error but don't throw — title generation is best-effort
+    logger.error(
+      { conversationId, err, orgId },
+      "chat.message.send: failed to generate conversation title",
+    );
+  }
+}
