@@ -4,12 +4,12 @@ import { MarketingHeroPage } from "@oxagen/ui";
 
 export default function HomePage(): ReactNode {
   return (
-    <div className="min-h-screen flex flex-col">
-      <div className="mb-12">
+    <div className="flex flex-col">
+      <div className="py-12 px-6">
         <MarketingHeroPage />
       </div>
 
-      <div className="flex-1 px-6 py-12 max-w-7xl mx-auto w-full">
+      <div className="px-6 py-12 max-w-7xl mx-auto w-full">
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           <Link href="/docs" className="group">
             <div className="rounded-lg border border-border p-6 hover:border-primary hover:bg-muted/50 transition-colors">
