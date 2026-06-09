@@ -83,4 +83,5 @@ async function writeTelemetry(data: TelemetryData): Promise<void> {
   });
 }
 
-export { writeTelemetry, TelemetryData };
+export type { TelemetryData };
+export { writeTelemetry };
