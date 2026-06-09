@@ -1,5 +1,6 @@
 import { CheckCircle2, XCircle, Loader2, Clock, CircleDot, Ban } from "lucide-react";
 import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { desc, eq } from "drizzle-orm";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { cn } from "@/lib/utils";
@@ -138,13 +139,15 @@ export default async function WorkflowsPage({
   const tenant = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(tenant.id, workspaceSlug);
 
-  const runs = await withTenantDb((db) =>
-    db
-      .select()
-      .from(schema.workflowRuns)
-      .where(eq(schema.workflowRuns.workspaceId, ws.id))
-      .orderBy(desc(schema.workflowRuns.createdAt))
-      .limit(50),
+  const runs = await runInTenantScope({ orgId: tenant.id, workspaceId: ws.id }, () =>
+    withTenantDb((db) =>
+      db
+        .select()
+        .from(schema.workflowRuns)
+        .where(eq(schema.workflowRuns.workspaceId, ws.id))
+        .orderBy(desc(schema.workflowRuns.createdAt))
+        .limit(50),
+    ),
   );
 
   const running = runs.filter((r) => r.status === "running" || r.status === "planning").length;
