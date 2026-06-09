@@ -1,14 +1,23 @@
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { eq, and, sql } from "drizzle-orm";
+import type { PlanTier } from "@oxagen/oxagen/types";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
 import { getOrgSeatUsage, SeatLimitError } from "./seats";
 import { meetsMinimumTier } from "./entitlements";
 
-// Type assertion helper - works around TypeScript type inference issue with database strings
+const VALID_PLAN_TIERS: ReadonlySet<string> = new Set(["free", "build", "scale", "enterprise"]);
+
+function isPlanTier(value: string): value is PlanTier {
+  return VALID_PLAN_TIERS.has(value);
+}
+
+// Type assertion helper - validates database strings are valid PlanTiers before comparison
 function checkPlanTier(actual: string, minimum: string): boolean {
-  return meetsMinimumTier(actual as any, minimum as any);
+  const actualTier = isPlanTier(actual) ? actual : "free";
+  const minimumTier = isPlanTier(minimum) ? minimum : "free";
+  return meetsMinimumTier(actualTier, minimumTier);
 }
 
 /**
