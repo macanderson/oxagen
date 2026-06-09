@@ -1,21 +1,30 @@
 /**
  * Universal ingestion pipeline types.
  *
- * Every data source connector — GitHub, Linear, Stripe, custom SQL, custom
- * NoSQL, Google Drive, Salesforce, etc. — produces EntityMutations that flow
- * through exactly these stages:
+ * Every data source connector — GitHub, Google Workspace, Zoom, custom SQL,
+ * Salesforce, etc. — produces EntityMutations that flow through these stages:
  *
- *   1. Receive   RawIngestEvent arrives (webhook or poller)
- *   2. Normalize  connector.normalize() → EntityMutation
- *   3. Dedup      naturalKey lookup → match existing node OR create principal
- *                 embedding similarity → ALIAS_OF edge with confidence score
- *   4. Embed      embedText() → store vector on Neo4j node
- *   5. Infer      async LLM worker → infer semantic edges and feature membership
+ *   1. Receive     RawIngestEvent arrives (webhook or poller)
+ *   2. Normalize   connector.normalizeRecord() → NormalizedRecord
+ *   3. Map         look up ingestion.entity_type_mappings → EntityMutation
+ *                  skip record if no mapping configured for this sourceRecordType
+ *   4. Dedup       naturalKey lookup → match existing node OR create principal
+ *                  embedding similarity → ALIAS_OF edge with confidence score
+ *   5. Embed       embedText() → store vector on Neo4j node
+ *   6. Infer       async LLM worker → infer semantic edges
  *
  * Stages fire each other via Inngest. Each stage is independently retryable.
- * Ingested entity nodes live 100% in Neo4j — no Postgres dual-write. If Neo4j
- * is temporarily unavailable Inngest retries with a 24 h window. Postgres holds
- * only connector credentials (encrypted) and connection config.
+ *
+ * Storage model:
+ *   Neo4j     — all ingested entity nodes (100%, no dual-write)
+ *   Postgres  — connection config, encrypted credentials, entity_type_mappings
+ *   ClickHouse — raw event audit log, ingestion telemetry
+ *
+ * Entity types are customer-configured workspace-scoped strings (e.g. "task",
+ * "document") looked up from ingestion.entity_type_mappings at Stage 3.
+ * Connectors never know or decide entity types — they only produce source
+ * record types (e.g. "pull_request", "issue") that customers map to their
+ * ontology during the connection setup wizard.
  */
 
 import { z } from "zod";
@@ -25,19 +34,18 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 export interface RawIngestEvent {
-  /** Which registered workspace connection produced this event. */
   connectionId: string;
   workspaceId: string;
   orgId: string;
-  /** Connector type slug: "github" | "linear" | "stripe" | "custom-sql" | etc. */
+  /** Connector slug: "github" | "google-drive" | "zoom" | "custom-sql" | etc. */
   connectorType: string;
+  /** Raw record type from the source: "pull_request" | "issue" | "file" | etc. */
+  sourceRecordType: string;
   /**
-   * Stable idempotency key. Connectors must produce a deterministic key so
-   * webhook replays and polling overlaps are silently dropped.
-   * Convention: `{connectorType}:{connectionId}:{externalId}:{eventType}:{hash}`
+   * Stable idempotency key.
+   * Convention: `{connectorType}:{connectionId}:{sourceRecordType}:{externalId}`
    */
   idempotencyKey: string;
-  /** Raw payload from the source system — unvalidated, connector-specific. */
   payload: unknown;
   receivedAt: string; // ISO-8601
 }
@@ -62,23 +70,24 @@ export interface EntityMutation {
   orgId: string;
   connectionId: string;
   /**
-   * Target Neo4j node label. Maps to NodeLabels constants.
-   * Connectors declare which entityTypes they emit in their manifest.
+   * Customer-configured entity type string, looked up from
+   * ingestion.entity_type_mappings. Workspace-scoped. Never a hardcoded enum.
+   * Examples: "task", "document", "code_change", "contact"
    */
   entityType: string;
   /**
+   * Raw record type from the connector, preserved for provenance.
+   * Examples: "pull_request", "issue", "file", "event"
+   */
+  sourceRecordType: string;
+  /**
    * Stable, globally unique deduplication key.
-   * Convention: `{connectorType}:{entityType}:{connectionId}:{externalId}`
-   * Example:    `github:PullRequest:conn_abc:octocat/hello-world:42`
+   * Convention: `{connectorType}:{connectionId}:{externalId}`
+   * Example:    `github:conn_abc:42`
    */
   naturalKey: string;
   operation: EntityOperation;
-  /**
-   * Human-readable label used in deduplication name-matching and UI display.
-   * For a person: full name. For a PR: title. For an issue: title.
-   */
   displayName?: string;
-  /** Validated, connector-specific properties. Zod-coerced by normalize(). */
   properties: Record<string, unknown>;
   sourceRef: SourceRef;
 }

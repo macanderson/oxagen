@@ -20,6 +20,7 @@
   "dependencies": {
     "@oxagen/ai": "workspace:*",
     "@oxagen/config": "workspace:*",
+    "@oxagen/crypto": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "zod": "3.25.76"
