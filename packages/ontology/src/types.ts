@@ -1,5 +1,11 @@
 // Spec §8. Node labels and edge types are mirrored here so app code can
 // reference them as constants rather than stringly-typed literals.
+//
+// IMPORTANT: NodeLabels contains only FIXED SYSTEM nodes — nodes whose
+// existence is guaranteed by the platform regardless of customer configuration.
+// Customer ontology entity types are free-form strings (e.g. "task", "contact")
+// stored in the ingestion.entity_types registry and carried as the `entityType`
+// property on :EntityNode nodes. They must NOT be added here.
 
 export const NodeLabels = {
   Tenant: "Tenant",
@@ -22,32 +28,14 @@ export const NodeLabels = {
   SkillVersion: "SkillVersion",
   BackgroundTask: "BackgroundTask",
   Plan: "Plan",
-  // Ingestion pipeline — external data sources live 100% in Neo4j.
+  // Ingestion pipeline — fixed system nodes (not customer ontology types).
+  // SourceConnection: one node per registered data source connection.
   SourceConnection: "SourceConnection",
-  GitCommit: "GitCommit",
-  PullRequest: "PullRequest",
-  GithubIssue: "GithubIssue",
-  LinearIssue: "LinearIssue",
-  DriveFile: "DriveFile",
-  SlackMessage: "SlackMessage",
-  SlackChannel: "SlackChannel",
-  ConfluencePage: "ConfluencePage",
-  NotionPage: "NotionPage",
-  JiraIssue: "JiraIssue",
-  CalendarEvent: "CalendarEvent",
-  EmailThread: "EmailThread",
-  SalesforceContact: "SalesforceContact",
-  SalesforceOpportunity: "SalesforceOpportunity",
-  StripeCustomer: "StripeCustomer",
-  StripeSubscription: "StripeSubscription",
-  CustomSqlRow: "CustomSqlRow",
-  OtelSpan: "OtelSpan",
-  OtelMetric: "OtelMetric",
-  // Inferred semantic nodes created by the Stage 5 LLM inference worker.
-  Feature: "Feature",
-  Topic: "Topic",
-  Risk: "Risk",
-  Decision: "Decision",
+  // EntityNode: universal primary label on ALL customer ontology nodes.
+  // Every ingested entity carries this label plus `entityType` (string property)
+  // and optionally a secondary TitleCase label for simple type names.
+  // Workspace-scoped. Queried as: MATCH (n:EntityNode {workspaceId: $wid, entityType: $type})
+  EntityNode: "EntityNode",
 } as const;
 export type NodeLabel = (typeof NodeLabels)[keyof typeof NodeLabels];
 
@@ -74,18 +62,18 @@ export const EdgeTypes = {
   ORIGINATED_FROM: "ORIGINATED_FROM",
   CALLED_TOOL: "CALLED_TOOL",
   // Ingestion pipeline — provenance + deduplication edges.
-  ALIAS_OF: "ALIAS_OF",       // alias node → principal (dedup; carries confidence score)
-  SOURCED_FROM: "SOURCED_FROM", // ingested node → SourceConnection
+  ALIAS_OF: "ALIAS_OF",           // alias node → principal (dedup; carries confidence score)
+  SOURCED_FROM: "SOURCED_FROM",   // ingested EntityNode → SourceConnection
   INFERRED_FROM: "INFERRED_FROM", // inferred edge → source entities that triggered inference
   // Agent execution provenance — event-triggered executions.
-  INITIATED_FROM: "INITIATED_FROM", // Execution → triggering graph node (e.g. new Feature node)
-  DOCUMENTED_BY: "DOCUMENTED_BY",   // Feature → Document (user doc written by the agent)
+  INITIATED_FROM: "INITIATED_FROM", // Execution → triggering EntityNode
+  DOCUMENTED_BY: "DOCUMENTED_BY",   // EntityNode → Document written by the agent about it
   CREATED_BY: "CREATED_BY",         // Document → Execution that produced it
   // Semantic / structural edges written by connectors and inference workers.
-  IMPLEMENTS: "IMPLEMENTS",   // Commit/PR → Feature
-  PART_OF: "PART_OF",         // Issue → Epic; Commit → PR
-  ASSIGNED_TO: "ASSIGNED_TO", // Issue/Task → User
-  AUTHORED_BY: "AUTHORED_BY", // Document/Commit → User
+  IMPLEMENTS: "IMPLEMENTS",   // commit/PR EntityNode → feature EntityNode
+  PART_OF: "PART_OF",         // issue → epic; commit → PR
+  ASSIGNED_TO: "ASSIGNED_TO", // task/issue → User
+  AUTHORED_BY: "AUTHORED_BY", // document/commit → User
 } as const;
 export type EdgeType = (typeof EdgeTypes)[keyof typeof EdgeTypes];
 
