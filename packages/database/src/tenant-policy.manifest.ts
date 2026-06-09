@@ -32,6 +32,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.subagent_fanouts", policyClass: "standard" },
   { table: "agent.subagent_runs", policyClass: "standard" },
   // agent.plan_steps dropped in 0026 (orphan table, never wired to handler/route)
+  // agent_plans: org-only policy applied in 0031; upgraded to standard (org+workspace) in 0034.
   { table: "agent.agent_plans", policyClass: "standard" },
   { table: "agent.mcp_servers", policyClass: "standard" },
   { table: "agent.workflow_runs", policyClass: "standard" },
@@ -73,6 +74,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // are NOT row-scoped (no org_id). credentials and api_keys are org+workspace.
   { table: "auth.credentials", policyClass: "standard" },
   { table: "auth.api_keys", policyClass: "standard" },
+  // GDPR Art.17/20 tables: org_id NOT NULL, no workspace_id → org-only policy.
+  // RLS added in migration 0034 (tables created in 0033 without policies).
+  { table: "auth.privacy_export_requests", policyClass: "org_only" },
+  { table: "auth.privacy_erasure_requests", policyClass: "org_only" },
 
   // ── org.* — IAM tables live in the `org` Postgres schema (NOT `iam.*`).
   //   principals and principal_role_assignments are workspace_nullable

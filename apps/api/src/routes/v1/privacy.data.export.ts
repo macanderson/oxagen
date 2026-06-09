@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { withSystemDb, schema } from "@oxagen/database";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
@@ -19,6 +19,7 @@ privacyDataExportRoute.post("/", async (c) => {
 // GET /privacy/export/:exportId — poll export status
 privacyDataExportRoute.get("/:exportId", async (c) => {
   const exportId = c.req.param("exportId");
+  const ctx = capabilityContext(c);
   const rows = await withSystemDb((tx) =>
     tx
       .select({
@@ -28,7 +29,12 @@ privacyDataExportRoute.get("/:exportId", async (c) => {
         completedAt: schema.privacyExportRequests.completedAt,
       })
       .from(schema.privacyExportRequests)
-      .where(eq(schema.privacyExportRequests.id, exportId))
+      .where(
+        and(
+          eq(schema.privacyExportRequests.id, exportId),
+          eq(schema.privacyExportRequests.userId, ctx.userId),
+        ),
+      )
       .limit(1),
   );
   const row = rows[0];
