@@ -13,9 +13,13 @@ const { mockCreateCheckoutSession } = vi.hoisted(() => ({
 }));
 
 // ── module mocks ──────────────────────────────────────────────────────────────
-vi.mock("@oxagen/billing", () => ({
-  createCheckoutSession: mockCreateCheckoutSession,
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    createCheckoutSession: mockCreateCheckoutSession,
+  };
+});
 
 // ── imports after mocks ───────────────────────────────────────────────────────
 import { billingSubscriptionUpgradeStartHandler } from "./billing.subscription.upgrade.start";

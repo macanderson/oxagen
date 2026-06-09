@@ -26,11 +26,15 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
   clearHandlersForTests: vi.fn(),
 }));
 
-vi.mock("@oxagen/billing", () => ({
-  verifyStripeSignature: vi.fn(),
-  processStripeEvent: vi.fn(),
-  bootstrapBillingRuntime: vi.fn(),
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    verifyStripeSignature: vi.fn(),
+    processStripeEvent: vi.fn(),
+    bootstrapBillingRuntime: vi.fn(),
+  };
+});
 
 vi.mock("@oxagen/handlers", () => ({
   serveFile: vi.fn(),

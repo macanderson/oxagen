@@ -44,9 +44,13 @@ vi.mock("@oxagen/ai", () => ({
   generateObjectFor: mocks.generateObjectFor,
 }));
 
-vi.mock("@oxagen/telemetry", () => ({
-  insertToolInvocation: mocks.insertToolInvocation,
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    insertToolInvocation: mocks.insertToolInvocation,
+  };
+});
 
 vi.mock("../inngest", () => ({
   inngest: {

@@ -34,9 +34,13 @@ vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),
 }));
 
-vi.mock("@oxagen/telemetry", () => ({
-  insertTokenUsage: mocks.insertTokenUsage,
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    insertTokenUsage: mocks.insertTokenUsage,
+  };
+});
 
 vi.mock("../logger", () => ({
   logger: { info: mocks.loggerInfo, error: vi.fn() },

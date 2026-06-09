@@ -73,9 +73,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 // db().transaction() inside the handler test. Billing idempotency is
 // covered by @oxagen/billing's own test suite.
 mocks.grantFreeCredits.mockResolvedValue(undefined);
-vi.mock("@oxagen/billing", () => ({
-  grantFreeCredits: mocks.grantFreeCredits,
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    grantFreeCredits: mocks.grantFreeCredits,
+  };
+});
 
 // Stub bootstrapOrgIAM — IAM provisioning is tested separately in
 // iam-provision.test.ts. Here we only verify it's called correctly.

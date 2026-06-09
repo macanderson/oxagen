@@ -24,15 +24,23 @@ mocks.chargeImageCredits.mockResolvedValue({
 
 vi.mock("ai", () => ({ generateImage: mocks.generateImage }));
 
-vi.mock("@oxagen/telemetry", () => ({
-  insertTokenUsage: mocks.insertTokenUsage,
-  providerFromModelId: mocks.providerFromModelId,
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    insertTokenUsage: mocks.insertTokenUsage,
+    providerFromModelId: mocks.providerFromModelId,
+  };
+});
 
-vi.mock("@oxagen/billing", () => ({
-  chargeImageCredits: mocks.chargeImageCredits,
-  imageProviderCostUsdMicros: mocks.imageProviderCostUsdMicros,
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    chargeImageCredits: mocks.chargeImageCredits,
+    imageProviderCostUsdMicros: mocks.imageProviderCostUsdMicros,
+  };
+});
 
 import { generateImageFor } from "./generate-image";
 

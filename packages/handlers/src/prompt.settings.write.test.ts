@@ -27,10 +27,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-vi.mock("@oxagen/billing", () => ({
-  resolveOrgTier: mocks.resolveOrgTier,
-  requireTier: mocks.requireTier,
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    resolveOrgTier: mocks.resolveOrgTier,
+    requireTier: mocks.requireTier,
+  };
+});
 
 import { promptSettingsWriteHandler } from "./prompt.settings.write";
 

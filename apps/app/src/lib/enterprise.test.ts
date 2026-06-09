@@ -16,11 +16,15 @@ const { mockResolveOrgTier, mockMeetsMinimumTier, mockRequireTier } = vi.hoisted
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
-vi.mock("@oxagen/billing", () => ({
-  resolveOrgTier: mockResolveOrgTier,
-  meetsMinimumTier: mockMeetsMinimumTier,
-  requireTier: mockRequireTier,
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    resolveOrgTier: mockResolveOrgTier,
+    meetsMinimumTier: mockMeetsMinimumTier,
+    requireTier: mockRequireTier,
+  };
+});
 
 import { getEnterpriseAccess, assertEnterprise, SOC2_MIN_TIER } from "./enterprise";
 

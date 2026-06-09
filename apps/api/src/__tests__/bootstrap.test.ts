@@ -43,11 +43,15 @@ vi.mock("@oxagen/iam", () => ({
   bootstrapIAMRuntime: mocks.bootstrapIAMRuntime,
 }));
 
-vi.mock("@oxagen/billing", () => ({
-  bootstrapBillingRuntime: mocks.bootstrapBillingRuntime,
-  verifyStripeSignature: vi.fn(),
-  processStripeEvent: vi.fn(),
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    bootstrapBillingRuntime: mocks.bootstrapBillingRuntime,
+    verifyStripeSignature: vi.fn(),
+    processStripeEvent: vi.fn(),
+  };
+});
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
   setSecurityEventEmitter: mocks.setSecurityEventEmitter,
@@ -55,9 +59,13 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
   clearHandlersForTests: vi.fn(),
 }));
 
-vi.mock("@oxagen/telemetry", () => ({
-  recordSecurityEvent: mocks.recordSecurityEvent,
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    recordSecurityEvent: mocks.recordSecurityEvent,
+  };
+});
 
 vi.mock("@oxagen/database/security", () => ({
   makeSecurityEventInserter: mocks.makeSecurityEventInserter,

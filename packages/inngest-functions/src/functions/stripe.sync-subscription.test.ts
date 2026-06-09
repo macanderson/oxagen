@@ -7,9 +7,13 @@ const mocks = vi.hoisted(() => ({
   loggerInfo: vi.fn(),
 }));
 
-vi.mock("@oxagen/billing", () => ({
-  syncSubscriptionFromStripe: mocks.syncSubscriptionFromStripe,
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    syncSubscriptionFromStripe: mocks.syncSubscriptionFromStripe,
+  };
+});
 
 vi.mock("../logger", () => ({
   logger: { info: mocks.loggerInfo, error: vi.fn() },

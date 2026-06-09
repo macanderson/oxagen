@@ -6,9 +6,13 @@ const mocks = vi.hoisted(() => ({
 
 mocks.insertExecutionLogsMock.mockImplementation(async () => undefined);
 
-vi.mock("@oxagen/telemetry", () => ({
-  insertExecutionLogs: mocks.insertExecutionLogsMock,
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    insertExecutionLogs: mocks.insertExecutionLogsMock,
+  };
+});
 
 import { beforeTool, afterTool, onError } from "./runtime";
 

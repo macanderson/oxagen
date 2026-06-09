@@ -31,9 +31,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-vi.mock("@oxagen/telemetry", () => ({
-  sumTokenUsage: mocks.sumTokenUsage,
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    sumTokenUsage: mocks.sumTokenUsage,
+  };
+});
 
 vi.mock("../logger", () => ({
   logger: { info: mocks.loggerInfo, error: vi.fn() },

@@ -17,9 +17,13 @@ const { mockCreateUsageCreditCheckout } = vi.hoisted(() => ({
 }));
 
 // ── module mocks ──────────────────────────────────────────────────────────────
-vi.mock("@oxagen/billing", () => ({
-  createUsageCreditCheckout: mockCreateUsageCreditCheckout,
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    createUsageCreditCheckout: mockCreateUsageCreditCheckout,
+  };
+});
 
 // ── imports after mocks ───────────────────────────────────────────────────────
 import { billingCreditsPurchaseHandler } from "./billing.credits.purchase";

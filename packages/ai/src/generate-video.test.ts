@@ -41,15 +41,23 @@ vi.mock("@ai-sdk/gateway", () => ({
   gateway: { video: mocks.gatewayVideo },
 }));
 
-vi.mock("@oxagen/telemetry", () => ({
-  insertTokenUsage: mocks.insertTokenUsage,
-  providerFromModelId: mocks.providerFromModelId,
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    insertTokenUsage: mocks.insertTokenUsage,
+    providerFromModelId: mocks.providerFromModelId,
+  };
+});
 
-vi.mock("@oxagen/billing", () => ({
-  chargeVideoCredits: mocks.chargeVideoCredits,
-  videoProviderCostUsdMicros: mocks.videoProviderCostUsdMicros,
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    chargeVideoCredits: mocks.chargeVideoCredits,
+    videoProviderCostUsdMicros: mocks.videoProviderCostUsdMicros,
+  };
+});
 
 import { generateVideoFor } from "./generate-video";
 

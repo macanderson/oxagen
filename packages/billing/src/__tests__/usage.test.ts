@@ -37,9 +37,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 const sumTokenUsageMock = vi.fn().mockResolvedValue([]);
 
-vi.mock("@oxagen/telemetry", () => ({
-  sumTokenUsage: sumTokenUsageMock,
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    sumTokenUsage: sumTokenUsageMock,
+  };
+});
 
 const { getCurrentPeriodUsage } = await import("../usage");
 

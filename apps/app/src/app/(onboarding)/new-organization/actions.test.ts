@@ -54,9 +54,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-vi.mock("@oxagen/billing", () => ({
-  grantFreeCredits: mockGrantFreeCredits,
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    grantFreeCredits: mockGrantFreeCredits,
+  };
+});
 
 vi.mock("@oxagen/storage", () => ({
   ingestImageFromUrl: mockIngestImageFromUrl,

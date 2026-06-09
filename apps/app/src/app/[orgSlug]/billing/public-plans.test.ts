@@ -36,30 +36,34 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
   };
 });
-vi.mock("@oxagen/billing", () => ({
-  SUBSCRIPTION_PLANS: [
-    {
-      slug: "build-v2",
-      displayName: "Build",
-      tier: "build",
-      monthlyCents: 2000,
-      annualCents: 20000,
-      includedCredits: 2000,
-      seats: 5,
-      features: { list: ["Feature A", "Feature B"] },
-    },
-    {
-      slug: "scale-v2",
-      displayName: "Scale",
-      tier: "scale",
-      monthlyCents: 9900,
-      annualCents: 99000,
-      includedCredits: 9900,
-      seats: 25,
-      features: { list: ["Feature C"] },
-    },
-  ],
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    SUBSCRIPTION_PLANS: [
+      {
+        slug: "build-v2",
+        displayName: "Build",
+        tier: "build",
+        monthlyCents: 2000,
+        annualCents: 20000,
+        includedCredits: 2000,
+        seats: 5,
+        features: { list: ["Feature A", "Feature B"] },
+      },
+      {
+        slug: "scale-v2",
+        displayName: "Scale",
+        tier: "scale",
+        monthlyCents: 9900,
+        annualCents: 99000,
+        includedCredits: 9900,
+        seats: 25,
+        features: { list: ["Feature C"] },
+      },
+    ],
+  };
+});
 vi.mock("@oxagen/handlers/logger", () => ({
   logger: { error: vi.fn() },
 }));

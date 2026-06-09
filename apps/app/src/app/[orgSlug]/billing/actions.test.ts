@@ -69,22 +69,26 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-vi.mock("@oxagen/billing", () => ({
-  cancelOrgSubscription: vi.fn(),
-  reactivateOrgSubscription: vi.fn(),
-  changeOrgPlan: vi.fn(),
-  setSubscriptionSeats: vi.fn(),
-  isSeatLimitError: vi.fn(() => false),
-  isTierDenied: vi.fn(() => false),
-  createUsageCreditCheckout: vi.fn(),
-  previewSeatChange: vi.fn(),
-  previewPlanChange: vi.fn(),
-  createPaymentMethodSetupIntent: vi.fn(),
-  syncPaymentMethodsFromStripe: vi.fn(),
-  setOrgDefaultPaymentMethod: vi.fn(),
-  removeOrgPaymentMethod: vi.fn(),
-  updateAutoReloadSettings: vi.fn(),
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    cancelOrgSubscription: vi.fn(),
+    reactivateOrgSubscription: vi.fn(),
+    changeOrgPlan: vi.fn(),
+    setSubscriptionSeats: vi.fn(),
+    isSeatLimitError: vi.fn(() => false),
+    isTierDenied: vi.fn(() => false),
+    createUsageCreditCheckout: vi.fn(),
+    previewSeatChange: vi.fn(),
+    previewPlanChange: vi.fn(),
+    createPaymentMethodSetupIntent: vi.fn(),
+    syncPaymentMethodsFromStripe: vi.fn(),
+    setOrgDefaultPaymentMethod: vi.fn(),
+    removeOrgPaymentMethod: vi.fn(),
+    updateAutoReloadSettings: vi.fn(),
+  };
+});
 
 vi.mock("@oxagen/config/env", () => ({
   loadEnv: vi.fn(() => ({

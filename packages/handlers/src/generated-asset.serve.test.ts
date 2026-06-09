@@ -46,7 +46,10 @@ vi.mock("@oxagen/storage", async () => {
   return { storage: () => ({ get: mocks.storageGet }), StorageNotFoundError };
 });
 
-vi.mock("@oxagen/telemetry", () => ({ insertEvents: mocks.insertEvents }));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, insertEvents: mocks.insertEvents };
+});
 
 vi.mock("node:crypto", () => ({
   randomUUID: () => "00000000-0000-0000-0000-000000000001",

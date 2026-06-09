@@ -85,17 +85,21 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
   };
 });
-vi.mock("@oxagen/billing", () => ({
-  assertSeatAvailable: mockAssertSeatAvailable,
-  isSeatLimitError: (err: unknown) =>
-    typeof err === "object" && err !== null && (err as { code?: string }).code === "seat_limit_reached",
-  SeatLimitError: class SeatLimitError extends Error {
-    readonly code = "seat_limit_reached" as const;
-    constructor() {
-      super("Seat limit reached");
-    }
-  },
-}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    assertSeatAvailable: mockAssertSeatAvailable,
+    isSeatLimitError: (err: unknown) =>
+      typeof err === "object" && err !== null && (err as { code?: string }).code === "seat_limit_reached",
+    SeatLimitError: class SeatLimitError extends Error {
+      readonly code = "seat_limit_reached" as const;
+      constructor() {
+        super("Seat limit reached");
+      }
+    },
+  };
+});
 vi.mock("@oxagen/handlers/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
   maskEmail: (e: string) => e,

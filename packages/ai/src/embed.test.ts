@@ -22,14 +22,18 @@ mocks.hashPrompt.mockResolvedValue("deadbeefdeadbeef");
 
 vi.mock("ai", () => ({ embed: mocks.embed }));
 vi.mock("@ai-sdk/gateway", () => ({ gateway: { embeddingModel: mocks.embeddingModel } }));
-vi.mock("@oxagen/telemetry", () => ({
-  insertTokenUsage: mocks.insertTokenUsage,
-  hashPrompt: mocks.hashPrompt,
-  providerFromModelId: (id: string) => {
-    const head = id.split(":")[0] ?? "";
-    return head === "openai" ? "openai" : "";
-  },
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    insertTokenUsage: mocks.insertTokenUsage,
+    hashPrompt: mocks.hashPrompt,
+    providerFromModelId: (id: string) => {
+      const head = id.split(":")[0] ?? "";
+      return head === "openai" ? "openai" : "";
+    },
+  };
+});
 
 import { embedText } from "./embed";
 

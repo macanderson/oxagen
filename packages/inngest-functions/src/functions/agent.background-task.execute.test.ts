@@ -46,9 +46,13 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
 }));
 
 // Stub @oxagen/telemetry so insertToolInvocation doesn't need ClickHouse.
-vi.mock("@oxagen/telemetry", () => ({
-  insertToolInvocation: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    insertToolInvocation: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 // Stub @oxagen/oxagen to a no-op (just the side-effect import)
 vi.mock("@oxagen/oxagen", () => ({}));

@@ -152,9 +152,13 @@ vi.mock("./approval", () => ({
   waitForApproval: mocks.waitForApproval,
 }));
 
-vi.mock("@oxagen/telemetry", () => ({
-  insertToolInvocation: mocks.insertToolInvocation,
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    insertToolInvocation: mocks.insertToolInvocation,
+  };
+});
 
 import { materializeTools } from "./materialize-tools";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";

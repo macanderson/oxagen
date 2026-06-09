@@ -15,10 +15,14 @@ const mocks = vi.hoisted(() => ({
   latestAuditChainHash: vi.fn<() => Promise<string>>(),
 }));
 
-vi.mock("@oxagen/telemetry", () => ({
-  insertAuditEvent: mocks.insertAuditEvent,
-  latestAuditChainHash: mocks.latestAuditChainHash,
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    insertAuditEvent: mocks.insertAuditEvent,
+    latestAuditChainHash: mocks.latestAuditChainHash,
+  };
+});
 
 import { emitAudit } from "./emit-audit";
 import type { CapabilityContext } from "@oxagen/oxagen";

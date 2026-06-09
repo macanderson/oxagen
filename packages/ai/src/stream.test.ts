@@ -30,15 +30,23 @@ mocks.chargeUsageCredits.mockResolvedValue({
 });
 
 vi.mock("ai", () => ({ streamText: mocks.streamText }));
-vi.mock("@oxagen/telemetry", () => ({
-  hashPrompt: mocks.hashPrompt,
-  insertTokenUsage: mocks.insertTokenUsage,
-  providerFromModelId: mocks.providerFromModelId,
-}));
-vi.mock("@oxagen/billing", () => ({
-  providerCostUsdMicros: mocks.providerCostUsdMicros,
-  chargeUsageCredits: mocks.chargeUsageCredits,
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    hashPrompt: mocks.hashPrompt,
+    insertTokenUsage: mocks.insertTokenUsage,
+    providerFromModelId: mocks.providerFromModelId,
+  };
+});
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    providerCostUsdMicros: mocks.providerCostUsdMicros,
+    chargeUsageCredits: mocks.chargeUsageCredits,
+  };
+});
 vi.mock("./models", () => ({ defaultModel: mocks.defaultModel, modelIdOf: (m: { modelId: string } | string) => (typeof m === "string" ? m : m.modelId) }));
 
 import { streamAgentReply, reasoningRequestConfig } from "./stream";
