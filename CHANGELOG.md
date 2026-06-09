@@ -1,5 +1,100 @@
 # Changelog
 
+## Oxagen Platform v0.3.0
+
+This release represents the most substantial expansion of the Oxagen platform since launch, spanning a full CLI buildout, broad API/MCP parity work, agent execution telemetry, workflow infrastructure, improved security hardening, a major UI overhaul, and a significant test coverage push. Dead code and orphaned schemas were aggressively pruned throughout.
+
+### Features
+
+**CLI — full parity buildout**
+The `apps/cli` package grew from a minimal dev utility into a production-ready CLI. Over 80 commands were added across auth, billing, agents, workflows, conversations, documents, images, plugins, org/workspace management, and more (9818a9a, f43e524, cd5f98e, 197458c, 2480cae, 7e8d546, 3d8c410). Commands include `auth.login/logout/whoami`, `billing.credits.purchase`, `workflow.run/status/cancel`, `agent.approval.resolve`, `documents.pdf.create`, `form.fill`, and many others. A typed `api-client` module and `config` module back all commands (a48df44), and API key secrets are now redacted in non-TTY output for CI safety (6ddf71c).
+
+**Agent execution recording and telemetry**
+A unified agent execution telemetry system was introduced (3c85a20). New database tables track agent executions end-to-end (d6f0aff, migration `0030_agent_execution_tables.sql`). Handlers for recording execution events were implemented (bf70b61), and an Inngest function (`agent.sync-execution-to-graph`) mirrors executions asynchronously to the Neo4j knowledge graph (ee4a62d). A workflow supervisor and per-task executor were also added as Inngest functions (PR #36, #35).
+
+**Workflow UI**
+A workflows list page with a `workflow-progress` UI component and sidebar navigation was added to the app (a3df4d6, 063b52e). New contracts for `workflow.run`, `workflow.status`, and `workflow.cancel` are wired across the API, MCP, CLI, and handlers layers.
+
+**Prompt settings UI**
+A new `/settings/prompts` page provides per-workspace prompt configuration: an auto-improve toggle, additional instructions field, and enterprise-level overrides (dfc8a15). Corresponding `prompt.settings.read` and `prompt.settings.write` contracts, handlers, and MCP/API routes are fully wired.
+
+**Security — audit event system**
+A new `@oxagen/compliance` package centralizes security event type definitions and a `emitSecurityEvent` registry (3885be8). Security audit events are now emitted on `organization.create`, `workspace.create`, provider-initiated subscription cancellations, and credit grants (77e9c51, 414381b).
+
+**Sandbox — Modal runner**
+The Modal sandbox runner was upgraded to the Modal 1.4.3 API and wired as the active sandbox driver (e98b007, 622f294).
+
+**App UI — high-fidelity pages**
+Numerous app pages that previously redirected or were stubs were replaced with high-fidelity static UI mocks: SSO, SCIM, MFA, Compliance, Incidents, Trust (security section); webhooks, developer docs, MCP install tabs with Shiki syntax highlighting; org plugins; workspace knowledge/activity/settings; and a searchable `Combobox` component for long option lists (cdd97c2, dcd97c2, ba88c67, 1b69eaf, 600bfc3, 1b099b3).
+
+**Auth — forgot/reset password flow**
+A complete forgot-password and reset-password flow was shipped with server actions, form components, and e2e specs (193dab7, reset-password.spec.ts, set-password.spec.ts).
+
+**AI SDK devtools**
+The AI SDK devtools middleware is now enabled on localhost for easier local debugging (fbe3698). OpenAI reasoning summary streaming via `reasoningSummary:detailed` was also enabled (80e3799).
+
+**RLS — workspace and plugin tables**
+Row-level security policies were added for `workspace.workspaces` and all installable-plugin tables (805dfe5, dc60f26). `TENANT_RLS_ENFORCEMENT_ENABLED` now defaults to `true` in `.env.example` and the config registry (e240baf, 9512530).
+
+**New contracts and API/MCP routes (parity)**
+Contracts, handlers, API routes, and MCP tools were added for: `api.key.create/revoke`, `archive.create`, `automation.create/list/trigger`, `conversation.chat/purge/rename`, `document.create/list/read`, `form.create/submit`, `image.analyze/create/list`, `workspace.invite.send`, `workspace.member.list`, `skill.workspace.list`, and `agent.execution.record`. The `agent.ui.render` contract was also added and exported (e8d91dc).
+
+**Batch billing operations and auth refactor**
+The auth layer was refactored and billing handlers were extended with batch operations (PR #37, 3aba46d). Billing's `grantFreeCredits` was moved to use `withSystemDb` with proper RLS scoping, and a P0 bug granting upgrade credits under an incorrect RLS scope was fixed (2ff39a4).
+
+**E2E test infrastructure**
+Playwright e2e specs were added for organization slug changes, workspace slug changes, workflows, reset/set-password, and agent runtime flows (c09cfb3, organization-slug-change.spec.ts, workspace-slug-change.spec.ts, workflows.spec.ts). A four-shard e2e CI job was added to `ci.yml` with proper Playwright browser installation (6380f14, 999edbb).
+
+**Documentation expansion**
+The `apps/docs` site gained new content sections for Agent capabilities, API reference, MCP, Governance (RBAC, BYOK, plugins), Enterprise, and Security (SOC 2, audit logging, tenant isolation, code execution, data handling). Architecture specs for agent execution design and workflow runs were added to `docs/architecture/`.
+
+### Fixes
+
+- **Billing P0 — plan upgrade credits not granted** due to RLS scoping bug (2ff39a4)
+- **Billing P0 — ClickHouse usage data** `DateTime64(3)` format bug causing bad usage reads (c025865)
+- **Auto-reload guard** — prevent enabling auto-reload without a payment method on file (151b850)
+- **PlanTier type errors** — resolved circular type reference and multiple type inference failures across the billing subscription stack (b3d2d58, cf35563, 492e99b, a3e2a07, da0a450)
+- **Conversation persistence** — fixed new-conversation behavior and persistence across navigation (49195e5)
+- **React key deduplication** in `MessageBubble`; new conversations now auto-titled via Claude Haiku (f167a4f)
+- **Chat stream** — `materializeTools` now runs inside `runInTenantScope` (8cd7619)
+- **Approval SSE event** emitted before blocking on `waitForApproval` (aaa3f09)
+- **Audit filter bar** — eliminated `setState`-in-effect pattern (3d5f4f7)
+- **`public_id` collision** and schema configuration in database (f8d9c02)
+- **Empty text blocks error** and public blob store fallback (5a9f2e1)
+- **Auth** — disabled `cookieCache` to prevent RSC cookie-write error (9c9825c)
+- **Notifications** — replaced `withSystemDb` with `withTenantDb` and added `orgId` filter (1d6136f)
+- **User preferences handlers** — corrected to use `withSystemDb`, not `withTenantDb` (373ee64)
+- **Billing actions** — all billing server actions now use proper tenant scope; plan cards have a fallback state (40ad2a1)
+- **Kernel HMR** — handler registration is now idempotent under dev hot-reload re-evaluation (9032de2)
+- **Inngest client** — lazy-initialized to prevent build-time env crash (73ee740)
+- **Database migration 0014** — added missing `workflow_runs` CREATE TABLE migration (d88f543)
+- **Schema: `workflowRunTasks`** — restored accidentally dropped table; fixed `workflowRuns.workflowId` nullable (e732ec1)
+- **RLS manifest** — added `org_security_policy` and workflow run tables (2f96044, 8c7c3a8)
+- **`credit_ledger` reason constraint** — updated to include all valid reason types (505f308)
+- **`agent_version_id`** — removed dead column from conversations and all downstream dead code (e34f9fd)
+- **`STRIPE_TAX_ENABLED`** added to build env overrides (7abe4ac)
+- **Plugin MCP notification RLS** migration applied (migration `0010`)
+- **`PageTabs` edge fades** — now gated on actual overflow (0443ee1)
+- Various `PlanTier`, ESLint, and TypeScript errors resolved across CI (a4848ab, a8b9059, c6a439d, 5d83396)
+
+### Internal
+
+- **Dead schemas and tables removed** — dropped `event`, `execution`, `integration`, `iam_sessions`, `workspace.folders`, `content.files`, `agent.plan_steps`, and several orphaned agent execution tables from the schema, migrations, and all references (82c692c, 11ac4d3, 895af5d, 541916c, 05cd14b, chore commits)
+- **`apps/admin` and `apps/website` removed** — both stub/empty apps deleted from the monorepo
+- **`file.serve` route and handler removed** — dead endpoint deleted from API and handlers (11ac4d3, a3515a8)
+- **`agent.code.execute`, `agent.plan.create`, `agent.skill.load`, `agent.subagent.aggregate/dispatch` contracts and handlers removed** — 6 dead contracts with no live callers cleaned up (a5e8f21, ea0b7e5)
+- **Migrations consolidated** — `drizzle/0000_baseline.sql` captures the full schema baseline; migration archive directory established (34e7619)
+- **`pnpm/action-setup` upgraded** from v4 to v5 across all CI workflows for Node 20 runner compatibility (9de0dbb, 33c8205)
+- **Coverage** — jsdom + Testing Library infrastructure added to `apps/app`; hundreds of unit tests added across app components, billing, handlers, MCP tools, ontology, auth, and CLI (736cbaf, and numerous test commits)
+- **`@oxagen/compliance` package** introduced for security event type registry (new package)
+- **Database doc generation scripts** added (`generate-db-docs.js`, `generate-db-docs-enhanced.js`)
+- **Audit command tooling** — new Claude commands for `/audit-e2e`, `/audit-security`, `/audit-soc2`, `/audit-tenancy`, `/audit-tests`, and `/remove-deadcode` added to `.claude/commands/`
+- **Nightly e2e** CI job now files a Linear ticket automatically on failure (nightly.yml)
+- **`AUDIT_EXPORT_SIGNING_SECRET`** and `OXAGEN_API_URL` registered in the ENV registry; `.env.example` regenerated (cbd8d60, c675077)
+- **GitHub OAuth env vars** split into `GITHUB_LOGIN_*` and `GITHUB_DATA_*` variants in `.env.example`
+- **`APP_URL`** declared in config schema and promoted to a tracked env var (f82c8b3)
+- Capability docs index rebuilt; 5 stale orphan capability docs removed, 20+ new capability specs added
+
 ## v0.2.2 — Installable MCP Plugins, Notifications, and AI Gateway exclusivity
 
 This release delivers the full installable-plugins system for MCP servers: a new `@oxagen/plugins` package provides registry catalog sync, per-workspace encrypted credential storage, OAuth PKCE/PKCE-refresh flows, org allow-list/denylist/governance controls, and an in-app marketplace UI with a plugin detail panel and re-auth deep-link page. A new `@oxagen/notifications` package powers in-app alerts — triggered automatically when credentials need re-auth — surfaced through a live `NotificationsBell` component. All plugin and notification surfaces are wired end-to-end: `@oxagen/oxagen` contracts, handlers, API routes, MCP tools, and a comprehensive Playwright E2E suite covering install, uninstall, disable, OAuth connect, denylist enforcement, RBAC negative paths, and live agent tool-call integration. The release also finalises AI Gateway exclusivity (direct provider keys fully removed), hardens the capability registry against bundler/HMR re-registration, and closes several pre-existing lint and type errors.
