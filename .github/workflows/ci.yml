@@ -312,16 +312,7 @@ jobs:
           node-version: "24"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Detect migration changes
-        id: migration_changes
-        run: |
-          if git diff --name-only "${TURBO_BASE}"...HEAD | grep -qE '^packages/database/drizzle/'; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Migrate
-        if: steps.migration_changes.outputs.changed == 'true'
+      - name: Migrate (always for fresh e2e database)
         run: pnpm db:migrate
       - name: Build (affected)
         run: pnpm turbo run build --filter="...[${TURBO_BASE}]"
