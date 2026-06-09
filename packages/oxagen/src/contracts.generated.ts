@@ -93,3 +93,5 @@ import "./contracts/workspace.invite.send";
 import "./contracts/workspace.member.list";
 import "./contracts/workspace.model.settings.read";
 import "./contracts/workspace.model.settings.write";
+import "./contracts/privacy.data.export";
+import "./contracts/privacy.data.erase";

@@ -93,6 +93,23 @@ type Events = {
   "agent/workflow.cancel": {
     data: { orgId: string; workflowRunId: string };
   };
+  "privacy/export.process": {
+    data: {
+      exportId: string;
+      userId: string;
+      orgId: string;
+      scope: "user" | "org";
+    };
+  };
+  "privacy/erasure.execute": {
+    data: {
+      requestId: string;
+      userId: string;
+      orgId: string;
+      scope: "user" | "org";
+      scheduledAt: string;
+    };
+  };
   // Fired by recordExecution() after a completed execution row is committed to
   // Postgres. The Inngest worker picks this up and mirrors the execution to
   // the Neo4j knowledge graph (async, best-effort, 24 h retry window).

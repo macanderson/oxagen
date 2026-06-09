@@ -23,6 +23,7 @@ export const account = {
   profile: (): string => "/account/profile",
   preferences: (): string => "/account/preferences",
   security: (): string => "/account/security",
+  privacy: (): string => "/account/privacy",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -81,6 +82,7 @@ export const org = {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,
     general: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,
     plugins: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/plugins`,
+    privacy: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/privacy`,
   },
 } as const;
 

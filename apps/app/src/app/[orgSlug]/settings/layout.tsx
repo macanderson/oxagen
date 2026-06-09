@@ -16,6 +16,7 @@ export default async function OrgSettingsLayout({
   const tabs = [
     { label: "General", href: org.settings.general(ctx) },
     { label: "Plugins", href: org.settings.plugins(ctx) },
+    { label: "Privacy", href: org.settings.privacy(ctx) },
   ];
 
   return (

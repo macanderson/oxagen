@@ -97,6 +97,8 @@ import { workflowCancelCommand } from "./commands/workflow.cancel.js";
 import { workflowStatusCommand } from "./commands/workflow.status.js";
 import { userPreferencesReadCommand } from "./commands/user.preferences.read.js";
 import { userPreferencesWriteCommand } from "./commands/user.preferences.write.js";
+import { privacyExportCommand } from "./commands/privacy.export.js";
+import { privacyEraseCommand } from "./commands/privacy.erase.js";
 
 const program = new Command();
 
@@ -302,6 +304,11 @@ video.addCommand(videoGenerateCommand);
 // svg
 const svg = program.command("svg").description("SVG generation commands");
 svg.addCommand(svgGenerateCommand);
+
+// privacy (GDPR Art.17 erasure + Art.20 portability)
+const privacy = program.command("privacy").description("GDPR privacy rights — data export and erasure");
+privacy.addCommand(privacyExportCommand);
+privacy.addCommand(privacyEraseCommand);
 
 program.parse(process.argv);
 

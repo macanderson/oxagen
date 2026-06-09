@@ -94,6 +94,8 @@ import { automationCreateRoute } from "./routes/v1/automation.create";
 import { automationTriggerRoute } from "./routes/v1/automation.trigger";
 import { skillWorkspaceListRoute } from "./routes/v1/skill.workspace.list";
 import { agentSubagentDispatchRoute } from "./routes/v1/agent.subagent.dispatch";
+import { privacyDataExportRoute } from "./routes/v1/privacy.data.export";
+import { privacyDataEraseRoute } from "./routes/v1/privacy.data.erase";
 
 export type AppEnv = {
   Variables: {
@@ -217,4 +219,6 @@ orgScoped.route("/automation/list", automationListRoute);
 orgScoped.route("/automation/create", automationCreateRoute);
 orgScoped.route("/automation/trigger", automationTriggerRoute);
 orgScoped.route("/skill/workspace/list", skillWorkspaceListRoute);
+orgScoped.route("/privacy/export", privacyDataExportRoute);
+orgScoped.route("/privacy/erase", privacyDataEraseRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

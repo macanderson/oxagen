@@ -65,6 +65,10 @@ export const SECURITY_EVENT_TYPES = [
   // Access review
   "access.review_completed",
   "access.member_access_confirmed",
+  // Privacy / GDPR
+  "privacy.export_requested",
+  "privacy.erasure_requested",
+  "privacy.org_erasure_requested",
 ] as const;
 
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];

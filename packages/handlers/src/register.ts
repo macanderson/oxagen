@@ -306,4 +306,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./chat.message.execution")).chatMessageExecutionHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "privacy.data.export",
+    async () =>
+      (await import("./privacy.data.export")).privacyDataExportHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "privacy.data.erase",
+    async () =>
+      (await import("./privacy.data.erase")).privacyDataEraseHandler as CapabilityHandlerFn,
+  );
 });

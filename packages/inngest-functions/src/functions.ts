@@ -13,6 +13,8 @@ import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watc
 import { agentWorkflowSupervisor } from "./functions/agent.workflow.supervisor";
 import { agentWorkflowTaskExecute } from "./functions/agent.workflow.task.execute";
 import { agentSyncExecutionToGraph } from "./functions/agent.sync-execution-to-graph";
+import { privacyExportProcess, privacyExportProcessOnFailure } from "./functions/privacy.export.process";
+import { privacyErasureExecute, privacyErasureExecuteOnFailure } from "./functions/privacy.erasure.execute";
 
 export const functions = [
   billingRollupUsage,
@@ -31,4 +33,8 @@ export const functions = [
   agentWorkflowSupervisor,
   agentWorkflowTaskExecute,
   agentSyncExecutionToGraph,
+  privacyExportProcess,
+  privacyExportProcessOnFailure,
+  privacyErasureExecute,
+  privacyErasureExecuteOnFailure,
 ];

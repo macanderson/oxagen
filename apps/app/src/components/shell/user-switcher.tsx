@@ -16,7 +16,7 @@
 import * as React from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { User, LogOut, Settings, ChevronsUpDown, Monitor, Moon, Sun } from "lucide-react";
+import { User, LogOut, Settings, Shield, ChevronsUpDown, Monitor, Moon, Sun } from "lucide-react";
 import { signOut } from "@oxagen/auth/client";
 import { useTheme } from "@oxagen/ui";
 import {
@@ -164,6 +164,11 @@ export function UserSwitcher({ user, variant = "full", className }: UserSwitcher
         <MenuItem onClick={() => router.push("/account")}>
           <Settings className="h-4 w-4" aria-hidden="true" />
           Settings
+        </MenuItem>
+
+        <MenuItem onClick={() => router.push("/account/privacy")}>
+          <Shield className="h-4 w-4" aria-hidden="true" />
+          Privacy
         </MenuItem>
 
         <MenuSeparator />

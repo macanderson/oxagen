@@ -41,3 +41,5 @@ export { workspaceMemberListHandler } from "./workspace.member.list";
 export { workspaceInviteSendHandler } from "./workspace.invite.send";
 export { skillWorkspaceListHandler } from "./skill.workspace.list";
 export { conversationChatHandler } from "./conversation.chat";
+export { privacyDataExportHandler } from "./privacy.data.export";
+export { privacyDataEraseHandler } from "./privacy.data.erase";
