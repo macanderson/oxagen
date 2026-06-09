@@ -46,7 +46,7 @@ function setupWithTenantDb(
 ) {
   const tx = makeTx(userPrefsRow, workspaceRow);
   mockWithTenantDb.mockImplementation(
-    async (fn: (tx: typeof tx) => Promise<unknown>) => fn(tx),
+    async (fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => fn(tx),
   );
   return tx;
 }

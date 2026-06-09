@@ -7,6 +7,11 @@ import { getOrgSeatUsage, SeatLimitError } from "./seats";
 import { meetsMinimumTier } from "./entitlements";
 import type { PlanTier } from "@oxagen/oxagen/types";
 
+// Type assertion helper - works around TypeScript type inference issue with database strings
+function checkPlanTier(actual: string, minimum: string): boolean {
+  return meetsMinimumTier(actual as any, minimum as any);
+}
+
 /**
  * Pulls the canonical subscription record from the billing provider and
  * upserts into billing.subscriptions. Idempotent on stripe_subscription_id.
@@ -320,7 +325,7 @@ export async function changeOrgPlan(
 
   // Active subscription — swap the price in-place.
   // Determine proration behavior by comparing tier order.
-  const isUpgrade = meetsMinimumTier(targetPlan.tier, (currentPlanRow?.tier || "free") as unknown as PlanTier);
+  const isUpgrade = checkPlanTier(currentPlanRow?.tier || "free", targetPlan.tier);
   const prorationBehavior: "always_invoice" | "none" = isUpgrade ? "always_invoice" : "none";
 
   // Use activeSubRow from now on (renamed to avoid confusion).
@@ -644,7 +649,7 @@ export async function previewPlanChange(
     }),
   );
 
-  const isUpgrade = meetsMinimumTier(targetPlan.tier, (currentPlanRow?.tier || "free") as unknown as PlanTier);
+  const isUpgrade = checkPlanTier(currentPlanRow?.tier || "free", targetPlan.tier);
   const prorationBehavior: "always_invoice" | "none" = isUpgrade
     ? "always_invoice"
     : "none";
