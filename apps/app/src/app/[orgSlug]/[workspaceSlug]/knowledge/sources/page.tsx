@@ -88,7 +88,7 @@ const CONNECTOR_ICONS: Record<string, React.ElementType> = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const STATUS_CONFIG: Record<SourceStatus, { label: string; icon: React.ElementType; className: string }> = {
+const STATUS_CONFIG: Record<SourceStatus, { label: string; icon: React.ElementType; className: string; iconClassName?: string }> = {
   synced: {
     label: "Synced",
     icon: CheckCircle2,
@@ -97,7 +97,8 @@ const STATUS_CONFIG: Record<SourceStatus, { label: string; icon: React.ElementTy
   syncing: {
     label: "Syncing…",
     icon: RefreshCw,
-    className: "text-blue-500 dark:text-blue-400 animate-spin",
+    className: "text-blue-500 dark:text-blue-400",
+    iconClassName: "animate-spin",
   },
   error: {
     label: "Error",
@@ -135,7 +136,7 @@ function SourceRow({ source }: { source: MockSource }) {
           </div>
           <div className="flex items-center gap-2 text-[11px]">
             <span className={`flex items-center gap-1 font-medium ${status.className}`}>
-              <StatusIcon className="h-3 w-3" aria-hidden="true" />
+              <StatusIcon className={`h-3 w-3 ${status.iconClassName ?? ""}`} aria-hidden="true" />
               {status.label}
             </span>
             {source.recordCount > 0 && (

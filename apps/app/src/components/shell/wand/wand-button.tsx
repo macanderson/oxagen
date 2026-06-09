@@ -16,6 +16,7 @@
  */
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import { Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePageContext } from "@/lib/page-context";
@@ -27,6 +28,10 @@ export interface WandButtonProps {
 
 export function WandButton({ className }: WandButtonProps) {
   const { isWandOpen, openWand, closeWand } = usePageContext();
+  const pathname = usePathname();
+  const isAskPage = pathname.endsWith("/ask");
+
+  if (isAskPage) return null;
 
   const handleClick = () => {
     if (isWandOpen) {
