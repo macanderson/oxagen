@@ -7,13 +7,7 @@ vi.mock("./agent.tool.list", () => ({
 
 import { resolveHandler, invokeCapability } from "./index";
 
-const CTX = {
-  orgId: "ten_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1", surface: "runner" as const, messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 describe("handler registry", () => {
   it("resolveHandler returns a function for a registered capability", async () => {

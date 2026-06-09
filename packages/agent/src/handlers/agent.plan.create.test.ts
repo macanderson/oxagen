@@ -15,26 +15,20 @@ const fakeDb = {
   insert: vi.fn().mockReturnValue(fakeInsertChain),
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) => fn(fakeDb),
-  schema: {
-    agentPlans: "agent_plans",
-  },
-}));
+
+  };
+});
 
 insertSpy.mockReturnValue(fakeInsertChain);
 
 import { agentPlanCreateHandler } from "./agent.plan.create";
 
-const CTX = {
-  orgId: "ten_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "runner" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 const BASIC_INPUT = {
   goals: ["Build a REST API", "Add authentication"],

@@ -17,16 +17,10 @@ const DEFAULT_ROW = {
 mocks.insertReturning.mockResolvedValue([DEFAULT_ROW]);
 mocks.findFirst.mockResolvedValue(null);
 
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    invitations: {
-      publicId: "invitations.publicId",
-      status: "invitations.status",
-      expiresAt: "invitations.expiresAt",
-      orgId: "invitations.orgId",
-      email: "invitations.email",
-    },
-  },
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       insert: () => ({
@@ -40,21 +34,15 @@ vi.mock("@oxagen/database", () => ({
         invitations: { findFirst: mocks.findFirst },
       },
     }),
-}));
+
+  };
+});
 
 import { workspaceInviteSendHandler } from "./workspace.invite.send";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("workspaceInviteSendHandler (@oxagen/handlers)", () => {
   beforeEach(() => {

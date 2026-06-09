@@ -99,22 +99,16 @@ function makeDb(opts: {
 
 const dbState: { instance: ReturnType<typeof makeDb> | null } = { instance: null };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => dbState.instance,
   withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
   withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
-  schema: {
-    invoices: {
-      stripeInvoiceId: "invoices.stripeInvoiceId",
-    },
-    invoiceLineItems: {
-      invoiceId: "invoiceLineItems.invoiceId",
-    },
-    subscriptions: {
-      stripeSubscriptionId: "subscriptions.stripeSubscriptionId",
-    },
-  },
-}));
+
+  };
+});
 
 // Import after mocks.
 const { syncInvoiceFromStripe } = await import("../invoices");

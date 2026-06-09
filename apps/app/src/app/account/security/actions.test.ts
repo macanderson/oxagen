@@ -25,15 +25,14 @@ const { mockWithSystemDb, mockEmitSecurityEvent, mockRevalidatePath, mockGetSess
     mockGetSessionOrRedirect: vi.fn(),
   }));
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withSystemDb: mockWithSystemDb,
-  schema: {
-    sessions: {
-      id: "sessions.id",
-      userId: "sessions.userId",
-    },
-  },
-}));
+
+  };
+});
 
 vi.mock("@oxagen/database/security", () => ({
   emitSecurityEvent: mockEmitSecurityEvent,

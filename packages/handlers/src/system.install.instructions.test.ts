@@ -5,15 +5,7 @@ import type { InstallClient } from "@oxagen/oxagen/contracts/system.install.inst
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const CLIENTS: InstallClient[] = [
   "claude-code",

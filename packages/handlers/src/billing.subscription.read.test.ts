@@ -13,7 +13,8 @@ const { subFindFirst, planFindFirst, balanceFindFirst } = vi.hoisted(() => ({
 
 // Stub column objects that drizzle's eq/inArray/and will receive without
 // blowing up — the findFirst mock ignores the where arg entirely.
-vi.mock("@oxagen/database", () => {
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
   const stubCol = { _: {} };
   const fakeDb = {
     query: {
@@ -23,13 +24,9 @@ vi.mock("@oxagen/database", () => {
     },
   };
   return {
+    ...real,
     db: () => fakeDb,
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
-    schema: {
-      subscriptions: { orgId: stubCol, status: stubCol },
-      plans: { id: stubCol },
-      creditBalances: { orgId: stubCol },
-    },
   };
 });
 

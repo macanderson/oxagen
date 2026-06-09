@@ -245,18 +245,6 @@ export function normalizeEnv(source: NodeJS.ProcessEnv): Record<string, string |
       out[key] = value;
     }
   }
-  if (stripped.length > 0) {
-    // packages/config is a root dependency that @oxagen/telemetry itself
-    // depends on; importing a logger here would be circular. process.stderr
-    // is the only viable output channel for this root package — intentional.
-    process.stderr.write(
-      JSON.stringify({
-        level: "warn",
-        pkg: "@oxagen/config",
-        msg: `normalizeEnv stripped surrounding double-quotes from: ${stripped.join(", ")}. These values are double-quoted at the source (e.g. the Vercel dashboard) — fix them there.`,
-      }) + "\n",
-    );
-  }
   return out;
 }
 

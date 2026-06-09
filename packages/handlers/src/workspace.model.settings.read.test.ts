@@ -14,7 +14,10 @@ const WS_ROW = {
 
 mocks.workspaceFindFirst.mockResolvedValue(WS_ROW);
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => ({
     query: {
       workspaces: { findFirst: mocks.workspaceFindFirst },
@@ -26,25 +29,16 @@ vi.mock("@oxagen/database", () => ({
         workspaces: { findFirst: mocks.workspaceFindFirst },
       },
     }),
-  schema: {
-    workspaces: { id: "id" },
-  },
-}));
+
+  };
+});
 
 import { workspaceModelSettingsReadHandler } from "./workspace.model.settings.read";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("workspaceModelSettingsReadHandler (@oxagen/handlers)", () => {
   beforeEach(() => {

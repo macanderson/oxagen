@@ -24,7 +24,10 @@ const UPDATED_ROW = {
 
 mocks.prefsFindFirst.mockResolvedValue(UPDATED_ROW);
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => ({
     insert: (_table: unknown) => ({ values: mocks.insertValues }),
     query: {
@@ -38,25 +41,16 @@ vi.mock("@oxagen/database", () => ({
         userPreferences: { findFirst: mocks.prefsFindFirst },
       },
     }),
-  schema: {
-    userPreferences: { userId: "userId" },
-  },
-}));
+
+  };
+});
 
 import { userPreferencesWriteHandler } from "./user.preferences.write";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("userPreferencesWriteHandler (@oxagen/handlers)", () => {
   beforeEach(() => {

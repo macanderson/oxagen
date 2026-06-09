@@ -24,21 +24,17 @@ const mockDb = {
   update: mockUpdate,
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => mockDb,
   // withSystemDb passthrough: forward each call to mockDb so existing mock
   // chains (query.invitations.findFirst, update) apply (OXA-1515).
   withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb),
-  schema: {
-    invitations: {
-      publicId: "invitations.publicId",
-      id: "invitations.id",
-      status: "invitations.status",
-      updatedAt: "invitations.updatedAt",
-      updatedByUserId: "invitations.updatedByUserId",
-    },
-  },
-}));
+
+  };
+});
 
 const { orgMemberInviteDeclineHandler } = await import("./org.member.invite.decline");
 

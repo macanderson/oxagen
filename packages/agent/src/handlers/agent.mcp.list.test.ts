@@ -12,35 +12,19 @@ mocks.fromMock.mockReturnValue({ where: mocks.whereMock });
 mocks.selectMock.mockReturnValue({ from: mocks.fromMock });
 
 const fakeMcpListDb = { select: mocks.selectMock };
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => fakeMcpListDb,
   withTenantDb: async (fn: (tx: typeof fakeMcpListDb) => Promise<unknown>) => fn(fakeMcpListDb),
-  schema: {
-    mcpServers: {
-      publicId: "publicId",
-      name: "name",
-      transportType: "transportType",
-      endpointUrl: "endpointUrl",
-      healthStatus: "healthStatus",
-      lastHealthcheckAt: "lastHealthcheckAt",
-      discoveredTools: "discoveredTools",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-    },
-  },
-}));
+
+  };
+});
 
 import { agentMcpListHandler } from "./agent.mcp.list";
 
-const CTX = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "runner" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 describe("agent.mcp.list handler", () => {
   beforeEach(() => {
@@ -96,10 +80,10 @@ describe("agent.mcp.list handler", () => {
     expect(result.servers[0]!.lastHealthcheckAt).toBeNull();
   });
 
-  it("scopes query to orgId and workspaceId from context (tenant isolation)", () => {
+  it("scopes query to orgId and workspaceId from context (tenant isolation)", async () => {
     mocks.selectResult.mockReturnValue([]);
     const beforeWhere = mocks.whereMock.mock.calls.length;
-    void agentMcpListHandler({}, CTX);
+    await agentMcpListHandler({}, CTX);
     expect(mocks.whereMock.mock.calls.length - beforeWhere).toBe(1);
   });
 });

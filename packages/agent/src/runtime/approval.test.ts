@@ -22,18 +22,15 @@ const fakeDb = {
   execute: executeSpy,
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => fakeDb,
   withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) => fn(fakeDb),
-  schema: {
-    approvalRequests: {
-      id: "id",
-      orgId: "orgId",
-      expiresAt: "expiresAt",
-      resolution: "resolution",
-    },
-  },
-}));
+
+  };
+});
 
 vi.mock("@oxagen/config/env", () => ({
   requireEnv: () => ({ DATABASE_URL: "postgres://test" }),

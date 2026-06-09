@@ -11,7 +11,10 @@ mocks.updateReturning.mockResolvedValue([
   { publicId: "cnv_3" },
 ]);
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => ({
     update: (_table: unknown) => ({
       set: (_vals: unknown) => ({
@@ -31,35 +34,16 @@ vi.mock("@oxagen/database", () => ({
         }),
       }),
     }),
-  schema: {
-    conversations: {
-      publicId: "publicId",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      userId: "userId",
-      deletedAt: "deletedAt",
-      deletedByUserId: "deletedByUserId",
-      archivedAt: "archivedAt",
-      updatedAt: "updatedAt",
-      updatedByUserId: "updatedByUserId",
-    },
-  },
-}));
+
+  };
+});
 
 import { conversationPurgeHandler } from "./conversation.purge";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("conversationPurgeHandler (@oxagen/handlers)", () => {
   beforeEach(() => {

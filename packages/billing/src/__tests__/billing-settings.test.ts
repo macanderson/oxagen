@@ -43,23 +43,16 @@ const dbMocks = {
   },
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => dbMocks,
   withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-  schema: {
-    orgBillingSettings: {
-      orgId: "org_billing_settings.orgId",
-      autoReloadEnabled: "org_billing_settings.autoReloadEnabled",
-      autoReloadThresholdCents: "org_billing_settings.autoReloadThresholdCents",
-      autoReloadAmountCents: "org_billing_settings.autoReloadAmountCents",
-      autoReloadPaymentMethodId:
-        "org_billing_settings.autoReloadPaymentMethodId",
-      lowBalanceThresholdCents: "org_billing_settings.lowBalanceThresholdCents",
-      dunningState: "org_billing_settings.dunningState",
-    },
-  },
-}));
+
+  };
+});
 
 // Import after mocks.
 const { getOrgBillingSettings, updateAutoReloadSettings } = await import(

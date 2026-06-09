@@ -72,11 +72,16 @@ const dbMocks = vi.hoisted(() => {
   };
   return { schema, rowsByTable, db: vi.fn((): unknown => builder) };
 });
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: dbMocks.db,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(dbMocks.db()),
   schema: dbMocks.schema,
-}));
+
+  };
+});
 
 // The MCP contributor uses @oxagen/plugins for credentials, OAuth provider, and reauth marking.
 vi.mock("@oxagen/plugins", () => ({

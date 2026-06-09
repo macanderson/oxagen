@@ -21,21 +21,15 @@ const fakeDb = {
   insert: mocks.dbInsert,
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => fakeDb,
   withSystemDb: async (fn: (tx: typeof fakeDb) => unknown) => fn(fakeDb),
-  schema: {
-    subscriptions: { status: "status", id: "id" },
-    usageRecords: {
-      subscriptionId: "subscriptionId",
-      metric: "metric",
-      periodStart: "periodStart",
-      periodEnd: "periodEnd",
-      quantity: "quantity",
-      totalCostMicros: "totalCostMicros",
-    },
-  },
-}));
+
+  };
+});
 
 vi.mock("@oxagen/telemetry", () => ({
   sumTokenUsage: mocks.sumTokenUsage,

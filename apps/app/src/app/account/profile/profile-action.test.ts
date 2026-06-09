@@ -28,12 +28,14 @@ vi.mock("@/lib/session", () => ({
   getSessionOrRedirect: mockGetSessionOrRedirect,
 }));
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withSystemDb: mockWithSystemDb,
-  schema: {
-    users: { id: "users.id" },
-  },
-}));
+
+  };
+});
 
 vi.mock("next/cache", () => ({
   revalidatePath: mockRevalidatePath,

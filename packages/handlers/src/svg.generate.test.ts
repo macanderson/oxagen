@@ -22,19 +22,10 @@ vi.mock("@oxagen/ai", () => ({
 // ── import under test ─────────────────────────────────────────────────────────
 
 import { svgGenerateHandler } from "./svg.generate";
-import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: "msg_1",
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const VALID_SVG = '<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><circle cx="200" cy="200" r="100" fill="currentColor"/></svg>';
 
@@ -130,7 +121,7 @@ describe("svgGenerateHandler", () => {
       },
     );
 
-    await svgGenerateHandler({ prompt: "test" }, CTX);
+    await svgGenerateHandler({ prompt: "test" }, { ...CTX, messageId: "msg_1" });
 
     expect(capturedTelemetry?.["orgId"]).toBe("org_1");
     expect(capturedTelemetry?.["workspaceId"]).toBe("ws_1");

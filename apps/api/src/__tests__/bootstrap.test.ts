@@ -30,9 +30,14 @@ vi.mock("@oxagen/config/env", () => ({
   loadEnv: mocks.loadEnv,
 }));
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   assertRlsConnectionSafe: mocks.assertRlsConnectionSafe,
-}));
+
+  };
+});
 
 vi.mock("@oxagen/iam", () => ({
   bootstrapIAMRuntime: mocks.bootstrapIAMRuntime,

@@ -68,16 +68,14 @@ vi.mock("@/lib/resolve-org", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: mockWithTenantDb,
-  schema: {
-    workspaceUsers: {
-      workspaceId: "wsu_ws",
-      userId: "wsu_user",
-      role: "wsu_role",
-    },
-  },
-}));
+
+  };
+});
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@/lib/routes", () => ({

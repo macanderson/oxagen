@@ -26,37 +26,23 @@ function makeSelectBuilder(rows: unknown[]): unknown {
   return { from };
 }
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withSystemDb: async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
     fn({ select: mocks.dbSelect } as unknown as Record<string, unknown>),
-  schema: {
-    generatedAssets: {
-      publicId: "ga.publicId",
-      workspaceId: "ga.workspaceId",
-      status: "ga.status",
-      deletedAt: "ga.deletedAt",
-      storageUrl: "ga.storageUrl",
-      mimeType: "ga.mimeType",
-    },
-  },
-}));
+
+  };
+});
 
 // ── import under test ─────────────────────────────────────────────────────────
 
 import { imageAnalyzeHandler } from "./image.analyze";
-import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: "msg_1",
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const FAKE_MODEL = { modelId: "anthropic/claude-sonnet-4.6" };
 
@@ -102,7 +88,7 @@ describe("imageAnalyzeHandler", () => {
   });
 
   it("forwards telemetry context to generateObjectFor", async () => {
-    await imageAnalyzeHandler({ image_id: "gen_abc" }, CTX);
+    await imageAnalyzeHandler({ image_id: "gen_abc" }, { ...CTX, messageId: "msg_1" });
 
     const call = mocks.generateObjectFor.mock.calls[0]![0] as {
       telemetry: Record<string, unknown>;

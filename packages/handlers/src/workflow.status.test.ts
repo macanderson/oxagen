@@ -56,7 +56,10 @@ mocks.tasksWhere.mockReturnValue({ orderBy: mocks.tasksOrderBy });
 mocks.tasksFrom.mockReturnValue({ where: mocks.tasksWhere });
 mocks.tasksSelect.mockReturnValue({ from: mocks.tasksFrom });
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
     const tx = {
       query: {
@@ -66,20 +69,9 @@ vi.mock("@oxagen/database", () => ({
     };
     return fn(tx);
   },
-  schema: {
-    workflowRuns: {
-      id: "id",
-      publicId: "publicId",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-    },
-    workflowRunTasks: {
-      workflowRunId: "workflowRunId",
-      orgId: "orgId",
-      taskIndex: "taskIndex",
-    },
-  },
-}));
+
+  };
+});
 
 vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -87,15 +79,7 @@ vi.mock("./logger", () => ({
 
 import { workflowStatusHandler } from "./workflow.status";
 
-const CTX = {
-  orgId: "org-1",
-  workspaceId: "ws-1",
-  userId: "user-1",
-  apiKeyId: null,
-  requestId: "req-1",
-  surface: "api" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("workflow.status handler", () => {
   beforeEach(() => {

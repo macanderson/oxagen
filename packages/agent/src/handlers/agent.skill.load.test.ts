@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   dbCallResults: [] as unknown[],
 }));
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
     const nextResult = mocks.dbCallResults.shift();
     return fn({
@@ -21,34 +24,13 @@ vi.mock("@oxagen/database", () => ({
       }),
     });
   },
-  schema: {
-    skills: {
-      id: "id",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      slug: "slug",
-      enabled: "enabled",
-      deletedAt: "deletedAt",
-    },
-    skillVersions: {
-      skillId: "skillId",
-      versionNumber: "versionNumber",
-      body: "body",
-    },
-  },
-}));
+
+  };
+});
 
 import { agentSkillLoadHandler } from "./agent.skill.load";
 
-const CTX = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "runner" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 function enqueue(...results: unknown[]) {
   mocks.dbCallResults.push(...results);

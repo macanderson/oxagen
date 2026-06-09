@@ -17,18 +17,10 @@ const mocks = vi.hoisted(() => ({
 
 mocks.selectQuery.mockResolvedValue([]);
 
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    documents: {
-      publicId: "documents.publicId",
-      title: "documents.title",
-      content: "documents.content",
-      metadata: "documents.metadata",
-      createdAt: "documents.createdAt",
-      workspaceId: "documents.workspaceId",
-      deletedAt: "documents.deletedAt",
-    },
-  },
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       select: () => ({
@@ -39,20 +31,14 @@ vi.mock("@oxagen/database", () => ({
         }),
       }),
     }),
-}));
+
+  };
+});
 
 import { documentReadHandler } from "./document.read";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const makeRow = (overrides: Record<string, unknown> = {}) => ({
   title: "My Document",

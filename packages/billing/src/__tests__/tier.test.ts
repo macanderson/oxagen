@@ -37,21 +37,14 @@ function makeTx() {
   };
 }
 
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx()),
-  schema: {
-    plans: { tier: "plans.tier", id: "plans.id" },
-    subscriptions: {
-      planId: "subscriptions.planId",
-      orgId: "subscriptions.orgId",
-      status: "subscriptions.status",
-    },
-    organizations: {
-      id: "organizations.id",
-      planType: "organizations.planType",
-    },
-  },
-}));
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
+    withSystemDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx()),
+    withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx()),
+  };
+});
 
 const { resolveOrgTier } = await import("../tier");
 

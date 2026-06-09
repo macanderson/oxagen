@@ -9,7 +9,10 @@ const mocks = vi.hoisted(() => ({
 // .select().from().where().orderBy().limit()
 mocks.selectFrom.mockResolvedValue([]);
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+  ...real,
   db: () => ({
     select: () => ({
       from: () => ({
@@ -33,36 +36,16 @@ vi.mock("@oxagen/database", () => ({
         }),
       }),
     }),
-  schema: {
-    conversations: {
-      publicId: "publicId",
-      title: "title",
-      status: "status",
-      archivedAt: "archivedAt",
-      createdAt: "createdAt",
-      updatedAt: "updatedAt",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      userId: "userId",
-      deletedAt: "deletedAt",
-    },
-  },
-}));
+
+  };
+});
 
 import { conversationListHandler } from "./conversation.list";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const BASE_INPUT = {
   filter: "active" as const,

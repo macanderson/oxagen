@@ -42,19 +42,15 @@ const fakeDb = {
   update: mocks.updateSpy,
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => fakeDb,
   withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) => fn(fakeDb),
-  schema: {
-    backgroundTasks: {
-      publicId: "publicId",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      id: "id",
-      status: "status",
-    },
-  },
-}));
+
+  };
+});
 
 vi.mock("@oxagen/config/env", () => ({
   requireEnv: () => ({ INNGEST_EVENT_KEY: "evt-test" }),
@@ -73,15 +69,7 @@ import { agentTaskBackgroundCancelHandler } from "./agent.task.background.cancel
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "runner" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // START
@@ -181,11 +169,11 @@ describe("agentTaskBackgroundReadHandler", () => {
     ).rejects.toThrow("Background task task_missing not found");
   });
 
-  it("queries with orgId and workspaceId from context (tenant isolation)", () => {
+  it("queries with orgId and workspaceId from context (tenant isolation)", async () => {
     mocks.selectResult.mockReturnValue([taskRow]);
     const beforeSelect = mocks.selectSpy.mock.calls.length;
     const beforeWhere = mocks.selectWhere.mock.calls.length;
-    void agentTaskBackgroundReadHandler({ taskId: "task_pub_1" }, CTX);
+    await agentTaskBackgroundReadHandler({ taskId: "task_pub_1" }, CTX);
     expect(mocks.selectSpy.mock.calls.length - beforeSelect).toBe(1);
     expect(mocks.selectWhere.mock.calls.length - beforeWhere).toBe(1);
   });
@@ -256,11 +244,11 @@ describe("agentTaskBackgroundCancelHandler", () => {
     ).rejects.toThrow("Background task task_ghost not found");
   });
 
-  it("queries with orgId from context (tenant isolation)", () => {
+  it("queries with orgId from context (tenant isolation)", async () => {
     mocks.selectResult.mockReturnValue([{ id: "id_4", status: "running" }]);
     const beforeSelect = mocks.selectSpy.mock.calls.length;
     const beforeWhere = mocks.selectWhere.mock.calls.length;
-    void agentTaskBackgroundCancelHandler({ taskId: "task_pub_1" }, CTX);
+    await agentTaskBackgroundCancelHandler({ taskId: "task_pub_1" }, CTX);
     expect(mocks.selectSpy.mock.calls.length - beforeSelect).toBe(1);
     expect(mocks.selectWhere.mock.calls.length - beforeWhere).toBe(1);
   });

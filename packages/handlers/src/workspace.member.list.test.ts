@@ -20,37 +20,20 @@ const makeTx = () => ({
   }),
 });
 
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    workspaceUsers: {
-      publicId: "workspaceUsers.publicId",
-      email: "workspaceUsers.email",
-      role: "workspaceUsers.role",
-      joinedAt: "workspaceUsers.joinedAt",
-      workspaceId: "workspaceUsers.workspaceId",
-      userId: "workspaceUsers.userId",
-    },
-    users: {
-      id: "users.id",
-      email: "users.email",
-    },
-  },
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => fn(makeTx()),
-}));
+
+  };
+});
 
 import { workspaceMemberListHandler } from "./workspace.member.list";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const makeRow = (overrides: Record<string, unknown> = {}) => ({
   publicId: "wsu_abc",

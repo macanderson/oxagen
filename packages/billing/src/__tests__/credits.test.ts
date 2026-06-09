@@ -107,33 +107,17 @@ function buildDb() {
   };
 }
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => dbState.instance,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => dbState.instance?.transaction(fn),
   withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => dbState.instance?.transaction(fn),
-  schema: {
-    creditLots: {
-      orgId: "cl.orgId",
-      remainingCents: "cl.remainingCents",
-      expiresAt: "cl.expiresAt",
-      id: "cl.id",
-      source: "cl.source",
-      originalCents: "cl.originalCents",
-      grantedAt: "cl.grantedAt",
-    },
-    creditLedger: {
-      orgId: "led.orgId",
-      reason: "led.reason",
-      referenceType: "led.referenceType",
-      referenceId: "led.referenceId",
-    },
-    creditBalances: {
-      orgId: "cb.orgId",
-      balanceCents: "cb.balanceCents",
-    },
-  },
   __dbState: dbState,
-}));
+
+  };
+});
 
 // consumeCredits is imported transitively by grantCredits (negative delta).
 // We mock it here to keep these tests isolated to createCreditLot / effectiveBalance.

@@ -21,19 +21,10 @@ const mocks = vi.hoisted(() => ({
   insertReturning: vi.fn(),
 }));
 
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    documents: {
-      publicId: "documents.publicId",
-      title: "documents.title",
-      createdAt: "documents.createdAt",
-      orgId: "documents.orgId",
-      workspaceId: "documents.workspaceId",
-      createdByUserId: "documents.createdByUserId",
-      updatedByUserId: "documents.updatedByUserId",
-      content: "documents.content",
-    },
-  },
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       insert: () => ({
@@ -42,20 +33,14 @@ vi.mock("@oxagen/database", () => ({
         }),
       }),
     }),
-}));
+
+  };
+});
 
 import { documentCreateHandler } from "./document.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 beforeEach(() => {
   vi.clearAllMocks();

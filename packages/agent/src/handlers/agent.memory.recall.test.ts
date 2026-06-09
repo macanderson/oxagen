@@ -30,13 +30,7 @@ vi.mock("../runtime/knowledge-graph", () => ({
 
 import { agentMemoryRecallHandler } from "./agent.memory.recall";
 
-const CTX = {
-  orgId: "ten_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1", surface: "runner" as const, messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 describe("agent.memory.recall handler", () => {
   beforeEach(() => {
@@ -54,7 +48,7 @@ describe("agent.memory.recall handler", () => {
     );
     expect(mocks.embedTextMock).toHaveBeenCalledWith("find me", {
       telemetry: {
-        orgId: "ten_1",
+        orgId: "org_1",
         workspaceId: "ws_1",
         surface: "runner",
         executionStepId: "req_1",

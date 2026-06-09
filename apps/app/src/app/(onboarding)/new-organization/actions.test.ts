@@ -15,6 +15,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { getTableName } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -44,16 +45,14 @@ vi.mock("@/lib/session", () => ({
   getSessionOrRedirect: mockGetSessionOrRedirect,
 }));
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withSystemDb: mockWithSystemDb,
-  schema: {
-    organizations: "organizations",
-    orgUsers: "orgUsers",
-    workspaces: "workspaces",
-    workspaceUsers: "workspaceUsers",
-    orgBillingProfiles: "orgBillingProfiles",
-  },
-}));
+
+  };
+});
 
 vi.mock("@oxagen/billing", () => ({
   grantFreeCredits: mockGrantFreeCredits,
@@ -150,18 +149,15 @@ function makeFormData(overrides: Record<string, string> = {}): FormData {
 }
 
 function makeSuccessfulDb(orgId = "org-123", orgSlug = "acme-inc", workspaceSlug = "default") {
-  // Table sentinel strings from the @oxagen/database mock above.
-  const ORG_TABLE = "organizations";
-  const WS_TABLE = "workspaces";
-
   return {
     insert: (table: unknown) => ({
       values: (_data: unknown) => ({
         returning: () => {
-          if (table === ORG_TABLE) {
+          const name = getTableName(table as Parameters<typeof getTableName>[0]);
+          if (name === "organizations") {
             return Promise.resolve([{ id: orgId, slug: orgSlug }]);
           }
-          if (table === WS_TABLE) {
+          if (name === "workspaces") {
             return Promise.resolve([{ id: "ws-456", slug: workspaceSlug }]);
           }
           return Promise.resolve([{ id: "row-misc" }]);
@@ -349,13 +345,14 @@ describe("createOrgAction", () => {
       const tx = {
         insert: (table: unknown) => ({
           values: (_data: unknown) => {
-            if (table === "orgBillingProfiles") {
+            const name = getTableName(table as Parameters<typeof getTableName>[0]);
+            if (name === "org_billing_profiles") {
               billingInsertCalled = true;
             }
             return {
               returning: () => {
-                if (table === "organizations") return Promise.resolve([{ id: "org-123", slug: "acme-inc" }]);
-                if (table === "workspaces") return Promise.resolve([{ id: "ws-456", slug: "default" }]);
+                if (name === "organizations") return Promise.resolve([{ id: "org-123", slug: "acme-inc" }]);
+                if (name === "workspaces") return Promise.resolve([{ id: "ws-456", slug: "default" }]);
                 return Promise.resolve([{ id: "row-misc" }]);
               },
             };
@@ -379,11 +376,12 @@ describe("createOrgAction", () => {
       const tx = {
         insert: (table: unknown) => ({
           values: (_data: unknown) => {
-            if (table === "orgBillingProfiles") billingInsertCalled = true;
+            const name = getTableName(table as Parameters<typeof getTableName>[0]);
+            if (name === "org_billing_profiles") billingInsertCalled = true;
             return {
               returning: () => {
-                if (table === "organizations") return Promise.resolve([{ id: "org-123", slug: "acme-inc" }]);
-                if (table === "workspaces") return Promise.resolve([{ id: "ws-456", slug: "default" }]);
+                if (name === "organizations") return Promise.resolve([{ id: "org-123", slug: "acme-inc" }]);
+                if (name === "workspaces") return Promise.resolve([{ id: "ws-456", slug: "default" }]);
                 return Promise.resolve([{ id: "row-misc" }]);
               },
             };

@@ -1,11 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@oxagen/database", () => ({
-  schema: { notifications: { publicId: "publicId_col", userId: "userId_col", unread: "unread_col", archived: "archived_col", updatedAt: "updatedAt_col" } },
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({ update: () => ({ set: () => ({ where: () => Promise.resolve() }) }) }),
   ),
-}));
+
+  };
+});
 
 import { handler } from "./notifications.mark";
 

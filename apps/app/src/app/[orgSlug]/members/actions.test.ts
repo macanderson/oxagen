@@ -77,12 +77,14 @@ vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({ resolveOrg: mockResolveOrg }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: mockWithTenantDb,
-  schema: {
-    invitations: "invitations_sentinel",
-  },
-}));
+
+  };
+});
 vi.mock("@oxagen/billing", () => ({
   assertSeatAvailable: mockAssertSeatAvailable,
   isSeatLimitError: (err: unknown) =>

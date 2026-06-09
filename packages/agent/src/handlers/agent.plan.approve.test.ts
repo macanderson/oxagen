@@ -8,25 +8,21 @@ const executeSpy = vi.fn(async () => undefined);
 
 const fakeDb = { execute: executeSpy };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => fakeDb,
   withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) => fn(fakeDb),
-  schema: {},
-}));
+
+  };
+});
 
 // Use the real drizzle sql so the tagged-template object shape is authentic.
 
 import { agentPlanApproveHandler } from "./agent.plan.approve";
 
-const CTX = {
-  orgId: "ten_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "runner" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 describe("agent.plan.approve handler", () => {
   beforeEach(() => {

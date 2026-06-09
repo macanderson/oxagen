@@ -112,15 +112,7 @@ vi.mock("pptxgenjs", () => {
 import { documentsGenerateHandler } from "./documents.generate";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 // ── Test setup ────────────────────────────────────────────────────────────────
 

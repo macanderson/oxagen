@@ -25,23 +25,16 @@ const dbMocks = {
   },
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => dbMocks,
   withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-  schema: {
-    subscriptions: {
-      orgId: "subscriptions.orgId",
-      status: "subscriptions.status",
-      seatCount: "subscriptions.seatCount",
-    },
-    orgUsers: { orgId: "orgUsers.orgId" },
-    invitations: {
-      orgId: "invitations.orgId",
-      status: "invitations.status",
-    },
-  },
-}));
+
+  };
+});
 
 // ── drizzle-orm mock ─────────────────────────────────────────────────────────
 // The seats module uses `and`, `count`, `eq`, `sql` from drizzle-orm.

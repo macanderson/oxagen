@@ -22,29 +22,19 @@ mocks.dbUpdate.mockReturnValue({ set: mocks.dbUpdateSet });
 mocks.generateObjectFor.mockResolvedValue({ object: MOCK_OUTPUT });
 mocks.insertToolInvocation.mockResolvedValue(undefined);
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
     const tx = {
       update: (_table: unknown) => ({ set: mocks.dbUpdateSet }),
     };
     return fn(tx);
   },
-  schema: {
-    workflowRunTasks: {
-      id: "id",
-      orgId: "orgId",
-      status: "status",
-      completedTasks: "completedTasks",
-    },
-    workflowRuns: {
-      id: "id",
-      completedTasks: "completedTasks",
-      failedTasks: "failedTasks",
-      totalTasks: "totalTasks",
-      status: "status",
-    },
-  },
-}));
+
+  };
+});
 
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),

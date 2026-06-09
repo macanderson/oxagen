@@ -15,7 +15,10 @@ mocks.insertReturning.mockResolvedValue([{ publicId: "aur_exec1", status: "runni
 // We track how many times it's been called and route accordingly.
 let withTenantDbCallCount = 0;
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
     withTenantDbCallCount++;
     if (withTenantDbCallCount % 2 === 1) {
@@ -35,42 +38,16 @@ vi.mock("@oxagen/database", () => ({
       }),
     });
   },
-  schema: {
-    automations: {
-      publicId: "publicId",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      deletedAt: "deletedAt",
-      id: "id",
-    },
-    automationRuns: {
-      publicId: "publicId",
-      status: "status",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      automationId: "automationId",
-      payload: "payload",
-      startedAt: "startedAt",
-      createdByUserId: "createdByUserId",
-      updatedByUserId: "updatedByUserId",
-    },
-  },
-}));
+
+  };
+});
 
 import { automationTriggerHandler } from "./automation.trigger";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const BASE_INPUT = {
   automation_id: "aut_abc",

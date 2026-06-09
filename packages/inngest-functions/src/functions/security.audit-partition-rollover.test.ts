@@ -23,10 +23,15 @@ const mocks = vi.hoisted(() => ({
 // One fake tenant-system transaction whose `execute` we script per call.
 const fakeTx = { execute: mocks.execute };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   // The rollover runs all DDL through withSystemDb (system/cron RLS bypass).
   withSystemDb: async (fn: (tx: typeof fakeTx) => Promise<unknown>) => fn(fakeTx),
-}));
+
+  };
+});
 
 vi.mock("../logger", () => ({
   logger: { info: mocks.loggerInfo, error: mocks.loggerError },

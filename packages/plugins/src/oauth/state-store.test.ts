@@ -5,17 +5,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 type Row = { id: string; identifier: string; value: string; expiresAt: Date; updatedAt?: Date };
 const store = new Map<string, Row>();
 
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    verifications: {
-      id: "id",
-      identifier: "identifier",
-      value: "value",
-      expiresAt: "expiresAt",
-    },
-  },
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withSystemDb: async (fn: (tx: unknown) => unknown) => fn(makeTx()),
-}));
+
+  };
+});
 
 function makeTx() {
   return {
@@ -65,7 +62,8 @@ beforeEach(() => {
 // Since drizzle condition ASTs are opaque we re-mock with a stateful version
 // that actually honours the id/expiresAt conditions.
 
-vi.mock("@oxagen/database", () => {
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
   const storeRef = store;
 
   // The state-store always passes `eq(schema.verifications.id, id)` — we capture
@@ -74,6 +72,7 @@ vi.mock("@oxagen/database", () => {
   let lastInsertedId: string | null = null;
 
   return {
+    ...real,
     schema: {
       verifications: {
         id: "id",

@@ -14,19 +14,16 @@ mocks.fromMock.mockReturnValue({ where: mocks.whereMock });
 mocks.selectMock.mockReturnValue({ from: mocks.fromMock });
 
 const fakeToolListDb = { select: mocks.selectMock };
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => fakeToolListDb,
   withTenantDb: async (fn: (tx: typeof fakeToolListDb) => Promise<unknown>) =>
     fn(fakeToolListDb),
-  schema: {
-    mcpServers: {
-      name: "name",
-      discoveredTools: "discoveredTools",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-    },
-  },
-}));
+
+  };
+});
 
 // Stub @oxagen/oxagen so the dynamic import inside the handler resolves
 vi.mock("@oxagen/oxagen", () => ({
@@ -36,15 +33,7 @@ vi.mock("@oxagen/oxagen", () => ({
 
 import { agentToolListHandler } from "./agent.tool.list";
 
-const CTX = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "runner" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 const BUILTIN_CAP = {
   name: "documents.generate",

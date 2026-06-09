@@ -16,21 +16,14 @@ function makeTx(rows: unknown[]): unknown {
   return { select };
 }
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx(mocks.selectRows())),
-  schema: {
-    generatedAssets: {
-      publicId: "publicId",
-      storageUrl: "storageUrl",
-      createdAt: "createdAt",
-      prompt: "prompt",
-      kind: "kind",
-      workspaceId: "workspaceId",
-      status: "status",
-      deletedAt: "deletedAt",
-    },
-  },
-}));
+
+  };
+});
 
 // ── import under test ─────────────────────────────────────────────────────────
 
@@ -39,15 +32,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 function makeRow(overrides: Record<string, unknown> = {}) {
   return {

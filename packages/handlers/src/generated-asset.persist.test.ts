@@ -17,15 +17,19 @@ vi.mock("@oxagen/storage", () => ({
   storage: () => ({ driver: "vercel-blob", put: mocks.put }),
 }));
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => ({ insert: mocks.insert }),
   // withSystemDb passthrough: the handler uses withSystemDb for both
   // persistGeneratedAsset and createPendingGeneratedAsset inserts (OXA-1515).
   // Forward fn to a fake tx that exposes the same insert mock.
   withSystemDb: async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
     fn({ insert: mocks.insert } as unknown as Record<string, unknown>),
-  schema: { generatedAssets: { id: "ga.id", publicId: "ga.publicId" } },
-}));
+
+  };
+});
 
 vi.mock("node:crypto", () => ({
   randomUUID: () => "11111111-1111-1111-1111-111111111111",

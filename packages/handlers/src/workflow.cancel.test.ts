@@ -17,7 +17,10 @@ mocks.updateWhere.mockResolvedValue([{ id: "wfr-uuid-1" }]);
 mocks.updateSet.mockReturnValue({ where: mocks.updateWhere });
 mocks.inngestSend.mockResolvedValue(undefined);
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
     const tx = {
       query: {
@@ -27,16 +30,9 @@ vi.mock("@oxagen/database", () => ({
     };
     return fn(tx);
   },
-  schema: {
-    workflowRuns: {
-      id: "id",
-      publicId: "publicId",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      status: "status",
-    },
-  },
-}));
+
+  };
+});
 
 vi.mock("@oxagen/inngest-functions/client", () => ({
   inngest: { send: mocks.inngestSend },
@@ -48,15 +44,7 @@ vi.mock("./logger", () => ({
 
 import { workflowCancelHandler } from "./workflow.cancel";
 
-const CTX = {
-  orgId: "org-1",
-  workspaceId: "ws-1",
-  userId: "user-1",
-  apiKeyId: null,
-  requestId: "req-1",
-  surface: "api" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("workflow.cancel handler", () => {
   beforeEach(() => {
@@ -98,7 +86,7 @@ describe("workflow.cancel handler", () => {
       expect.objectContaining({
         name: "agent/workflow.cancel",
         data: expect.objectContaining({
-          orgId: "org-1",
+          orgId: "org_1",
           workflowRunId: RUNNING_RUN.id,
         }),
       }),

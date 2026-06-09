@@ -14,14 +14,18 @@ const mocks = vi.hoisted(() => ({
   requireTier: vi.fn(),
 }));
 
-vi.mock("@oxagen/database", () => ({
-  schema: { workspaces: { id: "workspaces.id" } },
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       query: { workspaces: { findFirst: mocks.findFirst } },
       update: () => ({ set: mocks.set }),
     }),
-}));
+
+  };
+});
 
 vi.mock("@oxagen/billing", () => ({
   resolveOrgTier: mocks.resolveOrgTier,
@@ -30,15 +34,7 @@ vi.mock("@oxagen/billing", () => ({
 
 import { promptSettingsWriteHandler } from "./prompt.settings.write";
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 beforeEach(() => {
   mocks.findFirst.mockReset().mockResolvedValue({ settings: {} });

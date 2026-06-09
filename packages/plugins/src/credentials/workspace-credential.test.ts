@@ -2,16 +2,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // Mock @oxagen/database so the service is unit-testable without a live DB.
 const rows: Record<string, unknown>[] = [];
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    mcpCredentials: {
-      id: "id",
-      workspaceId: "workspace_id",
-      orgListingId: "org_listing_id",
-    },
-  },
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+  ...real,
   withSystemDb: async (fn: (tx: unknown) => unknown) => fn(makeTx()),
-}));
+
+  };
+});
 
 function makeTx() {
   return {

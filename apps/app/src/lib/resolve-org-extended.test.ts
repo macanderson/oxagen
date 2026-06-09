@@ -26,15 +26,14 @@ const { notFoundMock, mockRows, mockWithSystemDb } = vi.hoisted(() => {
 // ---------------------------------------------------------------------------
 vi.mock("next/navigation", () => ({ notFound: notFoundMock }));
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withSystemDb: mockWithSystemDb,
-  schema: {
-    organizations: { slug: "slug_col", id: "id_col" },
-    workspaces: { orgId: "org_id_col", slug: "ws_slug_col", id: "ws_id_col" },
-    orgUsers: { orgId: "org_id_col", userId: "user_id_col", id: "id_col", role: "role_col" },
-    accounts: { userId: "user_id_col", providerId: "provider_id_col" },
-  },
-}));
+
+  };
+});
 
 vi.mock("server-only", () => ({}));
 

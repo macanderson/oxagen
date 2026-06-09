@@ -7,7 +7,10 @@ const mocks = vi.hoisted(() => ({
 
 mocks.updateReturning.mockResolvedValue([{ publicId: "cnv_1" }, { publicId: "cnv_2" }]);
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => ({
     update: (_table: unknown) => ({
       set: (_vals: unknown) => ({
@@ -27,34 +30,16 @@ vi.mock("@oxagen/database", () => ({
         }),
       }),
     }),
-  schema: {
-    conversations: {
-      publicId: "publicId",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      userId: "userId",
-      deletedAt: "deletedAt",
-      deletedByUserId: "deletedByUserId",
-      updatedAt: "updatedAt",
-      updatedByUserId: "updatedByUserId",
-    },
-  },
-}));
+
+  };
+});
 
 import { conversationDeleteHandler } from "./conversation.delete";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("conversationDeleteHandler (@oxagen/handlers)", () => {
   beforeEach(() => {

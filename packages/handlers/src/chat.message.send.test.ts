@@ -67,7 +67,10 @@ mocks.txFn.mockImplementation(async (cb: (tx: Record<string, unknown>) => Promis
 
 // ── module mocks ──────────────────────────────────────────────────────────────
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => ({
     query: {
       conversations: { findFirst: mocks.convFindFirst },
@@ -75,51 +78,16 @@ vi.mock("@oxagen/database", () => ({
     transaction: mocks.txFn,
   }),
   withTenantDb: (fn: (tx: unknown) => Promise<unknown>): Promise<unknown> => mocks.txFn(fn) as Promise<unknown>,
-  schema: {
-    conversations: {
-      id: "id",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      userId: "userId",
-      title: "title",
-      status: "status",
-      createdByUserId: "createdByUserId",
-      updatedByUserId: "updatedByUserId",
-      activeLeafMessageId: "activeLeafMessageId",
-      updatedAt: "updatedAt",
-    },
-    messages: {
-      id: "id",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      conversationId: "conversationId",
-      parentMessageId: "parentMessageId",
-      role: "role",
-      content: "content",
-      contentBlocks: "contentBlocks",
-      branchReason: "branchReason",
-      isActiveInBranch: "isActiveInBranch",
-      metadata: "metadata",
-      createdByUserId: "createdByUserId",
-      updatedByUserId: "updatedByUserId",
-    },
-  },
-}));
+
+  };
+});
 
 import { chatMessageSendHandler } from "./chat.message.send";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const BASE_INPUT = {
   conversationId: null as string | null,

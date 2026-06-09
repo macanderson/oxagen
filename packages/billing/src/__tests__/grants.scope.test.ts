@@ -48,24 +48,15 @@ function makeTx() {
   };
 }
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: tenantSeam,
   withSystemDb: systemSeam,
-  schema: {
-    creditLedger: {
-      id: "creditLedger.id",
-      orgId: "creditLedger.orgId",
-      reason: "creditLedger.reason",
-      referenceType: "creditLedger.referenceType",
-      referenceId: "creditLedger.referenceId",
-    },
-    creditLots: { orgId: "creditLots.orgId" },
-    creditBalances: {
-      orgId: "creditBalances.orgId",
-      balanceCents: "creditBalances.balanceCents",
-    },
-  },
-}));
+
+  };
+});
 
 // grants.ts imports these at module load; stub to avoid side effects.
 vi.mock("@oxagen/database/security", () => ({ emitSecurityEvent: vi.fn() }));

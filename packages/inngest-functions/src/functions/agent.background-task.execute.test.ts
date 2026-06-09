@@ -21,19 +21,17 @@ mocks.dbUpdate.mockReturnValue({ set: mocks.dbUpdateSet });
 
 const fakeDb = { update: mocks.dbUpdate };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => fakeDb,
   // withTenantDb pass-through: invokes the callback with the same fake tx so
   // handler assertions keep working without a real transaction or GUC.
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
-  schema: {
-    backgroundTasks: {
-      publicId: "publicId",
-      orgId: "orgId",
-      id: "id",
-    },
-  },
-}));
+
+  };
+});
 
 vi.mock("@oxagen/tenancy", () => ({
   // runInTenantScope pass-through: executes fn() directly in unit tests so

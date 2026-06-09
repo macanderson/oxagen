@@ -50,24 +50,16 @@ const dbMocks = {
   select: vi.fn(),
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => dbMocks,
   withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-  schema: {
-    plans: { slug: "plans.slug", stripeProductId: "plans.stripeProductId" },
-    subscriptions: {
-      stripeSubscriptionId: "subs.stripeSubscriptionId",
-      orgId: "subs.orgId",
-      status: "subs.status",
-      seatCount: "subs.seatCount",
-      planId: "subs.planId",
-    },
-    organizations: { id: "orgs.id", name: "orgs.name", slug: "orgs.slug" },
-    orgUsers: { orgId: "orgUsers.orgId" },
-    invitations: { orgId: "inv.orgId", status: "inv.status" },
-  },
-}));
+
+  };
+});
 
 // ── drizzle-orm mock ─────────────────────────────────────────────────────────
 

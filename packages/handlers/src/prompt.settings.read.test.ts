@@ -14,15 +14,7 @@ vi.mock("@oxagen/ai", () => ({
 
 import { promptSettingsReadHandler } from "./prompt.settings.read";
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 beforeEach(() => mocks.loadWorkspacePromptConfig.mockReset());
 

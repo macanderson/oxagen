@@ -5,13 +5,14 @@ import { describe, expect, it, vi } from "vitest";
 // We capture the mock factory so individual tests can configure the return values.
 const mockWithTenantDb = vi.hoisted(() => vi.fn());
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: mockWithTenantDb,
-  schema: {
-    userPreferences: { userId: "userId" },
-    workspaces: { id: "id" },
-  },
-}));
+
+  };
+});
 
 // drizzle-orm eq is used as a comparator; mock it as an identity pass-through
 // so the query objects built inside the function don't throw.

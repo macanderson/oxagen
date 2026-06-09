@@ -86,24 +86,16 @@ const dbMocks = {
   },
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => dbMocks,
   withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-  schema: {
-    paymentMethods: {
-      orgId: "pm.orgId",
-      deletedAt: "pm.deletedAt",
-      stripePaymentMethodId: "pm.stripePaymentMethodId",
-      isDefault: "pm.isDefault",
-      id: "pm.id",
-    },
-    subscriptions: {
-      orgId: "sub.orgId",
-      status: "sub.status",
-    },
-  },
-}));
+
+  };
+});
 
 // Import after mocks.
 const {

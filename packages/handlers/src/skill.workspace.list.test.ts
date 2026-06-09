@@ -16,33 +16,20 @@ const makeTx = () => ({
   }),
 });
 
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    skills: {
-      publicId: "skills.publicId",
-      name: "skills.name",
-      description: "skills.description",
-      enabled: "skills.enabled",
-      workspaceId: "skills.workspaceId",
-      deletedAt: "skills.deletedAt",
-    },
-  },
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => fn(makeTx()),
-}));
+
+  };
+});
 
 import { skillWorkspaceListHandler } from "./skill.workspace.list";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const makeSkillRow = (overrides: Record<string, unknown> = {}) => ({
   publicId: "skl_abc",

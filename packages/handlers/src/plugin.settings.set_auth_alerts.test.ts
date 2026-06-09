@@ -1,11 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@oxagen/database", () => ({
-  schema: { organizations: { id: "id_col", settings: "settings_col", updatedAt: "updatedAt_col" } },
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withSystemDb: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({ update: () => ({ set: () => ({ where: () => Promise.resolve() }) }) }),
   ),
-}));
+
+  };
+});
 
 import { handler } from "./plugin.settings.set_auth_alerts";
 

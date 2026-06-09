@@ -42,15 +42,16 @@ const dbMocks = {
   },
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => dbMocks,
   withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-  schema: {
-    organizations: { id: "organizations.id" },
-    subscriptions: { orgId: "subscriptions.orgId" },
-  },
-}));
+
+  };
+});
 
 // Import after mocks.
 const { ensureStripeCustomer } = await import("../customers");

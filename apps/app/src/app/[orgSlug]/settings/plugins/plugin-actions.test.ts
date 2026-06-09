@@ -66,12 +66,14 @@ vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({ resolveOrg: mockResolveOrg }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: mockWithTenantDb,
-  schema: {
-    orgUsers: { orgId: "orgId_col", userId: "userId_col", role: "role_col" },
-  },
-}));
+
+  };
+});
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/handlers/logger", () => ({

@@ -52,31 +52,19 @@ vi.mock("@oxagen/storage", () => ({
   storage: () => ({ get: mocks.storageGet }),
 }));
 
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    generatedAssets: {
-      publicId: "generatedAssets.publicId",
-      orgId: "generatedAssets.orgId",
-      status: "generatedAssets.status",
-      deletedAt: "generatedAssets.deletedAt",
-      storageKey: "generatedAssets.storageKey",
-    },
-  },
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn({ select: mocks.dbSelect }),
-}));
+
+  };
+});
 
 import { archiveCreateHandler } from "./archive.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 // Fake ZIP output: real ZIP magic header + padding.
 const FAKE_ZIP = new Uint8Array([...ZIP_MAGIC, ...new Uint8Array(100)]);

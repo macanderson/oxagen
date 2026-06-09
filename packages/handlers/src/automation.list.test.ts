@@ -7,7 +7,10 @@ const mocks = vi.hoisted(() => ({
 
 mocks.selectOrderBy.mockResolvedValue([]);
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       select: (_cols: unknown) => ({
@@ -18,34 +21,16 @@ vi.mock("@oxagen/database", () => ({
         }),
       }),
     }),
-  schema: {
-    automations: {
-      publicId: "publicId",
-      name: "name",
-      status: "status",
-      triggerConfig: "triggerConfig",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      deletedAt: "deletedAt",
-      createdAt: "createdAt",
-    },
-  },
-}));
+
+  };
+});
 
 import { automationListHandler } from "./automation.list";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const makeRow = (overrides: Record<string, unknown> = {}) => ({
   publicId: "aut_abc",

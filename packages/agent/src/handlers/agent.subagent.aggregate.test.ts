@@ -2,46 +2,21 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // ---- Module mocks -----------------------------------------------------------
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: vi.fn(),
-  schema: {
-    subagentFanouts: {
-      publicId: "fan.publicId",
-      status: "fan.status",
-      totalChildren: "fan.totalChildren",
-      completedChildren: "fan.completedChildren",
-      orgId: "fan.orgId",
-      workspaceId: "fan.workspaceId",
-    },
-    subagentRuns: {
-      publicId: "run.publicId",
-      capabilityName: "run.capabilityName",
-      status: "run.status",
-      outputPayload: "run.outputPayload",
-      errorReason: "run.errorReason",
-      startedAt: "run.startedAt",
-      completedAt: "run.completedAt",
-      fanoutId: "run.fanoutId",
-      orgId: "run.orgId",
-      workspaceId: "run.workspaceId",
-    },
-  },
-}));
+
+  };
+});
 
 import { withTenantDb } from "@oxagen/database";
 import { agentSubagentAggregateHandler } from "./agent.subagent.aggregate";
 
 // ---- Test helpers -----------------------------------------------------------
 
-const CTX = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 type FanoutRow = { publicId: string; status: string; totalChildren: number; completedChildren: number };
 type RunRow = {

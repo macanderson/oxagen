@@ -69,24 +69,16 @@ function makeDb(state: DbState) {
 
 const dbStateHolder: { instance: ReturnType<typeof makeDb> | null } = { instance: null };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => dbStateHolder.instance,
   withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbStateHolder.instance),
   withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbStateHolder.instance),
-  schema: {
-    orgBillingSettings: {
-      orgId: "orgBillingSettings.orgId",
-      id: "orgBillingSettings.id",
-      dunningState: "orgBillingSettings.dunningState",
-      graceEndsAt: "orgBillingSettings.graceEndsAt",
-    },
-    subscriptions: {
-      orgId: "subscriptions.orgId",
-      status: "subscriptions.status",
-      stripeSubscriptionId: "subscriptions.stripeSubscriptionId",
-    },
-  },
-}));
+
+  };
+});
 
 // Import after mocks.
 const {

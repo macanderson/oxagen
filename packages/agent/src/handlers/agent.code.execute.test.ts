@@ -26,15 +26,7 @@ vi.mock("@oxagen/sandbox", () => ({
 import { agentCodeExecuteHandler } from "./agent.code.execute";
 import { isSandboxAvailable, getSandbox } from "@oxagen/sandbox";
 
-const CTX = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "runner" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 describe("agent.code.execute handler", () => {
   beforeEach(() => {

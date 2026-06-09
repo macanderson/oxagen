@@ -11,3 +11,4 @@ export {
   assertRlsConnectionSafe,
   type Tx,
 } from "./tenant";
+export { makeWithTenantDbMock, makeWithSystemDbMock } from "./tenant.mock";

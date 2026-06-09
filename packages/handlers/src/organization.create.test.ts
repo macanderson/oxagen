@@ -54,7 +54,10 @@ mocks.withSystemDbFn.mockImplementation(
   },
 );
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   // db() is no longer called by organization.create — kept for safety in case
   // any transitive dep still references it in tests.
   db: () => ({
@@ -62,19 +65,9 @@ vi.mock("@oxagen/database", () => ({
   }),
   withSystemDb: async (fn: (tx: Record<string, unknown>) => Promise<unknown>): Promise<unknown> =>
     mocks.withSystemDbFn(fn) as Promise<unknown>,
-  schema: {
-    organizations: {
-      slug: "slug",
-      id: "id",
-      publicId: "publicId",
-      name: "name",
-      type: "type",
-      createdAt: "createdAt",
-    },
-    orgUsers: {},
-    orgBillingProfiles: {},
-  },
-}));
+
+  };
+});
 
 // Stub the billing package so grantFreeCredits doesn't open a second
 // db().transaction() inside the handler test. Billing idempotency is
@@ -96,15 +89,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("organizationCreateHandler (@oxagen/handlers)", () => {
   beforeEach(() => {

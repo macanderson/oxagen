@@ -49,7 +49,10 @@ mocks.dbFrom.mockReturnValue({ where: mocks.dbWhere });
 mocks.dbSelect.mockReturnValue({ from: mocks.dbFrom });
 mocks.inngestSend.mockResolvedValue(undefined);
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
     const tx = {
       query: {
@@ -61,25 +64,9 @@ vi.mock("@oxagen/database", () => ({
     };
     return fn(tx);
   },
-  schema: {
-    workflowRuns: {
-      id: "id",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      status: "status",
-      completedTasks: "completedTasks",
-      failedTasks: "failedTasks",
-      totalTasks: "totalTasks",
-    },
-    workflowRunTasks: {
-      id: "id",
-      workflowRunId: "workflowRunId",
-      orgId: "orgId",
-      taskIndex: "taskIndex",
-      goal: "goal",
-    },
-  },
-}));
+
+  };
+});
 
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),

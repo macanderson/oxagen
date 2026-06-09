@@ -13,15 +13,15 @@ mocks.insertSpy.mockReturnValue({ values: mocks.insertValues });
 
 const fakeDb = { insert: mocks.insertSpy };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+  ...real,
   db: () => fakeDb,
   withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) => fn(fakeDb),
-  schema: {
-    mcpServers: {
-      publicId: "publicId",
-    },
-  },
-}));
+
+  };
+});
 
 vi.mock("../dispatch/mcp-client", () => ({
   healthcheck: mocks.healthcheckMock,
@@ -29,15 +29,7 @@ vi.mock("../dispatch/mcp-client", () => ({
 
 import { agentMcpRegisterHandler } from "./agent.mcp.register";
 
-const CTX = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "runner" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 const BASE_INPUT = {
   name: "test-mcp",

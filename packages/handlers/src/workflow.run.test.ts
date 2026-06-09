@@ -13,22 +13,19 @@ mocks.insertReturning.mockResolvedValue([ROW]);
 mocks.insertValues.mockReturnValue({ returning: mocks.insertReturning });
 mocks.inngestSend.mockResolvedValue(undefined);
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
     const tx = {
       insert: (_table: unknown) => ({ values: mocks.insertValues }),
     };
     return fn(tx);
   },
-  schema: {
-    workflowRuns: {
-      id: "id",
-      publicId: "publicId",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-    },
-  },
-}));
+
+  };
+});
 
 vi.mock("@oxagen/inngest-functions/client", () => ({
   inngest: { send: mocks.inngestSend },
@@ -40,15 +37,7 @@ vi.mock("./logger", () => ({
 
 import { workflowRunHandler } from "./workflow.run";
 
-const CTX = {
-  orgId: "org-1",
-  workspaceId: "ws-1",
-  userId: "user-1",
-  apiKeyId: null,
-  requestId: "req-1",
-  surface: "api" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("workflow.run handler", () => {
   beforeEach(() => {
@@ -75,8 +64,8 @@ describe("workflow.run handler", () => {
       expect.objectContaining({
         name: "agent/workflow.supervisor.start",
         data: expect.objectContaining({
-          orgId: "org-1",
-          workspaceId: "ws-1",
+          orgId: "org_1",
+          workspaceId: "ws_1",
           workflowRunId: ROW.id,
         }),
       }),

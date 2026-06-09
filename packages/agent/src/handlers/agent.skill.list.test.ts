@@ -15,39 +15,20 @@ mocks.fromMock.mockReturnValue({ leftJoin: mocks.leftJoinMock });
 mocks.selectMock.mockReturnValue({ from: mocks.fromMock });
 
 const fakeSkillListDb = { select: mocks.selectMock };
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => fakeSkillListDb,
   withTenantDb: async (fn: (tx: typeof fakeSkillListDb) => Promise<unknown>) =>
     fn(fakeSkillListDb),
-  schema: {
-    skills: {
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      id: "id",
-      slug: "slug",
-      name: "name",
-      description: "description",
-      source: "source",
-    },
-    skillVersions: {
-      skillId: "skillId",
-      isLatest: "isLatest",
-      versionNumber: "versionNumber",
-    },
-  },
-}));
+
+  };
+});
 
 import { agentSkillListHandler } from "./agent.skill.list";
 
-const CTX = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "runner" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 describe("agent.skill.list handler", () => {
   beforeEach(() => {

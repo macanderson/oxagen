@@ -2,12 +2,16 @@ import { describe, it, expect, vi } from "vitest";
 
 // The barrel re-exports notifyOrgManagers, which imports @oxagen/database.
 // Stub it so importing the public surface never touches a real connection.
-vi.mock("@oxagen/database", () => ({
-  schema: {},
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withSystemDb: vi.fn(),
   withTenantDb: vi.fn(),
   scopedSession: vi.fn(),
-}));
+
+  };
+});
 
 import * as pkg from "./index";
 

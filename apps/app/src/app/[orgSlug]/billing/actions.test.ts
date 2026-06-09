@@ -60,12 +60,14 @@ vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: mockRunInTenantScope,
 }));
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: mockWithTenantDb,
-  schema: {
-    orgUsers: { orgId: "org_id_col", userId: "user_id_col", role: "role_col", id: "id_col" },
-  },
-}));
+
+  };
+});
 
 vi.mock("@oxagen/billing", () => ({
   cancelOrgSubscription: vi.fn(),

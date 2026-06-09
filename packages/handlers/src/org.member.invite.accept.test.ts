@@ -47,41 +47,18 @@ const mockDb = {
   }),
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => mockDb,
   // withSystemDb passthrough: the handler uses withSystemDb for all DB access
   // (invitation lookup, user lookup, expiry update, and the main tx). We
   // forward each call to the same mockDb so existing mock chains apply.
   withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb),
-  schema: {
-    invitations: {
-      publicId: "invitations.publicId",
-      id: "invitations.id",
-      status: "invitations.status",
-      acceptedUserId: "invitations.acceptedUserId",
-      updatedAt: "invitations.updatedAt",
-      updatedByUserId: "invitations.updatedByUserId",
-    },
-    orgUsers: {
-      publicId: "orgUsers.publicId",
-      orgId: "orgUsers.orgId",
-      userId: "orgUsers.userId",
-    },
-    users: {
-      id: "users.id",
-      email: "users.email",
-    },
-    roles: {
-      orgId: "roles.orgId",
-      scopeKind: "roles.scopeKind",
-      name: "roles.name",
-      id: "roles.id",
-    },
-    principalRoleAssignments: {
-      principalId: "pra.principalId",
-    },
-  },
-}));
+
+  };
+});
 
 const { orgMemberInviteAcceptHandler } = await import("./org.member.invite.accept");
 

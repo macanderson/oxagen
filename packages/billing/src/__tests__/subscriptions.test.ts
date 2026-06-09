@@ -44,19 +44,16 @@ const dbMocks = {
   insert: vi.fn(),
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => dbMocks,
   withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-  schema: {
-    plans: { stripeProductId: "plans.stripeProductId" },
-    subscriptions: {
-      stripeSubscriptionId: "subscriptions.stripeSubscriptionId",
-      orgId: "subscriptions.orgId",
-      status: "subscriptions.status",
-    },
-  },
-}));
+
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Audit emit mock — syncSubscriptionFromStripe emits billing.subscription_canceled

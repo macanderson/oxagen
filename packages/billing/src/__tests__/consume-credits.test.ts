@@ -98,14 +98,27 @@ function makeTx() {
   };
 }
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const real = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...real,
+    eq: (a: unknown, b: unknown) => ({ _eq: [a, b] }),
+  };
+});
+
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => ({
     transaction: (cb: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => cb(makeTx()),
   }),
   withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx()),
   withSystemDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx()),
   schema: SCHEMA,
-}));
+
+  };
+});
 
 const { consumeCredits } = await import("../credits");
 

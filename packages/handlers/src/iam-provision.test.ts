@@ -29,41 +29,15 @@ mocks.withSystemDb.mockImplementation(async (_fn: unknown) => {
 // Column references used by drizzle-orm are mocked as plain strings.
 // All tests pass an explicit tx param — neither db() nor withSystemDb should
 // be called when tx is provided.
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => { throw new Error("[test] db() should not be called directly — pass tx param"); },
   withSystemDb: (fn: unknown): Promise<unknown> => mocks.withSystemDb(fn) as Promise<unknown>,
-  schema: {
-    roles: {
-      id: "roles.id",
-      orgId: "roles.orgId",
-      scopeKind: "roles.scopeKind",
-      name: "roles.name",
-      publicId: "roles.publicId",
-    },
-    principals: {
-      id: "principals.id",
-      orgId: "principals.orgId",
-      parentUserId: "principals.parentUserId",
-    },
-    principalRoleAssignments: {
-      id: "pra.id",
-      principalId: "pra.principalId",
-      roleId: "pra.roleId",
-      orgId: "pra.orgId",
-      workspaceId: "pra.workspaceId",
-      deletedAt: "pra.deletedAt",
-    },
-    roleGrants: {
-      id: "roleGrants.id",
-      publicId: "roleGrants.publicId",
-    },
-    users: {
-      id: "users.id",
-      displayName: "users.displayName",
-      email: "users.email",
-    },
-  },
-}));
+
+  };
+});
 
 vi.mock("@oxagen/oxagen", () => ({
   listCapabilities: mocks.listCapabilities,

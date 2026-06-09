@@ -45,16 +45,25 @@ vi.mock("next/navigation", () => ({
   notFound: notFoundMock,
 }));
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withSystemDb: mockWithSystemDb,
-  schema: {
-    organizations: { slug: "slug_col", id: "id_col" },
-    workspaces: { orgId: "org_id_col", slug: "ws_slug_col", id: "ws_id_col" },
-    orgUsers: { orgId: "org_id_col", userId: "user_id_col", id: "id_col", role: "role_col" },
-  },
-}));
 
-// drizzle-orm operators are used in the real source — mock them as identity fns.
+  };
+});
+
+// drizzle-orm: spread all real exports but wrap eq/and as spies so tests can
+// assert call counts without losing real SQL-builder behaviour.
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const real = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...real,
+    eq: vi.fn((...args: Parameters<typeof real.eq>) => real.eq(...args)),
+    and: vi.fn((...args: Parameters<typeof real.and>) => real.and(...args)),
+  };
+});
 
 // server-only is a package that throws when imported outside the server.
 vi.mock("server-only", () => ({}));

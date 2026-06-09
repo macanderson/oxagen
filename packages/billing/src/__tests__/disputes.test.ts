@@ -72,25 +72,16 @@ function makeDb(state: DbState) {
 
 const dbHolder: { instance: ReturnType<typeof makeDb> | null } = { instance: null };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => dbHolder.instance,
   withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbHolder.instance),
   withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbHolder.instance),
-  schema: {
-    billingDisputes: {
-      stripeDisputeId: "billingDisputes.stripeDisputeId",
-      id: "billingDisputes.id",
-      paymentIntentId: "billingDisputes.paymentIntentId",
-      stripeChargeId: "billingDisputes.stripeChargeId",
-    },
-    creditLedger: {
-      orgId: "creditLedger.orgId",
-      reason: "creditLedger.reason",
-      referenceType: "creditLedger.referenceType",
-      referenceId: "creditLedger.referenceId",
-    },
-  },
-}));
+
+  };
+});
 
 // Import after mocks.
 const { onDisputeCreated, onDisputeClosed, onChargeRefunded } = await import("../disputes");

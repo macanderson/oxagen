@@ -49,17 +49,15 @@ const fakeTx = {
   select: vi.fn(() => createMockBuilder()),
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => fakeTx,
   withSystemDb: async (fn: (tx: typeof fakeTx) => Promise<unknown>) => fn(fakeTx),
-  schema: {
-    sessions: { token: "sessions.token" },
-    apiKeys: { keyPrefix: "apiKeys.keyPrefix", deletedAt: "apiKeys.deletedAt" },
-    organizations: { slug: "organizations.slug" },
-    orgUsers: { orgId: "orgUsers.orgId", userId: "orgUsers.userId" },
-    workspaces: { orgId: "workspaces.orgId", slug: "workspaces.slug" },
-  },
-}));
+
+  };
+});
 
 // Import resolvers after the mock is registered.
 import {

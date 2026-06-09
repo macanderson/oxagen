@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock @oxagen/database before importing the module under test.
-vi.mock("@oxagen/database", () => {
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
   const mockTx = {
     insert: (_table: unknown) => ({
       values: (_v: unknown) => ({
@@ -13,7 +14,7 @@ vi.mock("@oxagen/database", () => {
     }),
   };
   return {
-    schema: { notifications: "notifications_table_sentinel" },
+    ...real,
     withSystemDb: vi.fn(async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
   };
 });

@@ -39,7 +39,10 @@ mocks.txFn.mockImplementation(async (cb: (tx: Record<string, unknown>) => Promis
   return cb(tx as unknown as Parameters<typeof cb>[0]);
 });
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => ({
     query: {
       organizations: { findFirst: mocks.orgFindFirst },
@@ -64,34 +67,16 @@ vi.mock("@oxagen/database", () => ({
     };
     return fn(tx);
   },
-  schema: {
-    organizations: { id: "id", slug: "slug" },
-    workspaces: {
-      orgId: "orgId",
-      slug: "slug",
-      id: "id",
-      publicId: "publicId",
-      name: "name",
-      createdAt: "createdAt",
-    },
-    workspaceUsers: {},
-  },
-}));
+
+  };
+});
 
 import { workspaceCreateHandler } from "./workspace.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("workspaceCreateHandler (@oxagen/handlers)", () => {
   beforeEach(() => {

@@ -114,27 +114,16 @@ function makeDb(
 
 const dbState: { instance: ReturnType<typeof makeDb> | null } = { instance: null };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => dbState.instance,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => dbState.instance?.transaction(fn),
   withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(dbState.instance),
-  schema: {
-    creditLedger: {
-      orgId: "creditLedger.orgId",
-      reason: "creditLedger.reason",
-      referenceType: "creditLedger.referenceType",
-      referenceId: "creditLedger.referenceId",
-    },
-    creditLots: { orgId: "creditLots.orgId" },
-    creditBalances: {
-      orgId: "creditBalances.orgId",
-      balanceCents: "creditBalances.balanceCents",
-    },
-    subscriptions: { stripeSubscriptionId: "subscriptions.stripeSubscriptionId" },
-    plans: { id: "plans.id" },
-    invoices: { stripeInvoiceId: "invoices.stripeInvoiceId" },
-  },
-}));
+
+  };
+});
 
 // Import after mocks.
 const { grantFreeCredits, grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } =

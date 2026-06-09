@@ -14,15 +14,17 @@ const mocks = vi.hoisted(() => ({
   dbFn: vi.fn(),
 }));
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: mocks.dbFn,
   // withTenantDb: pass-through — invokes the callback with the same fake tx
   // the handler expects. No scope GUC overhead in unit tests (OXA-1515).
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mocks.dbFn()),
-  schema: {
-    accessRequests: { publicId: "accessRequests.publicId" },
-  },
-}));
+
+  };
+});
 
 import { createAccessRequest } from "./access-request";
 import type { CapabilityContext, ResolvedPrincipal } from "@oxagen/oxagen";

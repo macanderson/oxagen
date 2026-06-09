@@ -20,13 +20,7 @@ vi.mock("../runtime/knowledge-graph", () => ({
 
 import { agentMemoryWriteHandler } from "./agent.memory.write";
 
-const CTX = {
-  orgId: "ten_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1", surface: "runner" as const, messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 describe("agent.memory.write handler", () => {
   beforeEach(() => {
@@ -50,7 +44,7 @@ describe("agent.memory.write handler", () => {
     );
     expect(mocks.embedTextMock).toHaveBeenCalledWith("do not rerun migrations", {
       telemetry: {
-        orgId: "ten_1",
+        orgId: "org_1",
         workspaceId: "ws_1",
         surface: "runner",
         executionStepId: "req_1",

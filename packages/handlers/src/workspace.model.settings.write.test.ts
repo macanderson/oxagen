@@ -19,7 +19,10 @@ mocks.updateReturning.mockResolvedValue([UPDATED_ROW]);
 mocks.updateWhere.mockReturnValue({ returning: mocks.updateReturning });
 mocks.updateSet.mockReturnValue({ where: mocks.updateWhere });
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => ({
     update: (_table: unknown) => ({ set: mocks.updateSet }),
   }),
@@ -27,31 +30,16 @@ vi.mock("@oxagen/database", () => ({
     fn({
       update: (_table: unknown) => ({ set: mocks.updateSet }),
     }),
-  schema: {
-    workspaces: {
-      id: "id",
-      defaultTextTier: "defaultTextTier",
-      defaultTextModel: "defaultTextModel",
-      defaultImageModel: "defaultImageModel",
-      defaultVideoModel: "defaultVideoModel",
-    },
-  },
-}));
+
+  };
+});
 
 import { workspaceModelSettingsWriteHandler } from "./workspace.model.settings.write";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("workspaceModelSettingsWriteHandler (@oxagen/handlers)", () => {
   beforeEach(() => {

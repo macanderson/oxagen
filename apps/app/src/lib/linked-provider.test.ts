@@ -21,15 +21,14 @@ const { mockRows, mockWithSystemDb } = vi.hoisted(() => {
 // ---------------------------------------------------------------------------
 vi.mock("server-only", () => ({}));
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withSystemDb: mockWithSystemDb,
-  schema: {
-    accounts: {
-      userId: "user_id_col",
-      providerId: "provider_id_col",
-    },
-  },
-}));
+
+  };
+});
 
 import { getLinkedSocialProvider } from "./linked-provider";
 

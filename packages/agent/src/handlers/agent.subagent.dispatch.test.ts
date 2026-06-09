@@ -9,7 +9,10 @@ const findRunsSpy = vi.fn(async () => [
 ]);
 const inngestSendSpy = vi.fn(async () => undefined);
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+  ...real,
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       insert: () => ({
@@ -21,11 +24,9 @@ vi.mock("@oxagen/database", () => ({
         subagentRuns: { findMany: findRunsSpy },
       },
     }),
-  schema: {
-    subagentFanouts: { publicId: "public_id" },
-    subagentRuns: { publicId: "public_id" },
-  },
-}));
+
+  };
+});
 
 vi.mock("../dispatch/inngest-client", () => ({
   getInngestClient: () => ({ send: inngestSendSpy }),
@@ -33,15 +34,7 @@ vi.mock("../dispatch/inngest-client", () => ({
 
 import { agentSubagentDispatchHandler } from "./agent.subagent.dispatch";
 
-const CTX = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "runner" as const,
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 describe("agent.subagent.dispatch handler", () => {
   beforeEach(() => {

@@ -35,21 +35,18 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 
 const mockInsert = vi.fn();
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => ({
     insert: mockInsert,
   }),
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({ insert: mockInsert }),
-  schema: {
-    invitations: {
-      publicId: "invitations.publicId",
-      expiresAt: "invitations.expiresAt",
-      orgId: "invitations.orgId",
-      email: "invitations.email",
-    },
-  },
-}));
+
+  };
+});
 
 // ── drizzle-orm mock ─────────────────────────────────────────────────────────
 

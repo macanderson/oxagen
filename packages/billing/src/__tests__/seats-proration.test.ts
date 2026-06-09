@@ -113,31 +113,16 @@ const dbMocks = {
   },
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => dbMocks,
   withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-  schema: {
-    subscriptions: {
-      orgId: "subscriptions.orgId",
-      status: "subscriptions.status",
-      stripeSubscriptionId: "subscriptions.stripeSubscriptionId",
-      stripeCustomerId: "subscriptions.stripeCustomerId",
-      seatCount: "subscriptions.seatCount",
-      planId: "subscriptions.planId",
-    },
-    plans: {
-      id: "plans.id",
-      slug: "plans.slug",
-      stripeProductId: "plans.stripeProductId",
-      tier: "plans.tier",
-      stripePriceIdMonthly: "plans.stripePriceIdMonthly",
-      stripePriceIdAnnual: "plans.stripePriceIdAnnual",
-      monthlyCents: "plans.monthlyCents",
-      annualCents: "plans.annualCents",
-    },
-  },
-}));
+
+  };
+});
 
 // Import AFTER mocks.
 const { previewSeatChange, setSubscriptionSeats, previewPlanChange } =

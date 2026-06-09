@@ -28,16 +28,14 @@ const { mockDbRows, mockSafeQuery } = vi.hoisted(() => {
 // ---------------------------------------------------------------------------
 
 vi.mock("./safe-query", () => ({ safeQuery: mockSafeQuery }));
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withSystemDb: vi.fn(),
-  schema: {
-    plans: {
-      isPublic: "isPublic_col",
-      slug: "slug_col",
-      monthlyCents: "monthlyCents_col",
-    },
-  },
-}));
+
+  };
+});
 vi.mock("@oxagen/billing", () => ({
   SUBSCRIPTION_PLANS: [
     {

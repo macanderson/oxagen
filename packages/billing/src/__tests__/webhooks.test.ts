@@ -139,20 +139,16 @@ function makeDb(
 
 const dbState: { instance: ReturnType<typeof makeDb> | null } = { instance: null };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => dbState.instance,
   withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
   withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
-  schema: {
-    stripeEvents: { stripeEventId: "stripeEvents.stripeEventId" },
-    stripeEventProcessing: {
-      stripeEventId: "stripeEventProcessing.stripeEventId",
-    },
-    subscriptions: { stripeCustomerId: "subscriptions.stripeCustomerId" },
-    paymentMethods: { stripePaymentMethodId: "paymentMethods.stripePaymentMethodId" },
-    orgBillingSettings: { orgId: "orgBillingSettings.orgId", dunningState: "orgBillingSettings.dunningState" },
-  },
-}));
+
+  };
+});
 
 // Import after mocks.
 const { processStripeEvent } = await import("../webhooks");

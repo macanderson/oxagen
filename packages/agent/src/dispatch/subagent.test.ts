@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { getTableName } from "drizzle-orm";
 
 const mocks = vi.hoisted(() => ({
   txInsertCalls: [] as Array<{ table: string; values: unknown }>,
@@ -10,9 +11,17 @@ const mocks = vi.hoisted(() => ({
 
 mocks.limitFanout.mockImplementation(async () => [mocks.fanoutRow]);
 
+const drizzleTableName = (table: unknown): string => {
+  try {
+    return getTableName(table as Parameters<typeof getTableName>[0]);
+  } catch {
+    return "unknown";
+  }
+};
+
 const fakeTx = {
-  insert: (table: { _name?: string }) => {
-    const tableName = table._name ?? "unknown";
+  insert: (table: unknown) => {
+    const tableName = drizzleTableName(table);
     return {
       values: (v: unknown) => {
         mocks.txInsertCalls.push({ table: tableName, values: v });
@@ -28,8 +37,8 @@ const fakeTx = {
 // readFanout uses a tx with .select(); dispatchFanout uses a tx with .insert().
 // We compose a unified fake tx so withTenantDb can serve both code paths.
 const fakeSelectDb = {
-  from: (tbl: { _name: string }) => {
-    if (tbl._name === "subagentRuns") {
+  from: (tbl: unknown) => {
+    if (drizzleTableName(tbl) === "subagent_runs") {
       return { where: async () => mocks.runsRows };
     }
     return { where: () => ({ limit: mocks.limitFanout }) };
@@ -40,18 +49,19 @@ const fakeUnifiedTx = {
   select: () => fakeSelectDb,
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => ({
     transaction: async (fn: (tx: typeof fakeTx) => Promise<unknown>) => fn(fakeTx),
     select: () => fakeSelectDb,
   }),
   withTenantDb: async (fn: (tx: typeof fakeUnifiedTx) => Promise<unknown>) =>
     fn(fakeUnifiedTx),
-  schema: {
-    subagentFanouts: { _name: "subagentFanouts", id: "id", orgId: "orgId" },
-    subagentRuns: { _name: "subagentRuns", fanoutId: "fanoutId" },
-  },
-}));
+
+  };
+});
 
 vi.mock("inngest", () => ({
   Inngest: vi.fn(() => ({ send: mocks.inngestSend })),
@@ -88,8 +98,8 @@ describe("subagent dispatch", () => {
 
     // Exactly 2 inserts: one fanout row + one batched runs insert.
     expect(mocks.txInsertCalls).toHaveLength(2);
-    expect(mocks.txInsertCalls[0]!.table).toBe("subagentFanouts");
-    expect(mocks.txInsertCalls[1]!.table).toBe("subagentRuns");
+    expect(mocks.txInsertCalls[0]!.table).toBe("subagent_fanouts");
+    expect(mocks.txInsertCalls[1]!.table).toBe("subagent_runs");
     expect(Array.isArray(mocks.txInsertCalls[1]!.values)).toBe(true);
     expect((mocks.txInsertCalls[1]!.values as unknown[]).length).toBe(3);
 

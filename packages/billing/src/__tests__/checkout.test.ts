@@ -70,15 +70,16 @@ const checkoutDbObj = {
   },
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => checkoutDbObj,
   withTenantDb: async (fn: (tx: typeof checkoutDbObj) => unknown) => fn(checkoutDbObj),
   withSystemDb: async (fn: (tx: typeof checkoutDbObj) => unknown) => fn(checkoutDbObj),
-  schema: {
-    plans: { slug: "plans.slug" },
-    subscriptions: { orgId: "subscriptions.orgId", status: "subscriptions.status" },
-  },
-}));
+
+  };
+});
 
 // Import after mocks.
 const { createCheckoutSession, createCreditPackCheckoutSession } = await import(

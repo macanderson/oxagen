@@ -5,7 +5,10 @@ const mocks = vi.hoisted(() => ({
   prefsFindFirst: vi.fn(),
 }));
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   db: () => ({
     query: {
       userPreferences: { findFirst: mocks.prefsFindFirst },
@@ -17,25 +20,16 @@ vi.mock("@oxagen/database", () => ({
         userPreferences: { findFirst: mocks.prefsFindFirst },
       },
     }),
-  schema: {
-    userPreferences: { userId: "userId" },
-  },
-}));
+
+  };
+});
 
 import { userPreferencesReadHandler } from "./user.preferences.read";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CTX: CapabilityContext = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
-  userId: "u_1",
-  apiKeyId: null,
-  requestId: "req_1",
-  surface: "api",
-  messageId: null,
-};
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const FULL_ROW = {
   fontSize: "large" as const,

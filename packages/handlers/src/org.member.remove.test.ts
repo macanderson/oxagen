@@ -48,40 +48,17 @@ const mockTx = {
   insert: vi.fn(),
 };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   // The handler runs all reads + writes inside a single withTenantDb (one
   // RLS-scoped transaction); resolveActorPrincipalAndRole uses its own. Both
   // route to the same fluent tx mock so the call sequence is continuous.
   withTenantDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
-  schema: {
-    principals: {
-      id: "principals.id",
-      orgId: "principals.orgId",
-      parentUserId: "principals.parentUserId",
-      status: "principals.status",
-    },
-    principalRoleAssignments: {
-      id: "pra.id",
-      principalId: "pra.principalId",
-      roleId: "pra.roleId",
-      orgId: "pra.orgId",
-      workspaceId: "pra.workspaceId",
-      deletedAt: "pra.deletedAt",
-    },
-    roles: {
-      id: "roles.id",
-      orgId: "roles.orgId",
-      scopeKind: "roles.scopeKind",
-      name: "roles.name",
-    },
-    orgUsers: {
-      id: "orgUsers.id",
-      orgId: "orgUsers.orgId",
-      userId: "orgUsers.userId",
-      role: "orgUsers.role",
-    },
-  },
-}));
+
+  };
+});
 
 const { orgMemberRemoveHandler } = await import("./org.member.remove");
 

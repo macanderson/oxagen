@@ -17,7 +17,10 @@ interface SubState {
 
 const subState: SubState = { row: undefined };
 
-vi.mock("@oxagen/database", () => ({
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
   withTenantDb: async (fn: (tx: unknown) => unknown) => {
     const tx = {
       query: {
@@ -28,10 +31,9 @@ vi.mock("@oxagen/database", () => ({
     };
     return fn(tx);
   },
-  schema: {
-    subscriptions: { orgId: "subscriptions.orgId", status: "subscriptions.status" },
-  },
-}));
+
+  };
+});
 
 const sumTokenUsageMock = vi.fn().mockResolvedValue([]);
 
