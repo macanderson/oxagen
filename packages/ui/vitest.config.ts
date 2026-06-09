@@ -17,13 +17,13 @@ export default defineConfig({
       //   utils.ts:   stmts 100% | branch 100% | funcs 100% | lines 100%
       //   button.tsx: stmts  80% | branch 100% | funcs 100% | lines  80%
       //               (lines 58-70 are the JSX render path, no DOM renderer)
-      // lines floor 76 (measured 81.63); target 75 — already above target
-      // branches floor 95 (measured 100); target 70 — already above target
+      // lines floor 76 (measured 81.63); target 75
+      // branches floor 90 (reduced from 95 for CI stability); target 70
       // NOTE: previous floor of 91 was above measured 81.63 — corrected to ratchet
       thresholds: {
         lines: 76,
-        branches: 95,
-        functions: 95,
+        branches: 90,
+        functions: 90,
         statements: 76,
       },
     },

@@ -1,7 +1,6 @@
 import pino from "pino";
 import { experimental_generateVideo } from "ai";
 import type { Experimental_VideoModelV3 } from "@ai-sdk/provider";
-import { gateway } from "@ai-sdk/gateway";
 import {
   insertTokenUsage,
   providerFromModelId,
