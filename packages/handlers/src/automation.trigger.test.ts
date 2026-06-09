@@ -57,11 +57,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return { and: orig.and, eq: orig.eq, isNull: orig.isNull };
-});
-
 import { automationTriggerHandler } from "./automation.trigger";
 import type { CapabilityContext } from "@oxagen/oxagen";
 

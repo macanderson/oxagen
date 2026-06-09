@@ -35,11 +35,6 @@ vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),
 }));
 
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return { eq: orig.eq };
-});
-
 // Mock @oxagen/ai
 const FAKE_BYTES = new Uint8Array([0x00, 0x01, 0x02]);
 const FAKE_MODEL_OBJ = { modelId: "google/veo-3.0-fast-generate-001" };

@@ -59,12 +59,6 @@ vi.mock("@oxagen/database", () => {
 });
 
 // Stub drizzle helpers used in the handler
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => args,
-  eq: (_col: unknown, _val: unknown) => "eq_sentinel",
-  count: () => "count_fn",
-  sql: (s: TemplateStringsArray, ..._args: unknown[]) => s[0],
-}));
 
 import { handler } from "./notifications.list";
 

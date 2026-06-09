@@ -55,10 +55,6 @@ vi.mock("@oxagen/database", () => ({
 }));
 
 // drizzle-orm operators are used in the real source — mock them as identity fns.
-vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((col: unknown, val: unknown) => ({ col, val, op: "eq" })),
-  and: vi.fn((...args: unknown[]) => ({ args, op: "and" })),
-}));
 
 // server-only is a package that throws when imported outside the server.
 vi.mock("server-only", () => ({}));

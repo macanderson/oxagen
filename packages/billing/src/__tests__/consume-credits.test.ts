@@ -15,19 +15,6 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("drizzle-orm", () => ({
-  eq: (a: unknown, b: unknown) => ({ _eq: [a, b] }),
-  and: (...args: unknown[]) => ({ _and: args }),
-  or: (...args: unknown[]) => ({ _or: args }),
-  isNull: (a: unknown) => ({ _isNull: a }),
-  gt: (a: unknown, b: unknown) => ({ _gt: [a, b] }),
-  asc: (a: unknown) => ({ _asc: a }),
-  sql: Object.assign(
-    (strings: TemplateStringsArray, ...vals: unknown[]) => ({ _sql: [strings, vals] }),
-    { raw: (s: string) => ({ _sqlRaw: s }) },
-  ),
-}));
-
 // ---------------------------------------------------------------------------
 // Shared state
 // ---------------------------------------------------------------------------

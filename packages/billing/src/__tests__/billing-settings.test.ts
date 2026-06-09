@@ -61,17 +61,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
-  isNull: (col: unknown) => ({ $type: "isNull", col }),
-  and: (...args: unknown[]) => ({ $type: "and", args }),
-  sql: (parts: TemplateStringsArray, ...vals: unknown[]) => ({
-    $type: "sql",
-    parts,
-    vals,
-  }),
-}));
-
 // Import after mocks.
 const { getOrgBillingSettings, updateAutoReloadSettings } = await import(
   "../billing-settings"

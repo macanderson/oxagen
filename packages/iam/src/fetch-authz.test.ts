@@ -47,18 +47,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => ({ _and: args }),
-  eq: (col: unknown, val: unknown) => ({ _eq: [col, val] }),
-  inArray: (col: unknown, arr: unknown) => ({ _inArray: [col, arr] }),
-  isNull: (col: unknown) => ({ _isNull: col }),
-  or: (...args: unknown[]) => ({ _or: args }),
-  gt: (col: unknown, val: unknown) => ({ _gt: [col, val] }),
-  sql: Object.assign((s: TemplateStringsArray) => ({ _sql: String(s) }), {
-    raw: (s: string) => ({ _sql: s }),
-  }),
-}));
-
 import { fetchAuthz } from "./fetch-authz";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

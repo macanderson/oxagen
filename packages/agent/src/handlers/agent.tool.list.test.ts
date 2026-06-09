@@ -28,11 +28,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return { and: orig.and, eq: orig.eq };
-});
-
 // Stub @oxagen/oxagen so the dynamic import inside the handler resolves
 vi.mock("@oxagen/oxagen", () => ({
   listCapabilities: mocks.listCapabilities,

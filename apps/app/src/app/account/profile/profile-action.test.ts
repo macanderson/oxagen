@@ -39,10 +39,6 @@ vi.mock("next/cache", () => ({
   revalidatePath: mockRevalidatePath,
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: (col: unknown, val: unknown) => ({ eq: [col, val] }),
-}));
-
 import { updateProfileAction } from "./profile-action";
 
 // ---------------------------------------------------------------------------

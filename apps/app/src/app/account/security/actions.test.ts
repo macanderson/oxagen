@@ -39,11 +39,6 @@ vi.mock("@oxagen/database/security", () => ({
   emitSecurityEvent: mockEmitSecurityEvent,
 }));
 
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => ({ and: args }),
-  eq: (col: unknown, val: unknown) => ({ eq: [col, val] }),
-}));
-
 vi.mock("next/cache", () => ({
   revalidatePath: mockRevalidatePath,
 }));

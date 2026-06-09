@@ -38,11 +38,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return { and: orig.and, eq: orig.eq, isNull: orig.isNull, desc: orig.desc };
-});
-
 import { agentSkillLoadHandler } from "./agent.skill.load";
 
 const CTX = {

@@ -26,12 +26,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Module mocks — registered before any module import.
 // ---------------------------------------------------------------------------
 
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => ({ $type: "and", args }),
-  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
-  sql: (parts: TemplateStringsArray) => ({ $type: "sql", parts }),
-}));
-
 const ensureStripeCustomerMock = vi.fn().mockResolvedValue("cus_test_001");
 vi.mock("../customers", () => ({
   ensureStripeCustomer: ensureStripeCustomerMock,

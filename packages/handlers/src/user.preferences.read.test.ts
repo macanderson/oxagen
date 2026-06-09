@@ -22,11 +22,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return { eq: orig.eq };
-});
-
 import { userPreferencesReadHandler } from "./user.preferences.read";
 import type { CapabilityContext } from "@oxagen/oxagen";
 

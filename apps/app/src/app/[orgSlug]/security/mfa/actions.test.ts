@@ -90,9 +90,6 @@ vi.mock("@oxagen/database", () => {
     },
   };
 });
-vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((col: unknown, val: unknown) => ({ col, val, op: "eq" })),
-}));
 
 import { saveMfaPolicyAction, loadMfaPolicy } from "./actions";
 

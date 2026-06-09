@@ -16,10 +16,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock("drizzle-orm", () => ({
-  eq: (a: unknown, b: unknown) => ({ _eq: [a, b] }),
-}));
-
 const effectiveBalanceMock = vi.fn().mockResolvedValue(0n);
 const createCreditLotMock = vi.fn().mockResolvedValue({ lotId: "lot-1", effectiveBalanceCents: 1000n });
 

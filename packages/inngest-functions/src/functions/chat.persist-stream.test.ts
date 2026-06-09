@@ -30,11 +30,6 @@ vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),
 }));
 
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return { eq: orig.eq };
-});
-
 vi.mock("@oxagen/telemetry", () => ({
   insertTokenUsage: mocks.insertTokenUsage,
 }));

@@ -15,14 +15,6 @@ vi.mock("@oxagen/database", () => ({
 }));
 
 // Use the real drizzle sql so the tagged-template object shape is authentic.
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const original = await importOriginal<typeof import("drizzle-orm")>();
-  return {
-    and: original.and,
-    eq: original.eq,
-    sql: original.sql,
-  };
-});
 
 import { agentPlanApproveHandler } from "./agent.plan.approve";
 

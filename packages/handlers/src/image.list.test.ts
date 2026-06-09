@@ -32,16 +32,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return {
-    and: orig.and,
-    eq: orig.eq,
-    desc: orig.desc,
-    isNull: orig.isNull,
-  };
-});
-
 // ── import under test ─────────────────────────────────────────────────────────
 
 import { imageListHandler } from "./image.list";

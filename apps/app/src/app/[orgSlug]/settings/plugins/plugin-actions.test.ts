@@ -72,10 +72,6 @@ vi.mock("@oxagen/database", () => ({
     orgUsers: { orgId: "orgId_col", userId: "userId_col", role: "role_col" },
   },
 }));
-vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((col: unknown, val: unknown) => ({ col, val, op: "eq" })),
-  and: vi.fn((...args: unknown[]) => ({ args, op: "and" })),
-}));
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/handlers/logger", () => ({

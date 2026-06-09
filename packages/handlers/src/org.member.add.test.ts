@@ -52,11 +52,6 @@ vi.mock("@oxagen/database", () => ({
 }));
 
 // ── drizzle-orm mock ─────────────────────────────────────────────────────────
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => ({ $type: "and", args }),
-  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
-  sql: (parts: TemplateStringsArray) => ({ $type: "sql", parts }),
-}));
 
 const { orgMemberAddHandler } = await import("./org.member.add");
 

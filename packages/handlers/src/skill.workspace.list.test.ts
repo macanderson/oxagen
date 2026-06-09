@@ -30,12 +30,6 @@ vi.mock("@oxagen/database", () => ({
   withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => fn(makeTx()),
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
-  and: (...args: unknown[]) => ({ $type: "and", args }),
-  isNull: (col: unknown) => ({ $type: "isNull", col }),
-}));
-
 import { skillWorkspaceListHandler } from "./skill.workspace.list";
 
 // ─────────────────────────────────────────────────────────────────────────────

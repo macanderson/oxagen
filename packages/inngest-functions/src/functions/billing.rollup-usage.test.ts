@@ -37,11 +37,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return { and: orig.and, gt: orig.gt, inArray: orig.inArray };
-});
-
 vi.mock("@oxagen/telemetry", () => ({
   sumTokenUsage: mocks.sumTokenUsage,
 }));

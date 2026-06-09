@@ -65,12 +65,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: (col: unknown, val: unknown) => ({ _eq: [col, val] }),
-  and: (...args: unknown[]) => ({ _and: args }),
-  isNull: (col: unknown) => ({ _isNull: col }),
-}));
-
 vi.mock("@oxagen/oxagen", () => ({
   listCapabilities: mocks.listCapabilities,
 }));

@@ -78,10 +78,6 @@ vi.mock("@oxagen/database", () => ({
     },
   },
 }));
-vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((col: unknown, val: unknown) => ({ col, val, op: "eq" })),
-  and: vi.fn((...args: unknown[]) => ({ args, op: "and" })),
-}));
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@/lib/routes", () => ({

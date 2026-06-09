@@ -17,17 +17,6 @@ import type { BillingInvoice } from "../provider";
 // Drizzle-orm mock — minimal stubs used by dunning.ts
 // ---------------------------------------------------------------------------
 
-vi.mock("drizzle-orm", () => ({
-  eq: (a: unknown, b: unknown) => ({ _eq: [a, b] }),
-  and: (...args: unknown[]) => ({ _and: args }),
-  lt: (a: unknown, b: unknown) => ({ _lt: [a, b] }),
-  inArray: (a: unknown, b: unknown) => ({ _inArray: [a, b] }),
-  sql: Object.assign(
-    (strings: TemplateStringsArray, ...vals: unknown[]) => ({ _sql: [strings, vals] }),
-    { raw: (s: string) => ({ _sqlRaw: s }) },
-  ),
-}));
-
 // ---------------------------------------------------------------------------
 // DB mock factory
 // ---------------------------------------------------------------------------

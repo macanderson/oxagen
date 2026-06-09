@@ -18,12 +18,6 @@ import type { BillingDispute, BillingRefundedCharge } from "../provider";
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock("drizzle-orm", () => ({
-  eq: (a: unknown, b: unknown) => ({ _eq: [a, b] }),
-  and: (...args: unknown[]) => ({ _and: args }),
-  isNotNull: (a: unknown) => ({ _isNotNull: a }),
-}));
-
 const consumeCreditsMock = vi.fn().mockResolvedValue({ chargedCents: 500n, shortfallCents: 0n, balanceCents: 0n });
 vi.mock("../credits", () => ({
   consumeCredits: consumeCreditsMock,

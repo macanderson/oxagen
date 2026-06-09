@@ -38,12 +38,6 @@ vi.mock("@oxagen/database", () => ({
     },
   },
 }));
-vi.mock("drizzle-orm", () => ({
-  eq: vi.fn(),
-  and: vi.fn(),
-  asc: vi.fn(),
-  inArray: vi.fn(),
-}));
 vi.mock("@oxagen/billing", () => ({
   SUBSCRIPTION_PLANS: [
     {

@@ -81,13 +81,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => args,
-  or: (...args: unknown[]) => args,
-  eq: (col: unknown, val: unknown) => ({ col, val }),
-  asc: (col: unknown) => col,
-}));
-
 vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));

@@ -31,10 +31,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((col: unknown, val: unknown) => ({ col, val })),
-}));
-
 import { getLinkedSocialProvider } from "./linked-provider";
 
 // ---------------------------------------------------------------------------

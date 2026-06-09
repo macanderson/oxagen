@@ -38,12 +38,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => args,
-  or: (...args: unknown[]) => args,
-  eq: (col: unknown, val: unknown) => ({ col, val }),
-}));
-
 vi.mock("@oxagen/inngest-functions/client", () => ({
   inngest: { send: mocks.inngestSend },
 }));

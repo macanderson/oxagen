@@ -7,11 +7,6 @@ vi.mock("@oxagen/database", () => ({
   ),
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: (_col: unknown, _val: unknown) => "eq_sentinel",
-  sql: (s: TemplateStringsArray, ..._args: unknown[]) => s[0],
-}));
-
 import { handler } from "./plugin.settings.set_auth_alerts";
 
 const ctx = {

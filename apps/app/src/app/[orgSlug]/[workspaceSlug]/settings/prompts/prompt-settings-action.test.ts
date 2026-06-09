@@ -54,10 +54,6 @@ vi.mock("@oxagen/database", () => ({
   withTenantDb: mockWithTenantDb,
   schema: { workspaceUsers: { workspaceId: "wsu_ws", userId: "wsu_user", role: "wsu_role" } },
 }));
-vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((col: unknown, val: unknown) => ({ col, val, op: "eq" })),
-  and: vi.fn((...args: unknown[]) => ({ args, op: "and" })),
-}));
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@/lib/routes", () => ({

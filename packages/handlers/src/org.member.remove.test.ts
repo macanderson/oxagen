@@ -30,12 +30,6 @@ vi.mock("@oxagen/database/security", () => ({
 }));
 
 // ── drizzle-orm mock ─────────────────────────────────────────────────────────
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => ({ $type: "and", args }),
-  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
-  isNull: (col: unknown) => ({ $type: "isNull", col }),
-  count: () => ({ $type: "count" }),
-}));
 
 // ── @oxagen/database mock ────────────────────────────────────────────────────
 // We build a fluent mock of the Drizzle query builder for:

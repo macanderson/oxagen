@@ -87,10 +87,6 @@ vi.mock("@oxagen/database", () => {
     },
   };
 });
-vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((col: unknown, val: unknown) => ({ col, val, op: "eq" })),
-  and: vi.fn((...args: unknown[]) => ({ args, op: "and" })),
-}));
 
 import { revokeSessionAction } from "./actions";
 

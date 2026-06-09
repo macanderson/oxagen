@@ -42,11 +42,6 @@ vi.mock("@oxagen/database", () => ({
     }),
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
-  and: (...args: unknown[]) => ({ $type: "and", args }),
-}));
-
 import { workspaceInviteSendHandler } from "./workspace.invite.send";
 
 // ─────────────────────────────────────────────────────────────────────────────

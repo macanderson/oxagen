@@ -44,8 +44,6 @@ vi.mock("@oxagen/database", () => ({
     }),
 }));
 
-vi.mock("drizzle-orm", () => ({}));
-
 import { formCreateHandler } from "./form.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 

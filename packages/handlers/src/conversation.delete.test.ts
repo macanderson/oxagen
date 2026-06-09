@@ -41,11 +41,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return { and: orig.and, eq: orig.eq, inArray: orig.inArray, isNull: orig.isNull };
-});
-
 import { conversationDeleteHandler } from "./conversation.delete";
 import type { CapabilityContext } from "@oxagen/oxagen";
 

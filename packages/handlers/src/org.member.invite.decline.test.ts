@@ -13,11 +13,6 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── drizzle-orm mock ─────────────────────────────────────────────────────────
 
-vi.mock("drizzle-orm", () => ({
-  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
-  and: (...args: unknown[]) => ({ $type: "and", args }),
-}));
-
 // ── @oxagen/database mock ────────────────────────────────────────────────────
 
 const mockUpdate = vi.fn();

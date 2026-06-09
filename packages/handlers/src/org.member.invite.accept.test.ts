@@ -28,13 +28,6 @@ vi.mock("./iam-provision", () => ({
 
 // ── drizzle-orm mock ─────────────────────────────────────────────────────────
 
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => ({ $type: "and", args }),
-  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
-  isNull: (col: unknown) => ({ $type: "isNull", col }),
-  sql: (parts: TemplateStringsArray) => ({ $type: "sql", parts }),
-}));
-
 // ── @oxagen/database mock ────────────────────────────────────────────────────
 
 const mockUpdate = vi.fn();

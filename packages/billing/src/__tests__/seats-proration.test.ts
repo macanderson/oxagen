@@ -139,16 +139,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => ({ $type: "and", args }),
-  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
-  sql: (parts: TemplateStringsArray, ...vals: unknown[]) => ({
-    $type: "sql",
-    parts,
-    vals,
-  }),
-}));
-
 // Import AFTER mocks.
 const { previewSeatChange, setSubscriptionSeats, previewPlanChange } =
   await import("../subscriptions");

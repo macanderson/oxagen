@@ -28,11 +28,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => ({ __and: args }),
-  eq: (col: unknown, val: unknown) => ({ __eq: [col, val] }),
-}));
-
 import { withTenantDb } from "@oxagen/database";
 import { agentSubagentAggregateHandler } from "./agent.subagent.aggregate";
 

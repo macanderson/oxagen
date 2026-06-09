@@ -34,11 +34,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
-  and: (...args: unknown[]) => ({ $type: "and", args }),
-}));
-
 vi.mock("@oxagen/storage", async () => {
   class StorageNotFoundError extends Error {
     readonly notFound = true as const;

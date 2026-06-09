@@ -46,12 +46,6 @@ vi.mock("@oxagen/database", () => ({
 // ── drizzle-orm mock ─────────────────────────────────────────────────────────
 // The seats module uses `and`, `count`, `eq`, `sql` from drizzle-orm.
 // We don't need to replicate their logic — the DB mock controls results.
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => ({ $type: "and", args }),
-  count: () => ({ $type: "count" }),
-  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
-  sql: (parts: TemplateStringsArray, ...vals: unknown[]) => ({ $type: "sql", parts, vals }),
-}));
 
 // Import AFTER mocks.
 const { getOrgSeatUsage, assertSeatAvailable, SeatLimitError, isSeatLimitError } = await import(

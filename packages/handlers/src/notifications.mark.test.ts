@@ -7,11 +7,6 @@ vi.mock("@oxagen/database", () => ({
   ),
 }));
 
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => args,
-  eq: (_col: unknown, _val: unknown) => "eq_sentinel",
-}));
-
 import { handler } from "./notifications.mark";
 
 const ctx = { orgId: "org-1", workspaceId: "ws-1", userId: "user-1", apiKeyId: null, requestId: "req-1", surface: "api" as const, messageId: null };

@@ -8,11 +8,6 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => ({ _and: args }),
-  eq: (a: unknown, b: unknown) => ({ _eq: [a, b] }),
-}));
-
 interface SubState {
   row: {
     currentPeriodStart: Date;

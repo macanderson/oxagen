@@ -38,11 +38,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return { eq: orig.eq };
-});
-
 import { workspaceModelSettingsWriteHandler } from "./workspace.model.settings.write";
 import type { CapabilityContext } from "@oxagen/oxagen";
 

@@ -136,12 +136,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((col: unknown, val: unknown) => ({ col, val })),
-  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values })),
-  and: vi.fn((...args: unknown[]) => args),
-}));
-
 // Import after mocks.
 const { grantFreeCredits, grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } =
   await import("../grants");

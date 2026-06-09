@@ -105,18 +105,6 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: (col: unknown, val: unknown) => ({ $type: "eq", col, val }),
-  isNull: (col: unknown) => ({ $type: "isNull", col }),
-  inArray: (col: unknown, vals: unknown) => ({ $type: "inArray", col, vals }),
-  and: (...args: unknown[]) => ({ $type: "and", args }),
-  sql: (parts: TemplateStringsArray, ...vals: unknown[]) => ({
-    $type: "sql",
-    parts,
-    vals,
-  }),
-}));
-
 // Import after mocks.
 const {
   listOrgPaymentMethods,

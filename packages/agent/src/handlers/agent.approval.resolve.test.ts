@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   whereMock: vi.fn(),
   setMock: vi.fn(),
   updateMock: vi.fn(),
-  andArgsRecord: [] as unknown[][],
   sqlArgsRecord: [] as string[],
   notifyResolutionMock: vi.fn(async () => undefined),
 }));
@@ -29,18 +28,19 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => {
-    mocks.andArgsRecord.push(args);
-    return { _and: args };
-  },
-  eq: (col: unknown, val: unknown) => ({ _eq: [col, val] }),
-  sql: (strings: TemplateStringsArray) => {
-    const raw = strings.join("?");
-    mocks.sqlArgsRecord.push(raw);
-    return { _sql: raw };
-  },
-}));
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...orig,
+    sql: Object.assign(
+      (strings: TemplateStringsArray, ...values: unknown[]) => {
+        mocks.sqlArgsRecord.push(strings.join("?"));
+        return orig.sql(strings, ...values);
+      },
+      orig.sql,
+    ) as typeof orig.sql,
+  };
+});
 
 vi.mock("../runtime/approval", () => ({
   notifyResolution: mocks.notifyResolutionMock,
@@ -63,7 +63,6 @@ describe("agent.approval.resolve handler", () => {
     mocks.setMock.mockClear();
     mocks.whereMock.mockClear();
     mocks.notifyResolutionMock.mockClear();
-    mocks.andArgsRecord.length = 0;
     mocks.sqlArgsRecord.length = 0;
   });
 

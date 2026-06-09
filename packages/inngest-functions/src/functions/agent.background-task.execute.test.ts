@@ -41,11 +41,6 @@ vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),
 }));
 
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("drizzle-orm")>();
-  return { and: orig.and, eq: orig.eq };
-});
-
 // Mock @oxagen/oxagen/kernel's invoke function (OXA-1498: capability calls now
 // route through kernel.invoke instead of @oxagen/agent's invokeCapability).
 vi.mock("@oxagen/oxagen/kernel", () => ({

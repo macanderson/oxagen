@@ -65,10 +65,6 @@ vi.mock("@oxagen/database", () => ({
   withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn({ select: mocks.dbSelect }),
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: (_col: unknown, _val: unknown) => ({ col: _col, val: _val }),
-}));
-
 import { archiveCreateHandler } from "./archive.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 

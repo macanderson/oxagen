@@ -15,9 +15,6 @@ vi.mock("@oxagen/database", () => ({
 
 // drizzle-orm eq is used as a comparator; mock it as an identity pass-through
 // so the query objects built inside the function don't throw.
-vi.mock("drizzle-orm", () => ({
-  eq: (_col: unknown, val: unknown) => val,
-}));
 
 import { loadEffectiveModelDefaults } from "./load-effective-model-defaults";
 

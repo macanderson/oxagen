@@ -10,11 +10,6 @@
  */
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => ({ _and: args }),
-  eq: (a: unknown, b: unknown) => ({ _eq: [a, b] }),
-}));
-
 interface TxState {
   subRows: { tier: string }[];
   orgRows: { planType: string | null }[];
