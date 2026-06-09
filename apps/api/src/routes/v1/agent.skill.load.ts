@@ -7,8 +7,7 @@ import type { AppEnv } from "../../app";
 export const agentSkillLoadRoute = new Hono<AppEnv>();
 
 agentSkillLoadRoute.post("/", async (c) => {
-  const body = await c.req.json();
-  const input = agentSkillLoad.input.parse(body);
+  const input = agentSkillLoad.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
   const out = await invoke(agentSkillLoad.name, input, ctx, { surface: "api" });
   return c.json(out);

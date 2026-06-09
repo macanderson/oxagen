@@ -31,7 +31,7 @@ export async function agentSubagentDispatchHandler(
 
   await withTenantDb((tx) =>
     tx.insert(schema.subagentRuns).values(
-      tasks.map((task, idx) => ({
+      tasks.map((task) => ({
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
         fanoutId: fanout.publicId,

@@ -280,3 +280,30 @@ export const agentToolCalls = agentSchema.table(
     orgIdx: index("agent_tool_calls_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
+
+// Agent plans: structured execution plans with approval gates.
+// Status flow: draft → awaiting_approval → approved | denied | amended → executing → completed.
+// Plans are immutable after approval.
+export const agentPlans = agentSchema.table(
+  "agent_plans",
+  {
+    ...idMixin("pln"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    // status constrained via CHECK in migration
+    status: citext("status").notNull().default("draft"),
+    goals: jsonb("goals").notNull().default(sql`'[]'::jsonb`),
+    constraints: jsonb("constraints").notNull().default(sql`'[]'::jsonb`),
+    tasks: jsonb("tasks").notNull().default(sql`'[]'::jsonb`),
+    approvalRequired: boolean("approval_required").notNull().default(true),
+    messageId: uuid("message_id"),
+    approvedAt: timestamp("approved_at", { withTimezone: true, mode: "date" }),
+    approvedByUserId: uuid("approved_by_user_id"),
+    taskCount: integer("task_count").notNull().default(0),
+  },
+  (t) => ({
+    orgStatusIdx: index("agent_plans_org_status_idx").on(t.orgId, t.workspaceId, t.status),
+    orgIdx: index("agent_plans_org_idx").on(t.orgId, t.workspaceId),
+    messageIdx: index("agent_plans_message_idx").on(t.messageId),
+  }),
+);

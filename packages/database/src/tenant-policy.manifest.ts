@@ -32,6 +32,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.subagent_fanouts", policyClass: "standard" },
   { table: "agent.subagent_runs", policyClass: "standard" },
   // agent.plan_steps dropped in 0026 (orphan table, never wired to handler/route)
+  { table: "agent.agent_plans", policyClass: "standard" },
   { table: "agent.mcp_servers", policyClass: "standard" },
   { table: "agent.workflow_runs", policyClass: "standard" },
   { table: "agent.workflow_run_tasks", policyClass: "standard" },
