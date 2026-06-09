@@ -8,8 +8,8 @@
  *  - resetBillingProvider() clears back to null so billingProvider() re-creates
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { billingProvider, setBillingProvider, resetBillingProvider } from "../client";
-import type { BillingProvider } from "../provider";
+import { billingProvider, setBillingProvider, resetBillingProvider } from "./client";
+import type { BillingProvider } from "./provider";
 
 function makeStubProvider(): BillingProvider {
   return {} as BillingProvider;

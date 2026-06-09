@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ---------------------------------------------------------------------------
 
 const assertOrgCanConsumeMock = vi.fn().mockResolvedValue(undefined);
-vi.mock("../dunning", () => ({
+vi.mock("./dunning", () => ({
   assertOrgCanConsume: assertOrgCanConsumeMock,
   BillingSuspendedError: class BillingSuspendedError extends Error {
     readonly code = "billing_suspended" as const;
@@ -22,23 +22,23 @@ vi.mock("../dunning", () => ({
 }));
 
 const maybeAutoReloadMock = vi.fn().mockResolvedValue({ reloaded: false, reason: "above_threshold" });
-vi.mock("../autoreload", () => ({
+vi.mock("./autoreload", () => ({
   maybeAutoReload: maybeAutoReloadMock,
 }));
 
 const effectiveBalanceMock = vi.fn().mockResolvedValue(0n);
 const consumeCreditsMock = vi.fn().mockResolvedValue({ chargedCents: 0n, shortfallCents: 0n, balanceCents: 0n });
-vi.mock("../credits", () => ({
+vi.mock("./credits", () => ({
   effectiveBalance: effectiveBalanceMock,
   consumeCredits: consumeCreditsMock,
 }));
 
-vi.mock("../logger", () => ({
+vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
 const { assertCanStartTurn, chargeImageCredits, chargeVideoCredits, InsufficientCreditsError } =
-  await import("../metering");
+  await import("./metering");
 
 // ---------------------------------------------------------------------------
 // assertCanStartTurn
@@ -71,7 +71,7 @@ describe("assertCanStartTurn", () => {
   });
 
   it("propagates BillingSuspendedError from assertOrgCanConsume", async () => {
-    const { BillingSuspendedError } = await import("../dunning");
+    const { BillingSuspendedError } = await import("./dunning");
     assertOrgCanConsumeMock.mockRejectedValue(new BillingSuspendedError(null));
     await expect(assertCanStartTurn("org-4")).rejects.toBeInstanceOf(BillingSuspendedError);
     // auto-reload and balance check must NOT be called when dunning rejects

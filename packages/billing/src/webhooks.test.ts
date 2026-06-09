@@ -21,7 +21,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { BillingWebhookEvent, BillingDispute, BillingRefundedCharge } from "../provider";
+import type { BillingWebhookEvent, BillingDispute, BillingRefundedCharge } from "./provider";
 
 // ---------------------------------------------------------------------------
 // Module mocks — hoisted before any import of the module under test.
@@ -30,17 +30,17 @@ import type { BillingWebhookEvent, BillingDispute, BillingRefundedCharge } from 
 const syncSubscriptionMock = vi.fn().mockResolvedValue(undefined);
 const syncInvoiceMock = vi.fn().mockResolvedValue(undefined);
 
-vi.mock("../subscriptions", () => ({
+vi.mock("./subscriptions", () => ({
   syncSubscriptionFromStripe: syncSubscriptionMock,
 }));
 
-vi.mock("../invoices", () => ({
+vi.mock("./invoices", () => ({
   syncInvoiceFromStripe: syncInvoiceMock,
 }));
 
 // billingProvider is only used by verifyStripeSignature in webhooks.ts (not
 // by processStripeEvent itself), so a minimal mock suffices.
-vi.mock("../client", () => ({
+vi.mock("./client", () => ({
   billingProvider: vi.fn(() => ({
     parseWebhookEvent: vi.fn(),
   })),
@@ -49,7 +49,7 @@ vi.mock("../client", () => ({
 // Mock grants so their internal syncSubscriptionFromStripe calls don't leak
 // into webhook dispatch assertions. Grant correctness is tested in grants.test.ts.
 const grantPlanCreditsForInvoicePaidMock = vi.fn().mockResolvedValue(undefined);
-vi.mock("../grants", () => ({
+vi.mock("./grants", () => ({
   grantPlanCreditsForInvoicePaid: grantPlanCreditsForInvoicePaidMock,
   grantCreditPackForCheckout: vi.fn().mockResolvedValue(undefined),
   grantFreeCredits: vi.fn().mockResolvedValue(undefined),
@@ -58,7 +58,7 @@ vi.mock("../grants", () => ({
 // Mock dunning handlers.
 const onInvoicePaymentFailedMock = vi.fn().mockResolvedValue(undefined);
 const onInvoiceRecoveredMock = vi.fn().mockResolvedValue(undefined);
-vi.mock("../dunning", () => ({
+vi.mock("./dunning", () => ({
   onInvoicePaymentFailed: onInvoicePaymentFailedMock,
   onInvoiceRecovered: onInvoiceRecoveredMock,
 }));
@@ -67,7 +67,7 @@ vi.mock("../dunning", () => ({
 const onDisputeCreatedMock = vi.fn().mockResolvedValue(undefined);
 const onDisputeClosedMock = vi.fn().mockResolvedValue(undefined);
 const onChargeRefundedMock = vi.fn().mockResolvedValue(undefined);
-vi.mock("../disputes", () => ({
+vi.mock("./disputes", () => ({
   onDisputeCreated: onDisputeCreatedMock,
   onDisputeClosed: onDisputeClosedMock,
   onChargeRefunded: onChargeRefundedMock,
@@ -151,7 +151,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 // Import after mocks.
-const { processStripeEvent } = await import("../webhooks");
+const { processStripeEvent } = await import("./webhooks");
 
 // ---------------------------------------------------------------------------
 // Fixture helpers

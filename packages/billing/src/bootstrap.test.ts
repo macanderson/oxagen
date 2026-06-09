@@ -16,18 +16,18 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
 
 const assertCanStartTurnMock = vi.fn().mockResolvedValue(undefined);
 
-vi.mock("../metering", () => ({
+vi.mock("./metering", () => ({
   assertCanStartTurn: assertCanStartTurnMock,
 }));
 
-vi.mock("../logger", () => ({
+vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
 // Each test imports a fresh module (vi.resetModules between tests would be
 // needed for true isolation of the `booted` flag, but since the module is
 // cached we just verify idempotency by inspecting call counts).
-const { bootstrapBillingRuntime } = await import("../bootstrap");
+const { bootstrapBillingRuntime } = await import("./bootstrap");
 
 describe("bootstrapBillingRuntime", () => {
   it("calls setBillingAdmissionGate once", () => {

@@ -16,20 +16,20 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { BillingCheckoutSession, BillingInvoice } from "../provider";
+import type { BillingCheckoutSession, BillingInvoice } from "./provider";
 
 // ---------------------------------------------------------------------------
 // Module mocks — registered before any module import.
 // ---------------------------------------------------------------------------
 
 const syncSubscriptionMock = vi.fn().mockResolvedValue(undefined);
-vi.mock("../subscriptions", () => ({
+vi.mock("./subscriptions", () => ({
   syncSubscriptionFromStripe: syncSubscriptionMock,
 }));
 
 // billingProvider mock — only getCheckoutSessionCreditPacks is used in grants.
 const getCheckoutSessionCreditPacksMock = vi.fn().mockResolvedValue([]);
-vi.mock("../client", () => ({
+vi.mock("./client", () => ({
   billingProvider: () => ({
     getCheckoutSessionCreditPacks: getCheckoutSessionCreditPacksMock,
   }),
@@ -127,7 +127,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 // Import after mocks.
 const { grantFreeCredits, grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } =
-  await import("../grants");
+  await import("./grants");
 
 // ---------------------------------------------------------------------------
 // Fixture helpers

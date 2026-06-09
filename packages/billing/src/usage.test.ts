@@ -45,7 +45,7 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
   };
 });
 
-const { getCurrentPeriodUsage } = await import("../usage");
+const { getCurrentPeriodUsage } = await import("./usage");
 
 describe("getCurrentPeriodUsage", () => {
   const periodStart = new Date("2026-06-01T00:00:00Z");

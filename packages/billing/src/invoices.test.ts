@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { BillingInvoice } from "../provider";
+import type { BillingInvoice } from "./provider";
 
 // ---------------------------------------------------------------------------
 // BillingProvider mock
@@ -24,7 +24,7 @@ import type { BillingInvoice } from "../provider";
 
 const getInvoiceMock = vi.fn();
 
-vi.mock("../client", () => ({
+vi.mock("./client", () => ({
   billingProvider: () => ({
     getInvoice: getInvoiceMock,
   }),
@@ -111,7 +111,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 // Import after mocks.
-const { syncInvoiceFromStripe } = await import("../invoices");
+const { syncInvoiceFromStripe } = await import("./invoices");
 
 // ---------------------------------------------------------------------------
 // Fixture helpers

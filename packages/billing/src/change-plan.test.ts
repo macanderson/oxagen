@@ -19,7 +19,7 @@ const upgradeSubscriptionMock = vi.fn().mockResolvedValue(undefined);
 const getSubscriptionMock = vi.fn();
 const createSubscriptionCheckoutMock = vi.fn();
 
-vi.mock("../client", () => ({
+vi.mock("./client", () => ({
   billingProvider: () => ({
     getSubscription: getSubscriptionMock,
     upgradeSubscription: upgradeSubscriptionMock,
@@ -70,8 +70,8 @@ vi.mock("@oxagen/config/env", () => ({
 }));
 
 // Import AFTER mocks.
-const { changeOrgPlan } = await import("../subscriptions");
-const { createCheckoutSession, ActiveSubscriptionError } = await import("../checkout");
+const { changeOrgPlan } = await import("./subscriptions");
+const { createCheckoutSession, ActiveSubscriptionError } = await import("./checkout");
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 

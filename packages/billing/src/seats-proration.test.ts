@@ -37,7 +37,7 @@ const listPaymentMethodsMock = vi.fn().mockResolvedValue([]);
 const getDefaultPaymentMethodIdMock = vi.fn().mockResolvedValue(null);
 const upgradeSubscriptionMock = vi.fn().mockResolvedValue(undefined);
 
-vi.mock("../client", () => ({
+vi.mock("./client", () => ({
   billingProvider: () => ({
     previewSeatChange: previewSeatChangeMock,
     previewPlanChange: previewPlanChangeMock,
@@ -56,7 +56,7 @@ vi.mock("../client", () => ({
 // ---------------------------------------------------------------------------
 
 const getOrgSeatUsageMock = vi.fn();
-vi.mock("../seats", () => ({
+vi.mock("./seats", () => ({
   getOrgSeatUsage: getOrgSeatUsageMock,
   SeatLimitError: class SeatLimitError extends Error {
     readonly code = "seat_limit_reached";
@@ -77,7 +77,7 @@ vi.mock("../seats", () => ({
 // customers mock
 // ---------------------------------------------------------------------------
 
-vi.mock("../customers", () => ({
+vi.mock("./customers", () => ({
   ensureStripeCustomer: vi.fn().mockResolvedValue("cus_mock"),
 }));
 
@@ -85,7 +85,7 @@ vi.mock("../customers", () => ({
 // grants mock (sibling agent will add grantProratedPlanUpgradeCredits)
 // ---------------------------------------------------------------------------
 
-vi.mock("../grants", () => ({
+vi.mock("./grants", () => ({
   grantFreeCredits: vi.fn().mockResolvedValue(undefined),
   grantPlanCreditsForInvoicePaid: vi.fn().mockResolvedValue(undefined),
   grantCreditPackForCheckout: vi.fn().mockResolvedValue(undefined),
@@ -126,7 +126,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 // Import AFTER mocks.
 const { previewSeatChange, setSubscriptionSeats, previewPlanChange } =
-  await import("../subscriptions");
+  await import("./subscriptions");
 
 // ---------------------------------------------------------------------------
 // Fixtures

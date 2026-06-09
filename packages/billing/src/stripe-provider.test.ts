@@ -74,7 +74,7 @@ vi.mock("@oxagen/config/env", () => ({
 }));
 
 // Import after mocks — also resets the singleton in stripeClient()
-const { StripeProvider } = await import("../stripe-provider");
+const { StripeProvider } = await import("./stripe-provider");
 
 // ---------------------------------------------------------------------------
 // Helpers — minimal Stripe object factories

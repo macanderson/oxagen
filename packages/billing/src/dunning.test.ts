@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { BillingInvoice } from "../provider";
+import type { BillingInvoice } from "./provider";
 
 // ---------------------------------------------------------------------------
 // Drizzle-orm mock — minimal stubs used by dunning.ts
@@ -90,7 +90,7 @@ const {
   BillingSuspendedError,
   isBillingSuspended,
   DUNNING_GRACE_DAYS,
-} = await import("../dunning");
+} = await import("./dunning");
 
 // ---------------------------------------------------------------------------
 // Fixtures

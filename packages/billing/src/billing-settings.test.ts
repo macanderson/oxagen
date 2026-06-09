@@ -56,7 +56,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 // Import after mocks.
 const { getOrgBillingSettings, updateAutoReloadSettings } = await import(
-  "../billing-settings"
+  "./billing-settings"
 );
 
 // ---------------------------------------------------------------------------

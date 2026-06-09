@@ -121,15 +121,15 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 // consumeCredits is imported transitively by grantCredits (negative delta).
 // We mock it here to keep these tests isolated to createCreditLot / effectiveBalance.
-vi.mock("../credits", async (importOriginal) => {
+vi.mock("./credits", async (importOriginal) => {
   // We can't easily partial-mock a module we're testing; instead rely on the
   // module's own implementation. This mock is only for the consumeCredits
   // import WITHIN grantCredits, but since both live in credits.ts we test
   // them at the module level below. No need to stub here.
-  return importOriginal<typeof import("../credits")>();
+  return importOriginal<typeof import("./credits")>();
 });
 
-const { createCreditLot, grantCredits, effectiveBalance } = await import("../credits");
+const { createCreditLot, grantCredits, effectiveBalance } = await import("./credits");
 const { __dbState } = await import("@oxagen/database") as unknown as {
   __dbState: typeof dbState;
 };

@@ -46,7 +46,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-const { resolveOrgTier } = await import("../tier");
+const { resolveOrgTier } = await import("./tier");
 
 describe("resolveOrgTier", () => {
   beforeEach(() => {

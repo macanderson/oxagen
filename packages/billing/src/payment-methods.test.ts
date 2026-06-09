@@ -29,7 +29,7 @@ const setDefaultPaymentMethodMock = vi.fn().mockResolvedValue(undefined);
 const detachPaymentMethodMock = vi.fn().mockResolvedValue(undefined);
 const createSetupIntentMock = vi.fn();
 
-vi.mock("../client", () => ({
+vi.mock("./client", () => ({
   billingProvider: () => ({
     listPaymentMethods: listPaymentMethodsMock,
     getDefaultPaymentMethodId: getDefaultPaymentMethodIdMock,
@@ -45,7 +45,7 @@ vi.mock("../client", () => ({
 
 const ensureStripeCustomerMock = vi.fn().mockResolvedValue("cus_default");
 
-vi.mock("../customers", () => ({
+vi.mock("./customers", () => ({
   ensureStripeCustomer: ensureStripeCustomerMock,
 }));
 
@@ -106,7 +106,7 @@ const {
   removeOrgPaymentMethod,
   LastPaymentMethodError,
   isLastPaymentMethodError,
-} = await import("../payment-methods");
+} = await import("./payment-methods");
 
 // ---------------------------------------------------------------------------
 // Helpers

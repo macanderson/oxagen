@@ -12,14 +12,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { BillingDispute, BillingRefundedCharge } from "../provider";
+import type { BillingDispute, BillingRefundedCharge } from "./provider";
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
 const consumeCreditsMock = vi.fn().mockResolvedValue({ chargedCents: 500n, shortfallCents: 0n, balanceCents: 0n });
-vi.mock("../credits", () => ({
+vi.mock("./credits", () => ({
   consumeCredits: consumeCreditsMock,
 }));
 
@@ -84,7 +84,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 // Import after mocks.
-const { onDisputeCreated, onDisputeClosed, onChargeRefunded } = await import("../disputes");
+const { onDisputeCreated, onDisputeClosed, onChargeRefunded } = await import("./disputes");
 
 // ---------------------------------------------------------------------------
 // Fixtures

@@ -120,7 +120,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-const { consumeCredits } = await import("../credits");
+const { consumeCredits } = await import("./credits");
 
 // ---------------------------------------------------------------------------
 // Helpers

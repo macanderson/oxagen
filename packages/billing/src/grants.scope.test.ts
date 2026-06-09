@@ -60,10 +60,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 // grants.ts imports these at module load; stub to avoid side effects.
 vi.mock("@oxagen/database/security", () => ({ emitSecurityEvent: vi.fn() }));
-vi.mock("../client", () => ({ billingProvider: () => ({ getCheckoutSessionCreditPacks: vi.fn() }) }));
-vi.mock("../subscriptions", () => ({ syncSubscriptionFromStripe: vi.fn() }));
+vi.mock("./client", () => ({ billingProvider: () => ({ getCheckoutSessionCreditPacks: vi.fn() }) }));
+vi.mock("./subscriptions", () => ({ syncSubscriptionFromStripe: vi.fn() }));
 
-import { grantFreeCredits } from "../grants";
+import { grantFreeCredits } from "./grants";
 
 describe("grantFreeCredits — system seam (no tenant scope required)", () => {
   beforeEach(() => {

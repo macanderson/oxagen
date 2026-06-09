@@ -27,7 +27,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ---------------------------------------------------------------------------
 
 const ensureStripeCustomerMock = vi.fn().mockResolvedValue("cus_test_001");
-vi.mock("../customers", () => ({
+vi.mock("./customers", () => ({
   ensureStripeCustomer: ensureStripeCustomerMock,
 }));
 
@@ -38,7 +38,7 @@ vi.mock("@oxagen/config/env", () => ({
 import type { PlanTier } from "@oxagen/oxagen/types";
 
 const resolveOrgTierMock = vi.fn<() => Promise<PlanTier>>().mockResolvedValue("build");
-vi.mock("../tier", () => ({
+vi.mock("./tier", () => ({
   resolveOrgTier: resolveOrgTierMock,
 }));
 
@@ -49,7 +49,7 @@ vi.mock("../tier", () => ({
 const createSubscriptionCheckoutMock = vi.fn();
 const createPaymentCheckoutMock = vi.fn();
 
-vi.mock("../client", () => ({
+vi.mock("./client", () => ({
   billingProvider: () => ({
     createSubscriptionCheckout: createSubscriptionCheckoutMock,
     createPaymentCheckout: createPaymentCheckoutMock,
@@ -83,7 +83,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 // Import after mocks.
 const { createCheckoutSession, createCreditPackCheckoutSession } = await import(
-  "../checkout"
+  "./checkout"
 );
 
 // ---------------------------------------------------------------------------

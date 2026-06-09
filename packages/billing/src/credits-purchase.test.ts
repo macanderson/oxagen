@@ -35,25 +35,25 @@ vi.mock("@oxagen/config/env", () => ({
 }));
 
 const ensureStripeCustomerMock = vi.fn().mockResolvedValue("cus_test_001");
-vi.mock("../customers", () => ({
+vi.mock("./customers", () => ({
   ensureStripeCustomer: ensureStripeCustomerMock,
 }));
 
 const resolveOrgTierMock = vi.fn<() => Promise<PlanTier>>().mockResolvedValue("build");
-vi.mock("../tier", () => ({
+vi.mock("./tier", () => ({
   resolveOrgTier: resolveOrgTierMock,
 }));
 
 const createDynamicCreditCheckoutMock = vi.fn();
-vi.mock("../client", () => ({
+vi.mock("./client", () => ({
   billingProvider: () => ({
     createDynamicCreditCheckout: createDynamicCreditCheckoutMock,
   }),
 }));
 
 // Import after mocks.
-const { createUsageCreditCheckout, MIN_GRANT_CENTS } = await import("../credits-purchase");
-const { TierDeniedError } = await import("../entitlements");
+const { createUsageCreditCheckout, MIN_GRANT_CENTS } = await import("./credits-purchase");
+const { TierDeniedError } = await import("./entitlements");
 
 // ---------------------------------------------------------------------------
 // Helpers

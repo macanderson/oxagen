@@ -42,7 +42,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 // Import AFTER mocks.
 const { getOrgSeatUsage, assertSeatAvailable, SeatLimitError, isSeatLimitError } = await import(
-  "../seats"
+  "./seats"
 );
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

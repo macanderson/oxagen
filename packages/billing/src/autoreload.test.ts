@@ -19,7 +19,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const effectiveBalanceMock = vi.fn().mockResolvedValue(0n);
 const createCreditLotMock = vi.fn().mockResolvedValue({ lotId: "lot-1", effectiveBalanceCents: 1000n });
 
-vi.mock("../credits", () => ({
+vi.mock("./credits", () => ({
   effectiveBalance: effectiveBalanceMock,
   createCreditLot: createCreditLotMock,
 }));
@@ -31,7 +31,7 @@ const chargeOffSessionMock = vi.fn().mockResolvedValue({
 });
 const getDefaultPaymentMethodIdMock = vi.fn().mockResolvedValue("pm_default");
 
-vi.mock("../client", () => ({
+vi.mock("./client", () => ({
   billingProvider: () => ({
     chargeOffSession: chargeOffSessionMock,
     getDefaultPaymentMethodId: getDefaultPaymentMethodIdMock,
@@ -40,7 +40,7 @@ vi.mock("../client", () => ({
 
 // getOrgBillingSettings — provided by sibling agent; we mock it here.
 const getOrgBillingSettingsMock = vi.fn();
-vi.mock("../billing-settings", () => ({
+vi.mock("./billing-settings", () => ({
   getOrgBillingSettings: getOrgBillingSettingsMock,
 }));
 
@@ -87,7 +87,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 // Import after mocks.
-const { isLowBalance, maybeAutoReload } = await import("../autoreload");
+const { isLowBalance, maybeAutoReload } = await import("./autoreload");
 
 // ---------------------------------------------------------------------------
 // Default settings factory
