@@ -1,5 +1,5 @@
-import { withTenantDb, schema } from "@oxagen/database";
-import { and, eq, sql } from "drizzle-orm";
+import { withTenantDb } from "@oxagen/database";
+import { sql } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
 import type { AgentPlanApproveInput, AgentPlanApproveOutput } from "@oxagen/oxagen/contracts/agent.plan.approve";
 
@@ -13,7 +13,7 @@ const DECISION_TO_STATUS: Record<AgentPlanApproveInput["decision"], "approved" |
 
 export async function agentPlanApproveHandler(
   input: AgentPlanApproveInput,
-  ctx: CapabilityContext,
+  _ctx: CapabilityContext,
 ): Promise<AgentPlanApproveOutput> {
   const status = DECISION_TO_STATUS[input.decision];
   // planSteps table dropped in migration 0026 (was never INSERTed, only UPDATE reference).

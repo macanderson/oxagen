@@ -7,6 +7,18 @@ import { logger } from "./logger";
 
 const ACTIVE_STATUSES = ["trialing", "active", "past_due", "paused"];
 
+type SubscriptionWithPlan = {
+  publicId: string;
+  status: string;
+  billingInterval: string;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  cancelAtPeriodEnd: boolean;
+  seatCount: number;
+  planId: string;
+  plan?: { slug: string };
+};
+
 export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSubscriptionRead> =
   async (_input, ctx) => {
     // Authorization guard: a resolved principal (user or API key) is required.
@@ -45,7 +57,7 @@ export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSub
               columns: { slug: true },
             },
           },
-        }),
+        }) as Promise<SubscriptionWithPlan | undefined>,
       ),
       withTenantDb((tx) =>
         tx.query.creditBalances.findFirst({
@@ -56,7 +68,7 @@ export const billingSubscriptionReadHandler: CapabilityHandler<typeof billingSub
     ]);
 
     const sub = subWithPlan ?? null;
-    const planSlug = (sub && (sub as any).plan ? (sub as any).plan.slug : null) ?? "unknown";
+    const planSlug = (sub && sub.plan ? sub.plan.slug : null) ?? "unknown";
 
     // OXA-1347: roll up the current billing period's token + cost totals
     // from ClickHouse when a subscription is active. Telemetry is best-
