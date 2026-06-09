@@ -55,6 +55,7 @@ import {
 describe("approval runtime", () => {
   beforeEach(() => {
     insertedValues.length = 0;
+    listenHandlers.length = 0;
     insertMock.mockClear();
     valuesMock.mockClear();
     returningMock.mockClear();
