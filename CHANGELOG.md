@@ -1,5 +1,11 @@
 # Changelog
 
+## What's Changed in v0.3.3
+
+No changes were provided for this release. The commit log, diffstat, and diff are all empty, so no user-facing release notes can be accurately produced.
+
+> **Note for maintainers:** If you intended to document changes since v0.3.2, please re-run the release notes generation with the relevant commit log and diff included. Fabricating changelog entries has been intentionally avoided here.
+
 ## What's Changed in v0.3.2
 
 No commit history or diff was provided, so there are no documented changes to summarize for this release.
