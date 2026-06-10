@@ -126,9 +126,27 @@ import { metadata as graphEdgeDeleteMetadata } from "./graph.edge.delete";
 import { metadata as graphCypherMetadata } from "./graph.cypher";
 import { metadata as webSearchMetadata } from "./web.search";
 import { metadata as webFetchMetadata } from "./web.fetch";
+import { metadata as semanticEdgeApproveMetadata } from "./semantic.edge.approve";
 import { metadata as semanticEdgeInferMetadata } from "./semantic.edge.infer";
 import { metadata as semanticEdgeListMetadata } from "./semantic.edge.list";
 import { metadata as semanticEdgeSuggestMetadata } from "./semantic.edge.suggest";
+import { metadata as pluginSchemaGetMetadata } from "./plugin.schema.get";
+import { metadata as pluginSchemaValidateMetadata } from "./plugin.schema.validate";
+import { metadata as pluginVersionListMetadata } from "./plugin.version.list";
+import { metadata as repoConfigureMetadata } from "./repo.configure";
+import { metadata as repoMetricsMetadata } from "./repo.metrics";
+import { metadata as repoPauseMetadata } from "./repo.pause";
+import { metadata as repoResumeMetadata } from "./repo.resume";
+import { metadata as repoSyncMetadata } from "./repo.sync";
+import { metadata as graphNodeListMetadata } from "./graph.node.list";
+import { metadata as graphStatsMetadata } from "./graph.stats";
+import { metadata as integrationConfigureMetadata } from "./integration.configure";
+import { metadata as integrationDeleteMetadata } from "./integration.delete";
+import { metadata as integrationGetMetadata } from "./integration.get";
+import { metadata as integrationInstallMetadata } from "./integration.install";
+import { metadata as integrationListMetadata } from "./integration.list";
+import { metadata as integrationMetricsMetadata } from "./integration.metrics";
+import { metadata as integrationSyncMetadata } from "./integration.sync";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -243,9 +261,27 @@ const allToolMetadata = [
   graphCypherMetadata,
   webSearchMetadata,
   webFetchMetadata,
+  semanticEdgeApproveMetadata,
   semanticEdgeInferMetadata,
   semanticEdgeListMetadata,
   semanticEdgeSuggestMetadata,
+  pluginSchemaGetMetadata,
+  pluginSchemaValidateMetadata,
+  pluginVersionListMetadata,
+  repoConfigureMetadata,
+  repoMetricsMetadata,
+  repoPauseMetadata,
+  repoResumeMetadata,
+  repoSyncMetadata,
+  graphNodeListMetadata,
+  graphStatsMetadata,
+  integrationConfigureMetadata,
+  integrationDeleteMetadata,
+  integrationGetMetadata,
+  integrationInstallMetadata,
+  integrationListMetadata,
+  integrationMetricsMetadata,
+  integrationSyncMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────
