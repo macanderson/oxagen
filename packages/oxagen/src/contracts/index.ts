@@ -122,6 +122,23 @@ import { webFetch } from "./web.fetch";
 import { semanticEdgeInfer } from "./semantic.edge.infer";
 import { semanticEdgeList } from "./semantic.edge.list";
 import { semanticEdgeSuggest } from "./semantic.edge.suggest";
+import { pluginSchemaGet } from "./plugin.schema.get";
+import { pluginSchemaValidate } from "./plugin.schema.validate";
+import { pluginVersionList } from "./plugin.version.list";
+import { repoConfigure } from "./repo.configure";
+import { repoSync } from "./repo.sync";
+import { repoPause } from "./repo.pause";
+import { repoResume } from "./repo.resume";
+import { repoMetrics } from "./repo.metrics";
+import { integrationInstall } from "./integration.install";
+import { integrationConfigure } from "./integration.configure";
+import { integrationList } from "./integration.list";
+import { integrationGet } from "./integration.get";
+import { integrationSync } from "./integration.sync";
+import { integrationMetrics } from "./integration.metrics";
+import { integrationDelete } from "./integration.delete";
+import { graphNodeList } from "./graph.node.list";
+import { graphStats } from "./graph.stats";
 
 export {
   apiKeyCreate,
@@ -238,6 +255,23 @@ export {
   semanticEdgeInfer,
   semanticEdgeList,
   semanticEdgeSuggest,
+  pluginSchemaGet,
+  pluginSchemaValidate,
+  pluginVersionList,
+  repoConfigure,
+  repoSync,
+  repoPause,
+  repoResume,
+  repoMetrics,
+  integrationInstall,
+  integrationConfigure,
+  integrationList,
+  integrationGet,
+  integrationSync,
+  integrationMetrics,
+  integrationDelete,
+  graphNodeList,
+  graphStats,
 };
 
 /**
@@ -363,4 +397,21 @@ export const contracts = [
   semanticEdgeInfer,
   semanticEdgeList,
   semanticEdgeSuggest,
+  pluginSchemaGet,
+  pluginSchemaValidate,
+  pluginVersionList,
+  repoConfigure,
+  repoSync,
+  repoPause,
+  repoResume,
+  repoMetrics,
+  integrationInstall,
+  integrationConfigure,
+  integrationList,
+  integrationGet,
+  integrationSync,
+  integrationMetrics,
+  integrationDelete,
+  graphNodeList,
+  graphStats,
 ] as const;
