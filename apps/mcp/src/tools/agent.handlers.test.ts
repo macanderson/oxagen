@@ -187,7 +187,7 @@ import handler_agentMemoryWrite, {
 } from "./agent.memory.write";
 
 describe("agent.memory.write handler", () => {
-  const validOutput = { memoryId: "mem_1", nodeRef: "node-abc" };
+  const validOutput = { memoryId: "mem_1", nodeRef: "node-abc", edgesCreated: 0 };
 
   it("exports schema and metadata", () => {
     expect(agentMemoryWriteSchema).toBeDefined();

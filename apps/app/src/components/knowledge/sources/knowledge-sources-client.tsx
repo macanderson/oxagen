@@ -33,8 +33,6 @@ const CONNECTOR_ICONS: Record<string, React.ElementType> = {
   github: GithubIcon,
 };
 
-type ConnectionStatus = string;
-
 interface StatusConfig {
   label: string;
   icon: React.ElementType;
@@ -111,7 +109,7 @@ interface ConnectionRowProps {
   resyncing: Set<string>;
 }
 
-function ConnectionRow({ connection, orgSlug, workspaceSlug, onResyncStart, resyncing }: ConnectionRowProps) {
+function ConnectionRow({ connection, orgSlug: _orgSlug, workspaceSlug: _workspaceSlug, onResyncStart, resyncing }: ConnectionRowProps) {
   const statusConfig = getStatusConfig(connection.status);
   const StatusIcon = statusConfig.icon;
   const ConnectorIcon = CONNECTOR_ICONS[connection.connectorId] ?? Database;
