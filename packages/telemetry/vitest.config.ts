@@ -9,13 +9,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // lines floor 40 (measured 45.04); target 80 — raise in follow-up
-      // branches floor 71 (measured 76.66); target 75 — raise in follow-up
+      // lines 71 (measured 71.96) — migrate.ts database ops not covered without live CH
+      // branches 95 (measured 95.65) — target 95; only migrate.ts cold-start path uncovered
       thresholds: {
-        lines: 40,
-        branches: 71,
-        functions: 30,
-        statements: 40,
+        lines: 71,
+        branches: 95,
+        functions: 86,
+        statements: 71,
       },
     },
   },
