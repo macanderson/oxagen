@@ -256,6 +256,19 @@ describe("McpServerPicker — server list", () => {
     expect(screen.getByLabelText("Health: healthy")).toBeInTheDocument();
   });
 
+  it("renders degraded health dot", async () => {
+    const { McpServerPicker } = await import("./mcp-server-picker");
+    render(
+      <McpServerPicker
+        servers={[makeServer({ publicId: "mcs_1", healthStatus: "degraded" })]}
+        activeServerIds={new Set()}
+        onActiveServerIdsChange={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "MCP servers" }));
+    expect(screen.getByLabelText("Health: degraded")).toBeInTheDocument();
+  });
+
   it("renders tool count when toolCount > 0", async () => {
     const { McpServerPicker } = await import("./mcp-server-picker");
     render(

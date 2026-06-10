@@ -120,38 +120,40 @@ When dispatching subagents for implementation, bug fixes, or refactoring work:
   commits are actually on main, not stranded in worktrees. Cherry-pick or
   consolidate if needed.
 
-## Bug-fix workflow — mandatory regression testing
+## PR workflow — test-completeness gate
 
-Every bug fix follows this sequence:
+Before opening any pull request (bug fix, feature, refactor), follow this sequence:
 
-1. **Dispatch a write-capable agent to diagnose and fix the bug.**
-   - Use `general-purpose` or implementation agents, never read-only architects.
-   - Agent owns the fix end-to-end: root cause, code changes, running tests locally.
-   - Agent commits to main and verifies commits are actually on main (not in worktree).
+1. **Implement all code changes** (logic, database, API, UI)
+   - Write new functions/handlers, add migrations, update routes, build UI
+   - Commit changes to your branch
 
-2. **Invoke the test-completeness-judge agent to determine test type.**
-   - Pass the bug description and fix summary to `test-completeness-judge`.
-   - Judge returns: test type (unit | e2e | both), rationale, test scope, edge cases.
-   - This step is **non-negotiable**; do not skip it or defer test decisions.
+2. **Write unit tests for all new/changed logic**
+   - Every new function/handler has tests covering behavior and edge cases
+   - Verify tests pass locally
 
-3. **Write the regression test(s) determined by the judge.**
-   - Unit tests: logic fixes, isolated modules, pure functions.
-   - E2E tests: user-facing changes, API routes, database, forms, navigation.
-   - Both: fixes spanning multiple layers.
-   - Tests must be committed alongside the fix in the same PR.
+3. **Write E2E tests for all user-facing changes**
+   - New forms, pages, navigation flows have end-to-end tests
+   - Tests submit data and verify success (screenshots, DB queries)
+   - E2E tests capture screenshots of success states to `__tests__/screenshots/`
 
-4. **Run the full CI gate and verify passing before declaring done.**
-   - `pnpm gate` locally (lint, typecheck, coverage, test, build).
-   - Verify test coverage remains at or above the package's threshold.
-   - If coverage dropped, the regression test was incomplete; add more assertions.
+4. **Run `pnpm gate` locally and verify all gates pass**
+   - Lint (–max-warnings 0), typecheck, coverage, test, build, migrations
+   - All gates must be green before dispatching the judge
 
-5. **For any edge cases identified by the judge, add additional test cases.**
-   - Example: if the judge identifies "boundary conditions" as an edge case,
-     add test cases for values at the boundary, not just happy path.
+5. **Dispatch the test-completeness-judge to audit coverage**
+   - Pass changed files, feature description, affected layers, user-facing impact
+   - Judge responds with APPROVED or INCOMPLETE
+   - If INCOMPLETE: Add missing tests and re-run judge until APPROVED
 
-**Non-negotiable:** No bug fix ships without a regression test. No test is
-written without the judge determining its type first. No claim of "done" without
-CI green and coverage verified.
+6. **Open PR only when judge approves**
+   - Do not open PR until verdict is APPROVED
+   - Judge requires proof: passing tests, coverage metrics, CI green
+   - No exceptions to this gate
+
+**Non-negotiable:** No PR opens without judge approval. No testing deferred to
+review. No incomplete coverage. Judge blocks PRs with missing test types, failed
+tests, coverage regressions, or failed CI gates.
 
 ## Working with this user
 
@@ -233,10 +235,11 @@ them too, so name the relevant skill in an agent's prompt.
   fan-out auditors → adversarial verify → safe auto-fix in a worktree → Linear
   tickets for approvals → interactive HTML dashboard. Use when asked to "audit
   my code", "give me an audit report", or score package health.
-- **`test-completeness-judge`** — LLM judge agent that determines whether a bug fix
-  needs a unit test, E2E test, or both by analyzing scope, layers touched, and
-  user-facing impact. Use after every bug fix to determine the regression test
-  type before writing tests.
+- **`test-completeness-judge`** — LLM judge agent that audits test completeness for
+  all code changes (features, bug fixes, refactors) across unit, integration, and E2E
+  layers. Verifies all changed code has adequate test coverage and proof (passing tests,
+  coverage metrics, screenshots for UI, CI green). **Gates PR opening** — do not open
+  PR until judge approves. Use before opening any PR.
 
 Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first. Building UI →
 `coss-ui` (component API) + `oxagen-design-system` (identity) + `frontend-patterns`
