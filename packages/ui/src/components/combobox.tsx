@@ -130,6 +130,26 @@ function ComboboxPopup({
   sideOffset = 4,
   portalProps,
 }: ComboboxPopupProps) {
+  const [searchValue, setSearchValue] = React.useState("");
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  // Filter children based on search value. Each child should be a ComboboxItem
+  // with a label (text content). We filter by doing a case-insensitive substring match.
+  const filteredChildren = React.useMemo(() => {
+    if (!searchValue.trim()) return children;
+
+    const query = searchValue.toLowerCase();
+    return React.Children.toArray(children).filter((child) => {
+      if (!React.isValidElement(child)) return true;
+      // Get the text content of the child's children (the label)
+      const label = React.Children.toArray(child.props.children)
+        .map((c) => (typeof c === "string" ? c : ""))
+        .join("")
+        .toLowerCase();
+      return label.includes(query);
+    });
+  }, [children, searchValue]);
+
   return (
     <ComboboxPrimitive.Portal {...portalProps}>
       <ComboboxPrimitive.Positioner sideOffset={sideOffset} className="z-50">
@@ -146,14 +166,17 @@ function ComboboxPopup({
           <div className="flex items-center border-b px-2 py-1.5 gap-2">
             <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <ComboboxPrimitive.Input
+              ref={inputRef}
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 min-w-0"
               placeholder={searchPlaceholder}
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.currentTarget.value)}
             />
           </div>
 
           {/* Scrollable option list — capped at ~280px before scrolling */}
           <ComboboxPrimitive.List className="max-h-[280px] overflow-y-auto overflow-x-hidden p-1">
-            {children}
+            {filteredChildren}
             <ComboboxPrimitive.Empty className="py-6 text-center text-sm text-muted-foreground">
               No results found.
             </ComboboxPrimitive.Empty>

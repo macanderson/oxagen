@@ -259,7 +259,7 @@ export function NewOrgForm({
           <div className="space-y-1.5">
             <Label htmlFor="employeeSize">Team size <span className="text-muted-foreground font-normal">(optional)</span></Label>
             <Select
-              value={employeeSize || undefined}
+              value={employeeSize}
               onValueChange={(v) => setEmployeeSize(v ?? "")}
             >
               <SelectTrigger id="employeeSize" size="lg" className="w-full">
