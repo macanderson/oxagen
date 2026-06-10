@@ -27,7 +27,7 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, waitFor, cleanup, act } from "@testing-library/react";
+import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MarketplaceModal } from "./marketplace-modal";
 
@@ -228,12 +228,13 @@ describe("MarketplaceModal — fetch method", () => {
   it("calls GET (not POST) with URLSearchParams including pluginType", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
-    const url: string = mockFetch.mock.calls[0][0] as string;
+    const firstCall = mockFetch.mock.calls[0];
+    const url = firstCall?.[0] as string;
     expect(url).toMatch(/^\/api\/v1\/plugin\/catalog\/browse\?/);
     expect(url).toContain("pluginType=mcp_server");
     expect(url).not.toMatch(/undefined/);
     // Verify no second argument (no POST body)
-    expect(mockFetch.mock.calls[0][1]).toBeUndefined();
+    expect(firstCall?.[1]).toBeUndefined();
   });
 
   it("includes search param when search is set", async () => {

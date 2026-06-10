@@ -22,7 +22,7 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, act, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, act, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 import type { McpServerSummary } from "./mcp-types";
@@ -35,12 +35,12 @@ vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
 }));
 
-const mockSupportsReasoning = vi.fn(() => false);
-const mockGetModel = vi.fn(() => undefined);
+const mockSupportsReasoning = vi.fn((_model: unknown) => false);
+const mockGetModel = vi.fn((_id: unknown) => undefined);
 
 vi.mock("@oxagen/ai/catalog", () => ({
-  supportsReasoning: (...args: unknown[]) => mockSupportsReasoning(...args),
-  getModel: (...args: unknown[]) => mockGetModel(...args),
+  supportsReasoning: (model: unknown) => mockSupportsReasoning(model),
+  getModel: (id: unknown) => mockGetModel(id),
 }));
 
 vi.mock("./model-picker", () => ({
@@ -190,8 +190,13 @@ const makeMcpServer = (overrides: Partial<McpServerSummary> = {}): McpServerSumm
   ...overrides,
 });
 
-function makeAction(result: { ok: boolean; error?: string } = { ok: true }) {
-  return vi.fn().mockResolvedValue(result) as (fd: FormData) => Promise<{ ok: boolean; error?: string }>;
+type ActionResult = { ok: boolean; error?: string; conversationId?: string; conversationPublicId?: string; userMessageId?: string };
+
+// Returns a plain vi.fn() mock; cast to ComposerAction at prop-site so .mock
+// is accessible for call inspection without losing the mock type.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeAction(result: ActionResult = { ok: true }): any {
+  return vi.fn().mockResolvedValue(result);
 }
 
 // ── tests ──────────────────────────────────────────────────────────────────────
@@ -1122,5 +1127,425 @@ describe("MessageComposer — effort control", () => {
     await waitFor(() => expect(action).toHaveBeenCalled());
     const fd = action.mock.calls[0][0] as FormData;
     expect(fd.get("effort")).toBe("high");
+  });
+});
+
+// ── branch-completion tests ────────────────────────────────────────────────────
+// These tests are narrowly targeted at branches V8 detected as uncovered above.
+
+describe("MessageComposer — model branch (explicit model.model)", () => {
+  it("encodes model= in FormData when initialModelState has model set", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        initialModelState={{
+          tier: null,
+          generate: null,
+          model: "claude-opus-4-5",
+          effort: null,
+          mediaTier: null,
+          mediaModel: null,
+          seededImageModel: null,
+          seededVideoModel: null,
+        }}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "use opus");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("model")).toBe("claude-opus-4-5");
+    expect(fd.get("tier")).toBeNull();
+  });
+});
+
+describe("MessageComposer — seeded media model branch", () => {
+  it("encodes mediaModel= when seededImageModel is set and image mode toggled on", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        initialModelState={{
+          tier: "fast",
+          generate: null,
+          model: null,
+          effort: null,
+          mediaTier: null,
+          mediaModel: null,
+          seededImageModel: "flux-2-max",
+          seededVideoModel: null,
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Generate image" }));
+    await userEvent.type(screen.getByRole("textbox"), "A landscape");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("mediaModel")).toBe("flux-2-max");
+    expect(fd.get("mediaTier")).toBeNull();
+  });
+});
+
+describe("MessageComposer — explicit mediaModel in FormData", () => {
+  it("encodes mediaModel= when initialModelState has mediaModel set", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        initialModelState={{
+          tier: null,
+          generate: "image",
+          model: null,
+          effort: null,
+          mediaTier: null,
+          mediaModel: "gpt-image-1",
+          seededImageModel: null,
+          seededVideoModel: null,
+        }}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "A cat");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("generate")).toBe("image");
+    expect(fd.get("mediaModel")).toBe("gpt-image-1");
+    expect(fd.get("mediaTier")).toBeNull();
+  });
+});
+
+describe("MessageComposer — keyboard guard: disabled in onKeyDown", () => {
+  it("Enter key while disabled=true in onKeyDown is a no-op", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        disabled
+        enterToSubmit
+      />,
+    );
+    const ta = screen.getByRole("textbox");
+    // Dispatch the key event manually; userEvent.type respects disabled on <input>
+    // but our custom Textarea mock renders a plain textarea that isn't disabled.
+    await act(async () => {
+      ta.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    expect(action).not.toHaveBeenCalled();
+  });
+});
+
+// ── proper queue-drain branch tests (replace broken dispatchEvent versions) ─────
+
+describe("MessageComposer — null tier in initialModelState", () => {
+  it("uses 'fast' tier fallback when tier is null", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        initialModelState={{
+          tier: null,
+          generate: null,
+          model: null,
+          effort: null,
+          mediaTier: null,
+          mediaModel: null,
+          seededImageModel: null,
+          seededVideoModel: null,
+        }}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "null tier test");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const fd = action.mock.calls[0][0] as FormData;
+    // tier=null falls back to "fast" in buildFormData (covers tier ?? "fast" branches)
+    expect(fd.get("tier")).toBe("fast");
+  });
+});
+
+describe("MessageComposer — null mediaTier fallback in buildFormData", () => {
+  it("uses 'basic' mediaTier fallback when mediaTier is null and no mediaModel", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        initialModelState={{
+          tier: "fast",
+          generate: "image",
+          model: null,
+          effort: null,
+          mediaTier: null,
+          mediaModel: null,
+          seededImageModel: null,
+          seededVideoModel: null,
+        }}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "image null mediaTier");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("generate")).toBe("image");
+    // mediaTier=null falls back to "basic" (covers mediaTier ?? "basic" branch)
+    expect(fd.get("mediaTier")).toBe("basic");
+  });
+});
+
+describe("MessageComposer — onSubmit disabled guard", () => {
+  it("onSubmit returns early when disabled=true (via fireEvent.submit)", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        disabled
+      />,
+    );
+    const form = screen.getByRole("textbox").closest("form")!;
+    // fireEvent.submit properly triggers the React synthetic onSubmit handler
+    fireEvent.submit(form);
+    expect(action).not.toHaveBeenCalled();
+  });
+});
+
+describe("MessageComposer — onKeyDown disabled+content guard", () => {
+  it("Enter key with content while disabled=true exits early at pending||disabled guard", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        enterToSubmit
+        disabled
+      />,
+    );
+    const ta = screen.getByRole("textbox");
+    // Set textarea value directly (userEvent.type respects disabled; fireEvent.change does not)
+    fireEvent.change(ta, { target: { value: "some content" } });
+    // Fire Enter — isEmpty is false so we reach the pending||disabled guard on line 301
+    fireEvent.keyDown(ta, { key: "Enter", bubbles: true, cancelable: true });
+    expect(action).not.toHaveBeenCalled();
+  });
+});
+
+describe("MessageComposer — queue drain: null tier fallback", () => {
+  it("uses 'fast' tier fallback when draining a queued message with tier=null", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    const nullTierState = {
+      tier: null as null,
+      generate: null as null,
+      model: null as null,
+      effort: null as null,
+      mediaTier: null as null,
+      mediaModel: null as null,
+      seededImageModel: null as null,
+      seededVideoModel: null as null,
+    };
+    const { rerender } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        isStreaming
+        pendingPromptBehavior="queue"
+        initialModelState={nullTierState}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "null tier queued");
+    await userEvent.click(screen.getByRole("button", { name: "Queue message" }));
+    rerender(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        isStreaming={false}
+        pendingPromptBehavior="queue"
+        initialModelState={nullTierState}
+      />,
+    );
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const fd = action.mock.calls[0][0] as FormData;
+    // Drain path: ms.tier=null → ms.tier ?? "fast" = "fast" (covers lines 251, 253)
+    expect(fd.get("tier")).toBe("fast");
+  });
+});
+
+describe("MessageComposer — queue drain: mediaModel set", () => {
+  it("encodes mediaModel in drained FormData when ms.mediaModel is set", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    const mediaModelState = {
+      tier: "fast" as const,
+      generate: "image" as const,
+      model: null as null,
+      effort: null as null,
+      mediaTier: null as null,
+      mediaModel: "flux-2-max",
+      seededImageModel: null as null,
+      seededVideoModel: null as null,
+    };
+    const { rerender } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        isStreaming
+        pendingPromptBehavior="queue"
+        initialModelState={mediaModelState}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "image with mediaModel");
+    await userEvent.click(screen.getByRole("button", { name: "Queue message" }));
+    rerender(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        isStreaming={false}
+        pendingPromptBehavior="queue"
+        initialModelState={mediaModelState}
+      />,
+    );
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const fd = action.mock.calls[0][0] as FormData;
+    // Drain path: ms.mediaModel is set → fd.set("mediaModel", ...) (covers line 260-261)
+    expect(fd.get("generate")).toBe("image");
+    expect(fd.get("mediaModel")).toBe("flux-2-max");
+  });
+});
+
+describe("MessageComposer — queue drain: null mediaTier fallback", () => {
+  it("uses 'basic' mediaTier fallback when draining a queued message with null mediaTier", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    const nullMediaTierState = {
+      tier: "fast" as const,
+      generate: "image" as const,
+      model: null as null,
+      effort: null as null,
+      mediaTier: null as null,
+      mediaModel: null as null,
+      seededImageModel: null as null,
+      seededVideoModel: null as null,
+    };
+    const { rerender } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        isStreaming
+        pendingPromptBehavior="queue"
+        initialModelState={nullMediaTierState}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "image null mediaTier drain");
+    await userEvent.click(screen.getByRole("button", { name: "Queue message" }));
+    rerender(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        isStreaming={false}
+        pendingPromptBehavior="queue"
+        initialModelState={nullMediaTierState}
+      />,
+    );
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const fd = action.mock.calls[0][0] as FormData;
+    // Drain path: ms.mediaTier=null → ms.mediaTier ?? "basic" = "basic" (covers line 263)
+    expect(fd.get("generate")).toBe("image");
+    expect(fd.get("mediaTier")).toBe("basic");
+  });
+});
+
+describe("MessageComposer — queue drain: effort in drained message", () => {
+  it("encodes effort when ms.effort is set and model supports reasoning", async () => {
+    mockSupportsReasoning.mockReturnValue(true);
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    const effortState = {
+      tier: "precise" as const,
+      generate: null as null,
+      model: null as null,
+      effort: "high" as const,
+      mediaTier: null as null,
+      mediaModel: null as null,
+      seededImageModel: null as null,
+      seededVideoModel: null as null,
+    };
+    const { rerender } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        isStreaming
+        pendingPromptBehavior="queue"
+        initialModelState={effortState}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "reasoning drain");
+    await userEvent.click(screen.getByRole("button", { name: "Queue message" }));
+    rerender(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        isStreaming={false}
+        pendingPromptBehavior="queue"
+        initialModelState={effortState}
+      />,
+    );
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const fd = action.mock.calls[0][0] as FormData;
+    // Drain path: supportsReasoning=true && ms.effort="high" → fd.set("effort", "high") (lines 254-255)
+    expect(fd.get("effort")).toBe("high");
+    mockSupportsReasoning.mockReturnValue(false);
   });
 });

@@ -31,12 +31,12 @@ export default defineConfig({
         "src/app/**/knowledge/**",
       ],
       // Coverage floor — ratchet upward as test surface grows.
-      // Raised from 40 after adding mcp-server-picker + related tests (measured: 50/82/69/50).
+      // Raised from 50/82/69/50 after adding MCP branch-completion tests (measured: 53/84/71/53).
       thresholds: {
-        lines: 50,
-        functions: 69,
-        branches: 82,
-        statements: 50,
+        lines: 53,
+        functions: 71,
+        branches: 84,
+        statements: 53,
       },
     },
   },
