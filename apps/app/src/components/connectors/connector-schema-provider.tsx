@@ -1,0 +1,254 @@
+"use client";
+
+/**
+ * connector-schema-provider.tsx — Context provider for connector install/configure forms.
+ *
+ * Provides:
+ *   - ConnectorPluginSchema (fetched from pluginSchemaGet API)
+ *   - Form state: values, errors, touched fields
+ *   - Auth scheme selection
+ *   - Conditional field visibility (dependsOn logic)
+ */
+
+import * as React from "react";
+import type { ConnectorPluginSchema } from "@oxagen/oxagen/contracts/plugin.schema.get";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export type FormValues = Record<string, unknown>;
+
+export interface FieldError {
+  field: string;
+  message: string;
+  code: string;
+}
+
+export interface ConnectorFormState {
+  values: FormValues;
+  errors: FieldError[];
+  touched: Set<string>;
+}
+
+export interface ConnectorSchemaContextValue {
+  schema: ConnectorPluginSchema | null;
+  loading: boolean;
+  fetchError: string | null;
+  formState: ConnectorFormState;
+  selectedAuthSchemeId: string | null;
+  setFieldValue: (key: string, value: unknown) => void;
+  touchField: (key: string) => void;
+  setErrors: (errors: FieldError[]) => void;
+  clearErrors: () => void;
+  selectAuthScheme: (schemeId: string) => void;
+  isFieldVisible: (fieldKey: string, dependsOn?: { field: string; value?: unknown }) => boolean;
+  resetForm: () => void;
+}
+
+// ── Context ────────────────────────────────────────────────────────────────────
+
+const ConnectorSchemaContext = React.createContext<ConnectorSchemaContextValue | null>(null);
+
+export function useConnectorSchema(): ConnectorSchemaContextValue {
+  const ctx = React.useContext(ConnectorSchemaContext);
+  if (!ctx) {
+    throw new Error("useConnectorSchema must be used within ConnectorSchemaProvider");
+  }
+  return ctx;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
+
+function buildDefaultValues(schema: ConnectorPluginSchema | null): FormValues {
+  if (!schema) return {};
+  const values: FormValues = {};
+
+  // Config field defaults
+  for (const field of schema.config?.fields ?? []) {
+    if (field.defaultValue !== undefined) {
+      values[field.key] = field.defaultValue;
+    }
+  }
+
+  // Auth field defaults (for currently selected scheme — set when scheme is chosen)
+  return values;
+}
+
+// ── Provider ──────────────────────────────────────────────────────────────────
+
+export interface ConnectorSchemaProviderProps {
+  pluginId: string;
+  orgSlug: string;
+  workspaceSlug: string;
+  children: React.ReactNode;
+  /** Pre-loaded schema (skips fetch). Used in SSR/test contexts. */
+  initialSchema?: ConnectorPluginSchema;
+}
+
+export function ConnectorSchemaProvider({
+  pluginId,
+  orgSlug,
+  workspaceSlug,
+  children,
+  initialSchema,
+}: ConnectorSchemaProviderProps) {
+  const [schema, setSchema] = React.useState<ConnectorPluginSchema | null>(initialSchema ?? null);
+  const [loading, setLoading] = React.useState(!initialSchema);
+  const [fetchError, setFetchError] = React.useState<string | null>(null);
+
+  const [formState, setFormState] = React.useState<ConnectorFormState>(() => ({
+    values: buildDefaultValues(initialSchema ?? null),
+    errors: [],
+    touched: new Set<string>(),
+  }));
+
+  const [selectedAuthSchemeId, setSelectedAuthSchemeId] = React.useState<string | null>(
+    initialSchema?.auth?.schemes[0]?.id ?? null,
+  );
+
+  // Fetch schema from API if not pre-loaded
+  React.useEffect(() => {
+    if (initialSchema) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setFetchError(null);
+
+    fetch(
+      `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/plugins/${encodeURIComponent(pluginId)}/schema`,
+      { credentials: "include" },
+    )
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          throw new Error(text || `HTTP ${res.status}`);
+        }
+        return res.json() as Promise<ConnectorPluginSchema>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setSchema(data);
+        setFormState({
+          values: buildDefaultValues(data),
+          errors: [],
+          touched: new Set<string>(),
+        });
+        setSelectedAuthSchemeId(data.auth?.schemes[0]?.id ?? null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setFetchError(err instanceof Error ? err.message : "Failed to load connector schema");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pluginId, orgSlug, workspaceSlug, initialSchema]);
+
+  const setFieldValue = React.useCallback((key: string, value: unknown) => {
+    setFormState((prev) => ({
+      ...prev,
+      values: { ...prev.values, [key]: value },
+      // Clear errors for this field on change
+      errors: prev.errors.filter((e) => e.field !== key && e.field !== `config.${key}`),
+    }));
+  }, []);
+
+  const touchField = React.useCallback((key: string) => {
+    setFormState((prev) => {
+      const next = new Set(prev.touched);
+      next.add(key);
+      return { ...prev, touched: next };
+    });
+  }, []);
+
+  const setErrors = React.useCallback((errors: FieldError[]) => {
+    setFormState((prev) => ({ ...prev, errors }));
+  }, []);
+
+  const clearErrors = React.useCallback(() => {
+    setFormState((prev) => ({ ...prev, errors: [] }));
+  }, []);
+
+  const selectAuthScheme = React.useCallback(
+    (schemeId: string) => {
+      setSelectedAuthSchemeId(schemeId);
+      // Clear auth field values when switching schemes
+      const scheme = schema?.auth?.schemes.find((s) => s.id === schemeId);
+      if (scheme?.fields) {
+        setFormState((prev) => {
+          const next = { ...prev.values };
+          for (const field of scheme.fields ?? []) {
+            if (field.defaultValue !== undefined) {
+              next[field.key] = field.defaultValue;
+            } else {
+              delete next[field.key];
+            }
+          }
+          return { ...prev, values: next };
+        });
+      }
+    },
+    [schema],
+  );
+
+  const isFieldVisible = React.useCallback(
+    (fieldKey: string, dependsOn?: { field: string; value?: unknown }): boolean => {
+      if (!dependsOn) return true;
+      // Check against auth fields and config fields in form values
+      const currentValue = formState.values[dependsOn.field];
+      return currentValue === dependsOn.value;
+    },
+    [formState.values],
+  );
+
+  const resetForm = React.useCallback(() => {
+    setFormState({
+      values: buildDefaultValues(schema),
+      errors: [],
+      touched: new Set<string>(),
+    });
+    setSelectedAuthSchemeId(schema?.auth?.schemes[0]?.id ?? null);
+  }, [schema]);
+
+  const ctx = React.useMemo<ConnectorSchemaContextValue>(
+    () => ({
+      schema,
+      loading,
+      fetchError,
+      formState,
+      selectedAuthSchemeId,
+      setFieldValue,
+      touchField,
+      setErrors,
+      clearErrors,
+      selectAuthScheme,
+      isFieldVisible,
+      resetForm,
+    }),
+    [
+      schema,
+      loading,
+      fetchError,
+      formState,
+      selectedAuthSchemeId,
+      setFieldValue,
+      touchField,
+      setErrors,
+      clearErrors,
+      selectAuthScheme,
+      isFieldVisible,
+      resetForm,
+    ],
+  );
+
+  return (
+    <ConnectorSchemaContext.Provider value={ctx}>
+      {children}
+    </ConnectorSchemaContext.Provider>
+  );
+}
