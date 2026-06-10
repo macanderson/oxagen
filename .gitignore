@@ -33,9 +33,10 @@ target
 # Drizzle
 packages/database/drizzle/.meta
 
-# Playwright
+# Playwright and E2E test artifacts
 test-results
 playwright-report
+**/__tests__/screenshots/
 
 # Editors
 .idea

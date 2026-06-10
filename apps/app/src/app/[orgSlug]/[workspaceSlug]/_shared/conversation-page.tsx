@@ -194,6 +194,44 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
         { orgId: tenant.id, workspaceId: workspace.id },
         () => conversationListHandler({ filter: "active", limit: 50, cursor: null }, userCtx),
       ).catch(() => ({ conversations: [], nextCursor: null })),
+      // Enabled + healthy workspace MCP servers for the per-turn activation picker.
+      runInTenantScope(
+        { orgId: tenant.id, workspaceId: workspace.id },
+        () =>
+          withTenantDb((tx) =>
+            tx
+              .select({
+                publicId: schema.mcpServers.publicId,
+                name: schema.mcpServers.name,
+                healthStatus: schema.mcpServers.healthStatus,
+                discoveredTools: schema.mcpServers.discoveredTools,
+              })
+              .from(schema.mcpServers)
+              .innerJoin(
+                schema.pluginOrgListings,
+                eq(schema.mcpServers.orgListingId, schema.pluginOrgListings.id),
+              )
+              .where(
+                and(
+                  eq(schema.mcpServers.orgId, tenant.id),
+                  eq(schema.mcpServers.workspaceId, workspace.id),
+                  eq(schema.mcpServers.enabled, true),
+                  eq(schema.mcpServers.healthStatus, "healthy"),
+                  eq(schema.pluginOrgListings.enabled, true),
+                  isNull(schema.pluginOrgListings.deletedAt),
+                ),
+              ),
+          ),
+      )
+        .then((rows) =>
+          rows.map((r): McpServerSummary => ({
+            publicId: r.publicId,
+            name: r.name,
+            healthStatus: r.healthStatus as McpServerSummary["healthStatus"],
+            toolCount: Array.isArray(r.discoveredTools) ? (r.discoveredTools as unknown[]).length : 0,
+          })),
+        )
+        .catch(() => [] as McpServerSummary[]),
     ]);
 
   // Bind the workspace scope into the nav's server actions so the client only
@@ -242,6 +280,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
             enterToSubmit={userPrefs.enterToSubmit}
             pendingPromptBehavior={userPrefs.pendingPromptBehavior}
             initialModelState={initialModelState}
+            availableMcpServers={availableMcpServers}
           />
         </div>
       </div>

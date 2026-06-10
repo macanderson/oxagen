@@ -53,6 +53,38 @@ Rules:
   If you introduce code that triggers a new warning, fix the root cause rather than
   suppressing.
 
+## Completion with evidence — verification discipline
+
+**Never claim a task is complete, a fix works, or a deploy succeeded without
+concrete verification.** Always provide evidence: test output, CI status, deployed
+artifact state, or rendered result. "It works" claims without proof have wasted
+countless rounds of correction and should never be accepted.
+
+Rules for completion:
+- **No task is done until verified.** Always run the relevant test suite, E2E
+  tests, or integration checks before declaring completion. State explicitly what
+  verification you ran and its output.
+- **UI changes require screenshots as evidence.** For any user-facing UI change,
+  capture a screenshot showing the feature working correctly, forms submitting
+  without error, and the page being navigable and usable. Screenshots are not
+  optional — they are the proof that "it works" is real.
+  - E2E tests must capture screenshots of key success states (form submitted,
+    data loaded, navigation working). The screenshot directory must be deleted
+    and recreated on every test run (not accumulated across runs).
+  - Add the screenshot directory to `.gitignore` so they don't pollute the repo.
+  - Example: `apps/app/__tests__/screenshots/` in `.gitignore`.
+- **Forms must be tested end-to-end without error.** Any form added or changed
+  must have an E2E test that submits data and verifies success. If the form
+  saves to a database, query the database to confirm the save succeeded. If it
+  calls an API, verify the API response. Do not accept "form works" without this
+  proof.
+- **Deployments must be verified in the target environment.** After deploying, run
+  a health check, query the database, or hit a relevant API endpoint to confirm
+  the deploy actually landed and is working. Do not trust deploy logs alone.
+- **Database changes must be verified with queries.** After a migration or data
+  change, run a `SELECT` query to confirm the change is actually in the database,
+  not just in logs or code.
+
 ## Working with this user
 
 The user routinely sends **multi-part prompts** — a single message asks for
