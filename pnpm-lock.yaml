@@ -59,6 +59,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@oxagen/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -68,6 +71,9 @@ importers:
       '@oxagen/iam':
         specifier: workspace:*
         version: link:../../packages/iam
+      '@oxagen/ingestion':
+        specifier: workspace:*
+        version: link:../../packages/ingestion
       '@oxagen/inngest-functions':
         specifier: workspace:*
         version: link:../../packages/inngest-functions
