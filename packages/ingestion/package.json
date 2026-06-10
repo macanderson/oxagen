@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./connectors": "./src/connectors/types.ts",
+    "./connector-schema-loader": "./src/connector-schema-loader.ts",
     "./pipeline": "./src/pipeline.ts",
     "./types": "./src/types.ts",
     "./embed": "./src/embed/index.ts",
@@ -27,6 +28,7 @@
     "@oxagen/crypto": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
+    "yaml": "2.9.0",
     "zod": "3.25.76"
   },
   "devDependencies": {

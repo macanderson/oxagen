@@ -752,6 +752,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/ingestion':
+        specifier: workspace:*
+        version: link:../ingestion
       '@oxagen/inngest-functions':
         specifier: workspace:*
         version: link:../inngest-functions
@@ -868,6 +871,9 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
       zod:
         specifier: 3.25.76
         version: 3.25.76

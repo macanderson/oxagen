@@ -18,6 +18,7 @@
   "dependencies": {
     "@oxagen/ai": "workspace:*",
     "@oxagen/billing": "workspace:*",
+    "@oxagen/ingestion": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/inngest-functions": "workspace:*",
