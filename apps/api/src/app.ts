@@ -99,6 +99,7 @@ import { privacyDataExportRoute } from "./routes/v1/privacy.data.export";
 import { privacyDataEraseRoute } from "./routes/v1/privacy.data.erase";
 import { connectionRoute } from "./routes/v1/connection";
 import { webhookRoute } from "./routes/v1/webhook";
+import { githubOauthRoute, githubOauthCallbackRoute } from "./routes/v1/github-oauth";
 
 export type AppEnv = {
   Variables: {
@@ -228,4 +229,10 @@ orgScoped.route("/skill/workspace/list", skillWorkspaceListRoute);
 orgScoped.route("/privacy/export", privacyDataExportRoute);
 orgScoped.route("/privacy/erase", privacyDataEraseRoute);
 orgScoped.route("/connections", connectionRoute);
+// GitHub App OAuth endpoints (workspace-scoped + auth-required)
+orgScoped.route("/connections/github", githubOauthRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
+
+// Public OAuth callback — HMAC-verified state param is the security boundary.
+// Must NOT be inside the workspace-scoped group (user has no session when GitHub redirects).
+app.route("/oauth/github", githubOauthCallbackRoute);

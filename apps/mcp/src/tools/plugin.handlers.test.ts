@@ -50,7 +50,7 @@ describe("plugin.catalog.browse handler", () => {
     const fakeOutput = { servers: [], nextOffset: null, total: 0 };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { limit: 30, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined };
+    const args = { limit: 30, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined, pluginType: undefined };
     const result = await handler_pluginCatalogBrowse(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
@@ -66,7 +66,7 @@ describe("plugin.catalog.browse handler", () => {
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("catalog unavailable"));
     await expect(
-      handler_pluginCatalogBrowse({ limit: 10, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined }),
+      handler_pluginCatalogBrowse({ limit: 10, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined, pluginType: undefined }),
     ).rejects.toThrow("catalog unavailable");
   });
 });

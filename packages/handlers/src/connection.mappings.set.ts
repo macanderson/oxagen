@@ -3,6 +3,7 @@ import { connectionMappingsSet } from "@oxagen/oxagen/contracts/connection.mappi
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
+import { inngest } from "@oxagen/inngest-functions/client";
 import { logger } from "./logger";
 
 export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMappingsSet> = async (
@@ -12,7 +13,12 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
   // Verify connection exists and belongs to this org/workspace
   const [conn] = await withTenantDb((tx) =>
     tx
-      .select({ id: schema.sourceConnections.id, status: schema.sourceConnections.status })
+      .select({
+        id: schema.sourceConnections.id,
+        status: schema.sourceConnections.status,
+        connectorId: schema.sourceConnections.connectorId,
+        deliveryConfig: schema.sourceConnections.deliveryConfig,
+      })
       .from(schema.sourceConnections)
       .where(
         and(
@@ -88,6 +94,34 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
         .where(eq(schema.sourceConnections.id, conn.id)),
     );
     connectionStatus = "active";
+
+    // Fire the GitHub initial-sync Inngest event when activating a GitHub connection.
+    // deliveryConfig carries { selectedRepos, installationId, owner, repo, defaultBranch }
+    // set by the connection wizard before calling connection.mappings.set.
+    if (conn.connectorId === "github") {
+      const dc = conn.deliveryConfig as Record<string, unknown> | null;
+      const owner = typeof dc?.["owner"] === "string" ? dc["owner"] : "";
+      const repo = typeof dc?.["repo"] === "string" ? dc["repo"] : "";
+      const defaultBranch =
+        typeof dc?.["defaultBranch"] === "string" ? dc["defaultBranch"] : "main";
+
+      await inngest.send({
+        name: "ingestion/github.initial-sync",
+        data: {
+          connectionId: conn.id,
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          owner,
+          repo,
+          defaultBranch,
+        },
+      });
+
+      logger.info(
+        { connectionId: conn.id, owner, repo, orgId: ctx.orgId },
+        "connection.mappings.set: fired ingestion/github.initial-sync",
+      );
+    }
   }
 
   logger.info(

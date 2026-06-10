@@ -141,8 +141,10 @@ function ComboboxPopup({
     const query = searchValue.toLowerCase();
     return React.Children.toArray(children).filter((child) => {
       if (!React.isValidElement(child)) return true;
-      // Get the text content of the child's children (the label)
-      const label = React.Children.toArray(child.props.children)
+      // Get the text content of the child's children (the label).
+      // child.props is typed as unknown by React 19 — narrow it safely.
+      const childProps = child.props as { children?: React.ReactNode };
+      const label = React.Children.toArray(childProps.children)
         .map((c) => (typeof c === "string" ? c : ""))
         .join("")
         .toLowerCase();

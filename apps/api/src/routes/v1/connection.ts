@@ -10,6 +10,9 @@ import { connectionMappingsSet } from "@oxagen/oxagen/contracts/connection.mappi
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
+import { schema, withTenantDb } from "@oxagen/database";
+import { eq, and, isNull } from "drizzle-orm";
+import { inngest } from "@oxagen/inngest-functions/client";
 
 export const connectionRoute = new Hono<AppEnv>();
 
@@ -89,4 +92,53 @@ connectionRoute.put("/:id/mappings", async (c) => {
   const ctx = capabilityContext(c);
   const out = await invoke(connectionMappingsSet.name, body, ctx, { surface: "api" });
   return c.json(out);
+});
+
+// POST /connections/:id/resync — queue a fresh initial sync for an existing connection
+connectionRoute.post("/:id/resync", async (c) => {
+  const publicId = c.req.param("id");
+  const ctx = capabilityContext(c);
+
+  // Verify connection belongs to this org/workspace and is not deleted.
+  const [conn] = await withTenantDb((tx) =>
+    tx
+      .select({
+        id: schema.sourceConnections.id,
+        orgId: schema.sourceConnections.orgId,
+        workspaceId: schema.sourceConnections.workspaceId,
+        connectorId: schema.sourceConnections.connectorId,
+        status: schema.sourceConnections.status,
+        deliveryConfig: schema.sourceConnections.deliveryConfig,
+      })
+      .from(schema.sourceConnections)
+      .where(
+        and(
+          eq(schema.sourceConnections.publicId, publicId),
+          eq(schema.sourceConnections.orgId, ctx.orgId),
+          eq(schema.sourceConnections.workspaceId, ctx.workspaceId),
+          isNull(schema.sourceConnections.deletedAt),
+        ),
+      )
+      .limit(1),
+  );
+
+  if (!conn) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  // Fire initial sync event — the Inngest function handles retry/dedup.
+  const deliveryConfig = conn.deliveryConfig as Record<string, unknown> | null;
+  await inngest.send({
+    name: "ingestion/github.initial-sync",
+    data: {
+      connectionId: conn.id,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      owner: (deliveryConfig?.owner as string | undefined) ?? "",
+      repo: (deliveryConfig?.repo as string | undefined) ?? "",
+      defaultBranch: (deliveryConfig?.defaultBranch as string | undefined) ?? "main",
+    },
+  });
+
+  return c.json({ queued: true });
 });
