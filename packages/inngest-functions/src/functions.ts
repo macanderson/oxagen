@@ -19,6 +19,9 @@ import { authSessionExpiryAudit } from "./functions/auth.session-expiry-audit";
 import { ingestionPipeline } from "./functions/ingestion.pipeline";
 import { ingestionDeleteConnection } from "./functions/ingestion.delete";
 import { ingestionOauthRefresh } from "./functions/ingestion.oauth-refresh";
+import { ingestionGithubInitialSync } from "./functions/ingestion.github-initial-sync";
+import { ingestionGithubParseFile } from "./functions/ingestion.github-parse-file";
+import { ingestionGithubInferFeatures } from "./functions/ingestion.github-infer-features";
 
 export const functions = [
   billingRollupUsage,
@@ -45,4 +48,7 @@ export const functions = [
   ingestionPipeline,
   ingestionDeleteConnection,
   ingestionOauthRefresh,
+  ingestionGithubInitialSync,
+  ingestionGithubParseFile,
+  ingestionGithubInferFeatures,
 ];

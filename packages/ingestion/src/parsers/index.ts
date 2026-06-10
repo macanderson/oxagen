@@ -10,6 +10,8 @@ import { extname } from "path";
 import { getParser } from "./loader";
 import type { ParseResult, ParsedSymbol, SymbolKind } from "./types";
 
+export type { ParseResult, ParsedSymbol, SymbolKind };
+
 // ---------------------------------------------------------------------------
 // Language detection
 // ---------------------------------------------------------------------------

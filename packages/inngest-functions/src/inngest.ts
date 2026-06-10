@@ -152,6 +152,50 @@ type Events = {
     };
   };
 
+  // ── GitHub source-code ingestion ───────────────────────────────────────────
+
+  // Kick off the initial sync for a newly-connected GitHub repository.
+  "ingestion/github.initial-sync": {
+    data: {
+      connectionId: string;
+      orgId: string;
+      workspaceId: string;
+      owner: string;
+      repo: string;
+      defaultBranch: string;
+    };
+  };
+
+  // Parse a single file blob fetched from the GitHub tree.
+  "ingestion/github.parse-file": {
+    data: {
+      connectionId: string;
+      orgId: string;
+      workspaceId: string;
+      owner: string;
+      repo: string;
+      sha: string;
+      path: string;
+    };
+  };
+
+  // Infer product-level features from parsed source symbols.
+  "ingestion/github.infer-features": {
+    data: {
+      fileNaturalKey: string;
+      symbols: Array<{
+        name: string;
+        kind: string;
+        startLine: number;
+        endLine: number;
+        docComment?: string;
+      }>;
+      orgId: string;
+      workspaceId: string;
+      connectionId: string;
+    };
+  };
+
   // ── Execution graph sync ────────────────────────────────────────────────────
   // Fired by recordExecution() after a completed execution row is committed to
   // Postgres. The Inngest worker picks this up and mirrors the execution to
