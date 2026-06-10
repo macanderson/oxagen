@@ -2,4 +2,5 @@
 // ../../eslint.next.mjs — plus the Fumadocs-generated .source/** ignore on top.
 import nextConfig from "../../eslint.next.mjs";
 
-export default [...nextConfig, { ignores: [".source/**"] }];
+const config = [...nextConfig, { ignores: [".source/**"] }];
+export default config;
