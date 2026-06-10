@@ -213,3 +213,28 @@ project ID `31ab7de2-021f-486d-9f6f-718a7976c027`).
 | ----------------------- | ------------------------------------------------------- |
 | `research.swarm.start`  | Start a multi-agent research swarm for a given topic.   |
 | `research.swarm.status` | Poll the status and results of a running research swarm.|
+
+## Partner connectors
+
+Oxagen supports both built-in connectors (GitHub, Google Drive, Slack, Linear)
+and partner-authored connectors loaded from a hosted `schema.yaml` URL.
+
+Partner schemas follow the same `ConnectorPlugin` format as built-in schemas.
+The platform fetches, validates, and caches partner schemas transparently —
+the `plugin.schema.get` and `integration.install` capabilities handle both
+paths without separate APIs.
+
+| Resource | Description |
+| -------- | ----------- |
+| [Connector Authoring Guide](../guides/connector-authoring.md) | How to author a `schema.yaml` for a partner connector — schema sections, field widgets, validation patterns, AI prompt best practices, and testing. |
+| [Partner Registration](../guides/partner-registration.md) | Registration workflow, marketplace listing requirements, security checklist, and support SLA. |
+| `packages/ingestion/src/connectors/example-saas/schema.yaml` | Fully annotated reference schema demonstrating every section and field type. |
+
+To install a partner connector by schema URL:
+```bash
+oxagen integrations install \
+  --plugin-id my-platform \
+  --schema-url https://cdn.mycompany.com/oxagen/schema.yaml \
+  --display-name "My Platform" \
+  --config '{"accountId":"acme"}'
+```

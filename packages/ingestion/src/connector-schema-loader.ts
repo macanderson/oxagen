@@ -1,10 +1,15 @@
 /**
- * Built-in connector schema loader.
+ * Connector schema loader — built-in and partner plugins.
  *
- * Loads and parses YAML schema files bundled alongside each built-in connector.
- * Used by plugin.schema.get to seed the DB cache on first access.
+ * Resolution order for `loadSchema(pluginId, options)`:
+ *   1. Built-in: check BUILT_IN_PLUGIN_IDS set → read bundled YAML from disk.
+ *   2. Partner:  if `options.schemaUrl` is provided → fetch YAML over HTTPS
+ *                with retry and timeout, cache result in the
+ *                `ingestion.connector_schemas` DB table, and return same
+ *                LoadedConnectorSchema interface.
  *
- * Partner plugin URL fetch is NOT implemented here — that is a later enhancement.
+ * `loadBuiltInSchema(pluginId)` is still exported for callers that only need
+ * the built-in resolution path (e.g. handler bootstrap, unit tests).
  *
  * NOTE: This module does not import from @oxagen/oxagen to avoid a circular
  * dependency (ingestion → oxagen). The ConnectorPluginSchema type is declared
@@ -67,11 +72,55 @@ export interface LoadedConnectorSchema {
   [key: string]: unknown;
 }
 
+// ── Partner fetch options ──────────────────────────────────────────────────────
+
+/**
+ * Options for loading a schema that may come from a partner URL rather than a
+ * built-in bundled file.
+ */
+export interface LoadSchemaOptions {
+  /**
+   * HTTPS URL pointing to a partner-hosted `schema.yaml`.
+   * Required when `pluginId` is not a known built-in connector.
+   * Ignored (built-in takes precedence) when `pluginId` is a built-in.
+   */
+  schemaUrl?: string;
+
+  /**
+   * DB cache writer injected by the handler layer to persist fetched partner
+   * schemas.  When omitted, caching is skipped (acceptable in tests / CLI).
+   *
+   * Receives the raw parsed schema and the source URL so the handler can write
+   * to `ingestion.connector_schemas`.
+   */
+  cacheWriter?: (
+    pluginId: string,
+    schemaUrl: string,
+    schema: LoadedConnectorSchema,
+  ) => Promise<void>;
+
+  /**
+   * Maximum time in milliseconds to wait for a partner schema URL to respond.
+   * Default: 10 000 (10 s).
+   */
+  fetchTimeoutMs?: number;
+
+  /**
+   * Number of retry attempts on network/server errors.
+   * Default: 2 (total = 1 initial + 2 retries = 3 attempts).
+   */
+  maxRetries?: number;
+}
+
 // ── Cache ──────────────────────────────────────────────────────────────────────
 
 /**
- * In-process schema cache to avoid re-reading files on repeated calls.
- * Keyed by pluginId.
+ * In-process schema cache to avoid re-reading files or re-fetching URLs on
+ * repeated calls within the same process lifetime.
+ *
+ * Keys:
+ *   built-in  → `pluginId`
+ *   partner   → `pluginId` (after first successful fetch/cache)
  */
 const schemaCache = new Map<string, LoadedConnectorSchema>();
 
@@ -121,6 +170,185 @@ export function loadBuiltInSchema(pluginId: string): LoadedConnectorSchema | nul
   schemaCache.set(pluginId, loaded);
   return loaded;
 }
+
+/**
+ * Unified schema loader — built-in first, partner URL fallback.
+ *
+ * Resolution order:
+ *   1. Built-in:  `pluginId` is in `BUILT_IN_PLUGIN_IDS` → read from disk,
+ *                 ignore `options.schemaUrl` (built-in always wins).
+ *   2. In-process cache: partner schema fetched earlier this process → return.
+ *   3. Partner fetch: `options.schemaUrl` set → fetch YAML with retry+timeout,
+ *                     validate basic shape, write DB cache, store in-process.
+ *
+ * Returns `null` when `pluginId` is neither a built-in nor has `schemaUrl`.
+ * Throws on unrecoverable errors (malformed YAML, empty response, etc.).
+ */
+export async function loadSchema(
+  pluginId: string,
+  options?: LoadSchemaOptions,
+): Promise<LoadedConnectorSchema | null> {
+  // Built-in connectors always resolve from disk.
+  const builtin = loadBuiltInSchema(pluginId);
+  if (builtin !== null) {
+    return builtin;
+  }
+
+  // In-process cache hit (previous partner fetch in this process).
+  const cached = schemaCache.get(pluginId);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  // Partner URL fetch.
+  const { schemaUrl, cacheWriter, fetchTimeoutMs = 10_000, maxRetries = 2 } =
+    options ?? {};
+
+  if (!schemaUrl) {
+    return null;
+  }
+
+  const schema = await fetchPartnerSchema(schemaUrl, fetchTimeoutMs, maxRetries);
+
+  // Warm in-process cache.
+  schemaCache.set(pluginId, schema);
+
+  // Persist to DB cache if a writer was injected.
+  if (cacheWriter) {
+    await cacheWriter(pluginId, schemaUrl, schema);
+  }
+
+  return schema;
+}
+
+// ── Partner schema fetcher ─────────────────────────────────────────────────────
+
+/** How long to wait between retry attempts (milliseconds). */
+const RETRY_DELAY_MS = 500;
+
+/**
+ * Fetch and parse a partner schema YAML from an HTTPS URL.
+ *
+ * Retries on 5xx and network errors up to `maxRetries` times with a fixed
+ * delay.  Throws on 4xx (bad URL / permission), invalid YAML, or timeout.
+ */
+async function fetchPartnerSchema(
+  schemaUrl: string,
+  timeoutMs: number,
+  maxRetries: number,
+): Promise<LoadedConnectorSchema> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      await delay(RETRY_DELAY_MS);
+    }
+
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      let response: Response;
+      try {
+        response = await fetch(schemaUrl, { signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+
+      if (response.status >= 400 && response.status < 500) {
+        // 4xx is a permanent error — no point retrying.
+        throw new Error(
+          `connector-schema-loader: partner schema URL returned ${response.status} (${schemaUrl})`,
+        );
+      }
+
+      if (!response.ok) {
+        // 5xx or unexpected — retry.
+        lastError = new Error(
+          `connector-schema-loader: partner schema URL returned ${response.status} (${schemaUrl})`,
+        );
+        continue;
+      }
+
+      const text = await response.text();
+      if (!text.trim()) {
+        throw new Error(
+          `connector-schema-loader: partner schema URL returned an empty response (${schemaUrl})`,
+        );
+      }
+
+      const parsed = parseYaml(text) as unknown;
+      return assertValidSchema(parsed, schemaUrl);
+    } catch (err: unknown) {
+      // AbortError = timeout.
+      if (err instanceof Error && err.name === "AbortError") {
+        lastError = new Error(
+          `connector-schema-loader: partner schema URL timed out after ${timeoutMs}ms (${schemaUrl})`,
+        );
+        continue;
+      }
+      // Re-throw permanent (non-retryable) errors immediately.
+      // These are always thrown by this module with a known prefix.
+      if (
+        err instanceof Error &&
+        err.message.startsWith("connector-schema-loader:")
+      ) {
+        throw err;
+      }
+      lastError = err;
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(
+        `connector-schema-loader: partner schema fetch failed for ${schemaUrl}`,
+      );
+}
+
+/**
+ * Assert that a parsed YAML value has the minimum required shape of a
+ * ConnectorPlugin schema.  Throws with a descriptive message if not.
+ */
+function assertValidSchema(
+  parsed: unknown,
+  source: string,
+): LoadedConnectorSchema {
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new Error(
+      `connector-schema-loader: schema from "${source}" did not parse to an object`,
+    );
+  }
+
+  const raw = parsed as Record<string, unknown>;
+
+  if (raw.apiVersion !== "oxagen.ai/v1alpha1") {
+    throw new Error(
+      `connector-schema-loader: schema from "${source}" has unsupported apiVersion: ${String(raw.apiVersion)}`,
+    );
+  }
+  if (raw.kind !== "ConnectorPlugin") {
+    throw new Error(
+      `connector-schema-loader: schema from "${source}" has unexpected kind: ${String(raw.kind)}`,
+    );
+  }
+
+  const meta = raw.metadata as Record<string, unknown> | undefined;
+  if (!meta?.id || typeof meta.id !== "string") {
+    throw new Error(
+      `connector-schema-loader: schema from "${source}" is missing metadata.id`,
+    );
+  }
+
+  return raw as LoadedConnectorSchema;
+}
+
+/** Promise-based delay helper. */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Field-level validation error shape returned by validateConfigAgainstSchema.

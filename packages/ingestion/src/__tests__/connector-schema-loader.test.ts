@@ -5,19 +5,81 @@
  *   - loadBuiltInSchema: verify it loads and caches each built-in YAML schema correctly.
  *     The real YAML files exist on disk, so no mocking is needed.
  *   - loadBuiltInSchema: verify it returns null for unknown plugin IDs.
+ *   - loadSchema: verify built-in resolution path (no schemaUrl needed).
+ *   - loadSchema: verify partner URL fetch path with a mocked fetch injected via
+ *     globalThis.fetch override — validates caching, retry behaviour on 5xx,
+ *     immediate failure on 4xx, shape validation, and cacheWriter callback.
  *   - validateConfigAgainstSchema: validate required, pattern, itemPattern,
  *     minItems, maxItems, min/max number, and oneOf rules.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import {
   loadBuiltInSchema,
+  loadSchema,
   validateConfigAgainstSchema,
   _clearSchemaCacheForTest,
 } from "../connector-schema-loader";
 
+// ── Shared partner schema YAML fixture ────────────────────────────────────────
+
+const PARTNER_SCHEMA_YAML = `
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+metadata:
+  id: custom-partner
+  displayName: Custom Partner
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Acme Corp
+    verified: false
+auth:
+  schemes:
+    - id: api_key
+      kind: api_key
+      displayName: API Key
+      fields:
+        - key: apiKey
+          label: API Key
+          widget: secret
+          validation:
+            required: true
+config:
+  fields:
+    - key: accountId
+      label: Account ID
+      widget: text
+      validation:
+        required: true
+sync:
+  delivery: polling
+  pollingSupported: true
+  polling:
+    defaultIntervalSeconds: 600
+    minIntervalSeconds: 300
+    maxIntervalSeconds: 86400
+`;
+
+/** Build a minimal Response-compatible mock. */
+function makeResponse(
+  body: string,
+  status = 200,
+): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => body,
+  } as unknown as Response;
+}
+
 beforeEach(() => {
   _clearSchemaCacheForTest();
+  vi.restoreAllMocks();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 // ── loadBuiltInSchema ──────────────────────────────────────────────────────────
@@ -75,6 +137,220 @@ describe("loadBuiltInSchema — built-in plugins", () => {
     // Different object reference (re-read from disk) but same content.
     expect(second).not.toBe(first);
     expect(second?.metadata.id).toBe("github");
+  });
+});
+
+// ── loadSchema — built-in resolution path ─────────────────────────────────────
+
+describe("loadSchema — built-in connectors (no schemaUrl needed)", () => {
+  it("resolves 'github' as a built-in without fetching", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const schema = await loadSchema("github");
+    expect(schema).not.toBeNull();
+    expect(schema?.metadata.id).toBe("github");
+    // fetch must not be called for built-in schemas.
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns null for unknown plugin with no schemaUrl", async () => {
+    const result = await loadSchema("nonexistent-plugin");
+    expect(result).toBeNull();
+  });
+
+  it("ignores schemaUrl when pluginId is a known built-in", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const schema = await loadSchema("slack", {
+      schemaUrl: "https://example.com/schema.yaml",
+    });
+    expect(schema?.metadata.id).toBe("slack");
+    // Built-in wins — URL should not be fetched.
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ── loadSchema — partner URL fetch path ───────────────────────────────────────
+
+describe("loadSchema — partner URL fetch", () => {
+  it("fetches and parses a partner schema from schemaUrl", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      makeResponse(PARTNER_SCHEMA_YAML),
+    );
+
+    const schema = await loadSchema("custom-partner", {
+      schemaUrl: "https://cdn.example.com/schema.yaml",
+    });
+
+    expect(schema).not.toBeNull();
+    expect(schema?.apiVersion).toBe("oxagen.ai/v1alpha1");
+    expect(schema?.kind).toBe("ConnectorPlugin");
+    expect(schema?.metadata.id).toBe("custom-partner");
+    expect(schema?.metadata.displayName).toBe("Custom Partner");
+  });
+
+  it("calls cacheWriter with pluginId, schemaUrl, and parsed schema", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      makeResponse(PARTNER_SCHEMA_YAML),
+    );
+
+    const cacheWriter = vi.fn().mockResolvedValue(undefined);
+
+    await loadSchema("custom-partner", {
+      schemaUrl: "https://cdn.example.com/schema.yaml",
+      cacheWriter,
+    });
+
+    expect(cacheWriter).toHaveBeenCalledOnce();
+    expect(cacheWriter).toHaveBeenCalledWith(
+      "custom-partner",
+      "https://cdn.example.com/schema.yaml",
+      expect.objectContaining({ metadata: expect.objectContaining({ id: "custom-partner" }) }),
+    );
+  });
+
+  it("returns cached instance on repeated calls without re-fetching", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(makeResponse(PARTNER_SCHEMA_YAML));
+
+    const first = await loadSchema("custom-partner", {
+      schemaUrl: "https://cdn.example.com/schema.yaml",
+    });
+    const second = await loadSchema("custom-partner", {
+      schemaUrl: "https://cdn.example.com/schema.yaml",
+    });
+
+    expect(first).toBe(second);
+    // fetch called exactly once — second call hits the in-process cache.
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
+  it("does not call cacheWriter on cache hit (second call)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      makeResponse(PARTNER_SCHEMA_YAML),
+    );
+
+    const cacheWriter = vi.fn().mockResolvedValue(undefined);
+    const opts = { schemaUrl: "https://cdn.example.com/schema.yaml", cacheWriter };
+
+    await loadSchema("custom-partner", opts);
+    await loadSchema("custom-partner", opts);
+
+    // cacheWriter called exactly once (on initial fetch, not on cache hit).
+    expect(cacheWriter).toHaveBeenCalledOnce();
+  });
+
+  it("retries on 5xx and succeeds on second attempt", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(makeResponse("", 503))
+      .mockResolvedValueOnce(makeResponse(PARTNER_SCHEMA_YAML));
+
+    const schema = await loadSchema("custom-partner", {
+      schemaUrl: "https://cdn.example.com/schema.yaml",
+      maxRetries: 2,
+    });
+
+    expect(schema?.metadata.id).toBe("custom-partner");
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws immediately on 4xx (non-retryable)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(makeResponse("Not Found", 404));
+
+    await expect(
+      loadSchema("custom-partner", {
+        schemaUrl: "https://cdn.example.com/schema.yaml",
+        maxRetries: 2,
+      }),
+    ).rejects.toThrow(/returned 404/);
+  });
+
+  it("throws after exhausting all retries on repeated 5xx", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(makeResponse("", 500));
+
+    await expect(
+      loadSchema("custom-partner", {
+        schemaUrl: "https://cdn.example.com/schema.yaml",
+        maxRetries: 1,
+      }),
+    ).rejects.toThrow(/returned 500/);
+  });
+
+  it("throws on empty response body", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(makeResponse("   "));
+
+    await expect(
+      loadSchema("custom-partner", {
+        schemaUrl: "https://cdn.example.com/schema.yaml",
+      }),
+    ).rejects.toThrow(/empty response/);
+  });
+
+  it("throws when fetched YAML has wrong apiVersion", async () => {
+    const badSchema = PARTNER_SCHEMA_YAML.replace(
+      "oxagen.ai/v1alpha1",
+      "oxagen.ai/v2",
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(makeResponse(badSchema));
+
+    await expect(
+      loadSchema("custom-partner", {
+        schemaUrl: "https://cdn.example.com/schema.yaml",
+      }),
+    ).rejects.toThrow(/unsupported apiVersion/);
+  });
+
+  it("throws when fetched YAML has wrong kind", async () => {
+    const badSchema = PARTNER_SCHEMA_YAML.replace(
+      "kind: ConnectorPlugin",
+      "kind: SomethingElse",
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(makeResponse(badSchema));
+
+    await expect(
+      loadSchema("custom-partner", {
+        schemaUrl: "https://cdn.example.com/schema.yaml",
+      }),
+    ).rejects.toThrow(/unexpected kind/);
+  });
+
+  it("throws when fetched YAML is missing metadata.id", async () => {
+    const badSchema = `
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+metadata:
+  displayName: No ID
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Test
+    verified: false
+sync:
+  delivery: polling
+`;
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(makeResponse(badSchema));
+
+    await expect(
+      loadSchema("custom-partner", {
+        schemaUrl: "https://cdn.example.com/schema.yaml",
+      }),
+    ).rejects.toThrow(/missing metadata\.id/);
+  });
+});
+
+// ── loadSchema — integration: cache cleared between tests ─────────────────────
+
+describe("loadSchema — after cache clear, re-fetches partner schema", () => {
+  it("fetches again after _clearSchemaCacheForTest", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(makeResponse(PARTNER_SCHEMA_YAML));
+
+    await loadSchema("custom-partner", { schemaUrl: "https://cdn.example.com/schema.yaml" });
+    _clearSchemaCacheForTest();
+    await loadSchema("custom-partner", { schemaUrl: "https://cdn.example.com/schema.yaml" });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -1,0 +1,321 @@
+# ── ExampleSaaS Connector Plugin Schema ──────────────────────────────────────
+#
+# This file is the canonical reference for partner connector authors.
+# It demonstrates every section and field of the ConnectorPlugin schema with
+# detailed inline comments explaining purpose and allowed values.
+#
+# To adapt this for your own connector:
+#   1. Update `metadata` with your platform's details.
+#   2. Choose one or both auth schemes (OAuth 2 and/or API Key).
+#   3. Define `config.fields` for your platform-specific settings.
+#   4. List the entity types your connector produces under `recordTypes`.
+#   5. Configure `filters`, `inference`, and `sync` for your data model.
+#   6. Host this file at a stable HTTPS URL (your CDN or GitHub raw).
+#   7. Register the URL with Oxagen (see docs/guides/partner-registration.md).
+
+# ── API version and kind ───────────────────────────────────────────────────────
+# These MUST be exactly these values. They identify the schema format version.
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+# ── Connector identity ─────────────────────────────────────────────────────────
+metadata:
+  # `id` must be globally unique across all connectors (built-in and partner).
+  # Use lowercase kebab-case. Once registered this ID is immutable.
+  id: example-saas
+
+  # Human-readable name shown in the Oxagen marketplace and install UI.
+  displayName: ExampleSaaS
+
+  # One or two sentences describing what data this connector syncs.
+  description: Sync accounts, users, and product events from ExampleSaaS into your knowledge graph.
+
+  # Icon identifier. Use a string matching your logo slug or a kebab-case name.
+  # Oxagen will attempt to load icon from your publisher's icon registry.
+  icon: example-saas
+
+  # Category for marketplace browsing. Common values:
+  #   developer-tools, project-management, communication, productivity,
+  #   crm, analytics, finance, security, hr
+  category: analytics
+
+  # Semantic version of your connector logic. Increment when you change
+  # normalization, field mappings, or record type IDs.
+  version: "1.0.0"
+
+  # Schema format version. Use "1" unless Oxagen documentation specifies a newer version.
+  schemaVersion: "1"
+
+  publisher:
+    # Your company or individual name as you want it displayed.
+    name: ExampleSaaS Inc.
+    # `verified` is set to true by Oxagen after your connector passes review.
+    # Leave as false when submitting for the first time.
+    verified: false
+
+# ── Authentication ─────────────────────────────────────────────────────────────
+# Define how Oxagen authenticates with your platform.
+# You may provide one or more schemes; users choose at install time.
+# Supported kinds:
+#   oauth2_authorization_code  — OAuth 2.0 Authorization Code flow
+#   oauth2_client_credentials  — OAuth 2.0 Client Credentials (machine-to-machine)
+#   api_key                    — Static token / key passed in headers
+#   basic                      — Username + password (HTTP Basic)
+#   none                       — No auth required (public data source)
+auth:
+  schemes:
+    # ── OAuth 2.0 (preferred) ─────────────────────────────────────────────────
+    - id: oauth2
+      kind: oauth2_authorization_code
+      displayName: Connect with ExampleSaaS (OAuth)
+      # List every OAuth scope your connector needs.
+      # Request the minimum scopes required — over-requesting causes users to decline.
+      scopes:
+        - accounts:read
+        - users:read
+        - events:read
+        - webhooks:write
+
+    # ── API Key (fallback for integrations without OAuth) ─────────────────────
+    - id: api_key
+      kind: api_key
+      displayName: API Key
+      fields:
+        - key: apiKey
+          label: API Key
+          # widget: secret — renders as a masked password input; value never shown after save
+          widget: secret
+          description: Generate at app.example-saas.com/settings/api-keys. Requires read scope.
+          validation:
+            required: true
+            # pattern: enforce key format to catch typos early.
+            # ExampleSaaS keys start with "esk_" followed by 32+ alphanumeric chars.
+            pattern: "^esk_[A-Za-z0-9]{32,}$"
+
+        - key: apiBaseUrl
+          label: API Base URL (optional)
+          # widget: url — shows URL input with protocol validation
+          widget: url
+          description: Override the default API endpoint for self-hosted deployments.
+          placeholder: "https://api.example-saas.com"
+          validation:
+            # Not required — falls back to the connector's hardcoded default.
+            pattern: "^https://[a-zA-Z0-9][a-zA-Z0-9.\\-]+(/.*)?$"
+
+# ── Configuration fields ───────────────────────────────────────────────────────
+# Fields the user fills in during connector setup.
+# These are platform-specific settings — NOT credentials (those go under auth).
+# Fields are rendered in the order listed here.
+config:
+  fields:
+    # ── Account ID — required, validated ─────────────────────────────────────
+    - key: accountId
+      label: Account ID
+      # widget: text — single-line text input
+      widget: text
+      description: Your ExampleSaaS account or organization identifier.
+      placeholder: "acme-corp"
+      validation:
+        required: true
+        # Alphanumeric + hyphens, 2–63 chars (RFC 1123 hostname label rules).
+        pattern: "^[a-zA-Z0-9][a-zA-Z0-9\\-]{1,62}$"
+
+    # ── Sync depth — number with min/max constraints ───────────────────────────
+    - key: syncDepthDays
+      label: Initial Sync Depth (days)
+      # widget: number — numeric input
+      widget: number
+      description: How far back to pull historical data on the first sync. Larger values take longer.
+      defaultValue: 90
+      validation:
+        # min/max apply to number fields.
+        min: 7
+        max: 365
+
+    # ── Event types — multi-select from fixed options ──────────────────────────
+    - key: eventTypes
+      label: Event Types
+      # widget: multi-select — checkbox list or tokenized dropdown from options
+      widget: multi-select
+      description: Which product event categories to ingest. Select all that apply.
+      defaultValue:
+        - page_view
+        - conversion
+      options:
+        - label: Page Views
+          value: page_view
+        - label: Conversions
+          value: conversion
+        - label: Errors
+          value: error
+        - label: Custom Events
+          value: custom
+      validation:
+        # Require at least one event type to be selected.
+        minItems: 1
+        maxItems: 4
+
+    # ── Custom labels — tag input with item pattern ────────────────────────────
+    - key: labelFilter
+      label: Label Filter (optional)
+      # widget: tag-input — free-form tokenized input for lists of strings
+      widget: tag-input
+      description: Only ingest records tagged with these labels. Leave empty to ingest all.
+      validation:
+        # itemPattern: validates each individual tag value in the list.
+        itemPattern: "^[a-z][a-z0-9_\\-]{0,49}$"
+        maxItems: 20
+
+    # ── Debug mode — boolean toggle ────────────────────────────────────────────
+    - key: includeTestAccounts
+      label: Include Test Accounts
+      # widget: checkbox — renders as a toggle switch or checkbox
+      widget: checkbox
+      description: Include accounts and users flagged as test/sandbox in ExampleSaaS. Disable for production data only.
+      defaultValue: false
+
+# ── Record types ───────────────────────────────────────────────────────────────
+# List every entity type your connector can produce.
+# `id` values must be stable — they are stored in customer configs and DB mappings.
+# `defaultEnabled: true` means the record type is selected by default at install.
+recordTypes:
+  # selectionMode: "multi" allows users to pick any subset.
+  # Use "single" if only one record type makes sense (rare).
+  selectionMode: multi
+  # defaultAll: false — show checkboxes; user must opt in per type.
+  # Set true to pre-select all types (use sparingly; prefer explicit opt-in).
+  defaultAll: false
+  items:
+    # ── Account — primary organizational entity ───────────────────────────────
+    - id: account
+      displayName: Accounts
+      description: Company or organization accounts tracked in ExampleSaaS.
+      defaultEnabled: true
+
+    # ── User — individual contacts within accounts ─────────────────────────────
+    - id: user
+      displayName: Users
+      description: Individual user records with profile, role, and engagement metadata.
+      defaultEnabled: true
+
+    # ── Event — behavioral / product analytics events ──────────────────────────
+    - id: event
+      displayName: Product Events
+      description: Page views, conversions, errors, and custom events emitted by your product.
+      defaultEnabled: false
+
+# ── Filters ───────────────────────────────────────────────────────────────────
+# Path and label filters let users narrow what gets synced post-install.
+filters:
+  pathFilters:
+    # enabled: true means path-based filtering is available for this connector.
+    # The filter UI will appear in the connection settings for applicable record types.
+    enabled: true
+    # defaultIgnore: patterns applied automatically unless the user removes them.
+    # These protect against syncing noisy or sensitive internal paths.
+    defaultIgnore:
+      - "/debug/**"
+      - "/internal/**"
+      - "/health"
+      - "/metrics"
+    # appliesTo: which recordTypes support path filtering.
+    appliesTo:
+      - event
+
+  labelFilters:
+    enabled: true
+    # appliesTo: label filtering applies to accounts and users.
+    appliesTo:
+      - account
+      - user
+
+# ── Semantic inference ─────────────────────────────────────────────────────────
+# Controls whether Oxagen runs LLM-based relationship inference on synced data.
+# The `ontologyPrompt` is the most important field — write it carefully.
+inference:
+  enabled: true
+  # defaultEnabled: false — user must explicitly enable inference. Recommended
+  # for connectors where inference quality depends on account-specific context.
+  defaultEnabled: false
+  toggleLabel: Enable AI relationship inference
+  # perRecordType: fine-grained control over which types get LLM processing.
+  # Disable inference for low-signal types to reduce cost and latency.
+  perRecordType:
+    account: true
+    user: true
+    event: false
+  confidenceThreshold:
+    defaultValue: 0.75
+    min: 0.50
+    max: 0.99
+  # ontologyPrompt: system-level instructions for the inference LLM.
+  # This is rendered as the "system" context alongside each entity's properties.
+  # Guidelines for writing effective ontology prompts:
+  #   - Name the node types you expect to infer (Account, User, Feature, etc.)
+  #   - List the edge types you want created (with direction notation)
+  #   - Give concrete examples of what signals to look for
+  #   - Mention cross-source links where relevant (e.g. GitHub/Linear cross-refs)
+  #   - Keep it under 800 tokens; every entity pays this cost
+  ontologyPrompt: |
+    Infer product relationships from ExampleSaaS account and user data.
+
+    Look for:
+    - Account names that match known product features, services, or team names
+    - User job titles indicating engineering, product, or leadership roles
+    - Account industry tags that map to market segments or use-case categories
+    - Conversion events that link users to specific product features or plans
+
+    Create edges:
+    - Account -[uses]-> Feature (when account name or tags reference a known product feature)
+    - User -[member_of]-> Account (when user belongs to a company account)
+    - Account -[in_segment]-> MarketSegment (when industry or plan data indicates market fit)
+    - User -[converted_on]-> Feature (when conversion event references a feature by name or path)
+
+    Cross-source links:
+    - If an account domain matches a GitHub organization name, create an ALIAS_OF edge
+    - If a user email domain matches a known customer in Linear, link to the org node
+
+# ── Sync configuration ─────────────────────────────────────────────────────────
+# How Oxagen fetches data from your platform.
+sync:
+  # delivery: "polling" means Oxagen periodically polls your API.
+  # "webhook" means your platform pushes events to Oxagen.
+  # "manual" means sync is triggered explicitly by the user or an agent.
+  delivery: polling
+  pollingSupported: true
+  polling:
+    # defaultIntervalSeconds: how often to poll by default (600 = 10 minutes).
+    defaultIntervalSeconds: 600
+    # minIntervalSeconds: the shortest interval a user can configure.
+    minIntervalSeconds: 300
+    # maxIntervalSeconds: the longest interval (86400 = 24 hours).
+    maxIntervalSeconds: 86400
+
+# ── Field mappings ─────────────────────────────────────────────────────────────
+# Map your API's field names to Oxagen's canonical graph node properties.
+# Format: yourApiField → oxagenProperty
+# Common Oxagen properties: title, description, author, status, tags,
+#   sourceUrl, createdAt, updatedAt, externalKey, email, displayName
+defaultFieldMappings:
+  account:
+    name: title
+    description: description
+    industry: tags
+    plan: status
+    domain: sourceUrl
+    createdAt: createdAt
+    updatedAt: updatedAt
+  user:
+    name: displayName
+    email: email
+    jobTitle: jobTitle
+    accountId: parentId
+    createdAt: createdAt
+    lastSeenAt: updatedAt
+  event:
+    name: title
+    type: tags
+    userId: author
+    accountId: parentId
+    path: sourceUrl
+    occurredAt: createdAt
