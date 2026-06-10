@@ -240,9 +240,13 @@ them too, so name the relevant skill in an agent's prompt.
   layers. Verifies all changed code has adequate test coverage and proof (passing tests,
   coverage metrics, screenshots for UI, CI green). **Gates PR opening** — do not open
   PR until judge approves. Use before opening any PR.
+- **`ci-green`** — Standardized CI verification skill. Run full local CI gate (`pnpm gate`),
+  verify environment files in sync (.env.example, lockfile), push to main, watch GitHub
+  Actions until all gates pass, provide CI evidence. Use before declaring any task complete
+  or pushing to production. Do NOT report success until CI shows green with proof.
 
-Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first. Building UI →
-`coss-ui` (component API) + `oxagen-design-system` (identity) + `frontend-patterns`
+Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first, then `ci-green` before pushing/declaring done.
+Building UI → `coss-ui` (component API) + `oxagen-design-system` (identity) + `frontend-patterns`
 (technique) + `reablocks`/`reagraph`/`reaviz` (component libs as needed). Auth →
 `vendor-better-auth` + the Better Auth `*-best-practices` skills. New features →
 `oxagen-feature`. See `.agents/skills/README.md` for the full local-skill manifest.
