@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { ConversationRow, DbMessageRow } from "@oxagen/database";
@@ -12,6 +12,7 @@ import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-t
 import type { PlanStep } from "@/components/chat/stream-event-types";
 import { loadEffectiveModelDefaults } from "@oxagen/ai";
 import { buildSeededModelState } from "@/components/chat/model-state";
+import type { McpServerSummary } from "@/components/chat/mcp-types";
 import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
 import { conversationListHandler } from "@oxagen/handlers/conversation.list";
 import { ConversationNav } from "@/components/conversations/conversation-nav";
@@ -165,7 +166,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
 
   // Agent-surface capabilities feed the plan-card amend UX. Computed
   // once per render here so the client doesn't refetch / refilter.
-  const [agentCapabilities, userPrefs, effectiveModelDefaults, initialConversations] =
+  const [agentCapabilities, userPrefs, effectiveModelDefaults, initialConversations, availableMcpServers] =
     await Promise.all([
       Promise.resolve(
         listCapabilities()

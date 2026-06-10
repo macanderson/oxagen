@@ -82,23 +82,20 @@ export function MarketplaceModal({
   const [bulkPending, setBulkPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Fetch catalog via the API route (POST /api/v1/plugin/catalog/browse)
+  // Fetch catalog via the API route (GET /api/v1/plugin/catalog/browse)
   const fetchServers = React.useCallback(
     async (offset = 0, replace = true) => {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/v1/plugin/catalog/browse`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            pluginType: activeTab,
-            limit: 30,
-            offset,
-            ...(search.trim() ? { search: search.trim() } : {}),
-            ...(authFilter ? { authKind: authFilter } : {}),
-          }),
+        const params = new URLSearchParams({
+          pluginType: activeTab,
+          limit: "30",
+          offset: String(offset),
         });
+        if (search.trim()) params.set("search", search.trim());
+        if (authFilter) params.set("authKind", authFilter);
+        const res = await fetch(`/api/v1/plugin/catalog/browse?${params.toString()}`);
         if (!res.ok) throw new Error(await res.text());
         const data = (await res.json()) as {
           servers: CatalogServer[];
@@ -114,7 +111,7 @@ export function MarketplaceModal({
         setLoading(false);
       }
     },
-    [search, authFilter],
+    [activeTab, search, authFilter],
   );
 
   // Re-fetch when the modal opens or filters change.

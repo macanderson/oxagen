@@ -30,6 +30,11 @@ export async function GET(request: NextRequest) {
     rawAuthKind === "oauth" || rawAuthKind === "secret" || rawAuthKind === "none"
       ? rawAuthKind
       : undefined;
+  const rawPluginType = searchParams.get("pluginType");
+  const pluginType =
+    rawPluginType === "mcp_server" || rawPluginType === "integration" || rawPluginType === "content_tool"
+      ? rawPluginType
+      : undefined;
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "30", 10), 100);
   const offset = Math.max(parseInt(searchParams.get("offset") ?? "0", 10), 0);
 
@@ -47,7 +52,7 @@ export async function GET(request: NextRequest) {
   try {
     const result = await invoke(
       "plugin.catalog.browse",
-      { search, authKind, limit, offset },
+      { search, authKind, pluginType, limit, offset },
       ctx,
       { surface: "agent" },
     );

@@ -56,6 +56,9 @@ const BodySchema = z.object({
   // True when the client created this conversation on this turn (first message).
   // Used to trigger auto-title generation after the assistant replies.
   newConversation: z.boolean().default(false),
+  // Per-turn MCP server allowlist: publicIds of servers the user has activated
+  // in the chat composer. When non-empty, only those servers' tools are loaded.
+  activeServerIds: z.array(z.string()).optional().default([]),
 });
 
 // Maximum number of prior messages to include in the context window. Keeps
@@ -118,6 +121,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     mediaTier,
     mediaModel,
     newConversation,
+    activeServerIds,
   } = parsed.data;
 
   let tenant: Awaited<ReturnType<typeof resolveOrg>>;
@@ -309,6 +313,7 @@ export async function POST(request: NextRequest): Promise<Response> {
                   clientIp,
                 },
                 {
+                  serverAllowlist: activeServerIds.length > 0 ? new Set(activeServerIds) : undefined,
                   onApprovalRequired: (approvalEvent) => {
                     emit({
                       type: "approval-required",

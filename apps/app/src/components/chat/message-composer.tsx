@@ -419,6 +419,15 @@ export function MessageComposer({
           <Video className="h-4 w-4" />
         </Button>
 
+        {/* MCP server activation picker — only shown when servers are available */}
+        {(availableMcpServers?.length ?? 0) > 0 && (
+          <McpServerPicker
+            servers={availableMcpServers!}
+            activeServerIds={activeServerIds}
+            onActiveServerIdsChange={setActiveServerIds}
+          />
+        )}
+
         <div className="ml-auto flex items-center gap-1.5">
           {isStreaming && queue.length > 0 ? (
             <span className="text-xs tabular-nums text-muted-foreground">
