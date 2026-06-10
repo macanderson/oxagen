@@ -27,6 +27,7 @@ interface CatalogServer {
   authKind: string;
   categories: string[];
   version: string;
+  pluginType: "mcp_server" | "integration" | "content_tool";
 }
 
 interface MarketplaceModalProps {
@@ -81,19 +82,23 @@ export function MarketplaceModal({
   const [bulkPending, setBulkPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Fetch catalog via the API route (GET /api/v1/plugin/catalog/browse)
+  // Fetch catalog via the API route (POST /api/v1/plugin/catalog/browse)
   const fetchServers = React.useCallback(
     async (offset = 0, replace = true) => {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({
-          limit: "30",
-          offset: String(offset),
-          ...(search.trim() ? { search: search.trim() } : {}),
-          ...(authFilter ? { authKind: authFilter } : {}),
+        const res = await fetch(`/api/v1/plugin/catalog/browse`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pluginType: activeTab,
+            limit: 30,
+            offset,
+            ...(search.trim() ? { search: search.trim() } : {}),
+            ...(authFilter ? { authKind: authFilter } : {}),
+          }),
         });
-        const res = await fetch(`/api/v1/plugin/catalog/browse?${params.toString()}`);
         if (!res.ok) throw new Error(await res.text());
         const data = (await res.json()) as {
           servers: CatalogServer[];

@@ -14,6 +14,7 @@ export const pluginCatalogBrowse = registerCapability({
   defaultEffect: "deny",
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
   input: z.object({
+    pluginType: z.enum(["mcp_server", "integration", "content_tool"]).optional(),
     search: z.string().optional(),
     categories: z.array(z.string()).optional(),
     transportTypes: z.array(z.string()).optional(),
@@ -33,6 +34,7 @@ export const pluginCatalogBrowse = registerCapability({
         authKind: z.string(),
         categories: z.array(z.string()),
         version: z.string(),
+        pluginType: z.enum(["mcp_server", "integration", "content_tool"]),
       }),
     ),
     nextOffset: z.number().nullable(),
