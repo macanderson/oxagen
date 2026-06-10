@@ -87,6 +87,8 @@ export interface MaterializeOptions {
   // Workspace risk policy: when set to "low" or "medium", any capability
   // with a strictly-higher riskLevel is filtered out of the tool set.
   riskCeiling?: "low" | "medium" | "high";
+  /** When provided, only MCP servers whose publicId is in this set are loaded for the turn. */
+  serverAllowlist?: Set<string>;
   /**
    * Called immediately after an approval request is created and BEFORE
    * `waitForApproval` blocks. Lets the stream route emit an
@@ -263,7 +265,7 @@ export async function materializeTools(
   for (const contributor of getPluginTypeContributors()) {
     let contributed: ContributedRawTool[] = [];
     try {
-      contributed = await contributor.contributeTools(ctx);
+      contributed = await contributor.contributeTools(ctx, { serverAllowlist: opts.serverAllowlist });
     } catch (err) {
       logger.error({ pluginType: contributor.type, err }, "plugin type contributor failed");
     }

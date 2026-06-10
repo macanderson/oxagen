@@ -26,9 +26,14 @@ export interface ContributedRawTool {
   externalServerId: string;
 }
 
+export interface PluginContributeOptions {
+  /** When provided, only servers whose publicId is in this set are loaded. */
+  serverAllowlist?: Set<string>;
+}
+
 export interface PluginTypeContributor {
   type: PluginTypeName;
-  contributeTools(ctx: CapabilityContext): Promise<ContributedRawTool[]>;
+  contributeTools(ctx: CapabilityContext, options?: PluginContributeOptions): Promise<ContributedRawTool[]>;
 }
 
 const registry = new Map<PluginTypeName, PluginTypeContributor>();

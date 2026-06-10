@@ -21,6 +21,8 @@ import {
   defaultModelState,
   type ComposerModelState,
 } from "./model-picker";
+import type { McpServerSummary } from "./mcp-types";
+import { McpServerPicker } from "./mcp-server-picker";
 
 export interface ComposerAction {
   (formData: FormData): Promise<{
@@ -57,6 +59,7 @@ export function MessageComposer({
   isStreaming = false,
   onInterrupt,
   initialModelState,
+  availableMcpServers,
 }: {
   conversationId: string | null;
   parentMessageId: string | null;
@@ -74,12 +77,15 @@ export function MessageComposer({
   onInterrupt?: () => void;
   /** Initial model state seeded from effective server-side defaults. */
   initialModelState?: ComposerModelState;
+  /** Available MCP servers for the per-turn activation picker. */
+  availableMcpServers?: McpServerSummary[];
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
   const [model, setModel] = React.useState<ComposerModelState>(
     initialModelState ?? defaultModelState,
   );
+  const [activeServerIds, setActiveServerIds] = React.useState<Set<string>>(new Set());
   const formRef = React.useRef<HTMLFormElement>(null);
 
   // Refs that always reflect the latest prop values so the queue-drain effect
@@ -89,6 +95,8 @@ export function MessageComposer({
   React.useEffect(() => { parentMessageIdRef.current = parentMessageId; }, [parentMessageId]);
   const conversationIdRef = React.useRef(conversationId);
   React.useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
+  const activeServerIdsRef = React.useRef(activeServerIds);
+  React.useEffect(() => { activeServerIdsRef.current = activeServerIds; }, [activeServerIds]);
 
   // FIFO queue for messages submitted while a stream is in flight (queue mode).
   const [queue, setQueue] = React.useState<QueuedMessage[]>([]);
@@ -163,6 +171,9 @@ export function MessageComposer({
       } else {
         fd.set("mediaTier", modelSnapshot.mediaTier ?? "basic");
       }
+    }
+    if (activeServerIds.size > 0) {
+      fd.set("activeServerIds", JSON.stringify([...activeServerIds]));
     }
     return fd;
   }
@@ -251,6 +262,12 @@ export function MessageComposer({
         } else {
           fd.set("mediaTier", ms.mediaTier ?? "basic");
         }
+      }
+      // Encode active server IDs using the ref to capture the current value
+      // at drain time — the effect closure captures stale state otherwise.
+      const currentActiveServerIds = activeServerIdsRef.current;
+      if (currentActiveServerIds.size > 0) {
+        fd.set("activeServerIds", JSON.stringify([...currentActiveServerIds]));
       }
       // Defer the dispatch out of the effect body to satisfy the
       // react-hooks/set-state-in-effect rule — the queue drain should not

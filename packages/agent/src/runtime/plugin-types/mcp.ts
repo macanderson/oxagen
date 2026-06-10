@@ -8,18 +8,18 @@
  * On UnauthorizedError (or any auth failure), the credential is flipped to
  * needs_reauth and that server is skipped for this turn.
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import pino from "pino";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { schema, withTenantDb } from "@oxagen/database";
 import { getWorkspaceSecret, DbOAuthClientProvider, markCredentialNeedsReauth } from "@oxagen/plugins";
 import type { CapabilityContext } from "../../types";
 import { connectMcp, materializeMcpTools } from "../../dispatch/mcp-client";
-import { registerPluginType, type ContributedRawTool } from "../plugin-type";
+import { registerPluginType, type ContributedRawTool, type PluginContributeOptions } from "../plugin-type";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.plugin-types.mcp" } });
 
-async function contributeMcpTools(ctx: CapabilityContext): Promise<ContributedRawTool[]> {
+async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContributeOptions): Promise<ContributedRawTool[]> {
   if (!ctx.workspaceId) return [];
 
   // Denylisted server names for this org (fetched first; drizzle 0.45.2 doesn't
@@ -34,18 +34,27 @@ async function contributeMcpTools(ctx: CapabilityContext): Promise<ContributedRa
 
   // Enabled + healthy installs joined to an enabled, non-deleted org listing.
   // Also selects authKind from the listing so we can branch on OAuth vs static.
+  const workspaceId = ctx.workspaceId!;
   const servers = await withTenantDb(async (tx) => {
-    const conds = [
+    // Base conditions — always applied.
+    const baseConds = [
       eq(schema.mcpServers.orgId, ctx.orgId),
-      eq(schema.mcpServers.workspaceId, ctx.workspaceId),
+      eq(schema.mcpServers.workspaceId, workspaceId),
       eq(schema.mcpServers.enabled, true),
       eq(schema.mcpServers.healthStatus, "healthy"),
       eq(schema.pluginOrgListings.enabled, true),
       isNull(schema.pluginOrgListings.deletedAt),
-    ];
+    ] as const;
+    // Per-turn server allowlist: when the user has toggled specific servers
+    // active in the chat composer, only load those servers' tools.
+    const allowlistCond =
+      options?.serverAllowlist && options.serverAllowlist.size > 0
+        ? inArray(schema.mcpServers.publicId, [...options.serverAllowlist])
+        : undefined;
     return tx
       .select({
         id: schema.mcpServers.id,
+        publicId: schema.mcpServers.publicId,
         name: schema.mcpServers.name,
         endpointUrl: schema.mcpServers.endpointUrl,
         authStrategy: schema.mcpServers.authStrategy,
@@ -58,7 +67,7 @@ async function contributeMcpTools(ctx: CapabilityContext): Promise<ContributedRa
         schema.pluginOrgListings,
         eq(schema.mcpServers.orgListingId, schema.pluginOrgListings.id),
       )
-      .where(and(...conds));
+      .where(and(...baseConds, allowlistCond));
   });
 
   const visible = servers.filter((s) => !deniedNames.includes(s.name));

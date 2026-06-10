@@ -21,6 +21,7 @@ import type { ChatShellProps } from "./chat-shell";
 import type { StreamEvent } from "./stream-event-types";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 import type { ComposerModelState } from "./model-picker";
+import type { McpServerSummary } from "./mcp-types";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import { ConversationFiles } from "./conversation-files";
 import { useLatestRef } from "@/lib/use-latest-ref";
@@ -54,6 +55,7 @@ export function ChatShellClient({
   enterToSubmit = false,
   pendingPromptBehavior = "queue",
   initialModelState,
+  availableMcpServers,
 }: {
   conversationId: string | null;
   /** publicId used for the files-panel fetch. */
@@ -73,6 +75,8 @@ export function ChatShellClient({
   pendingPromptBehavior?: "queue" | "interrupt";
   /** Initial model state seeded from effective server defaults. */
   initialModelState?: ComposerModelState;
+  /** Available MCP servers for the per-turn activation picker. */
+  availableMcpServers?: McpServerSummary[];
 }) {
   const {
     plans,
@@ -232,6 +236,11 @@ export function ChatShellClient({
               generate: (formData.get("generate") as string) || null,
               mediaTier: (formData.get("mediaTier") as string) || null,
               mediaModel: (formData.get("mediaModel") as string) || null,
+              activeServerIds: (() => {
+                const raw = formData.get("activeServerIds") as string | null;
+                if (!raw) return [];
+                try { return JSON.parse(raw) as string[]; } catch { return []; }
+              })(),
             }),
           });
 
@@ -605,6 +614,7 @@ export function ChatShellClient({
         isStreaming={isStreaming}
         onInterrupt={handleInterrupt}
         initialModelState={initialModelState}
+        availableMcpServers={availableMcpServers}
       />
     </div>
   );

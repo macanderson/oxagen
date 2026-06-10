@@ -9,6 +9,7 @@ import {
 } from "./background-task-tray";
 import { resolvedTierCatalog } from "@oxagen/ai";
 import type { ComposerModelState } from "./model-picker";
+import type { McpServerSummary } from "./mcp-types";
 
 export { type ChatMessage } from "./message-bubble";
 
@@ -41,6 +42,8 @@ export interface ChatShellProps {
   pendingPromptBehavior?: "queue" | "interrupt";
   /** Effective model defaults from server (workspace > user > system). */
   initialModelState?: ComposerModelState;
+  /** Available MCP servers for the per-turn activation picker. */
+  availableMcpServers?: McpServerSummary[];
 }
 
 // RSC streaming: the messages promise resolves inside a Suspense boundary
@@ -64,6 +67,7 @@ export function ChatShell({
   enterToSubmit,
   pendingPromptBehavior,
   initialModelState,
+  availableMcpServers,
 }: ChatShellProps) {
   return (
     <>
@@ -82,6 +86,7 @@ export function ChatShell({
           enterToSubmit={enterToSubmit}
           pendingPromptBehavior={pendingPromptBehavior}
           initialModelState={initialModelState}
+          availableMcpServers={availableMcpServers}
         />
       </Suspense>
       <BackgroundTaskTray
@@ -107,6 +112,7 @@ async function AsyncShell({
   enterToSubmit,
   pendingPromptBehavior,
   initialModelState,
+  availableMcpServers,
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
@@ -121,6 +127,7 @@ async function AsyncShell({
   enterToSubmit?: boolean;
   pendingPromptBehavior?: "queue" | "interrupt";
   initialModelState?: ComposerModelState;
+  availableMcpServers?: McpServerSummary[];
 }) {
   const messages = await promise;
   const modelConfig = resolvedTierCatalog();
@@ -140,6 +147,7 @@ async function AsyncShell({
       enterToSubmit={enterToSubmit}
       pendingPromptBehavior={pendingPromptBehavior}
       initialModelState={initialModelState}
+      availableMcpServers={availableMcpServers}
     />
   );
 }
