@@ -11,6 +11,42 @@
     {
       "id": "20260609230124898-3164e37d",
       "started_at": "2026-06-09T23:01:24.898Z"
+    },
+    {
+      "id": "20260610023659096-32c3da7f",
+      "started_at": "2026-06-10T02:36:59.100Z"
+    },
+    {
+      "id": "20260610023659113-5ddef2f4",
+      "started_at": "2026-06-10T02:36:59.113Z"
+    },
+    {
+      "id": "20260610023659117-9d4d20c0",
+      "started_at": "2026-06-10T02:36:59.117Z"
+    },
+    {
+      "id": "20260610023704789-1cba4fe7",
+      "started_at": "2026-06-10T02:37:04.792Z"
+    },
+    {
+      "id": "20260610023704802-3a01371b",
+      "started_at": "2026-06-10T02:37:04.802Z"
+    },
+    {
+      "id": "20260610023704806-d4459baa",
+      "started_at": "2026-06-10T02:37:04.806Z"
+    },
+    {
+      "id": "20260610023937710-041dc2d1",
+      "started_at": "2026-06-10T02:39:37.713Z"
+    },
+    {
+      "id": "20260610023937728-1829022e",
+      "started_at": "2026-06-10T02:39:37.728Z"
+    },
+    {
+      "id": "20260610023937730-70c45482",
+      "started_at": "2026-06-10T02:39:37.730Z"
     }
   ],
   "steps": [
@@ -58,6 +94,168 @@
       "model_id": "anthropic/claude-sonnet-4-6",
       "provider": "gateway",
       "started_at": "2026-06-09T23:01:24.898Z",
+      "input": "{\"prompt\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Generate a concise 3-8 word title for a conversation that starts with: \\\"Hello, assistant\\\"\"}]}],\"temperature\":0,\"responseFormat\":{\"type\":\"json\",\"schema\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"description\":\"A concise 3-8 word title for this conversation\"}},\"required\":[\"title\"],\"additionalProperties\":false,\"$schema\":\"http://json-schema.org/draft-07/schema#\"}}}",
+      "provider_options": null,
+      "duration_ms": null,
+      "output": null,
+      "usage": null,
+      "error": null,
+      "raw_request": null,
+      "raw_response": null,
+      "raw_chunks": null
+    },
+    {
+      "id": "a2da087c-9cb0-4453-a10f-ba0ac10b8cf9",
+      "run_id": "20260610023659096-32c3da7f",
+      "step_number": 1,
+      "type": "generate",
+      "model_id": "anthropic/claude-sonnet-4-6",
+      "provider": "gateway",
+      "started_at": "2026-06-10T02:36:59.108Z",
+      "input": "{\"prompt\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Generate a concise 3-8 word title for a conversation that starts with: \\\"Hello, assistant\\\"\"}]}],\"temperature\":0,\"responseFormat\":{\"type\":\"json\",\"schema\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"description\":\"A concise 3-8 word title for this conversation\"}},\"required\":[\"title\"],\"additionalProperties\":false,\"$schema\":\"http://json-schema.org/draft-07/schema#\"}}}",
+      "provider_options": null,
+      "duration_ms": null,
+      "output": null,
+      "usage": null,
+      "error": null,
+      "raw_request": null,
+      "raw_response": null,
+      "raw_chunks": null
+    },
+    {
+      "id": "8100d444-fd9f-439b-9838-886957b23383",
+      "run_id": "20260610023659113-5ddef2f4",
+      "step_number": 1,
+      "type": "generate",
+      "model_id": "anthropic/claude-sonnet-4-6",
+      "provider": "gateway",
+      "started_at": "2026-06-10T02:36:59.113Z",
+      "input": "{\"prompt\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Generate a concise 3-8 word title for a conversation that starts with: \\\"Hello, assistant\\\"\"}]}],\"temperature\":0,\"responseFormat\":{\"type\":\"json\",\"schema\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"description\":\"A concise 3-8 word title for this conversation\"}},\"required\":[\"title\"],\"additionalProperties\":false,\"$schema\":\"http://json-schema.org/draft-07/schema#\"}}}",
+      "provider_options": null,
+      "duration_ms": null,
+      "output": null,
+      "usage": null,
+      "error": null,
+      "raw_request": null,
+      "raw_response": null,
+      "raw_chunks": null
+    },
+    {
+      "id": "296216f3-fe10-4af0-93dd-cf709becfa38",
+      "run_id": "20260610023659117-9d4d20c0",
+      "step_number": 1,
+      "type": "generate",
+      "model_id": "anthropic/claude-sonnet-4-6",
+      "provider": "gateway",
+      "started_at": "2026-06-10T02:36:59.117Z",
+      "input": "{\"prompt\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Generate a concise 3-8 word title for a conversation that starts with: \\\"Hello, assistant\\\"\"}]}],\"temperature\":0,\"responseFormat\":{\"type\":\"json\",\"schema\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"description\":\"A concise 3-8 word title for this conversation\"}},\"required\":[\"title\"],\"additionalProperties\":false,\"$schema\":\"http://json-schema.org/draft-07/schema#\"}}}",
+      "provider_options": null,
+      "duration_ms": null,
+      "output": null,
+      "usage": null,
+      "error": null,
+      "raw_request": null,
+      "raw_response": null,
+      "raw_chunks": null
+    },
+    {
+      "id": "b54a489b-3fa8-4e3d-a2af-89bd753dd149",
+      "run_id": "20260610023704789-1cba4fe7",
+      "step_number": 1,
+      "type": "generate",
+      "model_id": "anthropic/claude-sonnet-4-6",
+      "provider": "gateway",
+      "started_at": "2026-06-10T02:37:04.799Z",
+      "input": "{\"prompt\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Generate a concise 3-8 word title for a conversation that starts with: \\\"Hello, assistant\\\"\"}]}],\"temperature\":0,\"responseFormat\":{\"type\":\"json\",\"schema\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"description\":\"A concise 3-8 word title for this conversation\"}},\"required\":[\"title\"],\"additionalProperties\":false,\"$schema\":\"http://json-schema.org/draft-07/schema#\"}}}",
+      "provider_options": null,
+      "duration_ms": null,
+      "output": null,
+      "usage": null,
+      "error": null,
+      "raw_request": null,
+      "raw_response": null,
+      "raw_chunks": null
+    },
+    {
+      "id": "6af441e3-6687-4d31-88f3-af607ea89b02",
+      "run_id": "20260610023704802-3a01371b",
+      "step_number": 1,
+      "type": "generate",
+      "model_id": "anthropic/claude-sonnet-4-6",
+      "provider": "gateway",
+      "started_at": "2026-06-10T02:37:04.804Z",
+      "input": "{\"prompt\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Generate a concise 3-8 word title for a conversation that starts with: \\\"Hello, assistant\\\"\"}]}],\"temperature\":0,\"responseFormat\":{\"type\":\"json\",\"schema\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"description\":\"A concise 3-8 word title for this conversation\"}},\"required\":[\"title\"],\"additionalProperties\":false,\"$schema\":\"http://json-schema.org/draft-07/schema#\"}}}",
+      "provider_options": null,
+      "duration_ms": null,
+      "output": null,
+      "usage": null,
+      "error": null,
+      "raw_request": null,
+      "raw_response": null,
+      "raw_chunks": null
+    },
+    {
+      "id": "5464f125-07fd-4ed3-b4e1-dd7ae31110dd",
+      "run_id": "20260610023704806-d4459baa",
+      "step_number": 1,
+      "type": "generate",
+      "model_id": "anthropic/claude-sonnet-4-6",
+      "provider": "gateway",
+      "started_at": "2026-06-10T02:37:04.807Z",
+      "input": "{\"prompt\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Generate a concise 3-8 word title for a conversation that starts with: \\\"Hello, assistant\\\"\"}]}],\"temperature\":0,\"responseFormat\":{\"type\":\"json\",\"schema\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"description\":\"A concise 3-8 word title for this conversation\"}},\"required\":[\"title\"],\"additionalProperties\":false,\"$schema\":\"http://json-schema.org/draft-07/schema#\"}}}",
+      "provider_options": null,
+      "duration_ms": null,
+      "output": null,
+      "usage": null,
+      "error": null,
+      "raw_request": null,
+      "raw_response": null,
+      "raw_chunks": null
+    },
+    {
+      "id": "3bd97f9e-213e-47c4-8da6-1009fe99b09f",
+      "run_id": "20260610023937710-041dc2d1",
+      "step_number": 1,
+      "type": "generate",
+      "model_id": "anthropic/claude-sonnet-4-6",
+      "provider": "gateway",
+      "started_at": "2026-06-10T02:39:37.724Z",
+      "input": "{\"prompt\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Generate a concise 3-8 word title for a conversation that starts with: \\\"Hello, assistant\\\"\"}]}],\"temperature\":0,\"responseFormat\":{\"type\":\"json\",\"schema\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"description\":\"A concise 3-8 word title for this conversation\"}},\"required\":[\"title\"],\"additionalProperties\":false,\"$schema\":\"http://json-schema.org/draft-07/schema#\"}}}",
+      "provider_options": null,
+      "duration_ms": null,
+      "output": null,
+      "usage": null,
+      "error": null,
+      "raw_request": null,
+      "raw_response": null,
+      "raw_chunks": null
+    },
+    {
+      "id": "a6f1b93e-a9e3-4c68-ae3d-9adcf8c79ca8",
+      "run_id": "20260610023937728-1829022e",
+      "step_number": 1,
+      "type": "generate",
+      "model_id": "anthropic/claude-sonnet-4-6",
+      "provider": "gateway",
+      "started_at": "2026-06-10T02:39:37.728Z",
+      "input": "{\"prompt\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Generate a concise 3-8 word title for a conversation that starts with: \\\"Hello, assistant\\\"\"}]}],\"temperature\":0,\"responseFormat\":{\"type\":\"json\",\"schema\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"description\":\"A concise 3-8 word title for this conversation\"}},\"required\":[\"title\"],\"additionalProperties\":false,\"$schema\":\"http://json-schema.org/draft-07/schema#\"}}}",
+      "provider_options": null,
+      "duration_ms": null,
+      "output": null,
+      "usage": null,
+      "error": null,
+      "raw_request": null,
+      "raw_response": null,
+      "raw_chunks": null
+    },
+    {
+      "id": "b78d6d87-eb91-4447-9d12-f6c2c1e0f34f",
+      "run_id": "20260610023937730-70c45482",
+      "step_number": 1,
+      "type": "generate",
+      "model_id": "anthropic/claude-sonnet-4-6",
+      "provider": "gateway",
+      "started_at": "2026-06-10T02:39:37.731Z",
       "input": "{\"prompt\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Generate a concise 3-8 word title for a conversation that starts with: \\\"Hello, assistant\\\"\"}]}],\"temperature\":0,\"responseFormat\":{\"type\":\"json\",\"schema\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"description\":\"A concise 3-8 word title for this conversation\"}},\"required\":[\"title\"],\"additionalProperties\":false,\"$schema\":\"http://json-schema.org/draft-07/schema#\"}}}",
       "provider_options": null,
       "duration_ms": null,

@@ -11,6 +11,12 @@ const mocks = vi.hoisted(() => ({
   runInTenantScope: vi.fn(),
   loggerInfo: vi.fn(),
   loggerDebug: vi.fn(),
+  // scopedSession mock: default returns { found: false } for dedup-pass-a
+  scopedSessionRun: vi.fn().mockResolvedValue({ records: [] }),
+  scopedSessionClose: vi.fn().mockResolvedValue(undefined),
+  scopedSession: vi.fn(),
+  // resolveEntity mock for dedup-pass-b
+  resolveEntity: vi.fn(),
 }));
 
 type HandlerCtx = {
@@ -60,6 +66,14 @@ vi.mock("@oxagen/tenancy", () => ({
   ),
 }));
 
+vi.mock("@oxagen/ontology/tenant", () => ({
+  scopedSession: mocks.scopedSession,
+}));
+
+vi.mock("@oxagen/ingestion/dedup", () => ({
+  resolveEntity: mocks.resolveEntity,
+}));
+
 vi.mock("../../logger", () => ({
   logger: { info: mocks.loggerInfo, debug: mocks.loggerDebug, error: vi.fn() },
 }));
@@ -102,6 +116,18 @@ describe("ingestion.pipeline Inngest function", () => {
     mocks.runInTenantScope.mockImplementation(
       (_scope: unknown, fn: () => unknown) => fn(),
     );
+    // Default: scopedSession returns no records (dedup-pass-a misses)
+    mocks.scopedSession.mockReturnValue({
+      run: mocks.scopedSessionRun,
+      close: mocks.scopedSessionClose,
+    });
+    mocks.scopedSessionRun.mockResolvedValue({ records: [] });
+    // Default: resolveEntity creates a new principal
+    mocks.resolveEntity.mockResolvedValue({
+      principalNodeId: "neo4j-node-1",
+      action: "created_principal",
+      confidence: 1.0,
+    });
   });
 
   describe("no entity type mapping configured", () => {

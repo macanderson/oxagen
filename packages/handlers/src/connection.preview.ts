@@ -51,8 +51,8 @@ export const connectionPreviewHandler: CapabilityHandler<typeof connectionPrevie
   const { adapter, keyId } = createIngestionCryptoAdapter();
   const envelope = row.encryptedPayload as { keyId: string; ciphertext: string };
   const cipherBuf = Buffer.from(envelope.ciphertext, "base64");
-  const plaintext = await decrypt(cipherBuf, keyId, { adapter });
-  const authCredential = JSON.parse(plaintext) as AuthCredential;
+  const plaintextBuf = await decrypt(cipherBuf, keyId, { adapter });
+  const authCredential = JSON.parse(plaintextBuf.toString("utf8")) as AuthCredential;
 
   // Load connector and fetch preview data
   const connector = getConnector(row.connectorId);

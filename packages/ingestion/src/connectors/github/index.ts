@@ -8,8 +8,6 @@ const connectionConfigSchema = z.object({
   syncDepthDays: z.number().int().positive().default(90),
 });
 
-type Config = z.infer<typeof connectionConfigSchema>;
-
 // Utility functions to safely extract values
 function asRecord(raw: unknown): Record<string, unknown> {
   return raw !== null && typeof raw === "object" && !Array.isArray(raw)
@@ -29,7 +27,7 @@ function asArray(v: unknown): unknown[] {
   return Array.isArray(v) ? v : [];
 }
 
-const github: ConnectorDefinition<Config> = {
+const github: ConnectorDefinition<typeof connectionConfigSchema> = {
   connectorId: "github",
   displayName: "GitHub",
   description: "Sync pull requests, issues, commits, releases, and sources from GitHub repositories.",

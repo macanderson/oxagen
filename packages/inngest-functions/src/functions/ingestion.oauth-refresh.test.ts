@@ -132,8 +132,9 @@ describe("ingestionOauthRefresh — no-op cases", () => {
     const nonGithubAccount = {
       id: "acct-1",
       provider: "slack",
-      access_token_enc: JSON.stringify(fakeEnvelope("access")),
-      refresh_token_enc: JSON.stringify(fakeEnvelope("refresh")),
+      // JSONB columns are returned as parsed objects from the DB driver
+      access_token_enc: fakeEnvelope("access"),
+      refresh_token_enc: fakeEnvelope("refresh"),
       org_id: "org-1",
     };
 
@@ -157,8 +158,9 @@ describe("ingestionOauthRefresh — GitHub happy path", () => {
   const githubAccount = {
     id: "acct-2",
     provider: "github",
-    access_token_enc: JSON.stringify(fakeEnvelope("old-access")),
-    refresh_token_enc: JSON.stringify(fakeEnvelope("old-refresh")),
+    // JSONB columns are returned as parsed objects from the DB driver
+    access_token_enc: fakeEnvelope("old-access"),
+    refresh_token_enc: fakeEnvelope("old-refresh"),
     org_id: "org-1",
   };
 
@@ -245,8 +247,9 @@ describe("ingestionOauthRefresh — GitHub error handling", () => {
   const githubAccount = {
     id: "acct-3",
     provider: "github",
-    access_token_enc: JSON.stringify(fakeEnvelope("old-access")),
-    refresh_token_enc: JSON.stringify(fakeEnvelope("old-refresh")),
+    // JSONB columns are returned as parsed objects from the DB driver
+    access_token_enc: fakeEnvelope("old-access"),
+    refresh_token_enc: fakeEnvelope("old-refresh"),
     org_id: "org-1",
   };
 

@@ -148,7 +148,7 @@ export async function resolveEntity(
       confidence: bestCandidate.score,
       matchReason: "name_embedding",
       tentative,
-    });
+    }, orgId);
     return {
       principalNodeId: bestCandidate.nodeId,
       aliasNodeId,

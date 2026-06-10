@@ -153,34 +153,40 @@ describe("resolveEntity — Pass B: alias path", () => {
   });
 
   it("creates alias when a candidate is above ALIAS_THRESHOLD", async () => {
-    let callIndex = 0;
-    mocks.scopedSession.mockImplementation(() => ({
-      run: mocks.sessionRun,
-      close: mocks.sessionClose,
-    }));
+    // Use separate session mocks for each scopedSession() call.
+    // resolveEntity calls scopedSession() three times:
+    //   1st = Pass A MATCH (returns nothing)
+    //   2nd = Pass B vector search (returns one high-score candidate)
+    //   3rd = batch naturalKey resolve (returns nothing — target not needed for edge creation)
+    const passASession = { run: vi.fn().mockResolvedValue({ records: [] }), close: vi.fn().mockResolvedValue(undefined) };
+    // Pass B: return one high-score candidate (cosine=0.95 gives 0.38; + displayName name similarity ≈ 0.14 → total ≈ 0.52 < 0.70)
+    // Use email match to push above threshold: 0.95*0.4=0.38 + 0.4 email + 0.2*name ≈ 0.78 → above ALIAS_THRESHOLD
+    const mutation = makeMutation({
+      displayName: "Add OAuth Login",
+      properties: { email: "mac@example.com" },
+    });
+    const passBSession = {
+      run: vi.fn().mockResolvedValue({
+        records: [
+          {
+            get: (k: string) =>
+              ({ nodeId: "principal-id", displayName: "Add OAuth Login", properties: JSON.stringify({ email: "mac@example.com" }), score: 0.95 })[k],
+          },
+        ],
+      }),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    const resolveSession = { run: vi.fn().mockResolvedValue({ records: [] }), close: vi.fn().mockResolvedValue(undefined) };
 
-    mocks.sessionRun.mockImplementation(async (cypher: string) => {
-      callIndex++;
-      if (callIndex === 1) {
-        // Pass A: miss
-        return { records: [] };
-      }
-      if (callIndex === 2) {
-        // Pass B vector search: one candidate with high cosine similarity
-        return {
-          records: [
-            {
-              get: (k: string) =>
-                ({ nodeId: "principal-id", displayName: "Add OAuth", properties: null, score: 0.85 }[k]),
-            },
-          ],
-        };
-      }
-      // Batch resolve naturalKey → nodeId
-      return { records: [] };
+    let sessionCallCount = 0;
+    mocks.scopedSession.mockImplementation(() => {
+      sessionCallCount++;
+      if (sessionCallCount === 1) return passASession;
+      if (sessionCallCount === 2) return passBSession;
+      return resolveSession;
     });
 
-    const result = await resolveEntity(makeMutation(), "org-1");
+    const result = await resolveEntity(mutation, "org-1");
 
     expect(["created_alias", "confirmed_alias"]).toContain(result.action);
     expect(result.principalNodeId).toBe("principal-id");
@@ -188,50 +194,36 @@ describe("resolveEntity — Pass B: alias path", () => {
     expect(mocks.createAliasEdge).toHaveBeenCalledOnce();
   });
 
-  it("marks alias as tentative when combined score is between thresholds", async () => {
-    let callIndex = 0;
-    mocks.scopedSession.mockImplementation(() => ({
-      run: mocks.sessionRun,
-      close: mocks.sessionClose,
-    }));
-    // Force a combined score just above ALIAS_THRESHOLD but below CONFIRM_THRESHOLD
-    // embedSimilarity=0.80 → embedding contribution = 0.8 * 0.4 = 0.32
-    // No email/url match → +0
-    // fuzzyName("Add OAuth Login", "Add OAuth") ≈ 0.77 → * 0.2 = 0.15
-    // Total ≈ 0.47 → below ALIAS_THRESHOLD (0.70). Use score=0.80 to hit above threshold via
-    // a high cosine (1.0) to make 0.4 + 0.2 name = 0.6 → below threshold. Use score 0.95 for
-    // embedding which gives 0.38 + name ≈ 0.15 = 0.53. To reliably get between thresholds,
-    // use perfect embedding + email match → 0.4 + 0.4 = 0.8, which is between 0.70 and 0.92.
-    mocks.sessionRun.mockImplementation(async () => {
-      callIndex++;
-      if (callIndex === 1) return { records: [] };
-      if (callIndex === 2) {
-        return {
-          records: [
-            {
-              get: (k: string) =>
-                ({
-                  nodeId: "principal-id",
-                  displayName: "Add OAuth Login",
-                  // Properties with matching email to push score above ALIAS_THRESHOLD
-                  properties: JSON.stringify({ email: "mac@example.com" }),
-                  score: 0.5, // 0.5 * 0.4 = 0.2, + email 0.4 = 0.6 < 0.70 → need higher
-                }[k]),
-            },
-          ],
-        };
-      }
-      return { records: [] };
+  it("creates a new principal when combined score is below ALIAS_THRESHOLD", async () => {
+    // cosine=0.5 with no email/url/name match → 0.5 * 0.4 = 0.2 < ALIAS_THRESHOLD (0.70)
+    const passASession = { run: vi.fn().mockResolvedValue({ records: [] }), close: vi.fn().mockResolvedValue(undefined) };
+    const passBSession = {
+      run: vi.fn().mockResolvedValue({
+        records: [
+          {
+            get: (k: string) =>
+              ({ nodeId: "candidate-id", displayName: "Completely Different Name", properties: null, score: 0.5 })[k],
+          },
+        ],
+      }),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    const resolveSession = { run: vi.fn().mockResolvedValue({ records: [] }), close: vi.fn().mockResolvedValue(undefined) };
+
+    let sessionCallCount = 0;
+    mocks.scopedSession.mockImplementation(() => {
+      sessionCallCount++;
+      if (sessionCallCount === 1) return passASession;
+      if (sessionCallCount === 2) return passBSession;
+      return resolveSession;
     });
 
-    // This test verifies that when score < ALIAS_THRESHOLD, no alias is created
-    const mutation = makeMutation({ properties: { email: "mac@example.com" } });
+    const mutation = makeMutation({ displayName: "Something Unrelated", properties: {} });
     const result = await resolveEntity(mutation, "org-1");
 
-    // With cosine=0.5, email match +0.4, name match ≈ 0.2 → total ≈ 1.0*0.4 + 0.4 + 0.2 but
-    // actual is 0.5*0.4=0.2 + 0.4 (email) + 0.2*1.0 (perfect name) = 0.8 → between thresholds
-    // So we'd get created_alias (tentative). Accept either created_principal or created_alias.
-    expect(["created_principal", "created_alias"]).toContain(result.action);
+    // score = 0.5 * 0.4 = 0.2 < 0.70 → no alias, should create_principal
+    expect(result.action).toBe("created_principal");
+    expect(mocks.createAliasEdge).not.toHaveBeenCalled();
   });
 });
 

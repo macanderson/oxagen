@@ -8,8 +8,9 @@ import { logger } from "../logger";
 interface ExpiringAccount extends Record<string, unknown> {
   id: string;
   provider: string;
-  access_token_enc: string | null;
-  refresh_token_enc: string | null;
+  // JSONB columns are returned as parsed objects by the pg/drizzle driver
+  access_token_enc: { keyId: string; ciphertext: string } | null;
+  refresh_token_enc: { keyId: string; ciphertext: string } | null;
   org_id: string;
 }
 
@@ -64,15 +65,20 @@ export const ingestionOauthRefresh = inngest.createFunction(
       await step.run(`refresh-token-${account.id}`, async () => {
         if (!account.refresh_token_enc) return;
 
-        // Decrypt the refresh token envelope
-        const envelope = account.refresh_token_enc as unknown as { keyId: string; ciphertext: string };
+        // Decrypt the refresh token envelope (JSONB column is already a parsed object)
+        const envelope = account.refresh_token_enc;
         const cipherBuf = Buffer.from(envelope.ciphertext, "base64");
 
         let decryptedRefreshToken: string;
         try {
-          decryptedRefreshToken = await decrypt(cipherBuf, cryptoAdapter.keyId, {
+          // decrypt() returns a Buffer; convert to UTF-8 string.
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          const decryptedRaw: unknown = await decrypt(cipherBuf, cryptoAdapter.keyId, {
             adapter: cryptoAdapter.adapter,
           });
+          decryptedRefreshToken = Buffer.isBuffer(decryptedRaw)
+            ? decryptedRaw.toString("utf8")
+            : String(decryptedRaw);
         } catch (err) {
           logger.warn(
             { tokenId: account.id, provider: account.provider, err },

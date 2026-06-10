@@ -1,0 +1,183 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// ── Hoisted mocks ─────────────────────────────────────────────────────────────
+const mocks = vi.hoisted(() => ({
+  sessionRun: vi.fn(),
+  sessionClose: vi.fn().mockResolvedValue(undefined),
+  scopedSession: vi.fn(),
+  generateObjectFor: vi.fn(),
+  upsertInferredEdges: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@oxagen/ontology/tenant", () => ({
+  scopedSession: mocks.scopedSession,
+}));
+
+vi.mock("@oxagen/ai", () => ({
+  generateObjectFor: mocks.generateObjectFor,
+}));
+
+vi.mock("../../mutations/upsert-entity", () => ({
+  upsertInferredEdges: mocks.upsertInferredEdges,
+}));
+
+import { inferSemanticEdges } from "../index";
+import type { SemanticInferenceJob } from "../../types";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function makeJob(overrides: Partial<SemanticInferenceJob> = {}): SemanticInferenceJob {
+  return {
+    nodeId: "node-uuid-1",
+    entityType: "task",
+    propertiesSnapshot: { title: "Add OAuth", state: "open" },
+    workspaceId: "ws-1",
+    orgId: "org-1",
+    ...overrides,
+  };
+}
+
+function makeSession(runResult: { records: unknown[] }) {
+  return {
+    run: vi.fn().mockResolvedValue(runResult),
+    close: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe("inferSemanticEdges", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.upsertInferredEdges.mockResolvedValue(undefined);
+  });
+
+  it("returns empty output when node is not found in Neo4j", async () => {
+    mocks.scopedSession.mockReturnValue(makeSession({ records: [] }));
+
+    const result = await inferSemanticEdges(makeJob());
+
+    expect(result.nodeId).toBe("node-uuid-1");
+    expect(result.inferredEdges).toEqual([]);
+    expect(result.inferredNodes).toEqual([]);
+    expect(mocks.generateObjectFor).not.toHaveBeenCalled();
+    expect(mocks.upsertInferredEdges).not.toHaveBeenCalled();
+  });
+
+  it("calls generateObjectFor with correct schema and telemetry when node is found", async () => {
+    const nodeSession = makeSession({
+      records: [
+        { get: (k: string) => ({ naturalKey: "github:conn-1:42", displayName: "Add OAuth" })[k] },
+      ],
+    });
+    // generateObjectFor returns edges pointing to naturalKeys
+    mocks.generateObjectFor.mockResolvedValue({
+      object: {
+        inferredEdges: [
+          { targetNaturalKey: "github:conn-1:99", edgeType: "REFERENCES", confidence: 0.85, rationale: "Related PR" },
+        ],
+      },
+    });
+    // Resolve session: targetNaturalKey → no matching node
+    const resolveSession = makeSession({ records: [] });
+
+    let callCount = 0;
+    mocks.scopedSession.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return nodeSession;
+      return resolveSession;
+    });
+
+    const result = await inferSemanticEdges(makeJob());
+
+    expect(mocks.generateObjectFor).toHaveBeenCalledOnce();
+    const callArgs = mocks.generateObjectFor.mock.calls[0]![0] as {
+      telemetry: { orgId: string; workspaceId: string; surface: string; messageId: string };
+    };
+    expect(callArgs.telemetry.orgId).toBe("org-1");
+    expect(callArgs.telemetry.workspaceId).toBe("ws-1");
+    expect(callArgs.telemetry.surface).toBe("ingestion");
+    expect(callArgs.telemetry.messageId).toContain("infer:node-uuid-1");
+
+    // target node not in graph → no edges written, return empty
+    expect(result.inferredEdges).toHaveLength(0);
+    expect(mocks.upsertInferredEdges).not.toHaveBeenCalled();
+  });
+
+  it("writes edges for targets that exist in the graph", async () => {
+    const nodeSession = makeSession({
+      records: [
+        { get: (k: string) => ({ naturalKey: "github:conn-1:42", displayName: "Task A" })[k] },
+      ],
+    });
+    mocks.generateObjectFor.mockResolvedValue({
+      object: {
+        inferredEdges: [
+          { targetNaturalKey: "github:conn-1:55", edgeType: "PART_OF", confidence: 0.9, rationale: "Part of feature" },
+        ],
+      },
+    });
+    // Resolve session: returns matching node for the target naturalKey
+    const resolveSession = makeSession({
+      records: [
+        { get: (k: string) => ({ naturalKey: "github:conn-1:55", nodeId: "target-node-id" })[k] },
+      ],
+    });
+
+    let callCount = 0;
+    mocks.scopedSession.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return nodeSession;
+      return resolveSession;
+    });
+
+    const result = await inferSemanticEdges(makeJob());
+
+    expect(mocks.upsertInferredEdges).toHaveBeenCalledOnce();
+    const edgesArg = mocks.upsertInferredEdges.mock.calls[0]![0] as Array<{
+      fromNodeId: string;
+      toNodeId: string;
+      edgeType: string;
+      confidence: number;
+    }>;
+    expect(edgesArg).toHaveLength(1);
+    expect(edgesArg[0]!.fromNodeId).toBe("node-uuid-1");
+    expect(edgesArg[0]!.toNodeId).toBe("target-node-id");
+    expect(edgesArg[0]!.edgeType).toBe("PART_OF");
+    expect(edgesArg[0]!.confidence).toBe(0.9);
+
+    expect(result.inferredEdges).toHaveLength(1);
+    expect(result.inferredEdges[0]!.targetNodeId).toBe("target-node-id");
+    expect(result.inferredEdges[0]!.edgeType).toBe("PART_OF");
+  });
+
+  it("returns empty edges when generateObjectFor returns no inferredEdges", async () => {
+    const nodeSession = makeSession({
+      records: [
+        { get: (k: string) => ({ naturalKey: "github:conn-1:42", displayName: "Task A" })[k] },
+      ],
+    });
+    mocks.generateObjectFor.mockResolvedValue({ object: { inferredEdges: [] } });
+
+    mocks.scopedSession.mockReturnValue(nodeSession);
+
+    const result = await inferSemanticEdges(makeJob());
+
+    expect(result.inferredEdges).toHaveLength(0);
+    expect(mocks.upsertInferredEdges).not.toHaveBeenCalled();
+  });
+
+  it("closes all sessions (no session leak)", async () => {
+    const nodeSession = makeSession({
+      records: [
+        { get: (k: string) => ({ naturalKey: "github:conn-1:42", displayName: "Task A" })[k] },
+      ],
+    });
+    mocks.generateObjectFor.mockResolvedValue({ object: { inferredEdges: [] } });
+    mocks.scopedSession.mockReturnValue(nodeSession);
+
+    await inferSemanticEdges(makeJob());
+
+    expect(nodeSession.close).toHaveBeenCalled();
+  });
+});

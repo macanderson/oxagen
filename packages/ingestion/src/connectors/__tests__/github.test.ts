@@ -26,8 +26,8 @@ describe("github connector – previewRecordTypes", () => {
       expect(typeof s.fieldSchema).toBe("object");
       expect(s.fieldSchema).not.toBeNull();
       // Must NOT have old wrong-shape keys
-      expect((s as Record<string, unknown>)["recordType"]).toBeUndefined();
-      expect((s as Record<string, unknown>)["sample"]).toBeUndefined();
+      expect((s as unknown as Record<string, unknown>)["recordType"]).toBeUndefined();
+      expect((s as unknown as Record<string, unknown>)["sample"]).toBeUndefined();
     }
   });
 

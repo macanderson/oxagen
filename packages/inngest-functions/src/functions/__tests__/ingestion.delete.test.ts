@@ -6,6 +6,10 @@ const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   runInTenantScope: vi.fn(),
   loggerInfo: vi.fn(),
+  // scopedSession: returns records for alias promotion + deletion pass
+  scopedSessionRun: vi.fn(),
+  scopedSessionClose: vi.fn().mockResolvedValue(undefined),
+  scopedSession: vi.fn(),
 }));
 
 type HandlerCtx = {
@@ -41,6 +45,14 @@ vi.mock("@oxagen/tenancy", () => ({
   ),
 }));
 
+vi.mock("@oxagen/ontology", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/ontology")>();
+  return {
+    ...real,
+    scopedSession: mocks.scopedSession,
+  };
+});
+
 vi.mock("../../logger", () => ({
   logger: { info: mocks.loggerInfo, debug: vi.fn(), error: vi.fn() },
 }));
@@ -72,12 +84,24 @@ function setupTenantDb(mockExecute = vi.fn().mockResolvedValue([])): void {
   );
 }
 
+function setupScopedSession(): void {
+  // Default: alias promotion returns 0, delete returns 0
+  mocks.scopedSessionRun.mockResolvedValue({
+    records: [{ get: (_k: string) => 0 }],
+  });
+  mocks.scopedSession.mockReturnValue({
+    run: mocks.scopedSessionRun,
+    close: mocks.scopedSessionClose,
+  });
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("ingestion.delete-connection Inngest function", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupTenantDb();
+    setupScopedSession();
   });
 
   describe("mode: connection_only", () => {
@@ -113,15 +137,12 @@ describe("ingestion.delete-connection Inngest function", () => {
 
   describe("mode: data_only", () => {
     it("runs mark-deleting and delete-neo4j-data but NOT delete-postgres-records", async () => {
-      // delete-neo4j-data throws ("not yet implemented") — confirm error propagates.
       const step = makeStep();
 
-      await expect(
-        capturedHandler!({
-          event: { data: { ...BASE_EVENT, mode: "data_only" } },
-          step,
-        }),
-      ).rejects.toThrow("ingestion-delete: Neo4j deletion not yet implemented");
+      await capturedHandler!({
+        event: { data: { ...BASE_EVENT, mode: "data_only" } },
+        step,
+      });
 
       const stepRun = step.run as ReturnType<typeof vi.fn>;
       const stepNames: string[] = stepRun.mock.calls.map((c) => c[0] as string);
@@ -129,22 +150,30 @@ describe("ingestion.delete-connection Inngest function", () => {
       expect(stepNames).toContain("delete-neo4j-data");
       expect(stepNames).not.toContain("delete-postgres-records");
     });
+
+    it("calls scopedSession to delete Neo4j entity nodes", async () => {
+      const step = makeStep();
+
+      await capturedHandler!({
+        event: { data: { ...BASE_EVENT, mode: "data_only" } },
+        step,
+      });
+
+      // scopedSession().run should have been called for alias promotion + deletion
+      expect(mocks.scopedSessionRun).toHaveBeenCalled();
+    });
   });
 
   describe("mode: full", () => {
     it("runs mark-deleting, delete-neo4j-data, AND delete-postgres-records", async () => {
-      // Intercept delete-neo4j-data to not throw so full pipeline runs.
-      const stepRun = vi.fn(async (name: string, fn: () => unknown) => {
-        if (name === "delete-neo4j-data") return; // skip stub throw
-        return fn();
-      });
-      const step = { run: stepRun };
+      const step = makeStep();
 
       await capturedHandler!({
         event: { data: { ...BASE_EVENT, mode: "full" } },
         step,
       });
 
+      const stepRun = step.run as ReturnType<typeof vi.fn>;
       const stepNames: string[] = stepRun.mock.calls.map((c) => c[0] as string);
       expect(stepNames).toContain("mark-deleting");
       expect(stepNames).toContain("delete-neo4j-data");
@@ -153,14 +182,11 @@ describe("ingestion.delete-connection Inngest function", () => {
     });
 
     it("returns connectionId, mode, and deletedAt", async () => {
-      const stepRun = vi.fn(async (name: string, fn: () => unknown) => {
-        if (name === "delete-neo4j-data") return;
-        return fn();
-      });
+      const step = makeStep();
 
       const result = await capturedHandler!({
         event: { data: { ...BASE_EVENT, mode: "full" } },
-        step: { run: stepRun },
+        step,
       });
 
       expect(result).toMatchObject({
@@ -192,17 +218,16 @@ describe("ingestion.delete-connection Inngest function", () => {
       for (const mode of ["connection_only", "data_only", "full"] as const) {
         vi.clearAllMocks();
         setupTenantDb();
+        setupScopedSession();
 
-        const stepRun = vi.fn(async (name: string, fn: () => unknown) => {
-          if (name === "delete-neo4j-data") return; // prevent throw
-          return fn();
-        });
+        const step = makeStep();
 
         await capturedHandler!({
           event: { data: { ...BASE_EVENT, mode } },
-          step: { run: stepRun },
+          step,
         });
 
+        const stepRun = step.run as ReturnType<typeof vi.fn>;
         const stepNames: string[] = stepRun.mock.calls.map((c) => c[0] as string);
         expect(stepNames[0]).toBe("mark-deleting");
       }
