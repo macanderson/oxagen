@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/env-manager",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "description": "Local-only web UI to view env/secrets per environment and deploy the right values to the right Vercel project + environment. No auth — binds to 127.0.0.1.",

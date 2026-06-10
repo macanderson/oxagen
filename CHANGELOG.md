@@ -1,5 +1,13 @@
 # Changelog
 
+## What's Changed in v0.3.2
+
+No commit history or diff was provided, so there are no documented changes to summarize for this release.
+
+---
+
+> **Note for release managers:** Please re-run this request with the actual commit log, diffstat, and/or unified diff included so that accurate, evidence-based release notes can be generated. Inventing changes without supporting source material would be misleading to users.
+
 ## v0.3.1 — Ingestion pipeline, GDPR privacy layer, agent sub-capabilities, and a major test-suite hardening pass
 
 This release delivers four major areas of new functionality on top of v0.3.0: a full multi-connector data ingestion pipeline (GitHub, Google, Slack, Linear, Salesforce, Microsoft, Zoom, and custom sources) backed by a Neo4j/Postgres dual-write architecture; GDPR Art. 17/20 right-to-erasure and data-export contracts wired end-to-end through handlers, API, MCP, CLI, and a new docs page; four new agent sub-capabilities (`agent.subagent.dispatch`, `agent.subagent.aggregate`, `agent.skill.load`, `agent.code.execute`) promoted from stub to fully implemented; and a sweeping test-suite hardening effort that eliminated brittle mocks, raised coverage across nearly every package, and enforced per-package thresholds as ratchets in CI.
