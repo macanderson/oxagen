@@ -1029,6 +1029,24 @@
       }
     },
     {
+      "name": "graph.node.list",
+      "file": "graph.node.list.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "graph.node.search",
       "file": "graph.node.search.ts",
       "domain": "graph",
@@ -1064,6 +1082,24 @@
         "mcp": true,
         "unit": false,
         "docs": false
+      }
+    },
+    {
+      "name": "graph.stats",
+      "file": "graph.stats.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
       }
     },
     {
@@ -1127,6 +1163,138 @@
         "schema": true,
         "api": true,
         "mcp": true
+      }
+    },
+    {
+      "name": "integration.configure",
+      "file": "integration.configure.ts",
+      "domain": "integration",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "integration.delete",
+      "file": "integration.delete.ts",
+      "domain": "integration",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "integration.get",
+      "file": "integration.get.ts",
+      "domain": "integration",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "integration.install",
+      "file": "integration.install.ts",
+      "domain": "integration",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "integration.list",
+      "file": "integration.list.ts",
+      "domain": "integration",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "integration.metrics",
+      "file": "integration.metrics.ts",
+      "domain": "integration",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "integration.sync",
+      "file": "integration.sync.ts",
+      "domain": "integration",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
       }
     },
     {
@@ -1510,6 +1678,42 @@
       }
     },
     {
+      "name": "plugin.schema.get",
+      "file": "plugin.schema.get.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "plugin.schema.validate",
+      "file": "plugin.schema.validate.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "plugin.settings.set_auth_alerts",
       "file": "plugin.settings.set_auth_alerts.ts",
       "domain": "plugin",
@@ -1523,6 +1727,24 @@
         "api": true,
         "mcp": true,
         "unit": true
+      }
+    },
+    {
+      "name": "plugin.version.list",
+      "file": "plugin.version.list.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
       }
     },
     {
@@ -1612,6 +1834,100 @@
       }
     },
     {
+      "name": "repo.configure",
+      "file": "repo.configure.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "repo.metrics",
+      "file": "repo.metrics.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "repo.pause",
+      "file": "repo.pause.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "repo.resume",
+      "file": "repo.resume.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "repo.sync",
+      "file": "repo.sync.ts",
+      "domain": "repo",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "research.swarm.start",
       "file": "research.swarm.start.ts",
       "domain": "research",
@@ -1645,6 +1961,60 @@
         "mcp": true,
         "unit": false,
         "docs": false
+      }
+    },
+    {
+      "name": "semantic.edge.infer",
+      "file": "semantic.edge.infer.ts",
+      "domain": "semantic",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "semantic.edge.list",
+      "file": "semantic.edge.list.ts",
+      "domain": "semantic",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "semantic.edge.suggest",
+      "file": "semantic.edge.suggest.ts",
+      "domain": "semantic",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
       }
     },
     {

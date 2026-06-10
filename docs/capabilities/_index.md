@@ -110,7 +110,19 @@ project ID `31ab7de2-021f-486d-9f6f-718a7976c027`).
 | `org.member.remove`           | Remove member; revokes IAM. Blocks last-owner removal.       |
 | `org.member.role.change`      | Change member's org role; blocks last-owner demotion.        |
 
-## Plugins (17)
+## Integrations (7)
+
+| Capability               | Notes                                                              |
+| ------------------------ | ------------------------------------------------------------------ |
+| `integration.install`    | Install a plugin instance from catalog or custom URL (async).      |
+| `integration.configure`  | Update plugin instance config, cadence, and inference settings.    |
+| `integration.list`       | Browse installed plugin instances with status and sync metrics.     |
+| `integration.get`        | Get full details of a single plugin instance including schema.      |
+| `integration.sync`       | Trigger synchronization of a plugin instance (async).              |
+| `integration.metrics`    | Get sync statistics and metrics for a plugin instance.             |
+| `integration.delete`     | Remove a plugin instance and optionally purge graph data (async).  |
+
+## Plugins (20)
 
 | Capability                       | Notes                                                          |
 | -------------------------------- | -------------------------------------------------------------- |
@@ -131,6 +143,9 @@ project ID `31ab7de2-021f-486d-9f6f-718a7976c027`).
 | `plugin.registry.sync`           | Trigger on-demand catalog sync (async).                        |
 | `plugin.settings.set_auth_alerts` | Configure OAuth re-auth alert preferences.                    |
 | `plugin.workspace.set_enabled`   | Enable/disable plugin server for this workspace.               |
+| `plugin.schema.get`              | Fetch typed config schema for a connector plugin.              |
+| `plugin.schema.validate`         | Validate a config object against a plugin schema.              |
+| `plugin.version.list`            | List version history with changelog and breaking-change flags.  |
 
 ## System (1)
 
@@ -153,10 +168,11 @@ project ID `31ab7de2-021f-486d-9f6f-718a7976c027`).
 | `workspace.model.settings.read`     | Read workspace-level model defaults.               |
 | `workspace.model.settings.write`    | Update workspace-level model defaults (PATCH).     |
 
-## Graph (7)
+## Graph (9)
 
 | Capability          | Notes                                                       |
 | ------------------- | ----------------------------------------------------------- |
+| `graph.node.list`   | Paginated browse of all nodes in the workspace graph.       |
 | `graph.node.upsert` | Create or update a graph node by externalId.                |
 | `graph.node.get`    | Retrieve a graph node by externalId.                        |
 | `graph.node.delete` | Delete a graph node and its relationships.                  |
@@ -164,6 +180,7 @@ project ID `31ab7de2-021f-486d-9f6f-718a7976c027`).
 | `graph.edge.upsert` | Create or update a directed relationship between two nodes. |
 | `graph.edge.delete` | Delete a directed relationship between two nodes.           |
 | `graph.cypher`      | Execute a read-only Cypher query against the tenant graph.  |
+| `graph.stats`       | Workspace graph statistics: node/edge counts by type.       |
 
 ## Web (2)
 
@@ -171,6 +188,24 @@ project ID `31ab7de2-021f-486d-9f6f-718a7976c027`).
 | ------------ | ---------------------------------------------------- |
 | `web.search` | Search the web via Tavily and return ranked results. |
 | `web.fetch`  | Fetch and extract clean text from a URL.             |
+
+## Repo (5)
+
+| Capability        | Notes                                                                        |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `repo.configure`  | Set repo-specific config: filters, inference, cadence, field mappings.       |
+| `repo.sync`       | Trigger incremental or full re-index of a repository connection (async).     |
+| `repo.pause`      | Pause automatic syncing for a repository connection.                         |
+| `repo.resume`     | Resume automatic syncing for a paused repository connection.                 |
+| `repo.metrics`    | Get sync statistics and metrics for a repository connection.                 |
+
+## Semantic edges (3)
+
+| Capability                | Notes                                                                |
+| ------------------------- | -------------------------------------------------------------------- |
+| `semantic.edge.infer`     | Run LLM inference to discover cross-source relationships (async).    |
+| `semantic.edge.list`      | Paginated browse of inferred semantic edges with filtering.          |
+| `semantic.edge.suggest`   | Return unapproved edge candidates for human review.                  |
 
 ## Research (2)
 
