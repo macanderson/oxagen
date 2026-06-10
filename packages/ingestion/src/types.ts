@@ -206,6 +206,28 @@ export interface InferenceOutput {
 }
 
 // ---------------------------------------------------------------------------
+// Inngest event types — exported so tests can assert shape compliance
+// ---------------------------------------------------------------------------
+
+/** Data shape of the `"ingestion/entity.received"` Inngest event. */
+export interface IngestionEntityReceived {
+  connectionId: string;
+  workspaceId: string;
+  orgId: string;
+  /** Connector slug: "github" | "google-drive" | "zoom" | etc. */
+  connectorType: string;
+  /** Raw record type from the source: "pull_request" | "issue" | "file" | etc. */
+  sourceRecordType: string;
+  /**
+   * Stable idempotency key.
+   * Convention: `{connectorType}:{connectionId}:{sourceRecordType}:{timestamp}`
+   */
+  idempotencyKey: string;
+  payload: unknown;
+  receivedAt: string; // ISO-8601
+}
+
+// ---------------------------------------------------------------------------
 // Overall pipeline result (returned by runPipeline)
 // ---------------------------------------------------------------------------
 
