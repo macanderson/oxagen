@@ -6,7 +6,7 @@
  *                 the chat stream SSE endpoint (use-tool-stream.ts), plus
  *                 brand kit selection from workspace.brandKits.list.
  */
-import { Info, Wand2, Image, Video, FileText, ChevronDown } from "lucide-react";
+import { Info, Wand2, Image as ImageIcon, Video, FileText, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 const BRAND_KITS = ["Oxagen Default", "Campaign — Q2", "Dark Mode Studio"];
 
 const GENERATION_KINDS = [
-  { id: "image",    label: "Image",      icon: Image,    description: "Generate images from a prompt with the active brand kit." },
+  { id: "image",    label: "Image",      icon: ImageIcon,    description: "Generate images from a prompt with the active brand kit." },
   { id: "video",    label: "Video",      icon: Video,    description: "Text-to-video via Veo 3.0. Up to 30 seconds." },
   { id: "document", label: "Document",   icon: FileText,  description: "Long-form text — blog posts, reports, emails, social." },
 ];
@@ -137,7 +137,7 @@ export default function StudioComposePage() {
       {/* Preview placeholder */}
       <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-border/60 bg-muted/20">
         <div className="flex flex-col items-center gap-2 text-center">
-          <Image className="h-8 w-8 text-muted-foreground/50" aria-hidden="true" />
+          <ImageIcon className="h-8 w-8 text-muted-foreground/50" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">Generation preview appears here</p>
         </div>
       </div>
