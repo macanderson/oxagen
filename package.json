@@ -64,6 +64,9 @@
       "protobufjs",
       "sharp",
       "ssh2",
+      "tree-sitter-javascript",
+      "tree-sitter-python",
+      "tree-sitter-typescript",
       "unrs-resolver"
     ],
     "ignoredBuiltDependencies": [

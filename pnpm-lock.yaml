@@ -50,6 +50,9 @@ importers:
       '@oxagen/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@oxagen/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@oxagen/auth':
         specifier: workspace:*
         version: link:../../packages/auth
