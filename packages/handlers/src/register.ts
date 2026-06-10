@@ -387,4 +387,84 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./research.swarm.status")).researchSwarmStatusHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "repo.sync",
+    async () => (await import("./repo.sync")).repoSyncHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repo.configure",
+    async () => (await import("./repo.configure")).repoConfigureHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repo.pause",
+    async () => (await import("./repo.pause")).repoPauseHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repo.resume",
+    async () => (await import("./repo.resume")).repoResumeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repo.metrics",
+    async () => (await import("./repo.metrics")).repoMetricsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "integration.install",
+    async () => (await import("./integration.install")).integrationInstallHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "integration.configure",
+    async () => (await import("./integration.configure")).integrationConfigureHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "integration.list",
+    async () => (await import("./integration.list")).integrationListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "integration.get",
+    async () => (await import("./integration.get")).integrationGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "integration.sync",
+    async () => (await import("./integration.sync")).integrationSyncHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "integration.metrics",
+    async () => (await import("./integration.metrics")).integrationMetricsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "integration.delete",
+    async () => (await import("./integration.delete")).integrationDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "plugin.schema.get",
+    async () => (await import("./plugin.schema.get")).pluginSchemaGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "plugin.schema.validate",
+    async () => (await import("./plugin.schema.validate")).pluginSchemaValidateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "plugin.version.list",
+    async () => (await import("./plugin.version.list")).pluginVersionListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "semantic.edge.infer",
+    async () => (await import("./semantic.edge.infer")).semanticEdgeInferHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "semantic.edge.list",
+    async () => (await import("./semantic.edge.list")).semanticEdgeListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "semantic.edge.suggest",
+    async () => (await import("./semantic.edge.suggest")).semanticEdgeSuggestHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "graph.node.list",
+    async () => (await import("./graph.node.list")).graphNodeListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "graph.stats",
+    async () => (await import("./graph.stats")).graphStatsHandler as CapabilityHandlerFn,
+  );
 });
