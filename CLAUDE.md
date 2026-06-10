@@ -92,13 +92,49 @@ Rules for completion:
   change, run a `SELECT` query to confirm the change is actually in the database,
   not just in logs or code.
 
-## CI / Build
+## CI / Build — Full gate before push (non-negotiable)
 
 When fixing CI failures, verify against the actual CI environment — local typecheck
 passing does not mean lint, coverage gates, `.env.example`, and lockfiles are in sync.
-Run `pnpm gate` locally and confirm all outputs before declaring green.
 
-## Subagent workflows — writable agents only
+**Mandatory sequence before any push to main:**
+1. Run `pnpm gate` locally — this runs lint (–max-warnings 0), typecheck, coverage,
+   test, build, and migrations in one go. All must pass.
+2. Verify `.env.example` and lockfile are in sync with current state.
+3. Do NOT push if any gate is red. Fix the root cause locally first.
+4. Confirm CI is green on main after push using `gh run watch` or GitHub Actions UI.
+
+Recurring friction: fixes passed local typecheck but broke CI on lint/coverage/migrations.
+This happens because local and CI environments diverge (missing `.env.example` entries,
+stale lockfile, test config mismatch). Running `pnpm gate` before push catches ALL of
+these in one step. Do not push without it.
+
+## Database and migration targeting — confirm environment before executing
+
+When running data-mutation or migration scripts (e.g. `pnpm db:migrate`, `pnpm billing:stripe-sync`,
+seed scripts, or `execute-sql` for data changes), **always confirm you are targeting the
+correct database (production vs local vs test) BEFORE executing.**
+
+Rules:
+- **Place all migration files in `packages/database/migrations/`**, never in `apps/`.
+  Check the directory before writing. `tsx --env-file=.env.local` does NOT override
+  a shell `DATABASE_URL` — to force local targeting, `unset DATABASE_URL` first or
+  verify the env var is set to the local Docker Postgres (`:5433`).
+- **Before running any mutation script (stripe-sync, backfill, seed), echo the target
+  database URL** to confirm it matches your intent. For local work, it should be
+  `postgresql://...localhost:5433/...`. For production, it should point to the prod
+  database (verify this against the Vercel secrets, not a guess).
+- **Confirm the schema is correct.** After running a migration, query the target
+  database with a `SELECT` or `\dt` to verify the change actually landed — do not
+  trust logs alone. For data scripts, query a sample row to confirm the data was
+  written to the correct place.
+
+Recurring bugs: `stripe-sync` ran against prod when it should have hit local (plan not
+found), migrations were placed in the wrong directory and never executed. These errors
+have high blast radius (wrong pricing, failed backfills, skipped schema changes). Confirm
+before executing.
+
+## Subagent workflows — writable agents only, plus commit verification
 
 When dispatching subagents for implementation, bug fixes, or refactoring work:
 
@@ -115,10 +151,30 @@ When dispatching subagents for implementation, bug fixes, or refactoring work:
   for adequate test coverage (unit, integration, E2E). The judge gates PR opening
   and requires proof: passing tests, coverage metrics, screenshots for UI, CI gate
   success. Do not open a PR until the judge approves.
-- **Verify agents actually pushed changes to main.** After agents report "work
-  complete" or "pushed to main," verify with `git log origin/main` that the
-  commits are actually on main, not stranded in worktrees. Cherry-pick or
-  consolidate if needed.
+- **Verify agents actually pushed changes to main.** This is critical. After agents
+  report "work complete" or "pushed to main," **always verify with `git log origin/main`
+  that the commits are actually on main, not stranded in worktrees.** Do not accept
+  'pushed' claims without this check. Cherry-pick or consolidate worktree branches
+  if needed. Run `git fetch origin && git log -5 origin/main --oneline` to confirm.
+- **No subagent is done until you have verified with real commands.** After work
+  completes, run the test suite, check CI status, or query the database to confirm
+  the change landed and works. "Work done" means verified-on-main, not reported-as-done.
+
+## Large file handling — slice, don't read whole
+
+When working with large files (>50k tokens), do NOT read the entire file directly.
+Instead, use Bash commands (grep, awk, sed, head, tail) to extract only the lines you need.
+
+Rules:
+- **Grep for patterns first.** If you need lines matching 'error', run
+  `grep "error" large-file.log | head -50` instead of reading the whole file.
+- **Use Bash to slice before analyzing.** For a 200k-token file with one specific
+  section you need, run `sed -n '/START/,/END/p' file.ts | head -100` to extract
+  just that section, then read the result (now 5k tokens).
+- **Never dump the whole file into a prompt.** Context limits will block you and
+  waste a turn. Slice first, read the slice.
+
+This prevents context-limit hard failures that happened twice in your feedback data.
 
 ## PR workflow — test-completeness gate
 
