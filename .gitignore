@@ -83,3 +83,6 @@ creds.json
 .playwright-mcp*/
 .playwright*
 .superpowers/
+
+# Test results folder
+.test-results/
