@@ -21,7 +21,7 @@ vi.mock("./embed/index", () => ({
 import { runPipeline } from "./pipeline";
 import { resolveEntity } from "./dedup/resolve";
 import { embedEntity } from "./embed/index";
-import type { RawIngestEvent } from "./types";
+import type { RawIngestEvent, PipelineResult } from "./types";
 import type { PipelineContext } from "./pipeline";
 
 function makeEvent(overrides: Partial<RawIngestEvent> = {}): RawIngestEvent {
@@ -78,12 +78,14 @@ describe("runPipeline", () => {
     const result = await runPipeline(event, ctx);
 
     expect(result).not.toBeNull();
-    expect(result!.naturalKey).toBe("github:conn-abc:42");
-    expect(result!.operation).toBe("insert");
-    expect(result!.dedup.principalNodeId).toBe("node-principal-1");
-    expect(result!.dedup.action).toBe("created_principal");
-    expect(result!.embedded).toBe(true);
-    expect(result!.inferenceQueued).toBe(true);
+    // Narrow: no deliveryConfig set, so result is a PipelineResult (not FilteredResult)
+    const pr = result as PipelineResult;
+    expect(pr.naturalKey).toBe("github:conn-abc:42");
+    expect(pr.operation).toBe("insert");
+    expect(pr.dedup.principalNodeId).toBe("node-principal-1");
+    expect(pr.dedup.action).toBe("created_principal");
+    expect(pr.embedded).toBe(true);
+    expect(pr.inferenceQueued).toBe(true);
   });
 
   it("calls resolveEntity with the correct entityMutation", async () => {

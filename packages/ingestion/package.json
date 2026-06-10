@@ -10,6 +10,7 @@
     "./connectors": "./src/connectors/types.ts",
     "./connector-schema-loader": "./src/connector-schema-loader.ts",
     "./pipeline": "./src/pipeline.ts",
+    "./filters": "./src/filters.ts",
     "./types": "./src/types.ts",
     "./embed": "./src/embed/index.ts",
     "./mutations": "./src/mutations/upsert-entity.ts",
