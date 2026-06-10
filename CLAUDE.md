@@ -60,7 +60,7 @@ Rules:
   If you introduce code that triggers a new warning, fix the root cause rather than
   suppressing.
 
-## Completion with evidence — verification discipline
+## Verification discipline
 
 **Never claim a task is complete, a fix works, or a deploy succeeded without
 concrete verification.** Always provide evidence: test output, CI status, deployed
@@ -92,6 +92,12 @@ Rules for completion:
   change, run a `SELECT` query to confirm the change is actually in the database,
   not just in logs or code.
 
+## CI / Build
+
+When fixing CI failures, verify against the actual CI environment — local typecheck
+passing does not mean lint, coverage gates, `.env.example`, and lockfiles are in sync.
+Run `pnpm gate` locally and confirm all outputs before declaring green.
+
 ## Subagent workflows — writable agents only
 
 When dispatching subagents for implementation, bug fixes, or refactoring work:
@@ -104,13 +110,11 @@ When dispatching subagents for implementation, bug fixes, or refactoring work:
 - **Grant full find-and-fix permissions.** Bug-fix and regression workers must
   have permission to: diagnose root causes, fix code across multiple files,
   run tests, update tests, and commit changes. Do not gate their write access.
-- **Every regression needs a test.** When a bug is fixed, the fix is incomplete
-  without a regression test. Use the **regression-test-judge agent** (see below)
-  to determine whether a unit test or E2E test is appropriate based on the bug's
-  scope. The judge should be invoked as part of the bug fix workflow, not after.
-  - Unit test: fixes in a single module, pure logic, no side effects, no UI.
-  - E2E test: fixes involving UI, API routes, database, or user-facing flows.
-  - Both: fixes spanning multiple layers (e.g., form validation + API contract).
+- **Every PR must pass the test-completeness-judge before opening.** Before opening
+  a PR, dispatch the **test-completeness-judge agent** to audit all code changes
+  for adequate test coverage (unit, integration, E2E). The judge gates PR opening
+  and requires proof: passing tests, coverage metrics, screenshots for UI, CI gate
+  success. Do not open a PR until the judge approves.
 - **Verify agents actually pushed changes to main.** After agents report "work
   complete" or "pushed to main," verify with `git log origin/main` that the
   commits are actually on main, not stranded in worktrees. Cherry-pick or
@@ -125,8 +129,8 @@ Every bug fix follows this sequence:
    - Agent owns the fix end-to-end: root cause, code changes, running tests locally.
    - Agent commits to main and verifies commits are actually on main (not in worktree).
 
-2. **Invoke the regression-test-judge agent to determine test type.**
-   - Pass the bug description and fix summary to `regression-test-judge`.
+2. **Invoke the test-completeness-judge agent to determine test type.**
+   - Pass the bug description and fix summary to `test-completeness-judge`.
    - Judge returns: test type (unit | e2e | both), rationale, test scope, edge cases.
    - This step is **non-negotiable**; do not skip it or defer test decisions.
 
@@ -229,7 +233,7 @@ them too, so name the relevant skill in an agent's prompt.
   fan-out auditors → adversarial verify → safe auto-fix in a worktree → Linear
   tickets for approvals → interactive HTML dashboard. Use when asked to "audit
   my code", "give me an audit report", or score package health.
-- **`regression-test-judge`** — LLM judge agent that determines whether a bug fix
+- **`test-completeness-judge`** — LLM judge agent that determines whether a bug fix
   needs a unit test, E2E test, or both by analyzing scope, layers touched, and
   user-facing impact. Use after every bug fix to determine the regression test
   type before writing tests.
@@ -590,6 +594,9 @@ git fetch origin && git rebase origin/main  # sync before pushing (avoids force-
   use local DB even when `DATABASE_URL` is set in the shell. For prod DB
   operations, explicitly `unset DATABASE_URL` before running the script or
   use the Vercel env-scoped workflow (`gh workflow run ci.yml --ref main`).
+  Always confirm the target environment (prod vs local) before any migration or
+  sync script runs; place new migration files in `packages/database/migrations/`,
+  never in `apps/`.
 - **Stripe webhook tunnel** — `pnpm dev` auto-starts the Stripe CLI tunnel
   (`stripe listen --forward-to ...`) via `tools/scripts/stripe-tunnel.ts`.
   If you restart `apps/api` in isolation (e.g. direct `tsx` invocation, not
