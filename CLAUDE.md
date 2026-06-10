@@ -18,8 +18,9 @@ This repo is in **pre-launch build mode, NOT pull-request mode.** There are no
 live customers and no production traffic to protect.
 
 - **Commit and push directly to `main`.** You do not need to open PRs or wait for
-  review. (CI gates still only run on PRs, so verify locally — typecheck + tests
-  green — before pushing to main.)
+  review. However, **run the full CI gate locally before pushing** — do not rely
+  on CI to catch failures. The `pnpm gate` command runs lint, typecheck, coverage,
+  tests, and migrations. All must pass locally before any push to main.
 - **Dangerous, breaking edits are allowed**, including changes that would break
   production, drop/rewrite schemas, or remove APIs. Move fast; don't tiptoe.
 - The one non-negotiable: **everything you ship must be round and complete from a
@@ -43,7 +44,13 @@ Rules:
   `thresholds` block is a floor. When you ship new tested code that raises the
   measured coverage, bump the threshold to match (round down to the nearest integer
   percentage). Never reduce a threshold; it records the highest bar we've cleared.
-- **Verify locally before pushing.** Run `pnpm test:coverage` (unit) and
+- **Run the full CI gate before opening any PR.** Before opening a PR, run the
+  complete CI pipeline locally via `pnpm gate` to verify lint, typecheck, coverage,
+  tests, builds, and migrations all pass. Do not open a PR with failing or unknown
+  CI status. This is non-negotiable: PRs with broken CI waste review time and block
+  the pipeline. If you cannot run `pnpm gate` locally (e.g., due to environment
+  constraints), explicitly note this in the PR and explain what was verified instead.
+- **Verify locally before pushing to main.** Run `pnpm test:coverage` (unit) and
   `pnpm test:e2e` (e2e, if applicable) from the affected package before `git push`.
   Do not rely on CI to catch a coverage regression — fix it before it lands on
   `main`.
