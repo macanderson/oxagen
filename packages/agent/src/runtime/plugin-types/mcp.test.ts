@@ -161,9 +161,11 @@ describe("contributeMcpTools — serverAllowlist filtering", () => {
   });
 
   it("returns empty array when no workspace is set in context", async () => {
-    const result = await contributeMcpTools({ ...CTX, workspaceId: undefined }, {});
+    // CapabilityContext.workspaceId is string, but contributeMcpTools guards
+    // against runtime absence via `if (!ctx.workspaceId)`. Cast to test that path.
+    const result = await contributeMcpTools({ ...CTX, workspaceId: "" }, {});
     expect(result).toEqual([]);
-    // DB should never be queried when workspaceId is missing.
+    // DB should never be queried when workspaceId is falsy.
     expect(inArray).not.toHaveBeenCalled();
   });
 });

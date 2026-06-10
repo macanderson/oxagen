@@ -351,19 +351,49 @@ Do **not** parallelize when:
 - the work is small enough that dispatch overhead exceeds the gain
 - you're parallelizing just to look busy
 
+### Complexity inference — read once, dispatch fast
+
+Before any tool call, classify the prompt in one pass and dispatch immediately:
+
+| Prompt signal | Action |
+|---|---|
+| rename / move / format, single file | Do inline (Haiku parallel tool calls) |
+| fix / add / update ≤5 files, one package | Delegate to Haiku subagent |
+| fix / add crossing packages (>3 files) | Delegate to Sonnet subagent |
+| design / architect / broad refactor | Delegate to Sonnet; escalate to Opus if security/auth/billing touched |
+| auth / billing / security / multi-system | Opus subagent |
+
+If genuinely ambiguous: delegate to Sonnet and let it assess. Never spend
+Haiku tokens deliberating when a Sonnet subagent can decide and act in the
+same step. Speed > perfection on model choice.
+
+### Delegation — the default, not the exception
+
+**Subagents are the default for any work > 2 tool calls.** The parent context
+is for routing, synthesis, and user communication — not execution.
+
+- Dispatch first, think later. Read the prompt → classify → send agents in one message.
+- Keep work in the parent *only* when each step is small AND later steps depend on earlier ones.
+- Never grind through a queue of tasks personally. That is the failure mode.
+- Prefer `Explore` agent (read-only, fast) for search-only; `general-purpose` for write tasks.
+
+### Context budget management
+
+- **Delegate to shed context.** Long outputs (diffs, test logs, file trees) bloat the parent;
+  subagents absorb them and return summaries. Never let raw tool output accumulate.
+- **Compact before starting a new logical unit of work.** If the context feels heavy
+  from a prior task, use `/compact` before the next.
+- **Pass only what the subagent needs** — file paths, error excerpts, relevant lines.
+  Agents read files themselves; don't inline entire file contents in prompts.
+- **Summarize, don't quote.** Report subagent results as synthesis, not pasted output.
+
 ### Cost discipline
 
 - Match model to task — don't run Opus on a one-line rename.
-- For contract introspection, use `pnpm check:manifest --json` (cheap,
-  accurate). For codebase exploration, batch file reads in one turn.
-  The `ontology.*` graph query layer is **not yet shipped** — do not
-  attempt those calls; they will fail. `agent.code.execute` IS wired
-  (sandbox runner); use the contract, not raw `code.*` calls.
+- For contract introspection, use `pnpm check:manifest --json` (cheap, accurate).
 - Batch independent reads into one turn; don't chain them.
-- A subagent is a context isolation tool, not a default. Use it when
-  results would blow up the parent's context or when work is parallelizable.
-- Prefer `Explore` agent (read-only, fast) over `general-purpose` for
-  search-only tasks.
+- The `ontology.*` graph query layer is **not yet shipped** — do not attempt those calls.
+  `agent.code.execute` IS wired (sandbox runner); use the contract, not raw `code.*` calls.
 
 ## Local frontend verification (encouraged every session)
 
