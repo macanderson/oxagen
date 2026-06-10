@@ -70,3 +70,8 @@ export async function bootstrap(): Promise<void> {
     });
   });
 }
+
+// Internal: reset booted state for testing. Not exported in production.
+export function __resetBootForTesting(): void {
+  booted = false;
+}

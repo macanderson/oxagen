@@ -75,25 +75,24 @@ vi.mock("@oxagen/database/security", () => ({
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
 
-// ── Reset the booted state between tests ──────────────────────────────────────
-// bootstrap.ts uses a module-level `let booted = false`. To reset it between
-// tests we use vi.resetModules() and re-import the module.
+// ── Import bootstrap and test helper ──────────────────────────────────────────
+
+import { bootstrap, __resetBootForTesting } from "../bootstrap";
 
 describe("bootstrap() idempotency", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset module registry so the `booted` variable starts fresh
-    vi.resetModules();
+    // Reset the booted flag for each test so idempotency can be tested from scratch
+    __resetBootForTesting();
   });
 
   it("calling bootstrap() once runs init (loadEnv called once)", async () => {
-    const { bootstrap } = await import("../bootstrap");
     await bootstrap();
     expect(mocks.loadEnv).toHaveBeenCalledTimes(1);
   });
 
   it("calling bootstrap() twice does not re-run init (booted guard)", async () => {
-    const { bootstrap } = await import("../bootstrap");
+    // First call initializes; second call is guarded by booted flag
     await bootstrap();
     await bootstrap();
     // All init functions called exactly once despite two bootstrap() calls
@@ -105,7 +104,6 @@ describe("bootstrap() idempotency", () => {
   });
 
   it("concurrent double-call resolves safely (no double-init)", async () => {
-    const { bootstrap } = await import("../bootstrap");
     // Fire two concurrent calls — only one should run init
     await Promise.all([bootstrap(), bootstrap()]);
     expect(mocks.loadEnv).toHaveBeenCalledTimes(1);
@@ -114,7 +112,6 @@ describe("bootstrap() idempotency", () => {
   });
 
   it("bootstrap() resolves (returns undefined)", async () => {
-    const { bootstrap } = await import("../bootstrap");
     const result = await bootstrap();
     expect(result).toBeUndefined();
   });

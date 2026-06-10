@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { execSync } from 'child_process';
 
 interface SessionSummary {
@@ -41,8 +39,8 @@ async function captureSessionSummary(): Promise<SessionSummary> {
   const branch = safeExec('git rev-parse --abbrev-ref HEAD', 'main');
 
   // Get git diff statistics
-  const diffStat = safeExec('git diff --stat');
-  const diffNumStat = safeExec('git diff --numstat');
+  const diffStat = safeExec('git diff --stat', '');
+  const diffNumStat = safeExec('git diff --numstat', '');
 
   let filesChanged = 0;
   let linesAdded = 0;

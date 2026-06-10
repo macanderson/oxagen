@@ -110,6 +110,15 @@ import { privacyDataExport } from "./privacy.data.export";
 import { privacyDataErase } from "./privacy.data.erase";
 import { researchSwarmStart } from "./research.swarm.start";
 import { researchSwarmStatus } from "./research.swarm.status";
+import { graphNodeUpsert } from "./graph.node.upsert";
+import { graphNodeGet } from "./graph.node.get";
+import { graphNodeDelete } from "./graph.node.delete";
+import { graphNodeSearch } from "./graph.node.search";
+import { graphEdgeUpsert } from "./graph.edge.upsert";
+import { graphEdgeDelete } from "./graph.edge.delete";
+import { graphCypher } from "./graph.cypher";
+import { webSearch } from "./web.search";
+import { webFetch } from "./web.fetch";
 
 export {
   apiKeyCreate,
@@ -214,6 +223,15 @@ export {
   privacyDataErase,
   researchSwarmStart,
   researchSwarmStatus,
+  graphNodeUpsert,
+  graphNodeGet,
+  graphNodeDelete,
+  graphNodeSearch,
+  graphEdgeUpsert,
+  graphEdgeDelete,
+  graphCypher,
+  webSearch,
+  webFetch,
 };
 
 /**
@@ -327,4 +345,13 @@ export const contracts = [
   privacyDataErase,
   researchSwarmStart,
   researchSwarmStatus,
+  graphNodeUpsert,
+  graphNodeGet,
+  graphNodeDelete,
+  graphNodeSearch,
+  graphEdgeUpsert,
+  graphEdgeDelete,
+  graphCypher,
+  webSearch,
+  webFetch,
 ] as const;

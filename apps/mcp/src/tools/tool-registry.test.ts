@@ -117,6 +117,15 @@ import { metadata as connectionMappingsGetMetadata } from "./connection.mappings
 import { metadata as connectionMappingsSetMetadata } from "./connection.mappings.set";
 import { metadata as privacyDataEraseMetadata } from "./privacy.data.erase";
 import { metadata as privacyDataExportMetadata } from "./privacy.data.export";
+import { metadata as graphNodeUpsertMetadata } from "./graph.node.upsert";
+import { metadata as graphNodeGetMetadata } from "./graph.node.get";
+import { metadata as graphNodeDeleteMetadata } from "./graph.node.delete";
+import { metadata as graphNodeSearchMetadata } from "./graph.node.search";
+import { metadata as graphEdgeUpsertMetadata } from "./graph.edge.upsert";
+import { metadata as graphEdgeDeleteMetadata } from "./graph.edge.delete";
+import { metadata as graphCypherMetadata } from "./graph.cypher";
+import { metadata as webSearchMetadata } from "./web.search";
+import { metadata as webFetchMetadata } from "./web.fetch";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -222,6 +231,15 @@ const allToolMetadata = [
   connectionMappingsSetMetadata,
   privacyDataEraseMetadata,
   privacyDataExportMetadata,
+  graphNodeUpsertMetadata,
+  graphNodeGetMetadata,
+  graphNodeDeleteMetadata,
+  graphNodeSearchMetadata,
+  graphEdgeUpsertMetadata,
+  graphEdgeDeleteMetadata,
+  graphCypherMetadata,
+  webSearchMetadata,
+  webFetchMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────
