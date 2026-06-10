@@ -153,14 +153,14 @@ async function createAndLoad(
   return { container, spec };
 }
 
-export function createDockerSandbox(): SandboxDriver {
+export function createDockerSandbox(dockerFactory?: () => Dockerode): SandboxDriver {
   // Lazy runtime load of the dockerode value (see the type-only import note at
   // the top of the file). This require only executes when the docker driver is
   // actually selected — never in serverless prod, where SANDBOX_DRIVER is
   // vercel/modal — so the externalized `dockerode` is never resolved there.
   const require = createRequire(import.meta.url);
   const DockerodeCtor = require("dockerode") as typeof import("dockerode");
-  const docker: Dockerode = new DockerodeCtor();
+  const docker: Dockerode = dockerFactory ? dockerFactory() : new DockerodeCtor();
 
   async function run(req: SandboxRequest): Promise<SandboxResult> {
     const start = Date.now();

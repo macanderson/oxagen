@@ -100,8 +100,14 @@ function codePathFor(lang: SandboxLanguage): string {
   return IMAGES[lang].codePath;
 }
 
-export function createVercelSandbox(config: VercelSandboxConfig): SandboxDriver {
+/** Subset of the Sandbox static API needed for mocking in tests. */
+export interface SandboxFactory {
+  create: (params: Parameters<typeof Sandbox.create>[0]) => ReturnType<typeof Sandbox.create>;
+}
+
+export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: SandboxFactory): SandboxDriver {
   const credentials = credentialsFor(config);
+  const SandboxImpl: SandboxFactory = sandboxImpl ?? Sandbox;
 
   async function run(req: SandboxRequest): Promise<SandboxResult> {
     if (req.stdin && req.stdin.length > 0) {
@@ -126,7 +132,7 @@ export function createVercelSandbox(config: VercelSandboxConfig): SandboxDriver 
       ...(credentials ?? {}),
     };
 
-    const sandbox = await Sandbox.create(createParams);
+    const sandbox = await SandboxImpl.create(createParams);
     let finished: CommandFinished;
     let execStart: number;
     try {
@@ -193,7 +199,7 @@ export function createVercelSandbox(config: VercelSandboxConfig): SandboxDriver 
       ...(credentials ?? {}),
     };
 
-    const sandbox = await Sandbox.create(createParams);
+    const sandbox = await SandboxImpl.create(createParams);
     try {
       await sandbox.fs.writeFile(filePath, req.code, "utf8");
       const command = await sandbox.runCommand({ cmd, args, env: req.env, detached: true });

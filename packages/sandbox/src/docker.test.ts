@@ -19,10 +19,12 @@
  *
  * hostConfigFor is a pure function (no I/O); tests run without Docker.
  */
-import { describe, it, expect } from "vitest";
-import { hostConfigFor } from "./docker";
+import { describe, it, expect, vi } from "vitest";
+import { EventEmitter, PassThrough } from "node:stream";
+import { hostConfigFor, createDockerSandbox } from "./docker";
 import type { SandboxRequest } from "./types";
 import type { ImageSpec } from "./images";
+import type Dockerode from "dockerode";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -160,5 +162,388 @@ describe("hostConfigFor — memory", () => {
   it("sets MemorySwap equal to Memory (disables swap)", () => {
     const cfg = hostConfigFor(makeReq({ memoryMb: 128 }), TEST_SPEC);
     expect(cfg.MemorySwap).toBe(cfg.Memory);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helpers for Docker driver run/stream tests
+// ---------------------------------------------------------------------------
+
+/** Build a Docker multiplexed stream frame (8-byte header + payload). */
+function dockerFrame(channel: 1 | 2, data: string): Buffer {
+  const payload = Buffer.from(data, "utf8");
+  const hdr = Buffer.alloc(8);
+  hdr[0] = channel;
+  hdr.writeUInt32BE(payload.length, 4);
+  return Buffer.concat([hdr, payload]);
+}
+
+interface MockContainer {
+  putArchive: ReturnType<typeof vi.fn>;
+  attach: ReturnType<typeof vi.fn>;
+  start: ReturnType<typeof vi.fn>;
+  wait: ReturnType<typeof vi.fn>;
+  kill: ReturnType<typeof vi.fn>;
+  inspect: ReturnType<typeof vi.fn>;
+}
+
+function makeMockDockerSetup(): {
+  docker: Dockerode;
+  container: MockContainer;
+  attachEmitter: EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
+} {
+  const attachEmitter = Object.assign(new EventEmitter(), {
+    write: vi.fn(),
+    end: vi.fn(),
+  }) as EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
+
+  const container: MockContainer = {
+    putArchive: vi.fn().mockResolvedValue(undefined),
+    attach: vi.fn().mockResolvedValue(attachEmitter),
+    start: vi.fn().mockResolvedValue(undefined),
+    wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+    kill: vi.fn().mockResolvedValue(undefined),
+    inspect: vi.fn().mockResolvedValue({ State: { OOMKilled: false } }),
+  };
+
+  const docker = {
+    listImages: vi.fn().mockResolvedValue([{ Id: "sha256:cached" }]),
+    createContainer: vi.fn().mockResolvedValue(container),
+    pull: vi.fn(),
+    modem: {
+      followProgress: vi.fn((_s: unknown, cb: (e: Error | null) => void) => cb(null)),
+      demuxStream: vi.fn(),
+    },
+  } as unknown as Dockerode;
+
+  return { docker, container, attachEmitter };
+}
+
+// ---------------------------------------------------------------------------
+// createDockerSandbox — run()
+// ---------------------------------------------------------------------------
+
+describe("createDockerSandbox — run()", () => {
+  it("returns stdout and exit code 0 for a normal run", async () => {
+    const { docker, container, attachEmitter } = makeMockDockerSetup();
+
+    container.start = vi.fn().mockImplementation(async () => {
+      setImmediate(() => {
+        attachEmitter.emit("data", dockerFrame(1, "hello\n"));
+        attachEmitter.emit("end");
+      });
+    });
+
+    const sandbox = createDockerSandbox(() => docker);
+    const result = await sandbox.run(makeReq({ code: 'console.log("hello")' }));
+
+    expect(result.stdout).toBe("hello\n");
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(result.timedOut).toBe(false);
+    expect(result.oomKilled).toBe(false);
+  });
+
+  it("returns stderr output when container writes to stderr", async () => {
+    const { docker, container, attachEmitter } = makeMockDockerSetup();
+
+    container.start = vi.fn().mockImplementation(async () => {
+      setImmediate(() => {
+        attachEmitter.emit("data", dockerFrame(2, "error message\n"));
+        attachEmitter.emit("end");
+      });
+    });
+
+    const sandbox = createDockerSandbox(() => docker);
+    const result = await sandbox.run(makeReq());
+
+    expect(result.stderr).toBe("error message\n");
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("reports non-zero exit code from container", async () => {
+    const { docker, container, attachEmitter } = makeMockDockerSetup();
+
+    container.wait = vi.fn().mockResolvedValue({ StatusCode: 1 });
+    container.start = vi.fn().mockImplementation(async () => {
+      setImmediate(() => {
+        attachEmitter.emit("data", dockerFrame(2, "fail\n"));
+        attachEmitter.emit("end");
+      });
+    });
+
+    const sandbox = createDockerSandbox(() => docker);
+    const result = await sandbox.run(makeReq());
+
+    expect(result.exitCode).toBe(1);
+    expect(result.timedOut).toBe(false);
+  });
+
+  it("sets timedOut=true and exitCode=137 when the container times out", async () => {
+    const { docker, container, attachEmitter } = makeMockDockerSetup();
+
+    // wait() never resolves — only the timer fires.
+    container.wait = vi.fn().mockReturnValue(new Promise(() => undefined));
+    container.start = vi.fn().mockResolvedValue(undefined);
+    // Emit "end" only when kill() is called so the stream-end listener
+    // is already registered (it's registered after the timeout fires).
+    container.kill = vi.fn().mockImplementation(async () => {
+      setImmediate(() => attachEmitter.emit("end"));
+    });
+
+    const sandbox = createDockerSandbox(() => docker);
+    // Give extra vitest timeout since a real 50ms timer is involved.
+    const result = await sandbox.run(makeReq({ timeoutMs: 50 }));
+
+    expect(result.timedOut).toBe(true);
+    expect(result.exitCode).toBe(137);
+    expect(container.kill).toHaveBeenCalledWith({ signal: "SIGKILL" });
+  }, 10_000);
+
+  it("sets oomKilled=true when container inspect reports OOMKilled", async () => {
+    const { docker, container, attachEmitter } = makeMockDockerSetup();
+
+    container.inspect = vi.fn().mockResolvedValue({ State: { OOMKilled: true } });
+    container.start = vi.fn().mockImplementation(async () => {
+      setImmediate(() => attachEmitter.emit("end"));
+    });
+
+    const sandbox = createDockerSandbox(() => docker);
+    const result = await sandbox.run(makeReq());
+
+    expect(result.oomKilled).toBe(true);
+  });
+
+  it("writes stdin to the attach stream when req.stdin is provided", async () => {
+    const { docker, container, attachEmitter } = makeMockDockerSetup();
+
+    container.start = vi.fn().mockImplementation(async () => {
+      setImmediate(() => attachEmitter.emit("end"));
+    });
+
+    const sandbox = createDockerSandbox(() => docker);
+    await sandbox.run(makeReq({ stdin: "input data\n" }));
+
+    expect(attachEmitter.write).toHaveBeenCalledWith("input data\n");
+    expect(attachEmitter.end).toHaveBeenCalled();
+  });
+
+  it("truncates output and kills container when output exceeds 8 MB", async () => {
+    const { docker, container, attachEmitter } = makeMockDockerSetup();
+
+    container.start = vi.fn().mockImplementation(async () => {
+      // Emit a frame just over the 8 MB limit
+      const bigData = "x".repeat(8 * 1024 * 1024 + 1);
+      const payload = Buffer.from(bigData, "utf8");
+      const hdr = Buffer.alloc(8);
+      hdr[0] = 1;
+      hdr.writeUInt32BE(payload.length, 4);
+      attachEmitter.emit("data", Buffer.concat([hdr, payload]));
+      setImmediate(() => attachEmitter.emit("end"));
+    });
+
+    const sandbox = createDockerSandbox(() => docker);
+    const result = await sandbox.run(makeReq());
+
+    expect(result.stdout).toContain("[output truncated");
+    expect(container.kill).toHaveBeenCalledWith({ signal: "SIGKILL" });
+  });
+
+  it("passes stdin attachment flags when req.stdin is set", async () => {
+    const { docker, container, attachEmitter } = makeMockDockerSetup();
+
+    container.start = vi.fn().mockImplementation(async () => {
+      setImmediate(() => attachEmitter.emit("end"));
+    });
+
+    const sandbox = createDockerSandbox(() => docker);
+    await sandbox.run(makeReq({ stdin: "test" }));
+
+    const attachCall = container.attach.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(attachCall.stdin).toBe(true);
+  });
+
+  it("pulls image when it is not cached", async () => {
+    const { docker, container, attachEmitter } = makeMockDockerSetup();
+
+    const mockPullStream = new EventEmitter();
+    (docker as unknown as { listImages: ReturnType<typeof vi.fn> }).listImages = vi
+      .fn()
+      .mockResolvedValue([]);
+    (docker as unknown as { pull: ReturnType<typeof vi.fn> }).pull = vi
+      .fn()
+      .mockImplementation(
+        (_image: string, _opts: unknown, cb: (err: null, stream: EventEmitter) => void) => {
+          cb(null, mockPullStream);
+        },
+      );
+    (
+      docker as unknown as { modem: { followProgress: ReturnType<typeof vi.fn>; demuxStream: ReturnType<typeof vi.fn> } }
+    ).modem.followProgress = vi.fn((_s: unknown, cb: (e: Error | null) => void) => cb(null));
+
+    container.start = vi.fn().mockImplementation(async () => {
+      setImmediate(() => attachEmitter.emit("end"));
+    });
+
+    const sandbox = createDockerSandbox(() => docker);
+    await sandbox.run(makeReq());
+
+    expect((docker as unknown as { pull: ReturnType<typeof vi.fn> }).pull).toHaveBeenCalled();
+  });
+
+  it("includes env vars in the container create call", async () => {
+    const { docker, container, attachEmitter } = makeMockDockerSetup();
+
+    container.start = vi.fn().mockImplementation(async () => {
+      setImmediate(() => attachEmitter.emit("end"));
+    });
+
+    const sandbox = createDockerSandbox(() => docker);
+    await sandbox.run(makeReq({ env: { FOO: "bar", BAZ: "qux" } }));
+
+    const createCall = (
+      docker as unknown as { createContainer: ReturnType<typeof vi.fn> }
+    ).createContainer.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(createCall.Env).toContain("FOO=bar");
+    expect(createCall.Env).toContain("BAZ=qux");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createDockerSandbox — stream()
+// ---------------------------------------------------------------------------
+
+describe("createDockerSandbox — stream()", () => {
+  it("yields stdout and stderr chunks from the container", async () => {
+    const { docker, container } = makeMockDockerSetup();
+    const attachEmitter = new EventEmitter() as EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
+    attachEmitter.write = vi.fn();
+    attachEmitter.end = vi.fn();
+
+    container.attach = vi.fn().mockResolvedValue(attachEmitter);
+
+    (
+      docker as unknown as {
+        modem: { demuxStream: ReturnType<typeof vi.fn>; followProgress: ReturnType<typeof vi.fn> };
+      }
+    ).modem.demuxStream = vi.fn(
+      (_attached: unknown, stdoutPipe: PassThrough, stderrPipe: PassThrough) => {
+        setImmediate(() => {
+          stdoutPipe.write(Buffer.from("out1\n"));
+          stderrPipe.write(Buffer.from("err1\n"));
+          stdoutPipe.end();
+          stderrPipe.end();
+        });
+      },
+    );
+
+    // wait() resolves after a tick so the stream loop can finish
+    container.wait = vi.fn().mockImplementation(
+      () => new Promise<{ StatusCode: number }>((r) => setImmediate(() => r({ StatusCode: 0 }))),
+    );
+    container.start = vi.fn().mockResolvedValue(undefined);
+
+    const sandbox = createDockerSandbox(() => docker);
+    const chunks: Array<{ channel: string; data: string }> = [];
+    for await (const chunk of sandbox.stream(makeReq())) {
+      chunks.push(chunk);
+    }
+
+    const stdoutChunks = chunks.filter((c) => c.channel === "stdout");
+    const stderrChunks = chunks.filter((c) => c.channel === "stderr");
+    expect(stdoutChunks.some((c) => c.data === "out1\n")).toBe(true);
+    expect(stderrChunks.some((c) => c.data === "err1\n")).toBe(true);
+  });
+
+  it("kills container when queue exceeds MAX_QUEUE_ITEMS (1000)", async () => {
+    const { docker, container } = makeMockDockerSetup();
+    const attachEmitter = new EventEmitter() as EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
+    attachEmitter.write = vi.fn();
+    attachEmitter.end = vi.fn();
+
+    container.attach = vi.fn().mockResolvedValue(attachEmitter);
+
+    let capturedStdout: PassThrough | null = null;
+    (
+      docker as unknown as {
+        modem: { demuxStream: ReturnType<typeof vi.fn>; followProgress: ReturnType<typeof vi.fn> };
+      }
+    ).modem.demuxStream = vi.fn((_attached: unknown, stdoutPipe: PassThrough) => {
+      capturedStdout = stdoutPipe;
+    });
+
+    container.wait = vi.fn().mockImplementation(
+      () => new Promise<{ StatusCode: number }>((r) => setTimeout(() => r({ StatusCode: 0 }), 500)),
+    );
+    container.start = vi.fn().mockResolvedValue(undefined);
+
+    const sandbox = createDockerSandbox(() => docker);
+    const streamIter = sandbox.stream(makeReq({ timeoutMs: 1000 }));
+
+    // Start iterating (first next() call starts the generator)
+    const firstNextPromise = streamIter[Symbol.asyncIterator]().next();
+
+    // Give the stream function time to set up and call start
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    // Flood the stdout pipe to overflow the queue
+    const capturedOut = capturedStdout as PassThrough | null;
+    if (capturedOut !== null) {
+      for (let i = 0; i < 1001; i++) {
+        capturedOut.write(Buffer.from(`chunk-${i}\n`));
+      }
+    }
+
+    // Drain and collect
+    const firstChunk = await firstNextPromise;
+    expect(firstChunk.done).toBe(false);
+    expect(container.kill).toHaveBeenCalledWith({ signal: "SIGKILL" });
+  });
+
+  it("kills container when stream timeout fires", async () => {
+    const { docker, container } = makeMockDockerSetup();
+    const attachEmitter = new EventEmitter() as EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
+    attachEmitter.write = vi.fn();
+    attachEmitter.end = vi.fn();
+
+    container.attach = vi.fn().mockResolvedValue(attachEmitter);
+    (
+      docker as unknown as {
+        modem: { demuxStream: ReturnType<typeof vi.fn>; followProgress: ReturnType<typeof vi.fn> };
+      }
+    ).modem.demuxStream = vi.fn();
+    container.start = vi.fn().mockResolvedValue(undefined);
+    // wait() resolves AFTER the timeout (150ms > timeoutMs 50ms) so the timer fires.
+    container.wait = vi.fn().mockImplementation(
+      () => new Promise<{ StatusCode: number }>((r) => setTimeout(() => r({ StatusCode: 0 }), 150)),
+    );
+
+    const sandbox = createDockerSandbox(() => docker);
+    const chunks: Array<unknown> = [];
+    for await (const chunk of sandbox.stream(makeReq({ timeoutMs: 50 }))) {
+      chunks.push(chunk);
+    }
+
+    // kill is called by the timeout handler (fires at ~50ms, before wait() at 150ms)
+    expect(container.kill).toHaveBeenCalledWith({ signal: "SIGKILL" });
+  }, 10_000);
+});
+
+// ---------------------------------------------------------------------------
+// createDockerSandbox — warmup()
+// ---------------------------------------------------------------------------
+
+describe("createDockerSandbox — warmup()", () => {
+  it("resolves without error when images are already cached", async () => {
+    const { docker } = makeMockDockerSetup();
+
+    const sandbox = createDockerSandbox(() => docker);
+    await expect(sandbox.warmup?.()).resolves.toBeUndefined();
+
+    // listImages called once per language (node, python, shell)
+    expect(
+      (docker as unknown as { listImages: ReturnType<typeof vi.fn> }).listImages,
+    ).toHaveBeenCalledTimes(3);
   });
 });

@@ -6,12 +6,13 @@
  * selection path in getSandbox(). SANDBOX_DRIVER is process.env-gated in
  * integration environments; set it in CI env to choose the appropriate driver.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import {
   createVercelSandbox,
   runtimeFor,
   networkPolicyFor,
   VercelSandboxUnsupportedError,
+  type SandboxFactory,
 } from "./vercel";
 import { getSandbox, isSandboxAvailable, setSandboxForTests } from "./index";
 
@@ -294,5 +295,285 @@ describe("isSandboxAvailable", () => {
     delete process.env.MODAL_RUNNER_URL;
     delete process.env.MODAL_RUNNER_TOKEN;
     expect(isSandboxAvailable()).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sandbox mock helpers
+// ---------------------------------------------------------------------------
+
+interface MockCommandFinished {
+  exitCode: number;
+  stdout: () => Promise<string>;
+  stderr: () => Promise<string>;
+}
+
+interface MockCommand {
+  logs: () => AsyncIterable<{ stream: "stdout" | "stderr"; data: string }>;
+}
+
+interface MockSandboxInstance {
+  fs: { writeFile: ReturnType<typeof vi.fn> };
+  runCommand: ReturnType<typeof vi.fn>;
+  stop: ReturnType<typeof vi.fn>;
+}
+
+function makeFinished(stdout: string, stderr: string, exitCode = 0): MockCommandFinished {
+  return {
+    exitCode,
+    stdout: vi.fn().mockResolvedValue(stdout),
+    stderr: vi.fn().mockResolvedValue(stderr),
+  };
+}
+
+function makeMockSandboxImpl(instance: MockSandboxInstance): SandboxFactory {
+  return {
+    create: vi.fn().mockResolvedValue(instance) as SandboxFactory["create"],
+  };
+}
+
+function makeVercelReq(overrides: Partial<Parameters<typeof createVercelSandbox>[0]> = {}) {
+  void overrides;
+  return {
+    language: "node" as const,
+    code: 'console.log("hi")',
+    timeoutMs: 10_000,
+    memoryMb: 256,
+    network: "deny" as const,
+    orgId: "org_test",
+    workspaceId: "wrk_test",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// createVercelSandbox — run()
+// ---------------------------------------------------------------------------
+
+describe("createVercelSandbox — run()", () => {
+  it("returns stdout and exit code 0 for a normal run", async () => {
+    const finished = makeFinished("hello\n", "");
+    const instance: MockSandboxInstance = {
+      fs: { writeFile: vi.fn().mockResolvedValue(undefined) },
+      runCommand: vi.fn().mockResolvedValue(finished),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const sandboxImpl = makeMockSandboxImpl(instance);
+    const driver = createVercelSandbox({}, sandboxImpl);
+
+    const result = await driver.run(makeVercelReq());
+
+    expect(result.stdout).toBe("hello\n");
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(result.timedOut).toBe(false);
+    expect(result.oomKilled).toBe(false);
+  });
+
+  it("returns stderr from a failed command", async () => {
+    const finished = makeFinished("", "error output\n", 1);
+    const instance: MockSandboxInstance = {
+      fs: { writeFile: vi.fn().mockResolvedValue(undefined) },
+      runCommand: vi.fn().mockResolvedValue(finished),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const driver = createVercelSandbox({}, makeMockSandboxImpl(instance));
+
+    const result = await driver.run(makeVercelReq());
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe("error output\n");
+  });
+
+  it("throws VercelSandboxUnsupportedError when stdin is provided to run()", async () => {
+    const driver = createVercelSandbox({});
+
+    await expect(
+      driver.run({ ...makeVercelReq(), stdin: "some input" }),
+    ).rejects.toThrow(VercelSandboxUnsupportedError);
+  });
+
+  it("calls sandbox.stop() even when runCommand throws", async () => {
+    const instance: MockSandboxInstance = {
+      fs: { writeFile: vi.fn().mockResolvedValue(undefined) },
+      runCommand: vi.fn().mockRejectedValue(new Error("exec failed")),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const driver = createVercelSandbox({}, makeMockSandboxImpl(instance));
+
+    await expect(driver.run(makeVercelReq())).rejects.toThrow("exec failed");
+    expect(instance.stop).toHaveBeenCalled();
+  });
+
+  it("truncates stdout when it exceeds 8 MB", async () => {
+    const bigOutput = "x".repeat(8 * 1024 * 1024 + 100);
+    const finished = makeFinished(bigOutput, "");
+    const instance: MockSandboxInstance = {
+      fs: { writeFile: vi.fn().mockResolvedValue(undefined) },
+      runCommand: vi.fn().mockResolvedValue(finished),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const driver = createVercelSandbox({}, makeMockSandboxImpl(instance));
+
+    const result = await driver.run(makeVercelReq());
+
+    expect(result.stdout).toContain("[output truncated");
+    expect(result.stdout.length).toBeLessThan(bigOutput.length);
+  });
+
+  it("passes explicit credentials to sandbox.create when all three are set", async () => {
+    const finished = makeFinished("", "");
+    const instance: MockSandboxInstance = {
+      fs: { writeFile: vi.fn().mockResolvedValue(undefined) },
+      runCommand: vi.fn().mockResolvedValue(finished),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const createFn: Mock = vi.fn().mockResolvedValue(instance);
+    const driver = createVercelSandbox(
+      { token: "tok", teamId: "team", projectId: "prj" },
+      { create: createFn as unknown as SandboxFactory["create"] },
+    );
+
+    await driver.run(makeVercelReq());
+
+    const call = createFn.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(call?.token).toBe("tok");
+    expect(call?.teamId).toBe("team");
+    expect(call?.projectId).toBe("prj");
+  });
+
+  it("uses shell runtime and /tmp/main.sh path for shell language", async () => {
+    const finished = makeFinished("ok", "");
+    const instance: MockSandboxInstance = {
+      fs: { writeFile: vi.fn().mockResolvedValue(undefined) },
+      runCommand: vi.fn().mockResolvedValue(finished),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const createFn: Mock = vi.fn().mockResolvedValue(instance);
+    const driver = createVercelSandbox({}, { create: createFn as unknown as SandboxFactory["create"] });
+
+    await driver.run({ ...makeVercelReq(), language: "shell" });
+
+    const createParams = createFn.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(createParams?.runtime).toBe("node24");
+    const writeFileCall = instance.fs.writeFile.mock.calls[0] as [string, string, string] | undefined;
+    expect(writeFileCall?.[0]).toBe("/tmp/main.sh");
+    const runCall = instance.runCommand.mock.calls[0]?.[0] as { cmd: string; args: string[] } | undefined;
+    expect(runCall?.cmd).toBe("/bin/sh");
+    expect(runCall?.args).toContain("/tmp/main.sh");
+  });
+
+  it("uses python3.13 runtime for python language", async () => {
+    const finished = makeFinished("", "");
+    const instance: MockSandboxInstance = {
+      fs: { writeFile: vi.fn().mockResolvedValue(undefined) },
+      runCommand: vi.fn().mockResolvedValue(finished),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const createFn: Mock = vi.fn().mockResolvedValue(instance);
+    const driver = createVercelSandbox({}, { create: createFn as unknown as SandboxFactory["create"] });
+
+    await driver.run({ ...makeVercelReq(), language: "python" });
+
+    const createParams = createFn.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(createParams?.runtime).toBe("python3.13");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createVercelSandbox — stream()
+// ---------------------------------------------------------------------------
+
+async function* makeLogIterable(
+  items: Array<{ stream: "stdout" | "stderr"; data: string }>,
+): AsyncIterable<{ stream: "stdout" | "stderr"; data: string }> {
+  for (const item of items) {
+    yield item;
+  }
+}
+
+describe("createVercelSandbox — stream()", () => {
+  it("yields stdout and stderr chunks", async () => {
+    const logs = [
+      { stream: "stdout" as const, data: "out1\n" },
+      { stream: "stderr" as const, data: "err1\n" },
+    ];
+    const mockCommand: MockCommand = {
+      logs: () => makeLogIterable(logs),
+    };
+    const instance: MockSandboxInstance = {
+      fs: { writeFile: vi.fn().mockResolvedValue(undefined) },
+      runCommand: vi.fn().mockResolvedValue(mockCommand),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const driver = createVercelSandbox({}, makeMockSandboxImpl(instance));
+
+    const chunks: Array<{ channel: string; data: string }> = [];
+    for await (const chunk of driver.stream(makeVercelReq())) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toContainEqual(expect.objectContaining({ channel: "stdout", data: "out1\n" }));
+    expect(chunks).toContainEqual(expect.objectContaining({ channel: "stderr", data: "err1\n" }));
+  });
+
+  it("throws VercelSandboxUnsupportedError when stdin is provided to stream()", async () => {
+    const driver = createVercelSandbox({});
+
+    const iter = driver.stream({ ...makeVercelReq(), stdin: "data" });
+    await expect(iter[Symbol.asyncIterator]().next()).rejects.toThrow(
+      VercelSandboxUnsupportedError,
+    );
+  });
+
+  it("truncates stream output when accumulated bytes exceed 8 MB", async () => {
+    const bigChunk = "x".repeat(8 * 1024 * 1024 + 100);
+    const logs = [
+      { stream: "stdout" as const, data: bigChunk },
+      { stream: "stdout" as const, data: "should not appear\n" },
+    ];
+    const mockCommand: MockCommand = {
+      logs: () => makeLogIterable(logs),
+    };
+    const instance: MockSandboxInstance = {
+      fs: { writeFile: vi.fn().mockResolvedValue(undefined) },
+      runCommand: vi.fn().mockResolvedValue(mockCommand),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const driver = createVercelSandbox({}, makeMockSandboxImpl(instance));
+
+    const chunks: Array<{ data: string }> = [];
+    for await (const chunk of driver.stream(makeVercelReq())) {
+      chunks.push(chunk);
+    }
+
+    const allData = chunks.map((c) => c.data).join("");
+    expect(allData).toContain("[output truncated");
+    expect(allData).not.toContain("should not appear");
+  });
+
+  it("calls sandbox.stop() in the finally block after streaming", async () => {
+    const instance: MockSandboxInstance = {
+      fs: { writeFile: vi.fn().mockResolvedValue(undefined) },
+      runCommand: vi.fn().mockResolvedValue({ logs: () => makeLogIterable([]) }),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const driver = createVercelSandbox({}, makeMockSandboxImpl(instance));
+
+    for await (const _chunk of driver.stream(makeVercelReq())) {
+      // drain
+    }
+
+    expect(instance.stop).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createVercelSandbox — warmup()
+// ---------------------------------------------------------------------------
+
+describe("createVercelSandbox — warmup()", () => {
+  it("resolves immediately without making any API calls (Vercel handles pooling)", async () => {
+    const driver = createVercelSandbox({});
+    await expect(driver.warmup?.()).resolves.toBeUndefined();
   });
 });
