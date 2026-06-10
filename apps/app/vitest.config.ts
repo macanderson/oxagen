@@ -31,13 +31,12 @@ export default defineConfig({
         "src/app/**/knowledge/**",
       ],
       // Coverage floor — ratchet upward as test surface grows.
-      // Set conservatively at 40% to gate against regression without
-      // blocking new feature work. Raise in increments after adding tests.
+      // Raised from 40 after adding mcp-server-picker + related tests (measured: 50/82/69/50).
       thresholds: {
-        lines: 40,
-        functions: 40,
-        branches: 40,
-        statements: 40,
+        lines: 50,
+        functions: 69,
+        branches: 82,
+        statements: 50,
       },
     },
   },
