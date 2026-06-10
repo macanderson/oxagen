@@ -92,6 +92,30 @@ Rules for completion:
   change, run a `SELECT` query to confirm the change is actually in the database,
   not just in logs or code.
 
+## Subagent workflows — writable agents only
+
+When dispatching subagents for implementation, bug fixes, or refactoring work:
+
+- **Use writable agents, never read-only architects.** Architect agents (e.g.
+  `feature-dev:code-architect`) return blueprints but cannot write code. For any
+  task requiring file edits, use full-capability agents (e.g. `general-purpose`,
+  `feature-dev:code-explorer` with write permission, or custom implementation
+  agents). Blueprint-only results force you to re-do all edits yourself.
+- **Grant full find-and-fix permissions.** Bug-fix and regression workers must
+  have permission to: diagnose root causes, fix code across multiple files,
+  run tests, update tests, and commit changes. Do not gate their write access.
+- **Every regression needs a test.** When a bug is fixed, the fix is incomplete
+  without a regression test. Use the **regression-test-judge agent** (see below)
+  to determine whether a unit test or E2E test is appropriate based on the bug's
+  scope. The judge should be invoked as part of the bug fix workflow, not after.
+  - Unit test: fixes in a single module, pure logic, no side effects, no UI.
+  - E2E test: fixes involving UI, API routes, database, or user-facing flows.
+  - Both: fixes spanning multiple layers (e.g., form validation + API contract).
+- **Verify agents actually pushed changes to main.** After agents report "work
+  complete" or "pushed to main," verify with `git log origin/main` that the
+  commits are actually on main, not stranded in worktrees. Cherry-pick or
+  consolidate if needed.
+
 ## Working with this user
 
 The user routinely sends **multi-part prompts** — a single message asks for
