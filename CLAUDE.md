@@ -457,6 +457,11 @@ Token metering (`token_usage` ClickHouse table), duration tracking, surface tagg
 
 Authoritative. See AGENTS.md for the why.
 
+**Note:** Architectural decisions at this level should be documented in `docs/adr/`
+(e.g., ADR-012 for the connector dual-write pattern) with context, decision,
+alternatives, and consequences. ADRs stay in the repo; design decisions do not
+age in conversations.
+
 ### Neo4j — graph data only
 
 - ontology and entity relationships
@@ -491,6 +496,15 @@ Authoritative. See AGENTS.md for the why.
 
 **Never:** analytics in Neo4j. Graph relationships in Postgres.
 Transactional state in ClickHouse. Binary payloads in any of the three DB stores.
+
+**Exception — Connector Data Ingestion Dual-Write:**
+Data connectors (GitHub, Linear, Salesforce, etc.) use a dual-write pattern:
+**Postgres** stores the operational record (sync cursor, connection health, event log —
+ACID, must never lose). **Neo4j** stores the indexed graph (entities, embeddings,
+relationships — async Inngest, retryable). This is not a violation of the rule above
+because they serve different purposes: Postgres ensures operational durability; Neo4j
+enables graph queries. Write both, but understand Postgres is the source of truth
+for cursor state. ClickHouse observes ingestion events for telemetry.
 
 ## Documentation — capability registry
 
