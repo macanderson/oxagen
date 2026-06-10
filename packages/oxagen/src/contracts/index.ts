@@ -119,6 +119,7 @@ import { graphEdgeDelete } from "./graph.edge.delete";
 import { graphCypher } from "./graph.cypher";
 import { webSearch } from "./web.search";
 import { webFetch } from "./web.fetch";
+import { semanticEdgeApprove } from "./semantic.edge.approve";
 import { semanticEdgeInfer } from "./semantic.edge.infer";
 import { semanticEdgeList } from "./semantic.edge.list";
 import { semanticEdgeSuggest } from "./semantic.edge.suggest";
@@ -252,6 +253,7 @@ export {
   graphCypher,
   webSearch,
   webFetch,
+  semanticEdgeApprove,
   semanticEdgeInfer,
   semanticEdgeList,
   semanticEdgeSuggest,
@@ -394,6 +396,7 @@ export const contracts = [
   graphCypher,
   webSearch,
   webFetch,
+  semanticEdgeApprove,
   semanticEdgeInfer,
   semanticEdgeList,
   semanticEdgeSuggest,

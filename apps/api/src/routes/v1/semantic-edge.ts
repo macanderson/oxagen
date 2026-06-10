@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { semanticEdgeApprove } from "@oxagen/oxagen/contracts/semantic.edge.approve";
 import { semanticEdgeInfer } from "@oxagen/oxagen/contracts/semantic.edge.infer";
 import { semanticEdgeList } from "@oxagen/oxagen/contracts/semantic.edge.list";
 import { semanticEdgeSuggest } from "@oxagen/oxagen/contracts/semantic.edge.suggest";
@@ -29,6 +30,16 @@ semanticEdgeRoute.get("/suggest", async (c) => {
   const suggestBody = semanticEdgeSuggest.input.parse(body);
   const ctx = capabilityContext(c);
   const out = await invoke(semanticEdgeSuggest.name, suggestBody, ctx, { surface: "api" });
+  return c.json(out, 200);
+});
+
+// POST /semantic-edges/:edgeId/decide — approve or reject a pending InferredEdge
+// This is the endpoint the UI client components call from the browser.
+semanticEdgeRoute.post("/:edgeId/decide", async (c) => {
+  const edgeId = c.req.param("edgeId");
+  const body = semanticEdgeApprove.input.parse({ edgeId, ...(await c.req.json()) });
+  const ctx = capabilityContext(c);
+  const out = await invoke(semanticEdgeApprove.name, body, ctx, { surface: "api" });
   return c.json(out, 200);
 });
 

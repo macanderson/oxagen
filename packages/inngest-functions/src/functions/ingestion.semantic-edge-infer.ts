@@ -1,0 +1,232 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- event.data types are declared in inngest.ts Events; untyped here because InstanceType<typeof Inngest> strips EventSchemas generics from the Proxy */
+import { z } from "zod";
+import { inngest } from "../inngest";
+import { runInTenantScope } from "@oxagen/tenancy";
+import { scopedSession } from "@oxagen/ontology/tenant";
+import { generateObjectFor } from "@oxagen/ai";
+import { logger } from "../logger";
+
+/**
+ * Default system prompt instructing the LLM on how to extract cross-entity
+ * relationships from a single entity's property bag. Connectors may override
+ * this via their schema's `semanticInference.ontologyPrompt` field.
+ */
+const DEFAULT_SYSTEM_PROMPT =
+  "You are a knowledge-graph architect. Given a JSON object representing a business entity, " +
+  "identify meaningful relationships it implies with other entities in the knowledge graph. " +
+  "For each relationship output: the target entity type (e.g. Feature, Service, Person, Team), " +
+  "the target entity name, the relationship type in UPPER_SNAKE_CASE (e.g. IMPLEMENTS, BELONGS_TO, " +
+  "ASSIGNED_TO, REFERENCES, DEPENDS_ON), and a confidence score 0.0–1.0. " +
+  "Only emit relationships you are confident about. Be conservative — prefer fewer, higher-quality edges.";
+
+const edgeInferenceSchema = z.object({
+  edges: z
+    .array(
+      z.object({
+        targetType: z
+          .string()
+          .describe("Label of the target entity (e.g. Feature, Service, Person)"),
+        targetName: z
+          .string()
+          .describe("Display name or identifier of the target entity"),
+        relationshipType: z
+          .string()
+          .describe("Relationship type in UPPER_SNAKE_CASE (e.g. IMPLEMENTS, BELONGS_TO)"),
+        confidence: z
+          .number()
+          .min(0)
+          .max(1)
+          .describe("Confidence score 0.0–1.0"),
+      }),
+    )
+    .max(20),
+});
+
+/**
+ * Inngest function that handles `ingestion/entity.infer`.
+ *
+ * Fired by the 6-step ingestion pipeline (step 6) once an EntityNode has been
+ * embedded. For each entity:
+ *   1. Fetch the ontology prompt from the connector schema (or use default).
+ *   2. Call the LLM via @oxagen/ai with the entity's property snapshot.
+ *   3. Write InferredEdge nodes to Neo4j with approvalStatus = "pending".
+ *      Edges at or above a 0.85 auto-accept threshold are written as
+ *      "approved" and immediately materialised as :SEMANTIC_EDGE relationships.
+ *
+ * Concurrency is limited to 8 parallel inferences per org to avoid thundering
+ * herd against the AI Gateway after a large batch sync.
+ */
+export const ingestionSemanticEdgeInfer = inngest.createFunction(
+  {
+    id: "ingestion-semantic-edge-infer",
+    retries: 2,
+    concurrency: { limit: 8, key: "event.data.orgId" },
+  },
+  { event: "ingestion/entity.infer" },
+  async ({ event, step }) => {
+    const { nodeId, entityType, propertiesSnapshot, workspaceId, orgId } = event.data;
+
+    // ── Step 1: Infer edges via LLM ──────────────────────────────────────────
+    const inferResult = await step.run("infer-edges", () =>
+      generateObjectFor({
+        schema: edgeInferenceSchema,
+        system: DEFAULT_SYSTEM_PROMPT,
+        prompt:
+          `Entity type: ${entityType}\n` +
+          `Properties: ${JSON.stringify(propertiesSnapshot, null, 2)}`,
+        telemetry: {
+          orgId,
+          workspaceId,
+          surface: "ingestion",
+          messageId: `semantic-edge-infer:${nodeId}`,
+        },
+      }),
+    );
+
+    const edges = inferResult.object.edges;
+    const AUTO_ACCEPT_THRESHOLD = 0.85;
+
+    logger.info(
+      {
+        nodeId,
+        entityType,
+        orgId,
+        totalEdges: edges.length,
+        autoAccepted: edges.filter((e) => e.confidence >= AUTO_ACCEPT_THRESHOLD).length,
+        pending: edges.filter((e) => e.confidence < AUTO_ACCEPT_THRESHOLD).length,
+      },
+      "ingestion-semantic-edge-infer: inference complete",
+    );
+
+    if (edges.length === 0) {
+      return { nodeId, edgesCreated: 0, autoAccepted: 0 };
+    }
+
+    // ── Step 2: Write InferredEdge nodes + materialise auto-accepted edges ───
+    const result = await step.run("write-inferred-edges", () =>
+      runInTenantScope({ orgId, workspaceId }, async () => {
+        const sess = scopedSession();
+        let pendingCount = 0;
+        let autoAcceptedCount = 0;
+
+        try {
+          const now = new Date().toISOString();
+          const model = `ingestion-semantic-edge-infer`;
+          const promptText = `Entity type: ${entityType}\nProperties: ${JSON.stringify(propertiesSnapshot)}`;
+
+          for (const edge of edges) {
+            const edgeId = crypto.randomUUID();
+            const isAutoAccepted = edge.confidence >= AUTO_ACCEPT_THRESHOLD;
+            const approvalStatus = isAutoAccepted ? "approved" : "pending";
+
+            // Create the InferredEdge node (idempotent: MERGE on sourceNodeId+targetType+targetName+relType)
+            await sess.run(
+              `MERGE (ie:InferredEdge {
+                 orgId: $orgId,
+                 sourceNodeId: $sourceNodeId,
+                 targetType: $targetType,
+                 targetName: $targetName,
+                 relationshipType: $relationshipType
+               })
+               ON CREATE SET
+                 ie.id              = $id,
+                 ie.workspaceId     = $workspaceId,
+                 ie.connectionId    = $connectionId,
+                 ie.confidence      = $confidence,
+                 ie.approvalStatus  = $approvalStatus,
+                 ie.approvedBy      = $approvedBy,
+                 ie.approvedAt      = $approvedAt,
+                 ie.llmModel        = $llmModel,
+                 ie.semanticPrompt  = $semanticPrompt,
+                 ie.inferredAt      = datetime($inferredAt)
+               ON MATCH SET
+                 ie.confidence      = $confidence,
+                 ie.approvalStatus  = CASE WHEN ie.approvalStatus = 'pending' THEN $approvalStatus ELSE ie.approvalStatus END,
+                 ie.llmModel        = $llmModel,
+                 ie.semanticPrompt  = $semanticPrompt,
+                 ie.inferredAt      = datetime($inferredAt)`,
+              {
+                orgId,
+                workspaceId,
+                sourceNodeId: nodeId,
+                targetType: edge.targetType,
+                targetName: edge.targetName,
+                relationshipType: edge.relationshipType,
+                id: edgeId,
+                connectionId: propertiesSnapshot["connectionId"] as string ?? "",
+                confidence: edge.confidence,
+                approvalStatus,
+                approvedBy: isAutoAccepted ? "system:auto-accept" : null,
+                approvedAt: isAutoAccepted ? now : null,
+                llmModel: model,
+                semanticPrompt: promptText,
+                inferredAt: now,
+              },
+            );
+
+            if (isAutoAccepted) {
+              // Materialise as a permanent :SEMANTIC_EDGE relationship immediately.
+              // Find or create the target placeholder node, then create the relationship.
+              await sess.run(
+                `MATCH (src:EntityNode {publicId: $sourceNodeId, orgId: $orgId})
+                 MERGE (tgt:KnowledgeNode {
+                   orgId: $orgId,
+                   workspaceId: $workspaceId,
+                   type: $targetType,
+                   name: $targetName
+                 })
+                 ON CREATE SET
+                   tgt.id        = randomUUID(),
+                   tgt.publicId  = randomUUID(),
+                   tgt.createdAt = datetime()
+                 WITH src, tgt
+                 MERGE (src)-[r:SEMANTIC_EDGE {inferredEdgeId: $edgeId}]->(tgt)
+                 ON CREATE SET
+                   r.type        = $relationshipType,
+                   r.confidence  = $confidence,
+                   r.approvedBy  = $approvedBy,
+                   r.approvedAt  = datetime($approvedAt),
+                   r.createdAt   = datetime()`,
+                {
+                  orgId,
+                  workspaceId,
+                  sourceNodeId: nodeId,
+                  targetType: edge.targetType,
+                  targetName: edge.targetName,
+                  edgeId,
+                  relationshipType: edge.relationshipType,
+                  confidence: edge.confidence,
+                  approvedBy: "system:auto-accept",
+                  approvedAt: now,
+                },
+              );
+              autoAcceptedCount++;
+            } else {
+              pendingCount++;
+            }
+          }
+        } finally {
+          await sess.close();
+        }
+
+        return { pendingCount, autoAcceptedCount };
+      }),
+    );
+
+    logger.info(
+      {
+        nodeId,
+        entityType,
+        orgId,
+        ...result,
+      },
+      "ingestion-semantic-edge-infer: completed",
+    );
+
+    return {
+      nodeId,
+      edgesCreated: edges.length,
+      autoAccepted: result.autoAcceptedCount,
+    };
+  },
+);

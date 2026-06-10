@@ -140,6 +140,22 @@ type Events = {
     };
   };
 
+  // Bulk inference request dispatched by the semantic.edge.infer handler.
+  // The worker fans out per-entity infer events for all matched connections.
+  "ingestion/semantic.edge.infer.requested": {
+    data: {
+      jobId: string;
+      connectionIds: string[];
+      orgId: string;
+      workspaceId: string;
+      maxEdgesPerNode: number;
+      confidenceThreshold: number;
+      semanticEdgePrompt: string;
+      dryRun: boolean;
+      requestedAt: string; // ISO-8601
+    };
+  };
+
   // Async deletion job: remove a connection and optionally its ingested graph data.
   "ingestion/connection.delete": {
     data: {

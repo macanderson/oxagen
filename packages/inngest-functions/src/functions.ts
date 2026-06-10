@@ -22,6 +22,7 @@ import { ingestionOauthRefresh } from "./functions/ingestion.oauth-refresh";
 import { ingestionGithubInitialSync } from "./functions/ingestion.github-initial-sync";
 import { ingestionGithubParseFile } from "./functions/ingestion.github-parse-file";
 import { ingestionGithubInferFeatures } from "./functions/ingestion.github-infer-features";
+import { ingestionSemanticEdgeInfer } from "./functions/ingestion.semantic-edge-infer";
 
 export const functions = [
   billingRollupUsage,
@@ -51,4 +52,5 @@ export const functions = [
   ingestionGithubInitialSync,
   ingestionGithubParseFile,
   ingestionGithubInferFeatures,
+  ingestionSemanticEdgeInfer,
 ];

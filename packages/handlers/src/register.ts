@@ -448,6 +448,10 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () => (await import("./plugin.version.list")).pluginVersionListHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "semantic.edge.approve",
+    async () => (await import("./semantic.edge.approve")).semanticEdgeApproveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "semantic.edge.infer",
     async () => (await import("./semantic.edge.infer")).semanticEdgeInferHandler as CapabilityHandlerFn,
   );
