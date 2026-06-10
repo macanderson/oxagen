@@ -112,6 +112,7 @@ import { webSearchRoute } from "./routes/v1/web.search";
 import { webFetchRoute } from "./routes/v1/web.fetch";
 import { researchSwarmStartRoute } from "./routes/v1/research.swarm.start";
 import { researchSwarmStatusRoute } from "./routes/v1/research.swarm.status";
+import { semanticEdgeRoute } from "./routes/v1/semantic-edge";
 
 export type AppEnv = {
   Variables: {
@@ -255,6 +256,7 @@ orgScoped.route("/web/search", webSearchRoute);
 orgScoped.route("/web/fetch", webFetchRoute);
 orgScoped.route("/research/swarm/start", researchSwarmStartRoute);
 orgScoped.route("/research/swarm/status", researchSwarmStatusRoute);
+orgScoped.route("/semantic-edges", semanticEdgeRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
 
 // Public OAuth callback — HMAC-verified state param is the security boundary.

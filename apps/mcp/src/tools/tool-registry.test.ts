@@ -126,6 +126,9 @@ import { metadata as graphEdgeDeleteMetadata } from "./graph.edge.delete";
 import { metadata as graphCypherMetadata } from "./graph.cypher";
 import { metadata as webSearchMetadata } from "./web.search";
 import { metadata as webFetchMetadata } from "./web.fetch";
+import { metadata as semanticEdgeInferMetadata } from "./semantic.edge.infer";
+import { metadata as semanticEdgeListMetadata } from "./semantic.edge.list";
+import { metadata as semanticEdgeSuggestMetadata } from "./semantic.edge.suggest";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -240,6 +243,9 @@ const allToolMetadata = [
   graphCypherMetadata,
   webSearchMetadata,
   webFetchMetadata,
+  semanticEdgeInferMetadata,
+  semanticEdgeListMetadata,
+  semanticEdgeSuggestMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────

@@ -119,6 +119,9 @@ import { graphEdgeDelete } from "./graph.edge.delete";
 import { graphCypher } from "./graph.cypher";
 import { webSearch } from "./web.search";
 import { webFetch } from "./web.fetch";
+import { semanticEdgeInfer } from "./semantic.edge.infer";
+import { semanticEdgeList } from "./semantic.edge.list";
+import { semanticEdgeSuggest } from "./semantic.edge.suggest";
 
 export {
   apiKeyCreate,
@@ -232,6 +235,9 @@ export {
   graphCypher,
   webSearch,
   webFetch,
+  semanticEdgeInfer,
+  semanticEdgeList,
+  semanticEdgeSuggest,
 };
 
 /**
@@ -354,4 +360,7 @@ export const contracts = [
   graphCypher,
   webSearch,
   webFetch,
+  semanticEdgeInfer,
+  semanticEdgeList,
+  semanticEdgeSuggest,
 ] as const;

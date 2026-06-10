@@ -976,7 +976,45 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     placeholder: "",
   },
 
+  // ── Web Intelligence ────────────────────────────────────────────────────────
+  TAVILY_API_KEY: {
+    group: "Web Intelligence",
+    description: "Tavily API key for web.search capability.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
   // ── CLI / tooling ────────────────────────────────────────────────────────────
+  OXAGEN_API_TOKEN: {
+    group: "CLI",
+    description: "API token used by the CLI to authenticate requests; falls back to the value stored in ~/.oxagen/config.json.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_ORG_ID: {
+    group: "CLI",
+    description: "Default org slug for CLI commands; falls back to the value stored in ~/.oxagen/config.json.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_WORKSPACE_ID: {
+    group: "CLI",
+    description: "Default workspace slug for CLI commands; falls back to the value stored in ~/.oxagen/config.json.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_API_URL: {
     group: "CLI",
     description:
