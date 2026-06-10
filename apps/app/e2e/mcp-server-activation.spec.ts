@@ -69,12 +69,6 @@ test.describe("mcp-server-activation — with servers", () => {
     await fixture.cleanup();
   });
 
-  // Helper: navigate to the ask page as the fixture user.
-  async function gotoAsk(page: Parameters<typeof loginAs>[0] & { goto: (url: string) => Promise<unknown> }, context: Parameters<typeof loginAs>[0]) {
-    await loginAs(context as Parameters<typeof loginAs>[0], fixture.userEmail, E2E_TEST_PASSWORD);
-    await (page as { goto: (url: string) => Promise<unknown> }).goto(`/${fixture.orgSlug}/${fixture.workspaceSlug}/ask`);
-  }
-
   test("picker button is visible when servers are installed", async ({
     page,
     context,

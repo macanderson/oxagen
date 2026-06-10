@@ -9,16 +9,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // lines floor 85 (measured 90.26); target 80 — already above target
-      // branches floor 75 (measured 80.43); target 75 — at target
-      // functions floor 73 (measured 73.97 on main too; the 75 floor was never
-      //   gated — package not in recent affected sets — and is not a regression
-      //   from the RLS PR). Raise via targeted handler tests (OXA-1553).
+      // lines floor 91 (measured 91.44); branches floor 83 (measured 83.43);
+      // functions floor 76 (measured 76.13) — ratcheted after serverAllowlist tests.
       thresholds: {
-        lines: 85,
-        branches: 75,
-        functions: 73,
-        statements: 85,
+        lines: 91,
+        branches: 83,
+        functions: 76,
+        statements: 91,
       },
     },
   },

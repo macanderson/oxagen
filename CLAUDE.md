@@ -116,6 +116,39 @@ When dispatching subagents for implementation, bug fixes, or refactoring work:
   commits are actually on main, not stranded in worktrees. Cherry-pick or
   consolidate if needed.
 
+## Bug-fix workflow — mandatory regression testing
+
+Every bug fix follows this sequence:
+
+1. **Dispatch a write-capable agent to diagnose and fix the bug.**
+   - Use `general-purpose` or implementation agents, never read-only architects.
+   - Agent owns the fix end-to-end: root cause, code changes, running tests locally.
+   - Agent commits to main and verifies commits are actually on main (not in worktree).
+
+2. **Invoke the regression-test-judge agent to determine test type.**
+   - Pass the bug description and fix summary to `regression-test-judge`.
+   - Judge returns: test type (unit | e2e | both), rationale, test scope, edge cases.
+   - This step is **non-negotiable**; do not skip it or defer test decisions.
+
+3. **Write the regression test(s) determined by the judge.**
+   - Unit tests: logic fixes, isolated modules, pure functions.
+   - E2E tests: user-facing changes, API routes, database, forms, navigation.
+   - Both: fixes spanning multiple layers.
+   - Tests must be committed alongside the fix in the same PR.
+
+4. **Run the full CI gate and verify passing before declaring done.**
+   - `pnpm gate` locally (lint, typecheck, coverage, test, build).
+   - Verify test coverage remains at or above the package's threshold.
+   - If coverage dropped, the regression test was incomplete; add more assertions.
+
+5. **For any edge cases identified by the judge, add additional test cases.**
+   - Example: if the judge identifies "boundary conditions" as an edge case,
+     add test cases for values at the boundary, not just happy path.
+
+**Non-negotiable:** No bug fix ships without a regression test. No test is
+written without the judge determining its type first. No claim of "done" without
+CI green and coverage verified.
+
 ## Working with this user
 
 The user routinely sends **multi-part prompts** — a single message asks for
@@ -196,6 +229,10 @@ them too, so name the relevant skill in an agent's prompt.
   fan-out auditors → adversarial verify → safe auto-fix in a worktree → Linear
   tickets for approvals → interactive HTML dashboard. Use when asked to "audit
   my code", "give me an audit report", or score package health.
+- **`regression-test-judge`** — LLM judge agent that determines whether a bug fix
+  needs a unit test, E2E test, or both by analyzing scope, layers touched, and
+  user-facing impact. Use after every bug fix to determine the regression test
+  type before writing tests.
 
 Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first. Building UI →
 `coss-ui` (component API) + `oxagen-design-system` (identity) + `frontend-patterns`
