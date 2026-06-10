@@ -16,8 +16,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
     "@oxagen/ai": "workspace:*",
     "@oxagen/billing": "workspace:*",
+    "@oxagen/crypto": "workspace:*",
     "@oxagen/ingestion": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
@@ -29,10 +31,12 @@
     "@oxagen/ontology": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "@oxagen/web": "workspace:*",
+    "ai": "6.0.197",
     "docx": "9.7.1",
     "drizzle-orm": "0.45.2",
     "exceljs": "4.4.0",
     "fflate": "0.8.3",
+    "hono": "4.12.23",
     "pdf-lib": "1.17.1",
     "pino": "9.14.0",
     "pptxgenjs": "4.0.1",
