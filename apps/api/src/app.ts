@@ -113,6 +113,11 @@ import { webFetchRoute } from "./routes/v1/web.fetch";
 import { researchSwarmStartRoute } from "./routes/v1/research.swarm.start";
 import { researchSwarmStatusRoute } from "./routes/v1/research.swarm.status";
 import { semanticEdgeRoute } from "./routes/v1/semantic-edge";
+import { repoRoute } from "./routes/v1/repo";
+import { integrationRoute } from "./routes/v1/integration";
+import { pluginSchemaRoute, pluginVersionRoute } from "./routes/v1/plugin-schema";
+import { graphNodeListRoute } from "./routes/v1/graph.node.list";
+import { graphStatsRoute } from "./routes/v1/graph.stats";
 
 export type AppEnv = {
   Variables: {
@@ -257,6 +262,12 @@ orgScoped.route("/web/fetch", webFetchRoute);
 orgScoped.route("/research/swarm/start", researchSwarmStartRoute);
 orgScoped.route("/research/swarm/status", researchSwarmStatusRoute);
 orgScoped.route("/semantic-edges", semanticEdgeRoute);
+orgScoped.route("/repos", repoRoute);
+orgScoped.route("/integrations", integrationRoute);
+orgScoped.route("/plugin-schema", pluginSchemaRoute);
+orgScoped.route("/plugin-versions", pluginVersionRoute);
+orgScoped.route("/graph/nodes", graphNodeListRoute);
+orgScoped.route("/graph/stats", graphStatsRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
 
 // Public OAuth callback — HMAC-verified state param is the security boundary.
