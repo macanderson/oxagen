@@ -10,7 +10,6 @@
 
 import * as React from "react";
 import { RadioGroup, Radio } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ShieldCheck } from "lucide-react";
 import { FieldRenderer } from "./field-renderer";

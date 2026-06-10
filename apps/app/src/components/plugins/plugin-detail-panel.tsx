@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, X, Plug } from "lucide-react";
@@ -127,9 +128,11 @@ export function PluginDetailPanel({
       {/* Header */}
       <div className="flex items-start gap-3 border-b border-border/40 p-6">
         {detail.icons[0] ? (
-          <img
+          <Image
             src={detail.icons[0].src}
             alt=""
+            width={48}
+            height={48}
             className="h-12 w-12 rounded-xl object-contain flex-shrink-0"
             aria-hidden="true"
           />

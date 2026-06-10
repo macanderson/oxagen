@@ -66,6 +66,9 @@ function buildModeOptions(
 export function SyncCadencePanel() {
   const { schema, formState, setFieldValue } = useConnectorSchema();
 
+  // Hook must be declared unconditionally before any early returns
+  const [intervalError, setIntervalError] = React.useState<string | null>(null);
+
   const sync = schema?.sync;
   if (!sync) return null;
 
@@ -86,8 +89,6 @@ export function SyncCadencePanel() {
 
   const minInterval = sync.polling?.minIntervalSeconds ?? 60;
   const maxInterval = (sync.polling as { maxIntervalSeconds?: number } | undefined)?.maxIntervalSeconds ?? 86400;
-
-  const [intervalError, setIntervalError] = React.useState<string | null>(null);
 
   const handleIntervalChange = (val: string) => {
     const n = parseInt(val, 10);

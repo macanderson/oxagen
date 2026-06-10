@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import Image from "next/image";
 import {
   Dialog,
   DialogPopup,
@@ -327,9 +328,11 @@ export function MarketplaceModal({
 
                               <div className="flex items-start gap-2 pr-6">
                                 {srv.icons[0] ? (
-                                  <img
+                                  <Image
                                     src={srv.icons[0].src}
                                     alt=""
+                                    width={32}
+                                    height={32}
                                     className="h-8 w-8 rounded object-contain flex-shrink-0"
                                     aria-hidden="true"
                                   />

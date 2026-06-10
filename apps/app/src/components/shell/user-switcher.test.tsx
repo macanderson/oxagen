@@ -31,6 +31,7 @@ vi.mock("@oxagen/ui", () => ({
 }));
 
 vi.mock("next/image", () => ({
+  // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim; real next/image requires Next.js runtime
   default: ({ src, alt, ...rest }: { src: string; alt: string; [key: string]: unknown }) =>
     <img src={src} alt={alt} {...rest} />,
 }));

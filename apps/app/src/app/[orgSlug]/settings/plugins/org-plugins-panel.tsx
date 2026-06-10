@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import Image from "next/image";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -411,9 +412,11 @@ function AllowListSection({
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {listing.iconUrl ? (
-                          <img
+                          <Image
                             src={listing.iconUrl}
                             alt=""
+                            width={24}
+                            height={24}
                             className="h-6 w-6 rounded object-contain flex-shrink-0"
                             aria-hidden="true"
                           />

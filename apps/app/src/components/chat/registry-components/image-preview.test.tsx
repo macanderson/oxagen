@@ -18,6 +18,7 @@ afterEach(cleanup);
 
 // Stub next/image so jsdom can handle it
 vi.mock("next/image", () => ({
+  // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim; real next/image requires Next.js runtime
   default: ({
     src,
     alt,

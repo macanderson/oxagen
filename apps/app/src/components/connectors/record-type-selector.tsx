@@ -19,17 +19,20 @@ export function RecordTypeSelector() {
   const { schema, formState, setFieldValue } = useConnectorSchema();
 
   const recordTypes = schema?.recordTypes;
-  if (!recordTypes || recordTypes.items.length === 0) return null;
 
   // Initialize from formState or defaultEnabled
+  // Hook must be called unconditionally — guard is applied after
   const selected: string[] = React.useMemo(() => {
+    if (!recordTypes || recordTypes.items.length === 0) return [];
     const stored = formState.values[RECORD_TYPE_KEY];
     if (Array.isArray(stored)) return stored as string[];
     // Default: all defaultEnabled items
     return recordTypes.items
       .filter((rt) => rt.defaultEnabled)
       .map((rt) => rt.id);
-  }, [formState.values, recordTypes.items]);
+  }, [formState.values, recordTypes]);
+
+  if (!recordTypes || recordTypes.items.length === 0) return null;
 
   const toggle = (id: string) => {
     if (recordTypes.selectionMode === "single") {

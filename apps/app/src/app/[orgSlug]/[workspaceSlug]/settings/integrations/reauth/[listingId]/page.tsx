@@ -7,6 +7,7 @@ import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org
 import { Plug, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import Image from "next/image";
 
 // Sentinel workspaceId for org-only DB queries. — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
@@ -58,9 +59,11 @@ export default async function ReauthPage({
       {/* Plugin icon */}
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border/60 bg-muted/60">
         {listing.iconUrl ? (
-          <img
+          <Image
             src={listing.iconUrl}
             alt=""
+            width={32}
+            height={32}
             className="h-8 w-8 rounded object-contain"
             aria-hidden="true"
           />
