@@ -13,12 +13,49 @@
  *   - Open state: Install selected button is disabled when nothing selected
  *   - Shows server cards when fetch succeeds
  *   - Renders error message when fetch fails
+ *   - fetchServers calls GET (not POST) with URLSearchParams
+ *   - Tab switching changes activeTab and clears selection
+ *   - Auth filter chip click triggers refetch
+ *   - Search input triggers debounced fetchServers
+ *   - Selecting a server enables bulk install button and shows selected count
+ *   - Bulk install success calls installBulkAction and closes modal
+ *   - Bulk install error displays error message
+ *   - Clicking server card (not denied) opens detail panel
+ *   - Load more button triggers paginated fetch
+ *   - Server with icon renders img element
+ *   - Server with null title falls back to name
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, waitFor, cleanup, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MarketplaceModal } from "./marketplace-modal";
+
+// Mock PluginDetailPanel to avoid its own fetch calls.
+vi.mock("./plugin-detail-panel", () => ({
+  PluginDetailPanel: ({
+    catalogId,
+    onClose,
+    onInstalled,
+  }: {
+    catalogId: string;
+    onClose: () => void;
+    onInstalled: () => void;
+    orgSlug: string;
+    pluginType: string;
+    isDenied: boolean;
+    installAction: unknown;
+  }) => (
+    <div data-testid={`detail-panel-${catalogId}`}>
+      <button type="button" onClick={onClose} data-testid="detail-panel-close">
+        Close
+      </button>
+      <button type="button" onClick={onInstalled} data-testid="detail-panel-install">
+        Install
+      </button>
+    </div>
+  ),
+}));
 
 afterEach(cleanup);
 
@@ -46,6 +83,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.clearAllTimers();
 });
 
 describe("MarketplaceModal — closed", () => {
@@ -181,6 +219,432 @@ describe("MarketplaceModal — server cards", () => {
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(
       () => expect(screen.getByText("Server error")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+  });
+});
+
+describe("MarketplaceModal — fetch method", () => {
+  it("calls GET (not POST) with URLSearchParams including pluginType", async () => {
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    const url: string = mockFetch.mock.calls[0][0] as string;
+    expect(url).toMatch(/^\/api\/v1\/plugin\/catalog\/browse\?/);
+    expect(url).toContain("pluginType=mcp_server");
+    expect(url).not.toMatch(/undefined/);
+    // Verify no second argument (no POST body)
+    expect(mockFetch.mock.calls[0][1]).toBeUndefined();
+  });
+
+  it("includes search param when search is set", async () => {
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+
+    const input = screen.getByPlaceholderText("Search…");
+    await userEvent.type(input, "github");
+    // The debounce is 300ms; waitFor polls up to 2s.
+    await waitFor(
+      () => {
+        const calls = mockFetch.mock.calls.map((c) => c[0] as string);
+        expect(calls.some((url) => url.includes("search=github"))).toBe(true);
+      },
+      { timeout: 2000 },
+    );
+  });
+
+  it("includes authKind param when auth filter is set", async () => {
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+
+    await userEvent.click(screen.getByTestId("marketplace-filter-auth-oauth"));
+    await waitFor(
+      () => {
+        const calls = mockFetch.mock.calls.map((c) => c[0] as string);
+        expect(calls.some((url) => url.includes("authKind=oauth"))).toBe(true);
+      },
+      { timeout: 3000 },
+    );
+  });
+});
+
+describe("MarketplaceModal — tab switching", () => {
+  it("switches to Integrations tab on click", async () => {
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+
+    await userEvent.click(screen.getByTestId("marketplace-tab-integration"));
+    await waitFor(
+      () => {
+        const calls = mockFetch.mock.calls.map((c) => c[0] as string);
+        expect(calls.some((url) => url.includes("pluginType=integration"))).toBe(true);
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it("switches to Content Tools tab on click", async () => {
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+
+    await userEvent.click(screen.getByTestId("marketplace-tab-content_tool"));
+    await waitFor(
+      () => {
+        const calls = mockFetch.mock.calls.map((c) => c[0] as string);
+        expect(calls.some((url) => url.includes("pluginType=content_tool"))).toBe(true);
+      },
+      { timeout: 3000 },
+    );
+  });
+});
+
+describe("MarketplaceModal — selection and bulk install", () => {
+  const serverResponse = {
+    ok: true,
+    json: () =>
+      Promise.resolve({
+        servers: [
+          {
+            id: "srv-a",
+            name: "tool-a",
+            title: "Tool A",
+            description: "desc",
+            icons: [],
+            transportTypes: ["http"],
+            authKind: "none",
+            categories: [],
+            version: "1.0",
+          },
+        ],
+        nextOffset: null,
+        total: 1,
+      }),
+    text: () => Promise.resolve(""),
+  };
+
+  it("selecting a server enables bulk install and shows count", async () => {
+    mockFetch.mockResolvedValue(serverResponse);
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-server-card-srv-a")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+
+    await userEvent.click(screen.getByTestId("marketplace-select-srv-a"));
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect(screen.getByTestId("marketplace-bulk-install-btn")).not.toBeDisabled();
+  });
+
+  it("deselecting a server removes it from selection", async () => {
+    mockFetch.mockResolvedValue(serverResponse);
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-server-card-srv-a")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+
+    const checkbox = screen.getByTestId("marketplace-select-srv-a");
+    await userEvent.click(checkbox); // select
+    await userEvent.click(checkbox); // deselect
+    expect(screen.getByText(/select plugins to bulk-install/i)).toBeInTheDocument();
+  });
+
+  it("bulk install success calls installBulkAction and closes modal", async () => {
+    mockFetch.mockResolvedValue(serverResponse);
+    const onOpenChange = vi.fn();
+    const bulkAction = vi.fn().mockResolvedValue({ ok: true });
+    render(
+      <MarketplaceModal
+        {...defaultProps}
+        open
+        onOpenChange={onOpenChange}
+        installBulkAction={bulkAction}
+      />,
+    );
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-server-card-srv-a")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+
+    await userEvent.click(screen.getByTestId("marketplace-select-srv-a"));
+    await userEvent.click(screen.getByTestId("marketplace-bulk-install-btn"));
+
+    await waitFor(() => expect(bulkAction).toHaveBeenCalledWith({
+      orgSlug: "acme",
+      items: [{ catalogServerId: "srv-a", pluginType: "mcp_server" }],
+    }));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  it("bulk install error displays error message", async () => {
+    mockFetch.mockResolvedValue(serverResponse);
+    const bulkAction = vi.fn().mockResolvedValue({ ok: false, error: "Install failed" });
+    render(
+      <MarketplaceModal {...defaultProps} open installBulkAction={bulkAction} />,
+    );
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-server-card-srv-a")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+
+    await userEvent.click(screen.getByTestId("marketplace-select-srv-a"));
+    await userEvent.click(screen.getByTestId("marketplace-bulk-install-btn"));
+
+    await waitFor(
+      () => expect(screen.getByText("Install failed")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+  });
+});
+
+describe("MarketplaceModal — detail panel", () => {
+  const serverResponse = {
+    ok: true,
+    json: () =>
+      Promise.resolve({
+        servers: [
+          {
+            id: "srv-b",
+            name: "tool-b",
+            title: "Tool B",
+            description: "desc b",
+            icons: [],
+            transportTypes: ["http"],
+            authKind: "oauth",
+            categories: [],
+            version: "1.0",
+          },
+        ],
+        nextOffset: null,
+        total: 1,
+      }),
+    text: () => Promise.resolve(""),
+  };
+
+  it("clicking a server card opens the detail panel", async () => {
+    mockFetch.mockResolvedValue(serverResponse);
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-server-card-srv-b")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+
+    await userEvent.click(screen.getByTestId("marketplace-server-card-srv-b"));
+    await waitFor(
+      () => expect(screen.getByTestId("detail-panel-srv-b")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+  });
+
+  it("closing the detail panel hides it", async () => {
+    mockFetch.mockResolvedValue(serverResponse);
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-server-card-srv-b")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+
+    await userEvent.click(screen.getByTestId("marketplace-server-card-srv-b"));
+    await waitFor(() => expect(screen.getByTestId("detail-panel-srv-b")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByTestId("detail-panel-close"));
+    await waitFor(
+      () => expect(screen.queryByTestId("detail-panel-srv-b")).not.toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+  });
+
+  it("onInstalled callback closes modal", async () => {
+    mockFetch.mockResolvedValue(serverResponse);
+    const onOpenChange = vi.fn();
+    render(<MarketplaceModal {...defaultProps} open onOpenChange={onOpenChange} />);
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-server-card-srv-b")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+
+    await userEvent.click(screen.getByTestId("marketplace-server-card-srv-b"));
+    await waitFor(() => expect(screen.getByTestId("detail-panel-srv-b")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByTestId("detail-panel-install"));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("clicking a denied server card does NOT open detail panel", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          servers: [
+            {
+              id: "srv-denied2",
+              name: "blocked",
+              title: "Blocked",
+              description: "desc",
+              icons: [],
+              transportTypes: [],
+              authKind: "none",
+              categories: [],
+              version: "1.0",
+            },
+          ],
+          nextOffset: null,
+          total: 1,
+        }),
+      text: () => Promise.resolve(""),
+    });
+    render(<MarketplaceModal {...defaultProps} open deniedNames={["blocked"]} />);
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-server-card-srv-denied2")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+
+    await userEvent.click(screen.getByTestId("marketplace-server-card-srv-denied2"));
+    expect(screen.queryByTestId("detail-panel-srv-denied2")).not.toBeInTheDocument();
+  });
+});
+
+describe("MarketplaceModal — load more", () => {
+  it("shows Load more button when nextOffset is non-null and calls paginated fetch", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          servers: [
+            {
+              id: "srv-p1",
+              name: "page1",
+              title: "Page 1",
+              description: "desc",
+              icons: [],
+              transportTypes: [],
+              authKind: "none",
+              categories: [],
+              version: "1.0",
+            },
+          ],
+          nextOffset: 30,
+          total: 60,
+        }),
+      text: () => Promise.resolve(""),
+    });
+
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-load-more")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({ servers: [], nextOffset: null, total: 60 }),
+      text: () => Promise.resolve(""),
+    });
+
+    await userEvent.click(screen.getByTestId("marketplace-load-more"));
+    await waitFor(
+      () => {
+        const lastUrl = mockFetch.mock.calls.at(-1)?.[0] as string;
+        expect(lastUrl).toContain("offset=30");
+      },
+      { timeout: 3000 },
+    );
+  });
+});
+
+describe("MarketplaceModal — server card variants", () => {
+  it("renders img when server has icon", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          servers: [
+            {
+              id: "srv-icon",
+              name: "with-icon",
+              title: "With Icon",
+              description: "desc",
+              icons: [{ src: "https://example.com/icon.png" }],
+              transportTypes: [],
+              authKind: "none",
+              categories: [],
+              version: "1.0",
+            },
+          ],
+          nextOffset: null,
+          total: 1,
+        }),
+      text: () => Promise.resolve(""),
+    });
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-server-card-srv-icon")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    expect(document.querySelector("img[src='https://example.com/icon.png']")).not.toBeNull();
+  });
+
+  it("falls back to server name when title is null", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          servers: [
+            {
+              id: "srv-no-title",
+              name: "raw-name",
+              title: null,
+              description: "desc",
+              icons: [],
+              transportTypes: [],
+              authKind: "secret",
+              categories: [],
+              version: "1.0",
+            },
+          ],
+          nextOffset: null,
+          total: 1,
+        }),
+      text: () => Promise.resolve(""),
+    });
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(
+      () => expect(screen.getByText("raw-name")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+  });
+
+  it("denied card with title uses title in aria-label", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          servers: [
+            {
+              id: "srv-denied-titled",
+              name: "blocked-named",
+              title: "Blocked Titled",
+              description: "desc",
+              icons: [],
+              transportTypes: [],
+              authKind: "none",
+              categories: [],
+              version: "1.0",
+            },
+          ],
+          nextOffset: null,
+          total: 1,
+        }),
+      text: () => Promise.resolve(""),
+    });
+    render(<MarketplaceModal {...defaultProps} open deniedNames={["blocked-named"]} />);
+    await waitFor(
+      () =>
+        expect(
+          screen.getByRole("button", {
+            name: "Blocked Titled — blocked by your organization's admins",
+          }),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
   });
