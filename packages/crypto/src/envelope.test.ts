@@ -217,6 +217,24 @@ describe("envelope encryption", () => {
     ).rejects.toThrow(/truncated/);
   });
 
+  it("ct+tag segment shorter than AES-GCM tag size: decrypt throws", async () => {
+    // Build a syntactically valid envelope where ctLen=5 (< 16 = AES_GCM_TAG_BYTES).
+    // ivLen=12, encDekLen=32, ctLen=5 → total 9+12+32+5=58 bytes (passes truncation check).
+    const ctLen = 5;
+    const ivLen = 12;
+    const encDekLen = 32;
+    const buf = Buffer.alloc(9 + ivLen + encDekLen + ctLen, 0);
+    let off = 0;
+    buf.writeUInt8(0x01, off); off += 1;
+    buf.writeUInt16BE(ivLen, off); off += 2;
+    buf.writeUInt16BE(encDekLen, off); off += 2;
+    buf.writeUInt32BE(ctLen, off);
+
+    await expect(
+      decrypt(buf, FAKE_KEY_ID, { adapter: makeAdapter() }),
+    ).rejects.toThrow(/too short.*auth tag/i);
+  });
+
   it("each encrypt call produces a different ciphertext (fresh IV + DEK)", async () => {
     const adapter = makeAdapter();
     const ct1 = await encrypt("same-plaintext", FAKE_KEY_ID, { adapter });

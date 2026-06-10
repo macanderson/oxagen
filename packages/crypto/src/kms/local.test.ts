@@ -58,6 +58,15 @@ describe("createLocalKmsAdapter", () => {
   it("rejects a master key that is not 32 bytes", () => {
     expect(() => createLocalKmsAdapter(randomBytes(16))).toThrow(/32 bytes/);
   });
+
+  it("decryptDataKey: rejects a wrapped key buffer with unexpected length", async () => {
+    const adapter = createLocalKmsAdapter(randomBytes(32));
+    // WRAPPED_LEN = IV(12) + TAG(16) + DEK(32) = 60; pass a 10-byte buffer instead.
+    const wrongLength = randomBytes(10);
+    await expect(adapter.decryptDataKey(wrongLength, KEY_ID)).rejects.toThrow(
+      /unexpected length/,
+    );
+  });
 });
 
 describe("loadMasterKey", () => {
