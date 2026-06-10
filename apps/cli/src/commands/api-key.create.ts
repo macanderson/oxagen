@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
+import { getOrgId, getWorkspaceId } from "../lib/config.js";
 
 interface ApiKeyResponse {
   key?: string;
@@ -18,7 +19,7 @@ export const apiKeyCreateCommand = new Command("create")
     try {
       const data = await apiRequest<ApiKeyResponse>("/api-keys", {
         method: "POST",
-        body: JSON.stringify({ name, org: options.org, workspace: options.workspace }),
+        body: JSON.stringify({ name, org: options.org ?? getOrgId(), workspace: options.workspace ?? getWorkspaceId() }),
       });
       const secret = data.key ?? data.token;
       console.log(`✓ API key created: ${data.id ?? "unknown"}`);

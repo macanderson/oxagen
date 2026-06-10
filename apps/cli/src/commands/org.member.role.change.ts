@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface RoleChangeResponse {
   userId: string;
@@ -21,7 +22,7 @@ export const orgMemberRoleChangeCommand = new Command("member:role-change")
           body: JSON.stringify({
             user_id: options.user,
             role: options.role,
-            org_id: options.org,
+            org_id: options.org ?? getOrgId(),
           }),
         }
       );

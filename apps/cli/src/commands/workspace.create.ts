@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface WorkspaceResponse {
   workspace?: { slug?: string; id?: string; name?: string };
@@ -17,7 +18,7 @@ export const workspaceCreateCommand = new Command("create")
     try {
       const data = await apiRequest<WorkspaceResponse>("/workspaces", {
         method: "POST",
-        body: JSON.stringify({ name, org: options.org, slug: options.slug }),
+        body: JSON.stringify({ name, org: options.org ?? getOrgId(), slug: options.slug }),
       });
       const ws = data.workspace ?? data;
       console.log(`✓ Workspace created: ${(ws as WorkspaceResponse["workspace"])?.slug ?? (ws as WorkspaceResponse).slug ?? "unknown"}`);

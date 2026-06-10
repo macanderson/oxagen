@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getWorkspaceId } from "../lib/config.js";
 
 interface ArchiveResponse {
   id: string;
@@ -20,7 +21,7 @@ export const archiveCreateCommand = new Command("create")
         body: JSON.stringify({
           conversation_id: options.conversation,
           name: options.name,
-          workspace_id: options.workspace,
+          workspace_id: options.workspace ?? getWorkspaceId(),
         }),
       });
       console.log(`✓ Archive created`);

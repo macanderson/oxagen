@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest } from "../lib/api-client.js";
+import { getWorkspaceId } from "../lib/config.js";
 
 export const workspaceModelSettingsWriteCommand = new Command("write")
   .description("Update model settings for a workspace")
@@ -11,7 +12,7 @@ export const workspaceModelSettingsWriteCommand = new Command("write")
       const result = await apiRequest("/workspace/model-settings/write", {
         method: "POST",
         body: JSON.stringify({
-          workspace: options.workspace,
+          workspace: options.workspace ?? getWorkspaceId(),
           key: options.key,
           value: options.value,
         }),

@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
 
  
 mocks.embedTextMock.mockImplementation(async () => new Array(1536).fill(0.1));
-mocks.writeMemoryMock.mockImplementation(async () => ({ memoryId: "m_new" }));
+mocks.writeMemoryMock.mockImplementation(async () => ({ memoryId: "m_new", edgesCreated: 0 }));
 // Default: KG enabled so existing tests are unaffected.
 mocks.isKnowledgeGraphEnabledMock.mockReturnValue(true);
 
@@ -60,6 +60,26 @@ describe("agent.memory.write handler", () => {
     expect(arg.kind).toBe("constraint");
     expect(res.memoryId).toBe("m_new");
     expect(res.nodeRef).toBe("Function:foo");
+    expect(res.edgesCreated).toBe(0);
+  });
+
+  it("passes relatedNodeIds to writeMemory and surfaces edgesCreated", async () => {
+    mocks.writeMemoryMock.mockImplementationOnce(async () => ({ memoryId: "m_rel", edgesCreated: 3 }));
+    const res = await agentMemoryWriteHandler(
+      {
+        nodeRef: "Function:baz",
+        weight: "high",
+        kind: "constraint",
+        lesson: "always close sessions",
+        source: "feature",
+        relatedNodeIds: ["kn_1", "kn_2", "kn_3"],
+      },
+      CTX,
+    );
+    const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.relatedNodeIds).toEqual(["kn_1", "kn_2", "kn_3"]);
+    expect(res.memoryId).toBe("m_rel");
+    expect(res.edgesCreated).toBe(3);
   });
 
   it("no-ops when knowledge graph is disabled — returns valid output without touching Neo4j or embeddings", async () => {
@@ -76,9 +96,10 @@ describe("agent.memory.write handler", () => {
       CTX,
     );
 
-    // Output must be a valid AgentMemoryWriteOutput (memoryId + nodeRef both strings).
+    // Output must be a valid AgentMemoryWriteOutput (memoryId + nodeRef + edgesCreated).
     expect(typeof res.memoryId).toBe("string");
     expect(res.nodeRef).toBe("Function:bar");
+    expect(res.edgesCreated).toBe(0);
     // Neither the embedding model nor Neo4j must have been called.
     expect(mocks.embedTextMock).not.toHaveBeenCalled();
     expect(mocks.writeMemoryMock).not.toHaveBeenCalled();

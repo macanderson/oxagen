@@ -87,6 +87,8 @@ import "./contracts/plugin.settings.set_auth_alerts";
 import "./contracts/plugin.workspace.set_enabled";
 import "./contracts/privacy.data.erase";
 import "./contracts/privacy.data.export";
+import "./contracts/research.swarm.start";
+import "./contracts/research.swarm.status";
 import "./contracts/prompt.settings.read";
 import "./contracts/prompt.settings.write";
 import "./contracts/skill.workspace.list";

@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 export const pluginUninstallCommand = new Command("uninstall")
   .description("Uninstall a plugin")
@@ -10,7 +11,7 @@ export const pluginUninstallCommand = new Command("uninstall")
     try {
       await apiRequest("/plugins/uninstall", {
         method: "POST",
-        body: JSON.stringify({ pluginId: id, org: options.org }),
+        body: JSON.stringify({ pluginId: id, org: options.org ?? getOrgId() }),
       });
       console.log(`✓ Plugin ${id} uninstalled`);
     } catch (err) {

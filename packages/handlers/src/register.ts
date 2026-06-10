@@ -341,4 +341,50 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./connection.mappings.suggest")).connectionMappingsSuggestHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "graph.node.upsert",
+    async () => (await import("./graph.node.upsert")).graphNodeUpsertHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "graph.node.get",
+    async () => (await import("./graph.node.get")).graphNodeGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "graph.node.delete",
+    async () => (await import("./graph.node.delete")).graphNodeDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "graph.node.search",
+    async () => (await import("./graph.node.search")).graphNodeSearchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "graph.edge.upsert",
+    async () => (await import("./graph.edge.upsert")).graphEdgeUpsertHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "graph.edge.delete",
+    async () => (await import("./graph.edge.delete")).graphEdgeDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "graph.cypher",
+    async () => (await import("./graph.cypher")).graphCypherHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "web.search",
+    async () => (await import("./web.search")).webSearchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "web.fetch",
+    async () => (await import("./web.fetch")).webFetchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "research.swarm.start",
+    async () =>
+      (await import("./research.swarm.start")).researchSwarmStartHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "research.swarm.status",
+    async () =>
+      (await import("./research.swarm.status")).researchSwarmStatusHandler as CapabilityHandlerFn,
+  );
 });

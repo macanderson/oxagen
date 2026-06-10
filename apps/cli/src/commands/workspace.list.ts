@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface Workspace {
   id?: string;
@@ -18,7 +19,7 @@ export const workspaceListCommand = new Command("list")
   .action(async (options: { org?: string }) => {
     requireAuth();
     try {
-      const qs = options.org ? `?org=${options.org}` : "";
+      const qs = options.org ? `?org=${options.org ?? getOrgId()}` : "";
       const data = await apiRequest<WorkspacesResponse>(`/workspaces${qs}`);
       const workspaces = data.workspaces ?? data.data ?? [];
       if (workspaces.length === 0) {

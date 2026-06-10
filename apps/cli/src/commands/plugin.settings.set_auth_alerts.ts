@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId, getWorkspaceId } from "../lib/config.js";
 
 interface PluginSettingsSetAuthAlertsResponse {
   ok: boolean;
@@ -20,8 +21,8 @@ export const pluginSettingsSetAuthAlertsCommand = new Command("set-auth-alerts")
         body: JSON.stringify({
           sendEmail,
           roles,
-          org_id: options.org,
-          workspace_id: options.workspace,
+          org_id: options.org ?? getOrgId(),
+          workspace_id: options.workspace ?? getWorkspaceId(),
         }),
       });
       console.log(data.ok ? `✓ Auth alert settings updated (roles: ${roles.join(", ")}, email: ${sendEmail})` : "Update failed");

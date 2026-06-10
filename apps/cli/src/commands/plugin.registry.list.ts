@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { apiRequest } from "../lib/api-client.js";
 
+
 export const pluginRegistryListCommand = new Command("list")
   .description("List available plugin registries")
   .option("-o, --org-scoped", "Show only org-scoped registries")

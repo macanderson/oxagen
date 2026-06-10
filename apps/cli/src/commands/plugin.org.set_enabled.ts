@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface PluginOrgSetEnabledResponse {
   ok: boolean;
@@ -18,7 +19,7 @@ export const pluginOrgSetEnabledCommand = new Command("set-enabled")
         body: JSON.stringify({
           orgListingId: options.listing,
           enabled,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(data.ok ? `✓ Plugin listing ${options.listing} ${enabled ? "enabled" : "disabled"}` : "Operation failed");

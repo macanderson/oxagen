@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface UninstallResponse {
   id: string;
@@ -17,7 +18,7 @@ export const pluginOrgUninstallCommand = new Command("plugin:uninstall")
         "/plugin/org/uninstall",
         {
           method: "POST",
-          body: JSON.stringify({ plugin_id: options.plugin, org_id: options.org }),
+          body: JSON.stringify({ plugin_id: options.plugin, org_id: options.org ?? getOrgId() }),
         }
       );
       console.log(`✓ Plugin uninstalled (status: ${data.status})`);

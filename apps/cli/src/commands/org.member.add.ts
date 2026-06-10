@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 export const orgMemberAddCommand = new Command("add")
   .description("Add a member to the organization")
@@ -11,7 +12,7 @@ export const orgMemberAddCommand = new Command("add")
     try {
       await apiRequest("/org/members", {
         method: "POST",
-        body: JSON.stringify({ email, org: options.org, role: options.role }),
+        body: JSON.stringify({ email, org: options.org ?? getOrgId(), role: options.role }),
       });
       console.log(`✓ Added ${email} as ${options.role ?? "member"}`);
     } catch (err) {

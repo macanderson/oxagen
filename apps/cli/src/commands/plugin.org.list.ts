@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface PluginOrgListResponse {
   listings: Array<{
@@ -25,7 +26,8 @@ export const pluginOrgListCommand = new Command("list-org")
     try {
       const params = new URLSearchParams();
       if (options.type) params.append("pluginType", options.type);
-      if (options.org) params.append("org_id", options.org);
+      const orgId = options.org ?? getOrgId();
+      if (orgId) params.append("org_id", orgId);
       const data = await apiRequest<PluginOrgListResponse>(`/plugin/org/list?${params}`, {
         method: "GET",
       });

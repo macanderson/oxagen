@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { apiRequest } from "../lib/api-client.js";
 
+
 export const pluginCredentialReauthCommand = new Command("reauth")
   .description("Re-authenticate plugin credentials")
   .requiredOption("-p, --plugin-id <id>", "Plugin ID")

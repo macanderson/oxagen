@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface PluginCredentialSetSecretResponse {
   ok: boolean;
@@ -23,7 +24,7 @@ export const pluginCredentialSetSecretCommand = new Command("set-secret")
           secret: options.secret,
           accessToken: options.accessToken,
           refreshToken: options.refreshToken,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(data.ok ? "✓ Credential stored" : "Failed to store credential");

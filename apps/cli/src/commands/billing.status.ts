@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, requireAuth , ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface SubscriptionResponse {
   subscription?: {
@@ -17,7 +18,7 @@ export const billingStatusCommand = new Command("status")
   .action(async (options: { org?: string }) => {
     requireAuth();
     try {
-      const qs = options.org ? `?org=${options.org}` : "";
+      const qs = options.org ? `?org=${options.org ?? getOrgId()}` : "";
       const data = await apiRequest<SubscriptionResponse>(`/billing/subscription${qs}`);
       const sub = data.subscription;
       if (sub) {

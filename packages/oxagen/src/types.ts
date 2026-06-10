@@ -66,7 +66,7 @@ export type CapabilityLayer =
 // Where a capability is exposed. A capability with `surfaces: ['agent']`
 // is invoked only by the in-app agent mid-stream and skips the /v1
 // HTTP layer + MCP wrapping. Default is the public-facing pair.
-export type CapabilitySurface = "api" | "mcp" | "agent";
+export type CapabilitySurface = "api" | "mcp" | "agent" | "cli";
 
 export type RiskLevel = "low" | "medium" | "high";
 

@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId, getWorkspaceId } from "../lib/config.js";
 
 interface InstallStep {
   label: string;
@@ -19,8 +20,10 @@ export const systemInstallInstructionsCommand = new Command("install-instruction
   .action(async (options: { client: string; workspace?: string; org?: string }) => {
     try {
       const params = new URLSearchParams({ client: options.client });
-      if (options.workspace) params.append("workspaceSlug", options.workspace);
-      if (options.org) params.append("org_id", options.org);
+      const workspaceId = options.workspace ?? getWorkspaceId();
+      if (workspaceId) params.append("workspaceSlug", workspaceId);
+      const orgId = options.org ?? getOrgId();
+      if (orgId) params.append("org_id", orgId);
       const data = await apiRequest<SystemInstallInstructionsResponse>(`/system/install/instructions?${params}`, {
         method: "GET",
       });

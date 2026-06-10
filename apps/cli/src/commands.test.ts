@@ -7,6 +7,8 @@ vi.mock("./lib/config.js", () => ({
   readConfig: vi.fn(() => ({ token: "test-token", orgSlug: "my-org", workspaceSlug: "default" })),
   writeConfig: vi.fn(),
   clearConfig: vi.fn(),
+  getOrgId: vi.fn(() => "my-org"),
+  getWorkspaceId: vi.fn(() => "default"),
 }));
 
 vi.mock("./lib/api-client.js", () => ({
@@ -123,6 +125,8 @@ const mockRequireAuth = vi.mocked(apiClient.requireAuth);
 const mockWriteConfig = vi.mocked(config.writeConfig);
 const mockClearConfig = vi.mocked(config.clearConfig);
 const mockGetToken = vi.mocked(config.getToken);
+const mockGetOrgId = vi.mocked(config.getOrgId);
+const mockGetWorkspaceId = vi.mocked(config.getWorkspaceId);
 
 // Helper: throw an ApiError through apiRequest mock (covers instanceof branch in catch blocks)
 function mockApiError(status: number, message: string) {
@@ -476,7 +480,7 @@ describe("chat send", () => {
 
     await chatSendCommand.parseAsync(["node", "cli", "hi", "--conversation", "cnv_abc"]);
 
-    expect(capturedBody?.conversationId).toBe("cnv_abc");
+    expect(capturedBody!["conversationId"]).toBe("cnv_abc");
     stdoutSpy.mockRestore();
   });
 
@@ -829,7 +833,7 @@ describe("agent mcp list", () => {
 
     await agentMcpListCommand.parseAsync(["node", "cli"]);
 
-    expect(mockApiRequest).toHaveBeenCalledWith("/agent/mcp/list?", expect.objectContaining({ method: "GET" }));
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("/agent/mcp/list"), expect.objectContaining({ method: "GET" }));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("MCP Servers"));
     consoleSpy.mockRestore();
   });
@@ -847,7 +851,7 @@ describe("agent skill list", () => {
 
     await agentSkillListCommand.parseAsync(["node", "cli"]);
 
-    expect(mockApiRequest).toHaveBeenCalledWith("/agent/skill/list?", expect.objectContaining({ method: "GET" }));
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("/agent/skill/list"), expect.objectContaining({ method: "GET" }));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Agent Skills"));
     consoleSpy.mockRestore();
   });
@@ -865,7 +869,7 @@ describe("agent tool list", () => {
 
     await agentToolListCommand.parseAsync(["node", "cli"]);
 
-    expect(mockApiRequest).toHaveBeenCalledWith("/agent/tool/list?", expect.objectContaining({ method: "GET" }));
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("/agent/tool/list"), expect.objectContaining({ method: "GET" }));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Agent Tools"));
     consoleSpy.mockRestore();
   });
@@ -902,7 +906,7 @@ describe("billing subscription read", () => {
 
     await billingSubscriptionReadCommand.parseAsync(["node", "cli"]);
 
-    expect(mockApiRequest).toHaveBeenCalledWith("/billing/subscription/read?", expect.objectContaining({ method: "GET" }));
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.stringContaining("/billing/subscription/read"), expect.objectContaining({ method: "GET" }));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Current Subscription"));
     consoleSpy.mockRestore();
   });
@@ -2558,5 +2562,207 @@ describe("branch coverage: empty/optional data branches", () => {
     await expect(workflowRunCommand.parseAsync(["node", "cli", "-w", "wf1"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith("Error: Invalid workflow spec");
     consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+});
+
+describe("Environment Variable Defaults", () => {
+  beforeEach(() => {
+    mockGetOrgId.mockReturnValue("default-org");
+    mockGetWorkspaceId.mockReturnValue("default-workspace");
+    mockGetToken.mockReturnValue("default-token");
+  });
+
+  afterEach(() => {
+    delete process.env.OXAGEN_ORG_ID;
+    delete process.env.OXAGEN_WORKSPACE_ID;
+    delete process.env.OXAGEN_API_TOKEN;
+    vi.clearAllMocks();
+  });
+
+  describe("OXAGEN_ORG_ID environment variable", () => {
+    it("org member list uses OXAGEN_ORG_ID env var when no --org flag provided", async () => {
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      mockGetOrgId.mockReturnValue("env-org-123");
+      mockApiRequest.mockResolvedValueOnce({ members: [] });
+
+      await orgMemberAddCommand.parseAsync(["node", "cli", "user@example.com", "--role", "admin"]);
+
+      expect(mockApiRequest).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining("env-org-123"),
+        })
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it("org member list uses command-line --org flag to override OXAGEN_ORG_ID env var", async () => {
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      mockGetOrgId.mockReturnValue("env-org-123");
+      mockApiRequest.mockResolvedValueOnce({ members: [] });
+
+      await orgMemberAddCommand.parseAsync(["node", "cli", "user@example.com", "--role", "admin", "--org", "cli-org-456"]);
+
+      expect(mockApiRequest).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining("cli-org-456"),
+        })
+      );
+
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe("OXAGEN_WORKSPACE_ID environment variable", () => {
+    afterEach(() => {
+      mockApiRequest.mockClear();
+    });
+
+    it("workspace member list uses env var default when no --workspace flag", async () => {
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      mockGetWorkspaceId.mockReturnValue("env-workspace-789");
+      mockApiRequest.mockResolvedValueOnce([]);
+
+      await workspaceMemberListCommand.parseAsync(["node", "cli"]);
+
+      const calls = mockApiRequest.mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      expect((calls[0]?.[0] as string)).toContain("workspace_id=env-workspace-789");
+
+      consoleSpy.mockRestore();
+    });
+
+    it("workspace member list uses explicit flag to override env var", async () => {
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      mockGetWorkspaceId.mockReturnValue("env-workspace-789");
+      mockApiRequest.mockResolvedValueOnce([]);
+
+      await workspaceMemberListCommand.parseAsync(["node", "cli", "-w", "cli-workspace-xyz"]);
+
+      const calls = mockApiRequest.mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      expect((calls[0]?.[0] as string)).toContain("workspace_id=cli-workspace-xyz");
+
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe("OXAGEN_API_TOKEN environment variable", () => {
+    it("uses OXAGEN_API_TOKEN for Bearer token in Authorization header", async () => {
+      mockGetToken.mockReturnValue("sk-token-from-env");
+      mockApiRequest.mockResolvedValueOnce({ key: "key123" });
+
+      await apiKeyCreateCommand.parseAsync(["node", "cli", "mykey"]);
+
+      expect(mockApiRequest).toHaveBeenCalled();
+    });
+  });
+
+  describe("Precedence: env vars > command-line args (fallback pattern)", () => {
+    it("agent mcp register: workspace_id uses command-line --workspace when provided", async () => {
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      mockGetWorkspaceId.mockReturnValue("env-workspace-999");
+      mockApiRequest.mockResolvedValueOnce({
+        mcpServerId: "mcp-123",
+        healthStatus: "healthy",
+        discoveredTools: ["tool1"],
+      });
+
+      await agentMcpRegisterCommand.parseAsync([
+        "node", "cli", "register",
+        "-n", "my-mcp",
+        "-u", "http://localhost:9000",
+        "-t", "streamable-http",
+        "-w", "explicit-workspace-888"
+      ]);
+
+      expect(mockApiRequest).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining("explicit-workspace-888"),
+        })
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it("agent mcp register: org_id uses getOrgId fallback when no --org flag provided", async () => {
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      mockGetOrgId.mockReturnValue("fallback-org-111");
+      mockGetWorkspaceId.mockReturnValue("any-workspace");
+      mockApiRequest.mockResolvedValueOnce({
+        mcpServerId: "mcp-456",
+        healthStatus: "healthy",
+        discoveredTools: [],
+      });
+
+      await agentMcpRegisterCommand.parseAsync([
+        "node", "cli", "register",
+        "-n", "my-mcp",
+        "-u", "http://localhost:9000",
+        "-t", "streamable-http"
+      ]);
+
+      expect(mockApiRequest).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining("fallback-org-111"),
+        })
+      );
+
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe("Multiple commands with env var defaults", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mockGetWorkspaceId.mockReturnValue("env-ws-default");
+      // Commander retains option values between parseAsync calls; reset to avoid cross-test pollution
+      workspaceMemberListCommand.setOptionValue("workspace", undefined);
+    });
+
+    it("workspace member list uses OXAGEN_WORKSPACE_ID as default when no --workspace flag", async () => {
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      mockApiRequest.mockResolvedValueOnce([
+        { id: "user1", email: "user@test.com", role: "member", joined_at: "2024-01-01" }
+      ]);
+
+      await workspaceMemberListCommand.parseAsync(["node", "cli"]);
+
+      const calls = mockApiRequest.mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      expect((calls[0]?.[0] as string)).toContain("workspace_id=env-ws-default");
+
+      consoleSpy.mockRestore();
+    });
+
+    it("workspace member list uses explicit --workspace to override OXAGEN_WORKSPACE_ID", async () => {
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      mockApiRequest.mockResolvedValueOnce([
+        { id: "user1", email: "user@test.com", role: "member", joined_at: "2024-01-01" }
+      ]);
+
+      await workspaceMemberListCommand.parseAsync([
+        "node", "cli",
+        "-w", "explicit-ws"
+      ]);
+
+      const calls = mockApiRequest.mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      expect((calls[0]?.[0] as string)).toContain("workspace_id=explicit-ws");
+
+      consoleSpy.mockRestore();
+    });
   });
 });

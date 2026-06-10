@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getWorkspaceId } from "../lib/config.js";
 
 interface Skill {
   id: string;
@@ -17,7 +18,8 @@ export const agentSkillListCommand = new Command("skill:list")
   .action(async (options: { workspace?: string }) => {
     try {
       const params = new URLSearchParams();
-      if (options.workspace) params.append("workspace_id", options.workspace);
+      const workspaceId = options.workspace ?? getWorkspaceId();
+      if (workspaceId) params.append("workspace_id", workspaceId);
       const data = await apiRequest<SkillListResponse>(
         `/agent/skill/list?${params}`,
         { method: "GET" }

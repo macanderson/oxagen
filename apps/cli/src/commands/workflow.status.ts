@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface WorkflowRun {
   id: string;
@@ -27,7 +28,8 @@ export const workflowStatusCommand = new Command("status")
   .action(async (options: { workflow: string; org?: string }) => {
     try {
       const params = new URLSearchParams({ workflowId: options.workflow });
-      if (options.org) params.append("org_id", options.org);
+      const orgId = options.org ?? getOrgId();
+      if (orgId) params.append("org_id", orgId);
       const data = await apiRequest<WorkflowStatusResponse>(`/workflow/status?${params}`, {
         method: "GET",
       });

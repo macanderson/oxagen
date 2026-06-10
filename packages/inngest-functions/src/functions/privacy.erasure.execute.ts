@@ -1,6 +1,6 @@
 import { inngest } from "../inngest";
 import { schema, withSystemDb } from "@oxagen/database";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { logger } from "../logger";
 
 /**

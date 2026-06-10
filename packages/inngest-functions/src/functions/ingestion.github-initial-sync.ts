@@ -3,7 +3,6 @@ import { withSystemDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { createIngestionCryptoAdapter, decrypt } from "@oxagen/crypto";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { scopedSession } from "@oxagen/ontology/tenant";
 import { upsertSourceConnectionMeta } from "@oxagen/ingestion/mutations";
 import { logger } from "../logger";
 

@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface OrgMemberInviteDeclineResponse {
   invitationPublicId: string;
@@ -16,7 +17,7 @@ export const orgMemberInviteDeclineCommand = new Command("decline")
         method: "POST",
         body: JSON.stringify({
           invitationPublicId: options.invitation,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(`✓ Invitation ${data.invitationPublicId} ${data.status}`);

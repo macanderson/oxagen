@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId, getWorkspaceId } from "../lib/config.js";
 
 interface DocumentsPdfCreateResponse {
   assetId: string;
@@ -31,8 +32,8 @@ export const documentsPdfCreateCommand = new Command("pdf-create")
           title: options.title,
           content,
           brandColors,
-          org_id: options.org,
-          workspace_id: options.workspace,
+          org_id: options.org ?? getOrgId(),
+          workspace_id: options.workspace ?? getWorkspaceId(),
         }),
       });
       console.log(`✓ PDF created`);

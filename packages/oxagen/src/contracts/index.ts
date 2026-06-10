@@ -108,6 +108,8 @@ import { connectionMappingsGet } from "./connection.mappings.get";
 import { connectionMappingsSet } from "./connection.mappings.set";
 import { privacyDataExport } from "./privacy.data.export";
 import { privacyDataErase } from "./privacy.data.erase";
+import { researchSwarmStart } from "./research.swarm.start";
+import { researchSwarmStatus } from "./research.swarm.status";
 
 export {
   apiKeyCreate,
@@ -210,6 +212,8 @@ export {
   connectionMappingsSet,
   privacyDataExport,
   privacyDataErase,
+  researchSwarmStart,
+  researchSwarmStatus,
 };
 
 /**
@@ -321,4 +325,6 @@ export const contracts = [
   connectionMappingsSet,
   privacyDataExport,
   privacyDataErase,
+  researchSwarmStart,
+  researchSwarmStatus,
 ] as const;

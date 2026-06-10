@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { apiRequest } from "../lib/api-client.js";
 
+
 export const pluginRegistryAddCommand = new Command("add")
   .description("Add a new plugin registry")
   .requiredOption("-n, --name <name>", "Registry name")

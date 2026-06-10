@@ -99,6 +99,17 @@ import { userPreferencesReadCommand } from "./commands/user.preferences.read.js"
 import { userPreferencesWriteCommand } from "./commands/user.preferences.write.js";
 import { privacyExportCommand } from "./commands/privacy.export.js";
 import { privacyEraseCommand } from "./commands/privacy.erase.js";
+import { graphNodeUpsertCommand } from "./commands/graph.node.upsert.js";
+import { graphNodeGetCommand } from "./commands/graph.node.get.js";
+import { graphNodeDeleteCommand } from "./commands/graph.node.delete.js";
+import { graphNodeSearchCommand } from "./commands/graph.node.search.js";
+import { graphEdgeUpsertCommand } from "./commands/graph.edge.upsert.js";
+import { graphEdgeDeleteCommand } from "./commands/graph.edge.delete.js";
+import { graphCypherCommand } from "./commands/graph.cypher.js";
+import { webSearchCommand } from "./commands/web.search.js";
+import { webFetchCommand } from "./commands/web.fetch.js";
+import { researchSwarmStartCommand } from "./commands/research.swarm.start.js";
+import { researchSwarmStatusCommand } from "./commands/research.swarm.status.js";
 
 const program = new Command();
 
@@ -309,6 +320,29 @@ svg.addCommand(svgGenerateCommand);
 const privacy = program.command("privacy").description("GDPR privacy rights — data export and erasure");
 privacy.addCommand(privacyExportCommand);
 privacy.addCommand(privacyEraseCommand);
+
+// graph
+const graph = program.command("graph").description("Knowledge graph commands");
+const graphNode = graph.command("node").description("Graph node management");
+graphNode.addCommand(graphNodeUpsertCommand);
+graphNode.addCommand(graphNodeGetCommand);
+graphNode.addCommand(graphNodeDeleteCommand);
+graphNode.addCommand(graphNodeSearchCommand);
+const graphEdge = graph.command("edge").description("Graph edge management");
+graphEdge.addCommand(graphEdgeUpsertCommand);
+graphEdge.addCommand(graphEdgeDeleteCommand);
+graph.addCommand(graphCypherCommand);
+
+// web
+const web = program.command("web").description("Web intelligence commands");
+web.addCommand(webSearchCommand);
+web.addCommand(webFetchCommand);
+
+// research
+const research = program.command("research").description("Research swarm commands");
+const researchSwarm = research.command("swarm").description("Research swarm management");
+researchSwarm.addCommand(researchSwarmStartCommand);
+researchSwarm.addCommand(researchSwarmStatusCommand);
 
 program.parse(process.argv);
 

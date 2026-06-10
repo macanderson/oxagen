@@ -300,11 +300,25 @@ oxagen workflow run --help
 
 ## Configuration
 
-Session token and defaults are stored in `~/.config/oxagen/`. To target a different org or workspace without passing flags on every command, set environment variables:
+Session token and defaults are stored in `~/.config/oxagen/`. To avoid passing org and workspace IDs on every command, set these environment variables:
 
 ```bash
-export OXAGEN_ORG=my-org
-export OXAGEN_WORKSPACE=engineering
+export OXAGEN_ORG_ID=org_abc123
+export OXAGEN_WORKSPACE_ID=ws_xyz789
+export OXAGEN_API_TOKEN=sk-...
+```
+
+The CLI checks environment variables first, then falls back to saved config, then to command-line flags:
+
+```bash
+# Uses OXAGEN_WORKSPACE_ID env var if set, falls back to ~/.config/oxagen/config.json
+oxagen automation list
+
+# Overrides env var with explicit flag
+oxagen automation list --workspace ws_different456
+
+# Authenticate and save defaults to config
+oxagen auth login --email you@example.com --password yourpassword
 ```
 
 ---

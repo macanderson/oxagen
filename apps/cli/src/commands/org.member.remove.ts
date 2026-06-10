@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 export const orgMemberRemoveCommand = new Command("remove")
   .description("Remove a member from the organization")
@@ -10,7 +11,7 @@ export const orgMemberRemoveCommand = new Command("remove")
     try {
       await apiRequest("/org/members", {
         method: "DELETE",
-        body: JSON.stringify({ email, org: options.org }),
+        body: JSON.stringify({ email, org: options.org ?? getOrgId() }),
       });
       console.log(`✓ Removed ${email} from organization`);
     } catch (err) {

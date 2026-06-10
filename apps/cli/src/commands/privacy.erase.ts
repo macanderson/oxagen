@@ -2,6 +2,7 @@ import { Command } from "commander";
 import * as readline from "node:readline";
 import { apiRequest, ApiError } from "../lib/api-client.js";
 
+
 interface EraseResponse {
   requestId: string;
   status: string;

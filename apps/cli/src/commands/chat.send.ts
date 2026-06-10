@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { requireAuth, ApiError } from "../lib/api-client.js";
-import { getToken, getApiUrl, readConfig } from "../lib/config.js";
+import { getToken, getApiUrl, getOrgId, getWorkspaceId } from "../lib/config.js";
 
 interface StreamEvent {
   type: string;
@@ -50,13 +50,12 @@ export const chatSendCommand = new Command("send")
     ) => {
       requireAuth();
 
-      const config = readConfig();
-      const org = options.org ?? config.orgSlug;
-      const workspace = options.workspace ?? config.workspaceSlug;
+      const org = options.org ?? getOrgId();
+      const workspace = options.workspace ?? getWorkspaceId();
 
       if (!org || !workspace) {
         console.error(
-          "Error: --org and --workspace are required (or save defaults with `oxagen auth login`).",
+          "Error: --org and --workspace are required (or set OXAGEN_ORG_ID and OXAGEN_WORKSPACE_ID environment variables, or save defaults with `oxagen auth login`).",
         );
         process.exit(1);
       }

@@ -11,7 +11,7 @@ import type { EntityMutation } from "../types";
 
 export async function upsertEntityNode(
   mutation: EntityMutation,
-  orgId: string,
+  _orgId: string,
 ): Promise<{ nodeId: string }> {
   const session = scopedSession();
   try {
@@ -62,7 +62,7 @@ export async function createAliasEdge(
   aliasNodeId: string,
   principalNodeId: string,
   props: AliasEdgeProps,
-  orgId: string,
+  _orgId: string,
 ): Promise<void> {
   const session = scopedSession();
   try {
@@ -95,7 +95,7 @@ export async function upsertEmbedding(
   nodeId: string,
   vector: number[],
   model: string,
-  orgId: string,
+  _orgId: string,
 ): Promise<void> {
   const session = scopedSession();
   try {
@@ -191,7 +191,7 @@ const EDGE_TYPE_QUERIES: Record<string, string> = {
                   ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`,
 };
 
-export async function upsertInferredEdges(edges: InferredEdge[], orgId: string): Promise<void> {
+export async function upsertInferredEdges(edges: InferredEdge[], _orgId: string): Promise<void> {
   if (edges.length === 0) return;
   const session = scopedSession();
   try {

@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface PluginDenylistAddResponse {
   ok: boolean;
@@ -19,7 +20,7 @@ export const pluginDenylistAddCommand = new Command("add")
           serverName: options.server,
           pluginType: options.type,
           reason: options.reason,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(data.ok ? `✓ ${options.server} added to denylist` : "Failed to add to denylist");

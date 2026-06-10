@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId, getWorkspaceId } from "../lib/config.js";
 
 interface PluginWorkspaceSetEnabledResponse {
   workspaceServerId: string | null;
@@ -19,8 +20,8 @@ export const pluginWorkspaceSetEnabledCommand = new Command("workspace-set-enabl
         body: JSON.stringify({
           orgListingId: options.listing,
           enabled,
-          org_id: options.org,
-          workspace_id: options.workspace,
+          org_id: options.org ?? getOrgId(),
+          workspace_id: options.workspace ?? getWorkspaceId(),
         }),
       });
       const status = enabled ? "enabled" : "disabled";

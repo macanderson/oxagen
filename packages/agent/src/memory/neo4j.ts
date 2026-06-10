@@ -78,13 +78,17 @@ export interface WriteMemoryArgs {
   kind: string;
   lesson: string;
   source: string;
+  /** IDs of KnowledgeNode entities this memory is about — creates :ABOUT edges. */
+  relatedNodeIds?: string[];
 }
 
 // MERGE on (orgId, workspaceId, nodeRef, lesson) so identical writes
 // from repeated reflection don't accumulate duplicates.
 // orgId/workspaceId are injected automatically by scopedSession() from the
 // active tenant scope — no need to thread them through the function args.
-export async function writeMemory(args: WriteMemoryArgs): Promise<{ memoryId: string }> {
+export async function writeMemory(
+  args: WriteMemoryArgs,
+): Promise<{ memoryId: string; edgesCreated: number }> {
   const s = scopedSession();
   try {
     const result = await s.run(
@@ -113,7 +117,14 @@ export async function writeMemory(args: WriteMemoryArgs): Promise<{ memoryId: st
         FOREACH (_ IN CASE WHEN target IS NULL THEN [] ELSE [1] END |
           MERGE (target)-[:REMEMBERS]->(m)
         )
-        RETURN m.id AS id
+        WITH m
+        UNWIND $relatedNodeIds AS nid
+        OPTIONAL MATCH (kn:KnowledgeNode {publicId: nid, orgId: $orgId})
+        FOREACH (_ IN CASE WHEN kn IS NULL THEN [] ELSE [1] END |
+          MERGE (m)-[:ABOUT]->(kn)
+        )
+        WITH m, count(kn) AS edgesCreated
+        RETURN m.id AS id, edgesCreated
       `,
       {
         nodeRef: args.nodeRef,
@@ -122,10 +133,12 @@ export async function writeMemory(args: WriteMemoryArgs): Promise<{ memoryId: st
         kind: args.kind,
         source: args.source,
         embedding: args.embedding,
+        relatedNodeIds: args.relatedNodeIds ?? [],
       },
     );
     const id = result.records[0]?.get("id") as string;
-    return { memoryId: id };
+    const edgesCreated = Number(result.records[0]?.get("edgesCreated") ?? 0);
+    return { memoryId: id, edgesCreated };
   } finally {
     await s.close();
   }

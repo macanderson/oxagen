@@ -14,7 +14,7 @@ export async function agentMemoryWriteHandler(
     // No-op when the knowledge graph is not configured. Return a valid output
     // conforming to the contract schema (memoryId is an empty string sentinel
     // that callers can detect; the nodeRef echo is always safe to return).
-    return { memoryId: "", nodeRef: input.nodeRef };
+    return { memoryId: "", nodeRef: input.nodeRef, edgesCreated: 0 };
   }
   const embedding = await embedText(input.lesson, {
     telemetry: {
@@ -24,13 +24,14 @@ export async function agentMemoryWriteHandler(
       executionStepId: ctx.messageId ?? ctx.requestId,
     },
   });
-  const { memoryId } = await writeMemory({
+  const { memoryId, edgesCreated } = await writeMemory({
     nodeRef: input.nodeRef,
     embedding,
     weight: input.weight,
     kind: input.kind,
     lesson: input.lesson,
     source: input.source,
+    relatedNodeIds: input.relatedNodeIds,
   });
-  return { memoryId, nodeRef: input.nodeRef };
+  return { memoryId, nodeRef: input.nodeRef, edgesCreated };
 }

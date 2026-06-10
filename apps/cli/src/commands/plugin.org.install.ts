@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface PluginInstallResponse {
   id: string;
@@ -18,7 +19,7 @@ export const pluginOrgInstallCommand = new Command("plugin:install")
         "/plugin/org/install",
         {
           method: "POST",
-          body: JSON.stringify({ plugin_name: options.name, org_id: options.org }),
+          body: JSON.stringify({ plugin_name: options.name, org_id: options.org ?? getOrgId() }),
         }
       );
       console.log(`✓ Plugin installed`);

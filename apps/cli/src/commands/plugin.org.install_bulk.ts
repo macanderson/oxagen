@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface PluginOrgInstallBulkResponse {
   installed: Array<{
@@ -20,7 +21,7 @@ export const pluginOrgInstallBulkCommand = new Command("install-bulk")
         method: "POST",
         body: JSON.stringify({
           items,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       const succeeded = data.installed.filter((i) => !i.error).length;

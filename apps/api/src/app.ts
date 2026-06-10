@@ -101,6 +101,17 @@ import { privacyDataEraseRoute } from "./routes/v1/privacy.data.erase";
 import { connectionRoute } from "./routes/v1/connection";
 import { webhookRoute } from "./routes/v1/webhook";
 import { githubOauthRoute, githubOauthCallbackRoute } from "./routes/v1/github-oauth";
+import { graphNodeUpsertRoute } from "./routes/v1/graph.node.upsert";
+import { graphNodeGetRoute } from "./routes/v1/graph.node.get";
+import { graphNodeDeleteRoute } from "./routes/v1/graph.node.delete";
+import { graphNodeSearchRoute } from "./routes/v1/graph.node.search";
+import { graphEdgeUpsertRoute } from "./routes/v1/graph.edge.upsert";
+import { graphEdgeDeleteRoute } from "./routes/v1/graph.edge.delete";
+import { graphCypherRoute } from "./routes/v1/graph.cypher";
+import { webSearchRoute } from "./routes/v1/web.search";
+import { webFetchRoute } from "./routes/v1/web.fetch";
+import { researchSwarmStartRoute } from "./routes/v1/research.swarm.start";
+import { researchSwarmStatusRoute } from "./routes/v1/research.swarm.status";
 
 export type AppEnv = {
   Variables: {
@@ -233,6 +244,17 @@ orgScoped.route("/privacy/erase", privacyDataEraseRoute);
 orgScoped.route("/connections", connectionRoute);
 // GitHub App OAuth endpoints (workspace-scoped + auth-required)
 orgScoped.route("/connections/github", githubOauthRoute);
+orgScoped.route("/graph/node/upsert", graphNodeUpsertRoute);
+orgScoped.route("/graph/node/get", graphNodeGetRoute);
+orgScoped.route("/graph/node/delete", graphNodeDeleteRoute);
+orgScoped.route("/graph/node/search", graphNodeSearchRoute);
+orgScoped.route("/graph/edge/upsert", graphEdgeUpsertRoute);
+orgScoped.route("/graph/edge/delete", graphEdgeDeleteRoute);
+orgScoped.route("/graph/cypher", graphCypherRoute);
+orgScoped.route("/web/search", webSearchRoute);
+orgScoped.route("/web/fetch", webFetchRoute);
+orgScoped.route("/research/swarm/start", researchSwarmStartRoute);
+orgScoped.route("/research/swarm/status", researchSwarmStatusRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
 
 // Public OAuth callback — HMAC-verified state param is the security boundary.

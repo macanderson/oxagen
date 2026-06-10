@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface AgentTaskBackgroundCancelResponse {
   cancelled: boolean;
@@ -15,7 +16,7 @@ export const agentTaskBackgroundCancelCommand = new Command("cancel")
         method: "POST",
         body: JSON.stringify({
           taskId: options.task,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       if (data.cancelled) {

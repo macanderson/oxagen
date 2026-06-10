@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId, getWorkspaceId } from "../lib/config.js";
 
 interface BrandkitApplyResponse {
   stub: true;
@@ -19,10 +20,10 @@ export const brandkitApplyCommand = new Command("apply")
       const data = await apiRequest<BrandkitApplyResponse>("/brandkit/apply", {
         method: "POST",
         body: JSON.stringify({
-          workspaceId: options.workspace,
+          workspaceId: options.workspace ?? getWorkspaceId(),
           brandKitId: options.brandKit,
           targetFileId: options.file,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(`Brand kit apply submitted (stub — backing not yet wired)`);

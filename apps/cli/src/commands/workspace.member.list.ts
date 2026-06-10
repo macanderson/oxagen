@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getWorkspaceId } from "../lib/config.js";
 
 interface WorkspaceMember {
   id: string;
@@ -13,7 +14,8 @@ export const workspaceMemberListCommand = new Command("list")
   .option("-w, --workspace <id>", "Workspace ID (defaults to current workspace)")
   .action(async (options: { workspace?: string }) => {
     try {
-      const params = options.workspace ? `?workspace_id=${options.workspace}` : "";
+      const workspaceId = options.workspace ?? getWorkspaceId();
+      const params = workspaceId ? `?workspace_id=${workspaceId}` : "";
       const data = await apiRequest<WorkspaceMember[]>(
         `/workspace/member/list${params}`,
         { method: "GET" }

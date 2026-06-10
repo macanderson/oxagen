@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getWorkspaceId } from "../lib/config.js";
 
 interface Tool {
   id: string;
@@ -17,7 +18,8 @@ export const agentToolListCommand = new Command("tool:list")
   .action(async (options: { workspace?: string }) => {
     try {
       const params = new URLSearchParams();
-      if (options.workspace) params.append("workspace_id", options.workspace);
+      const workspaceId = options.workspace ?? getWorkspaceId();
+      if (workspaceId) params.append("workspace_id", workspaceId);
       const data = await apiRequest<ToolListResponse>(
         `/agent/tool/list?${params}`,
         { method: "GET" }

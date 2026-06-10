@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface CreditsPurchaseResponse {
   credits: number;
@@ -22,7 +23,7 @@ export const billingCreditsPurchaseCommand = new Command("credits:purchase")
         "/billing/credits/purchase",
         {
           method: "POST",
-          body: JSON.stringify({ amount, org_id: options.org }),
+          body: JSON.stringify({ amount, org_id: options.org ?? getOrgId() }),
         }
       );
       console.log(`✓ Purchase initiated`);

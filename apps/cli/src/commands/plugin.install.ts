@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 export const pluginInstallCommand = new Command("install")
   .description("Install a plugin")
@@ -10,7 +11,7 @@ export const pluginInstallCommand = new Command("install")
     try {
       await apiRequest("/plugins/install", {
         method: "POST",
-        body: JSON.stringify({ pluginId: id, org: options.org }),
+        body: JSON.stringify({ pluginId: id, org: options.org ?? getOrgId() }),
       });
       console.log(`✓ Plugin ${id} installed`);
     } catch (err) {

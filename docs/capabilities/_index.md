@@ -152,3 +152,29 @@ project ID `31ab7de2-021f-486d-9f6f-718a7976c027`).
 | `workspace.create`                  | Create workspace inside the caller's tenant.       |
 | `workspace.model.settings.read`     | Read workspace-level model defaults.               |
 | `workspace.model.settings.write`    | Update workspace-level model defaults (PATCH).     |
+
+## Graph (7)
+
+| Capability          | Notes                                                       |
+| ------------------- | ----------------------------------------------------------- |
+| `graph.node.upsert` | Create or update a graph node by externalId.                |
+| `graph.node.get`    | Retrieve a graph node by externalId.                        |
+| `graph.node.delete` | Delete a graph node and its relationships.                  |
+| `graph.node.search` | Vector + full-text search over graph nodes.                 |
+| `graph.edge.upsert` | Create or update a directed relationship between two nodes. |
+| `graph.edge.delete` | Delete a directed relationship between two nodes.           |
+| `graph.cypher`      | Execute a read-only Cypher query against the tenant graph.  |
+
+## Web (2)
+
+| Capability   | Notes                                                |
+| ------------ | ---------------------------------------------------- |
+| `web.search` | Search the web via Tavily and return ranked results. |
+| `web.fetch`  | Fetch and extract clean text from a URL.             |
+
+## Research (2)
+
+| Capability              | Notes                                                   |
+| ----------------------- | ------------------------------------------------------- |
+| `research.swarm.start`  | Start a multi-agent research swarm for a given topic.   |
+| `research.swarm.status` | Poll the status and results of a running research swarm.|

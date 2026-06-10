@@ -202,6 +202,7 @@ describe("agent.memory.write handler", () => {
       kind: "gotcha" as const,
       lesson: "Always flush cache",
       source: "fix" as const,
+      relatedNodeIds: undefined,
     };
     const result = await handler_agentMemoryWrite(args);
 

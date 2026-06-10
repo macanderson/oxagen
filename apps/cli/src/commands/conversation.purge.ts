@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId, getWorkspaceId } from "../lib/config.js";
 
 interface ConversationPurgeResponse {
   deleted: number;
@@ -19,8 +20,8 @@ export const conversationPurgeCommand = new Command("purge")
       const data = await apiRequest<ConversationPurgeResponse>("/conversation/purge", {
         method: "POST",
         body: JSON.stringify({
-          workspace_id: options.workspace,
-          org_id: options.org,
+          workspace_id: options.workspace ?? getWorkspaceId(),
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(`✓ Purged ${data.deleted} archived conversation(s)`);

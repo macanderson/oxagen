@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface PluginRegistryRemoveResponse {
   ok: boolean;
@@ -15,7 +16,7 @@ export const pluginRegistryRemoveCommand = new Command("remove")
         method: "DELETE",
         body: JSON.stringify({
           registryId: options.registry,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(data.ok ? `✓ Registry ${options.registry} removed` : "Failed to remove registry");

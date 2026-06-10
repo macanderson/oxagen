@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface AgentPlanApproveResponse {
   planId: string;
@@ -26,7 +27,7 @@ export const agentPlanApproveCommand = new Command("approve")
           decision: options.decision,
           note: options.note,
           amendedSteps,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(`✓ Plan ${data.status}: ${data.planId}`);

@@ -28,10 +28,16 @@ export const agentMemoryWrite = registerCapability({
     ]),
     lesson: z.string().min(1).max(2000),
     source: z.enum(["feature", "fix", "exception-watcher", "bug-report"]),
+    relatedNodeIds: z
+      .array(z.string())
+      .max(20)
+      .optional()
+      .describe("IDs of KnowledgeNode entities this memory is about — creates :ABOUT edges"),
   }),
   output: z.object({
     memoryId: z.string(),
     nodeRef: z.string(),
+    edgesCreated: z.number().describe("Count of :ABOUT edges created to KnowledgeNode entities"),
   }),
 });
 

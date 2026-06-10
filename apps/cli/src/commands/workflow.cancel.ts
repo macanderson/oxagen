@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface WorkflowCancelResponse {
   cancelled: boolean;
@@ -15,7 +16,7 @@ export const workflowCancelCommand = new Command("cancel")
         method: "POST",
         body: JSON.stringify({
           workflowId: options.workflow,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(data.cancelled ? `✓ Workflow ${options.workflow} cancelled` : `Workflow ${options.workflow} could not be cancelled`);

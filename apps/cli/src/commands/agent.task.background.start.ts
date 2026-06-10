@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface AgentTaskBackgroundStartResponse {
   taskId: string;
@@ -21,7 +22,7 @@ export const agentTaskBackgroundStartCommand = new Command("start")
           kind: options.kind,
           payload,
           label: options.label,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(`✓ Background task started`);

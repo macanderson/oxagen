@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface WorkflowRunResponse {
   id: string;
@@ -28,7 +29,7 @@ export const workflowRunCommand = new Command("run")
         body: JSON.stringify({
           workflow_id: options.workflow,
           input,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(`✓ Workflow started`);

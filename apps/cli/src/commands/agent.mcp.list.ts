@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface McpServer {
   id: string;
@@ -17,7 +18,8 @@ export const agentMcpListCommand = new Command("mcp:list")
   .action(async (options: { org?: string }) => {
     try {
       const params = new URLSearchParams();
-      if (options.org) params.append("org_id", options.org);
+      const orgId = options.org ?? getOrgId();
+      if (orgId) params.append("org_id", orgId);
       const data = await apiRequest<McpListResponse>(
         `/agent/mcp/list?${params}`,
         { method: "GET" }

@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest } from "../lib/api-client.js";
+import { getWorkspaceId } from "../lib/config.js";
 
 export const workspaceModelSettingsReadCommand = new Command("read")
   .description("Read model settings for a workspace")
@@ -9,7 +10,7 @@ export const workspaceModelSettingsReadCommand = new Command("read")
       const result = await apiRequest("/workspace/model-settings/read", {
         method: "POST",
         body: JSON.stringify({
-          workspace: options.workspace,
+          workspace: options.workspace ?? getWorkspaceId(),
         }),
       });
       console.log(JSON.stringify(result, null, 2));

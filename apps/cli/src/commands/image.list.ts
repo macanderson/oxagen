@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getWorkspaceId } from "../lib/config.js";
 
 interface ImageListItem {
   id: string;
@@ -18,7 +19,8 @@ export const imageListCommand = new Command("list")
   .action(async (options: { workspace?: string }) => {
     try {
       const params = new URLSearchParams();
-      if (options.workspace) params.set("workspace_id", options.workspace);
+      const workspaceId = options.workspace ?? getWorkspaceId();
+      if (workspaceId) params.set("workspace_id", workspaceId);
       const query = params.toString() ? `?${params.toString()}` : "";
       const data = await apiRequest<ImageListResponse>(`/image/list${query}`);
       if (data.images.length === 0) {

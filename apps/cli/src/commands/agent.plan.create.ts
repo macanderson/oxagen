@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface PlanTask {
   id: string;
@@ -52,7 +53,7 @@ export const agentPlanCreateCommand = new Command("create")
             constraints,
             approvalRequired: options.approval,
             messageId: options.messageId,
-            org_id: options.org,
+            org_id: options.org ?? getOrgId(),
           }),
         });
 

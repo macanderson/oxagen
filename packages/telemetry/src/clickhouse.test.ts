@@ -7,6 +7,16 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { hashPrompt, providerFromModelId } from "./clickhouse";
+import type {
+  ApiKeyEventRow,
+  AuditEventRow,
+  EventRow,
+  ExecutionLogRow,
+  SpanRow,
+  TokenUsageRow,
+  ToolInvocationRow,
+  TraceRow,
+} from "./clickhouse";
 
 // ---------------------------------------------------------------------------
 // hashPrompt
@@ -239,7 +249,7 @@ describe("insert helpers — insertRows delegation", () => {
   });
 
   it("insertExecutionLogs delegates to execution_logs table", async () => {
-    const row: mod.ExecutionLogRow = {
+    const row: ExecutionLogRow = {
       execution_id: "exec-1",
       step_id: null,
       org_id: "org-1",
@@ -258,7 +268,7 @@ describe("insert helpers — insertRows delegation", () => {
   });
 
   it("insertTraces delegates to traces table", async () => {
-    const row: mod.TraceRow = {
+    const row: TraceRow = {
       trace_id: "t1",
       execution_id: "e1",
       org_id: "o1",
@@ -274,7 +284,7 @@ describe("insert helpers — insertRows delegation", () => {
   });
 
   it("insertSpans delegates to spans table", async () => {
-    const row: mod.SpanRow = {
+    const row: SpanRow = {
       span_id: "s1",
       trace_id: "t1",
       parent_span_id: null,
@@ -293,7 +303,7 @@ describe("insert helpers — insertRows delegation", () => {
   });
 
   it("insertEvents delegates to events table", async () => {
-    const row: mod.EventRow = {
+    const row: EventRow = {
       event_id: "ev1",
       org_id: "o1",
       workspace_id: "w1",
@@ -312,7 +322,7 @@ describe("insert helpers — insertRows delegation", () => {
   });
 
   it("insertApiKeyEvents delegates to api_key_events table", async () => {
-    const row: mod.ApiKeyEventRow = {
+    const row: ApiKeyEventRow = {
       api_key_id: "ak1",
       org_id: "o1",
       ip_address: "1.2.3.4",
@@ -330,7 +340,7 @@ describe("insert helpers — insertRows delegation", () => {
   });
 
   it("insertTokenUsage delegates to token_usage table", async () => {
-    const row: mod.TokenUsageRow = {
+    const row: TokenUsageRow = {
       execution_step_id: "es1",
       org_id: "o1",
       workspace_id: "w1",
@@ -354,7 +364,7 @@ describe("insert helpers — insertRows delegation", () => {
   });
 
   it("insertToolInvocation delegates to tool_invocations table with single-element array", async () => {
-    const row: mod.ToolInvocationRow = {
+    const row: ToolInvocationRow = {
       invocation_id: "inv1",
       org_id: "o1",
       workspace_id: "w1",
@@ -384,7 +394,7 @@ describe("insert helpers — insertRows delegation", () => {
   });
 
   it("insertAuditEvent delegates to audit_events table", async () => {
-    const row: mod.AuditEventRow = {
+    const row: AuditEventRow = {
       occurred_at: new Date().toISOString(),
       event_id: "ae1",
       org_id: "o1",

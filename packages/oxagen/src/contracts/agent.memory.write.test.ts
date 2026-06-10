@@ -54,6 +54,7 @@ describe("agent.memory.write capability", () => {
     const parsed = agentMemoryWrite.output.parse({
       memoryId: "mem_1",
       nodeRef: "Function:x",
+      edgesCreated: 3,
     });
     expect(parsed.memoryId).toBe("mem_1");
   });

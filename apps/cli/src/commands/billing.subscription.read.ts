@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface Subscription {
   id: string;
@@ -18,7 +19,8 @@ export const billingSubscriptionReadCommand = new Command("subscription:read")
   .action(async (options: { org?: string }) => {
     try {
       const params = new URLSearchParams();
-      if (options.org) params.append("org_id", options.org);
+      const orgId = options.org ?? getOrgId();
+      if (orgId) params.append("org_id", orgId);
       const data = await apiRequest<SubscriptionReadResponse>(
         `/billing/subscription/read?${params}`,
         { method: "GET" }

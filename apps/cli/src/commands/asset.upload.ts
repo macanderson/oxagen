@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface AssetUploadResponse {
   url: string;
@@ -22,7 +23,7 @@ export const assetUploadCommand = new Command("upload")
           sourceUrl: options.source,
           kind: options.kind,
           filename: options.filename,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(`✓ Asset uploaded`);

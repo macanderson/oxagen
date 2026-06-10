@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface PluginRegistrySyncResponse {
   accepted: boolean;
@@ -17,7 +18,7 @@ export const pluginRegistrySyncCommand = new Command("sync")
         body: JSON.stringify({
           registryId: options.registry,
           mode: options.mode,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(data.accepted ? `✓ Sync accepted for registry ${options.registry} (${options.mode})` : "Sync not accepted");

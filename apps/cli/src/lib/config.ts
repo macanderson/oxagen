@@ -33,7 +33,15 @@ export function clearConfig(): void {
 }
 
 export function getToken(): string | undefined {
-  return readConfig().token;
+  return process.env["OXAGEN_API_TOKEN"] ?? readConfig().token;
+}
+
+export function getOrgId(): string | undefined {
+  return process.env["OXAGEN_ORG_ID"] ?? readConfig().orgSlug;
+}
+
+export function getWorkspaceId(): string | undefined {
+  return process.env["OXAGEN_WORKSPACE_ID"] ?? readConfig().workspaceSlug;
 }
 
 export function getApiUrl(): string {

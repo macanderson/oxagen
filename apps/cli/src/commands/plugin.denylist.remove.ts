@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface PluginDenylistRemoveResponse {
   ok: boolean;
@@ -17,7 +18,7 @@ export const pluginDenylistRemoveCommand = new Command("remove")
         body: JSON.stringify({
           serverName: options.server,
           pluginType: options.type,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(data.ok ? `✓ ${options.server} removed from denylist` : "Failed to remove from denylist");

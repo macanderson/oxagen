@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface BillingSubscriptionUpgradeStartResponse {
   checkoutUrl: string;
@@ -23,7 +24,7 @@ export const billingSubscriptionUpgradeStartCommand = new Command("upgrade-start
           interval: options.interval,
           successUrl: options.successUrl,
           cancelUrl: options.cancelUrl,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       console.log(`✓ Checkout session created for plan: ${data.planSlug} (${data.interval})`);

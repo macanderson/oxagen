@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface FieldDiff {
   name: string;
@@ -30,7 +31,7 @@ export const formFillCommand = new Command("fill")
           instruction: options.instruction,
           fields,
           entitySummary: options.entity,
-          org_id: options.org,
+          org_id: options.org ?? getOrgId(),
         }),
       });
       const changed = data.fields.filter((f) => f.changed);

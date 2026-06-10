@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { apiRequest, requireAuth , ApiError } from "../lib/api-client.js";
+import { getOrgId } from "../lib/config.js";
 
 interface Plugin {
   id?: string;
@@ -19,7 +20,7 @@ export const pluginListCommand = new Command("list")
   .action(async (options: { org?: string }) => {
     requireAuth();
     try {
-      const qs = options.org ? `?org=${options.org}` : "";
+      const qs = options.org ? `?org=${options.org ?? getOrgId()}` : "";
       const data = await apiRequest<PluginsResponse>(`/plugins${qs}`);
       const plugins = data.plugins ?? data.data ?? [];
       if (plugins.length === 0) {
