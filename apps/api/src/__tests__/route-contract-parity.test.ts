@@ -146,36 +146,9 @@ describe("route–contract parity", () => {
   const registeredPaths = app.routes.map((r) => r.path);
 
   // Filter contracts to only those with "api" in their surfaces
-  // TODO: Phase 5–6 stubs (semantic.edge.approve/list/infer/suggest, plugin.schema.*, plugin.version.list, repo.*, integration.*, graph.node.list)
-  // need routes; skip them for now until routes are wired (OXA-XXXX)
-  const stubContractNames = new Set([
-    "semantic.edge.approve",
-    "semantic.edge.infer",
-    "semantic.edge.list",
-    "semantic.edge.suggest",
-    "plugin.schema.get",
-    "plugin.schema.validate",
-    "plugin.version.list",
-    "repo.configure",
-    "repo.sync",
-    "repo.pause",
-    "repo.resume",
-    "repo.metrics",
-    "integration.install",
-    "integration.configure",
-    "integration.list",
-    "integration.get",
-    "integration.sync",
-    "integration.metrics",
-    "integration.delete",
-    "graph.node.list",
-  ]);
-
-  const apiContracts = contracts.filter((contract) => {
-    const isApiSurface = getSurfaces(contract).includes("api");
-    const isStub = stubContractNames.has(contract.name);
-    return isApiSurface && !isStub;
-  });
+  const apiContracts = contracts.filter((contract) =>
+    getSurfaces(contract).includes("api"),
+  );
 
   it("there are api-surfaced contracts to check (registry is non-empty)", () => {
     expect(apiContracts.length).toBeGreaterThan(0);
@@ -202,9 +175,9 @@ describe("route–contract parity", () => {
   }
 
   it("total api-surfaced contracts matches the number checked (no silent filter)", () => {
-    // Asserts we didn't accidentally filter out contracts (excluding known stubs)
+    // Asserts we didn't accidentally filter out contracts
     const apiSurfaceCount = contracts.filter((c) =>
-      getSurfaces(c).includes("api") && !stubContractNames.has(c.name),
+      getSurfaces(c).includes("api"),
     ).length;
     expect(apiContracts.length).toBe(apiSurfaceCount);
   });
