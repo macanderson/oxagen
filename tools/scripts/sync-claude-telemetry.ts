@@ -54,6 +54,11 @@ async function syncTelemetry() {
     return;
   }
 
+  // Skip sync if credentials are not configured
+  if (!ANALYTICS_URL || !ANALYTICS_USER || !ANALYTICS_PASSWORD) {
+    return;
+  }
+
   const lastSyncedLine = fs.existsSync(SYNCED_LOG)
     ? parseInt(fs.readFileSync(SYNCED_LOG, 'utf-8').trim(), 10)
     : 0;
@@ -114,7 +119,9 @@ async function syncTelemetry() {
   fs.writeFileSync(SYNCED_LOG, lineNumber.toString());
 }
 
-syncTelemetry().catch(err => {
-  console.error('Telemetry sync error:', err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+syncTelemetry()
+  .then(() => process.exit(0))
+  .catch(err => {
+    console.error('Telemetry sync error:', err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
