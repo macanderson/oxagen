@@ -12,7 +12,8 @@
     "./types": "./src/types.ts",
     "./embed": "./src/embed/index.ts",
     "./mutations": "./src/mutations/upsert-entity.ts",
-    "./dedup": "./src/dedup/resolve.ts"
+    "./dedup": "./src/dedup/resolve.ts",
+    "./parsers": "./src/parsers/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -31,6 +32,9 @@
   "devDependencies": {
     "typescript": "6.0.3",
     "vitest": "2.1.9",
-    "@vitest/coverage-v8": "2.1.9"
+    "@vitest/coverage-v8": "2.1.9",
+    "web-tree-sitter": "^0.22.6",
+    "tree-sitter-typescript": "^0.23.2",
+    "tree-sitter-python": "^0.23.6"
   }
 }
