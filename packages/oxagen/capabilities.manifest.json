@@ -1964,6 +1964,24 @@
       }
     },
     {
+      "name": "semantic.edge.approve",
+      "file": "semantic.edge.approve.ts",
+      "domain": "semantic",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "semantic.edge.infer",
       "file": "semantic.edge.infer.ts",
       "domain": "semantic",

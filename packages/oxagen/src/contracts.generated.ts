@@ -115,6 +115,7 @@ import "./contracts/repo.resume";
 import "./contracts/repo.sync";
 import "./contracts/research.swarm.start";
 import "./contracts/research.swarm.status";
+import "./contracts/semantic.edge.approve";
 import "./contracts/semantic.edge.infer";
 import "./contracts/semantic.edge.list";
 import "./contracts/semantic.edge.suggest";
