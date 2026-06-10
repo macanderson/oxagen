@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- event.data types are declared in inngest.ts Events; untyped here because InstanceType<typeof Inngest> strips EventSchemas generics from the Proxy */
 import { z } from "zod";
 import { inngest } from "../inngest";
 import { runInTenantScope } from "@oxagen/tenancy";

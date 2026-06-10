@@ -72,7 +72,6 @@ export const ingestionOauthRefresh = inngest.createFunction(
         let decryptedRefreshToken: string;
         try {
           // decrypt() returns a Buffer; convert to UTF-8 string.
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           const decryptedRaw: unknown = await decrypt(cipherBuf, cryptoAdapter.keyId, {
             adapter: cryptoAdapter.adapter,
           });

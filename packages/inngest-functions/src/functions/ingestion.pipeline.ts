@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument -- event.data types are declared in inngest.ts Events; untyped here because InstanceType<typeof Inngest> strips EventSchemas generics from the Proxy */
 import { inngest } from "../inngest";
 import { withTenantDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";

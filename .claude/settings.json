@@ -321,6 +321,20 @@
           }
         ]
       }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx tsx \"$CLAUDE_PROJECT_DIR/tools/scripts/claude-session-summary.ts\"",
+            "timeout": 10,
+            "statusMessage": "Recording session summary to ClickHouse...",
+            "async": true
+          }
+        ]
+      }
     ]
   },
   "worktree": {

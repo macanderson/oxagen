@@ -54,6 +54,8 @@ import { metadata as formFillMetadata } from "./form.fill";
 import { metadata as imageGenerateMetadata } from "./image.generate";
 import { metadata as notificationsListMetadata } from "./notifications.list";
 import { metadata as notificationsMarkMetadata } from "./notifications.mark";
+import { metadata as researchSwarmStartMetadata } from "./research.swarm.start";
+import { metadata as researchSwarmStatusMetadata } from "./research.swarm.status";
 import { metadata as organizationCreateMetadata } from "./organization.create";
 import { metadata as pluginCatalogBrowseMetadata } from "./plugin.catalog.browse";
 import { metadata as pluginCatalogGetMetadata } from "./plugin.catalog.get";
@@ -157,6 +159,8 @@ const allToolMetadata = [
   imageGenerateMetadata,
   notificationsListMetadata,
   notificationsMarkMetadata,
+  researchSwarmStartMetadata,
+  researchSwarmStatusMetadata,
   organizationCreateMetadata,
   orgMemberAddMetadata,
   orgMemberInviteAcceptMetadata,
