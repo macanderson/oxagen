@@ -117,6 +117,14 @@ function contractNameToPathSegment(name: string): string {
     archive: "archive",
     connection: "connections",
     "privacy.data": "privacy",
+    // Domains whose routes use hyphenated plurals or differ from the dot-path
+    "semantic.edge": "semantic-edges",
+    "plugin.schema": "plugin-schema",
+    "plugin.version": "plugin-versions",
+    repo: "repos",
+    integration: "integrations",
+    // graph.node.list maps to /graph/nodes (browse endpoint)
+    "graph.node.list": "graph/nodes",
   };
 
   // Try progressively shorter prefixes
@@ -137,10 +145,12 @@ describe("route–contract parity", () => {
   // Collect all registered route paths from the Hono app
   const registeredPaths = app.routes.map((r) => r.path);
 
-  // Filter contracts to only those with "api" in their surfaces
-  const apiContracts = contracts.filter((contract) =>
-    getSurfaces(contract).includes("api"),
-  );
+  // Filter contracts to only those with "api" in their surfaces, excluding intentional stubs
+  const apiContracts = contracts.filter((contract) => {
+    const isApiSurface = getSurfaces(contract).includes("api");
+    const isStub = contract.layers?.includes("stub");
+    return isApiSurface && !isStub;
+  });
 
   it("there are api-surfaced contracts to check (registry is non-empty)", () => {
     expect(apiContracts.length).toBeGreaterThan(0);

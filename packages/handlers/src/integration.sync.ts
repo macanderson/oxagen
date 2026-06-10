@@ -65,7 +65,7 @@ export const integrationSyncHandler: CapabilityHandler<typeof integrationSync> =
   // Queue the sync job via Inngest. The event carries sync-method context so
   // the receiving function can apply the correct cadence and backoff strategy.
   await inngest.send({
-    name: "ingestion/sync.requested" as never,
+    name: "ingestion/sync.requested",
     data: {
       jobId,
       connectionId: row.id,

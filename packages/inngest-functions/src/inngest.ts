@@ -156,6 +156,22 @@ type Events = {
     };
   };
 
+  // Manual or polling sync request dispatched by the integration.sync handler.
+  // The worker resolves the connector type and dispatches the appropriate sync event.
+  "ingestion/sync.requested": {
+    data: {
+      jobId: string;
+      connectionId: string;
+      orgId: string;
+      workspaceId: string;
+      integrationId: string;
+      mode: "full" | "incremental" | "dry_run";
+      syncMethod: "manual" | "polling" | "webhook";
+      syncIntervalSeconds: number;
+      requestedAt: string; // ISO-8601
+    };
+  };
+
   // Async deletion job: remove a connection and optionally its ingested graph data.
   "ingestion/connection.delete": {
     data: {
