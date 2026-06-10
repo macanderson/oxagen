@@ -79,6 +79,7 @@ export function McpServerPicker({
             : "MCP servers"
         }
         aria-expanded={open}
+        data-testid="mcp-server-picker-btn"
         onClick={() => setOpen((v) => !v)}
         className={cn(
           "h-8 w-8 p-0",
