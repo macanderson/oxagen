@@ -19,9 +19,10 @@ afterEach(cleanup);
 
 // Mock next/image
 vi.mock("next/image", () => ({
-  // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim; real next/image requires Next.js runtime
-  default: ({ src, alt, ...rest }: { src: string; alt: string; [key: string]: unknown }) =>
-    <img src={src} alt={alt} {...rest} />,
+  default: ({ src, alt, ...rest }: { src: string; alt: string; [key: string]: unknown }) => (
+    // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim; real next/image requires Next.js runtime
+    <img src={src} alt={alt} {...rest} />
+  ),
 }));
 
 // Mock react-easy-crop (it relies on canvas APIs not available in jsdom)

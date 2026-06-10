@@ -121,6 +121,7 @@ export function ChatShellClient({
       awaitingReconcileRef.current = false;
       reset();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isStreamingValueRef is a stable ref; its identity never changes
   }, [messages, reset]);
 
   // Stable refs so useCallback deps don't change on every render.
@@ -169,6 +170,7 @@ export function ChatShellClient({
       signalRef.current(approvalId);
       return resolveApprovalAction(approvalId, decision);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- signalRef is a stable ref via useLatestRef; adding it would defeat the pattern
     [resolveApprovalAction],
   );
 
@@ -280,6 +282,7 @@ export function ChatShellClient({
 
       return result;
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- *Ref values are stable refs via useLatestRef; adding them would defeat the pattern
     [sendAction, router, pathname],
   );
 
@@ -289,6 +292,7 @@ export function ChatShellClient({
     // Reset live state immediately so the partial turn is cleaned up.
     resetRef.current();
     setIsStreamingRef.current(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- *Ref values are stable refs via useLatestRef; no dependencies needed
   }, []);
 
   const callbacks: MessageBubbleCallbacks = {

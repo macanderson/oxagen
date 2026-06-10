@@ -23,9 +23,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("next/image", () => ({
-  // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim; real next/image requires Next.js runtime
-  default: ({ src, alt, ...rest }: { src: string; alt: string; [k: string]: unknown }) =>
-    <img src={src} alt={alt} {...rest} />,
+  default: ({ src, alt, ...rest }: { src: string; alt: string; [k: string]: unknown }) => (
+    // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim; real next/image requires Next.js runtime
+    <img src={src} alt={alt} {...rest} />
+  ),
 }));
 
 const current = { publicId: "org-1", slug: "acme", name: "Acme Corp" };
