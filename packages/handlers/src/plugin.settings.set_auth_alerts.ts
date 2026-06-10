@@ -7,7 +7,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const { sendEmail, roles } = input as { sendEmail: boolean; roles: string[] };
   const orgId = ctx.orgId;
 
-  const alertsValue = JSON.stringify({ send_email: sendEmail, roles });
+  const alertsValue = JSON.stringify({ mcp_auth_alerts: { send_email: sendEmail, roles } });
 
   try {
     await withSystemDb(async (tx) => {

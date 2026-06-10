@@ -114,9 +114,35 @@ export default async function OrgPluginsPage({ params }: PageProps) {
     // Continue with empty arrays if contract fails
   }
 
-  // For now, assume auth alerts defaults; can be fetched later if needed.
-  const initialSendEmail = false;
-  const initialAlertRoles = ["Owner"];
+  // Read mcp_auth_alerts from org settings.
+  let initialSendEmail = false;
+  let initialAlertRoles: string[] = ["Owner"];
+  try {
+    const [orgRow] = await runInTenantScope(
+      { orgId: org.id, workspaceId: ORG_ONLY_WS },
+      () =>
+        withSystemDb((tx) =>
+          tx
+            .select({ settings: schema.organizations.settings })
+            .from(schema.organizations)
+            .where(eq(schema.organizations.id, org.id))
+            .limit(1),
+        ),
+    );
+    if (orgRow) {
+      const raw = (orgRow.settings ?? {}) as Record<string, unknown>;
+      const alerts = (raw["mcp_auth_alerts"] ?? {}) as Record<string, unknown>;
+      if (typeof alerts["send_email"] === "boolean") {
+        initialSendEmail = alerts["send_email"];
+      }
+      if (Array.isArray(alerts["roles"]) && alerts["roles"].length > 0) {
+        initialAlertRoles = alerts["roles"] as string[];
+      }
+    }
+  } catch (e) {
+    console.error("Failed to fetch org auth alert settings:", e);
+    // Safe defaults already set above
+  }
 
   return (
     <OrgPluginsPanel
