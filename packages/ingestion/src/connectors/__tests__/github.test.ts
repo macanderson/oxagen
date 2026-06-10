@@ -1,8 +1,62 @@
 import { createHmac } from "node:crypto";
 import { describe, it, expect } from "vitest";
 import { github } from "../github/index";
+import type { RecordTypeSample } from "../types";
 
 const payload = Buffer.from("test-body");
+
+describe("github connector – previewRecordTypes", () => {
+  it("returns an array of RecordTypeSample with the correct shape", async () => {
+    const samples = await github.previewRecordTypes(
+      { scheme: "oauth2", _marker: "oauth2" },
+      { organizations: ["oxagen"], syncDepthDays: 90 },
+    );
+
+    expect(Array.isArray(samples)).toBe(true);
+    expect(samples.length).toBeGreaterThan(0);
+
+    for (const sample of samples) {
+      // Each entry must match RecordTypeSample shape
+      const s = sample as RecordTypeSample;
+      expect(typeof s.sourceRecordType).toBe("string");
+      expect(s.sourceRecordType.length).toBeGreaterThan(0);
+      expect(typeof s.displayName).toBe("string");
+      expect(s.displayName.length).toBeGreaterThan(0);
+      expect(Array.isArray(s.sampleRecords)).toBe(true);
+      expect(typeof s.fieldSchema).toBe("object");
+      expect(s.fieldSchema).not.toBeNull();
+      // Must NOT have old wrong-shape keys
+      expect((s as Record<string, unknown>)["recordType"]).toBeUndefined();
+      expect((s as Record<string, unknown>)["sample"]).toBeUndefined();
+    }
+  });
+
+  it("includes pull_request, issue, commit, repository, release, source record types", async () => {
+    const samples = await github.previewRecordTypes(
+      { scheme: "oauth2", _marker: "oauth2" },
+      { organizations: ["oxagen"], syncDepthDays: 90 },
+    );
+    const types = samples.map((s) => s.sourceRecordType);
+    expect(types).toContain("pull_request");
+    expect(types).toContain("issue");
+    expect(types).toContain("commit");
+    expect(types).toContain("repository");
+    expect(types).toContain("release");
+    expect(types).toContain("source");
+  });
+
+  it("pull_request has correct fieldSchema keys", async () => {
+    const samples = await github.previewRecordTypes(
+      { scheme: "oauth2", _marker: "oauth2" },
+      { organizations: ["oxagen"], syncDepthDays: 90 },
+    );
+    const pr = samples.find((s) => s.sourceRecordType === "pull_request");
+    expect(pr).toBeDefined();
+    expect(pr!.fieldSchema["title"]).toBe("string");
+    expect(pr!.fieldSchema["state"]).toBe("string");
+    expect(pr!.fieldSchema["author"]).toBe("string");
+  });
+});
 
 describe("github connector – normalizeRecord", () => {
   describe("pull_request", () => {

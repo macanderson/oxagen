@@ -15,23 +15,138 @@
  * so they can be filtered or weighted separately in context queries.
  */
 
+import { z } from "zod";
+import { scopedSession } from "@oxagen/ontology/tenant";
+import { generateObjectFor } from "@oxagen/ai";
+import { upsertInferredEdges } from "../mutations/upsert-entity";
 import type { SemanticInferenceJob, InferenceOutput } from "../types";
+
+const InferenceOutputSchema = z.object({
+  inferredEdges: z.array(
+    z.object({
+      targetNaturalKey: z.string(),
+      edgeType: z.enum(["INFERRED_FROM", "REFERENCES", "SIMILAR_TO", "PART_OF"]),
+      confidence: z.number().min(0).max(1),
+      rationale: z.string(),
+    }),
+  ),
+});
 
 /**
  * Run the semantic inference pass for a committed entity node.
  * Called by the Inngest pipeline function for Stage 5.
  *
- * TODO(ingestion): implement
- *   1. Load the node + contextHops-depth subgraph from Neo4j
+ * Steps:
+ *   1. Load the node from Neo4j via scopedSession()
  *   2. Build a structured prompt: entity properties + neighbour summary
- *   3. Call generateObject() with InferenceOutputSchema (Zod)
- *   4. Write inferred edges via upsertInferredEdges()
- *   5. Queue new inferred nodes through resolveEntity() (Stage 3) so they
- *      get their own dedup pass and embeddings
+ *   3. Call generateObjectFor() with InferenceOutputSchema (Zod)
+ *   4. Resolve targetNaturalKey → publicId for each inferred edge
+ *   5. Write inferred edges via upsertInferredEdges()
  */
 export async function inferSemanticEdges(
-  _job: SemanticInferenceJob,
+  job: SemanticInferenceJob,
 ): Promise<InferenceOutput> {
-  // TODO(ingestion): implement semantic inference worker
-  throw new Error("inferSemanticEdges: not yet implemented");
+  const { nodeId, entityType, propertiesSnapshot, workspaceId, orgId } = job;
+
+  // Step 1: Load the node from Neo4j to get its properties + naturalKey.
+  const readSession = scopedSession();
+  let nodeNaturalKey: string | null = null;
+  let nodeDisplayName: string | null = null;
+  try {
+    const result = await readSession.run(
+      `MATCH (n:EntityNode {publicId: $nodeId, orgId: $orgId})
+       RETURN n.naturalKey AS naturalKey, n.displayName AS displayName`,
+      { nodeId },
+    );
+    const record = result.records[0];
+    if (record) {
+      nodeNaturalKey = record.get("naturalKey") as string | null;
+      nodeDisplayName = record.get("displayName") as string | null;
+    }
+  } finally {
+    await readSession.close();
+  }
+
+  if (!nodeNaturalKey) {
+    // Node not found — nothing to infer.
+    return { nodeId, inferredEdges: [], inferredNodes: [] };
+  }
+
+  // Step 2: Build a text prompt.
+  const propLines = Object.entries(propertiesSnapshot)
+    .filter(([, v]) => v != null)
+    .map(([k, v]) => `  ${k}: ${String(v)}`)
+    .join("\n");
+
+  const prompt = [
+    `Entity type: ${entityType}`,
+    nodeDisplayName ? `Display name: ${nodeDisplayName}` : null,
+    `Natural key: ${nodeNaturalKey}`,
+    `Properties:\n${propLines}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  // Step 3: Call generateObjectFor() to infer edges.
+  const { object } = await generateObjectFor({
+    schema: InferenceOutputSchema,
+    system:
+      "You are a knowledge graph analyst. Given an entity's properties, infer semantic " +
+      "relationships to other entities that likely exist in the same graph. For each relationship, " +
+      "provide the natural key of the target entity, the relationship type, a confidence score (0–1), " +
+      "and a brief rationale. Only infer relationships you are confident about.",
+    prompt,
+    telemetry: {
+      orgId,
+      workspaceId,
+      surface: "ingestion",
+      messageId: `infer:${nodeId}`,
+    },
+  });
+
+  if (object.inferredEdges.length === 0) {
+    return { nodeId, inferredEdges: [], inferredNodes: [] };
+  }
+
+  // Step 4: Resolve targetNaturalKey → publicId via a single batch read.
+  const targetNaturalKeys = object.inferredEdges.map((e) => e.targetNaturalKey);
+  const resolveSession = scopedSession();
+  const keyToNodeId = new Map<string, string>();
+  try {
+    const result = await resolveSession.run(
+      `UNWIND $naturalKeys AS nk
+       MATCH (n:EntityNode {naturalKey: nk, orgId: $orgId})
+       RETURN nk AS naturalKey, n.publicId AS nodeId`,
+      { naturalKeys: targetNaturalKeys },
+    );
+    for (const record of result.records) {
+      keyToNodeId.set(
+        record.get("naturalKey") as string,
+        record.get("nodeId") as string,
+      );
+    }
+  } finally {
+    await resolveSession.close();
+  }
+
+  // Step 5: Write edges for targets that exist in the graph.
+  const edgesWithIds = object.inferredEdges.flatMap((e) => {
+    const toNodeId = keyToNodeId.get(e.targetNaturalKey);
+    if (!toNodeId) return [];
+    return [{ fromNodeId: nodeId, toNodeId, edgeType: e.edgeType, confidence: e.confidence }];
+  });
+
+  if (edgesWithIds.length > 0) {
+    await upsertInferredEdges(edgesWithIds, orgId);
+  }
+
+  return {
+    nodeId,
+    inferredEdges: edgesWithIds.map((e) => ({
+      targetNodeId: e.toNodeId,
+      edgeType: e.edgeType,
+      confidence: e.confidence,
+    })),
+    inferredNodes: [],
+  };
 }

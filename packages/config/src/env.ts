@@ -35,6 +35,15 @@ export const baseEnvSchema = z.object({
   GITHUB_DATA_CLIENT_ID: z.string().optional(),
   GITHUB_DATA_CLIENT_SECRET: z.string().optional(),
 
+  // GitHub App OAuth — used for the data-connector OAuth flow (repo ingestion).
+  // Separate from GITHUB_DATA_CLIENT_* (data client is for future use).
+  // CLIENT_ID/SECRET identify the GitHub App itself; WEBHOOK_SECRET validates
+  // inbound webhook payloads; INSTALL_STATE_SECRET signs the OAuth state param.
+  GITHUB_APP_CLIENT_ID: z.string().optional(),
+  GITHUB_APP_CLIENT_SECRET: z.string().optional(),
+  GITHUB_APP_WEBHOOK_SECRET: z.string().optional(),
+  GITHUB_APP_INSTALL_STATE_SECRET: z.string().optional(),
+
   STRIPE_SECRET_KEY: z.string().startsWith("sk_"),
   STRIPE_PUBLISHABLE_KEY: z.string().startsWith("pk_"),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_"),

@@ -312,6 +312,44 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
   },
 
+  // ── GitHub App (connector OAuth + webhooks) ──────────────────────────────────
+  GITHUB_APP_CLIENT_ID: {
+    group: "github",
+    description: "GitHub App OAuth client id — used for the data-connector OAuth flow.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  GITHUB_APP_CLIENT_SECRET: {
+    group: "github",
+    description: "GitHub App OAuth client secret.",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  GITHUB_APP_WEBHOOK_SECRET: {
+    group: "github",
+    description: "GitHub App webhook signing secret — validates inbound webhook payloads.",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  GITHUB_APP_INSTALL_STATE_SECRET: {
+    group: "github",
+    description: "HMAC secret used to sign the OAuth state parameter for GitHub App installs.",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
   // ── Stripe ──────────────────────────────────────────────────────────────────
   STRIPE_SECRET_KEY: {
     group: "Stripe",

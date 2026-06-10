@@ -28,34 +28,140 @@
  * An agent asking "tell me everything about Mac Anderson" sees all aliases merged.
  */
 
+import { scopedSession } from "@oxagen/ontology/tenant";
+import { embedText } from "@oxagen/ai";
 import type { EntityMutation, DeduplicationResult } from "../types";
 import { ALIAS_THRESHOLD, CONFIRM_THRESHOLD } from "../types";
+import { upsertEntityNode, createAliasEdge } from "../mutations/upsert-entity";
 
 /**
  * Resolve an EntityMutation against the existing graph.
  *
  * @returns DeduplicationResult describing what happened and which node to embed.
- *
- * TODO: implement — requires:
- *   - scopedSession() from @oxagen/ontology/tenant
- *   - embedText() from @oxagen/ai/embed (for Pass B candidates)
- *   - Neo4j MERGE on naturalKey (Pass A)
- *   - Neo4j vector similarity query on entityType nodes (Pass B)
- *   - scoreCandidate() combining embedding + property match
- *   - createPrincipalNode() / createAliasEdge() Neo4j mutations
  */
-// TODO(OXA-ingestion): implement entity dedup — for now pass-through
-// Requires scopedSession() from @oxagen/ontology/tenant, embedText() from @oxagen/ai/embed,
-// Neo4j MERGE on naturalKey (Pass A), and vector similarity query (Pass B).
 export async function resolveEntity(
   mutation: EntityMutation,
-  _orgId: string,
+  orgId: string,
 ): Promise<DeduplicationResult> {
-  // Pass-through: treat every entity as a new principal until dedup is implemented.
-  // This allows the pipeline to run without blocking on the Neo4j integration.
-  console.warn("[ingestion] resolveEntity is a pass-through stub — entity dedup not yet implemented");
+  // ── Pass A: exact naturalKey lookup ─────────────────────────────────────────
+  const session = scopedSession();
+  let passANodeId: string | null = null;
+  try {
+    const result = await session.run(
+      `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
+       RETURN n.publicId AS nodeId`,
+      { naturalKey: mutation.naturalKey },
+    );
+    const record = result.records[0];
+    if (record) {
+      passANodeId = record.get("nodeId") as string;
+    }
+  } finally {
+    await session.close();
+  }
+
+  if (passANodeId) {
+    // Node already exists; upsertEntityNode will update it (ON MATCH SET).
+    await upsertEntityNode(mutation, orgId);
+    return {
+      principalNodeId: passANodeId,
+      action: "updated_principal",
+      confidence: 1.0,
+      matchReason: "natural_key_exact",
+    };
+  }
+
+  // ── Pass B: embedding similarity search ──────────────────────────────────────
+  // Build a text representation of the incoming entity for embedding.
+  const textParts: string[] = [mutation.entityType];
+  if (mutation.displayName) textParts.push(mutation.displayName);
+  for (const [k, v] of Object.entries(mutation.properties)) {
+    if (v == null) continue;
+    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+      textParts.push(`${k}:${v}`);
+    }
+  }
+  const entityText = textParts.join("  ");
+
+  const vector = await embedText(entityText, {
+    telemetry: {
+      orgId: mutation.orgId,
+      workspaceId: mutation.workspaceId,
+      surface: "ingestion",
+      executionStepId: `dedup:${mutation.naturalKey}`,
+    },
+  });
+
+  // Query the entity_node_embedding_index for similar nodes of the same entityType.
+  const searchSession = scopedSession();
+  let bestCandidate: { nodeId: string; displayName?: string; email?: string; url?: string; score: number } | null = null;
+  try {
+    const result = await searchSession.run(
+      `CALL db.index.vector.queryNodes('entity_node_embedding_index', 5, $vector)
+       YIELD node AS n, score
+       WHERE n.orgId = $orgId AND n.entityType = $entityType
+       RETURN n.publicId AS nodeId,
+              n.displayName AS displayName,
+              n.properties AS properties,
+              score`,
+      { vector, entityType: mutation.entityType },
+    );
+
+    for (const record of result.records) {
+      const candidateId = record.get("nodeId") as string;
+      const candidateDisplayName = record.get("displayName") as string | undefined;
+      const rawProperties = record.get("properties") as string | null;
+      const embeddingSimilarity = record.get("score") as number;
+
+      let parsedProps: Record<string, unknown> = {};
+      if (rawProperties) {
+        try {
+          parsedProps = JSON.parse(rawProperties) as Record<string, unknown>;
+        } catch {
+          // malformed stored properties — skip property scoring
+        }
+      }
+
+      const candidate = {
+        displayName: candidateDisplayName,
+        email: typeof parsedProps["email"] === "string" ? parsedProps["email"] : undefined,
+        url: typeof parsedProps["url"] === "string" ? parsedProps["url"] : undefined,
+      };
+
+      const combinedScore = scoreCandidate(mutation, candidate, embeddingSimilarity);
+
+      if (combinedScore >= ALIAS_THRESHOLD) {
+        if (!bestCandidate || combinedScore > bestCandidate.score) {
+          bestCandidate = { nodeId: candidateId, ...candidate, score: combinedScore };
+        }
+      }
+    }
+  } finally {
+    await searchSession.close();
+  }
+
+  if (bestCandidate) {
+    // Create new alias node, then link it to the principal.
+    const { nodeId: aliasNodeId } = await upsertEntityNode(mutation, orgId);
+    const tentative = bestCandidate.score < CONFIRM_THRESHOLD;
+    await createAliasEdge(aliasNodeId, bestCandidate.nodeId, {
+      confidence: bestCandidate.score,
+      matchReason: "name_embedding",
+      tentative,
+    });
+    return {
+      principalNodeId: bestCandidate.nodeId,
+      aliasNodeId,
+      action: tentative ? "created_alias" : "confirmed_alias",
+      confidence: bestCandidate.score,
+      matchReason: "name_embedding",
+    };
+  }
+
+  // No match — create a brand-new principal.
+  const { nodeId: newNodeId } = await upsertEntityNode(mutation, orgId);
   return {
-    principalNodeId: mutation.naturalKey,
+    principalNodeId: newNodeId,
     action: "created_principal",
     confidence: 1.0,
   };

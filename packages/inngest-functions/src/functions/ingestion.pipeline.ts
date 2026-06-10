@@ -2,9 +2,11 @@ import { inngest } from "../inngest";
 import { withTenantDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { scopedSession } from "@oxagen/ontology/tenant";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { renderEntityText, embedEntity } from "@oxagen/ingestion/embed";
 import { upsertEntityNode } from "@oxagen/ingestion/mutations";
+import { resolveEntity } from "@oxagen/ingestion/dedup";
 import type { EntityMutation, SourceRef } from "@oxagen/ingestion/types";
 import type { EntityTypeMapping } from "@oxagen/ingestion/pipeline";
 import { logger } from "../logger";
@@ -100,22 +102,32 @@ export const ingestionPipeline = inngest.createFunction(
     }
 
     // ── Step 2: Dedup Pass A — exact naturalKey lookup in Neo4j ─────────────
-    // Using scopedSession directly here since ingestion graph mutations are
-    // tenant-scoped by orgId on the node properties.
     const dedupPassA = await step.run("dedup-pass-a", async (): Promise<{
       found: boolean;
       nodeId?: string;
     }> => {
-      // TODO(ingestion): implement Neo4j naturalKey MATCH via scopedSession()
-      // MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
-      // RETURN n.publicId as nodeId
-      // For now: always miss (no Neo4j data yet) so Pass B creates a principal.
-      return { found: false };
+      return runInTenantScope({ orgId, workspaceId }, async () => {
+        const session = scopedSession();
+        try {
+          const result = await session.run(
+            `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
+             RETURN n.publicId AS nodeId`,
+            { naturalKey: mutation.naturalKey },
+          );
+          const record = result.records[0];
+          if (record) {
+            return { found: true, nodeId: record.get("nodeId") as string };
+          }
+          return { found: false };
+        } finally {
+          await session.close();
+        }
+      });
     });
 
-    // ── Step 3: Dedup Pass B — similarity match (stub until vector query ready) ──
+    // ── Step 3: Dedup Pass B — embedding similarity match ───────────────────
     const dedup = await step.run("dedup-pass-b", async (): Promise<{
-      action: "updated_principal" | "created_principal" | "created_alias";
+      action: "updated_principal" | "created_principal" | "created_alias" | "confirmed_alias";
       principalNodeId: string;
       confidence: number;
     }> => {
@@ -127,16 +139,10 @@ export const ingestionPipeline = inngest.createFunction(
         };
       }
 
-      // TODO(ingestion): implement embedding similarity search via Neo4j vector index
-      // entity_node_embedding_index — cosine similarity on (n:EntityNode).embedding
-      // For now: always create a new principal. The naturalKey uniqueness constraint
-      // on Neo4j (entity_node_natural_key index) will deduplicate on upsert.
-      const stubNodeId = `pending:${mutation.naturalKey}`;
-      return {
-        action: "created_principal",
-        principalNodeId: stubNodeId,
-        confidence: 1.0,
-      };
+      // Pass A missed — run full dedup (embedding similarity + alias creation).
+      return runInTenantScope({ orgId, workspaceId }, () =>
+        resolveEntity(mutation, orgId),
+      );
     });
 
     // ── Step 4: Upsert entity node in Neo4j ──────────────────────────────────

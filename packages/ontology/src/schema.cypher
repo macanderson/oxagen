@@ -72,3 +72,30 @@ OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`
 CREATE VECTOR INDEX entity_node_embedding_index IF NOT EXISTS
 FOR (n:EntityNode) ON (n.embedding)
 OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+// --- Source code ingestion — SourceFile, SourceSymbol, Feature ---
+CREATE CONSTRAINT source_file_public_id IF NOT EXISTS FOR (n:SourceFile) REQUIRE n.publicId IS UNIQUE;
+CREATE INDEX source_file_natural_key IF NOT EXISTS FOR (n:SourceFile) ON (n.naturalKey);
+CREATE INDEX source_file_org IF NOT EXISTS FOR (n:SourceFile) ON (n.orgId);
+CREATE INDEX source_file_connection IF NOT EXISTS FOR (n:SourceFile) ON (n.connectionId);
+
+CREATE CONSTRAINT source_symbol_public_id IF NOT EXISTS FOR (n:SourceSymbol) REQUIRE n.publicId IS UNIQUE;
+CREATE INDEX source_symbol_natural_key IF NOT EXISTS FOR (n:SourceSymbol) ON (n.naturalKey);
+CREATE INDEX source_symbol_org IF NOT EXISTS FOR (n:SourceSymbol) ON (n.orgId);
+CREATE INDEX source_symbol_file IF NOT EXISTS FOR (n:SourceSymbol) ON (n.fileNaturalKey);
+
+CREATE CONSTRAINT feature_public_id IF NOT EXISTS FOR (n:Feature) REQUIRE n.publicId IS UNIQUE;
+CREATE INDEX feature_natural_key IF NOT EXISTS FOR (n:Feature) ON (n.naturalKey);
+CREATE INDEX feature_org IF NOT EXISTS FOR (n:Feature) ON (n.orgId, n.workspaceId);
+
+CREATE VECTOR INDEX source_file_embedding_index IF NOT EXISTS
+FOR (n:SourceFile) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+CREATE VECTOR INDEX source_symbol_embedding_index IF NOT EXISTS
+FOR (n:SourceSymbol) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+CREATE VECTOR INDEX feature_embedding_index IF NOT EXISTS
+FOR (n:Feature) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };

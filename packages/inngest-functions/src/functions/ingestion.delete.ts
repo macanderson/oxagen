@@ -2,6 +2,7 @@ import { inngest } from "../inngest";
 import { withTenantDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { scopedSession } from "@oxagen/ontology";
 import { logger } from "../logger";
 
 /**
@@ -49,26 +50,74 @@ export const ingestionDeleteConnection = inngest.createFunction(
 
     // ── Step 2: Delete Neo4j entity nodes (when mode includes data) ──────────
     if (mode === "data_only" || mode === "full") {
-      await step.run("delete-neo4j-data", async () => {
-        // TODO(ingestion): implement Neo4j deletion via scopedSession()
-        //
-        // Algorithm:
-        //   1. MATCH (n:EntityNode {connectionId: $connectionId, orgId: $orgId})
-        //   2. For each n: check for incoming ALIAS_OF edges from nodes with
-        //      a DIFFERENT connectionId (Case C: alias from another source).
-        //      If found: promote highest-confidence alias to principal —
-        //        - Copy n.naturalKey, n.displayName, n.properties → alias node
-        //        - Reroute all ALIAS_OF edges that pointed to n → alias node
-        //        - Remove n
-        //      If not found: simply DETACH DELETE n
-        //
-        // Tracked in Linear: implement once scopedSession() is stable in this
-        // execution context and alias-promotion cypher is reviewed.
-        throw new Error(
-          "ingestion-delete: Neo4j deletion not yet implemented — " +
-            "tracked in Linear for implementation after scopedSession() stabilises",
-        );
-      });
+      await step.run("delete-neo4j-data", () =>
+        runInTenantScope({ orgId, workspaceId }, async () => {
+          const session = scopedSession();
+
+          // ── Pass 1: Promote aliases ──────────────────────────────────────
+          // Find principal nodes (from this connection) that have incoming
+          // ALIAS_OF edges from OTHER connections. Promote the highest-
+          // confidence alias to become the new principal before deletion.
+          const aliasResult = await session.run(
+            `
+            MATCH (alias:EntityNode)-[r:ALIAS_OF]->(principal:EntityNode)
+            WHERE principal.connectionId = $connectionId
+              AND principal.orgId = $orgId
+              AND alias.connectionId <> $connectionId
+            WITH principal, alias, r
+            ORDER BY r.confidence DESC
+            WITH principal, collect({alias: alias, edge: r})[0] AS topAlias
+            WHERE topAlias IS NOT NULL
+            WITH principal, topAlias.alias AS promoted
+            // Copy principal's identity fields to the promoted alias
+            SET promoted.naturalKey  = principal.naturalKey,
+                promoted.displayName = principal.displayName,
+                promoted.properties  = principal.properties,
+                promoted.syncedAt    = datetime()
+            // Reroute any remaining ALIAS_OF edges that pointed to the principal
+            WITH principal, promoted
+            MATCH (other:EntityNode)-[old:ALIAS_OF]->(principal)
+            WHERE other <> promoted
+            MERGE (other)-[newEdge:ALIAS_OF]->(promoted)
+              ON CREATE SET newEdge.confidence  = old.confidence,
+                            newEdge.matchReason = old.matchReason,
+                            newEdge.tentative   = old.tentative,
+                            newEdge.createdAt   = old.createdAt
+            DELETE old
+            RETURN count(promoted) AS promoted
+            `,
+            { connectionId, orgId },
+          );
+
+          const promotedCount = (aliasResult.records[0]?.get("promoted") as number | undefined) ?? 0;
+          logger.info(
+            { connectionId, orgId, promotedCount },
+            "ingestion-delete: alias promotion complete",
+          );
+
+          // ── Pass 2: Delete non-aliased entity nodes ──────────────────────
+          // Only delete nodes that have no remaining incoming ALIAS_OF edges
+          // from other connections (they were either promoted above or were
+          // never aliased).
+          const deleteResult = await session.run(
+            `
+            MATCH (n:EntityNode {connectionId: $connectionId, orgId: $orgId})
+            WHERE NOT ((:EntityNode)-[:ALIAS_OF]->(n))
+            DETACH DELETE n
+            RETURN count(n) AS deleted
+            `,
+            { connectionId, orgId },
+          );
+
+          const deletedCount = (deleteResult.records[0]?.get("deleted") as number | undefined) ?? 0;
+          logger.info(
+            { connectionId, orgId, deletedCount },
+            "ingestion-delete: neo4j entity nodes deleted",
+          );
+
+          return { promoted: promotedCount, deleted: deletedCount };
+        }),
+      );
     }
 
     // ── Step 3: Delete Postgres records ──────────────────────────────────────

@@ -1,0 +1,223 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// ── Hoisted mocks ─────────────────────────────────────────────────────────────
+const mocks = vi.hoisted(() => ({
+  sessionRun: vi.fn(),
+  sessionClose: vi.fn().mockResolvedValue(undefined),
+  scopedSession: vi.fn(),
+}));
+
+vi.mock("@oxagen/ontology/tenant", () => ({
+  scopedSession: mocks.scopedSession,
+}));
+
+mocks.scopedSession.mockReturnValue({
+  run: mocks.sessionRun,
+  close: mocks.sessionClose,
+});
+
+import {
+  upsertEntityNode,
+  upsertEmbedding,
+  createAliasEdge,
+  upsertInferredEdges,
+} from "../upsert-entity";
+import type { EntityMutation } from "../../types";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function makeMutation(overrides: Partial<EntityMutation> = {}): EntityMutation {
+  return {
+    workspaceId: "ws-1",
+    orgId: "org-1",
+    connectionId: "conn-1",
+    entityType: "task",
+    sourceRecordType: "issue",
+    naturalKey: "github:conn-1:42",
+    operation: "insert",
+    displayName: "Fix the bug",
+    properties: { title: "Fix the bug", state: "open" },
+    sourceRef: { connectorType: "github", connectionId: "conn-1", externalId: "42" },
+    ...overrides,
+  };
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe("upsertEntityNode", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.scopedSession.mockReturnValue({
+      run: mocks.sessionRun,
+      close: mocks.sessionClose,
+    });
+  });
+
+  it("runs a MERGE Cypher with naturalKey and orgId", async () => {
+    mocks.sessionRun.mockResolvedValueOnce({
+      records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],
+    });
+
+    const mutation = makeMutation();
+    const result = await upsertEntityNode(mutation, "org-1");
+
+    expect(result).toEqual({ nodeId: "uuid-node-1" });
+    expect(mocks.sessionRun).toHaveBeenCalledOnce();
+
+    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(cypher).toContain("MERGE (n:EntityNode");
+    expect(cypher).toContain("naturalKey:");
+    expect(cypher).toContain("orgId:");
+    expect(cypher).toContain("RETURN n.publicId AS nodeId");
+    expect(params["naturalKey"]).toBe("github:conn-1:42");
+    expect(params["entityType"]).toBe("task");
+    expect(params["displayName"]).toBe("Fix the bug");
+    // properties must be JSON-stringified
+    expect(typeof params["properties"]).toBe("string");
+    expect(JSON.parse(params["properties"] as string)).toMatchObject({ title: "Fix the bug" });
+  });
+
+  it("closes session even on error", async () => {
+    mocks.sessionRun.mockRejectedValueOnce(new Error("Neo4j down"));
+
+    await expect(upsertEntityNode(makeMutation(), "org-1")).rejects.toThrow("Neo4j down");
+    expect(mocks.sessionClose).toHaveBeenCalledOnce();
+  });
+
+  it("throws when no record is returned", async () => {
+    mocks.sessionRun.mockResolvedValueOnce({ records: [] });
+
+    await expect(upsertEntityNode(makeMutation(), "org-1")).rejects.toThrow(
+      "upsertEntityNode: no record returned",
+    );
+  });
+});
+
+describe("upsertEmbedding", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.scopedSession.mockReturnValue({
+      run: mocks.sessionRun,
+      close: mocks.sessionClose,
+    });
+    mocks.sessionRun.mockResolvedValue({ records: [] });
+  });
+
+  it("runs MATCH + SET Cypher on publicId", async () => {
+    await upsertEmbedding("node-uuid", [0.1, 0.2, 0.3], "text-embedding-3-small", "org-1");
+
+    expect(mocks.sessionRun).toHaveBeenCalledOnce();
+    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(cypher).toContain("MATCH (n:EntityNode {publicId: $nodeId, orgId: $orgId})");
+    expect(cypher).toContain("SET n.embedding");
+    expect(params["nodeId"]).toBe("node-uuid");
+    expect(params["vector"]).toEqual([0.1, 0.2, 0.3]);
+    expect(params["model"]).toBe("text-embedding-3-small");
+  });
+
+  it("closes session on success", async () => {
+    await upsertEmbedding("node-uuid", [], "model", "org-1");
+    expect(mocks.sessionClose).toHaveBeenCalledOnce();
+  });
+});
+
+describe("createAliasEdge", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.scopedSession.mockReturnValue({
+      run: mocks.sessionRun,
+      close: mocks.sessionClose,
+    });
+    mocks.sessionRun.mockResolvedValue({ records: [] });
+  });
+
+  it("runs MERGE ALIAS_OF with correct params", async () => {
+    await createAliasEdge("alias-id", "principal-id", {
+      confidence: 0.95,
+      matchReason: "email_match",
+      tentative: false,
+    }, "org-1");
+
+    expect(mocks.sessionRun).toHaveBeenCalledOnce();
+    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(cypher).toContain("MERGE (alias)-[r:ALIAS_OF]->(principal)");
+    expect(params["aliasNodeId"]).toBe("alias-id");
+    expect(params["principalNodeId"]).toBe("principal-id");
+    expect(params["confidence"]).toBe(0.95);
+    expect(params["matchReason"]).toBe("email_match");
+    expect(params["tentative"]).toBe(false);
+  });
+});
+
+describe("upsertInferredEdges", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.scopedSession.mockReturnValue({
+      run: mocks.sessionRun,
+      close: mocks.sessionClose,
+    });
+    mocks.sessionRun.mockResolvedValue({ records: [] });
+  });
+
+  it("does nothing when edges array is empty", async () => {
+    await upsertInferredEdges([], "org-1");
+    expect(mocks.scopedSession).not.toHaveBeenCalled();
+    expect(mocks.sessionRun).not.toHaveBeenCalled();
+  });
+
+  it("runs one MERGE per edge with correct params", async () => {
+    const edges = [
+      { fromNodeId: "from-1", toNodeId: "to-1", edgeType: "REFERENCES", confidence: 0.8 },
+      { fromNodeId: "from-1", toNodeId: "to-2", edgeType: "PART_OF", confidence: 0.9 },
+    ];
+
+    await upsertInferredEdges(edges, "org-1");
+
+    expect(mocks.sessionRun).toHaveBeenCalledTimes(2);
+
+    const [cypher1, params1] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(cypher1).toContain("REFERENCES");
+    expect(params1["fromNodeId"]).toBe("from-1");
+    expect(params1["toNodeId"]).toBe("to-1");
+    expect(params1["confidence"]).toBe(0.8);
+
+    const [cypher2] = mocks.sessionRun.mock.calls[1] as [string, Record<string, unknown>];
+    expect(cypher2).toContain("PART_OF");
+  });
+
+  it("supports all 4 allowed edge types", async () => {
+    const edgeTypes = ["INFERRED_FROM", "REFERENCES", "SIMILAR_TO", "PART_OF"];
+    for (const edgeType of edgeTypes) {
+      vi.clearAllMocks();
+      mocks.scopedSession.mockReturnValue({
+        run: mocks.sessionRun,
+        close: mocks.sessionClose,
+      });
+      mocks.sessionRun.mockResolvedValue({ records: [] });
+
+      await upsertInferredEdges(
+        [{ fromNodeId: "from", toNodeId: "to", edgeType, confidence: 0.7 }],
+        "org-1",
+      );
+      const [cypher] = mocks.sessionRun.mock.calls[0] as [string, unknown];
+      expect(cypher).toContain(edgeType);
+    }
+  });
+
+  it("throws for unsupported edge types", async () => {
+    await expect(
+      upsertInferredEdges(
+        [{ fromNodeId: "f", toNodeId: "t", edgeType: "UNKNOWN_EDGE", confidence: 0.5 }],
+        "org-1",
+      ),
+    ).rejects.toThrow('unsupported edgeType "UNKNOWN_EDGE"');
+  });
+
+  it("closes session on success", async () => {
+    await upsertInferredEdges(
+      [{ fromNodeId: "f", toNodeId: "t", edgeType: "SIMILAR_TO", confidence: 0.75 }],
+      "org-1",
+    );
+    expect(mocks.sessionClose).toHaveBeenCalledOnce();
+  });
+});
