@@ -1,0 +1,153 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: slack
+  displayName: Slack
+  description: Sync messages, threads, channels, and user activity from Slack workspaces.
+  icon: slack
+  category: communication
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: oauth2
+      kind: oauth2_authorization_code
+      displayName: Connect with Slack
+      scopes:
+        - channels:history
+        - channels:read
+        - groups:history
+        - groups:read
+        - users:read
+        - users:read.email
+        - team:read
+        - files:read
+
+config:
+  fields:
+    - key: channelIds
+      label: Channels (optional)
+      widget: tag-input
+      description: Restrict sync to specific channel IDs (e.g. C01234ABCDE). Leave empty to sync all accessible public channels.
+      validation:
+        itemPattern: "^[CG][A-Z0-9]{8,}$"
+
+    - key: includePrivateChannels
+      label: Include Private Channels
+      widget: checkbox
+      description: Sync private channels the connected user is a member of. Requires groups:history scope.
+      defaultValue: false
+
+    - key: includeDirectMessages
+      label: Include Direct Messages
+      widget: checkbox
+      description: Sync direct messages involving the connected user. Requires im:history scope.
+      defaultValue: false
+
+    - key: syncDepthDays
+      label: Initial Sync Depth (days)
+      widget: number
+      description: How far back to pull message history on the first sync.
+      defaultValue: 90
+      validation:
+        min: 1
+        max: 365
+
+    - key: excludeBotMessages
+      label: Exclude Bot Messages
+      widget: checkbox
+      description: Skip messages posted by bots and automated integrations.
+      defaultValue: true
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: false
+  items:
+    - id: message
+      displayName: Messages
+      description: Channel messages and thread replies with reaction and attachment metadata.
+      defaultEnabled: true
+
+    - id: channel
+      displayName: Channels
+      description: Channel metadata including name, purpose, topic, and member count.
+      defaultEnabled: true
+
+    - id: user
+      displayName: Users
+      description: Workspace member profiles including name, email, and title.
+      defaultEnabled: true
+
+filters:
+  pathFilters:
+    enabled: false
+  labelFilters:
+    enabled: false
+
+inference:
+  enabled: true
+  defaultEnabled: true
+  toggleLabel: Enable AI relationship inference
+  perRecordType:
+    message: true
+    channel: false
+    user: false
+  confidenceThreshold:
+    defaultValue: 0.75
+    min: 0.50
+    max: 0.99
+  ontologyPrompt: |
+    Extract decisions, action items, and project signals from Slack messages.
+
+    Look for:
+    - Messages mentioning GitHub PR numbers, issue references, or feature names
+    - Decision announcements in engineering channels (e.g. "We decided to...", "Shipping X tomorrow")
+    - Incident or outage reports mentioning services or components
+    - Cross-team coordination signals linking people to projects or features
+
+    Create edges:
+    - SlackMessage -[discusses]-> Feature (when message references a feature by name)
+    - SlackMessage -[references]-> PullRequest (when message contains a GitHub PR URL or number)
+    - SlackMessage -[reports_incident_for]-> Service (when message is an incident/outage report)
+    - SlackUser -[member_of]-> Team (when user's channel membership indicates team affiliation)
+    - SlackMessage -[authored_by]-> SlackUser
+
+    Extract decision metadata:
+    - Decision text, stakeholders present, date, affected components.
+
+sync:
+  delivery: webhook
+  pollingSupported: true
+  webhookEvents:
+    - message
+    - channel_created
+    - channel_archive
+    - member_joined_channel
+    - member_left_channel
+    - team_join
+  polling:
+    defaultIntervalSeconds: 900
+    minIntervalSeconds: 300
+    maxIntervalSeconds: 86400
+
+defaultFieldMappings:
+  message:
+    text: description
+    userId: author
+    channelId: parentId
+    ts: createdAt
+    threadTs: threadId
+    permalink: sourceUrl
+  channel:
+    name: title
+    purpose: description
+    topic: summary
+  user:
+    realName: displayName
+    email: email
+    title: jobTitle

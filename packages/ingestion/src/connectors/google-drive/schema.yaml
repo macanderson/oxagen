@@ -1,0 +1,157 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: google-drive
+  displayName: Google Drive
+  description: Sync files, shared drives, and folders from Google Drive, including Google Docs, Sheets, Slides, and PDFs.
+  icon: google-drive
+  category: productivity
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: oauth2
+      kind: oauth2_authorization_code
+      displayName: Connect with Google
+      scopes:
+        - https://www.googleapis.com/auth/drive.readonly
+        - https://www.googleapis.com/auth/drive.metadata.readonly
+
+config:
+  fields:
+    - key: sharedDrivesOnly
+      label: Shared Drives Only
+      widget: checkbox
+      description: Restrict sync to shared (team) drives. Disable to include personal My Drive.
+      defaultValue: false
+
+    - key: rootFolderIds
+      label: Root Folder IDs (optional)
+      widget: tag-input
+      description: Limit sync to specific folder IDs. Leave empty to sync the entire accessible Drive.
+      validation:
+        itemPattern: "^[a-zA-Z0-9_\\-]{10,}$"
+
+    - key: includedMimeTypes
+      label: File Types
+      widget: multi-select
+      description: Restrict to specific file formats. Leave empty for all supported types.
+      defaultValue:
+        - application/vnd.google-apps.document
+        - application/vnd.google-apps.spreadsheet
+        - application/pdf
+      options:
+        - label: Google Docs
+          value: application/vnd.google-apps.document
+        - label: Google Sheets
+          value: application/vnd.google-apps.spreadsheet
+        - label: Google Slides
+          value: application/vnd.google-apps.presentation
+        - label: PDFs
+          value: application/pdf
+        - label: Plain Text
+          value: text/plain
+        - label: Markdown
+          value: text/markdown
+        - label: Microsoft Word
+          value: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+
+    - key: excludeTrashed
+      label: Exclude Trashed Files
+      widget: checkbox
+      description: Skip files in the Trash. Strongly recommended.
+      defaultValue: true
+
+    - key: nameIgnorePatterns
+      label: Name Ignore Patterns
+      widget: tag-input
+      description: Glob patterns for file names to skip (e.g. ~$* for Office temp files).
+      defaultValue:
+        - "~$*"
+        - "*.tmp"
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: false
+  items:
+    - id: file
+      displayName: Files
+      description: Documents, spreadsheets, presentations, PDFs, and other files stored in Drive.
+      defaultEnabled: true
+
+    - id: folder
+      displayName: Folders
+      description: Drive folder metadata for hierarchy mapping.
+      defaultEnabled: false
+
+    - id: shared_drive
+      displayName: Shared Drives
+      description: Team Drive metadata including name and membership.
+      defaultEnabled: false
+
+filters:
+  pathFilters:
+    enabled: false
+  labelFilters:
+    enabled: false
+
+inference:
+  enabled: true
+  defaultEnabled: true
+  toggleLabel: Enable AI relationship inference
+  perRecordType:
+    file: true
+    folder: false
+    shared_drive: false
+  confidenceThreshold:
+    defaultValue: 0.80
+    min: 0.50
+    max: 0.99
+  ontologyPrompt: |
+    Extract specifications, design decisions, and requirements from Drive documents.
+
+    Look for:
+    - Documents mentioning feature names, service names, or architectural components
+    - Acceptance criteria, design rationale, and API contracts
+    - Author mentions or team ownership signals
+
+    Create edges:
+    - GoogleDoc -[specifies]-> Feature (when doc describes a feature by name or functionality)
+    - GoogleDoc -[references]-> PullRequest (when doc mentions a PR number or GitHub URL)
+    - GoogleDoc -[authored_by]-> GithubUser (when doc author matches a known GitHub handle)
+    - Service -[depends_on]-> ExternalAPI (when doc describes an integration or dependency)
+
+    Cross-source links:
+    - If a doc mentions a feature by name, link to the Feature node inferred from connected code sources
+    - If a doc mentions a GitHub issue number (e.g. #123), reference that Issue node
+
+sync:
+  delivery: polling
+  pollingSupported: true
+  polling:
+    defaultIntervalSeconds: 900
+    minIntervalSeconds: 300
+    maxIntervalSeconds: 86400
+
+defaultFieldMappings:
+  file:
+    name: title
+    mimeType: contentType
+    owners: authors
+    createdTime: createdAt
+    modifiedTime: updatedAt
+    webViewLink: sourceUrl
+    driveId: parentId
+  folder:
+    name: title
+    createdTime: createdAt
+    modifiedTime: updatedAt
+    webViewLink: sourceUrl
+  shared_drive:
+    name: title
+    createdTime: createdAt

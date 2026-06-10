@@ -1,0 +1,201 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: github
+  displayName: GitHub
+  description: Sync pull requests, issues, commits, releases, and source files from GitHub repositories.
+  icon: github
+  category: developer-tools
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: oauth2
+      kind: oauth2_authorization_code
+      displayName: Connect with GitHub (OAuth)
+      scopes:
+        - repo
+        - read:org
+        - read:user
+    - id: pat
+      kind: api_key
+      displayName: Personal Access Token
+      fields:
+        - key: apiKey
+          label: Personal Access Token
+          widget: secret
+          description: Generate at github.com/settings/tokens — requires repo and read:org scopes.
+          validation:
+            required: true
+            pattern: "^(ghp_|github_pat_)[A-Za-z0-9_]{20,}$"
+
+config:
+  fields:
+    - key: organizations
+      label: Organizations
+      widget: tag-input
+      description: GitHub organization slugs to sync (e.g. acme-corp). At least one required.
+      validation:
+        required: true
+        minItems: 1
+        itemPattern: "^[a-zA-Z0-9][a-zA-Z0-9\\-]{0,38}$"
+
+    - key: repositories
+      label: Repositories (optional)
+      widget: tag-input
+      description: Restrict sync to specific repos (owner/repo). Leave empty to sync all accessible repos in the listed organizations.
+      validation:
+        itemPattern: "^[a-zA-Z0-9_\\.\\-]+/[a-zA-Z0-9_\\.\\-]+$"
+
+    - key: syncDepthDays
+      label: Initial Sync Depth (days)
+      widget: number
+      description: How far back to pull history on the first sync.
+      defaultValue: 90
+      validation:
+        min: 1
+        max: 730
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: false
+  items:
+    - id: pull_request
+      displayName: Pull Requests
+      description: Merged, open, and closed pull requests including descriptions, labels, and review metadata.
+      defaultEnabled: true
+
+    - id: issue
+      displayName: Issues
+      description: Bug reports, feature requests, and tasks tracked as GitHub issues.
+      defaultEnabled: true
+
+    - id: release
+      displayName: Releases
+      description: Tagged releases with changelogs and semantic version metadata.
+      defaultEnabled: true
+
+    - id: source
+      displayName: Source Files
+      description: Repository file tree snapshots for code-level ontology inference.
+      defaultEnabled: false
+
+    - id: commit
+      displayName: Commits
+      description: Individual commit metadata (SHA, message, author, timestamp).
+      defaultEnabled: false
+
+    - id: repository
+      displayName: Repositories
+      description: "Repository metadata: name, description, language, visibility."
+      defaultEnabled: true
+
+    - id: code_review
+      displayName: Code Reviews
+      description: Pull request review bodies and approval/change-request states.
+      defaultEnabled: false
+
+    - id: comment
+      displayName: Comments
+      description: Issue and pull request comments.
+      defaultEnabled: false
+
+filters:
+  pathFilters:
+    enabled: true
+    defaultIgnore:
+      - "node_modules/**"
+      - "dist/**"
+      - ".git/**"
+      - "*.lock"
+      - "*.min.js"
+      - "coverage/**"
+      - ".turbo/**"
+    appliesTo:
+      - source
+  labelFilters:
+    enabled: true
+    appliesTo:
+      - issue
+      - pull_request
+
+inference:
+  enabled: true
+  defaultEnabled: true
+  toggleLabel: Enable AI relationship inference
+  perRecordType:
+    pull_request: true
+    issue: true
+    release: true
+    source: true
+    commit: false
+    repository: false
+    code_review: false
+    comment: false
+  confidenceThreshold:
+    defaultValue: 0.75
+    min: 0.50
+    max: 0.99
+  ontologyPrompt: |
+    Infer product features from GitHub entities.
+    Features are identified from:
+    - Issue titles containing "Feature:" prefix or labels like "feature", "enhancement"
+    - PR titles that implement or close an issue
+    - Code comments mentioning feature or service names
+
+    Create edges:
+    - Feature -[implemented_by]-> PullRequest (when PR is merged and title references a feature)
+    - Feature -[tracked_by]-> Issue (when issue describes a feature request)
+    - Feature -[released_in]-> Release (when feature appears in release notes)
+    - Service -[depends_on]-> Service (when a PR imports or calls another service)
+
+    Extract architectural domains from file paths and import graphs:
+    api, web, mobile, infra, billing, auth, data.
+    Tag inferred Feature and Service nodes with their domain.
+
+sync:
+  delivery: webhook
+  pollingSupported: true
+  webhookEvents:
+    - push
+    - pull_request
+    - issues
+    - release
+    - create
+  polling:
+    defaultIntervalSeconds: 300
+    minIntervalSeconds: 60
+    maxIntervalSeconds: 86400
+
+defaultFieldMappings:
+  pull_request:
+    title: title
+    body: description
+    author: author
+    state: status
+    labels: tags
+    mergedAt: closedAt
+    url: sourceUrl
+  issue:
+    title: title
+    body: description
+    author: author
+    state: status
+    labels: tags
+    url: sourceUrl
+  release:
+    name: title
+    body: description
+    tagName: version
+    publishedAt: publishedAt
+    url: sourceUrl
+  repository:
+    fullName: title
+    description: description
+    language: language
+    url: sourceUrl

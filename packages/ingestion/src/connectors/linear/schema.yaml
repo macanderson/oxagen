@@ -1,0 +1,174 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: linear
+  displayName: Linear
+  description: Sync issues, projects, cycles, milestones, and team activity from Linear.
+  icon: linear
+  category: project-management
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: oauth2
+      kind: oauth2_authorization_code
+      displayName: Connect with Linear (OAuth)
+      scopes:
+        - read
+    - id: pat
+      kind: api_key
+      displayName: Personal API Key
+      fields:
+        - key: apiKey
+          label: Linear API Key
+          widget: secret
+          description: Generate at linear.app/settings/api — personal or workspace API key.
+          validation:
+            required: true
+            pattern: "^lin_(api|oauth)_[A-Za-z0-9]{40,}$"
+
+config:
+  fields:
+    - key: teamIds
+      label: Teams (optional)
+      widget: tag-input
+      description: Restrict sync to specific Linear team IDs or slugs. Leave empty to sync all accessible teams.
+      validation:
+        itemPattern: "^[a-zA-Z0-9_\\-]{1,50}$"
+
+    - key: syncDepthDays
+      label: Initial Sync Depth (days)
+      widget: number
+      description: How far back to pull issue history on the first sync.
+      defaultValue: 90
+      validation:
+        min: 1
+        max: 730
+
+    - key: includeCancelledIssues
+      label: Include Cancelled Issues
+      widget: checkbox
+      description: Sync issues in a Cancelled state. Useful for audit and trend analysis.
+      defaultValue: false
+
+    - key: includeArchivedProjects
+      label: Include Archived Projects
+      widget: checkbox
+      description: Sync projects that have been archived.
+      defaultValue: false
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: false
+  items:
+    - id: issue
+      displayName: Issues
+      description: Tasks, bugs, and feature requests tracked as Linear issues with state, priority, labels, and estimates.
+      defaultEnabled: true
+
+    - id: project
+      displayName: Projects
+      description: Linear projects grouping related issues with lead, dates, and progress.
+      defaultEnabled: true
+
+    - id: cycle
+      displayName: Cycles
+      description: Sprint cycles with start/end dates and completion metrics.
+      defaultEnabled: true
+
+    - id: comment
+      displayName: Comments
+      description: Issue comment threads for discussion and decision capture.
+      defaultEnabled: false
+
+filters:
+  pathFilters:
+    enabled: false
+  labelFilters:
+    enabled: true
+    appliesTo:
+      - issue
+
+inference:
+  enabled: true
+  defaultEnabled: true
+  toggleLabel: Enable AI relationship inference
+  perRecordType:
+    issue: true
+    project: true
+    cycle: false
+    comment: true
+  confidenceThreshold:
+    defaultValue: 0.75
+    min: 0.50
+    max: 0.99
+  ontologyPrompt: |
+    Infer product features and engineering work items from Linear entities.
+
+    Look for:
+    - Issues with "feature", "enhancement", or custom feature labels
+    - Issues grouped under projects that map to product areas or services
+    - Issue identifiers referenced in PR titles or commit messages (e.g. OXA-123)
+    - Priority and estimate signals that indicate strategic importance
+
+    Create edges:
+    - Feature -[tracked_by]-> LinearIssue (when issue describes or tracks a product feature)
+    - LinearIssue -[implemented_by]-> PullRequest (when a PR or commit references the issue identifier)
+    - LinearProject -[contains]-> Feature (when a project groups feature issues)
+    - LinearIssue -[blocked_by]-> LinearIssue (when issue description or relations indicate blocking)
+    - Service -[owns]-> LinearProject (when project name or team maps to a known service or domain)
+
+    Extract architectural domain tags from issue labels and project names:
+    api, web, mobile, infra, billing, auth, data.
+
+sync:
+  delivery: webhook
+  pollingSupported: true
+  webhookEvents:
+    - Issue
+    - IssueLabel
+    - Project
+    - Cycle
+    - Comment
+  polling:
+    defaultIntervalSeconds: 900
+    minIntervalSeconds: 300
+    maxIntervalSeconds: 86400
+
+defaultFieldMappings:
+  issue:
+    title: title
+    description: description
+    state: status
+    priority: priority
+    assignee: assignee
+    labels: tags
+    identifier: externalKey
+    estimate: storyPoints
+    dueDate: dueDate
+    url: sourceUrl
+  project:
+    name: title
+    description: description
+    state: status
+    lead: owner
+    progress: progressPercent
+    startDate: startDate
+    targetDate: dueDate
+    url: sourceUrl
+  cycle:
+    name: title
+    number: cycleNumber
+    startsAt: startDate
+    endsAt: endDate
+    progress: progressPercent
+    url: sourceUrl
+  comment:
+    body: description
+    author: author
+    createdAt: createdAt
