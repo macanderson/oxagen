@@ -485,4 +485,48 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     expect(capName).toBe(`mcp.${MCP_SERVER.id}.list_pull_requests`);
     expect(defaultEffect).toBe("allow");
   });
+
+  it("contributes tools when serverAllowlist is undefined (no filtering)", async () => {
+    // When serverAllowlist is not set, all healthy servers are loaded (no per-turn restriction).
+    const { tools } = await materializeTools(CTX);
+    const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    expect(tools[toolAlias]).toBeDefined();
+  });
+
+  it("contributes tools when serverAllowlist contains the server publicId", async () => {
+    // Server row needs a publicId for the allowlist check in contributeMcpTools.
+    const serverWithPublicId = { ...MCP_SERVER, publicId: "mcs_abc" };
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [serverWithPublicId]);
+    const { tools } = await materializeTools(CTX, { serverAllowlist: new Set(["mcs_abc"]) });
+    const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    // The DB mock ignores WHERE conditions and returns all rows, so tools are contributed.
+    expect(tools[toolAlias]).toBeDefined();
+  });
+
+  it("passes serverAllowlist through to contributeTools options", async () => {
+    // Verify the threading: materializeTools propagates serverAllowlist to every
+    // plugin-type contributor via the PluginContributeOptions argument.
+    vi.doMock("./plugin-type", async (importOriginal) => {
+      const real = await importOriginal<typeof import("./plugin-type")>();
+      const spyContributor = {
+        type: "mcp_server" as const,
+        contributeTools: vi.fn(async () => []),
+      };
+      return {
+        ...real,
+        getPluginTypeContributors: vi.fn(() => [spyContributor]),
+        // Expose the spy so we can assert on it below.
+        __spyContributor: spyContributor,
+      };
+    });
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+    const mod = await import("./plugin-type") as typeof import("./plugin-type") & { __spyContributor?: { contributeTools: ReturnType<typeof vi.fn> } };
+    const allowlist = new Set(["mcs_x1", "mcs_x2"]);
+    await mt(CTX, { serverAllowlist: allowlist });
+    expect(mod.__spyContributor?.contributeTools).toHaveBeenCalledWith(
+      CTX,
+      { serverAllowlist: allowlist },
+    );
+  });
 });
