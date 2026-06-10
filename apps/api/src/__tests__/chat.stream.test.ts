@@ -416,10 +416,8 @@ describe("chat stream: tool-call events", () => {
 
 describe("chat stream: error handling", () => {
   it("emits error event when stream throws", async () => {
-    async function* errorStream() {
+    async function* errorStream(): AsyncGenerator<never> {
       throw new Error("LLM provider error");
-      // eslint-disable-next-line no-unreachable
-      yield { type: "text-delta", text: "unreachable" };
     }
     mocks.streamAgentReply.mockReturnValue({ fullStream: errorStream() });
 

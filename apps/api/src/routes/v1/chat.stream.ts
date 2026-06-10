@@ -14,7 +14,6 @@ import {
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { randomUUID } from "node:crypto";
 import type { ModelMessage } from "ai";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
@@ -39,10 +38,6 @@ function partType(p: unknown): string | undefined {
   return typeof p === "object" && p !== null && "type" in p
     ? String((p as { type: unknown }).type)
     : undefined;
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
 }
 
 function errorMessageOf(error: unknown): string {

@@ -108,16 +108,16 @@ export const chatSendCommand = new Command("send")
       }
 
       // Parse the SSE stream line-by-line and render to stdout.
-      const reader = res.body.getReader();
+      const reader = res.body.getReader() as ReadableStreamDefaultReader<Uint8Array>;
       const decoder = new TextDecoder();
       let buffer = "";
       let hasOutput = false;
 
       try {
         while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          buffer += decoder.decode(chunk.value, { stream: true });
 
           // Split on double-newline SSE message boundaries.
           const parts = buffer.split("\n\n");

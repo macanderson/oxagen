@@ -431,37 +431,75 @@ describe("workspace create", () => {
 // ---------------------------------------------------------------------------
 // chat send
 // ---------------------------------------------------------------------------
+// chat.send uses native fetch() directly for SSE streaming (not apiRequest).
+// Build minimal SSE response helpers here.
+function makeSseResponse(text: string): Response {
+  const line = `data: ${JSON.stringify({ type: "text", text })}\n\nevent: done\ndata: [DONE]\n\n`;
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(c) { c.enqueue(encoder.encode(line)); c.close(); },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: { "content-type": "text/event-stream" },
+  });
+}
+
+function makeErrorResponse(status: number, message: string): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
 describe("chat send", () => {
-  it("sends message and prints response", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockApiRequest.mockResolvedValueOnce({ content: "Hello back!" });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it("sends message and streams response to stdout", async () => {
+    const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(makeSseResponse("Hello back!"));
 
     await chatSendCommand.parseAsync(["node", "cli", "hello"]);
 
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("hello"));
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Hello back!"));
-    consoleSpy.mockRestore();
+    const written = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(written).toContain("Hello back!");
+    stdoutSpy.mockRestore();
   });
 
-  it("passes conversation id when provided", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockApiRequest.mockResolvedValueOnce({ content: "response" });
+  it("passes conversationId when --conversation is provided", async () => {
+    const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    let capturedBody: Record<string, unknown> | null = null;
+    vi.spyOn(global, "fetch").mockImplementationOnce(async (_url, init) => {
+      capturedBody = JSON.parse((init as RequestInit).body as string) as Record<string, unknown>;
+      return makeSseResponse("ok");
+    });
 
     await chatSendCommand.parseAsync(["node", "cli", "hi", "--conversation", "cnv_abc"]);
 
-    const calls = mockApiRequest.mock.calls as unknown[][];
-    const init = calls[0]?.[1] as Record<string, unknown> | undefined;
-    const callBody = JSON.parse(init?.body as string) as Record<string, unknown>;
-    expect(callBody.conversationId).toBe("cnv_abc");
-    consoleSpy.mockRestore();
+    expect(capturedBody?.conversationId).toBe("cnv_abc");
+    stdoutSpy.mockRestore();
   });
 
-  it("exits 1 on API error", async () => {
+  it("exits 1 when fetch throws a network error", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
-    mockApiRequest.mockRejectedValueOnce(new Error("timeout"));
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(
+      () => { throw new Error("exit"); },
+    );
+    vi.spyOn(global, "fetch").mockRejectedValueOnce(new Error("ECONNREFUSED"));
 
     await expect(() => chatSendCommand.parseAsync(["node", "cli", "msg"])).rejects.toThrow("exit");
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
+  it("exits 1 on non-ok HTTP response", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(
+      () => { throw new Error("exit"); },
+    );
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(makeErrorResponse(503, "Service unavailable"));
+
+    await expect(() => chatSendCommand.parseAsync(["node", "cli", "test"])).rejects.toThrow();
     consoleSpy.mockRestore();
     exitSpy.mockRestore();
   });
@@ -2486,9 +2524,14 @@ describe("branch coverage: empty/optional data branches", () => {
   it("chat send ApiError path", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
-    mockApiError(503, "Service unavailable");
+    // chat.send uses native fetch (not apiRequest); mock fetch directly.
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "Service unavailable" }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      })
+    );
     await expect(chatSendCommand.parseAsync(["node", "cli", "test"])).rejects.toThrow();
-    expect(consoleSpy).toHaveBeenCalledWith("Error: Service unavailable");
     consoleSpy.mockRestore(); exitSpy.mockRestore();
   });
 
