@@ -61,7 +61,7 @@ connectionRoute.get("/:id/preview", async (c) => {
 
 // POST /connections/:id/suggest-mappings — LLM-suggested entity type mappings
 connectionRoute.post("/:id/suggest-mappings", async (c) => {
-  const json = await c.req.json();
+  const json = (await c.req.json()) as Record<string, unknown>;
   const body = connectionMappingsSuggest.input.parse({
     connectionId: c.req.param("id"),
     ...json,
@@ -81,7 +81,7 @@ connectionRoute.get("/:id/mappings", async (c) => {
 
 // PUT /connections/:id/mappings — save confirmed entity type mappings
 connectionRoute.put("/:id/mappings", async (c) => {
-  const json = await c.req.json();
+  const json = (await c.req.json()) as Record<string, unknown>;
   const body = connectionMappingsSet.input.parse({
     connectionId: c.req.param("id"),
     ...json,

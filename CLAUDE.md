@@ -28,6 +28,31 @@ live customers and no production traffic to protect.
   passing, no dead code. "Fast and breaking" is licence on *process and blast
   radius*, never on *completeness*. Pair this with the prime directive above.
 
+## Test gate enforcement — non-negotiable
+
+Every code change that ships must leave the package's test suite **at or above the
+coverage gate defined in that package's `vitest.config.ts`** (`coverage.thresholds`).
+
+Rules:
+- **New code requires new tests.** Route handlers, contracts, utilities — all new
+  source files need corresponding tests before the commit lands. No exceptions.
+- **E2E parity.** Any user-facing flow added or changed must have an e2e test in
+  the affected app's test suite (Playwright in `apps/app/__tests__/`). If the e2e
+  suite doesn't yet exist for that flow, create it.
+- **Coverage thresholds are ratchets — never lower them.** Each `vitest.config.ts`
+  `thresholds` block is a floor. When you ship new tested code that raises the
+  measured coverage, bump the threshold to match (round down to the nearest integer
+  percentage). Never reduce a threshold; it records the highest bar we've cleared.
+- **Verify locally before pushing.** Run `pnpm test:coverage` (unit) and
+  `pnpm test:e2e` (e2e, if applicable) from the affected package before `git push`.
+  Do not rely on CI to catch a coverage regression — fix it before it lands on
+  `main`.
+- **Lint is part of the gate.** The `--max-warnings 0` flag is enforced for every
+  package. Zero ESLint warnings means zero; suppress nothing with `eslint-disable`
+  unless the rule is genuinely inapplicable (add an inline comment explaining why).
+  If you introduce code that triggers a new warning, fix the root cause rather than
+  suppressing.
+
 ## Working with this user
 
 The user routinely sends **multi-part prompts** — a single message asks for

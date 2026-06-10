@@ -1,11 +1,18 @@
 import { Hono } from "hono";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withSystemDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
 import { inngest } from "@oxagen/inngest-functions/client";
 import { getConnector } from "@oxagen/ingestion/connectors";
-import { decrypt } from "@oxagen/crypto";
-import { createIngestionCryptoAdapter } from "@oxagen/crypto";
+import { decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
 import type { AppEnv } from "../../app";
+
+type WebhookConnRow = {
+  connectionId: string;
+  orgId: string;
+  workspaceId: string;
+  status: string;
+  secretEnc: unknown;
+};
 
 export const webhookRoute = new Hono<AppEnv>();
 
@@ -34,8 +41,10 @@ webhookRoute.post("/:connectorId/:connectionId", async (c) => {
     return c.json({ error: "Unknown connector" }, 404);
   }
 
-  // Look up the connection and its HMAC secret
-  const rows = await withTenantDb((tx) =>
+  // Look up the connection and its HMAC secret. withSystemDb is correct here:
+  // this is an unauthenticated route with no ALS scope, and we need to resolve
+  // the tenant from the connection's publicId before any scope exists.
+  const rows = await withSystemDb((tx) =>
     tx
       .select({
         connectionId: schema.sourceConnections.id,
@@ -61,7 +70,7 @@ webhookRoute.post("/:connectorId/:connectionId", async (c) => {
       .limit(1),
   );
 
-  const conn = rows[0];
+  const conn = rows[0] as WebhookConnRow | undefined;
   if (!conn) {
     return c.json({ error: "Connection not found" }, 404);
   }
@@ -81,9 +90,9 @@ webhookRoute.post("/:connectorId/:connectionId", async (c) => {
 
   // Build header map for connector verification
   const headers: Record<string, string> = {};
-  c.req.raw.headers.forEach((value, key) => {
+  for (const [key, value] of c.req.raw.headers.entries()) {
     headers[key.toLowerCase()] = value;
-  });
+  }
 
   // HMAC / token verification — connector decides the algorithm
   const verified = connector.verifyWebhook?.(payload, headers, webhookSecret ?? null) ?? true;
