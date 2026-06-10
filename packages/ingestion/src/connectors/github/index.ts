@@ -8,10 +8,13 @@ const connectionConfigSchema = z.object({
   syncDepthDays: z.number().int().positive().default(90),
 });
 
-type Config = typeof connectionConfigSchema;
+type Config = z.infer<typeof connectionConfigSchema>;
 
+// Utility functions to safely extract values
 function asRecord(raw: unknown): Record<string, unknown> {
-  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return raw !== null && typeof raw === "object" && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -29,7 +32,7 @@ function asArray(v: unknown): unknown[] {
 const github: ConnectorDefinition<Config> = {
   connectorId: "github",
   displayName: "GitHub",
-  description: "Sync pull requests, issues, commits, and releases from GitHub repositories.",
+  description: "Sync pull requests, issues, commits, releases, and sources from GitHub repositories.",
   icon: "github",
   supportedAuthSchemes: ["oauth2_authorization_code", "api_key"],
   deliveryMethod: "webhook",
@@ -37,20 +40,33 @@ const github: ConnectorDefinition<Config> = {
   connectionConfigSchema,
 
   async previewRecordTypes(_auth, _config): Promise<RecordTypeSample[]> {
-    throw new Error("github.previewRecordTypes: not yet implemented");
+    // Source records are now included as "source"
+    return [
+      { recordType: "pull_request", sample: {} },
+      { recordType: "issue", sample: {} },
+      { recordType: "commit", sample: {} },
+      { recordType: "repository", sample: {} },
+      { recordType: "release", sample: {} },
+      { recordType: "code_review", sample: {} },
+      { recordType: "comment", sample: {} },
+      { recordType: "source", sample: {} },
+    ];
   },
 
   normalizeRecord(sourceRecordType: string, raw: unknown): NormalizedRecord {
     const r = asRecord(raw);
 
     switch (sourceRecordType) {
+      // Pull requests
       case "pull_request": {
         const user = asRecord(r["user"]);
-        const labels = asArray(r["labels"]).map((l) => asString(asRecord(l)["name"])).filter(Boolean);
+        const labels = asArray(r["labels"])
+          .map((l) => asString(asRecord(l)["name"]))
+          .filter((n): n is string => !!n);
         return {
-          externalId: String(r["number"] ?? r["id"] ?? ""),
-          externalUrl: asString(r["html_url"]),
-          displayName: asString(r["title"]),
+          externalId: r["number"] !== undefined ? String(r["number"]) : r["id"] !== undefined ? String(r["id"]) : "",
+          externalUrl: asString(r["html_url"]) ?? undefined,
+          displayName: asString(r["title"]) ?? undefined,
           properties: {
             title: asString(r["title"]),
             body: asString(r["body"]),
@@ -65,13 +81,16 @@ const github: ConnectorDefinition<Config> = {
         };
       }
 
+      // Issues
       case "issue": {
         const user = asRecord(r["user"]);
-        const labels = asArray(r["labels"]).map((l) => asString(asRecord(l)["name"])).filter(Boolean);
+        const labels = asArray(r["labels"])
+          .map((l) => asString(asRecord(l)["name"]))
+          .filter((n): n is string => !!n);
         return {
-          externalId: String(r["number"] ?? r["id"] ?? ""),
-          externalUrl: asString(r["html_url"]),
-          displayName: asString(r["title"]),
+          externalId: r["number"] !== undefined ? String(r["number"]) : r["id"] !== undefined ? String(r["id"]) : "",
+          externalUrl: asString(r["html_url"]) ?? undefined,
+          displayName: asString(r["title"]) ?? undefined,
           properties: {
             title: asString(r["title"]),
             body: asString(r["body"]),
@@ -86,13 +105,14 @@ const github: ConnectorDefinition<Config> = {
         };
       }
 
+      // Commits
       case "commit": {
         const commitObj = asRecord(r["commit"]);
         const authorObj = asRecord(commitObj["author"]);
         return {
-          externalId: asString(r["sha"]) ?? String(r["id"] ?? ""),
-          externalUrl: asString(r["html_url"]),
-          displayName: asString(commitObj["message"])?.split("\n")[0],
+          externalId: asString(r["sha"]) ?? (r["id"] !== undefined ? String(r["id"]) : ""),
+          externalUrl: asString(r["html_url"]) ?? undefined,
+          displayName: asString(commitObj["message"]) ? asString(commitObj["message"])!.split("\n")[0] : undefined,
           properties: {
             sha: asString(r["sha"]),
             message: asString(commitObj["message"]),
@@ -104,18 +124,19 @@ const github: ConnectorDefinition<Config> = {
         };
       }
 
+      // Repositories
       case "repository": {
         const owner = asRecord(r["owner"]);
         return {
-          externalId: String(r["id"] ?? ""),
-          externalUrl: asString(r["html_url"]),
-          displayName: asString(r["full_name"]) ?? asString(r["name"]),
+          externalId: r["id"] !== undefined ? String(r["id"]) : "",
+          externalUrl: asString(r["html_url"]) ?? undefined,
+          displayName: asString(r["full_name"]) ?? asString(r["name"]) ?? undefined,
           properties: {
             name: asString(r["name"]),
             fullName: asString(r["full_name"]),
             description: asString(r["description"]),
             owner: asString(owner["login"]),
-            private: r["private"],
+            private: typeof r["private"] === "boolean" ? r["private"] : undefined,
             language: asString(r["language"]),
             stargazersCount: asNumber(r["stargazers_count"]),
             url: asString(r["html_url"]),
@@ -125,37 +146,90 @@ const github: ConnectorDefinition<Config> = {
         };
       }
 
+      // Releases
       case "release": {
         const author = asRecord(r["author"]);
         return {
-          externalId: String(r["id"] ?? ""),
-          externalUrl: asString(r["html_url"]),
-          displayName: asString(r["name"]) ?? asString(r["tag_name"]),
+          externalId: r["id"] !== undefined ? String(r["id"]) : "",
+          externalUrl: asString(r["html_url"]) ?? undefined,
+          displayName: asString(r["name"]) ?? asString(r["tag_name"]) ?? undefined,
           properties: {
             name: asString(r["name"]),
             tagName: asString(r["tag_name"]),
             body: asString(r["body"]),
             author: asString(author["login"]),
-            draft: r["draft"],
-            prerelease: r["prerelease"],
+            draft: typeof r["draft"] === "boolean" ? r["draft"] : undefined,
+            prerelease: typeof r["prerelease"] === "boolean" ? r["prerelease"] : undefined,
             publishedAt: asString(r["published_at"]),
             url: asString(r["html_url"]),
           },
         };
       }
 
+      // Code reviews and comments
       case "code_review":
       case "comment":
         return {
-          externalId: String(r["id"] ?? ""),
-          externalUrl: asString(r["html_url"]),
-          displayName: asString(r["body"])?.slice(0, 100),
+          externalId: r["id"] !== undefined ? String(r["id"]) : "",
+          externalUrl: asString(r["html_url"]) ?? undefined,
+          displayName: asString(r["body"]) ? asString(r["body"])!.slice(0, 100) : undefined,
           properties: {
             body: asString(r["body"]),
             url: asString(r["html_url"]),
             createdAt: asString(r["created_at"]),
           },
         };
+
+      // Sources (with more robust field checks)
+      case "source": {
+        // For demonstration, support both file and directory
+        // Accepts GitHub API tree/blob responses, or webhook payloads for files
+
+        // Try github REST output for a tree entry
+        if (
+          typeof r["type"] === "string" &&
+          (r["type"] === "blob" || r["type"] === "tree")
+        ) {
+          return {
+            externalId: asString(r["sha"]) ?? (r["id"] !== undefined ? String(r["id"]) : ""),
+            externalUrl: asString(r["url"]) ?? asString(r["html_url"]) ?? undefined,
+            displayName: asString(r["path"]) ?? undefined,
+            properties: {
+              path: asString(r["path"]),
+              type: asString(r["type"]), // 'tree' (directory), 'blob' (file)
+              size: asNumber(r["size"]),
+              mode: asString(r["mode"]),
+              sha: asString(r["sha"]),
+              url: asString(r["url"]),
+            },
+          };
+        }
+        // Try a file object from webhook (push event)
+        if (typeof r["filename"] === "string") {
+          return {
+            externalId: asString(r["sha"]) ?? (r["id"] !== undefined ? String(r["id"]) : ""),
+            externalUrl: asString(r["url"]) ?? asString(r["blob_url"]) ?? asString(r["raw_url"]) ?? undefined,
+            displayName: asString(r["filename"]),
+            properties: {
+              path: asString(r["filename"]),
+              status: asString(r["status"]),
+              additions: asNumber(r["additions"]),
+              deletions: asNumber(r["deletions"]),
+              changes: asNumber(r["changes"]),
+              sha: asString(r["sha"]),
+              blobUrl: asString(r["blob_url"]),
+              rawUrl: asString(r["raw_url"]),
+            },
+          };
+        }
+        // Could not determine source type
+        return {
+          externalId: asString(r["sha"]) ?? (asString(r["id"]) ?? ""),
+          externalUrl: asString(r["url"]) ?? undefined,
+          displayName: asString(r["path"]) ?? asString(r["filename"]) ?? "Unknown",
+          properties: r,
+        };
+      }
 
       default:
         throw new Error(`github.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
@@ -165,10 +239,14 @@ const github: ConnectorDefinition<Config> = {
   verifyWebhook(payload, headers, secret): boolean {
     if (!secret) return false;
     const sig = headers["x-hub-signature-256"];
-    if (!sig) return false;
+    if (!sig || typeof sig !== "string") return false;
     const expected = "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
     try {
-      return timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+      // Normalize lengths before timingSafeEqual to prevent crash
+      const sigBuf = Buffer.from(sig, "utf8");
+      const expBuf = Buffer.from(expected, "utf8");
+      if (sigBuf.length !== expBuf.length) return false;
+      return timingSafeEqual(sigBuf, expBuf);
     } catch {
       return false;
     }

@@ -1,12 +1,9 @@
 import https from 'https';
-
-const CLICKHOUSE_URL = process.env.CLICKHOUSE_URL ?? 'https://xao3dt0f2y.us-east-1.aws.clickhouse.cloud:8443';
-const CLICKHOUSE_USERNAME = process.env.CLICKHOUSE_USERNAME ?? 'default';
-const CLICKHOUSE_PASSWORD = process.env.CLICKHOUSE_PASSWORD ?? '';
+import { ANALYTICS_URL, ANALYTICS_USER, ANALYTICS_PASSWORD, ANALYTICS_DATABASE } from './clickhouse-analytics-config';
 
 function executeClickHouseSql(sql: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const url = new URL(CLICKHOUSE_URL);
+    const url = new URL(ANALYTICS_URL);
     url.pathname = '/';
     url.searchParams.set('query', sql);
 
@@ -16,7 +13,7 @@ function executeClickHouseSql(sql: string): Promise<string> {
       path: url.pathname + url.search,
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${Buffer.from(`${CLICKHOUSE_USERNAME}:${CLICKHOUSE_PASSWORD}`).toString('base64')}`,
+        'Authorization': `Basic ${Buffer.from(`${ANALYTICS_USER}:${ANALYTICS_PASSWORD}`).toString('base64')}`,
       },
     };
 
@@ -39,13 +36,13 @@ function executeClickHouseSql(sql: string): Promise<string> {
 
 async function setupTelemetry() {
   try {
-    console.log('Creating internal database...');
-    await executeClickHouseSql('CREATE DATABASE IF NOT EXISTS internal');
+    console.log(`Creating ${ANALYTICS_DATABASE} database...`);
+    await executeClickHouseSql(`CREATE DATABASE IF NOT EXISTS ${ANALYTICS_DATABASE}`);
     console.log('✓ Database created');
 
     console.log('Creating agent_executions table...');
     const createTableSql = `
-      CREATE TABLE IF NOT EXISTS internal.agent_executions (
+      CREATE TABLE IF NOT EXISTS ${ANALYTICS_DATABASE}.agent_executions (
         timestamp DateTime DEFAULT now(),
         type String,
         user_email String,

@@ -1,4 +1,5 @@
 import https from 'https';
+import { ANALYTICS_URL, ANALYTICS_USER, ANALYTICS_PASSWORD, ANALYTICS_DATABASE } from './clickhouse-analytics-config';
 
 interface TelemetryData {
   userEmail?: string;
@@ -14,16 +15,12 @@ interface TelemetryData {
   status?: 'success' | 'error';
 }
 
-const CLICKHOUSE_URL = process.env.CLICKHOUSE_URL ?? 'https://xao3dt0f2y.us-east-1.aws.clickhouse.cloud:8443';
-const CLICKHOUSE_USERNAME = process.env.CLICKHOUSE_USERNAME ?? 'default';
-const CLICKHOUSE_PASSWORD = process.env.CLICKHOUSE_PASSWORD ?? '';
-
 async function writeTelemetry(data: TelemetryData): Promise<void> {
   return new Promise((resolve, reject) => {
     const filesJson = JSON.stringify(data.filesModified);
 
     const insertSql = `
-      INSERT INTO internal.agent_executions (
+      INSERT INTO ${ANALYTICS_DATABASE}.agent_executions (
         type,
         user_email,
         session_id,
@@ -52,7 +49,7 @@ async function writeTelemetry(data: TelemetryData): Promise<void> {
       )
     `;
 
-    const url = new URL(CLICKHOUSE_URL);
+    const url = new URL(ANALYTICS_URL);
     url.pathname = '/';
     url.searchParams.set('query', insertSql);
 
@@ -62,7 +59,7 @@ async function writeTelemetry(data: TelemetryData): Promise<void> {
       path: url.pathname + url.search,
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${Buffer.from(`${CLICKHOUSE_USERNAME}:${CLICKHOUSE_PASSWORD}`).toString('base64')}`,
+        'Authorization': `Basic ${Buffer.from(`${ANALYTICS_USER}:${ANALYTICS_PASSWORD}`).toString('base64')}`,
       },
     };
 

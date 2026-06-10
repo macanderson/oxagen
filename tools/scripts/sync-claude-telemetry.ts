@@ -3,10 +3,7 @@ import path from 'path';
 import os from 'os';
 import https from 'https';
 import readline from 'readline';
-
-const CLICKHOUSE_URL = process.env.CLICKHOUSE_URL ?? 'https://xao3dt0f2y.us-east-1.aws.clickhouse.cloud:8443';
-const CLICKHOUSE_USERNAME = process.env.CLICKHOUSE_USERNAME ?? 'default';
-const CLICKHOUSE_PASSWORD = process.env.CLICKHOUSE_PASSWORD ?? '';
+import { ANALYTICS_URL, ANALYTICS_USER, ANALYTICS_PASSWORD, ANALYTICS_DATABASE } from './clickhouse-analytics-config';
 
 const TELEMETRY_LOG = path.join(os.homedir(), '.claude', 'claude-code-telemetry.jsonl');
 const SYNCED_LOG = path.join(os.homedir(), '.claude', 'claude-code-telemetry.synced');
@@ -21,7 +18,7 @@ interface TelemetryEntry {
 
 async function executeClickHouseSql(sql: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const url = new URL(CLICKHOUSE_URL);
+    const url = new URL(ANALYTICS_URL);
     url.pathname = '/';
     url.searchParams.set('query', sql);
 
@@ -31,7 +28,7 @@ async function executeClickHouseSql(sql: string): Promise<string> {
       path: url.pathname + url.search,
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${Buffer.from(`${CLICKHOUSE_USERNAME}:${CLICKHOUSE_PASSWORD}`).toString('base64')}`,
+        'Authorization': `Basic ${Buffer.from(`${ANALYTICS_USER}:${ANALYTICS_PASSWORD}`).toString('base64')}`,
       },
     };
 
@@ -88,7 +85,7 @@ async function syncTelemetry() {
   for (const entry of entries) {
     const filesJson = JSON.stringify(entry.files_modified);
     const insertSql = `
-      INSERT INTO internal.agent_executions (
+      INSERT INTO ${ANALYTICS_DATABASE}.agent_executions (
         type,
         user_email,
         model,
