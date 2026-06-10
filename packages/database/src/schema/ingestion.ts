@@ -237,3 +237,28 @@ export const deletionJobs = ingestionSchema.table(
     statusIdx: index("deletion_jobs_status_idx").on(t.status),
   }),
 );
+
+// ── ingestion.connector_schemas ─────────────────────────────────────────────────
+
+export const connectorSchemas = ingestionSchema.table(
+  "connector_schemas",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    pluginId: text("plugin_id").notNull(),
+    schemaUrl: text("schema_url"),
+    schema: jsonb("schema").notNull().default(sql`'{}'::jsonb`),
+    schemaVersion: text("schema_version").notNull(),
+    pluginVersion: text("plugin_version").notNull(),
+    cachedAt: timestamp("cached_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pluginIdVersionUniq: unique("connector_schemas_plugin_version_uniq").on(
+      t.pluginId,
+      t.pluginVersion,
+    ),
+    pluginIdIdx: index("connector_schemas_plugin_id_idx").on(t.pluginId),
+    cachedAtIdx: index("connector_schemas_cached_at_idx").on(t.cachedAt),
+  }),
+);
