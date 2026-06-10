@@ -259,14 +259,65 @@
     "opusplan"
   ],
   "enableAllProjectMcpServers": true,
+  "skillListingMaxDescChars": 512,
+  "skillListingBudgetFraction": 0.002,
+  "skillOverrides": {
+    "oxagen-code-audit": "name-only",
+    "audit-e2e": "name-only",
+    "audit-security": "name-only",
+    "audit-soc2": "name-only",
+    "audit-tenancy": "name-only",
+    "audit-tests": "name-only",
+    "grep-auditor": "name-only",
+    "pr-hygiene-auditor": "name-only",
+    "test-build-auditor": "name-only",
+    "code-architecture-auditor": "name-only",
+    "compliance-tenancy-auditor": "name-only",
+    "parity-docs-auditor": "name-only",
+    "release-audit": "name-only",
+    "prune-stale-branches-and-worktrees": "name-only",
+    "remove-deadcode": "name-only",
+    "create-auth-skill": "name-only",
+    "email-and-password-best-practices": "name-only",
+    "two-factor-authentication-best-practices": "name-only",
+    "organization-best-practices": "name-only",
+    "vendor-better-auth": "name-only",
+    "reablocks": "name-only",
+    "reagraph": "name-only",
+    "reaviz": "name-only",
+    "coss-ui": "name-only",
+    "oxagen-design-system": "name-only",
+    "vercel:bootstrap": "name-only",
+    "vercel:status": "name-only",
+    "vercel:marketplace": "name-only",
+    "vercel:env": "name-only",
+    "vercel:knowledge-update": "name-only",
+    "vercel:verification": "name-only",
+    "vercel:storage": "name-only",
+    "vercel:workflow": "name-only",
+    "vercel:runtime-cache": "name-only",
+    "vercel:deployment-expert": "name-only",
+    "vercel:performance-optimizer": "name-only",
+    "modern-web-guidance": "name-only",
+    "chrome-devtools-mcp": "name-only",
+    "keybindings-help": "name-only",
+    "update-config": "name-only",
+    "iterative-retrieval": "name-only",
+    "prompt-optimizer": "name-only",
+    "context-budget": "name-only",
+    "find-skills": "name-only"
+  },
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "pnpm lint --fix && pnpm typecheck"
+            "command": "npx tsx $CLAUDE_TELEMETRY_LOGGER",
+            "timeout": 3,
+            "statusMessage": "Recording telemetry...",
+            "async": true
           }
         ]
       }

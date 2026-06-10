@@ -245,11 +245,10 @@ function resolveInngestEnv() {
   return base;
 }
 
-// Concrete Inngest client type. Using InstanceType<typeof Inngest> avoids a
-// callable helper function while still giving getInngest() and the Proxy a
-// stable type. Event-name inference flows through the `as ConcreteInngestClient`
-// cast in getInngest() and the EventSchemas binding at construction time.
-type ConcreteInngestClient = InstanceType<typeof Inngest>;
+// Concrete Inngest client type with EventSchemas<Events> bound so that
+// createFunction() callbacks see event.data as properly typed rather than any.
+// InstanceType<typeof Inngest> strips generics — name the generic directly.
+type ConcreteInngestClient = Inngest<{ id: "oxagen-runner" }, EventSchemas<Events>>;
 
 let _inngest: ConcreteInngestClient | null = null;
 

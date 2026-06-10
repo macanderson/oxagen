@@ -934,6 +934,139 @@
       }
     },
     {
+      "name": "graph.cypher",
+      "file": "graph.cypher.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "graph.edge.delete",
+      "file": "graph.edge.delete.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "graph.edge.upsert",
+      "file": "graph.edge.upsert.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "graph.node.delete",
+      "file": "graph.node.delete.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "graph.node.get",
+      "file": "graph.node.get.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "graph.node.search",
+      "file": "graph.node.search.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "graph.node.upsert",
+      "file": "graph.node.upsert.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "image.analyze",
       "file": "image.analyze.ts",
       "domain": "image",
@@ -1479,6 +1612,42 @@
       }
     },
     {
+      "name": "research.swarm.start",
+      "file": "research.swarm.start.ts",
+      "domain": "research",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "research.swarm.status",
+      "file": "research.swarm.status.ts",
+      "domain": "research",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "skill.workspace.list",
       "file": "skill.workspace.list.ts",
       "domain": "skill",
@@ -1579,6 +1748,44 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "web.fetch",
+      "file": "web.fetch.ts",
+      "domain": "web",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "web.search",
+      "file": "web.search.ts",
+      "domain": "web",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
       }
     },
     {
