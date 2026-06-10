@@ -168,9 +168,9 @@ test.describe("knowledge-sources connections", () => {
   test("selecting org loads repository list", async ({ page, context }) => {
     await loginAs(context, fixture.userEmail, E2E_TEST_PASSWORD);
 
-    // Mock installations (no query param — exact match).
+    // Mock installations — the wizard appends ?connectionId=X so use trailing wildcard.
     await page.route(
-      `**connections/github/installations`,
+      `**/connections/github/installations*`,
       async (route) => {
         await route.fulfill({
           status: 200,
@@ -255,9 +255,9 @@ test.describe("knowledge-sources connections", () => {
   }) => {
     await loginAs(context, fixture.userEmail, E2E_TEST_PASSWORD);
 
-    // Mock installations.
+    // Mock installations — the wizard appends ?connectionId=X so use trailing wildcard.
     await page.route(
-      `**connections/github/installations`,
+      `**/connections/github/installations*`,
       async (route) => {
         await route.fulfill({
           status: 200,
@@ -279,7 +279,7 @@ test.describe("knowledge-sources connections", () => {
 
     // Mock repositories.
     await page.route(
-      `**installations/${MOCK_INSTALLATION_ID}/repositories**`,
+      `**/installations/${MOCK_INSTALLATION_ID}/repositories*`,
       async (route) => {
         await route.fulfill({
           status: 200,

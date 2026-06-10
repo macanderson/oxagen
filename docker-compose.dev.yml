@@ -13,6 +13,7 @@ services:
       postgres
       -c shared_preload_libraries=pg_stat_statements
       -c log_statement=none
+      -c max_connections=300
     ports:
       # Host 5433 → container 5432; avoids collision with oxagen-platform's
       # postgres on 5432. Update DATABASE_URL in .env.local accordingly.
