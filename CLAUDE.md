@@ -1,762 +1,259 @@
 # CLAUDE.md
 
-## Prime directive — fix every issue you encounter, no matter what
+## Prime directive — fix every issue you encounter
 
-When you encounter a bug, broken path, dead value, mispriced meter, stale
-config, or any defect — **fix it now, in place, completely.** Do not defer it,
-ticket-and-skip it, footnote it as "cosmetic / out of scope," or hand the user a
-follow-up. If you noticed it, you own it this turn. The user cannot track
-deferred work and has explicitly forbidden it. The only acceptable surface for a
-"later" is a *true external action* you cannot perform from here (e.g. flipping a
-prod env var) — and even then you fix everything in code first. Investigate to
-root cause, fix every co-located instance of the same class of bug (not just the
-one that was reported), and verify with tests/typecheck before declaring done.
+When you encounter a bug, broken path, dead value, mispriced meter, stale config, or any defect — **fix it now, in place, completely.** Investigate to root cause, fix every co-located instance, and verify with tests/typecheck before declaring done. The only acceptable deferral is a true external action you cannot perform (e.g. flipping a prod env var) — and even then, fix everything in code first.
 
-## Operating mode — build fast, no customers are live
+## Operating mode — pre-launch, build fast
 
-This repo is in **pre-launch build mode, NOT pull-request mode.** There are no
-live customers and no production traffic to protect.
+No live customers. **Commit and push directly to `main`** after running `pnpm gate` locally. Dangerous, breaking edits are allowed. Non-negotiable: **everything shipped must be functionally complete** — fully wired end-to-end, every layer present, tests passing, no dead code.
 
-- **Commit and push directly to `main`.** You do not need to open PRs or wait for
-  review. However, **run the full CI gate locally before pushing** — do not rely
-  on CI to catch failures. The `pnpm gate` command runs lint, typecheck, coverage,
-  tests, and migrations. All must pass locally before any push to main.
-- **Dangerous, breaking edits are allowed**, including changes that would break
-  production, drop/rewrite schemas, or remove APIs. Move fast; don't tiptoe.
-- The one non-negotiable: **everything you ship must be round and complete from a
-  functionality perspective** — fully wired end-to-end, every layer present (no
-  half-built features, no `dall-e-3`-style placeholders left charging $0), tests
-  passing, no dead code. "Fast and breaking" is licence on *process and blast
-  radius*, never on *completeness*. Pair this with the prime directive above.
+## Test gate enforcement
 
-## Test gate enforcement — non-negotiable
+Every code change must leave the package's test suite at or above its `vitest.config.ts` `coverage.thresholds`.
 
-Every code change that ships must leave the package's test suite **at or above the
-coverage gate defined in that package's `vitest.config.ts`** (`coverage.thresholds`).
-
-Rules:
-- **New code requires new tests.** Route handlers, contracts, utilities — all new
-  source files need corresponding tests before the commit lands. No exceptions.
-- **E2E parity.** Any user-facing flow added or changed must have an e2e test in
-  the affected app's test suite (Playwright in `apps/app/__tests__/`). If the e2e
-  suite doesn't yet exist for that flow, create it.
-- **Coverage thresholds are ratchets — never lower them.** Each `vitest.config.ts`
-  `thresholds` block is a floor. When you ship new tested code that raises the
-  measured coverage, bump the threshold to match (round down to the nearest integer
-  percentage). Never reduce a threshold; it records the highest bar we've cleared.
-- **Run the full CI gate before opening any PR.** Before opening a PR, run the
-  complete CI pipeline locally via `pnpm gate` to verify lint, typecheck, coverage,
-  tests, builds, and migrations all pass. Do not open a PR with failing or unknown
-  CI status. This is non-negotiable: PRs with broken CI waste review time and block
-  the pipeline. If you cannot run `pnpm gate` locally (e.g., due to environment
-  constraints), explicitly note this in the PR and explain what was verified instead.
-- **Verify locally before pushing to main.** Run `pnpm test:coverage` (unit) and
-  `pnpm test:e2e` (e2e, if applicable) from the affected package before `git push`.
-  Do not rely on CI to catch a coverage regression — fix it before it lands on
-  `main`.
-- **Lint is part of the gate.** The `--max-warnings 0` flag is enforced for every
-  package. Zero ESLint warnings means zero; suppress nothing with `eslint-disable`
-  unless the rule is genuinely inapplicable (add an inline comment explaining why).
-  If you introduce code that triggers a new warning, fix the root cause rather than
-  suppressing.
+- **New code requires new tests.** Route handlers, contracts, utilities — all need tests before the commit lands.
+- **E2E parity.** Any user-facing flow added or changed needs an e2e test in `apps/app/__tests__/`.
+- **Thresholds are ratchets — never lower them.** When new tested code raises coverage, bump the threshold to match (round down). Never reduce.
+- **Run `pnpm gate` before any push.** Lint (`--max-warnings 0`), typecheck, coverage, tests, builds, migrations — all must pass locally.
+- **Lint is part of the gate.** Zero ESLint warnings; no `eslint-disable` unless genuinely inapplicable (inline comment required).
 
 ## Verification discipline
 
-**Never claim a task is complete, a fix works, or a deploy succeeded without
-concrete verification.** Always provide evidence: test output, CI status, deployed
-artifact state, or rendered result. "It works" claims without proof have wasted
-countless rounds of correction and should never be accepted.
+Never claim a task is complete without concrete verification. Always provide evidence: test output, CI status, or rendered result.
 
-Rules for completion:
-- **No task is done until verified.** Always run the relevant test suite, E2E
-  tests, or integration checks before declaring completion. State explicitly what
-  verification you ran and its output.
-- **UI changes require screenshots as evidence.** For any user-facing UI change,
-  capture a screenshot showing the feature working correctly, forms submitting
-  without error, and the page being navigable and usable. Screenshots are not
-  optional — they are the proof that "it works" is real.
-  - E2E tests must capture screenshots of key success states (form submitted,
-    data loaded, navigation working). The screenshot directory must be deleted
-    and recreated on every test run (not accumulated across runs).
-  - Add the screenshot directory to `.gitignore` so they don't pollute the repo.
-  - Example: `apps/app/__tests__/screenshots/` in `.gitignore`.
-- **Forms must be tested end-to-end without error.** Any form added or changed
-  must have an E2E test that submits data and verifies success. If the form
-  saves to a database, query the database to confirm the save succeeded. If it
-  calls an API, verify the API response. Do not accept "form works" without this
-  proof.
-- **Deployments must be verified in the target environment.** After deploying, run
-  a health check, query the database, or hit a relevant API endpoint to confirm
-  the deploy actually landed and is working. Do not trust deploy logs alone.
-- **Database changes must be verified with queries.** After a migration or data
-  change, run a `SELECT` query to confirm the change is actually in the database,
-  not just in logs or code.
+- **No task is done until verified.** State what verification you ran and its output.
+- **UI changes require screenshots.** E2E tests must capture screenshots of key success states. Delete and recreate the screenshot directory on every run; add it to `.gitignore` (e.g. `apps/app/__tests__/screenshots/`).
+- **Forms must be tested end-to-end.** Submit data, verify success via DB query or API response.
+- **Deployments must be verified.** Health check, DB query, or API call after deploying — not just deploy logs.
+- **DB changes must be verified.** Run a `SELECT` after migration to confirm changes landed.
 
-## CI / Build — Full gate before push (non-negotiable)
+## CI / Build
 
-When fixing CI failures, verify against the actual CI environment — local typecheck
-passing does not mean lint, coverage gates, `.env.example`, and lockfiles are in sync.
+**Before any push to main:**
+1. Run `pnpm gate` locally — lint, typecheck, coverage, test, build, migrations. All must pass.
+2. Verify `.env.example` and lockfile are in sync.
+3. Confirm CI is green after push via `gh run watch`.
 
-**Mandatory sequence before any push to main:**
-1. Run `pnpm gate` locally — this runs lint (–max-warnings 0), typecheck, coverage,
-   test, build, and migrations in one go. All must pass.
-2. Verify `.env.example` and lockfile are in sync with current state.
-3. Do NOT push if any gate is red. Fix the root cause locally first.
-4. Confirm CI is green on main after push using `gh run watch` or GitHub Actions UI.
+## Database and migration targeting
 
-Recurring friction: fixes passed local typecheck but broke CI on lint/coverage/migrations.
-This happens because local and CI environments diverge (missing `.env.example` entries,
-stale lockfile, test config mismatch). Running `pnpm gate` before push catches ALL of
-these in one step. Do not push without it.
+Before running any mutation/migration script, **confirm you are targeting the correct database.**
 
-## Database and migration targeting — confirm environment before executing
+- **Migration files go in `packages/database/migrations/`**, never in `apps/`.
+- **Echo the target DB URL before any mutation script.** Local = `localhost:5433`; prod = Vercel secrets.
+- `tsx --env-file=.env.local` does NOT override a shell `DATABASE_URL` — `unset DATABASE_URL` to force local targeting.
+- **Verify with a query after migration.** Don't trust logs alone.
 
-When running data-mutation or migration scripts (e.g. `pnpm db:migrate`, `pnpm billing:stripe-sync`,
-seed scripts, or `execute-sql` for data changes), **always confirm you are targeting the
-correct database (production vs local vs test) BEFORE executing.**
+## Subagent workflows
 
-Rules:
-- **Place all migration files in `packages/database/migrations/`**, never in `apps/`.
-  Check the directory before writing. `tsx --env-file=.env.local` does NOT override
-  a shell `DATABASE_URL` — to force local targeting, `unset DATABASE_URL` first or
-  verify the env var is set to the local Docker Postgres (`:5433`).
-- **Before running any mutation script (stripe-sync, backfill, seed), echo the target
-  database URL** to confirm it matches your intent. For local work, it should be
-  `postgresql://...localhost:5433/...`. For production, it should point to the prod
-  database (verify this against the Vercel secrets, not a guess).
-- **Confirm the schema is correct.** After running a migration, query the target
-  database with a `SELECT` or `\dt` to verify the change actually landed — do not
-  trust logs alone. For data scripts, query a sample row to confirm the data was
-  written to the correct place.
+- **Use writable agents.** Architect agents return blueprints only; use `general-purpose` or equivalent for file edits.
+- **Grant full find-and-fix permissions.** Bug-fix workers must be able to diagnose, fix across files, run tests, and commit.
+- **Dispatch the test-completeness-judge before pushing to main or opening a PR.**
+- **Verify agents actually pushed.** Run `git fetch origin && git log -5 origin/main --oneline`. Do not accept "pushed" claims without this.
 
-Recurring bugs: `stripe-sync` ran against prod when it should have hit local (plan not
-found), migrations were placed in the wrong directory and never executed. These errors
-have high blast radius (wrong pricing, failed backfills, skipped schema changes). Confirm
-before executing.
+## Large file handling
 
-## Subagent workflows — writable agents only, plus commit verification
+For files >50k tokens, do NOT read the whole file. Grep or slice first:
+- `grep "pattern" file | head -50` for matching lines
+- `sed -n '/START/,/END/p' file | head -100` for sections
 
-When dispatching subagents for implementation, bug fixes, or refactoring work:
+## PR workflow / push to main
 
-- **Use writable agents, never read-only architects.** Architect agents (e.g.
-  `feature-dev:code-architect`) return blueprints but cannot write code. For any
-  task requiring file edits, use full-capability agents (e.g. `general-purpose`,
-  `feature-dev:code-explorer` with write permission, or custom implementation
-  agents). Blueprint-only results force you to re-do all edits yourself.
-- **Grant full find-and-fix permissions.** Bug-fix and regression workers must
-  have permission to: diagnose root causes, fix code across multiple files,
-  run tests, update tests, and commit changes. Do not gate their write access.
-- **Every PR must pass the test-completeness-judge before opening.** Before opening
-  a PR, dispatch the **test-completeness-judge agent** to audit all code changes
-  for adequate test coverage (unit, integration, E2E). The judge gates PR opening
-  and requires proof: passing tests, coverage metrics, screenshots for UI, CI gate
-  success. Do not open a PR until the judge approves.
-- **Verify agents actually pushed changes to main.** This is critical. After agents
-  report "work complete" or "pushed to main," **always verify with `git log origin/main`
-  that the commits are actually on main, not stranded in worktrees.** Do not accept
-  'pushed' claims without this check. Cherry-pick or consolidate worktree branches
-  if needed. Run `git fetch origin && git log -5 origin/main --oneline` to confirm.
-- **No subagent is done until you have verified with real commands.** After work
-  completes, run the test suite, check CI status, or query the database to confirm
-  the change landed and works. "Work done" means verified-on-main, not reported-as-done.
-
-## Large file handling — slice, don't read whole
-
-When working with large files (>50k tokens), do NOT read the entire file directly.
-Instead, use Bash commands (grep, awk, sed, head, tail) to extract only the lines you need.
-
-Rules:
-- **Grep for patterns first.** If you need lines matching 'error', run
-  `grep "error" large-file.log | head -50` instead of reading the whole file.
-- **Use Bash to slice before analyzing.** For a 200k-token file with one specific
-  section you need, run `sed -n '/START/,/END/p' file.ts | head -100` to extract
-  just that section, then read the result (now 5k tokens).
-- **Never dump the whole file into a prompt.** Context limits will block you and
-  waste a turn. Slice first, read the slice.
-
-This prevents context-limit hard failures that happened twice in your feedback data.
-
-## PR workflow — test-completeness gate
-
-Before opening any pull request (bug fix, feature, refactor), follow this sequence:
-
-1. **Implement all code changes** (logic, database, API, UI)
-   - Write new functions/handlers, add migrations, update routes, build UI
-   - Commit changes to your branch
-
-2. **Write unit tests for all new/changed logic**
-   - Every new function/handler has tests covering behavior and edge cases
-   - Verify tests pass locally
-
-3. **Write E2E tests for all user-facing changes**
-   - New forms, pages, navigation flows have end-to-end tests
-   - Tests submit data and verify success (screenshots, DB queries)
-   - E2E tests capture screenshots of success states to `__tests__/screenshots/`
-
-4. **Run `pnpm gate` locally and verify all gates pass**
-   - Lint (–max-warnings 0), typecheck, coverage, test, build, migrations
-   - All gates must be green before dispatching the judge
-
-5. **Dispatch the test-completeness-judge to audit coverage**
-   - Pass changed files, feature description, affected layers, user-facing impact
-   - Judge responds with APPROVED or INCOMPLETE
-   - If INCOMPLETE: Add missing tests and re-run judge until APPROVED
-
-6. **Open PR only when judge approves**
-   - Do not open PR until verdict is APPROVED
-   - Judge requires proof: passing tests, coverage metrics, CI green
-   - No exceptions to this gate
-
-**Non-negotiable:** No PR opens without judge approval. No testing deferred to
-review. No incomplete coverage. Judge blocks PRs with missing test types, failed
-tests, coverage regressions, or failed CI gates.
+1. Implement all code changes; commit.
+2. Write unit tests for all new/changed logic.
+3. Write E2E tests for user-facing changes (screenshots to `__tests__/screenshots/`).
+4. Run `pnpm gate` — all gates green.
+5. Dispatch **test-completeness-judge** to audit coverage. Re-run until APPROVED.
+6. Push to main / open PR only after judge approves.
 
 ## Working with this user
 
-The user routinely sends **multi-part prompts** — a single message asks for
-several only-loosely-related things in one shot. When you read one and find
-≥2 logically independent units of work, decompose immediately and dispatch
-subagents in parallel for the independent pieces. Never serialize work
-that has no dependency chain — it wastes the user's time and the user has
-explicitly asked for this pattern.
+Multi-part prompts are the norm. **Decompose immediately and dispatch subagents in parallel for independent work.** Never serialize independent tasks.
 
-**Delegate by default.** When you've identified work, your first move is
-to dispatch agents for it, not to start executing it yourself in a long
-sequence of tool calls. Grinding through a queue of tasks personally is
-the *failure mode* the user has explicitly called out. Pattern:
+**Delegation is the default for any work > 2 tool calls.** Pattern:
+1. Parse → decompose → dispatch in one message.
+2. Multi-step chunk → agent. Trivially small → inline parallel tool calls.
+3. Keep work in parent only when steps are small AND sequentially dependent.
 
-1. Parse the user's request and decompose into independent units.
-2. For each unit, decide: is this a single 1-2 line edit OR a multi-step
-   chunk? If multi-step, dispatch an agent. If trivially small, batch
-   into a single parallel tool-call block, do NOT serialize.
-3. Send the dispatches in **one message** with multiple Agent calls.
-4. Use the agents' results to inform your response; don't re-do their
-   work in the parent context.
-
-The only time to keep work in the parent context is when later steps
-depend on earlier ones AND each step is small. Otherwise delegate.
-
-The decomposition rule of thumb:
-
-- Research / investigation → dispatch an agent (good context isolation)
-- File edits in known locations → do yourself in parallel tool calls
-- Codebase mapping or breadth search → dispatch `Explore` agent
-- Anything that touches a different repo/system → its own agent
-
-Examples of independence:
-- "Fix X, document Y, ask about Z" — three agents, send in one message
-- "Update the spec and create the tickets" — sequential (tickets reference the spec)
+Decomposition:
+- Research / investigation → agent (context isolation)
+- File edits in known locations → inline parallel tool calls
+- Codebase breadth search → `Explore` agent
+- Different repo/system → its own agent
 
 ## Project skills
 
-This repo ships its own Claude skills under `.agents/skills/`, auto-registered
-via symlinks in `.claude/skills/`. They are the canonical, agent-facing layer —
-there is no separate `docs/agents/` copy. Reach for them by name (the Skill tool
-or fully-qualified `oxagen-engineering-policy` etc.); dispatched subagents inherit
-them too, so name the relevant skill in an agent's prompt.
+`.agents/skills/` auto-registered via `.claude/skills/`. Consult before writing code.
 
-- **`oxagen-engineering-policy`** — **binding law.** The non-negotiables, prime
-  directives, four-store data model, SQL conventions, bloat/vendor/naming rules,
-  observability, PR discipline. **Consult it BEFORE writing or changing code,
-  picking/pinning a dep, designing a schema or migration, writing tests, opening
-  a PR, or touching CI.** When a request conflicts with it, halt and surface the
-  conflict — do not weaken the rule. This supersedes nothing below; it is the
-  floor everything else sits on.
-- **`oxagen-design-system`** — Oxagen's brand & visual identity (palette, the
-  indigo→green gradient ring, Aeonik type, motion tokens, glass/card treatment,
-  iconography, voice & casing). Use for any user-facing UI or product copy in
-  `apps/app` so output reads as Oxagen.
-- **`coss-ui`** — the coss ui (Base UI) component system as implemented by
-  `@oxagen/ui`: registry & import paths, `render`-not-`asChild` composition,
-  `*Popup`/`*Panel`/`Menu*`/`TabsTab` naming, size scales & semantic tokens, and
-  the shadcn/Radix → coss migration mapping. Use when building, restyling, or
-  reviewing UI that imports `@oxagen/ui` (`@/components/ui/*`), or migrating
-  shadcn/Radix components to coss/Base UI.
-- **`frontend-patterns`** — a 136-entry library of web-platform technique guides
-  (CSS, a11y, Core Web Vitals, forms/autofill, passkeys, view transitions,
-  scroll animation, privacy, security). Use when building/reviewing frontend:
-  open the one or two matching technique files, don't read the whole library.
-- **`reablocks`** — component/chart/graph library used in `apps/app`. Use when
-  building or restyling data-rich UI: tables, timelines, block-based layouts.
-- **`reagraph`** — graph-visualization layer (WebGL, force-directed). Use when
-  rendering knowledge-graph, lineage, or topology views.
-- **`reaviz`** — charting library (d3-backed). Use when building analytics charts,
-  sparklines, or metric visualizations in the app.
-- **`oxagen-feature`** — feature-development workflow skill. Use when scaffolding
-  a new product feature end-to-end (contracts → routes → UI → tests).
-- **`vendor-better-auth`** — documentation map (llms.txt index) for Better Auth.
-  Use to jump to the right official doc; pair with the `*-best-practices` auth
-  skills for hands-on setup.
-- **`oxagen-code-audit`** — full-repo audit against the engineering law:
-  fan-out auditors → adversarial verify → safe auto-fix in a worktree → Linear
-  tickets for approvals → interactive HTML dashboard. Use when asked to "audit
-  my code", "give me an audit report", or score package health.
-- **`test-completeness-judge`** — LLM judge agent that audits test completeness for
-  all code changes (features, bug fixes, refactors) across unit, integration, and E2E
-  layers. Verifies all changed code has adequate test coverage and proof (passing tests,
-  coverage metrics, screenshots for UI, CI green). **Gates PR opening** — do not open
-  PR until judge approves. Use before opening any PR.
-- **`ci-green`** — Standardized CI verification skill. Run full local CI gate (`pnpm gate`),
-  verify environment files in sync (.env.example, lockfile), push to main, watch GitHub
-  Actions until all gates pass, provide CI evidence. Use before declaring any task complete
-  or pushing to production. Do NOT report success until CI shows green with proof.
+- **`oxagen-engineering-policy`** — binding law. Non-negotiables, four-store data model, SQL conventions, bloat/vendor/naming, observability, PR discipline. Consult BEFORE writing/changing code, picking a dep, designing a schema, writing tests, opening a PR, or touching CI. Halt and surface conflicts — do not weaken the rule.
+- **`oxagen-design-system`** — brand & visual identity (palette, indigo→green gradient ring, Aeonik, motion tokens, glass/card, voice). Use for any user-facing UI in `apps/app`.
+- **`coss-ui`** — `@oxagen/ui` component system: registry, `render`-not-`asChild`, naming conventions, size scales, shadcn/Radix → coss migration. Use when building UI importing `@oxagen/ui`.
+- **`frontend-patterns`** — 136-entry technique library (CSS, a11y, CWV, forms, passkeys, view transitions, privacy, security). Open matching technique files; don't read the whole library.
+- **`reablocks`** — tables, timelines, block layouts in `apps/app`.
+- **`reagraph`** — WebGL graph visualization (knowledge-graph, lineage, topology).
+- **`reaviz`** — d3-backed charts, sparklines, metric visualizations.
+- **`oxagen-feature`** — feature scaffolding workflow (contracts → routes → UI → tests).
+- **`vendor-better-auth`** — Better Auth llms.txt index. Pair with `*-best-practices` auth skills.
+- **`oxagen-code-audit`** — full-repo audit: fan-out → adversarial verify → auto-fix → Linear tickets → HTML dashboard.
+- **`test-completeness-judge`** — gates PR opening. Audits unit, integration, E2E coverage with proof. Do not open PR until judge approves.
+- **`ci-green`** — full local CI gate, env file sync, push, watch GitHub Actions until green.
 
-Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first, then `ci-green` before pushing/declaring done.
-Building UI → `coss-ui` (component API) + `oxagen-design-system` (identity) + `frontend-patterns`
-(technique) + `reablocks`/`reagraph`/`reaviz` (component libs as needed). Auth →
-`vendor-better-auth` + the Better Auth `*-best-practices` skills. New features →
-`oxagen-feature`. See `.agents/skills/README.md` for the full local-skill manifest.
+Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first, then `ci-green` before pushing.
+UI → `coss-ui` + `oxagen-design-system` + `frontend-patterns` + component libs as needed.
+Auth → `vendor-better-auth` + Better Auth `*-best-practices`. New features → `oxagen-feature`.
 
 ## Production URLs (interim)
 
-Until oxagen.ai is launched, production deploys use Vercel-managed domains:
-
 - App: `https://oxagen-v2-app.vercel.app`
 - API: `https://oxagen-v2-api.vercel.app` (Hono REST; no MCP protocol endpoint)
-- MCP: `https://oxagen-v2-mcp.vercel.app` (xmcp server; connect at `/mcp` over
-  streamable HTTP — **not** `oxagen-v2-api.../mcp/sse`. Org+workspace scope is
-  carried by the API key, so no org/workspace path segment is needed.)
+- MCP: `https://oxagen-v2-mcp.vercel.app` (connect at `/mcp` over streamable HTTP; org+workspace scope carried by API key)
 - Docs: `https://oxagen-v2-docs.vercel.app`
 
-When generating OAuth callback URLs, env values, allowedOrigins, or any
-docs/spec content that references prod URLs, use the vercel.app domains.
-Switch back to oxagen.ai is a single env-var sweep when the brand domain
-is ready — keep the URL values isolated to env vars and config, not hard-
-coded in source.
+Use Vercel domains in OAuth callbacks, env values, allowedOrigins, docs. Keep URLs isolated to env vars — oxagen.ai switch is a single env-var sweep.
 
 ## Linear
 
-Oxagen uses the `oxagen-v2` linear project. Access the linear project via
-apis or the linear mcp server. The api key is stored as an environment
-variable in the root of this repo.
+Project: `oxagen-v2`. API key in repo root env.
 
-### Ticket convention (apply on every ticket you create)
-
-- **One ticket = one pull request.** Never split a single PR across two
-  tickets. Never bundle two unrelated PRs into one ticket. The goal is
-  one CI run per ticket so the user's Vercel build budget is preserved.
-- **Sub-issues for chunks of work** *inside* the ticket. A sub-issue is
-  a tracking unit (a reviewer can resolve them as each chunk merges into
-  the parent branch), not a separate PR. Aim for 3–6 sub-issues per
-  parent ticket; more is a sign the parent is too big.
-- **Assignee: Mac Anderson** (`mac@oxagen.ai`,
-  uuid `aa47fc28-1b3a-4b45-bb02-d18f2e59c6bb`). Always set on creation.
-- **Labels — every ticket:** Call `list_issue_labels` to get the live
-  set — do not guess or hard-code. The active taxonomy (~28 slugs, ≤50
-  cap) includes: `web-app`, `mobile-ux`, `api`, `mcp`, `knowledge-graph`,
-  `ingestion`, `connectors`, `agents`, `agent-memory`, `content-studio`,
-  `llm`, `automation`, `auth`, `billing`, `security`, `soc-2`,
-  `observability`, `infra`, `ci`, `database`, `performance`, `reliability`,
-  `bug`, `epic`, `tech-debt`, `testing`, `user-docs`, `adr`.
-  Labels `agent-created`, `foundations`, `application-shell`, `iam`,
-  `SOC2` no longer exist — do not use them. Add a new label with
-  `create_issue_label` only when no existing slug fits; keep the total
-  under 50.
-- **T-shirt size** every ticket using Linear `estimate`:
-  - XS (1): ≤1h, single-file, no schema impact, near-zero risk.
-  - S (2): half-day, ≤5 files, isolated module, low risk.
-  - M (3): one day, ≤20 files, one package, modest test surface.
-  - L (5): multi-day, ≤100 files, crosses packages, moderate risk
-    (e.g. requires a migration but no behavior change).
-  - XL (8): week-plus, >100 files OR security-critical OR
-    requires exhaustive testing OR touches IAM/audit boundary.
-  Reconsider sizing on three axes — **risk** (what happens if it
-  goes wrong?), **blast radius** (how many files/packages touched?),
-  **effort** (raw time). The largest of the three sets the size.
-- **Priority** matches business need, not "everything is Urgent."
-  P1 = Urgent for foundation work that blocks other work; P2 = High
-  for the next quarter's milestones; P3 = Medium / P4 = Low otherwise.
-- **Description structure** — always include:
-  1. One-sentence purpose.
-  2. Link to the relevant `docs/architecture/<topic>/spec.md` (or the
-     topic's `plan.md` / top-level architecture MD when no `spec.md`
-     exists) section.
-  3. What changes — explicit file list / migration name / contract
-     id, not vague verbs.
-  4. Acceptance criteria as a checklist.
-  5. Risks + mitigations.
-  6. Rollback plan.
-
-Following this convention means future agent sessions can hand the user
-a coherent backlog without re-deciding ticket shape each time.
+**Ticket convention:**
+- **One ticket = one PR.** Sub-issues for chunks within the ticket (3–6 per parent).
+- **Assignee: Mac Anderson** (`mac@oxagen.ai`, `aa47fc28-1b3a-4b45-bb02-d18f2e59c6bb`).
+- **Labels:** Call `list_issue_labels` — don't guess. Active ~28 slugs: `web-app`, `mobile-ux`, `api`, `mcp`, `knowledge-graph`, `ingestion`, `connectors`, `agents`, `agent-memory`, `content-studio`, `llm`, `automation`, `auth`, `billing`, `security`, `soc-2`, `observability`, `infra`, `ci`, `database`, `performance`, `reliability`, `bug`, `epic`, `tech-debt`, `testing`, `user-docs`, `adr`. Defunct (do not use): `agent-created`, `foundations`, `application-shell`, `iam`, `SOC2`.
+- **Estimate:** XS(1)≤1h · S(2)half-day · M(3)1day · L(5)multi-day · XL(8)week+. Size on largest of risk / blast-radius / effort.
+- **Priority:** P1=Urgent (blocks others) · P2=High (next quarter) · P3=Medium · P4=Low.
+- **Description:** purpose sentence · spec.md link · explicit file/migration list · acceptance checklist · risks+mitigations · rollback plan.
 
 ## Operating model
 
-**Default model: Haiku.** Haiku plans, routes, and handles the majority of
-turns. Escalate explicitly — do not default upward.
+**Default model: Haiku.** Escalate explicitly.
 
-### Escalation rubric (use this, not vibes)
+| Stay on Haiku | Escalate to Sonnet | Escalate to Opus |
+|---|---|---|
+| Single-file edits, reads, lookups, formatting, dispatch, summarizing | >3 files or cross-package; ambiguous requirements; non-trivial new logic; non-obvious debugging; diff review | Architectural decisions; storage boundary changes; security (auth/billing/secrets); multi-system (MCP+API+app); production incidents |
 
-Stay on **Haiku** for: single-file edits, reads, lookups, graph queries,
-formatting, renames, doc tweaks, dispatching subagents, summarizing tool
-output.
+**Parallelism:** Dispatch in parallel when genuinely independent. Do not parallelize when steps have dependencies, touch the same files, or dispatch overhead exceeds gain.
 
-Escalate to **Sonnet** when any of these are true:
-- change spans >3 files or crosses package boundaries
-- requirements are ambiguous and need clarification or design choices
-- writing non-trivial new logic (not just wiring existing pieces)
-- debugging where the root cause isn't obvious from the first read
-- reviewing a diff for correctness
-
-Escalate to **Opus** when any of these are true:
-- architectural decisions or changes to `/packages` public surfaces
-- anything touching the storage boundaries below
-- security-sensitive code (auth, permissions, billing, secrets)
-- multi-system changes coordinating MCP + API + app
-- incident triage with production impact
-
-### Parallelism — when it pays, when it doesn't
-
-Dispatch subagents **in parallel** when subtasks are genuinely
-independent: multi-repo searches, reading N unrelated files, querying
-different data stores, running independent test suites. Send them in a
-single message with multiple tool calls.
-
-Do **not** parallelize when:
-- later steps depend on earlier results (just run sequentially)
-- subtasks touch the same files (race conditions, merge pain)
-- the work is small enough that dispatch overhead exceeds the gain
-- you're parallelizing just to look busy
-
-### Complexity inference — read once, dispatch fast
-
-Before any tool call, classify the prompt in one pass and dispatch immediately:
+**Dispatch table:**
 
 | Prompt signal | Action |
 |---|---|
-| rename / move / format, single file | Do inline (Haiku parallel tool calls) |
-| fix / add / update ≤5 files, one package | Delegate to Haiku subagent |
-| fix / add crossing packages (>3 files) | Delegate to Sonnet subagent |
-| design / architect / broad refactor | Delegate to Sonnet; escalate to Opus if security/auth/billing touched |
-| auth / billing / security / multi-system | Opus subagent |
+| Rename / format, single file | Inline parallel tool calls |
+| Fix / add ≤5 files, one package | Haiku subagent |
+| Fix / add crossing packages (>3 files) | Sonnet subagent |
+| Design / architect / broad refactor | Sonnet; Opus if security/auth/billing |
+| Auth / billing / security / multi-system | Opus subagent |
 
-If genuinely ambiguous: delegate to Sonnet and let it assess. Never spend
-Haiku tokens deliberating when a Sonnet subagent can decide and act in the
-same step. Speed > perfection on model choice.
+**Context budget:** Delegate to shed context. Pass only file paths, error excerpts, relevant lines. Summarize results; don't quote raw output. Use `/compact` before starting a new logical unit if context is heavy.
 
-### Delegation — the default, not the exception
+**Cost discipline:** Match model to task. Use `pnpm check:manifest --json` for contract introspection. The `ontology.*` graph query layer is **not yet shipped** — do not attempt those calls. `agent.code.execute` IS wired; use the contract, not raw `code.*` calls.
 
-**Subagents are the default for any work > 2 tool calls.** The parent context
-is for routing, synthesis, and user communication — not execution.
+## Local frontend verification
 
-- Dispatch first, think later. Read the prompt → classify → send agents in one message.
-- Keep work in the parent *only* when each step is small AND later steps depend on earlier ones.
-- Never grind through a queue of tasks personally. That is the failure mode.
-- Prefer `Explore` agent (read-only, fast) for search-only; `general-purpose` for write tasks.
+Authorized and encouraged every session without asking permission. Use `creds.json` at repo root (gitignored — never commit or print the password).
 
-### Context budget management
+**Stack:** `apps/app` → `http://localhost:3000`, `apps/docs` → `http://localhost:3300`, API → `:4000`, MCP → `:4100`. Local Postgres on `:5433`. `pnpm dev` starts all apps + Docker.
 
-- **Delegate to shed context.** Long outputs (diffs, test logs, file trees) bloat the parent;
-  subagents absorb them and return summaries. Never let raw tool output accumulate.
-- **Compact before starting a new logical unit of work.** If the context feels heavy
-  from a prior task, use `/compact` before the next.
-- **Pass only what the subagent needs** — file paths, error excerpts, relevant lines.
-  Agents read files themselves; don't inline entire file contents in prompts.
-- **Summarize, don't quote.** Report subagent results as synthesis, not pasted output.
+**Login:** Email+password only (no email verification locally). New user → `/signup` → `/new-organization` → create org → `/{org}/{ws}/ask`. Returning: `/login`.
 
-### Cost discipline
-
-- Match model to task — don't run Opus on a one-line rename.
-- For contract introspection, use `pnpm check:manifest --json` (cheap, accurate).
-- Batch independent reads into one turn; don't chain them.
-- The `ontology.*` graph query layer is **not yet shipped** — do not attempt those calls.
-  `agent.code.execute` IS wired (sandbox runner); use the contract, not raw `code.*` calls.
-
-## Local frontend verification (encouraged every session)
-
-You are **authorized and encouraged** to drive the local app in a browser to
-verify your own frontend work — every session, any time you touch UI, without
-asking permission first. Don't ship UI changes you haven't seen render.
-
-**Credentials.** A reusable local-dev account lives in `creds.json` at the repo
-root (gitignored — never commit it, never print the password in chat). It holds
-the login email/password plus the seeded org/workspace slugs. Reuse it across
-sessions. If the local DB was reset and login fails, recreate the account via
-the signup flow below and update `creds.json` (keep the same email/password so
-it stays stable).
-
-**Spin up the stack.** The dev server is usually already running:
-- `apps/app` → `http://localhost:3000` (check `lsof -ti:3000` first).
-- `apps/docs` → `http://localhost:3300` (Fumadocs; statically served).
-  `pnpm dev` starts both Next apps plus the API (4000) and MCP (4100) servers.
-- Local Postgres is on `:5433` (Docker). `pnpm dev` brings up Docker + env.
-- If port 3000 is free, run `pnpm dev` (needs Docker running).
-
-**Log in / sign up (email+password, no social).** The whole app is auth-gated —
-every route 307s to `/login` until you have a session. Email/password signup
-auto-signs-in (no email verification locally).
-1. Go to `/signup`, fill name/email/password from `creds.json`, submit.
-2. A brand-new user lands on `/new-organization` — create the org (it also
-   creates a default workspace), then you're at `/{org}/{ws}/ask`.
-3. Returning sessions: use `/login` with the saved creds.
-
-**Driving the browser.** Prefer the chrome-devtools MCP
-(`mcp__plugin_chrome-devtools-mcp_chrome-devtools__*`) — it manages its own
-browser. The Playwright MCP shares one profile and errors with "Browser is
-already in use" when another session holds it; don't kill that browser (it may
-be another agent's). The chrome-devtools `fill` tool **appends** to inputs and
-its empty-string clear does **not** fire React's controlled `onChange`; to set
-a React-controlled field reliably (or to clear one), use `evaluate_script` with
-the native value setter + a bubbling `input` event.
+**Browser:** Prefer chrome-devtools MCP (`mcp__plugin_chrome-devtools-mcp_chrome-devtools__*`). The chrome-devtools `fill` tool appends to inputs — to set a React-controlled field, use `evaluate_script` with the native value setter + a bubbling `input` event.
 
 ## Key dependency versions
 
-Pinned in `pnpm-lock.yaml`; check `apps/app/package.json` for app-level overrides.
-
-- **Next.js `16.2.7`** — App Router, Turbopack default (extensionless imports).
-  `proxy.ts` replaces `middleware.ts` (see below).
-- **AI SDK `ai@6.0.x`** — use `modelIdOf()` to resolve model handles to gateway
-  slugs; the v4/v5 web docs do NOT match this version. `streamText` /
-  `generateObject` / `generateText` are the correct server-side APIs.
-  `ai/rsc` (`streamUI`, `createStreamableUI`, `createAI`) is **forbidden**
-  (experimental). `@ai-sdk/react` (`useChat` / `useCompletion`) is permitted
-  on the client when needed (see App stack notes).
-- **TypeScript `6.0.3`** — stricter inference; no `any`.
+- **Next.js `16.2.7`** — App Router, Turbopack default. `proxy.ts` replaces `middleware.ts`.
+- **AI SDK `ai@6.0.x`** — use `modelIdOf()` for model resolution. `streamText`/`generateObject`/`generateText` are correct. `ai/rsc` (`streamUI`, `createStreamableUI`, `createAI`) is **forbidden**. `@ai-sdk/react` permitted for non-chat client surfaces only.
+- **TypeScript `6.0.3`** — no `any`.
 
 ## App stack
 
-### `apps/app` — interactive agent UI
-
-- **Next.js App Router** with **React Server Components** and streaming.
-- The interactive agent is built on the **Vercel AI SDK Core** (`ai`
-  package — `streamText` / `generateText` / `streamObject` /
-  `generateObject`) on the server. **Do NOT use AI SDK RSC**
-  (`ai/rsc`, `streamUI`, `createStreamableUI`, `createAI`) — it is
-  flagged experimental and not recommended for production. No experimental
-  or unstable SDKs ship in this product.
-- The primary chat path does **not** use `@ai-sdk/react` — it consumes the
-  `POST /api/v1/chat/stream` SSE endpoint through the hand-rolled
-  `use-tool-stream.ts` hook
-  (`apps/app/src/components/chat/use-tool-stream.ts`). Do not roll a second
-  transport alongside it. `@ai-sdk/react` (`useChat` / `useCompletion`) may
-  be used on the client for **other** surfaces (e.g. lightweight form
-  generation, secondary panels) where the full SSE pipeline is overkill —
-  but never for the main chat path.
-- Generative UI ("generate UI components from a prompt") is done **without
-  RSC**: the model returns structured tool-call / `generateObject` output
-  and the client maps it to React components via the chat component
-  registry. The model streams *data*, not server-rendered React trees.
-- Tool calls, generative UI, and message branching all flow through the
-  SSE stream consumed by `use-tool-stream.ts` — do not reach for `ai/rsc`
-  to get there.
-- Server actions handle mutations; client components subscribe to
-  streamed responses.
-- Auth lives in server components; client never sees session tokens.
-- **Request interception uses `proxy.ts`, not `middleware.ts`.** Next.js 16
-  (this repo runs 16.2.x) deprecated and renamed the `middleware` file
-  convention to `proxy` — the file lives at `apps/app/src/proxy.ts` and
-  exports a `proxy` function. The file runs on the **Edge runtime** (no
-  `export const runtime` override; default is edge for this convention).
-  Keep `proxy.ts` edge-safe: cookie inspection, URL rewrites, and redirects
-  only — no Node.js built-ins, no DB calls, no secrets. `middleware.ts` is
-  no longer recognized; do not create one.
+### `apps/app`
+- Next.js App Router, RSC, streaming.
+- AI via Vercel AI SDK Core (`streamText`/`generateText`/`streamObject`/`generateObject`) on server. **Never `ai/rsc`.**
+- Main chat path: `POST /api/v1/chat/stream` SSE consumed by `use-tool-stream.ts` (`apps/app/src/components/chat/use-tool-stream.ts`). Do not add a second transport. `@ai-sdk/react` only for non-chat surfaces.
+- Generative UI: model returns `generateObject` structured output; client maps to React components via chat component registry. No server-rendered React trees.
+- **Request interception: `proxy.ts`** at `apps/app/src/proxy.ts`, not `middleware.ts`. Edge-safe only: cookies, URL rewrites, redirects. No Node built-ins, DB calls, or secrets.
 
 ### `apps/api`, `apps/mcp`
-
-- **`apps/api`** — Hono REST server. Routes live at
-  `apps/api/src/routes/v1/<capability>.ts` (versioned, one file per
-  capability). No UI. Thin shell over `packages/`.
-- **`apps/mcp`** — xmcp server. Tools live at
-  `apps/mcp/src/tools/<capability>.ts` (one file per capability).
-  Connect at `/mcp` over streamable HTTP.
-- **Capability parity rule:** any new user-facing action must also be a
-  contract in `packages/oxagen/src/contracts/` (via `registerCapability`)
-  wired into `apps/api/src/routes/v1/`, `apps/mcp/src/tools/`, and
-  `apps/cli/src/commands/`. Run `pnpm check:manifest` to verify API↔MCP parity
-  after adding a contract (CLI parity is tracked separately in Linear).
-- **Parity caveat:** *contract-declared* capabilities are symmetric between
-  API and MCP. However, a large number of UI sections are intentional static
-  mocks with no backing contracts yet: `knowledge.*`, `access.*`, `security.*`,
-  `activity.*`, `developer.*`, `tools/studio.*`, and several `billing/settings/profile`
-  actions. These stub pages are tracked in Linear
-  and must NOT be wired to live data until a contract exists. The correct
-  order is: contract → API route → MCP tool → UI wire-up. Run
-  `pnpm check:manifest` to get the current gap list.
-- **`check:manifest` combined-route false positive** — the manifest script
-  expects one file per capability (e.g. `workflow.run.ts`). When capabilities
-  share a combined route file, the script reports a false-positive gap for each.
-  Combined files currently in use:
-  - `apps/api/src/routes/v1/workflow.ts` — covers `workflow.run`, `workflow.cancel`,
-    `workflow.status` (false-positive `api` gap for each).
-  - `apps/api/src/routes/v1/connection.ts` + `apps/mcp/src/tools/connection.ts`
-    — covers all 8 `connection.*` capabilities (false-positive `api` **and** `mcp`
-    gap for each).
-  Verify by reading the combined file before filing a parity ticket.
+- `apps/api` — Hono REST. Routes at `apps/api/src/routes/v1/<capability>.ts`.
+- `apps/mcp` — xmcp. Tools at `apps/mcp/src/tools/<capability>.ts`. Connect at `/mcp`.
+- **Capability parity rule:** new user-facing action → contract in `packages/oxagen/src/contracts/` → API route → MCP tool → CLI command. Run `pnpm check:manifest` to verify.
+- **Static mock sections** (`knowledge.*`, `access.*`, `security.*`, `activity.*`, `developer.*`, `tools/studio.*`, several billing/settings/profile actions) must NOT be wired to live data until a contract exists. Correct order: contract → API route → MCP tool → UI wire-up.
+- **`check:manifest` false positives:** combined route files report false-positive gaps. `workflow.ts` covers `workflow.run/cancel/status`; `connection.ts` covers all 8 `connection.*` capabilities. Verify by reading the file before filing a parity ticket.
 
 ### `apps/cli`
-
-- Commander + Ink CLI. Entry: `apps/cli/src/index.tsx`. Ships 95 command
-  files covering auth, orgs, workspaces, chat, conversations, API keys,
-  plugins, billing, agents, workflows, images, documents, automation, forms,
-  skills, and user preferences. `oxagen dev` is the dev-stack launcher and
-  port-prober.
+Commander + Ink. Entry: `apps/cli/src/index.tsx`. 95 command files. `oxagen dev` is the dev-stack launcher.
 
 ### `apps/docs`
-
-- Fumadocs/MDX documentation site. Statically generated; deployed as
-  `oxagen-v2-docs.vercel.app`. No interactive runtime features.
+Fumadocs/MDX. Statically generated. No interactive runtime.
 
 ## Common commands
 
 ```bash
 pnpm dev                         # start all apps + Docker (Postgres :5433, ClickHouse :8123, Neo4j :7687)
-pnpm typecheck                   # run TS across the monorepo (do before push)
+pnpm typecheck                   # run TS across the monorepo
 pnpm test                        # run test suite
 pnpm check:manifest              # verify API↔MCP capability parity (warn-only)
 pnpm check:manifest --json       # machine-readable parity output
 pnpm check:contracts             # verify contract definitions
 pnpm env:check                   # validate .env.local against schema
-pnpm release:patch               # bump all packages to next patch version, tag, sync PLATFORM_VERSION to Vercel
-pnpm release:minor               # bump all packages to next minor version
-pnpm release:major               # bump all packages to next major version
+pnpm release:patch               # bump patch version, tag, sync PLATFORM_VERSION to Vercel
+pnpm release:minor               # bump minor version
+pnpm release:major               # bump major version
 pnpm db:migrate                  # apply pending Postgres migrations
 pnpm db:lint-migrations          # verify migration file names and checksums
 pnpm db:seed-iam                 # seed IAM roles and permissions
 pnpm db:seed-skills              # seed agent skill definitions
 pnpm db:backfill-iam             # backfill org IAM for existing orgs
 pnpm gate                        # run full CI suite locally (lint + typecheck + test + build)
-pnpm kill                        # kill all background processes (dev, docker, etc.)
-pnpm env:pull                    # pull Vercel env vars to .env.local (dev only)
+pnpm kill                        # kill all background processes
+pnpm env:pull                    # pull Vercel env vars to .env.local
 pnpm billing:stripe-sync         # sync meter pricing and discounts with Stripe
-lsof -ti:3000                    # check if app dev server is already running
-lsof -ti:4000                    # check if API server is running (port 4000)
-lsof -ti:4100                    # check if MCP server is running (port 4100)
-git fetch origin && git rebase origin/main  # sync before pushing (avoids force-push)
+lsof -ti:3000                    # check if app dev server is running
+lsof -ti:4000                    # check if API server is running
+lsof -ti:4100                    # check if MCP server is running
+git fetch origin && git rebase origin/main  # sync before pushing
 ```
 
 ## Gotchas
 
-- **`"use client"` boundary** — never call a `"use client"` function from a
-  Server Component; the compiler won't catch it but it will blow up at runtime.
-- **`invoke()` needs handler registration** — any file that calls `invoke()`
-  must `import "@oxagen/handlers/register"` before the call; forgetting it
-  silently no-ops the metering/IAM layer.
-- **Turbopack extensionless imports** — Next.js 16 + Turbopack requires
-  extension-free imports (e.g. `import Foo from "./Foo"` not `"./Foo.tsx"`).
-- **`proxy.ts` not `middleware.ts`** — Next.js 16 renamed the interception
-  file; `middleware.ts` is no longer recognized.
-- **Raw `db()` is banned** — use `withTenantDb` / `withSystemDb` /
-  `scopedSession`; the ESLint rule enforces this. `FORCE RLS` requires the
-  `oxagen_app` non-superuser role.
-- **Rebase before pushing to main** — other agents/users push to main
-  concurrently; always `git fetch origin && git rebase origin/main` before
-  `git push` to avoid non-fast-forward errors.
-- **`apps/app` does not bootstrap IAM** — `invoke()` calls that originate
-  inside `apps/app` (server actions, RSC data fetches) skip IAM role checks
-  because `apps/app` never loads the IAM bootstrap. Only `apps/api` and
-  `apps/mcp` enforce roles. When routing app code through `invoke()`, add
-  explicit `assertBillingManager` / `assertOrgMember` gates at the call
-  site; do not rely on the kernel to enforce them.
-- **Better Auth `rateLimits` plural — prod-only 500** — `drizzleAdapter`
-  with `usePlural: true` pluralizes `rateLimit` → `rateLimits`. The wrong
-  table name produces a 500 on ALL auth calls in production but passes dev
-  and e2e because rate-limiting is disabled locally. Always verify auth
-  changes against a production-equivalent environment.
-- **`tsx --env-file` does NOT override a shell `DATABASE_URL`** — seeding
-  and migration scripts invoked with `tsx --env-file-if-exists=.env.local`
-  use local DB even when `DATABASE_URL` is set in the shell. For prod DB
-  operations, explicitly `unset DATABASE_URL` before running the script or
-  use the Vercel env-scoped workflow (`gh workflow run ci.yml --ref main`).
-  Always confirm the target environment (prod vs local) before any migration or
-  sync script runs; place new migration files in `packages/database/migrations/`,
-  never in `apps/`.
-- **Stripe webhook tunnel** — `pnpm dev` auto-starts the Stripe CLI tunnel
-  (`stripe listen --forward-to ...`) via `tools/scripts/stripe-tunnel.ts`.
-  If you restart `apps/api` in isolation (e.g. direct `tsx` invocation, not
-  via `pnpm dev`), the tunnel stays alive but the per-session signing secret
-  injected into `process.env.STRIPE_WEBHOOK_SECRET` is lost — restart the
-  whole stack via `pnpm dev` to re-sync it.
-- **AI Gateway slug drift** — gateway model slugs can be dropped/renamed
-  silently; always use `modelIdOf()` to resolve handles, never hard-code
-  slugs. Verify against live `/v1/models` when adding a new model.
-- **`agent.subagent.dispatch` / `agent.subagent.aggregate`** — platform-level parallel orchestration. `dispatch` fans out sub-tasks and returns a run-ID per branch; `aggregate` collects results when all branches settle. Use these contracts instead of hand-rolling fan-out inside a handler; they emit proper lineage and metering through `invoke()`.
-- **`prompt.settings.read` / `prompt.settings.write`** — platform-level prompt configuration, org+workspace scoped, stored in Postgres. When adding system-prompt customisation or model-behaviour knobs, reach for these contracts rather than hard-coding strings. They are metered and IAM-gated.
-- **`agent.ui.render`** — generative UI contract. The model returns `generateObject` structured output; the client maps it to React components via the chat component registry. Never use `ai/rsc` or server-render React trees; this contract is the only approved path for model-driven UI generation.
-- **`agent.ui.render` is agent-surface only** — its contract declares `surfaces: ["agent"]`; it has no MCP tool file and no API route by design. `pnpm check:manifest` will report a false-positive parity gap for it — this is expected. Do not add an MCP/API wrapper for this capability.
+- **`"use client"` boundary** — never call a `"use client"` function from a Server Component.
+- **`invoke()` needs handler registration** — `import "@oxagen/handlers/register"` before any `invoke()` call; forgetting silently no-ops metering/IAM.
+- **Turbopack extensionless imports** — `import Foo from "./Foo"` not `"./Foo.tsx"`.
+- **`proxy.ts` not `middleware.ts`** — `middleware.ts` is no longer recognized.
+- **Raw `db()` is banned** — use `withTenantDb` / `withSystemDb` / `scopedSession`. `FORCE RLS` requires the `oxagen_app` non-superuser role.
+- **Rebase before pushing** — `git fetch origin && git rebase origin/main` before `git push`.
+- **`apps/app` does not bootstrap IAM** — `invoke()` from `apps/app` skips IAM role checks. Add explicit `assertBillingManager` / `assertOrgMember` gates at the call site; do not rely on the kernel.
+- **Better Auth `rateLimits` plural** — `drizzleAdapter` with `usePlural: true` pluralizes `rateLimit` → `rateLimits`. Wrong table = 500 on all auth calls in prod (passes dev/e2e since rate-limiting is disabled locally). Always verify auth changes against a prod-equivalent environment.
+- **`tsx --env-file` does NOT override shell `DATABASE_URL`** — `unset DATABASE_URL` for local targeting. Always confirm target env before any migration. Migration files go in `packages/database/migrations/`, never in `apps/`.
+- **Stripe webhook tunnel** — `pnpm dev` auto-starts the tunnel. Restarting `apps/api` in isolation loses the per-session signing secret — restart the full stack via `pnpm dev`.
+- **AI Gateway slug drift** — always use `modelIdOf()`, never hard-code slugs. Verify against `/v1/models` for new models.
+- **`agent.subagent.dispatch` / `agent.subagent.aggregate`** — use these contracts for fan-out; they emit lineage and metering through `invoke()`. Don't hand-roll fan-out.
+- **`prompt.settings.read` / `prompt.settings.write`** — for system-prompt customization, use these contracts (metered, IAM-gated, org+workspace scoped). Don't hard-code strings.
+- **`agent.ui.render`** — `generateObject` structured output only; client maps to React via chat component registry. No `ai/rsc`. Agent surface only — `check:manifest` false-positive gap expected; do not add an MCP/API wrapper.
 
 ## All LLM calls must go through `@oxagen/ai`
 
-Token metering (`token_usage` ClickHouse table), duration tracking, surface tagging, and prompt hashing are emitted **only** by the wrappers in `packages/ai/src/` (`generateObject`, `streamText` via `stream.ts`, `generateImage`, `generateVideo`, `embed`). Calling AI SDK (`ai`, `@ai-sdk/gateway`) directly bypasses all metering. Never import `generateText` / `streamText` / `generateObject` directly from `ai` inside a handler or route — always use the `@oxagen/ai` re-exports.
+Never import `generateText` / `streamText` / `generateObject` directly from `ai` inside a handler or route. Always use `@oxagen/ai` re-exports — they emit metering, duration tracking, surface tagging, and prompt hashing to ClickHouse.
 
 ## Infrastructure boundaries
 
-Authoritative. See AGENTS.md for the why.
+Authoritative. Document architectural decisions in `docs/adr/`.
 
-**Note:** Architectural decisions at this level should be documented in `docs/adr/`
-(e.g., ADR-012 for the connector dual-write pattern) with context, decision,
-alternatives, and consequences. ADRs stay in the repo; design decisions do not
-age in conversations.
+**Neo4j — graph data only:** ontology/entity relationships, workflow lineage, agent memory, semantic retrieval.
 
-### Neo4j — graph data only
+**PostgreSQL — transactional state only:** users, orgs, permissions, billing, configs, job metadata, durable application state.
 
-- ontology and entity relationships
-- workflow lineage and execution graphs
-- agent memory and topology
-- semantic retrieval
+**ClickHouse — append-only runtime events only:** execution events, logs, metrics, traces, token analytics, tool usage, telemetry.
 
-### PostgreSQL — transactional state only
+**File / blob storage — binary assets only:** avatars, generated images/video/documents, uploaded workspace files. Reference row (URL + metadata) lives in Postgres. Driver: Vercel Blob via `@oxagen/storage` (`BLOB_READ_WRITE_TOKEN`).
 
-- users, orgs, permissions
-- billing
-- configs and job metadata
-- durable application state
+**Never:** analytics in Neo4j · graph relationships in Postgres · transactional state in ClickHouse · binary payloads in any DB.
 
-### ClickHouse — append-only runtime events only
-
-- execution events
-- logs, metrics, traces
-- token analytics and tool usage
-- runtime telemetry and historical performance
-
-### File / blob storage — binary assets only
-
-- user and org avatars
-- generated images, video, documents, PDFs, SVGs
-- uploaded workspace files
-- The blob lives here; its reference row (URL + metadata) lives in Postgres.
-  Never store binary payloads in any of the three DB stores.
-- Driver: Vercel Blob behind the `@oxagen/storage` vendor-neutral adapter
-  (`BLOB_READ_WRITE_TOKEN`). Served via access-controlled `/api/v1/assets/[id]`
-  (generated assets) or `/api/v1/files/[id]` (workspace files).
-
-**Never:** analytics in Neo4j. Graph relationships in Postgres.
-Transactional state in ClickHouse. Binary payloads in any of the three DB stores.
-
-**Exception — Connector Data Ingestion Dual-Write:**
-Data connectors (GitHub, Linear, Salesforce, etc.) use a dual-write pattern:
-**Postgres** stores the operational record (sync cursor, connection health, event log —
-ACID, must never lose). **Neo4j** stores the indexed graph (entities, embeddings,
-relationships — async Inngest, retryable). This is not a violation of the rule above
-because they serve different purposes: Postgres ensures operational durability; Neo4j
-enables graph queries. Write both, but understand Postgres is the source of truth
-for cursor state. ClickHouse observes ingestion events for telemetry.
+**Exception — Connector Dual-Write:** Data connectors write to Postgres (operational record: sync cursor, connection health — source of truth, ACID) and Neo4j (graph index: entities, embeddings, relationships — async Inngest, retryable). ClickHouse observes ingestion events for telemetry.
 
 ## Documentation — capability registry
 
-**`docs/capabilities/` must stay in sync with live contracts.** The directory
-contains markdown files for every user-facing capability (API endpoints, MCP
-tools, CLI commands). It is the single source of truth for product documentation
-shipped to the website and agent-facing systems. **Currently, capability docs
-are manually maintained** (see **Gaps** below). Automated regeneration is
-tracked in Linear.
+`docs/capabilities/` must stay in sync with live contracts. Manually maintained.
 
-- **When to update:** Whenever a contract is added, renamed, or removed
-  (not just parameter changes).
-- **How to update:** Manually create `.md` files in `docs/capabilities/` per
-  capability using the pattern from existing files. Filename is the capability
-  name in kebab-case (e.g., `workflow.run.md`). Update `_index.md` for new
-  capabilities.
-- **Before pushing:** Manually verify `docs/capabilities/` matches contracts
-  in `packages/oxagen/src/contracts/`, `apps/api/src/routes/v1/*`,
-  `apps/mcp/src/tools/*`, and `apps/cli/src/commands/*`. Stale or missing docs
-  cause drift between shipped product and agent knowledge.
-- **Gaps (last audited 2026-06-09):** `pnpm check:manifest` reports **14** missing-docs
-  entries: `agent.execution.record`, `agent.plan.create`, `agent.subagent.aggregate`,
-  `agent.subagent.dispatch`, `agent.ui.render`, `chat.message.execution`, and all 8
-  `connection.*` capabilities. A further **12** capabilities have no `docs/capabilities/`
-  file but omit `"docs"` from their contract `layers[]`, making them invisible to
-  `check:manifest`: `document.create`, `document.list`, `document.read`, `form.create`,
-  `form.submit`, `image.analyze`, `image.create`, `image.list`, `prompt.settings.read`,
-  `prompt.settings.write`, `skill.workspace.list`, `workspace.member.list`. True total
-  ~26 undocumented. Run `pnpm check:manifest` for tracked gaps; for the untracked 12,
-  add `"docs"` to their contract `layers[]`. This count drifts; do not hard-code it.
+- Update when a contract is added, renamed, or removed. Filename: kebab-case capability name (e.g. `workflow.run.md`). Update `_index.md` for new capabilities.
+- Verify `docs/capabilities/` matches contracts in `packages/oxagen/src/contracts/`, `apps/api/src/routes/v1/*`, `apps/mcp/src/tools/*`, `apps/cli/src/commands/*` before pushing.
+- **Gaps (last audited 2026-06-09):** ~26 undocumented capabilities. Run `pnpm check:manifest` for tracked gaps; for untracked ones, add `"docs"` to contract `layers[]`. This count drifts; do not hard-code it.

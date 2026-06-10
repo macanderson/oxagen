@@ -15,6 +15,7 @@ import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscr
 import { billingCreditsPurchaseRoute } from "./routes/v1/billing.credits.purchase";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
 import { chatMessageExecutionRoute } from "./routes/v1/chat.message.execution";
+import { chatStreamRoute } from "./routes/v1/chat.stream";
 import { agentCodeExecuteRoute } from "./routes/v1/agent.code.execute";
 import { agentToolListRoute } from "./routes/v1/agent.tool.list";
 import { agentMcpRegisterRoute } from "./routes/v1/agent.mcp.register";
@@ -146,6 +147,7 @@ orgScoped.route("/billing/subscription/upgrade/start", billingSubscriptionUpgrad
 orgScoped.route("/billing/credits/purchase", billingCreditsPurchaseRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
+orgScoped.route("/chat/stream", chatStreamRoute);
 orgScoped.route("/conversations", conversationListRoute);
 orgScoped.route("/conversations/rename", conversationRenameRoute);
 orgScoped.route("/conversations/archive", conversationArchiveRoute);
