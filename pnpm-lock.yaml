@@ -740,6 +740,9 @@ importers:
 
   packages/handlers:
     dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: 1.29.0
+        version: 1.29.0(zod@3.25.76)
       '@oxagen/ai':
         specifier: workspace:*
         version: link:../ai
@@ -749,6 +752,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
@@ -779,6 +785,9 @@ importers:
       '@oxagen/web':
         specifier: workspace:*
         version: link:../web
+      ai:
+        specifier: 6.0.197
+        version: 6.0.197(zod@3.25.76)
       docx:
         specifier: 9.7.1
         version: 9.7.1
@@ -791,6 +800,9 @@ importers:
       fflate:
         specifier: 0.8.3
         version: 0.8.3
+      hono:
+        specifier: 4.12.23
+        version: 4.12.23
       pdf-lib:
         specifier: 1.17.1
         version: 1.17.1
