@@ -259,7 +259,19 @@
     "opusplan"
   ],
   "enableAllProjectMcpServers": true,
-  "hooks": {},
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm lint --fix && pnpm typecheck"
+          }
+        ]
+      }
+    ]
+  },
   "worktree": {
     "symlinkDirectories": [
       "node_modules",
