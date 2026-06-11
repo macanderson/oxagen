@@ -28,10 +28,36 @@ Never claim a task is complete without concrete verification. Always provide evi
 - **Deployments must be verified.** Health check, DB query, or API call after deploying — not just deploy logs.
 - **DB changes must be verified.** Run a `SELECT` after migration to confirm changes landed.
 
+## Golden rule — the three-command gate
+
+**Before every push to main or opening a PR, ALL THREE of the following must pass locally with no errors:**
+
+```bash
+pnpm i --no-frozen-lockfile          # sync lockfile; run after any dep change
+pnpm build                           # full monorepo build from repo root
+pnpm kill && pnpm dev                # clean start; all dev servers must come up without error
+```
+
+Then run the full test suite:
+
+```bash
+pnpm gate                            # lint + typecheck + coverage + tests + migrations
+```
+
+**If you hit a "port already in use" error, run `pnpm kill` first**, then retry.
+
+This gate is non-negotiable. Never push or open a PR until all four commands succeed.
+
+## Dependencies
+
+- **Always add external package dependencies to the correct `package.json`** — the app or package that imports the dep, not the monorepo root. Never hoist a dep to the root just for convenience.
+- **Run `pnpm i --no-frozen-lockfile` after any dep addition or removal** to update the lockfile before committing.
+- **Do not add a dep to multiple packages** if it can be shared via a workspace package.
+
 ## CI / Build
 
 **Before any push to main:**
-1. Run `pnpm gate` locally — lint, typecheck, coverage, test, build, migrations. All must pass.
+1. Run the three-command gate above — build, dev, and `pnpm gate` all pass.
 2. Verify `.env.example` and lockfile are in sync.
 3. Confirm CI is green after push via `gh run watch`.
 
