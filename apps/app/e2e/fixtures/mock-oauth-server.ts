@@ -43,9 +43,30 @@ export async function startMockOAuthServer(): Promise<MockOAuthHandle> {
           issuer: base,
           authorization_endpoint: `${base}/authorize`,
           token_endpoint: `${base}/token`,
+          // registration_endpoint is required for the MCP SDK's Dynamic Client
+          // Registration flow. Without it, mcpAuth() throws
+          // "Incompatible auth server: does not support dynamic client registration".
+          registration_endpoint: `${base}/register`,
           response_types_supported: ["code"],
           grant_types_supported: ["authorization_code", "refresh_token"],
           code_challenge_methods_supported: ["S256"],
+        }),
+      );
+      return;
+    }
+
+    // ── Dynamic Client Registration ───────────────────────────────────────────
+    // The MCP SDK calls this when no stored client_id exists. We issue a
+    // predictable fake client_id so the authorize step can proceed.
+    if (req.method === "POST" && url.pathname === "/register") {
+      await readBody(req); // consume body
+      res.writeHead(201, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          client_id: "e2e_mock_client_id",
+          client_secret: "e2e_mock_client_secret",
+          client_id_issued_at: Math.floor(Date.now() / 1000),
+          client_secret_expires_at: 0,
         }),
       );
       return;
