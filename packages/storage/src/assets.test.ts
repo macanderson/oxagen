@@ -1,3 +1,4 @@
+// This file contains unit tests for the assets module, which defines asset types, limits, and key derivation logic for uploaded files. The tests cover the following aspects:
 import { describe, it, expect } from "vitest";
 
 import {

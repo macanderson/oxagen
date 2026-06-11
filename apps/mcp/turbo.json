@@ -3,7 +3,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".xmcp/**", "dist/**"],
+      "outputs": [".vercel/output/**", ".xmcp/**", "dist/**"],
       // MCP server (xmcp). Surfaces the same shared packages as the API minus
       // Inngest (not a dependency). Reads its env through @oxagen/config.
       "env": [
