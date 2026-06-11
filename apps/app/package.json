@@ -71,16 +71,17 @@
     "@types/node": "25.9.1",
     "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
+    "@vitest/coverage-v8": "2.1.9",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.7",
     "globals": "17.6.0",
     "jsdom": "29.1.1",
     "neo4j-driver": "5.28.3",
     "postcss": "8.5.15",
+    "postgres": "3.4.9",
     "tailwindcss": "4.3.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.60.0",
-    "vitest": "2.1.9",
-    "@vitest/coverage-v8": "2.1.9"
+    "vitest": "2.1.9"
   }
 }

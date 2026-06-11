@@ -333,6 +333,11 @@ export function MarketplaceModal({
                                     alt=""
                                     width={32}
                                     height={32}
+                                    // Marketplace icons are arbitrary remote URLs that can't
+                                    // be allowlisted in next.config remotePatterns; route them
+                                    // around Next's optimizer (which would 404 unknown hosts)
+                                    // so the original src renders verbatim.
+                                    unoptimized
                                     className="h-8 w-8 rounded object-contain flex-shrink-0"
                                     aria-hidden="true"
                                   />
