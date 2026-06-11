@@ -33,10 +33,14 @@ vi.mock("@oxagen/auth", () => ({
   resolveWorkspaceScope: mocks.resolveWorkspaceScope,
 }));
 
-vi.mock("@oxagen/oxagen/kernel", () => ({
-  invoke: mocks.invoke,
-  clearHandlersForTests: vi.fn(),
-}));
+vi.mock("@oxagen/oxagen/kernel", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/oxagen/kernel")>();
+  return {
+    ...real,
+    invoke: mocks.invoke,
+    clearHandlersForTests: vi.fn(),
+  };
+});
 
 vi.mock("@oxagen/billing", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/billing")>();
