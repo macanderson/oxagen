@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import type { CapabilityContext } from "@oxagen/oxagen/types";
@@ -107,7 +107,9 @@ export async function installOne(
     );
   }
 
-  // Insert the listing (enabled: false by default).
+  // Upsert the listing (enabled: false by default).
+  // ON CONFLICT on the (org_id, plugin_type, name) unique index returns the
+  // existing row's id — making install idempotent when the listing already exists.
   const inserted = await withSystemDb(async (tx) => {
     const [row] = await tx
       .insert(schema.pluginOrgListings)
@@ -124,6 +126,10 @@ export async function installOne(
         transport,
         authKind,
         enabled: false,
+      })
+      .onConflictDoUpdate({
+        target: [schema.pluginOrgListings.orgId, schema.pluginOrgListings.pluginType, schema.pluginOrgListings.name],
+        set: { updatedAt: sql`now()` },
       })
       .returning({ id: schema.pluginOrgListings.id });
     return row ?? null;

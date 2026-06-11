@@ -1,18 +1,11 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
-import { schema, withSystemDb } from "@oxagen/database";
+import { schema, withSystemDb, isUniqueViolation } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { eq } from "drizzle-orm";
 import { grantFreeCredits } from "@oxagen/billing";
 import { logger } from "./logger";
 import { bootstrapOrgIAM } from "./iam-provision";
-
-// Postgres unique_violation. Two concurrent creates with the same slug can
-// both pass the pre-check before either insert lands; the loser hits the
-// citext unique index and must surface the same friendly error, not a 500.
-function isSlugConflict(err: unknown): boolean {
-  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
-}
 
 export const organizationCreateHandler: CapabilityHandler<typeof organizationCreate> = async (input, ctx) => {
   if (!ctx.userId) {
@@ -150,7 +143,7 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
       logger.error({ err, orgId: txResult.id }, "organization.create: failed to record security event");
     });
   } catch (err) {
-    if (isSlugConflict(err)) {
+    if (isUniqueViolation(err)) {
       logger.warn({ slug: input.slug, orgId: ctx.orgId }, "organization.create: slug conflict");
       throw new Error(`slug "${input.slug}" already in use`);
     }

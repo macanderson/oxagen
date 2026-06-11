@@ -12,3 +12,4 @@ export {
   type Tx,
 } from "./tenant";
 export { makeWithTenantDbMock, makeWithSystemDbMock } from "./tenant.mock";
+export { isUniqueViolation } from "./errors";

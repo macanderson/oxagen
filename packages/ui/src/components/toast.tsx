@@ -67,7 +67,11 @@ function ToastViewport({ className }: { className?: string }) {
     <ToastPrimitive.Portal>
       <ToastPrimitive.Viewport
         className={cn(
-          "fixed bottom-0 right-0 z-[100] flex max-h-screen w-full flex-col-reverse gap-2 p-4 sm:max-w-[420px]",
+          // pointer-events-none so the empty full-width viewport (w-full on
+          // mobile) does not sit over and swallow taps on whatever is beneath it
+          // — e.g. the fixed bottom navigation bar. Individual toasts re-enable
+          // pointer-events-auto so they stay interactive (see Toast above).
+          "pointer-events-none fixed bottom-0 right-0 z-[100] flex max-h-screen w-full flex-col-reverse gap-2 p-4 sm:max-w-[420px]",
           className,
         )}
       >

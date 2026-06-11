@@ -49,17 +49,19 @@ test.describe("mcp-disable", () => {
     await expect(enableToggle).toBeVisible({ timeout: 10_000 });
 
     // Step 1: Enable first (fixture seeds as enabled=false → toggle is unchecked).
+    // The coss Switch wraps Base UI's Switch.Root (role="switch"), which exposes
+    // on/off via aria-checked — not Radix's data-state. See packages/ui/src/components/switch.tsx.
     await enableToggle.click();
-    await expect(enableToggle).toHaveAttribute("data-state", "checked", { timeout: 10_000 });
+    await expect(enableToggle).toHaveAttribute("aria-checked", "true", { timeout: 10_000 });
 
     // Step 2: Now disable.
     await enableToggle.click();
-    await expect(enableToggle).toHaveAttribute("data-state", "unchecked", { timeout: 10_000 });
+    await expect(enableToggle).toHaveAttribute("aria-checked", "false", { timeout: 10_000 });
 
     // Step 3: Reload to confirm DB-persisted disabled state.
     await page.reload();
     await expect(
       page.getByTestId(`org-listing-enable-toggle-${fixture.orgListingId}`),
-    ).toHaveAttribute("data-state", "unchecked", { timeout: 10_000 });
+    ).toHaveAttribute("aria-checked", "false", { timeout: 10_000 });
   });
 });

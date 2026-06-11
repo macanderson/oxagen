@@ -72,6 +72,43 @@ describe("useSecureCookies derivation", () => {
 });
 
 // ---------------------------------------------------------------------------
+// rateLimit.enabled logic — extracted from auth.ts for unit testing.
+//
+// The rule from auth.ts:
+//   const isE2E = process.env.E2E_TEST === "true";
+//   rateLimit.enabled = !isE2E
+//
+// The SOC2 brute-force defense (5/60 sign-in, 10/60 sign-up) is ALWAYS on in
+// production and development, and is disabled ONLY under the deterministic
+// Playwright harness (E2E_TEST="true"), which signs in/up far faster than the
+// window allows. Like the secure-cookie bypass, the override must be exact:
+// only the string "true" disables it.
+// ---------------------------------------------------------------------------
+
+function deriveRateLimitEnabled(e2eTest: string | undefined): boolean {
+  const isE2E = e2eTest === "true";
+  return !isE2E;
+}
+
+describe("rateLimit.enabled derivation", () => {
+  it("is enabled (SOC2 brute-force defense ON) in normal operation", () => {
+    expect(deriveRateLimitEnabled(undefined)).toBe(true);
+    expect(deriveRateLimitEnabled("")).toBe(true);
+  });
+
+  it("is disabled under the Playwright harness (E2E_TEST=true)", () => {
+    expect(deriveRateLimitEnabled("true")).toBe(false);
+  });
+
+  it("bypass only activates for the exact string 'true' — never weakens prod by accident", () => {
+    expect(deriveRateLimitEnabled("True")).toBe(true);
+    expect(deriveRateLimitEnabled("TRUE")).toBe(true);
+    expect(deriveRateLimitEnabled("1")).toBe(true);
+    expect(deriveRateLimitEnabled("yes")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Email + password policy constants
 // ---------------------------------------------------------------------------
 

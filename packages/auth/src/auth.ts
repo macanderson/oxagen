@@ -41,15 +41,19 @@ const tokenEncryptionKey = process.env.AUTH_TOKEN_ENCRYPTION_KEY;
 // rotation can identify which master key wrapped each row. Bump on rotation.
 const TOKEN_KEY_ID = "vercel-native-v1";
 
+// E2E_TEST is injected by playwright.config.ts webServer.env when running
+// `next start` in CI. Playwright drives a production build over http, so
+// NODE_ENV is "production" even though several production-only behaviors
+// (secure cookies, OAuth token encryption, brute-force rate limiting) must be
+// relaxed for the deterministic test harness. This single flag gates all of
+// those E2E exemptions.
+const isE2E = process.env.E2E_TEST === "true";
+
 const isLocalEnv =
   env.NODE_ENV === "development" ||
   env.NODE_ENV === "test" ||
   process.env.VERCEL_ENV === "development" ||
-  // E2E_TEST is injected by playwright.config.ts webServer.env when running
-  // `next start` in CI. Playwright drives a production build over http, so
-  // NODE_ENV is "production" even though the key is unavailable — the same
-  // exemption already applied to useSecureCookies (line below).
-  process.env.E2E_TEST === "true";
+  isE2E;
 
 // The master key is a RUNTIME requirement, not a build-time one. Next.js
 // evaluates route modules during `next build` ("Collecting page data") with
@@ -247,9 +251,16 @@ export const auth = betterAuth({
   // Note: Better Auth also applies a built-in default rule of 3 req / 10 s
   // for /sign-in/* and /sign-up/* paths; our customRules below OVERRIDE
   // that with the SOC2-appropriate 5/60 and 10/60 windows.
+  //
+  // E2E EXEMPTION: the Playwright suite signs in / signs up dozens of times in
+  // rapid succession from a single loopback IP (one shared rate-limit bucket),
+  // which legitimately exceeds the 5/60 sign-in and 10/60 sign-up windows and
+  // 429s the harness — not an attack. No e2e test asserts rate-limit behavior,
+  // so disabling it under E2E_TEST is lossless. Production and dev keep the
+  // full SOC2 brute-force defense; only the deterministic test build relaxes it.
   // ---------------------------------------------------------------------------
   rateLimit: {
-    enabled: true,
+    enabled: !isE2E,
     storage: "database",
     window: 60,
     max: 100,
@@ -303,7 +314,7 @@ export const auth = betterAuth({
     // a production build (`next start`) over http://localhost. `__Secure-`
     // cookies are never sent over http, so the e2e auth helper could never
     // inject a session. The flag is set only by the Playwright webServer.
-    useSecureCookies: env.NODE_ENV === "production" && process.env.E2E_TEST !== "true",
+    useSecureCookies: env.NODE_ENV === "production" && !isE2E,
     defaultCookieAttributes: {
       httpOnly: true,
       sameSite: "lax",

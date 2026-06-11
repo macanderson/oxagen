@@ -1,16 +1,9 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
-
-// Postgres unique_violation. Two concurrent creates with the same (orgId, slug)
-// can both pass the pre-check before either insert lands; the loser hits the
-// unique index and must surface the same friendly error, not a 500.
-function isSlugConflict(err: unknown): boolean {
-  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
-}
 
 export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> = async (
   input,
@@ -111,7 +104,7 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
 
     return result;
   } catch (err) {
-    if (isSlugConflict(err)) {
+    if (isUniqueViolation(err)) {
       logger.warn({ orgId: ctx.orgId, slug: input.slug }, "workspace.create: slug conflict (race)");
       throw new Error(`slug "${input.slug}" already in use for this tenant`);
     }

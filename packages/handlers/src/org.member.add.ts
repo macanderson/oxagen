@@ -12,7 +12,7 @@
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberAdd } from "@oxagen/oxagen/contracts/org.member.add";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { assertSeatAvailable, isSeatLimitError } from "@oxagen/billing";
 import { logger, maskEmail } from "./logger";
@@ -80,8 +80,9 @@ export const orgMemberAddHandler: CapabilityHandler<typeof orgMemberAdd> = async
     if (!row) throw new Error("invitation insert returned no row");
     invitation = row;
   } catch (err) {
-    // Unique violation (code 23505) → duplicate pending invite.
-    if (typeof err === "object" && err !== null && (err as { code?: string }).code === "23505") {
+    // Unique violation (code 23505) → duplicate pending invite. isUniqueViolation
+    // walks the drizzle cause chain (the SQLSTATE is on .cause.code, not top-level).
+    if (isUniqueViolation(err)) {
       logger.warn(
         { orgId: ctx.orgId, email: maskEmail(input.email) },
         "org.member.add: duplicate pending invitation for this email",

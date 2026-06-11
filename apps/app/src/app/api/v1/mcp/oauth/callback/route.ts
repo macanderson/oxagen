@@ -2,8 +2,8 @@
  * GET /api/v1/mcp/oauth/callback
  *
  * OAuth 2.1 callback handler: exchanges the authorization code for tokens,
- * stores them encrypted in mcp.credentials, and marks the workspace install
- * as healthy.
+ * stores them encrypted in mcp.credentials, and upserts the workspace install
+ * row (creating it if it doesn't exist yet) marked as healthy.
  *
  * Query params: code, state
  * The state parameter is used to look up the PKCE verifier + flow metadata
@@ -74,15 +74,36 @@ export async function GET(req: NextRequest) {
   await deleteOAuthState(state);
 
   if (result === "AUTHORIZED") {
-    // Tokens stored — mark the workspace install healthy.
+    // Upsert the workspace install row: create it if it doesn't exist yet
+    // (first-time OAuth connect), or update it if it does (reconnect flow).
+    // mapAuthStrategy: oauth listings use bearer token auth.
     await withSystemDb(async (tx) => {
       await tx
-        .update(schema.mcpServers)
-        .set({ healthStatus: "healthy", updatedAt: new Date() })
-        .where(eq(schema.mcpServers.orgListingId, stateData.orgListingId));
+        .insert(schema.mcpServers)
+        .values({
+          orgId: stateData.orgId,
+          workspaceId: stateData.workspaceId,
+          orgListingId: stateData.orgListingId,
+          name: listing.name,
+          transportType: listing.transport ?? "streamable-http",
+          endpointUrl: listing.endpointUrl!,
+          authStrategy: "bearer",
+          authConfig: {},
+          healthStatus: "healthy",
+          enabled: true,
+          discoveredTools: [],
+        })
+        .onConflictDoUpdate({
+          target: [schema.mcpServers.workspaceId, schema.mcpServers.orgListingId],
+          set: {
+            healthStatus: "healthy",
+            enabled: true,
+            updatedAt: new Date(),
+          },
+        });
     });
 
-    logger.info({ orgId: stateData.orgId, orgListingId: stateData.orgListingId }, "mcp-oauth: token exchange succeeded, install marked healthy");
+    logger.info({ orgId: stateData.orgId, orgListingId: stateData.orgListingId }, "mcp-oauth: token exchange succeeded, install upserted and marked healthy");
     return NextResponse.redirect(
       `${url.origin}${stateData.returnTo}?mcp=connected`,
     );

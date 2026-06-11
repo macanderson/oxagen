@@ -55,32 +55,27 @@ export function PluginDetailPanel({
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    let cancelled = false;
-    // Defer the synchronous state resets out of the effect body to satisfy
-    // react-hooks/set-state-in-effect (same pattern as message-composer.tsx).
-    setTimeout(() => {
-      if (!cancelled) {
-        setLoading(true);
-        setDetail(null);
-        setError(null);
-      }
-    }, 0);
-    fetch(`/api/v1/plugin/catalog/get?catalogId=${encodeURIComponent(catalogId)}`)
+    const controller = new AbortController();
+    // Reset state synchronously so loading is true before the fetch resolves,
+    // preventing a race where a fast fetch resolves before deferred state resets fire.
+    setLoading(true);
+    setDetail(null);
+    setError(null);
+    fetch(`/api/v1/plugin/catalog/get?catalogId=${encodeURIComponent(catalogId)}`, {
+      signal: controller.signal,
+    })
       .then((r) => r.json() as Promise<CatalogDetail>)
       .then((d) => {
-        if (!cancelled) {
-          setDetail(d);
-          setLoading(false);
-        }
+        setDetail(d);
+        setLoading(false);
       })
       .catch((e) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Failed");
-          setLoading(false);
-        }
+        if ((e as { name?: string }).name === "AbortError") return;
+        setError(e instanceof Error ? e.message : "Failed");
+        setLoading(false);
       });
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [catalogId]);
 

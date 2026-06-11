@@ -279,6 +279,14 @@ export function MarketplaceModal({
                         className="grid grid-cols-2 gap-3"
                         data-testid="marketplace-server-grid"
                       >
+                        {servers.length === 0 && (
+                          <p
+                            className="col-span-2 py-8 text-center text-sm text-muted-foreground"
+                            data-testid="marketplace-no-results"
+                          >
+                            No plugins found.
+                          </p>
+                        )}
                         {servers.map((srv) => {
                           const denied = deniedNames.includes(srv.name);
                           const isSelected = selected.has(srv.id);

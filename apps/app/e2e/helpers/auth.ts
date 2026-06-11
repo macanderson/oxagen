@@ -1,4 +1,5 @@
 import type { BrowserContext } from "@playwright/test";
+import { createHmac } from "node:crypto";
 
 // Programmatic login for E2E: calls the real Better Auth sign-in endpoint
 // with email + password, extracts the returned session cookies, and injects
@@ -107,6 +108,30 @@ export async function loginAs(
 // Must match what seedPlugin / setupAgentRuntimeFixture seed into auth.accounts.
 export const E2E_TEST_PASSWORD = "E2eTestPassword123!";
 
+// Better Auth stores the session-token cookie as a SIGNED value:
+//   `${token}.${base64(HMAC-SHA256(token, BETTER_AUTH_SECRET))}`
+// (see better-auth cookies → setSignedCookie → makeSignature). On every request
+// it verifies that signature before the DB lookup, so injecting a bare token
+// yields no session and the app bounces to /login. We replicate the signature
+// with node:crypto — verified byte-for-byte against better-auth's makeSignature.
+function signSessionToken(token: string): string {
+  let secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret) {
+    throw new Error(
+      "loginWithSession: BETTER_AUTH_SECRET is not set in the test process — cannot " +
+        "sign the session cookie. playwright.config.ts loadEnvLocal() must populate it.",
+    );
+  }
+  // Strip one balanced surrounding double-quote pair (matches the running app's
+  // normalizeEnv and playwright.config.ts loadEnvLocal) so the signing secret is
+  // byte-identical to the server's.
+  if (secret.length >= 2 && secret.startsWith('"') && secret.endsWith('"')) {
+    secret = secret.slice(1, -1);
+  }
+  const signature = createHmac("sha256", secret).update(token).digest("base64");
+  return `${token}.${signature}`;
+}
+
 // Inject a pre-seeded session token directly as a cookie, bypassing the
 // email/password flow. Use this when the fixture seeds auth.sessions but not
 // auth.accounts (credential rows). The cookie prefix "oxagen" must match the
@@ -120,7 +145,7 @@ export async function loginWithSession(
   await context.addCookies([
     {
       name: "oxagen.session_token",
-      value: sessionToken,
+      value: signSessionToken(sessionToken),
       domain: url.hostname,
       path: "/",
       httpOnly: true,

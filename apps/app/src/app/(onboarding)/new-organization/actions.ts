@@ -1,6 +1,6 @@
 "use server";
 import { z } from "zod";
-import { withSystemDb, schema } from "@oxagen/database";
+import { withSystemDb, schema, isUniqueViolation } from "@oxagen/database";
 // tenancy: unscoped seam (org creation bootstrap — no org or workspace exists
 // yet at call time; this action IS what creates the first tenant identity, so
 // a scope cannot be entered before the org row exists; withSystemDb bypasses
@@ -73,13 +73,6 @@ const FormSchema = z.object({
   // same pattern the settings general-action uses.
   avatarUrl: z.string().url().max(2048).optional().or(z.literal("")),
 });
-
-// Postgres unique_violation. Mirrors isSlugConflict in workspace.create.ts and
-// the organization/workspace handlers — match the structured error code rather
-// than sniffing the message string, which is locale- and driver-dependent.
-function isSlugConflict(err: unknown): boolean {
-  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
-}
 
 // Coerce an empty string to undefined so we don't write blank strings into
 // optional columns.
@@ -256,10 +249,13 @@ export async function createOrgAction(
     // The only unique index reachable here is organizations_slug_idx — the
     // workspace insert always uses slug "default" under a freshly-minted org id,
     // so a 23505 means the org slug collided.
-    if (isSlugConflict(err)) {
+    if (isUniqueViolation(err)) {
       return { ok: false, error: `Slug "${org.slug}" is already taken` };
     }
-    const message = err instanceof Error ? err.message : "Failed to create organization";
-    return { ok: false, error: message };
+    // Never surface a raw driver/SQL error string to the user (information leak
+    // — the unhandled path previously echoed the full INSERT statement). Log the
+    // real cause for diagnosis and return a generic, safe message.
+    logger.error({ err, slug: org.slug }, "[onboarding] createOrgAction failed");
+    return { ok: false, error: "Failed to create organization. Please try again." };
   }
 }

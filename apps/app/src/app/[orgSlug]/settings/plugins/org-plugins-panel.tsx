@@ -379,15 +379,17 @@ function AllowListSection({
         <p className="text-xs text-muted-foreground">
           {listings.length === 0 ? "No plugins installed." : `${listings.length} plugin${listings.length === 1 ? "" : "s"} installed`}
         </p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onBrowseMarketplace}
-          data-testid="browse-marketplace-btn"
-        >
-          <ShoppingBag className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-          Browse marketplace
-        </Button>
+        {canManage && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onBrowseMarketplace}
+            data-testid="browse-marketplace-btn"
+          >
+            <ShoppingBag className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            Browse marketplace
+          </Button>
+        )}
       </div>
 
       {listings.length > 0 && (
@@ -426,8 +428,10 @@ function AllowListSection({
                           </span>
                         )}
                         <div>
-                          <p className="font-medium">{listing.title ?? listing.name}</p>
-                          <p className="text-xs text-muted-foreground">{listing.name}</p>
+                          <p className="font-medium" data-testid={`org-listing-display-name-${listing.id}`}>{listing.title ?? listing.name}</p>
+                          {listing.title && listing.title !== listing.name && (
+                            <p className="text-xs text-muted-foreground">{listing.name}</p>
+                          )}
                         </div>
                       </div>
                     </td>

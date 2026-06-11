@@ -1,8 +1,9 @@
 "use server";
 import { and, eq } from "drizzle-orm";
-import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema, isUniqueViolation } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
+import { logger } from "@oxagen/handlers/logger";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
 
@@ -19,11 +20,6 @@ const RESERVED_WORKSPACE_SLUGS = new Set(["new-workspace", "settings"]);
 // pre-check time; withTenantDb sets both GUCs but org_only-classed tables
 // only evaluate the org_id GUC) — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
-
-/** Postgres unique_violation — the (org_id, slug) index lost a create race. */
-function isSlugConflict(err: unknown): boolean {
-  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
-}
 
 /**
  * Create a workspace inside the active org. `orgSlug` is bound in the page so
@@ -112,10 +108,13 @@ export async function createWorkspaceAction(
       });
       return { ok: true, workspaceSlug };
     } catch (err) {
-      if (isSlugConflict(err)) {
+      if (isUniqueViolation(err)) {
         return { ok: false, error: `Slug "${parsed.data.slug}" is already taken in this organization` };
       }
-      return { ok: false, error: err instanceof Error ? err.message : "Failed to create workspace" };
+      // Never surface a raw driver/SQL error to the user (information leak); log
+      // for diagnosis and return a generic, safe message.
+      logger.error({ err, orgId: org.id, slug: parsed.data.slug }, "[new-workspace] createWorkspaceAction failed");
+      return { ok: false, error: "Failed to create workspace. Please try again." };
     }
   });
 }

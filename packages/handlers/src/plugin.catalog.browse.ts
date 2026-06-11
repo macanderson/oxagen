@@ -19,7 +19,20 @@ export const handler: CapabilityHandlerFn = async (input) => {
   ];
   if (search) conds.push(ilike(schema.mcpCatalogServers.name, `%${search}%`));
   if (authKind) conds.push(eq(schema.mcpCatalogServers.authKind, authKind));
-  if (pluginType) conds.push(arrayOverlaps(schema.mcpCatalogServers.categories, [pluginType]));
+  // pluginType is a TYPE discriminator overlaid on the `categories` array, where
+  // mcp_server is the DEFAULT classification: a catalog row is an mcp_server
+  // unless it is explicitly tagged "integration" or "content_tool". This MUST
+  // mirror the output derivation below (serverPluginType) — otherwise a server
+  // with empty/content-only categories (the common case: real registry syncs
+  // never write the literal "mcp_server" tag) is classified mcp_server on output
+  // yet filtered OUT of the mcp_server tab, leaving the marketplace empty.
+  if (pluginType === "mcp_server") {
+    conds.push(
+      sql`NOT (${schema.mcpCatalogServers.categories} && ARRAY['integration','content_tool']::text[])`,
+    );
+  } else if (pluginType) {
+    conds.push(arrayOverlaps(schema.mcpCatalogServers.categories, [pluginType]));
+  }
   if (categories?.length) conds.push(arrayOverlaps(schema.mcpCatalogServers.categories, categories));
   if (transportTypes?.length) conds.push(arrayOverlaps(schema.mcpCatalogServers.transportTypes, transportTypes));
   const where = and(...conds);

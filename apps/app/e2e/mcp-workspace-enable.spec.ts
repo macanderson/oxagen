@@ -58,8 +58,10 @@ test.describe("mcp-workspace-enable", () => {
     await expect(orgToggle).toBeVisible({ timeout: 10_000 });
     // The fixture seeds as disabled=false; click to enable.
     await orgToggle.click();
-    // After clicking, the toggle should reflect "checked" state.
-    await expect(orgToggle).toHaveAttribute("data-state", "checked", { timeout: 10_000 });
+    // After clicking, the toggle should reflect the on state. The coss Switch
+    // wraps Base UI's Switch.Root (role="switch"), which exposes on/off via
+    // aria-checked — not Radix's data-state.
+    await expect(orgToggle).toHaveAttribute("aria-checked", "true", { timeout: 10_000 });
 
     // Step 2: Navigate to the workspace integrations page.
     await page.goto(`/${fixture.orgSlug}/${fixture.workspaceSlug}/settings/integrations`);
@@ -74,6 +76,6 @@ test.describe("mcp-workspace-enable", () => {
     await toggle.click();
 
     // Step 4: The toggle should now reflect enabled state.
-    await expect(toggle).toHaveAttribute("data-state", "checked", { timeout: 10_000 });
+    await expect(toggle).toHaveAttribute("aria-checked", "true", { timeout: 10_000 });
   });
 });
