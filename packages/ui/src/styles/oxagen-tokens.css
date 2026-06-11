@@ -1,15 +1,12 @@
 
 :root {
-
-    --colors-oxagenBrandCyan: #7CE8F4;
-    --colors-oxagenBrandViolet: #7C5AED;
-    --colors-oxagenBrandCosmos: #DF2A5D;
-
-    --colors-oxagenGradientAurora: linear-gradient(90deg, rgba(124, 232, 244, 0.08) 0%, rgba(124, 90, 237, 0.04) 100%);
-    --colors-oxagenGradientGalaxy: linear-gradient(135deg, rgba(124, 90, 237, 0.70) 0%, rgba(124, 232, 244, 0.70) 100%);
-    --colors-oxagenGradientNebula: linear-gradient(90deg, #7CE8F4 0%, #9B5AED 47.92%, #DF2A5D 100%);
-    --colors-oxagenGradientSunset: linear-gradient(90deg, #DF2A5D 0.41%, #7C5AED 99.55%);
-    --colors-black: #232F3E;
+    /* Oxagen Colors */
+    --colors-oxagen-cyan: #7CE8F4;
+    --colors-oxagen-violet: #7C5AED;
+    --colors-oxagen-cosmos: #DF2A5D;
+    /* Black Color */
+    --colors-black: #16191F;
+    /* Gray Colors */
     --colors-gray100: #F9F9FB;
     --colors-gray200: #F4F3F4;
     --colors-gray300: #EEEDF2;
@@ -21,156 +18,37 @@
     --colors-gray800: #544F69;
     --colors-gray900: #16191F;
     --colors-light-sky: #F6F9FF;
-
+    /* Pastel Colors */
     --colors-pastelError: #FFEFEF;
     --colors-pastelPrimary: #EAF7FF;
     --colors-pastelSuccess: #F0F5E8;
     --colors-pastelWarning: #FFF0E6;
-
+    /* Info Colors */
     --colors-background-info: #2074D5;
     --colors-foreground-info: #FFFFFF;
-
+    /* Error Colors */
     --colors-background-error: #e2320e;
     --colors-foreground-error: #FFFFFF;
-
+    /* Success Colors */
     --colors-background-success: #37A04D;
     --colors-foreground-success: #04200A;
-
+    /* Warning Colors */
     --colors-background-warning: #FF9900;
     --colors-foreground-warning: #1F0A00;
-
     /* Text Colors */
     --colors-ink-black: #232F3E;
     --colors-ink-grey: #544F69;
     --colors-ink-disabled: #9E9CA5;
     --colors-ink-white: #FFFFFF;
-
-    --borderStyles-primary: solid;
-    --borderStyles-secondary: dotted;
-    --borderWidths-extra-small: 1px;
-    --borderWidths-small: 2px;
-    --colors-black: #232F3E;
-    --colors-brandCosmos: #DF2A5D;
-    --colors-brandCyan: #7CE8F4;
-    --colors-brandViolet: #7C5AED;
-    --colors-error: #e2320e;
-    --colors-gradientAurora: linear-gradient(90deg, rgba(124, 232, 244, 0.08) 0%, rgba(124, 90, 237, 0.04) 100%);
-    --colors-gradientGalaxy: linear-gradient(135deg, rgba(124, 90, 237, 0.70) 0%, rgba(124, 232, 244, 0.70) 100%);
-    --colors-gradientNebula: linear-gradient(90deg, #7CE8F4 0%, #9B5AED 47.92%, #DF2A5D 100%);
-    --colors-gradientSunset: linear-gradient(90deg, #DF2A5D 0.41%, #7C5AED 99.55%);
-    --colors-gray100: #F9F9FB;
-    --colors-gray200: #F4F3F4;
-    --colors-gray300: #EEEDF2;
-    --colors-gray400: #DBDBE1;
-    --colors-gray500: #BEBDC2;
-    --colors-gray600: #9E9CA5;
-    --colors-gray650: #918F99;
-    --colors-gray700: #747281;
-    --colors-gray800: #544F69;
-    --colors-gray900: #16191F;
-    --colors-light-sky: #F6F9FF;
-    --colors-pastelError: #FFEFEF;
-    --colors-pastelPrimary: #EAF7FF;
-    --colors-pastelSuccess: #F0F5E8;
-    --colors-pastelWarning: #FFF0E6;
-    --colors-primary: #2074D5;
-    --colors-darkSky: #1766C2;
-    --colors-darkGreen: #00752B;
-    --colors-success: #37A04D;
-    --colors-warning: #FF9900;
-    --colors-white: #FFFFFF;
-    --colors-background: #F9F9FB;
-    --colors-disabled: #9E9CA5;
-    --colors-info: #2074D5;
-    --colors-secondary: #2074D5;
-    --colors-text-primary: #232F3E;
-    --colors-text-secondary: #544F69;
-    --colorsText-black: #232F3E;
-    --colorsText-brandCosmos: #DF2A5D;
-    --colorsText-brandCyan: #7CE8F4;
-    --colorsText-brandViolet: #7C5AED;
-    --colorsText-error: #D13212;
-    --colorsText-gradientAurora: linear-gradient(90deg, rgba(124, 232, 244, 0.08) 0%, rgba(124, 90, 237, 0.04) 100%);
-    --colorsText-gradientGalaxy: linear-gradient(135deg, rgba(124, 90, 237, 0.70) 0%, rgba(124, 232, 244, 0.70) 100%);
-    --colorsText-gradientNebula: linear-gradient(90deg, #7CE8F4 0%, #9B5AED 47.92%, #DF2A5D 100%);
-    --colorsText-gradientSunset: linear-gradient(90deg, #DF2A5D 0.41%, #7C5AED 99.55%);
-    --colorsText-gray100: #F9F9FB;
-    --colorsText-gray200: #F4F3F4;
-    --colorsText-gray300: #EEEDF2;
-    --colorsText-gray400: #DBDBE1;
-    --colorsText-gray500: #BEBDC2;
-    --colorsText-gray600: #9E9CA5;
-    --colorsText-gray650: #918F99;
-    --colorsText-gray700: #747281;
-    --colorsText-gray800: #544F69;
-    --colorsText-gray900: #16191F;
-    --colorsText-light-sky: #F6F9FF;
-    --colorsText-pastelError: #FFEFEF;
-    --colorsText-pastelPrimary: #EAF7FF;
-    --colorsText-pastelSuccess: #F0F5E8;
-    --colorsText-pastelWarning: #FFF0E6;
-    --colorsText-primary: #232F3E;
-    --colorsText-darkSky: #1766C2;
-    --colorsText-darkGreen: #00752B;
-    --colorsText-success: #37A04D;
-    --colorsText-warning: #FF9900;
-    --colorsText-white: #FFFFFF;
-    --colorsText-disabled: #9E9CA5;
-    --colorsText-info: #2074D5;
-    --colorsText-secondary: #544F69;
-    --fontSizes-10: 0.625rem;
-    --fontSizes-12: 0.75rem;
-    --fontSizes-14: 0.875rem;
-    --fontSizes-16: 1rem;
-    --fontSizes-20: 1.25rem;
-    --fontSizes-24: 1.5rem;
-    --fontSizes-32: 2rem;
-    --fontSizes-44: 2.75rem;
-    --fontSizes-72: 4.5rem;
-    --fontSizes-extra-extra-large: 2.75rem;
-    --fontSizes-extra-large: 1.5rem;
-    --fontSizes-large: 1.25rem;
-    --fontSizes-medium: 1rem;
-    --fontSizes-medium-small: 0.875rem;
-    --fontSizes-small: 0.75rem;
-    --fontSizes-extra-small: 0.625rem;
-    --fontWeights-bold: 700;
-    --fontWeights-normal: 400;
-    --fonts-regular: ember-display, apple-system, sans-serif;
-    --fonts-regular-italic: ember-display-regular-italic, apple-system, sans-serif;
-    --fonts-bold: ember-display-bold, apple-system, sans-serif;
-    --fonts-bold-italic: ember-display-bold-italic, apple-system, sans-serif;
-    --fonts-mono: ember-mono-bold, apple-system, sans-serif;
-    --letterSpacings-wide: 0.05em;
-    --lineHeights-12: 0.75rem;
-    --lineHeights-14: 0.875rem;
-    --lineHeights-17: 1.0625rem;
-    --lineHeights-19: 1.1875rem;
-    --lineHeights-24: 1.5rem;
-    --lineHeights-26: 1.625rem;
-    --lineHeights-32: 2rem;
-    --lineHeights-44: 2.75rem;
-    --lineHeights-82: 5.125rem;
-    --lineHeights-extra-extra-large: 3.291875rem;
-    --lineHeights-extra-large: 2.75rem;
-    --lineHeights-large: 1.625rem;
-    --lineHeights-medium: 1.5rem;
-    --lineHeights-medium-small: 1.0625rem;
-    --lineHeights-small: 0.8975rem;
-    --lineHeights-extra-small: 0.748125rem;
-    --radii-extra-extra-large: 100px;
-    --radii-medium: 8px;
-    --radii-normal: 8px;
-    --radii-small: 4px;
+    /* Gradient Colors */
+    --colors-gradient-aurora: linear-gradient(90deg, rgba(124, 232, 244, 0.08) 0%, rgba(124, 90, 237, 0.04) 100%);
+    --colors-gradient-galaxy: linear-gradient(135deg, rgba(124, 90, 237, 0.70) 0%, rgba(124, 232, 244, 0.70) 100%);
+    --colors-gradient-nebula: linear-gradient(90deg, #7CE8F4 0%, #9B5AED 47.92%, #DF2A5D 100%);
+    --colors-gradient-sunset: linear-gradient(90deg, #DF2A5D 0.41%, #7C5AED 99.55%);
+    /* Shadow Colors */
     --shadows-focus: 0px 0px 16px rgba(32, 116, 213, 0.25);
     --shadows-normal: 0px 4px 40px rgba(51, 0, 102, 0.05);
     --shadows-medium: 0px 4px 24px rgba(8, 37, 70, 0.08);
     --shadows-bold: 0px 4px 32px 4px rgba(8, 37, 70, 0.18);
-    --space-extra-large: 20px;
-    --space-large: 16px;
-    --space-medium: 12px;
-    --space-small: 8px;
-    --space-extra-small: 4px;
-    --zIndices-z-nav: 999;
-    --zIndices-z-chatbot: 980;
+
 }
