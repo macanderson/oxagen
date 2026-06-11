@@ -129,14 +129,20 @@ test.describe("mcp-oauth-connect", () => {
     await expect(connectBtn).toBeVisible();
 
     // The mock OAuth server instantly redirects back with ?code=e2e_auth_code.
-    // Playwright follows the redirect chain. We wait for the final URL to be
-    // back on the integrations page (without the code param).
+    // Playwright follows the redirect chain through:
+    //   /api/v1/mcp/oauth/authorize → <mock>/authorize?... → /api/v1/mcp/oauth/callback?code=...
+    //   → /{org}/{ws}/settings/integrations?mcp=connected
+    //
+    // We wait for ?mcp=connected — this is distinct from the current page URL
+    // (which has no mcp param) so waitForURL won't resolve until the full round
+    // trip completes. Checking for !code is insufficient because the starting
+    // URL already satisfies that condition.
     await Promise.all([
       page.waitForURL(
         (url) =>
           url.pathname.includes("/settings/integrations") &&
-          !url.searchParams.has("code"),
-        { timeout: 20_000 },
+          url.searchParams.get("mcp") === "connected",
+        { timeout: 30_000 },
       ),
       connectBtn.click(),
     ]);
