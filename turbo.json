@@ -276,7 +276,10 @@
         "NEO4J_DATABASE",
         "STRIPE_SECRET_KEY",
         "STRIPE_PUBLISHABLE_KEY",
-        "STRIPE_WEBHOOK_SECRET"
+        "STRIPE_WEBHOOK_SECRET",
+        "AUTH_TOKEN_ENCRYPTION_KEY",
+        "INNGEST_EVENT_KEY",
+        "INNGEST_SIGNING_KEY"
       ],
       "passThroughEnv": ["CI"]
     },

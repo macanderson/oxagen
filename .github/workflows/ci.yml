@@ -44,6 +44,10 @@ env:
   # Required by the env schema when NODE_ENV=production (set by `next build`).
   INNGEST_EVENT_KEY: ci_inngest_event
   INNGEST_SIGNING_KEY: signkey-test-ci0000000000000000000000000000000000000000000000000000000000
+  # OXA-1504: the e2e job serves apps/app as a production build (`next start`),
+  # where the auth startup guard requires the credential-encryption master key.
+  # Real 256-bit key from repo secrets — dummies fail the base64-length check.
+  AUTH_TOKEN_ENCRYPTION_KEY: ${{ secrets.AUTH_TOKEN_ENCRYPTION_KEY }}
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────
