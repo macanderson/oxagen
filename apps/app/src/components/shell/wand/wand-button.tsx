@@ -47,9 +47,10 @@ export function WandButton({ className }: WandButtonProps) {
         // Position: fixed bottom-right, equal 1.5rem margins.
         // z-40 puts it above normal content but below modals (z-50).
         "fixed bottom-6 right-6 z-40",
-        // On mobile: offset above the MobileBottomBar (3.5rem height + 1.5rem gap).
-        // MobileBottomBar is visible below md breakpoint.
-        "bottom-[calc(3.5rem+1.5rem)] md:bottom-6",
+        // On mobile: float above the MobileBottomBar (--bottom-bar-h) with a
+        // comfortable 1.5rem gap, clearing the device safe area too. The bar is
+        // visible below the md breakpoint; above it the FAB returns to bottom-6.
+        "bottom-[calc(var(--bottom-bar-h)+1.5rem+env(safe-area-inset-bottom))] md:bottom-6",
         className,
       )}
       // Keep the button out of the main document landmark so it doesn't

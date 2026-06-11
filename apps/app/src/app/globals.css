@@ -78,6 +78,21 @@ html[data-density="spacious"] {
   --density-py: 1rem;       /* 16px */
 }
 
+/* ── Mobile bottom navigation bar ───────────────────────────────────────── */
+/*
+ * Single source of truth for the fixed bottom nav's geometry (sub-`md` only).
+ * Any fixed-position element that must clear the bar — the shell <main>
+ * padding, the chat composer, the background-task tray, the wand FAB — reserves
+ * its space from these two custom properties instead of hard-coding 3.5rem.
+ * Bumping the bar height here cascades everywhere, so content can never hide
+ * beneath it (notably the chat Send button). The bar itself adds
+ * env(safe-area-inset-bottom) below this height for notched devices.
+ */
+:root {
+  --bottom-bar-h: 3.5rem;    /* 56px — bar content height (icon + label, ≥44px tap target) */
+  --bottom-bar-gap: 0.75rem; /* 12px — breathing room reserved above the bar   */
+}
+
 /* ── Wand widget ────────────────────────────────────────────────────────── */
 /*
  * The gradient ring on the floating wand button pulses gently to draw

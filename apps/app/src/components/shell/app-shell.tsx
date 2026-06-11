@@ -5,8 +5,8 @@
  *   Desktop: a floating, collapsible Sidebar card + an inset content panel
  *            whose header holds the toggle, Ask bar, and (right) the org /
  *            workspace pickers + notifications.
- *   Mobile:  the content panel goes full-bleed; nav is a drawer (MobileNav,
- *            opened from the header) plus a fixed MobileBottomBar.
+ *   Mobile:  the content panel goes full-bleed; navigation is the thumb-reachable
+ *            fixed MobileBottomBar (tabs + a "More" sheet for overflow + account).
  *
  * The shell is a server component. Collapse state + the interactive header live
  * in the client ShellFrame, wrapped here in SidebarProvider. PageContextProvider,
@@ -16,7 +16,7 @@
 import type { ReactNode } from "react";
 import { SidebarProvider } from "./sidebar-context";
 import { ShellFrame } from "./shell-frame";
-import { MobileBottomBar } from "./sidebar";
+import { MobileBottomBar } from "./mobile-bottom-bar";
 import type { OrgOption } from "@/components/org/org-switcher";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
 import type { SessionUser } from "./user-switcher";
@@ -68,8 +68,8 @@ export function AppShell({
         {children}
       </ShellFrame>
 
-      {/* Mobile bottom tab bar — hidden on desktop */}
-      <MobileBottomBar ctx={ctx} />
+      {/* Mobile bottom tab bar — the sole mobile nav; hidden on desktop. */}
+      <MobileBottomBar ctx={ctx} user={user} />
     </SidebarProvider>
   );
 }

@@ -47,19 +47,20 @@ test.describe("mobile-nav (< md viewport)", () => {
     await expect(page).not.toHaveURL(/\/login/);
   });
 
-  test("mobile hamburger button is visible in topbar", async ({
+  test("the top-left hamburger trigger is gone (bottom nav is the only nav)", async ({
     page,
     context,
     baseURL,
   }) => {
     await loginWithSession(context, fixture.sessionToken, baseURL);
     await page.goto(`/${ORG_SLUG}/${WS_SLUG}/ask`);
-    const trigger = page.getByRole("button", { name: /open navigation menu/i });
-    await expect(trigger).toBeVisible();
-    await expect(trigger).toBeEnabled();
+    // The old hamburger drawer trigger was removed in favour of the bottom bar.
+    await expect(
+      page.getByRole("button", { name: /open navigation menu/i }),
+    ).toHaveCount(0);
   });
 
-  test("mobile drawer opens and contains navigation links", async ({
+  test("bottom bar is visible and navigates client-side to the right page", async ({
     page,
     context,
     baseURL,
@@ -67,29 +68,50 @@ test.describe("mobile-nav (< md viewport)", () => {
     await loginWithSession(context, fixture.sessionToken, baseURL);
     await page.goto(`/${ORG_SLUG}/${WS_SLUG}/ask`);
 
-    const trigger = page.getByRole("button", { name: /open navigation menu/i });
-    await expect(trigger).toBeVisible();
-    await trigger.click();
-
-    // The nav drawer should open and expose primary nav links.
-    const nav = page.getByRole("navigation", { name: /primary navigation/i });
-    await expect(nav).toBeVisible();
-
-    // At least one workspace nav link must be present.
-    await expect(nav.getByRole("link", { name: /chat/i })).toBeVisible();
-  });
-
-  test("mobile bottom bar is visible at mobile width", async ({
-    page,
-    context,
-    baseURL,
-  }) => {
-    await loginWithSession(context, fixture.sessionToken, baseURL);
-    await page.goto(`/${ORG_SLUG}/${WS_SLUG}/ask`);
     const bottomBar = page.getByRole("navigation", { name: /mobile navigation/i });
     await expect(bottomBar).toBeVisible();
-    // Confirm authenticated shell rendered (not login redirect).
-    await expect(page).not.toHaveURL(/\/login/);
+
+    // Tapping a destination routes to it.
+    await bottomBar.getByRole("link", { name: "Knowledge" }).click();
+    await expect(page).toHaveURL(new RegExp(`/${ORG_SLUG}/${WS_SLUG}/knowledge`));
+  });
+
+  test("More sheet exposes overflow destinations and the account control", async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    await loginWithSession(context, fixture.sessionToken, baseURL);
+    await page.goto(`/${ORG_SLUG}/${WS_SLUG}/ask`);
+
+    await page.getByRole("button", { name: /more navigation/i }).click();
+
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible();
+    // Overflow nav (Settings lives behind More) and the account control.
+    await expect(sheet.getByRole("link", { name: "Settings" })).toBeVisible();
+    await expect(sheet.getByRole("button", { name: /open account menu/i })).toBeVisible();
+  });
+
+  test("bottom bar does not cover the chat composer Send button", async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    await loginWithSession(context, fixture.sessionToken, baseURL);
+    await page.goto(`/${ORG_SLUG}/${WS_SLUG}/ask`);
+
+    const sendButton = page.getByRole("button", { name: /send message/i });
+    await expect(sendButton).toBeVisible();
+    const bottomBar = page.getByRole("navigation", { name: /mobile navigation/i });
+
+    // The Send button must sit entirely above the fixed bottom bar — its bottom
+    // edge cannot overlap the bar's top edge (this is the bug being fixed).
+    const sendBox = await sendButton.boundingBox();
+    const barBox = await bottomBar.boundingBox();
+    expect(sendBox).not.toBeNull();
+    expect(barBox).not.toBeNull();
+    expect(sendBox!.y + sendBox!.height).toBeLessThanOrEqual(barBox!.y + 1);
   });
 });
 
@@ -109,15 +131,17 @@ test.describe("mobile-nav hidden at desktop width", () => {
     await expect(page).not.toHaveURL(/\/login/);
   });
 
-  test("mobile hamburger button is hidden at desktop width", async ({
+  test("bottom bar is hidden at desktop width", async ({
     page,
     context,
     baseURL,
   }) => {
     await loginWithSession(context, fixture.sessionToken, baseURL);
     await page.goto(`/${ORG_SLUG}/${WS_SLUG}/ask`);
-    const trigger = page.getByRole("button", { name: /open navigation menu/i });
-    await expect(trigger).toBeHidden();
+    // The bottom bar is `md:hidden` — absent at desktop width.
+    await expect(
+      page.getByRole("navigation", { name: /mobile navigation/i }),
+    ).toBeHidden();
     // Sidebar visible confirms the desktop layout rendered correctly.
     await expect(page.locator("aside").first()).toBeVisible();
   });
