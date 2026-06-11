@@ -269,14 +269,16 @@ describe("createOrgAction", () => {
   // (e) Generic DB error
   // ---------------------------------------------------------------------------
 
-  it("returns ok:false with error message on generic DB error", async () => {
+  it("returns ok:false with a generic message on a generic DB error (no raw error leak)", async () => {
     mockWithSystemDb.mockRejectedValue(new Error("disk full"));
 
     const result = await createOrgAction(makeFormData());
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error).toBe("disk full");
+      // Raw driver/SQL error text must NEVER reach the user (information leak).
+      expect(result.error).toBe("Failed to create organization. Please try again.");
+      expect(result.error).not.toContain("disk full");
     }
   });
 
