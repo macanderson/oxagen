@@ -19,6 +19,18 @@ const config: XmcpConfig = {
   // import to its .ts equivalent so rspack finds the TypeScript source.
   bundler: (config) => {
     config.resolve = config.resolve ?? {};
+
+    // xmcp force-aliases `zod` (and `zod/v3`, `zod/v4-mini`) to this app's
+    // local zod (v3). better-auth depends on zod v4 and its dist imports
+    // v4-only APIs (z.looseObject), so the forced alias breaks the build.
+    // Remove the alias and let each package resolve its own zod version.
+    if (config.resolve.alias && typeof config.resolve.alias === "object") {
+      const alias = config.resolve.alias as Record<string, unknown>;
+      delete alias["zod"];
+      delete alias["zod/v3"];
+      delete alias["zod/v4-mini"];
+    }
+
     config.resolve.extensionAlias = {
       ".js": [".ts", ".js"],
       ".mjs": [".mts", ".mjs"],

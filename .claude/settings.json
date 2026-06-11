@@ -253,6 +253,7 @@
     "sonnet",
     "sonnet[1m]",
     "haiku",
+    "fable",
     "opusplan"
   ],
   "enableAllProjectMcpServers": true,
