@@ -79,6 +79,7 @@ export const pluginOauthRefreshWatcher = inngest.createFunction(
 
           // auth() will detect an existing refresh_token and exchange it for a
           // new access_token, calling saveTokens() on success.
+           
           await mcpAuth(provider, { serverUrl: endpointUrl });
           return { ok: true } as const;
         } catch (err) {
