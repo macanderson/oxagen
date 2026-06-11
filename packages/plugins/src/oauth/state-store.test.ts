@@ -5,62 +5,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 type Row = { id: string; identifier: string; value: string; expiresAt: Date; updatedAt?: Date };
 const store = new Map<string, Row>();
 
-vi.mock("@oxagen/database", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@oxagen/database")>();
-  return {
-    ...real,
-  withSystemDb: async (fn: (tx: unknown) => unknown) => fn(makeTx()),
-
-  };
-});
-
-function makeTx() {
-  return {
-    insert: (_table: unknown) => ({
-      values: (v: Row) => ({
-        onConflictDoUpdate: (_opts: unknown) => ({
-          // Simulate upsert: always stores the latest value.
-          then: undefined,
-          [Symbol.toStringTag]: "Promise",
-          // Make it awaitable by returning a thenable.
-          async valueOf() {
-            store.set(v.id, v);
-          },
-        }),
-      }),
-    }),
-    select: (_cols: unknown) => ({
-      from: (_table: unknown) => ({
-        where: (_cond: unknown) => ({
-          limit: (_n: unknown) => {
-            // We can't easily inspect drizzle conditions, so let
-            // the state-store.ts call the query builder chain.
-            // Instead we simulate by collecting what was inserted:
-            // We hook into the actual where condition by returning
-            // the stored row if it exists and isn't expired.
-            //
-            // Because we can't inspect the drizzle AST, we use
-            // a different approach: mock the full chain to call
-            // the underlying store with a fake where-evaluator.
-            return Promise.resolve([]);
-          },
-        }),
-      }),
-    }),
-    delete: (_table: unknown) => ({
-      where: (_cond: unknown) => Promise.resolve(),
-    }),
-  };
-}
-
 beforeEach(() => {
   store.clear();
   vi.resetModules();
 });
-
-// ── Real integration-style mock ───────────────────────────────────────────────
-// Since drizzle condition ASTs are opaque we re-mock with a stateful version
-// that actually honours the id/expiresAt conditions.
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
