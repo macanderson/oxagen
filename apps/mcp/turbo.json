@@ -49,9 +49,29 @@
         "TENANT_RLS_ENFORCEMENT_ENABLED",
         "BLOB_READ_WRITE_TOKEN",
         "NEXT_PUBLIC_APP_URL",
-        "NEXT_PUBLIC_API_URL"
+        "NEXT_PUBLIC_API_URL",
+        "VERCEL"
       ],
-      "passThroughEnv": ["VERCEL", "VERCEL_URL"]
+      "passThroughEnv": [
+        "VERCEL_URL",
+        "INNGEST_EVENT_KEY",
+        "INNGEST_SIGNING_KEY",
+        "OXAGEN_LLM_OCR",
+        "OXAGEN_EMBEDDING_MODEL",
+        "OXAGEN_EMBEDDING_DIMENSIONS",
+        "OXAGEN_EMBEDDING_MULTIMODAL",
+        "BLOB_STORE_ID",
+        "BLOB_WEBHOOK_PUBLIC_KEY",
+        "AURA_INSTANCENAME",
+        "SMTP_HOST",
+        "SMTP_PORT",
+        "SMTP_USERNAME",
+        "SMTP_FROM_EMAIL",
+        "SMTP_FROM_NAME",
+        "SMTP_PASSWORD",
+        "OXAGEN_APP_DB_PASSWORD",
+        "TAVILY_API_KEY"
+      ]
     }
   }
 }
