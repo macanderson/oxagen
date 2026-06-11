@@ -14,8 +14,6 @@ export default async function SecurityLayout({
 
   const tabs = [
     { label: "Overview", href: org.security.root(ctx) },
-    { label: "SSO", href: org.security.sso(ctx) },
-    { label: "SCIM", href: org.security.scim(ctx) },
     { label: "MFA", href: org.security.mfa(ctx) },
     { label: "Audit", href: org.security.audit(ctx) },
     { label: "Compliance", href: org.security.compliance(ctx) },
@@ -27,7 +25,7 @@ export default async function SecurityLayout({
     <div className="flex flex-col gap-0">
       <PageHeader
         title="Security"
-        description="SSO, SCIM, MFA, audit, compliance, and incidents."
+        description="MFA, audit, compliance, trust, and incidents."
       />
       <PageTabs tabs={tabs} className="mb-6" />
       {children}

@@ -2,7 +2,7 @@
  * page.tsx — Workspace → Automation → Events (static mock).
  *
  * Static presentational mock — zero withTenantDb / invoke() dependencies.
- * Wire-up target: automation.events.list + automation.events.create
+ * Wire-up target: automation.eventSources.list + automation.eventSources.create
  *                 capabilities (workspace_events table, Postgres).
  *
  * Events are saved filters over the ontology that act as observable signals.
@@ -161,7 +161,7 @@ function EventCard({ event }: { event: MockEvent }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function AutomationEventsPage() {
+export default function AutomationEventSourcesPage() {
   const activeCount = MOCK_EVENTS.filter((e) => e.status === "active").length;
 
   return (

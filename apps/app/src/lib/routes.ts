@@ -44,7 +44,7 @@ export const org = {
     policies: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/policies`,
     requests: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/requests`,
     sessions: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/sessions`,
-    identities: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/identities`,
+    principals: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/principals`,
     reviews: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/reviews`,
   },
 
@@ -116,7 +116,7 @@ export const workspace = {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation`,
     agents: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/agents`,
     playbooks: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/playbooks`,
-    events: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/events`,
+    eventSources: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/event-sources`,
     triggers: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/triggers`,
   },
 
@@ -128,11 +128,11 @@ export const workspace = {
     audit: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity/audit`,
   },
 
-  // Studio — de-emphasized Tools group
+  // Studio — workspace-scoped content studio (flattened from the old /tools/ group)
   studio: {
-    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/tools/studio`,
-    compose: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/tools/studio/compose`,
-    library: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/tools/studio/library`,
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/studio`,
+    compose: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/studio/compose`,
+    library: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/studio/library`,
   },
 
   // Workflows — parallel task supervisor runs

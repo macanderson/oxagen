@@ -1,32 +1,23 @@
-import { ConversationPage } from "../_shared/conversation-page";
-import {
-  cancelBackgroundTaskAction,
-  readBackgroundTaskAction,
-  resolveApprovalAction,
-  resolvePlanAction,
-  sendMessageAction,
-} from "./actions";
+import { redirect } from "next/navigation";
+import { workspace } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
-export default async function ChatPage({
+/**
+ * Legacy `/chat` route — consolidated onto `/ask` (the canonical conversation
+ * surface). This redirect preserves bookmarked / deep-linked conversation URLs
+ * of the form `/{org}/{ws}/chat?c={id}` by forwarding them to the matching
+ * `/{org}/{ws}/ask?c={id}`. New links are always written against `/ask`.
+ */
+export default async function ChatRedirectPage({
   params,
   searchParams,
 }: {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
   searchParams: Promise<{ c?: string }>;
 }) {
-  return (
-    <ConversationPage
-      params={params}
-      searchParams={searchParams}
-      actions={{
-        sendMessageAction,
-        resolveApprovalAction,
-        resolvePlanAction,
-        cancelBackgroundTaskAction,
-        readBackgroundTaskAction,
-      }}
-    />
-  );
+  const { orgSlug, workspaceSlug } = await params;
+  const { c } = await searchParams;
+  const base = workspace.ask({ orgSlug, workspaceSlug });
+  redirect(c ? `${base}?c=${encodeURIComponent(c)}` : base);
 }

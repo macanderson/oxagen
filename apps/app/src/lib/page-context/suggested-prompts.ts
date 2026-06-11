@@ -77,7 +77,7 @@ export function classifyRoute(pathname: string): RouteSection {
   if (p.includes("/knowledge")) return "knowledge";
   if (p.includes("/automation")) return "automation";
   if (p.includes("/activity")) return "activity";
-  if (p.includes("/tools/studio") || p.includes("/studio")) return "studio";
+  if (p.includes("/studio")) return "studio";
   if (p.startsWith("/account")) return "account";
   if (p.includes("/members")) return "members";
   if (p.includes("/developer")) return "developer";

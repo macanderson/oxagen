@@ -66,7 +66,7 @@ describe("deriveSuggestions — activity route", () => {
 // Studio route
 // ---------------------------------------------------------------------------
 describe("deriveSuggestions — studio route", () => {
-  const prompts = deriveSuggestions(ctx("/acme/prod/tools/studio/compose"));
+  const prompts = deriveSuggestions(ctx("/acme/prod/studio/compose"));
 
   it("returns exactly 3 prompts", () => {
     expect(prompts).toHaveLength(3);

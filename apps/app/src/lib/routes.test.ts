@@ -136,7 +136,7 @@ describe("workspace route builders", () => {
   it("knowledge.sources → /{org}/{ws}/knowledge/sources", () => expect(workspace.knowledge.sources(wsCtx)).toBe("/acme/prod/knowledge/sources"));
   it("automation.agents → /{org}/{ws}/automation/agents", () => expect(workspace.automation.agents(wsCtx)).toBe("/acme/prod/automation/agents"));
   it("activity.runs → /{org}/{ws}/activity/runs", () => expect(workspace.activity.runs(wsCtx)).toBe("/acme/prod/activity/runs"));
-  it("studio.root → /{org}/{ws}/tools/studio", () => expect(workspace.studio.root(wsCtx)).toBe("/acme/prod/tools/studio"));
+  it("studio.root → /{org}/{ws}/studio", () => expect(workspace.studio.root(wsCtx)).toBe("/acme/prod/studio"));
   it("settings.root → /{org}/{ws}/settings", () => expect(workspace.settings.root(wsCtx)).toBe("/acme/prod/settings"));
   it("settings.modelKeys → /{org}/{ws}/settings/model-keys", () => expect(workspace.settings.modelKeys(wsCtx)).toBe("/acme/prod/settings/model-keys"));
 });

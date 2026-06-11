@@ -215,7 +215,7 @@ describe("classifyRoute", () => {
     ["/acme/prod/knowledge/sources", "knowledge"],
     ["/acme/prod/automation/agents", "automation"],
     ["/acme/prod/activity/runs", "activity"],
-    ["/acme/prod/tools/studio/compose", "studio"],
+    ["/acme/prod/studio/compose", "studio"],
     ["/account/profile", "account"],
     ["/acme/members", "members"],
     ["/acme/developer/mcp", "developer"],

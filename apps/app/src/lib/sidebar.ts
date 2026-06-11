@@ -264,6 +264,13 @@ const accountConfig: SidebarConfig = {
       href: () => account.security(),
       group: "primary",
     },
+    {
+      id: "privacy",
+      label: "Privacy",
+      icon: ShieldCheck,
+      href: () => account.privacy(),
+      group: "primary",
+    },
   ],
 };
 
@@ -416,7 +423,7 @@ export function enumerateNavTargets(
     // Automation tabs
     targets.push({ label: "Automation · Agents", href: workspace.automation.agents(wsCtx), parent: "automation" });
     targets.push({ label: "Automation · Playbooks", href: workspace.automation.playbooks(wsCtx), parent: "automation" });
-    targets.push({ label: "Automation · Events", href: workspace.automation.events(wsCtx), parent: "automation" });
+    targets.push({ label: "Automation · Event Sources", href: workspace.automation.eventSources(wsCtx), parent: "automation" });
     targets.push({ label: "Automation · Triggers", href: workspace.automation.triggers(wsCtx), parent: "automation" });
 
     // Activity tabs
@@ -452,11 +459,9 @@ export function enumerateNavTargets(
   targets.push({ label: "Access · Policies", href: org.access.policies(ctx), parent: "access" });
   targets.push({ label: "Access · Requests", href: org.access.requests(ctx), parent: "access" });
   targets.push({ label: "Access · Sessions", href: org.access.sessions(ctx), parent: "access" });
-  targets.push({ label: "Access · Identities", href: org.access.identities(ctx), parent: "access" });
+  targets.push({ label: "Access · Principals", href: org.access.principals(ctx), parent: "access" });
 
-  // Security tabs
-  targets.push({ label: "Security · SSO", href: org.security.sso(ctx), parent: "security" });
-  targets.push({ label: "Security · SCIM", href: org.security.scim(ctx), parent: "security" });
+  // Security tabs (SSO + SCIM hidden from nav until their contracts ship)
   targets.push({ label: "Security · MFA", href: org.security.mfa(ctx), parent: "security" });
   targets.push({ label: "Security · Audit", href: org.security.audit(ctx), parent: "security" });
   targets.push({ label: "Security · Compliance", href: org.security.compliance(ctx), parent: "security" });
@@ -477,6 +482,7 @@ export function enumerateNavTargets(
   targets.push({ label: "Profile", href: account.profile(), parent: "profile" });
   targets.push({ label: "Preferences", href: account.preferences(), parent: "preferences" });
   targets.push({ label: "Security", href: account.security(), parent: "security" });
+  targets.push({ label: "Privacy", href: account.privacy(), parent: "privacy" });
 
   return targets;
 }

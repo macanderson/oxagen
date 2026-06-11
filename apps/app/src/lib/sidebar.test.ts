@@ -94,10 +94,10 @@ describe("getSidebarConfig item counts", () => {
     expect(config.items).toHaveLength(7);
   });
 
-  it("account config has exactly 4 items", () => {
+  it("account config has exactly 5 items", () => {
     const config = getSidebarConfig("account");
     expect(config.mode).toBe("account");
-    expect(config.items).toHaveLength(4);
+    expect(config.items).toHaveLength(5);
   });
 
   it("account config contains exactly one isReturn item", () => {
@@ -162,8 +162,8 @@ describe("href builders produce correct paths", () => {
       expect(findItem("activity").href(wsCtx)).toBe("/acme/production/activity");
     });
 
-    it("studio -> /{org}/{ws}/tools/studio", () => {
-      expect(findItem("studio").href(wsCtx)).toBe("/acme/production/tools/studio");
+    it("studio -> /{org}/{ws}/studio", () => {
+      expect(findItem("studio").href(wsCtx)).toBe("/acme/production/studio");
     });
 
     it("settings -> /{org}/{ws}/settings", () => {
@@ -236,7 +236,7 @@ describe("enumerateNavTargets", () => {
     expect(hrefs).toContain("/acme/production/ask");
     expect(hrefs).toContain("/acme/production/knowledge/sources");
     expect(hrefs).toContain("/acme/production/automation/triggers");
-    expect(hrefs).toContain("/acme/production/tools/studio");
+    expect(hrefs).toContain("/acme/production/studio");
   });
 
   it("includes org paths regardless of workspaceSlug", () => {

@@ -161,12 +161,11 @@ describe("purgeArchivedConversationsAction", () => {
     expect(input).toEqual({});
   });
 
-  it("revalidatePath called for both /ask and /chat surfaces", async () => {
+  it("revalidatePath called for the /ask surface", async () => {
     vi.mocked(invoke).mockResolvedValue({ deleted: 0 });
     await purgeArchivedConversationsAction(ctx);
     const paths = vi.mocked(revalidatePath).mock.calls.map(([p]) => p);
     expect(paths).toContain("/acme/prod/ask");
-    expect(paths).toContain("/acme/prod/chat");
   });
 
   it("returns {ok:true, count} on success", async () => {

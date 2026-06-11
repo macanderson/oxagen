@@ -63,11 +63,9 @@ async function resolveScope(ctx: ConversationActionCtx) {
 }
 
 function revalidateConversationSurfaces(ctx: ConversationActionCtx) {
-  // Both full-page conversation surfaces render the nav from the same server
-  // query; revalidate both so the list is fresh after a mutation regardless of
-  // which one the user is on.
+  // /ask is the canonical full-page conversation surface; revalidate it so the
+  // nav list is fresh after a mutation. (Legacy /chat is now a redirect to /ask.)
   revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
-  revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/chat`);
 }
 
 export async function listConversationsAction(

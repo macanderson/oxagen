@@ -183,7 +183,7 @@ const MFA_LABEL: Record<MfaStatus, string> = {
 // Page
 // ---------------------------------------------------------------------------
 
-export default function AccessIdentitiesPage() {
+export default function AccessPrincipalsPage() {
   const humans = MOCK_PRINCIPALS.filter((p) => p.kind === "human");
   const nonHumans = MOCK_PRINCIPALS.filter((p) => p.kind !== "human");
 

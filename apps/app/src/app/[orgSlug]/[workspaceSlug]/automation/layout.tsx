@@ -17,7 +17,7 @@ export default async function AutomationLayout({
   const tabs = [
     { label: "Agents", href: workspace.automation.agents(ctx) },
     { label: "Playbooks", href: workspace.automation.playbooks(ctx) },
-    { label: "Events", href: workspace.automation.events(ctx) },
+    { label: "Event Sources", href: workspace.automation.eventSources(ctx) },
     { label: "Triggers", href: workspace.automation.triggers(ctx) },
   ];
 

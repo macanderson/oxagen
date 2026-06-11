@@ -45,6 +45,7 @@ vi.mock("@oxagen/auth/client", () => ({ signOut: vi.fn().mockResolvedValue({}) }
 vi.mock("@oxagen/ui", () => ({ useTheme: () => ({ theme: "system", setTheme: vi.fn() }) }));
 
 import { MobileBottomBar } from "./mobile-bottom-bar";
+import * as sidebarLib from "@/lib/sidebar";
 
 const wsCtx = { orgSlug: "acme", workspaceSlug: "prod" };
 const user = { id: "u1", name: "Jane", email: "jane@example.com", image: null };
@@ -86,7 +87,7 @@ describe("MobileBottomBar — More sheet", () => {
       () => expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument(),
       { timeout: 2000 },
     );
-    expect(screen.getByRole("link", { name: "Studio" })).toHaveAttribute("href", "/acme/prod/tools/studio");
+    expect(screen.getByRole("link", { name: "Studio" })).toHaveAttribute("href", "/acme/prod/studio");
     expect(screen.getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/acme/prod/workflows");
   });
 
@@ -127,13 +128,31 @@ describe("MobileBottomBar — org mode", () => {
 });
 
 describe("MobileBottomBar — empty More guard", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("omits the More tab when there are no overflow items and no user", () => {
-    // Account mode has exactly four items (no overflow); with user=undefined the
-    // sheet would be header-only, so the More tab must not render at all.
+    // Drive a minimal (≤4-item) config so moreItems is empty; with user=undefined
+    // the sheet would be header-only, so the More tab must not render at all.
+    // Mocking the config exercises this guard independently of how many items any
+    // real nav mode happens to have (account mode itself now overflows — below).
+    const real = sidebarLib.getSidebarConfig("account");
+    vi.spyOn(sidebarLib, "getSidebarConfig").mockReturnValue({
+      ...real,
+      items: real.items.slice(0, 1),
+    });
+    pathnameRef.current = "/account/profile";
+    render(<MobileBottomBar ctx={{ orgSlug: "acme" }} user={undefined} />);
+    expect(screen.queryByRole("button", { name: /more navigation/i })).toBeNull();
+  });
+
+  it("surfaces overflow account items (Privacy) in the More sheet even without a user", () => {
+    // Account now has five items (return-to-app, Profile, Preferences, Security,
+    // Privacy); the fifth overflows past MAX_BAR_ITEMS into More, so the More tab
+    // renders even when no user/account-control is present.
     pathnameRef.current = "/account/profile";
     render(<MobileBottomBar ctx={{ orgSlug: "acme" }} user={undefined} />);
     expect(screen.getByRole("link", { name: "Profile" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /more navigation/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
   });
 
   it("still shows the More tab in account mode when a user is present (account control)", () => {
