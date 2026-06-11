@@ -3,3 +3,26 @@ packages:
   - "packages/*"
   - "plugins/*"
   - "tools/*"
+
+# pnpm 10 reads these settings from pnpm-workspace.yaml only — the
+# package.json#pnpm field is ignored (pnpm warns on every install).
+overrides:
+  drizzle-orm: 0.45.2
+  typescript: 6.0.3
+  d3-path: 3.1.0
+  d3-shape: 3.2.0
+
+onlyBuiltDependencies:
+  - "@swc/core"
+  - cpu-features
+  - esbuild
+  - protobufjs
+  - sharp
+  - ssh2
+  - tree-sitter-javascript
+  - tree-sitter-python
+  - tree-sitter-typescript
+  - unrs-resolver
+
+ignoredBuiltDependencies:
+  - "@swc/core"
