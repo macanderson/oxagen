@@ -28,8 +28,10 @@
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
+    "ai": "6.0.197",
     "drizzle-orm": "0.45.2",
     "hono": "4.12.23",
+    "inngest": "3.17.0",
     "pino": "9.14.0",
     "zod": "3.25.76"
   },

@@ -17,6 +17,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.4.0",
     "@oxagen/agent": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/ai": "workspace:*",

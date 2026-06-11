@@ -17,10 +17,12 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.4.0",
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/notifications": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
+    "drizzle-orm": "0.45.2",
     "zod": "3.25.76",
     "unified": "11.0.5",
     "remark-parse": "11.0.0",
