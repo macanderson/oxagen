@@ -405,6 +405,14 @@ export async function teardownFixture(opts: {
     )`;
     await sql`DELETE FROM agent.subagent_fanouts WHERE org_id = ${orgId}`;
     await sql`DELETE FROM agent.approval_requests WHERE org_id = ${orgId}`;
+    // IAM rows seeded by bootstrapOrgIAM (opt-in via FixtureOptions.bootstrapIam)
+    // live in the `org` schema and reference the org + its users — delete them in
+    // FK-safe order BEFORE the org/user rows, or org deletion hits a FK violation.
+    // Safe no-op when bootstrapIam was not used (deletes 0 rows).
+    await sql`DELETE FROM org.principal_role_assignments WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM org.role_grants WHERE role_id IN (SELECT id FROM org.roles WHERE org_id = ${orgId})`;
+    await sql`DELETE FROM org.roles WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM org.principals WHERE org_id = ${orgId}`;
     // Collect user IDs BEFORE deleting org_users (needed for session + auth.user cleanup).
     const orgUserRows = await sql<{ userId: string }[]>`
       SELECT user_id::text AS "userId" FROM org.org_users WHERE org_id = ${orgId}

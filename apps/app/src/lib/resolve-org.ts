@@ -170,6 +170,39 @@ export const assertBillingManager = cache(
 export const SECURITY_MANAGER_ROLES = new Set(["owner", "admin"]);
 
 /**
+ * Assert that the given user is a member of the given workspace (via
+ * workspace.workspace_users). Calls `notFound()` if the user has no row,
+ * ensuring a session scoped to workspace A cannot read workspace B — even
+ * within the same org. 404 (not 403) is deliberate: without the
+ * `authInterrupts` flag, Next.js only exposes `notFound()` for hard
+ * navigation interrupts; 404 is indistinguishable from "workspace not found"
+ * to an attacker, which is the correct information-hiding behaviour.
+ *
+ * Call AFTER resolveWorkspace() in any server-side path that renders
+ * per-workspace content. The workspace layout (`[workspaceSlug]/layout.tsx`)
+ * is the canonical enforcement point.
+ */
+export const assertWorkspaceMember = cache(
+  async (workspaceId: string, userId: string): Promise<void> => {
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({ id: schema.workspaceUsers.id })
+        .from(schema.workspaceUsers)
+        .where(
+          and(
+            eq(schema.workspaceUsers.workspaceId, workspaceId),
+            eq(schema.workspaceUsers.userId, userId),
+          ),
+        )
+        .limit(1),
+    );
+    if (rows.length === 0) {
+      notFound();
+    }
+  },
+);
+
+/**
  * Return the caller's role in the org, or null when they are not a member.
  * Read-only (does NOT 404) — use for UI gating (e.g. enabling/disabling the
  * audit-export button). For a hard server gate use {@link assertSecurityManager}.

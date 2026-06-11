@@ -72,7 +72,9 @@ test.describe("api.key — full lifecycle", () => {
     await page.goto(`/${ORG_SLUG}/developer/tokens`);
 
     await expect(page.getByText("e2e-test-key")).toBeVisible();
-    await expect(page.getByText("Active")).toBeVisible();
+    // The status badge is a <span>; use .locator() to disambiguate from the
+    // "Active" section heading that also matches getByText('Active').
+    await expect(page.locator("span").filter({ hasText: /^Active$/ }).first()).toBeVisible();
 
     // The raw key is never shown in the UI — only the obfuscated prefix.
     await expect(page.getByText(created.rawKey)).not.toBeVisible();
@@ -124,7 +126,9 @@ test.describe("api.key — full lifecycle", () => {
     await page.goto(`/${ORG_SLUG}/developer/tokens`);
 
     await expect(page.getByText("e2e-revoke-target")).toBeVisible();
-    await expect(page.getByText("Revoked")).toBeVisible();
+    // The status badge is a <span>; use .locator() to disambiguate from the
+    // "Revoked / expired" section heading that also matches getByText('Revoked').
+    await expect(page.locator("span").filter({ hasText: /^Revoked$/ }).first()).toBeVisible();
   });
 
   test("revoked key is rejected by the API (auth guard)", async ({

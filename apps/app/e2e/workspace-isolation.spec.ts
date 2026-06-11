@@ -23,16 +23,22 @@ let beta: AgentRuntimeFixture;
 test.describe("workspace.isolation — cross-workspace access denied", () => {
   test.beforeAll(async () => {
     // Both calls use the same orgSlug; the second reuses the org via ON CONFLICT.
+    // bootstrapIam: true provisions full IAM (system roles + owner principal +
+    // role assignment + role_grants) so both users pass the IAM-enforced
+    // conversation.list gate on the API surface. Without it the kernel denies
+    // the request (defaultEffect:"deny") → 403 on what should be a 200 baseline.
     [alpha, beta] = await Promise.all([
       setupAgentRuntimeFixture({
         orgSlug: ORG_SLUG,
         workspaceSlug: WS_ALPHA_SLUG,
         userEmail: "e2e+ws-alpha@oxagen.ai",
+        bootstrapIam: true,
       }),
       setupAgentRuntimeFixture({
         orgSlug: ORG_SLUG,
         workspaceSlug: WS_BETA_SLUG,
         userEmail: "e2e+ws-beta@oxagen.ai",
+        bootstrapIam: true,
       }),
     ]);
   });
