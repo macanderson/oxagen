@@ -111,9 +111,12 @@ code{font-family:var(--mono)}
 
 /* columns table */
 .t-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius-sm)}
-table.cols{width:100%;border-collapse:collapse;font-size:13px}
+table.cols{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
 table.cols th{text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel2);position:sticky;top:0}
-table.cols td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+table.cols td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+table.cols col.w-name{width:17%}table.cols col.w-type{width:12%}table.cols col.w-def{width:16%}table.cols col.w-con{width:15%}table.cols col.w-desc{width:40%}
+/* recs table keeps its own proportions */
+table.recs-table{table-layout:auto}
 table.cols tr:last-child td{border-bottom:none}
 table.cols tr:hover td{background:var(--panel2)}
 .c-name code{color:var(--indigo2);font-weight:600}
@@ -164,7 +167,7 @@ mark{background:rgba(99,102,241,.35);color:inherit;border-radius:3px;padding:0 1
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <input id="q" type="search" placeholder="Filter tables & columns…" autocomplete="off" spellcheck="false">
     </div>
-    <a href="#recommendations" class="nav-rec">⚑ Recommendations<span class="nav-count">44</span></a>
+    <a href="#recommendations" class="nav-rec">⚑ Recommendations<span class="nav-count">3</span></a>
     <ul class="nav"><li class="nav-schema" style="--hue:262">
     <a href="#s-auth" class="nav-s"><span class="dot"></span>auth<span class="nav-count">10</span></a>
     <ul class="nav-tables">
@@ -249,145 +252,19 @@ mark{background:rgba(99,102,241,.35);color:inherit;border-radius:3px;padding:0 1
       <div class="stat"><div class="k">73</div><div class="l">Tables</div></div>
       <div class="stat"><div class="k">1043</div><div class="l">Columns</div></div>
       <div class="stat"><div class="k">2,274</div><div class="l">Rows (local)</div></div>
-      <div class="stat danger"><div class="k">44</div><div class="l">Drop candidates</div></div>
+      <div class="stat danger"><div class="k">3</div><div class="l">Drop candidates</div></div>
     </div>
     <section class="recs" id="recommendations">
-    <div class="s-head"><div class="s-badge warn">⚑ 44 to drop</div><h2>Recommendations</h2>
-      <div class="s-stats"><span>44 drop</span><span>5 review</span></div>
+    <div class="s-head"><div class="s-badge warn">⚑ 3 to drop</div><h2>Recommendations</h2>
+      <div class="s-stats"><span>3 drop</span><span>0 review</span></div>
     </div>
     <p class="s-desc">Tables below have <strong>no runtime CRUD</strong> written against their Drizzle export symbol — nothing in <code>apps/</code> or <code>packages/</code> (excluding tests, seeds, and migrations) inserts, selects, updates, or deletes against them. Per the prime directive (no dead code), these are candidates to pull out of the schema. Verify each against external writers (Inngest jobs, raw SQL, Better Auth) before dropping.</p>
     <h3 class="rec-h">Drop candidates — no CRUD</h3>
     <div class="t-wrap"><table class="cols recs-table"><thead><tr><th>Table</th><th>Rows</th><th>Cols</th><th>Refs</th><th>Why &amp; recommended action</th></tr></thead><tbody><tr class="rec-drop">
-    <td><a href="#t-org-access_requests"><code>access_requests</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">16</td>
-    <td class="r-ref">4</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-agent-agent_execution_steps"><code>agent_execution_steps</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">18</td>
-    <td class="r-ref">2</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-agent-agent_executions"><code>agent_executions</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">23</td>
-    <td class="r-ref">2</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-agent-agent_plans"><code>agent_plans</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">17</td>
-    <td class="r-ref">1</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-agent-agent_tool_calls"><code>agent_tool_calls</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">17</td>
-    <td class="r-ref">2</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-agent-approval_requests"><code>approval_requests</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">19</td>
-    <td class="r-ref">6</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-ingestion-auth_credentials"><code>auth_credentials</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">5</td>
-    <td class="r-ref">2</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
     <td><a href="#t-auth-credentials"><code>auth.credentials</code></a></td>
     <td class="r-rows">0</td>
     <td class="r-cols">16</td>
     <td class="r-ref">55</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-auth-privacy_erasure_requests"><code>auth.privacy_erasure_requests</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">13</td>
-    <td class="r-ref">2</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-auth-privacy_export_requests"><code>auth.privacy_export_requests</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">13</td>
-    <td class="r-ref">5</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-workflow-automation_runs"><code>automation_runs</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">13</td>
-    <td class="r-ref">2</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-agent-background_tasks"><code>background_tasks</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">16</td>
-    <td class="r-ref">6</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-billing-credit_lots"><code>billing.credit_lots</code></a></td>
-    <td class="r-rows">6</td>
-    <td class="r-cols">12</td>
-    <td class="r-ref">3</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate (note: has rows — confirm no external writer before dropping).</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-billing-invoice_line_items"><code>billing.invoice_line_items</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">9</td>
-    <td class="r-ref">2</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-billing-org_billing_profiles"><code>billing.org_billing_profiles</code></a></td>
-    <td class="r-rows">6</td>
-    <td class="r-cols">14</td>
-    <td class="r-ref">2</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate (note: has rows — confirm no external writer before dropping).</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-billing-usage_records"><code>billing.usage_records</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">13</td>
-    <td class="r-ref">4</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-mcp-catalog_servers"><code>catalog_servers</code></a></td>
-    <td class="r-rows">5</td>
-    <td class="r-cols">27</td>
-    <td class="r-ref">4</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate (note: has rows — confirm no external writer before dropping).</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-ingestion-connector_schemas"><code>connector_schemas</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">9</td>
-    <td class="r-ref">1</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-mcp-credentials"><code>credentials</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">20</td>
-    <td class="r-ref">4</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-ingestion-deletion_jobs"><code>deletion_jobs</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">15</td>
-    <td class="r-ref">1</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-content-documents"><code>documents</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">13</td>
-    <td class="r-ref">44</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-ingestion-entity_type_mappings"><code>entity_type_mappings</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">11</td>
-    <td class="r-ref">2</td>
     <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
   </tr><tr class="rec-drop">
     <td><a href="#t-ingestion-entity_types"><code>entity_types</code></a></td>
@@ -396,164 +273,13 @@ mark{background:rgba(99,102,241,.35);color:inherit;border-radius:3px;padding:0 1
     <td class="r-ref">0</td>
     <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
   </tr><tr class="rec-drop">
-    <td><a href="#t-content-form_submissions"><code>form_submissions</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">11</td>
-    <td class="r-ref">1</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-content-forms"><code>forms</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">12</td>
-    <td class="r-ref">16</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-content-generated_assets"><code>generated_assets</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">24</td>
-    <td class="r-ref">9</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-agent-mcp_servers"><code>mcp_servers</code></a></td>
-    <td class="r-rows">5</td>
-    <td class="r-cols">18</td>
-    <td class="r-ref">19</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate (note: has rows — confirm no external writer before dropping).</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-notification-notifications"><code>notifications</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">16</td>
-    <td class="r-ref">53</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-ingestion-oauth_accounts"><code>oauth_accounts</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">16</td>
-    <td class="r-ref">2</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
     <td><a href="#t-ingestion-oauth_tokens"><code>oauth_tokens</code></a></td>
     <td class="r-rows">0</td>
     <td class="r-cols">12</td>
     <td class="r-ref">0</td>
     <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-plugin-org_denylist"><code>org_denylist</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">10</td>
-    <td class="r-ref">9</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-plugin-org_listings"><code>org_listings</code></a></td>
-    <td class="r-rows">5</td>
-    <td class="r-cols">22</td>
-    <td class="r-ref">19</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate (note: has rows — confirm no external writer before dropping).</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-security-org_security_policy"><code>org_security_policy</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">6</td>
-    <td class="r-ref">3</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-org-principal_role_assignments"><code>principal_role_assignments</code></a></td>
-    <td class="r-rows">6</td>
-    <td class="r-cols">15</td>
-    <td class="r-ref">11</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate (note: has rows — confirm no external writer before dropping).</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-org-principals"><code>principals</code></a></td>
-    <td class="r-rows">6</td>
-    <td class="r-cols">15</td>
-    <td class="r-ref">16</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate (note: has rows — confirm no external writer before dropping).</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-mcp-registries"><code>registries</code></a></td>
-    <td class="r-rows">6</td>
-    <td class="r-cols">13</td>
-    <td class="r-ref">5</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate (note: has rows — confirm no external writer before dropping).</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-org-role_grants"><code>role_grants</code></a></td>
-    <td class="r-rows">2,016</td>
-    <td class="r-cols">10</td>
-    <td class="r-ref">10</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate (note: has rows — confirm no external writer before dropping).</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-org-roles"><code>roles</code></a></td>
-    <td class="r-rows">42</td>
-    <td class="r-cols">13</td>
-    <td class="r-ref">71</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate (note: has rows — confirm no external writer before dropping).</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-security-security_events"><code>security_events</code></a></td>
-    <td class="r-rows">47</td>
-    <td class="r-cols">11</td>
-    <td class="r-ref">9</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate (note: has rows — confirm no external writer before dropping).</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-ingestion-setup_suggestions"><code>setup_suggestions</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">12</td>
-    <td class="r-ref">1</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-ingestion-source_connections"><code>source_connections</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">19</td>
-    <td class="r-ref">14</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-agent-subagent_fanouts"><code>subagent_fanouts</code></a></td>
-    <td class="r-rows">1</td>
-    <td class="r-cols">13</td>
-    <td class="r-ref">8</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate (note: has rows — confirm no external writer before dropping).</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-ingestion-webhook_subscriptions"><code>webhook_subscriptions</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">12</td>
-    <td class="r-ref">1</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
-  </tr><tr class="rec-drop">
-    <td><a href="#t-agent-workflow_run_tasks"><code>workflow_run_tasks</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">18</td>
-    <td class="r-ref">3</td>
-    <td>No CRUD anywhere — no insert/select/update/delete written against it. Strong drop candidate.</td>
   </tr></tbody></table></div>
-    <h3 class="rec-h">Review — seed / reference-only</h3>
-    <div class="t-wrap"><table class="cols recs-table"><thead><tr><th>Table</th><th>Rows</th><th>Cols</th><th>Refs</th><th>Why &amp; recommended action</th></tr></thead><tbody><tr class="rec-review">
-    <td><a href="#t-auth-users"><code>auth.users</code></a></td>
-    <td class="r-rows">13</td>
-    <td class="r-cols">16</td>
-    <td class="r-ref">57</td>
-    <td>Seed/reference only — written by 1 seed/migration file(s) but no runtime read/write CRUD. Verify it is intentional reference data.</td>
-  </tr><tr class="rec-review">
-    <td><a href="#t-org-org_users"><code>org_users</code></a></td>
-    <td class="r-rows">11</td>
-    <td class="r-cols">11</td>
-    <td class="r-ref">43</td>
-    <td>Seed/reference only — written by 1 seed/migration file(s) but no runtime read/write CRUD. Verify it is intentional reference data.</td>
-  </tr><tr class="rec-review">
-    <td><a href="#t-agent-skill_versions"><code>skill_versions</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">15</td>
-    <td class="r-ref">5</td>
-    <td>Seed/reference only — written by 1 seed/migration file(s) but no runtime read/write CRUD. Verify it is intentional reference data.</td>
-  </tr><tr class="rec-review">
-    <td><a href="#t-agent-skills"><code>skills</code></a></td>
-    <td class="r-rows">0</td>
-    <td class="r-cols">15</td>
-    <td class="r-ref">29</td>
-    <td>Seed/reference only — written by 1 seed/migration file(s) but no runtime read/write CRUD. Verify it is intentional reference data.</td>
-  </tr><tr class="rec-review">
-    <td><a href="#t-workspace-workspace_users"><code>workspace_users</code></a></td>
-    <td class="r-rows">11</td>
-    <td class="r-cols">11</td>
-    <td class="r-ref">14</td>
-    <td>Seed/reference only — written by 1 seed/migration file(s) but no runtime read/write CRUD. Verify it is intentional reference data.</td>
-  </tr></tbody></table></div>
+    
   </section>
     <div id="content"><section class="schema" id="s-auth" style="--hue:262">
     <div class="s-head">
@@ -585,6 +311,7 @@ apps              = api, app, cli, mcp</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -713,6 +440,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -835,6 +563,7 @@ apps              = api, app, cli</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -936,12 +665,12 @@ apps              = api, app, cli</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-auth-privacy_erasure_requests" data-table="privacy_erasure_requests" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id user_id org_id scope status scheduled_at completed_at error_message" data-verdict="drop">
+  </article><article class="table" id="t-auth-privacy_erasure_requests" data-table="privacy_erasure_requests" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id user_id org_id scope status scheduled_at completed_at error_message" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">auth.</span>privacy_erasure_requests</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">13 cols</span>
     </header>
@@ -957,6 +686,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -1040,12 +770,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-auth-privacy_export_requests" data-table="privacy_export_requests" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id user_id org_id scope status export_url completed_at error_message" data-verdict="drop">
+  </article><article class="table" id="t-auth-privacy_export_requests" data-table="privacy_export_requests" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id user_id org_id scope status export_url completed_at error_message" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">auth.</span>privacy_export_requests</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">13 cols</span>
     </header>
@@ -1061,6 +791,7 @@ apps              = api, app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -1165,6 +896,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -1215,6 +947,7 @@ apps              = app, mcp</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -1289,6 +1022,7 @@ apps              = cli</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -1420,12 +1154,12 @@ apps              = cli</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table" id="t-auth-users" data-table="users" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id deleted_at deleted_by_user_id email username display_name avatar_url status email_verified email_verified_at last_login_at" data-verdict="review">
+  </article><article class="table" id="t-auth-users" data-table="users" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id deleted_at deleted_by_user_id email username display_name avatar_url status email_verified email_verified_at last_login_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">auth.</span>users</h3>
       <span class="spacer"></span>
-      <span class="pill v-review" title="Seed/reference only — review">⚑ review</span>
+      
       <span class="pill rows" title="current row count">13 rows</span>
       <span class="pill cols">16 cols</span>
     </header>
@@ -1441,6 +1175,7 @@ apps              = app, cli, docs, mcp</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -1563,6 +1298,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -1614,12 +1350,12 @@ apps              = —</code></pre>
       </div>
     </div>
     <p class="s-desc">The `org` Postgres schema is the central hub for organizational structure and authorization. `org.ts` defines the core multi-tenancy entities: organizations (with plan, type, and profile metadata), org_users (membership join table with role and permissions), and invitations plus access_requests for controlled onboarding and JIT access. `iam.ts` extends the schema with a full RBAC authorization model: principals (human/agent/service identities), roles (system and custom, versioned, org- or workspace-scoped), role_grants (the large permission-grant table mapping roles to capabilities with allow/deny/require_approval effects), and principal_role_assignments (mapping principals to roles with optional workspace scope and time-bounded expiry). All eight tables live in the `org` Postgres schema so drizzle-kit picks them up from a single schemaFilter entry.</p>
-    <div class="tables"><article class="table is-drop" id="t-org-access_requests" data-table="access_requests" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id requester_id capability_id scope_kind scope_id status approver_id approved_at ttl_seconds justification" data-verdict="drop">
+    <div class="tables"><article class="table" id="t-org-access_requests" data-table="access_requests" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id requester_id capability_id scope_kind scope_id status approver_id approved_at ttl_seconds justification" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">org.</span>access_requests</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">16 cols</span>
     </header>
@@ -1635,6 +1371,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -1757,6 +1494,7 @@ apps              = api, app, cli</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -1840,12 +1578,12 @@ apps              = api, app, cli</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table" id="t-org-org_users" data-table="org_users" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id user_id role permissions joined_at" data-verdict="review">
+  </article><article class="table" id="t-org-org_users" data-table="org_users" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id user_id role permissions joined_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">org.</span>org_users</h3>
       <span class="spacer"></span>
-      <span class="pill v-review" title="Seed/reference only — review">⚑ review</span>
+      
       <span class="pill rows" title="current row count">11 rows</span>
       <span class="pill cols">11 cols</span>
     </header>
@@ -1861,6 +1599,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -1953,6 +1692,7 @@ apps              = api, app, cli</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -2054,12 +1794,12 @@ apps              = api, app, cli</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-org-principal_role_assignments" data-table="principal_role_assignments" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id deleted_at deleted_by_user_id principal_id role_id org_id workspace_id assigned_by assigned_at expires_at" data-verdict="drop">
+  </article><article class="table" id="t-org-principal_role_assignments" data-table="principal_role_assignments" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id deleted_at deleted_by_user_id principal_id role_id org_id workspace_id assigned_by assigned_at expires_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">org.</span>principal_role_assignments</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">6 rows</span>
       <span class="pill cols">15 cols</span>
     </header>
@@ -2075,6 +1815,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -2170,12 +1911,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-org-principals" data-table="principals" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id kind display_name status mfa_status idp_subject parent_user_id metadata" data-verdict="drop">
+  </article><article class="table" id="t-org-principals" data-table="principals" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id kind display_name status mfa_status idp_subject parent_user_id metadata" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">org.</span>principals</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">6 rows</span>
       <span class="pill cols">15 cols</span>
     </header>
@@ -2191,6 +1932,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -2286,12 +2028,12 @@ apps              = app</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-org-role_grants" data-table="role_grants" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id role_id capability_id effect" data-verdict="drop">
+  </article><article class="table" id="t-org-role_grants" data-table="role_grants" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id role_id capability_id effect" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">org.</span>role_grants</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">2,016 rows</span>
       <span class="pill cols">10 cols</span>
     </header>
@@ -2307,6 +2049,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -2372,12 +2115,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-org-roles" data-table="roles" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id scope_kind name description is_system_default version parent_role_id" data-verdict="drop">
+  </article><article class="table" id="t-org-roles" data-table="roles" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id scope_kind name description is_system_default version parent_role_id" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">org.</span>roles</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">42 rows</span>
       <span class="pill cols">13 cols</span>
     </header>
@@ -2393,6 +2136,7 @@ apps              = api, app, cli, mcp</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -2486,12 +2230,12 @@ apps              = api, app, cli, mcp</code></pre>
       </div>
     </div>
     <p class="s-desc">Workspaces and workspace memberships: the sub-organisation container that scopes AI defaults, members, and content.</p>
-    <div class="tables"><article class="table" id="t-workspace-workspace_users" data-table="workspace_users" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id workspace_id user_id role permissions joined_at" data-verdict="review">
+    <div class="tables"><article class="table" id="t-workspace-workspace_users" data-table="workspace_users" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id workspace_id user_id role permissions joined_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">workspace.</span>workspace_users</h3>
       <span class="spacer"></span>
-      <span class="pill v-review" title="Seed/reference only — review">⚑ review</span>
+      
       <span class="pill rows" title="current row count">11 rows</span>
       <span class="pill cols">11 cols</span>
     </header>
@@ -2507,6 +2251,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -2599,6 +2344,7 @@ apps              = api, app, cli</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -2725,6 +2471,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -2847,6 +2594,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -2927,6 +2675,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -2980,12 +2729,12 @@ apps              = app</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-billing-credit_lots" data-table="credit_lots" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id source original_cents remaining_cents granted_at expires_at" data-verdict="drop">
+  </article><article class="table" id="t-billing-credit_lots" data-table="credit_lots" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id source original_cents remaining_cents granted_at expires_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">billing.</span>credit_lots</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">6 rows</span>
       <span class="pill cols">12 cols</span>
     </header>
@@ -3001,6 +2750,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -3078,12 +2828,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-billing-invoice_line_items" data-table="invoice_line_items" data-cols="id org_id invoice_id description quantity unit_amount_cents total_cents metric metadata" data-verdict="drop">
+  </article><article class="table" id="t-billing-invoice_line_items" data-table="invoice_line_items" data-cols="id org_id invoice_id description quantity unit_amount_cents total_cents metric metadata" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">billing.</span>invoice_line_items</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">9 cols</span>
     </header>
@@ -3099,6 +2849,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -3179,6 +2930,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -3310,12 +3062,12 @@ apps              = app</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-billing-org_billing_profiles" data-table="org_billing_profiles" data-cols="id org_id billing_email address_line1 address_line2 address_city address_region address_postal_code address_country address_place_id created_at updated_at created_by_user_id updated_by_user_id" data-verdict="drop">
+  </article><article class="table" id="t-billing-org_billing_profiles" data-table="org_billing_profiles" data-cols="id org_id billing_email address_line1 address_line2 address_city address_region address_postal_code address_country address_place_id created_at updated_at created_by_user_id updated_by_user_id" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">billing.</span>org_billing_profiles</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">6 rows</span>
       <span class="pill cols">14 cols</span>
     </header>
@@ -3331,6 +3083,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -3441,6 +3194,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -3569,6 +3323,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -3697,6 +3452,7 @@ apps              = api, app, cli</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -3831,6 +3587,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -3881,6 +3638,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -3943,6 +3701,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -4056,12 +3815,12 @@ apps              = app</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-billing-usage_records" data-table="usage_records" data-cols="id public_id created_at created_by_user_id org_id subscription_id metric quantity unit_cost_micros total_cost_micros period_start period_end source_query_id" data-verdict="drop">
+  </article><article class="table" id="t-billing-usage_records" data-table="usage_records" data-cols="id public_id created_at created_by_user_id org_id subscription_id metric quantity unit_cost_micros total_cost_micros period_start period_end source_query_id" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">billing.</span>usage_records</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">13 cols</span>
     </header>
@@ -4077,6 +3836,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -4170,12 +3930,12 @@ apps              = —</code></pre>
       </div>
     </div>
     <p class="s-desc">The agent schema holds the full transactional runtime state for the Oxagen agent subsystem. It covers the skill catalog and its immutable versioned bodies, execution lineage (executions → steps → tool calls), structured plan documents with approval gates, human-in-the-loop approval requests, long-running background tasks backed by Inngest, subagent fan-out aggregates and their individual child runs, and MCP server registrations (workspace-installed, health-tracked, tool-discovery cached). Together these tables provide the durable, ACID-safe record that complements the ClickHouse event stream and Neo4j graph index used for observability and semantic retrieval.</p>
-    <div class="tables"><article class="table is-drop" id="t-agent-agent_execution_steps" data-table="agent_execution_steps" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id execution_id org_id workspace_id step_number step_type status input_payload output_payload failure_reason latency_ms input_tokens output_tokens" data-verdict="drop">
+    <div class="tables"><article class="table" id="t-agent-agent_execution_steps" data-table="agent_execution_steps" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id execution_id org_id workspace_id step_number step_type status input_payload output_payload failure_reason latency_ms input_tokens output_tokens" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">agent.</span>agent_execution_steps</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">18 cols</span>
     </header>
@@ -4191,6 +3951,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -4304,12 +4065,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-agent-agent_executions" data-table="agent_executions" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id agent_id agent_version_id origin_type origin_id status input_payload output_payload failure_reason started_at completed_at latency_ms input_tokens output_tokens estimated_cost_usd synced_to_graph_at" data-verdict="drop">
+  </article><article class="table" id="t-agent-agent_executions" data-table="agent_executions" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id agent_id agent_version_id origin_type origin_id status input_payload output_payload failure_reason started_at completed_at latency_ms input_tokens output_tokens estimated_cost_usd synced_to_graph_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">agent.</span>agent_executions</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">23 cols</span>
     </header>
@@ -4325,6 +4086,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -4468,12 +4230,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-agent-agent_plans" data-table="agent_plans" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id status goals constraints tasks approval_required message_id approved_at approved_by_user_id task_count" data-verdict="drop">
+  </article><article class="table" id="t-agent-agent_plans" data-table="agent_plans" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id status goals constraints tasks approval_required message_id approved_at approved_by_user_id task_count" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">agent.</span>agent_plans</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">17 cols</span>
     </header>
@@ -4489,6 +4251,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -4596,12 +4359,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-agent-agent_tool_calls" data-table="agent_tool_calls" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id execution_step_id org_id workspace_id tool_name tool_type request_payload response_payload status latency_ms input_tokens output_tokens" data-verdict="drop">
+  </article><article class="table" id="t-agent-agent_tool_calls" data-table="agent_tool_calls" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id execution_step_id org_id workspace_id tool_name tool_type request_payload response_payload status latency_ms input_tokens output_tokens" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">agent.</span>agent_tool_calls</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">17 cols</span>
     </header>
@@ -4617,6 +4380,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -4724,12 +4488,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-agent-approval_requests" data-table="approval_requests" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id execution_step_id tool_call_id message_id capability_name input_preview risk_level resolution resolved_at resolved_by_user_id note expires_at" data-verdict="drop">
+  </article><article class="table" id="t-agent-approval_requests" data-table="approval_requests" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id execution_step_id tool_call_id message_id capability_name input_preview risk_level resolution resolved_at resolved_by_user_id note expires_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">agent.</span>approval_requests</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">19 cols</span>
     </header>
@@ -4745,6 +4509,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -4864,12 +4629,12 @@ apps              = app</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-agent-background_tasks" data-table="background_tasks" data-cols="id public_id created_at updated_at org_id workspace_id kind label inngest_run_id status input_payload result_payload failure_reason started_at completed_at created_by_user_id" data-verdict="drop">
+  </article><article class="table" id="t-agent-background_tasks" data-table="background_tasks" data-cols="id public_id created_at updated_at org_id workspace_id kind label inngest_run_id status input_payload result_payload failure_reason started_at completed_at created_by_user_id" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">agent.</span>background_tasks</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">16 cols</span>
     </header>
@@ -4885,6 +4650,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -4986,12 +4752,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-agent-mcp_servers" data-table="mcp_servers" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id org_listing_id name transport_type endpoint_url auth_strategy auth_config health_status last_healthcheck_at discovered_tools enabled" data-verdict="drop">
+  </article><article class="table" id="t-agent-mcp_servers" data-table="mcp_servers" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id org_listing_id name transport_type endpoint_url auth_strategy auth_config health_status last_healthcheck_at discovered_tools enabled" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">agent.</span>mcp_servers</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">5 rows</span>
       <span class="pill cols">18 cols</span>
     </header>
@@ -5007,6 +4773,7 @@ apps              = app, cli</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -5120,12 +4887,12 @@ apps              = app, cli</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table" id="t-agent-skill_versions" data-table="skill_versions" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id version_number is_latest parent_version_id published_at skill_id body references_payload" data-verdict="review">
+  </article><article class="table" id="t-agent-skill_versions" data-table="skill_versions" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id version_number is_latest parent_version_id published_at skill_id body references_payload" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">agent.</span>skill_versions</h3>
       <span class="spacer"></span>
-      <span class="pill v-review" title="Seed/reference only — review">⚑ review</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">15 cols</span>
     </header>
@@ -5141,6 +4908,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -5236,12 +5004,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table" id="t-agent-skills" data-table="skills" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id deleted_at deleted_by_user_id name slug description source enabled" data-verdict="review">
+  </article><article class="table" id="t-agent-skills" data-table="skills" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id deleted_at deleted_by_user_id name slug description source enabled" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">agent.</span>skills</h3>
       <span class="spacer"></span>
-      <span class="pill v-review" title="Seed/reference only — review">⚑ review</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">15 cols</span>
     </header>
@@ -5257,6 +5025,7 @@ apps              = api, app, cli, mcp</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -5352,12 +5121,12 @@ apps              = api, app, cli, mcp</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-agent-subagent_fanouts" data-table="subagent_fanouts" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id parent_message_id inngest_event_id status total_children completed_children" data-verdict="drop">
+  </article><article class="table" id="t-agent-subagent_fanouts" data-table="subagent_fanouts" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id parent_message_id inngest_event_id status total_children completed_children" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">agent.</span>subagent_fanouts</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">1 rows</span>
       <span class="pill cols">13 cols</span>
     </header>
@@ -5373,6 +5142,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -5477,6 +5247,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -5584,12 +5355,12 @@ apps              = app</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-agent-workflow_run_tasks" data-table="workflow_run_tasks" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id workflow_run_id task_index title goal status inngest_run_id output_json error started_at completed_at" data-verdict="drop">
+  </article><article class="table" id="t-agent-workflow_run_tasks" data-table="workflow_run_tasks" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id workflow_run_id task_index title goal status inngest_run_id output_json error started_at completed_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">agent.</span>workflow_run_tasks</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">18 cols</span>
     </header>
@@ -5605,6 +5376,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -5739,6 +5511,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -5880,12 +5653,12 @@ apps              = app</code></pre>
       </div>
     </div>
     <p class="s-desc">Automations and automation runs: user-defined trigger-to-action automation rules and their per-execution records.</p>
-    <div class="tables"><article class="table is-drop" id="t-workflow-automation_runs" data-table="automation_runs" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id automation_id status payload started_at completed_at" data-verdict="drop">
+    <div class="tables"><article class="table" id="t-workflow-automation_runs" data-table="automation_runs" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id automation_id status payload started_at completed_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">workflow.</span>automation_runs</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">13 cols</span>
     </header>
@@ -5901,6 +5674,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -6005,6 +5779,7 @@ apps              = app, cli</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -6125,6 +5900,7 @@ apps              = api, app, cli, mcp</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -6247,6 +6023,7 @@ apps              = api, app, cli</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -6358,12 +6135,12 @@ apps              = api, app, cli</code></pre>
       </div>
     </div>
     <p class="s-desc">Documents, forms, form submissions, and generated assets: user-authored text content, structured forms, submitted responses, and AI-generated media reference rows.</p>
-    <div class="tables"><article class="table is-drop" id="t-content-documents" data-table="documents" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id deleted_at deleted_by_user_id title content metadata" data-verdict="drop">
+    <div class="tables"><article class="table" id="t-content-documents" data-table="documents" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id deleted_at deleted_by_user_id title content metadata" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">content.</span>documents</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">13 cols</span>
     </header>
@@ -6379,6 +6156,7 @@ apps              = api, app, cli, mcp</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -6462,12 +6240,12 @@ apps              = api, app, cli, mcp</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-content-form_submissions" data-table="form_submissions" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id form_id responses status" data-verdict="drop">
+  </article><article class="table" id="t-content-form_submissions" data-table="form_submissions" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id form_id responses status" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">content.</span>form_submissions</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">11 cols</span>
     </header>
@@ -6483,6 +6261,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -6554,12 +6333,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-content-forms" data-table="forms" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id deleted_at deleted_by_user_id title fields" data-verdict="drop">
+  </article><article class="table" id="t-content-forms" data-table="forms" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id deleted_at deleted_by_user_id title fields" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">content.</span>forms</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">12 cols</span>
     </header>
@@ -6575,6 +6354,7 @@ apps              = api, app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -6652,12 +6432,12 @@ apps              = api, app</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-content-generated_assets" data-table="generated_assets" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id deleted_at deleted_by_user_id user_id kind access_policy status storage_provider storage_key storage_url mime_type size_bytes prompt model conversation_id message_id metadata" data-verdict="drop">
+  </article><article class="table" id="t-content-generated_assets" data-table="generated_assets" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id deleted_at deleted_by_user_id user_id kind access_policy status storage_provider storage_key storage_url mime_type size_bytes prompt model conversation_id message_id metadata" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">content.</span>generated_assets</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">24 cols</span>
     </header>
@@ -6673,6 +6453,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -6832,12 +6613,12 @@ apps              = app</code></pre>
       </div>
     </div>
     <p class="s-desc">The ingestion schema is the authoritative Postgres operational record for all data-connector activity in the connector dual-write pattern (Postgres for durability, Neo4j for graph index). It stores the lifecycle of every source connection — OAuth accounts and encrypted tokens used to authenticate third-party providers, per-connection auth credentials, webhook subscriptions that receive push events, connector JSON schemas cached per plugin version, entity type definitions and their cross-connector mappings, AI-generated setup suggestions surfaced during onboarding, and asynchronous deletion jobs that coordinate graph cleanup. Every row is org- and workspace-scoped, enabling row-level security to enforce strict multi-tenant isolation.</p>
-    <div class="tables"><article class="table is-drop" id="t-ingestion-auth_credentials" data-table="auth_credentials" data-cols="connection_id auth_scheme encrypted_payload created_at updated_at" data-verdict="drop">
+    <div class="tables"><article class="table" id="t-ingestion-auth_credentials" data-table="auth_credentials" data-cols="connection_id auth_scheme encrypted_payload created_at updated_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">ingestion.</span>auth_credentials</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">5 cols</span>
     </header>
@@ -6853,6 +6634,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>connection_id</code></td>
@@ -6888,12 +6670,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-ingestion-connector_schemas" data-table="connector_schemas" data-cols="id created_at updated_at plugin_id schema_url schema schema_version plugin_version cached_at" data-verdict="drop">
+  </article><article class="table" id="t-ingestion-connector_schemas" data-table="connector_schemas" data-cols="id created_at updated_at plugin_id schema_url schema schema_version plugin_version cached_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">ingestion.</span>connector_schemas</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">9 cols</span>
     </header>
@@ -6909,6 +6691,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -6968,12 +6751,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-ingestion-deletion_jobs" data-table="deletion_jobs" data-cols="id public_id created_at connection_id workspace_id org_id delete_mode requested_by total_entities deleted_entities alias_promotions status started_at completed_at error" data-verdict="drop">
+  </article><article class="table" id="t-ingestion-deletion_jobs" data-table="deletion_jobs" data-cols="id public_id created_at connection_id workspace_id org_id delete_mode requested_by total_entities deleted_entities alias_promotions status started_at completed_at error" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">ingestion.</span>deletion_jobs</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">15 cols</span>
     </header>
@@ -6989,6 +6772,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -7084,12 +6868,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-ingestion-entity_type_mappings" data-table="entity_type_mappings" data-cols="id public_id created_at updated_at connection_id workspace_id org_id source_record_type oxagen_entity_type property_mappings is_active" data-verdict="drop">
+  </article><article class="table" id="t-ingestion-entity_type_mappings" data-table="entity_type_mappings" data-cols="id public_id created_at updated_at connection_id workspace_id org_id source_record_type oxagen_entity_type property_mappings is_active" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">ingestion.</span>entity_type_mappings</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">11 cols</span>
     </header>
@@ -7105,6 +6889,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -7197,6 +6982,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -7286,12 +7072,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-ingestion-oauth_accounts" data-table="oauth_accounts" data-cols="id public_id created_at updated_at org_id provider provider_user_id provider_user_email provider_user_name access_token_enc refresh_token_enc expires_at token_type scopes last_refreshed_at refresh_failure_count" data-verdict="drop">
+  </article><article class="table" id="t-ingestion-oauth_accounts" data-table="oauth_accounts" data-cols="id public_id created_at updated_at org_id provider provider_user_id provider_user_email provider_user_name access_token_enc refresh_token_enc expires_at token_type scopes last_refreshed_at refresh_failure_count" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">ingestion.</span>oauth_accounts</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">16 cols</span>
     </header>
@@ -7307,6 +7093,7 @@ apps              = api</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -7429,6 +7216,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>connection_id</code></td>
@@ -7506,12 +7294,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-ingestion-setup_suggestions" data-table="setup_suggestions" data-cols="id public_id created_at connection_id workspace_id source_record_type suggested_entity_type suggested_property_mappings reasoning status resolved_at resolved_by" data-verdict="drop">
+  </article><article class="table" id="t-ingestion-setup_suggestions" data-table="setup_suggestions" data-cols="id public_id created_at connection_id workspace_id source_record_type suggested_entity_type suggested_property_mappings reasoning status resolved_at resolved_by" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">ingestion.</span>setup_suggestions</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">12 cols</span>
     </header>
@@ -7527,6 +7315,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -7604,12 +7393,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-ingestion-source_connections" data-table="source_connections" data-cols="id public_id created_at updated_at workspace_id org_id connector_id display_name auth_scheme delivery_method delivery_config status entity_count cursor last_sync_at error_message deleted_at deleted_by oauth_account_id" data-verdict="drop">
+  </article><article class="table" id="t-ingestion-source_connections" data-table="source_connections" data-cols="id public_id created_at updated_at workspace_id org_id connector_id display_name auth_scheme delivery_method delivery_config status entity_count cursor last_sync_at error_message deleted_at deleted_by oauth_account_id" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">ingestion.</span>source_connections</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">19 cols</span>
     </header>
@@ -7625,6 +7414,7 @@ apps              = api</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -7744,12 +7534,12 @@ apps              = api</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-ingestion-webhook_subscriptions" data-table="webhook_subscriptions" data-cols="id public_id created_at connection_id webhook_path secret_enc hmac_algorithm hmac_header provider_subscription_id record_types status last_received_at" data-verdict="drop">
+  </article><article class="table" id="t-ingestion-webhook_subscriptions" data-table="webhook_subscriptions" data-cols="id public_id created_at connection_id webhook_path secret_enc hmac_algorithm hmac_header provider_subscription_id record_types status last_received_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">ingestion.</span>webhook_subscriptions</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">12 cols</span>
     </header>
@@ -7765,6 +7555,7 @@ apps              = api</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -7852,12 +7643,12 @@ apps              = api</code></pre>
       </div>
     </div>
     <p class="s-desc">MCP registries, catalog servers, credentials: the Model Context Protocol server catalog + per-org connections</p>
-    <div class="tables"><article class="table is-drop" id="t-mcp-catalog_servers" data-table="catalog_servers" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id registry_id name version is_latest title description repository website_url icons packages remotes transport_types auth_kind categories readme_html readme_fetched_at status published_at upstream_updated_at status_changed_at meta" data-verdict="drop">
+    <div class="tables"><article class="table" id="t-mcp-catalog_servers" data-table="catalog_servers" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id registry_id name version is_latest title description repository website_url icons packages remotes transport_types auth_kind categories readme_html readme_fetched_at status published_at upstream_updated_at status_changed_at meta" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">mcp.</span>catalog_servers</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">5 rows</span>
       <span class="pill cols">27 cols</span>
     </header>
@@ -7873,6 +7664,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -8040,12 +7832,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-mcp-credentials" data-table="credentials" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id org_listing_id auth_kind access_token_enc refresh_token_enc secret_enc oauth_client_secret_enc token_kms_key_id oauth_client_id scopes expires_at status last_refreshed_at" data-verdict="drop">
+  </article><article class="table" id="t-mcp-credentials" data-table="credentials" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id org_listing_id auth_kind access_token_enc refresh_token_enc secret_enc oauth_client_secret_enc token_kms_key_id oauth_client_id scopes expires_at status last_refreshed_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">mcp.</span>credentials</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">20 cols</span>
     </header>
@@ -8061,6 +7853,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -8186,12 +7979,12 @@ apps              = —</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-mcp-registries" data-table="registries" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id name base_url enabled is_default_seed last_synced_at last_synced_cursor" data-verdict="drop">
+  </article><article class="table" id="t-mcp-registries" data-table="registries" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id name base_url enabled is_default_seed last_synced_at last_synced_cursor" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">mcp.</span>registries</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">6 rows</span>
       <span class="pill cols">13 cols</span>
     </header>
@@ -8207,6 +8000,7 @@ apps              = —</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -8300,12 +8094,12 @@ apps              = —</code></pre>
       </div>
     </div>
     <p class="s-desc">Installable plugin marketplace: org listings (installed plugins) and org denylist (governance blocks)</p>
-    <div class="tables"><article class="table is-drop" id="t-plugin-org_denylist" data-table="org_denylist" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id plugin_type server_name reason" data-verdict="drop">
+    <div class="tables"><article class="table" id="t-plugin-org_denylist" data-table="org_denylist" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id plugin_type server_name reason" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">plugin.</span>org_denylist</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">10 cols</span>
     </header>
@@ -8321,6 +8115,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -8386,12 +8181,12 @@ apps              = app</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-plugin-org_listings" data-table="org_listings" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id deleted_at deleted_by_user_id org_id plugin_type catalog_server_id source name title description icon_url endpoint_url transport auth_kind auth_config enabled config" data-verdict="drop">
+  </article><article class="table" id="t-plugin-org_listings" data-table="org_listings" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id deleted_at deleted_by_user_id org_id plugin_type catalog_server_id source name title description icon_url endpoint_url transport auth_kind auth_config enabled config" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">plugin.</span>org_listings</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">5 rows</span>
       <span class="pill cols">22 cols</span>
     </header>
@@ -8407,6 +8202,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -8554,12 +8350,12 @@ apps              = app</code></pre>
       </div>
     </div>
     <p class="s-desc">In-app notifications: per-user/org notification feed</p>
-    <div class="tables"><article class="table is-drop" id="t-notification-notifications" data-table="notifications" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id user_id kind title body deep_link unread archived emailed_at" data-verdict="drop">
+    <div class="tables"><article class="table" id="t-notification-notifications" data-table="notifications" data-cols="id public_id created_at updated_at created_by_user_id updated_by_user_id org_id workspace_id user_id kind title body deep_link unread archived emailed_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">notification.</span>notifications</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">16 cols</span>
     </header>
@@ -8575,6 +8371,7 @@ apps              = api, app, cli, mcp</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
@@ -8686,12 +8483,12 @@ apps              = api, app, cli, mcp</code></pre>
       </div>
     </div>
     <p class="s-desc">Security audit events (month-partitioned) + per-org security policy: the SOC 2 audit trail</p>
-    <div class="tables"><article class="table is-drop" id="t-security-org_security_policy" data-table="org_security_policy" data-cols="org_id mfa_required mfa_grace_hours updated_by_user_id created_at updated_at" data-verdict="drop">
+    <div class="tables"><article class="table" id="t-security-org_security_policy" data-table="org_security_policy" data-cols="org_id mfa_required mfa_grace_hours updated_by_user_id created_at updated_at" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">security.</span>org_security_policy</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">0 rows</span>
       <span class="pill cols">6 cols</span>
     </header>
@@ -8707,6 +8504,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>org_id</code></td>
@@ -8748,12 +8546,12 @@ apps              = app</code></pre>
         </table>
       </div>
     </div>
-  </article><article class="table is-drop" id="t-security-security_events" data-table="security_events" data-cols="id occurred_at event_type actor_user_id org_id workspace_id capability outcome ip user_agent request_id" data-verdict="drop">
+  </article><article class="table" id="t-security-security_events" data-table="security_events" data-cols="id occurred_at event_type actor_user_id org_id workspace_id capability outcome ip user_agent request_id" data-verdict="keep">
     <header class="t-head" role="button" tabindex="0" aria-expanded="true">
       <span class="chev" aria-hidden="true"></span>
       <h3><span class="t-schema">security.</span>security_events</h3>
       <span class="spacer"></span>
-      <span class="pill v-drop" title="No runtime CRUD — drop candidate">⚑ drop?</span>
+      
       <span class="pill rows" title="current row count">47 rows</span>
       <span class="pill cols">11 cols</span>
     </header>
@@ -8769,6 +8567,7 @@ apps              = app</code></pre>
   </div>
       <div class="t-wrap">
         <table class="cols">
+          <colgroup><col class="w-name"><col class="w-type"><col class="w-def"><col class="w-con"><col class="w-desc"></colgroup>
           <thead><tr><th>Column</th><th>Type</th><th>Default</th><th>Constraints</th><th>Description</th></tr></thead>
           <tbody><tr>
     <td class="c-name"><code>id</code></td>
