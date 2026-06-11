@@ -95,6 +95,13 @@ export async function setupAgentRuntimeFixture(
   `;
   if (!tenantRow) throw new Error("fixture: organization insert returned no row");
   const orgId = tenantRow.id;
+  // Per-fixture suffix for every seeded public_id. CI runs e2e shards in
+  // PARALLEL against one database, so hardcoded global public_ids let two specs
+  // collide on the UNIQUE(public_id) constraints; the ON CONFLICT loser then
+  // referenced / was cleaned up against the winner's rows → FK violations and
+  // cascading session-token dups. Deriving the suffix from the org's id keeps
+  // every fixture's rows isolated.
+  const sfx = orgId.replace(/-/g, "").slice(0, 16);
 
   const [userRow] = await sql<{ id: string }[]>`
     INSERT INTO auth.users (public_id, email, display_name, status, email_verified_at)
@@ -165,7 +172,7 @@ export async function setupAgentRuntimeFixture(
     )
     VALUES (
       gen_random_uuid(),
-      'apr_e2e_001',
+      ${`apr_e2e_${sfx}`},
       ${orgId},
       ${workspaceId},
       ${msgRootUuid}::uuid,
@@ -179,14 +186,15 @@ export async function setupAgentRuntimeFixture(
     ON CONFLICT (public_id) DO NOTHING
   `;
 
-  // 6. Subagent fanout + three runs.
+  // 6. Subagent fanout + three runs (public_ids suffixed via `sfx`, see above).
+  const fanoutPublicId = `fan_e2e_${sfx}`;
   const [fanoutRow] = await sql<{ id: string }[]>`
     INSERT INTO agent.subagent_fanouts (
       id, public_id, org_id, workspace_id, parent_message_id, status, total_children, completed_children
     )
     VALUES (
       gen_random_uuid(),
-      'fan_e2e_001',
+      ${fanoutPublicId},
       ${orgId},
       ${workspaceId},
       ${msgRootUuid}::uuid,
@@ -203,16 +211,16 @@ export async function setupAgentRuntimeFixture(
   const [fanoutExisting] = fanoutRow
     ? [fanoutRow]
     : await sql<{ id: string }[]>`
-        SELECT id FROM agent.subagent_fanouts WHERE public_id = 'fan_e2e_001'
+        SELECT id FROM agent.subagent_fanouts WHERE public_id = ${fanoutPublicId}
       `;
 
   if (fanoutExisting) {
     const fanoutId = fanoutExisting.id;
     // child_message_id is a UUID column — use deterministic UUIDs.
     const subagentRuns = [
-      { publicId: "sr_e2e_001", childMessageUuid: "00000000-e2e0-0000-0006-000000000001", capability: "agent.code.execute" },
-      { publicId: "sr_e2e_002", childMessageUuid: "00000000-e2e0-0000-0006-000000000002", capability: "agent.code.execute" },
-      { publicId: "sr_e2e_003", childMessageUuid: "00000000-e2e0-0000-0006-000000000003", capability: "agent.code.execute" },
+      { publicId: `sr_e2e_${sfx}_001`, childMessageUuid: "00000000-e2e0-0000-0006-000000000001", capability: "agent.code.execute" },
+      { publicId: `sr_e2e_${sfx}_002`, childMessageUuid: "00000000-e2e0-0000-0006-000000000002", capability: "agent.code.execute" },
+      { publicId: `sr_e2e_${sfx}_003`, childMessageUuid: "00000000-e2e0-0000-0006-000000000003", capability: "agent.code.execute" },
     ];
     for (const run of subagentRuns) {
       await sql`
