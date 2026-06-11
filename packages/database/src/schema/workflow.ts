@@ -11,7 +11,6 @@ export const workflowRuns = agentSchema.table(
     ...idMixin("wfr"),
     ...auditMixin(),
     ...orgScopeMixin(),
-    workflowId: uuid("workflow_id"),
     title: text("title").notNull(),
     goal: text("goal").notNull(),
     // CHECK planning|running|completed|failed|cancelled in migration.
@@ -28,7 +27,6 @@ export const workflowRuns = agentSchema.table(
     completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
   },
   (t) => ({
-    workflowIdx: index("workflow_runs_workflow_idx").on(t.workflowId),
     orgStatusIdx: index("workflow_runs_org_status_idx").on(t.orgId, t.workspaceId, t.status),
     orgIdx: index("workflow_runs_org_idx").on(t.orgId, t.workspaceId),
   }),

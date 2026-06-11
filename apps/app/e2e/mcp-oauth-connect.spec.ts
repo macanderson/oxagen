@@ -128,24 +128,28 @@ test.describe("mcp-oauth-connect", () => {
     const connectBtn = page.getByTestId(`integrations-oauth-btn-${oauthListingId}`);
     await expect(connectBtn).toBeVisible();
 
-    // The mock OAuth server instantly redirects back with ?code=e2e_auth_code.
-    // Playwright follows the redirect chain through:
+    // Extract the href from the OAuth connect button and navigate directly via
+    // page.goto(). This ensures the full redirect chain is followed:
     //   /api/v1/mcp/oauth/authorize → <mock>/authorize?... → /api/v1/mcp/oauth/callback?code=...
     //   → /{org}/{ws}/settings/integrations?mcp=connected
     //
-    // We wait for ?mcp=connected — this is distinct from the current page URL
-    // (which has no mcp param) so waitForURL won't resolve until the full round
-    // trip completes. Checking for !code is insufficient because the starting
-    // URL already satisfies that condition.
-    await Promise.all([
-      page.waitForURL(
-        (url) =>
-          url.pathname.includes("/settings/integrations") &&
-          url.searchParams.get("mcp") === "connected",
-        { timeout: 30_000 },
-      ),
-      connectBtn.click(),
-    ]);
+    // Note: clicking the <a> within a Next.js App Router client component causes
+    // the Next.js router to intercept the anchor click and call router.push()
+    // internally. For API-route hrefs (/api/...) the App Router soft-navigation
+    // makes a fetch call instead of a full browser navigation, which means
+    // Playwright never sees a page-level navigation event. Using page.goto()
+    // drives a real browser navigation that correctly follows the redirect chain.
+    const authorizeHref = await connectBtn.getAttribute("href");
+    if (!authorizeHref) throw new Error("Connect button has no href");
+
+    await page.goto(authorizeHref, { waitUntil: "load", timeout: 30_000 });
+    // The goto follows redirects: authorize → mock OAuth → callback → integrations?mcp=connected
+    await expect(page).toHaveURL(
+      (url) =>
+        url.pathname.includes("/settings/integrations") &&
+        url.searchParams.get("mcp") === "connected",
+      { timeout: 20_000 },
+    );
 
     // After OAuth callback, a workspace mcp_servers install row should exist
     // and the "connected" badge should appear. If the app's callback handler

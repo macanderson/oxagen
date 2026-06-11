@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import neo4j, { type Driver, type Session } from "neo4j-driver";
+import { bootstrapOrgIAM } from "@oxagen/handlers";
 
 // Test fixture for the agent runtime E2E. Manages a deterministic tenant +
 // workspace + user + auth session, plus the execution/approval/fanout rows
@@ -12,6 +13,16 @@ export interface FixtureOptions {
   orgSlug: string;
   workspaceSlug: string;
   userEmail: string;
+  /**
+   * When true, bootstrap full IAM for the org (system roles + the owner's
+   * principal + Owner role assignment + role grants) via bootstrapOrgIAM — the
+   * same provisioning the real org-create handler performs. Opt-in because most
+   * fixtures drive the APP surface, where invoke() does not enforce IAM; only
+   * specs that exercise the IAM-enforced API surface (api-key-lifecycle,
+   * workspace-isolation) need an authorized principal to get past the kernel
+   * IAM gate. Default false keeps existing fixtures byte-for-byte unchanged.
+   */
+  bootstrapIam?: boolean;
 }
 
 export interface DbState {
@@ -137,6 +148,14 @@ export async function setupAgentRuntimeFixture(
     VALUES ('wsu_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 22), ${workspaceId}, ${userId}, 'owner', now())
     ON CONFLICT (workspace_id, user_id) DO NOTHING
   `;
+
+  // OXA-1498: provision full IAM for the org so the seeded owner is an
+  // authorized principal on the IAM-enforced API surface. Opt-in — the kernel
+  // skips IAM on the app surface, so only API-surface specs need this. Mirrors
+  // the real org-create handler; idempotent (withSystemDb under the hood).
+  if (opts.bootstrapIam) {
+    await bootstrapOrgIAM({ orgId, ownerUserId: userId, actorUserId: userId });
+  }
 
   // Better Auth session row — used by the auth helper to inject a logged-in
   // cookie without going through OAuth.
