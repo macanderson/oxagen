@@ -5,6 +5,13 @@ export default defineConfig({
     clearMocks: true,
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // Several suites mock @oxagen/database via importOriginal and dynamically
+    // re-import the module-under-test (state-store uses vi.resetModules() per
+    // test). That cold-loads the full drizzle + schema graph each time, which
+    // exceeds vitest's 5s default on CI's shared runners (passes in ~300ms
+    // locally). Give cold module imports headroom so they don't false-fail.
+    testTimeout: 20000,
+    hookTimeout: 20000,
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],

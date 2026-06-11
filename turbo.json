@@ -265,7 +265,18 @@
         "BETTER_AUTH_URL",
         "NEXT_PUBLIC_APP_URL",
         "NEXT_PUBLIC_API_URL",
-        "E2E_TEST"
+        "E2E_TEST",
+        "CLICKHOUSE_URL",
+        "CLICKHOUSE_USERNAME",
+        "CLICKHOUSE_PASSWORD",
+        "CLICKHOUSE_DATABASE",
+        "NEO4J_URI",
+        "NEO4J_USERNAME",
+        "NEO4J_PASSWORD",
+        "NEO4J_DATABASE",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_PUBLISHABLE_KEY",
+        "STRIPE_WEBHOOK_SECRET"
       ],
       "passThroughEnv": ["CI"]
     },
