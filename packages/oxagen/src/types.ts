@@ -99,6 +99,14 @@ export interface CapabilityDeclaration<
    */
   scoped?: boolean;
   /**
+   * When true, the billing admission gate is skipped for this capability.
+   * Use for management/admin capabilities that do not consume AI tokens
+   * (API key creation, member management, settings reads, etc.).
+   * Default false — AI/agent capabilities that consume credits should leave
+   * this unset so the gate refuses calls from orgs with zero balance.
+   */
+  noBillingGate?: boolean;
+  /**
    * Sensitivity classification for this capability. Required — the IAM
    * resolver uses it for logging and the seed migration uses it for default
    * role-grant decisions.

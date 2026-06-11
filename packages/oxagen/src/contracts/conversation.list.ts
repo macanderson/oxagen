@@ -24,6 +24,9 @@ export const conversationList = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
+  // Conversation listing does not consume AI tokens — billing gate must not
+  // block this for orgs with zero credit balance.
+  noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "conversation" },
   sensitivity: "low",
   defaultEffect: "deny",

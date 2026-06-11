@@ -159,7 +159,10 @@ export async function setupAgentRuntimeFixture(
 
   // Better Auth session row — used by the auth helper to inject a logged-in
   // cookie without going through OAuth.
-  const sessionToken = `e2e-session-${orgId}-${Date.now()}`;
+  // Include the workspaceId in the session token to make it unique even when
+  // two fixtures share the same orgId (same org, different workspaces) and
+  // run in parallel via Promise.all within the same millisecond.
+  const sessionToken = `e2e-session-${orgId}-${workspaceId}-${Date.now()}`;
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
   await sql`
     INSERT INTO auth.sessions (id, token, user_id, expires_at, ip_address, user_agent)
@@ -402,11 +405,36 @@ export async function teardownFixture(opts: {
     )`;
     await sql`DELETE FROM agent.subagent_fanouts WHERE org_id = ${orgId}`;
     await sql`DELETE FROM agent.approval_requests WHERE org_id = ${orgId}`;
+    // Collect user IDs BEFORE deleting org_users (needed for session + auth.user cleanup).
+    const orgUserRows = await sql<{ userId: string }[]>`
+      SELECT user_id::text AS "userId" FROM org.org_users WHERE org_id = ${orgId}
+    `;
+    const orgUserIds = orgUserRows.map((r) => r.userId);
+
+    // Delete auth.sessions for these users BEFORE deleting org_users.
+    if (orgUserIds.length > 0) {
+      await sql`DELETE FROM auth.sessions WHERE user_id = ANY(${orgUserIds}::uuid[])`;
+    }
     await sql`DELETE FROM workspace.workspace_users WHERE workspace_id IN (
       SELECT id FROM workspace.workspaces WHERE org_id = ${orgId}
     )`;
     await sql`DELETE FROM workspace.workspaces WHERE org_id = ${orgId}`;
     await sql`DELETE FROM org.org_users WHERE org_id = ${orgId}`;
+    // IAM rows (bootstrapped by bootstrapOrgIAM when bootstrapIam:true).
+    // Delete in FK-safe order: assignments → role_grants → principals → roles.
+    // principal_role_assignments.principal_id → org.principals
+    // principal_role_assignments.role_id → org.roles
+    // role_grants.role_id → org.roles
+    await sql`DELETE FROM org.principal_role_assignments WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM org.role_grants WHERE role_id IN (
+      SELECT id FROM org.roles WHERE org_id = ${orgId}
+    )`;
+    await sql`DELETE FROM org.principals WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM org.roles WHERE org_id = ${orgId}`;
+    // Delete auth.users — sessions already deleted above, org_users already deleted.
+    if (orgUserIds.length > 0) {
+      await sql`DELETE FROM auth.users WHERE id = ANY(${orgUserIds}::uuid[])`;
+    }
     await sql`DELETE FROM org.organizations WHERE id = ${orgId}`;
 
     // Best-effort Neo4j cleanup.

@@ -1,8 +1,21 @@
 import type { ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
 import type { AppEnv } from "../app";
+
+// Typed error codes we duck-type from @oxagen/billing to avoid a direct dep.
+type BillingErrorCode = "insufficient_credits" | "billing_suspended";
+interface BillingError extends Error {
+  readonly code: BillingErrorCode;
+}
+
+function isBillingError(err: unknown): err is BillingError {
+  if (typeof err !== "object" || err === null) return false;
+  const code = (err as Record<string, unknown>).code;
+  return code === "insufficient_credits" || code === "billing_suspended";
+}
 
 export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
   const requestId = c.get("requestId") ?? "unknown";
@@ -27,6 +40,48 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
         requestId,
       },
       400,
+    );
+  }
+
+  // CapabilityError — map known codes to HTTP status codes.
+  if (err instanceof CapabilityError) {
+    if (err.code === "authz_denied") {
+      logger.warn({ requestId, capability: err.capability, message: err.message }, "authz denied");
+      return c.json(
+        { error: { code: "forbidden", message: err.message }, requestId },
+        403,
+      );
+    }
+    if (err.code === "surface_denied") {
+      logger.warn({ requestId, capability: err.capability, message: err.message }, "surface denied");
+      return c.json(
+        { error: { code: "forbidden", message: err.message }, requestId },
+        403,
+      );
+    }
+    if (err.code === "unknown_capability" || err.code === "no_handler") {
+      logger.warn({ requestId, capability: err.capability, message: err.message }, "capability not found");
+      return c.json(
+        { error: { code: "not_found", message: err.message }, requestId },
+        404,
+      );
+    }
+    if (err.code === "invalid_input") {
+      logger.warn({ requestId, capability: err.capability, message: err.message }, "invalid capability input");
+      return c.json(
+        { error: { code: "bad_request", message: err.message }, requestId },
+        400,
+      );
+    }
+    // invalid_output → 500 (server bug)
+  }
+
+  // Billing errors — map to 402 Payment Required.
+  if (isBillingError(err)) {
+    logger.warn({ requestId, code: err.code, message: err.message }, "billing gate");
+    return c.json(
+      { error: { code: err.code, message: err.message }, requestId },
+      402,
     );
   }
 

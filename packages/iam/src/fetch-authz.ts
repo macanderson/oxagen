@@ -9,7 +9,7 @@
 // lets the app boot and operate in dev environments where the IAM migration
 // has not been run. Remove this fallback after `pnpm db:migrate` is standard.
 
-import { withSystemDb } from "@oxagen/database";
+import { withTenantDb } from "@oxagen/database";
 import { eq, and, inArray, isNull, or, gt, sql } from "drizzle-orm";
 import { schema } from "@oxagen/database";
 import type { Grant, Role, RoleGrant, Policy } from "@oxagen/oxagen/iam";
@@ -84,24 +84,19 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   // (principal_role_assignments) can THEMSELVES be workspace-scoped, however,
   // so we must filter those by workspaceId here — see the PRA query below.
   //
-  // Tenancy (OXA-1515): this is the authorization gate that runs BEFORE the
-  // kernel enters the request's tenant scope (kernel.ts runs the IAM check ahead
-  // of runInTenantScope for the handler), so a scope-requiring seam (withTenantDb)
-  // throws TenantScopeError here and the check fails closed (500). Like Better
-  // Auth's identity resolution (packages/auth: resolveFirstOrgId), authz
-  // resolution legitimately precedes the tenant scope, so it runs on the
-  // system-bypass connection. Isolation is preserved WITHOUT RLS because EVERY
-  // query below is explicitly filtered by `orgId` and the principal is resolved
-  // by (orgId, parentUserId): a cross-org request (a user not in `orgId`) finds
-  // no principal → EMPTY_AUTHZ → deny. Do NOT add a query here that is not
-  // explicitly org-scoped — RLS is no longer the backstop on this read.
+  // RLS over-filtering analysis (OXA-1515): IAM tables (principals, grants,
+  // roles, role_grants, policies, principal_role_assignments) have
+  // workspace_nullable RLS policies — rows where workspace_id IS NULL (org-wide
+  // IAM rows) pass through alongside current-workspace rows. All cross-workspace
+  // org-wide IAM reads (roles, policies, org-wide PRAs) therefore remain
+  // correctly visible inside withTenantDb. No query is over-filtered.
   const { userId, orgId, workspaceId, capability } = args;
 
   // Resolve the principal from the userId (human kind).
   // Service accounts resolve from apiKeyId — extend here when needed.
   if (!userId) return EMPTY_AUTHZ;
 
-  return withSystemDb(async (tx) => {
+  return withTenantDb(async (tx) => {
     const principalRows = await tx
       .select()
       .from(schema.principals)

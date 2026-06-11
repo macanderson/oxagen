@@ -30,10 +30,14 @@ vi.mock("@oxagen/auth", () => ({
   resolveWorkspaceScope: vi.fn(),
 }));
 
-vi.mock("@oxagen/oxagen/kernel", () => ({
-  invoke: vi.fn(),
-  clearHandlersForTests: vi.fn(),
-}));
+vi.mock("@oxagen/oxagen/kernel", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/oxagen/kernel")>();
+  return {
+    ...real,
+    invoke: vi.fn(),
+    clearHandlersForTests: vi.fn(),
+  };
+});
 
 vi.mock("@oxagen/billing", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/billing")>();
@@ -243,6 +247,64 @@ describe("errorMiddleware unknown error", () => {
     const { body } = await triggerError(new Error("boom"));
     expect(typeof (body as { requestId: string }).requestId).toBe("string");
     expect((body as { requestId: string }).requestId.length).toBeGreaterThan(0);
+  });
+});
+
+// ── CapabilityError → HTTP status codes ──────────────────────────────────────
+
+describe("errorMiddleware CapabilityError", () => {
+  it("authz_denied → 403 forbidden", async () => {
+    const { CapabilityError } = await import("@oxagen/oxagen/kernel");
+    const { status, body } = await triggerError(
+      new CapabilityError("test.cap", "authz_denied", "IAM denied"),
+    );
+    expect(status).toBe(403);
+    expect((body as { error: { code: string } }).error.code).toBe("forbidden");
+  });
+
+  it("surface_denied → 403 forbidden", async () => {
+    const { CapabilityError } = await import("@oxagen/oxagen/kernel");
+    const { status, body } = await triggerError(
+      new CapabilityError("test.cap", "surface_denied", "surface blocked"),
+    );
+    expect(status).toBe(403);
+    expect((body as { error: { code: string } }).error.code).toBe("forbidden");
+  });
+
+  it("unknown_capability → 404 not_found", async () => {
+    const { CapabilityError } = await import("@oxagen/oxagen/kernel");
+    const { status, body } = await triggerError(
+      new CapabilityError("test.missing", "unknown_capability", "unknown"),
+    );
+    expect(status).toBe(404);
+    expect((body as { error: { code: string } }).error.code).toBe("not_found");
+  });
+
+  it("invalid_input → 400 bad_request", async () => {
+    const { CapabilityError } = await import("@oxagen/oxagen/kernel");
+    const { status, body } = await triggerError(
+      new CapabilityError("test.cap", "invalid_input", "bad input"),
+    );
+    expect(status).toBe(400);
+    expect((body as { error: { code: string } }).error.code).toBe("bad_request");
+  });
+});
+
+// ── Billing errors → 402 Payment Required ────────────────────────────────────
+
+describe("errorMiddleware billing errors", () => {
+  it("InsufficientCreditsError → 402", async () => {
+    const err = Object.assign(new Error("no credits"), { code: "insufficient_credits" });
+    const { status, body } = await triggerError(err);
+    expect(status).toBe(402);
+    expect((body as { error: { code: string } }).error.code).toBe("insufficient_credits");
+  });
+
+  it("BillingSuspendedError → 402", async () => {
+    const err = Object.assign(new Error("suspended"), { code: "billing_suspended" });
+    const { status, body } = await triggerError(err);
+    expect(status).toBe(402);
+    expect((body as { error: { code: string } }).error.code).toBe("billing_suspended");
   });
 });
 

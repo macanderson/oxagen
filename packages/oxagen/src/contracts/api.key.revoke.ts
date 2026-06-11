@@ -16,6 +16,9 @@ export const apiKeyRevoke = registerCapability({
   surfaces: ["api", "mcp"],
   layers: ["api", "mcp", "unit"],
   scoped: true,
+  // API key management does not consume AI tokens — billing gate must not
+  // block this for orgs with zero credit balance.
+  noBillingGate: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "organization" },
   sensitivity: "high",
   defaultEffect: "deny",

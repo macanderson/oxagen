@@ -346,115 +346,125 @@ export async function invoke(
     );
   }
 
-  // ── IAM check (OXA-1498) ───────────────────────────────────────────────────
-  // Run after input validation (we need the parsed input for the audit hash).
-  // ALWAYS runs when checkFn is registered. Only BLOCKS when _iamEnforced=true.
-  const checkFn = _iamCheckFn;
-  if (checkFn !== null) {
-    let rawInputJson = "{}";
-    try {
-      rawInputJson = JSON.stringify(inputResult.data);
-    } catch {
-      rawInputJson = "{}";
-    }
-    // defaultEffect is carried on the capability declaration; fall back to
-    // "deny" for capabilities without an explicit defaultEffect (safe default).
-    const defaultEffect: CapabilityEffect =
-      (cap as { defaultEffect?: CapabilityEffect }).defaultEffect ?? "deny";
+  // ── Scope wrapper helper ──────────────────────────────────────────────────
+  // For SCOPED capabilities, the IAM check, billing admission gate, and handler
+  // must ALL run inside ONE runInTenantScope so that withTenantDb seams in
+  // fetchAuthz (IAM) and consumeCredits/assertOrgCanConsume (billing) can
+  // resolve the active scope. For UNSCOPED capabilities (cap.scoped === false,
+  // e.g. user.preferences.write) we must NOT wrap — the ids are empty and
+  // runInTenantScope would throw TenantScopeError (OXA-1515). — OXA-1697
+  const isScoped = cap.scoped !== false;
+  const withScope = isScoped
+    ? <T>(fn: () => Promise<T>): Promise<T> =>
+        runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, fn)
+    : <T>(fn: () => Promise<T>): Promise<T> => fn();
 
-    // Fire-and-forget: checkFn internally emits the ClickHouse audit event.
-    let iamCheckThrew = false;
-    const iamResult = await checkFn({
-      capability: name,
-      ctx,
-      defaultEffect,
-      rawInputJson,
-    }).catch((err: unknown) => {
-      // IAM check failure is a critical incident. When enforcement is OFF we
-      // must never crash an invocation (log loudly and fall through), but when
-      // enforcement is ON we MUST fail closed — a transient resolver error
-      // (DB timeout, network blip, misconfig) must not silently grant access.
-      // Flag the throw and decide based on _iamEnforced below.
-      iamCheckThrew = true;
-      console.error(`[kernel] IAM check threw for "${name}":`, err);
-      return null;
-    });
-
-    // Fail closed on resolver error when enforcement is enabled.
-    if (iamCheckThrew && _iamEnforced) {
-      emitSecurityEvent({
-        capability: name,
-        outcome: "deny",
-        surface: ctx.surface,
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        actorUserId: ctx.userId,
-        requestId: ctx.requestId,
-        errorCode: "authz_denied",
-        durationMs: Date.now() - startMs,
-      });
-      throw new CapabilityError(
-        name,
-        "authz_denied",
-        `IAM check errored for "${name}" and IAM_ENFORCEMENT_ENABLED=true — failing closed.`,
-      );
-    }
-
-    if (iamResult !== null && iamResult.outcome !== "allow") {
-      if (_iamEnforced) {
-        // Enforcement on: block the call.
-        emitSecurityEvent({
-          capability: name,
-          outcome: "deny",
-          surface: ctx.surface,
-          orgId: ctx.orgId,
-          workspaceId: ctx.workspaceId,
-          actorUserId: ctx.userId,
-          requestId: ctx.requestId,
-          errorCode: "authz_denied",
-          durationMs: Date.now() - startMs,
-        });
-        throw new CapabilityError(
-          name,
-          "authz_denied",
-          `IAM denied "${name}" for principal: ${iamResult.reason ?? iamResult.outcome}`,
-        );
-      } else {
-        // Enforcement off: log would-deny and continue.
-        console.warn(
-          `[kernel] IAM would-deny "${name}" (outcome=${iamResult.outcome}, ` +
-            `reason=${iamResult.reason ?? "none"}) — IAM_ENFORCEMENT_ENABLED=false, proceeding.`,
-        );
-      }
-    }
-  }
-  // ── End IAM check ─────────────────────────────────────────────────────────
-
-  // ── Billing admission gate ─────────────────────────────────────────────────
-  // Runs after IAM (so admin/billing capabilities bypass the credit check).
-  // Only fires when orgId is present — system-level calls (no org) are exempt.
-  // Gate throws BillingSuspendedError or InsufficientCreditsError to refuse.
-  if (_billingGate !== null && ctx.orgId) {
-    await _billingGate(ctx.orgId);
-  }
-  // ── End billing admission gate ─────────────────────────────────────────────
-
+  // ── IAM + billing + handler (all inside scope for scoped caps) ───────────
   let output: unknown;
   try {
-    const handler = await resolveHandler(name);
-    // Unscoped capabilities (cap.scoped === false) operate outside any tenant —
-    // e.g. user.preferences.write keys on the user, not an org/workspace, and is
-    // invoked with empty org/workspace ids. runInTenantScope asserts both are
-    // UUIDs, so wrapping an unscoped call throws TenantScopeError before the
-    // handler runs (this silently broke Save preferences). Run those handlers
-    // directly; only scoped capabilities get the tenant-scope wrapper. — OXA-1515
-    output =
-      cap.scoped === false
-        ? await handler(inputResult.data, ctx)
-        : await runInTenantScope(
-            { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-            () => handler(inputResult.data, ctx),
+    output = await withScope(async () => {
+      // ── IAM check (OXA-1498) ───────────────────────────────────────────────
+      // Run after input validation (we need the parsed input for the audit hash).
+      // ALWAYS runs when checkFn is registered. Only BLOCKS when _iamEnforced=true.
+      // fetchAuthz uses withTenantDb, so the scope must be active here — OXA-1697.
+      const checkFn = _iamCheckFn;
+      if (checkFn !== null) {
+        let rawInputJson = "{}";
+        try {
+          rawInputJson = JSON.stringify(inputResult.data);
+        } catch {
+          rawInputJson = "{}";
+        }
+        // defaultEffect is carried on the capability declaration; fall back to
+        // "deny" for capabilities without an explicit defaultEffect (safe default).
+        const defaultEffect: CapabilityEffect =
+          (cap as { defaultEffect?: CapabilityEffect }).defaultEffect ?? "deny";
+
+        // Fire-and-forget: checkFn internally emits the ClickHouse audit event.
+        let iamCheckThrew = false;
+        const iamResult = await checkFn({
+          capability: name,
+          ctx,
+          defaultEffect,
+          rawInputJson,
+        }).catch((err: unknown) => {
+          // IAM check failure is a critical incident. When enforcement is OFF we
+          // must never crash an invocation (log loudly and fall through), but when
+          // enforcement is ON we MUST fail closed — a transient resolver error
+          // (DB timeout, network blip, misconfig) must not silently grant access.
+          // Flag the throw and decide based on _iamEnforced below.
+          iamCheckThrew = true;
+          console.error(`[kernel] IAM check threw for "${name}":`, err);
+          return null;
+        });
+
+        // Fail closed on resolver error when enforcement is enabled.
+        if (iamCheckThrew && _iamEnforced) {
+          emitSecurityEvent({
+            capability: name,
+            outcome: "deny",
+            surface: ctx.surface,
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            actorUserId: ctx.userId,
+            requestId: ctx.requestId,
+            errorCode: "authz_denied",
+            durationMs: Date.now() - startMs,
+          });
+          throw new CapabilityError(
+            name,
+            "authz_denied",
+            `IAM check errored for "${name}" and IAM_ENFORCEMENT_ENABLED=true — failing closed.`,
           );
+        }
+
+        if (iamResult !== null && iamResult.outcome !== "allow") {
+          if (_iamEnforced) {
+            // Enforcement on: block the call.
+            emitSecurityEvent({
+              capability: name,
+              outcome: "deny",
+              surface: ctx.surface,
+              orgId: ctx.orgId,
+              workspaceId: ctx.workspaceId,
+              actorUserId: ctx.userId,
+              requestId: ctx.requestId,
+              errorCode: "authz_denied",
+              durationMs: Date.now() - startMs,
+            });
+            throw new CapabilityError(
+              name,
+              "authz_denied",
+              `IAM denied "${name}" for principal: ${iamResult.reason ?? iamResult.outcome}`,
+            );
+          } else {
+            // Enforcement off: log would-deny and continue.
+            console.warn(
+              `[kernel] IAM would-deny "${name}" (outcome=${iamResult.outcome}, ` +
+                `reason=${iamResult.reason ?? "none"}) — IAM_ENFORCEMENT_ENABLED=false, proceeding.`,
+            );
+          }
+        }
+      }
+      // ── End IAM check ───────────────────────────────────────────────────────
+
+      // ── Billing admission gate ───────────────────────────────────────────────
+      // Runs after IAM (so admin/billing capabilities bypass the credit check).
+      // Only fires when orgId is present AND noBillingGate is not true on the
+      // contract. Capabilities tagged noBillingGate:true (API key creation,
+      // member management, settings, etc.) skip the gate — they don't consume
+      // AI tokens and must not be blocked by a zero credit balance.
+      // assertOrgCanConsume uses withTenantDb, so the scope must be active — OXA-1697.
+      // Gate throws BillingSuspendedError or InsufficientCreditsError to refuse.
+      const skipBilling = (cap as { noBillingGate?: boolean }).noBillingGate === true;
+      if (_billingGate !== null && ctx.orgId && !skipBilling) {
+        await _billingGate(ctx.orgId);
+      }
+      // ── End billing admission gate ───────────────────────────────────────────
+
+      const handler = await resolveHandler(name);
+      return handler(inputResult.data, ctx);
+    });
   } catch (err) {
     // Distinguish CapabilityError (handler not found → deny) from a
     // handler runtime throw (→ error). A TenantScopeError (e.g. the MCP

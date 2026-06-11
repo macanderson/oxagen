@@ -30,11 +30,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return {
     ...real,
   db: mocks.dbFn,
-  // withSystemDb: pass-through — fetchAuthz reads the IAM tables on the
-  // system-bypass connection (the authz gate runs before the tenant scope is
-  // entered; isolation comes from explicit orgId filters). Invoke the callback
-  // with the same fake tx the handler expects. No scope GUC in unit tests.
-  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mocks.dbFn()),
+  // withTenantDb: pass-through — invokes the callback with the same fake tx
+  // the handler expects. No scope GUC overhead in unit tests (OXA-1515).
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mocks.dbFn()),
 
   };
 });
