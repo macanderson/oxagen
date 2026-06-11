@@ -25,6 +25,7 @@
     "@oxagen/tenancy": "workspace:*",
     "ai": "6.0.197",
     "drizzle-orm": "0.45.2",
+    "pino": "9.14.0",
     "zod": "3.25.76"
   },
   "devDependencies": {

@@ -1,0 +1,71 @@
+@property --gradient-border-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+}
+
+@keyframes gradient-border-rotate {
+    to {
+        --gradient-border-angle: 360deg;
+    }
+}
+
+/*
+ * Apply .gradient-border to any element to get an animated
+ * rotating gradient outline on hover.
+ *
+ * Override defaults per-element with CSS custom properties:
+ *   --gradient-border-width   default 2px
+ *   --gradient-border-speed   default 3s
+ *   --gradient-border-opacity default 1
+ */
+.gradient-border {
+    --gradient-border-width: 2px;
+    --gradient-border-speed: 3s;
+    position: relative;
+    isolation: isolate;
+}
+
+.gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: var(--gradient-border-width);
+    background: conic-gradient(
+        from var(--gradient-border-angle),
+        var(--colors-oxagen-cyan),
+        var(--colors-oxagen-violet),
+        var(--colors-oxagen-cosmos),
+        var(--colors-oxagen-cyan)
+    );
+    /* Punch out the center — only the padding ring shows */
+    -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    animation: gradient-border-rotate var(--gradient-border-speed) linear infinite paused;
+    pointer-events: none;
+}
+
+.gradient-border:hover::before {
+    opacity: 1;
+    animation-play-state: running;
+}
+
+/* Thickness variants */
+.gradient-border-sm { --gradient-border-width: 1px; }
+.gradient-border-md { --gradient-border-width: 2px; }
+.gradient-border-lg { --gradient-border-width: 3px; }
+.gradient-border-xl { --gradient-border-width: 4px; }
+
+/* Speed variants */
+.gradient-border-slow   { --gradient-border-speed: 5s; }
+.gradient-border-normal { --gradient-border-speed: 3s; }
+.gradient-border-fast   { --gradient-border-speed: 1.5s; }
