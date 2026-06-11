@@ -7,6 +7,8 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
+import { isUniqueViolation, withSystemDb, schema } from "@oxagen/database";
+import { eq, and } from "drizzle-orm";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -117,6 +119,36 @@ export async function installPluginAction(
     const typed = out as { orgListingId: string };
     return { ok: true, orgListingId: typed.orgListingId };
   } catch (err) {
+    // Idempotent install: if the listing already exists (unique constraint
+    // on org_id + plugin_type + name), look it up and return it as success.
+    // This handles the case where a listing was pre-seeded or previously installed.
+    if (isUniqueViolation(err) && parsed.data.catalogServerId) {
+      try {
+        const [existing] = await withSystemDb((tx) =>
+          tx
+            .select({ id: schema.pluginOrgListings.id })
+            .from(schema.pluginOrgListings)
+            .where(
+              and(
+                eq(schema.pluginOrgListings.orgId, managed.orgId),
+                eq(schema.pluginOrgListings.pluginType, parsed.data.pluginType),
+                eq(schema.pluginOrgListings.catalogServerId, parsed.data.catalogServerId!),
+              ),
+            )
+            .limit(1),
+        );
+        if (existing) {
+          revalidatePath(`/${parsed.data.orgSlug}/settings/plugins`);
+          logger.info(
+            { orgListingId: existing.id, orgId: managed.orgId },
+            "installPluginAction: listing already exists — returning existing id",
+          );
+          return { ok: true, orgListingId: existing.id };
+        }
+      } catch (lookupErr) {
+        logger.error({ lookupErr }, "installPluginAction: lookup after conflict failed");
+      }
+    }
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Install failed",
