@@ -23,12 +23,36 @@ import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 export const metadata: Metadata = {
   title: "Oxagen",
   description: "The Oxagen agent platform",
-  icons: { icon: "/icon.svg" },
+  manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icons/icon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/icon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/icons/icon-180x180.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
+  openGraph: {
+    title: "Oxagen",
+    description: "The Oxagen agent platform",
+    images: [{ url: "/og/og-default.png", width: 1200, height: 630, alt: "Oxagen" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Oxagen",
+    description: "The Oxagen agent platform",
+    images: ["/og/og-default.png"],
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#4926a6",
 };
 
 /** Valid font-size cookie values; default 'medium' when absent/invalid. */

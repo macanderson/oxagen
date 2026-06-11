@@ -2,5 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "cd ../.. && pnpm turbo run build --filter=@oxagen/mcp",
   "installCommand": "pnpm install --frozen-lockfile",
-  "ignoreCommand": "npx turbo-ignore @oxagen/mcp"
+  "ignoreCommand": "npx turbo-ignore @oxagen/mcp",
+  "outputDirectory": "dist"
 }
