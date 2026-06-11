@@ -19,7 +19,6 @@ import { usePathname } from "next/navigation";
 import { PanelLeft } from "lucide-react";
 import { Sidebar } from "./sidebar";
 import { resolveSidebarCtx } from "@/lib/sidebar";
-import { MobileNav } from "./mobile-nav";
 import { AskBar } from "@/components/shell/ask/ask-bar";
 import { NotificationsBell } from "./notifications-bell";
 import { SupportMenu } from "./support-menu";
@@ -79,13 +78,14 @@ export function ShellFrame({
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-muted/40 md:gap-2 md:p-2">
-      {/* Floating, collapsible sidebar (desktop). Mobile uses MobileNav + bar. */}
+      {/* Floating, collapsible sidebar (desktop). Mobile uses MobileBottomBar. */}
       <Sidebar ctx={ctx} user={user} />
 
       {/* Inset content panel — the majority-width right side. */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-border bg-background md:rounded-xl md:border md:shadow-sm">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
-          {/* Desktop: collapse toggle. Mobile: drawer trigger. */}
+          {/* Desktop: sidebar collapse toggle. Mobile nav lives in the
+              bottom bar (MobileBottomBar), so no header trigger here. */}
           <Button
             variant="ghost"
             size="icon"
@@ -95,17 +95,6 @@ export function ShellFrame({
           >
             <PanelLeft className="size-4" />
           </Button>
-          <div className="md:hidden">
-            <MobileNav
-              ctx={ctx}
-              org={org}
-              workspace={workspace}
-              availableOrgs={availableOrgs}
-              availableWorkspaces={availableWorkspaces}
-              user={user}
-              createWorkspaceAction={createWorkspaceAction}
-            />
-          </div>
 
           {/* Top-left: org / workspace pickers (org ▾ / workspace ▾). */}
           <div className="flex min-w-0 shrink items-center gap-2">
@@ -149,7 +138,7 @@ export function ShellFrame({
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
+        <main className="flex-1 overflow-y-auto p-4 pb-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap)+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
           {children}
         </main>
       </div>
