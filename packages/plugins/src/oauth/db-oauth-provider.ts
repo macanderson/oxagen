@@ -9,14 +9,14 @@
  * redirectToAuthorization() stores the URL on the instance (pendingRedirect)
  * so the authorize route can read it and redirect the browser.
  */
+import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import type {
-  OAuthClientProvider,
   OAuthClientInformation,
   OAuthClientInformationFull,
   OAuthClientInformationMixed,
   OAuthClientMetadata,
   OAuthTokens,
-} from "@modelcontextprotocol/sdk/client/auth.js";
+} from "@modelcontextprotocol/sdk/shared/auth.js";
 import { setWorkspaceSecret, getWorkspaceSecret } from "../credentials/workspace-credential";
 import { saveOAuthState, loadOAuthState } from "./state-store";
 
