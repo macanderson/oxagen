@@ -13,7 +13,7 @@
  * Each credential is processed in its own step.run() for isolation.
  */
 import { and, eq, lt, sql } from "drizzle-orm";
-import { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
+import { auth as mcpAuth } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { schema, withSystemDb } from "@oxagen/database";
 import { DbOAuthClientProvider, markCredentialNeedsReauth } from "@oxagen/plugins";
 import { inngest } from "../inngest";
