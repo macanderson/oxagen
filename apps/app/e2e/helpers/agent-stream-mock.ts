@@ -7,6 +7,20 @@ export interface InterceptOptions {
   delayMs?: number;
   /** URL glob to intercept. Defaults to the chat send endpoint. */
   urlGlob?: string;
+  /**
+   * Hold the post-turn RSC refresh so the streamed (live) bubbles stay visible
+   * for assertions. Defaults to true.
+   *
+   * Why: after a turn the chat shell fires router.refresh() to reconcile the
+   * live SSE state against the now-persisted assistant reply. The mock
+   * intercepts the SSE stream but cannot persist a reply to Postgres, so the
+   * refresh re-renders the conversation from the DB (user message only) and the
+   * [messages] effect reset()s the streamed bubbles — wiping the very cards/text
+   * the spec asserts on (a race that flakes). Holding the RSC GET keeps the live
+   * state in place for the test. The initial page.goto is a full-document load
+   * (no RSC header), so navigation is unaffected.
+   */
+  holdRefresh?: boolean;
 }
 
 // Intercept the chat-stream POST and return a deterministic SSE response
@@ -51,6 +65,25 @@ export async function interceptAgentStream(
       body: chunks.join(""),
     });
   });
+
+  if (opts.holdRefresh ?? true) {
+    // Hold the post-turn RSC refresh of the conversation page so the live
+    // streamed bubbles persist through the assertions (see holdRefresh docs).
+    // Match only RSC GETs (header `rsc: 1`) to the /ask or /chat route; the
+    // full-document page.goto has no RSC header and falls through to continue().
+    await page.route(
+      (url) => /\/(ask|chat)(\?|$)/.test(`${url.pathname}${url.search}`),
+      async (route: Route) => {
+        const req = route.request();
+        if (req.method() === "GET" && req.headers()["rsc"] === "1") {
+          // Never fulfill: the refresh stays pending, so the [messages]
+          // reconcile that would reset() the streamed bubbles never fires.
+          return;
+        }
+        await route.continue();
+      },
+    );
+  }
 }
 
 // Helper: build the canonical set of stream events for the §10 scenario.
