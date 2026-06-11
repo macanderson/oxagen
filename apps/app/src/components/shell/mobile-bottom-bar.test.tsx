@@ -125,3 +125,20 @@ describe("MobileBottomBar — org mode", () => {
     expect(screen.getByRole("link", { name: "Members" })).toHaveAttribute("aria-current", "page");
   });
 });
+
+describe("MobileBottomBar — empty More guard", () => {
+  it("omits the More tab when there are no overflow items and no user", () => {
+    // Account mode has exactly four items (no overflow); with user=undefined the
+    // sheet would be header-only, so the More tab must not render at all.
+    pathnameRef.current = "/account/profile";
+    render(<MobileBottomBar ctx={{ orgSlug: "acme" }} user={undefined} />);
+    expect(screen.getByRole("link", { name: "Profile" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /more navigation/i })).toBeNull();
+  });
+
+  it("still shows the More tab in account mode when a user is present (account control)", () => {
+    pathnameRef.current = "/account/profile";
+    render(<MobileBottomBar ctx={{ orgSlug: "acme" }} user={user} />);
+    expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
+  });
+});
