@@ -130,6 +130,16 @@ vi.mock("@oxagen/database", () => {
       },
       workspaceUsers: { workspaceId: "wsu_wsId", userId: "wsu_user" },
     },
+    // Mirror the real @oxagen/database isUniqueViolation: walk the (drizzle-
+    // wrapped) cause chain for a Postgres unique_violation (SQLSTATE 23505).
+    isUniqueViolation: (err: unknown): boolean => {
+      let cur: unknown = err;
+      for (let depth = 0; cur != null && depth < 5; depth++) {
+        if (typeof cur === "object" && (cur as { code?: string }).code === "23505") return true;
+        cur = typeof cur === "object" ? (cur as { cause?: unknown }).cause : undefined;
+      }
+      return false;
+    },
   };
 });
 
