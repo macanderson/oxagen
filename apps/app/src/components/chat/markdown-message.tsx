@@ -107,6 +107,7 @@ export function MarkdownMessage({ children, streaming = false, className }: Mark
        * (Mermaid). Math and CJK are omitted — add here if needed.
        */
       plugins={{
+        // @ts-expect-error — @streamdown/code has shiki@3.23.0 but streamdown expects @1.29.2; type mismatch is safe at runtime
         code: codePlugin,
         mermaid: mermaidPlugin,
       }}
