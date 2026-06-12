@@ -33,12 +33,17 @@ test.describe("workspace.isolation — cross-workspace access denied", () => {
         workspaceSlug: WS_ALPHA_SLUG,
         userEmail: "e2e+ws-alpha@oxagen.ai",
         bootstrapIam: true,
+        // workspace-owner: assignment is scoped to ws-alpha, so the IAM gate
+        // denies this user in ws-beta — the premise of every test below.
+        // (An org-owner persona legitimately reaches all workspaces.)
+        iamRole: "workspace-owner",
       }),
       setupAgentRuntimeFixture({
         orgSlug: ORG_SLUG,
         workspaceSlug: WS_BETA_SLUG,
         userEmail: "e2e+ws-beta@oxagen.ai",
         bootstrapIam: true,
+        iamRole: "workspace-owner",
       }),
     ]);
   });

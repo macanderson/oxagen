@@ -13,6 +13,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import type { CapabilityHandler } from "@oxagen/oxagen";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { apiKeyCreate } from "@oxagen/oxagen/contracts/api.key.create";
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
@@ -70,11 +71,11 @@ export const apiKeyCreateHandler: CapabilityHandler<typeof apiKeyCreate> = async
   // ── Auth + scope guard ─────────────────────────────────────────────────────
   if (!ctx.userId && !ctx.apiKeyId) {
     logger.warn({ orgId: ctx.orgId }, "api.key.create: rejected — no authenticated principal");
-    throw new Error("Unauthorized: no authenticated principal");
+    throw new CapabilityError("api.key.create", "authz_denied", "Unauthorized: no authenticated principal");
   }
   if (!ctx.orgId) {
     logger.warn({}, "api.key.create: rejected — missing orgId");
-    throw new Error("Forbidden: orgId is required");
+    throw new CapabilityError("api.key.create", "authz_denied", "Forbidden: orgId is required");
   }
 
   const actorId = ctx.userId ?? ctx.apiKeyId ?? "system";
@@ -87,7 +88,7 @@ export const apiKeyCreateHandler: CapabilityHandler<typeof apiKeyCreate> = async
       { orgId: ctx.orgId, actorId, actorRole },
       "api.key.create: rejected — insufficient org role",
     );
-    throw new Error("Forbidden: only org Owners and Admins can create API keys");
+    throw new CapabilityError("api.key.create", "authz_denied", "Forbidden: only org Owners and Admins can create API keys");
   }
 
   // ── Generate key material ─────────────────────────────────────────────────
@@ -100,7 +101,7 @@ export const apiKeyCreateHandler: CapabilityHandler<typeof apiKeyCreate> = async
   // one). The resolveApiKey resolver returns the stored workspaceId to bind the
   // machine-auth scope to that workspace on each request.
   if (!ctx.workspaceId) {
-    throw new Error("Forbidden: workspaceId is required to create an API key");
+    throw new CapabilityError("api.key.create", "authz_denied", "Forbidden: workspaceId is required to create an API key");
   }
 
   const [inserted] = await withTenantDb((tx) =>

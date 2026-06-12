@@ -13,15 +13,26 @@ export interface FixtureOptions {
   workspaceSlug: string;
   userEmail: string;
   /**
-   * When true, seed the IAM rows (org Owner role + the user's principal +
-   * org-wide role assignment + role_grants) that the IAM-enforced API surface
-   * (:4000) requires. Opt-in because most fixtures drive the APP surface,
-   * where invoke() does not enforce IAM. Raw SQL mirror of bootstrapOrgIAM —
-   * the fixture stays dependency-free (no @oxagen/handlers import in the
+   * When true, seed the IAM rows (role + the user's principal + role
+   * assignment + role_grants) that the IAM-enforced API surface (:4000)
+   * requires. Opt-in because most fixtures drive the APP surface, where
+   * invoke() does not enforce IAM. Raw SQL mirror of bootstrapOrgIAM — the
+   * fixture stays dependency-free (no @oxagen/handlers import in the
    * Playwright process). Grants cover IAM_E2E_GRANTS; extend that list when
    * a new API-surface spec exercises another deny-by-default capability.
    */
   bootstrapIam?: boolean;
+  /**
+   * Persona for the seeded IAM rows (default "org-owner"):
+   *  - "org-owner": org-scope Owner role with an ORG-WIDE assignment
+   *    (workspace_id NULL). Matches real org owners — passes handler-level
+   *    gates that demand an org Owner/Admin (api.key.create/revoke) and can
+   *    reach every workspace in the org.
+   *  - "workspace-owner": workspace-scope Owner role with a WORKSPACE-SCOPED
+   *    assignment. Matches plain workspace members — IAM denies them outside
+   *    their own workspace, which is what isolation specs assert.
+   */
+  iamRole?: "org-owner" | "workspace-owner";
 }
 
 // Capabilities granted to the seeded Owner role when bootstrapIam is true.
@@ -163,11 +174,19 @@ export async function setupAgentRuntimeFixture(
     // Per-user suffix: two fixtures can share one org (same sfx), so
     // principal/assignment rows must key off the user, not the org.
     const userSfx = userId.replace(/-/g, "").slice(0, 16);
+    const persona = opts.iamRole ?? "org-owner";
+    const roleScope = persona === "org-owner" ? "org" : "workspace";
+    // Org-wide assignment (NULL workspace_id) for org owners — handler-level
+    // gates (api.key.create/revoke resolveActorRole) require exactly that.
+    // Workspace-scoped assignment for workspace owners — fetch-authz only
+    // surfaces it when ctx.workspaceId matches, so cross-workspace requests
+    // fall through to defaultEffect deny (the isolation specs' premise).
+    const assignmentWorkspaceId = persona === "org-owner" ? null : workspaceId;
 
-    const rolePublicId = `rol_e2e_${sfx}`;
+    const rolePublicId = `rol_e2e_${sfx}_${roleScope}`;
     const [roleRow] = await sql<{ id: string }[]>`
       INSERT INTO iam.roles (public_id, org_id, scope_kind, name, is_system_default)
-      VALUES (${rolePublicId}, ${orgId}, 'org', 'Owner', true)
+      VALUES (${rolePublicId}, ${orgId}, ${roleScope}, 'Owner', true)
       ON CONFLICT (public_id) DO UPDATE SET name = EXCLUDED.name
       RETURNING id
     `;
@@ -182,20 +201,16 @@ export async function setupAgentRuntimeFixture(
     `;
     if (!principalRow) throw new Error("fixture: IAM principal upsert returned no row");
 
-    // Workspace-SCOPED assignment (workspace_id set, not org-wide NULL):
-    // fetch-authz only surfaces the assignment when ctx.workspaceId matches,
-    // so the user is Owner in their own workspace and a stranger everywhere
-    // else — exactly the semantics the workspace-isolation spec asserts.
     await sql`
       INSERT INTO iam.principal_role_assignments (public_id, principal_id, role_id, org_id, workspace_id, assigned_by)
-      VALUES (${`pra_e2e_${userSfx}`}, ${principalRow.id}, ${roleId}, ${orgId}, ${workspaceId}, ${userId})
+      VALUES (${`pra_e2e_${userSfx}`}, ${principalRow.id}, ${roleId}, ${orgId}, ${assignmentWorkspaceId}, ${userId})
       ON CONFLICT (public_id) DO NOTHING
     `;
 
     for (const capability of IAM_E2E_GRANTS) {
       await sql`
         INSERT INTO iam.role_grants (public_id, org_id, role_id, capability_id, effect)
-        VALUES (${`rlg_e2e_${sfx}_${capability}`}, ${orgId}, ${roleId}, ${capability}, 'allow')
+        VALUES (${`rlg_e2e_${sfx}_${roleScope}_${capability}`}, ${orgId}, ${roleId}, ${capability}, 'allow')
         ON CONFLICT (public_id) DO NOTHING
       `;
     }
