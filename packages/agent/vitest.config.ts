@@ -20,11 +20,11 @@ export default defineConfig({
         "src/types.ts",
         "src/test-utils/**",
       ],
-      // Ratcheted after barrel/test-util excludes: measured 92.08 lines /
-      // 83.72 branches / 77.9 functions. Thresholds only go up.
+      // Ratcheted after barrel/test-util excludes: measured 92.16 lines /
+      // 84.04 branches / 77.9 functions (WP4 entitlement filter). Thresholds only go up.
       thresholds: {
         lines: 92,
-        branches: 83,
+        branches: 84,
         functions: 77,
         statements: 92,
       },

@@ -31,7 +31,20 @@ vi.mock("@oxagen/oxagen", () => ({
   getSurfaces: mocks.getSurfaces,
 }));
 
+// Entitlement filter dependencies (WP4): pluginForContract maps a capability
+// name to the plugin that claims it; listEntitledCapabilityPluginIds returns
+// the org's installed+enabled capability-plugin ids.
+vi.mock("@oxagen/oxagen/plugins", () => ({
+  pluginForContract: vi.fn((_name: string) => undefined),
+}));
+
+vi.mock("@oxagen/plugins", () => ({
+  listEntitledCapabilityPluginIds: vi.fn(async (_orgId: string) => new Set<string>()),
+}));
+
 import { agentToolListHandler } from "./agent.tool.list";
+import { pluginForContract } from "@oxagen/oxagen/plugins";
+import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
@@ -106,5 +119,115 @@ describe("agent.tool.list handler", () => {
     const result = await agentToolListHandler({ includeExternal: true }, CTX);
 
     expect(result.tools).toEqual([]);
+  });
+});
+
+describe("agent.tool.list handler — entitlement filter (WP4)", () => {
+  const PLUGIN_MANIFEST = {
+    id: "oxagen/media-svg",
+    name: "SVG Generation",
+    description: "Generate SVGs",
+    version: "1.0.0",
+    tier: "free" as const,
+    visibility: "ga" as const,
+    category: "media",
+    contracts: ["media.svg.generate"],
+    scopes: [],
+  };
+
+  const CLAIMED_CAP = {
+    ...BUILTIN_CAP,
+    name: "media.svg.generate",
+    description: "Generates an SVG",
+    domain: "media",
+  };
+
+  beforeEach(() => {
+    mocks.listCapabilities.mockClear();
+    mocks.selectMock.mockClear();
+    mocks.selectResult.mockClear();
+    mocks.getSurfaces.mockImplementation((c: { surfaces?: readonly string[] }) => c.surfaces ?? []);
+    vi.mocked(pluginForContract).mockClear();
+    vi.mocked(listEntitledCapabilityPluginIds).mockClear();
+    // Default: pluginForContract returns undefined (all builtins).
+    vi.mocked(pluginForContract).mockReturnValue(undefined);
+    // Default: empty entitled set.
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(new Set<string>());
+  });
+
+  it("includes plugin-claimed capability when org is entitled to the pack", async () => {
+    vi.mocked(pluginForContract).mockImplementation((name: string) =>
+      name === "media.svg.generate" ? PLUGIN_MANIFEST : undefined,
+    );
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(
+      new Set(["oxagen/media-svg"]),
+    );
+    mocks.listCapabilities.mockReturnValueOnce([BUILTIN_CAP, CLAIMED_CAP]);
+
+    const result = await agentToolListHandler({ includeExternal: false }, CTX);
+
+    expect(result.tools.map((t) => t.name)).toEqual([
+      "documents.generate",
+      "media.svg.generate",
+    ]);
+  });
+
+  it("excludes plugin-claimed capability when org is NOT entitled; builtins still listed", async () => {
+    vi.mocked(pluginForContract).mockImplementation((name: string) =>
+      name === "media.svg.generate" ? PLUGIN_MANIFEST : undefined,
+    );
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(new Set<string>());
+    mocks.listCapabilities.mockReturnValueOnce([BUILTIN_CAP, CLAIMED_CAP]);
+
+    const result = await agentToolListHandler({ includeExternal: false }, CTX);
+
+    expect(result.tools.map((t) => t.name)).toEqual(["documents.generate"]);
+  });
+
+  it("leaves builtin capabilities unaffected regardless of entitlement state", async () => {
+    // All capabilities are builtins (pluginForContract returns undefined);
+    // the entitlement service must never be consulted.
+    mocks.listCapabilities.mockReturnValueOnce([BUILTIN_CAP]);
+
+    const result = await agentToolListHandler({ includeExternal: false }, CTX);
+
+    expect(result.tools.map((t) => t.name)).toEqual(["documents.generate"]);
+    expect(listEntitledCapabilityPluginIds).not.toHaveBeenCalled();
+  });
+
+  it("excludes plugin-claimed tools and keeps builtins when entitlement fetch throws (fail-closed)", async () => {
+    vi.mocked(pluginForContract).mockImplementation((name: string) =>
+      name === "media.svg.generate" ? PLUGIN_MANIFEST : undefined,
+    );
+    vi.mocked(listEntitledCapabilityPluginIds).mockRejectedValue(
+      new Error("DB unavailable"),
+    );
+    mocks.listCapabilities.mockReturnValueOnce([BUILTIN_CAP, CLAIMED_CAP]);
+
+    const result = await agentToolListHandler({ includeExternal: false }, CTX);
+
+    // Plugin-claimed tool is excluded (fail-closed); builtins unaffected; no throw.
+    expect(result.tools.map((t) => t.name)).toEqual(["documents.generate"]);
+  });
+
+  it("fetches the entitled set at most once per handler invocation", async () => {
+    const PLUGIN_B = { ...PLUGIN_MANIFEST, id: "oxagen/other", contracts: ["documents.generate"] };
+    vi.mocked(pluginForContract).mockImplementation((name: string) => {
+      if (name === "media.svg.generate") return PLUGIN_MANIFEST;
+      if (name === "documents.generate") return PLUGIN_B;
+      return undefined;
+    });
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(
+      new Set(["oxagen/media-svg", "oxagen/other"]),
+    );
+    mocks.listCapabilities.mockReturnValueOnce([BUILTIN_CAP, CLAIMED_CAP]);
+
+    const result = await agentToolListHandler({ includeExternal: false }, CTX);
+
+    // Both capabilities are plugin-claimed and entitled, but the entitlement
+    // service is called exactly once per handler invocation.
+    expect(result.tools).toHaveLength(2);
+    expect(listEntitledCapabilityPluginIds).toHaveBeenCalledTimes(1);
+    expect(listEntitledCapabilityPluginIds).toHaveBeenCalledWith(CTX.orgId);
   });
 });

@@ -39,6 +39,10 @@ vi.mock("@oxagen/oxagen", () => ({
   getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
 }));
 
+vi.mock("@oxagen/oxagen/plugins", () => ({
+  pluginForContract: vi.fn((_name: string) => undefined),
+}));
+
 // Stub @oxagen/database. The MCP plugin-type contributor runs two queries via
 // withTenantDb: (1) denylisted server names, (2) the enabled installs joined to
 // their enabled org listing. The builder returns rows keyed by the `from` table
@@ -84,6 +88,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 // The MCP contributor uses @oxagen/plugins for credentials, OAuth provider, and reauth marking.
+// listEntitledCapabilityPluginIds is also mocked here for the entitlement filter tests.
 vi.mock("@oxagen/plugins", () => ({
   getWorkspaceSecret: vi.fn(async () => null),
   DbOAuthClientProvider: vi.fn().mockImplementation(() => ({
@@ -100,6 +105,7 @@ vi.mock("@oxagen/plugins", () => ({
     pendingRedirect: null,
   })),
   markCredentialNeedsReauth: vi.fn(async () => undefined),
+  listEntitledCapabilityPluginIds: vi.fn(async (_orgId: string) => new Set<string>()),
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
@@ -163,6 +169,8 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
 import { materializeTools } from "./materialize-tools";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
 import { connectMcp, materializeMcpTools } from "../dispatch/mcp-client";
+import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
+import { pluginForContract } from "@oxagen/oxagen/plugins";
 // Note: the @oxagen/database `db` is driven via `dbMocks.db` (hoisted above) —
 // we do not import the banned raw `db` symbol directly into the test.
 
@@ -528,5 +536,106 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       CTX,
       { serverAllowlist: allowlist },
     );
+  });
+});
+
+// ── Entitlement filter (Work Package 4) ──────────────────────────────────────
+// These tests verify that materializeTools filters plugin-claimed capabilities
+// based on the org's entitlement set, while leaving builtin capabilities
+// unaffected. The kernel gate is the real security boundary; this is UX-layer.
+describe("materializeTools — entitlement filter (WP4)", () => {
+  const PLUGIN_MANIFEST = {
+    id: "oxagen/media-svg",
+    name: "SVG Generation",
+    description: "Generate SVGs",
+    version: "1.0.0",
+    tier: "free" as const,
+    visibility: "ga" as const,
+    category: "media",
+    contracts: ["capB"],
+    scopes: [],
+  };
+
+  beforeEach(() => {
+    dbMocks.rowsByTable.clear();
+    vi.mocked(invoke).mockClear();
+    vi.mocked(listEntitledCapabilityPluginIds).mockClear();
+    vi.mocked(pluginForContract).mockClear();
+    // Default: pluginForContract returns undefined (all builtins).
+    vi.mocked(pluginForContract).mockReturnValue(undefined);
+    // Default: empty entitled set.
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(new Set<string>());
+  });
+
+  it("includes plugin-claimed capability when org is entitled to the pack", async () => {
+    // capB is claimed by oxagen/media-svg; org has it installed+enabled.
+    vi.mocked(pluginForContract).mockImplementation((name: string) =>
+      name === "capB" ? PLUGIN_MANIFEST : undefined,
+    );
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(
+      new Set(["oxagen/media-svg"]),
+    );
+    const { tools } = await materializeTools(CTX);
+    expect(tools.capB).toBeDefined();
+  });
+
+  it("excludes plugin-claimed capability when org is NOT entitled to the pack", async () => {
+    // capB is claimed by oxagen/media-svg; org has NOT installed it.
+    vi.mocked(pluginForContract).mockImplementation((name: string) =>
+      name === "capB" ? PLUGIN_MANIFEST : undefined,
+    );
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(new Set<string>());
+    const { tools } = await materializeTools(CTX);
+    expect(tools.capB).toBeUndefined();
+    // Builtin capabilities (capA, form.fill) are unaffected.
+    expect(tools.capA).toBeDefined();
+    expect(tools["form_fill"]).toBeDefined();
+  });
+
+  it("leaves builtin capabilities unaffected regardless of entitlement state", async () => {
+    // capA and form.fill are builtins (pluginForContract returns undefined for them).
+    // capB is plugin-claimed but not entitled.
+    vi.mocked(pluginForContract).mockImplementation((name: string) =>
+      name === "capB" ? PLUGIN_MANIFEST : undefined,
+    );
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(new Set<string>());
+    const { tools } = await materializeTools(CTX);
+    expect(tools.capA).toBeDefined();
+    expect(tools["form_fill"]).toBeDefined();
+    expect(tools.capB).toBeUndefined();
+  });
+
+  it("excludes plugin-claimed tools and keeps builtins when entitlement fetch throws (fail-closed)", async () => {
+    // capB is plugin-claimed; the DB call fails.
+    vi.mocked(pluginForContract).mockImplementation((name: string) =>
+      name === "capB" ? PLUGIN_MANIFEST : undefined,
+    );
+    vi.mocked(listEntitledCapabilityPluginIds).mockRejectedValue(
+      new Error("DB unavailable"),
+    );
+    const { tools } = await materializeTools(CTX);
+    // Plugin-claimed tool is excluded (fail-closed).
+    expect(tools.capB).toBeUndefined();
+    // Builtin capabilities are unaffected.
+    expect(tools.capA).toBeDefined();
+    expect(tools["form_fill"]).toBeDefined();
+  });
+
+  it("fetches the entitled set at most once per materializeTools call", async () => {
+    // Multiple plugin-claimed capabilities in one call — only one DB fetch.
+    const PLUGIN_B = { ...PLUGIN_MANIFEST, id: "oxagen/other", contracts: ["capA"] };
+    vi.mocked(pluginForContract).mockImplementation((name: string) => {
+      if (name === "capB") return PLUGIN_MANIFEST;
+      if (name === "capA") return PLUGIN_B;
+      return undefined;
+    });
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(
+      new Set(["oxagen/media-svg", "oxagen/other"]),
+    );
+    await materializeTools(CTX);
+    // Even though both capA and capB are plugin-claimed, the entitlement service
+    // is called exactly once per materializeTools invocation.
+    expect(listEntitledCapabilityPluginIds).toHaveBeenCalledTimes(1);
+    expect(listEntitledCapabilityPluginIds).toHaveBeenCalledWith(CTX.orgId);
   });
 });
