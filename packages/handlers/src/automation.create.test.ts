@@ -13,9 +13,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         insert: (_table: unknown) => ({
-          values: (_vals: unknown) => ({
-            returning: mocks.insertReturning,
-          }),
+          // values() returns an object that is both thenable (for fire-and-forget inserts
+          // that don't call .returning()) and exposes .returning() for inserts that do.
+          values: (_vals: unknown) => {
+            const returningFn = mocks.insertReturning;
+            const thenable = {
+              then: (resolve: (v: unknown) => unknown) => Promise.resolve(returningFn()).then(resolve),
+              returning: returningFn,
+            };
+            return thenable;
+          },
         }),
         update: (_table: unknown) => ({
           set: (_vals: unknown) => ({

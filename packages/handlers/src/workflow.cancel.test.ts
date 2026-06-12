@@ -21,16 +21,15 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
-    const tx = {
-      query: {
-        workflowRuns: { findFirst: mocks.runFindFirst },
-      },
-      update: (_table: unknown) => ({ set: mocks.updateSet }),
-    };
-    return fn(tx);
-  },
-
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        query: {
+          agentExecutions: { findFirst: mocks.runFindFirst },
+        },
+        update: (_table: unknown) => ({ set: mocks.updateSet }),
+      };
+      return fn(tx);
+    },
   };
 });
 
@@ -87,15 +86,15 @@ describe("workflow.cancel handler", () => {
         name: "agent/workflow.cancel",
         data: expect.objectContaining({
           orgId: "org_1",
-          workflowRunId: RUNNING_RUN.id,
+          executionId: RUNNING_RUN.id,
         }),
       }),
     );
   });
 
-  it("sends the cancel event with the correct workflowRunId", async () => {
+  it("sends the cancel event with the correct executionId", async () => {
     await workflowCancelHandler({ workflowId: "wfr-uuid-1" }, CTX);
     const sendArg = mocks.inngestSend.mock.calls[0]![0] as Record<string, unknown>;
-    expect((sendArg.data as Record<string, unknown>).workflowRunId).toBe(RUNNING_RUN.id);
+    expect((sendArg.data as Record<string, unknown>).executionId).toBe(RUNNING_RUN.id);
   });
 });

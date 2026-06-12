@@ -9,49 +9,52 @@ const mocks = vi.hoisted(() => ({
   tasksOrderBy: vi.fn(),
 }));
 
-const MOCK_RUN = {
+// MOCK_EXECUTION mirrors the shape that agentExecutions.findFirst returns:
+//   id, publicId, orgId, workspaceId, status, startedAt, completedAt, createdAt, updatedAt, inputPayload
+const MOCK_EXECUTION = {
   id: "wfr-uuid-1",
   publicId: "wfr_ABCDEF",
   orgId: "org-1",
   workspaceId: "ws-1",
-  title: "Fortune 500 research",
-  goal: "Profile all Fortune 500 CEOs",
   status: "running",
-  planJson: [],
-  totalTasks: 10,
-  completedTasks: 3,
-  failedTasks: 0,
-  maxParallelism: 50,
-  outputFormat: "json",
-  resultUrl: null,
   startedAt: new Date("2026-06-07T00:00:00Z"),
-  completedAt: null,
+  completedAt: null as Date | null,
   createdAt: new Date("2026-06-07T00:00:00Z"),
   updatedAt: new Date("2026-06-07T00:00:00Z"),
+  inputPayload: {
+    title: "Fortune 500 research",
+    goal: "Profile all Fortune 500 CEOs",
+    outputFormat: "json",
+    maxParallelism: 50,
+    plan: [] as unknown[],
+  },
 };
 
-const MOCK_TASKS = [
+// MOCK_STEPS mirrors the agentExecutionSteps row shape:
+//   id, publicId, stepNumber, status, inputPayload, outputPayload, failureReason, startedAt, completedAt, createdAt
+const MOCK_STEPS = [
   {
     id: "wft-uuid-1",
     publicId: "wft_AAAA",
-    workflowRunId: "wfr-uuid-1",
     orgId: "org-1",
     workspaceId: "ws-1",
-    taskIndex: 0,
-    title: "Research CEO #1",
-    goal: "Find CEO of Apple",
+    stepNumber: 0,
+    stepType: "agent",
     status: "completed",
-    inngestRunId: "inngest-run-1",
-    outputJson: { summary: "Tim Cook", data: {} },
-    error: null,
+    inputPayload: { title: "Research CEO #1", goal: "Find CEO of Apple" },
+    outputPayload: { summary: "Tim Cook", data: {} },
+    failureReason: null as string | null,
+    latencyMs: null as number | null,
+    inputTokens: null as number | null,
+    outputTokens: null as number | null,
     startedAt: new Date("2026-06-07T00:01:00Z"),
     completedAt: new Date("2026-06-07T00:02:00Z"),
     createdAt: new Date("2026-06-07T00:00:00Z"),
   },
 ];
 
-mocks.runFindFirst.mockResolvedValue(MOCK_RUN);
-mocks.tasksOrderBy.mockResolvedValue(MOCK_TASKS);
+mocks.runFindFirst.mockResolvedValue(MOCK_EXECUTION);
+mocks.tasksOrderBy.mockResolvedValue(MOCK_STEPS);
 mocks.tasksWhere.mockReturnValue({ orderBy: mocks.tasksOrderBy });
 mocks.tasksFrom.mockReturnValue({ where: mocks.tasksWhere });
 mocks.tasksSelect.mockReturnValue({ from: mocks.tasksFrom });
@@ -60,16 +63,15 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
-    const tx = {
-      query: {
-        workflowRuns: { findFirst: mocks.runFindFirst },
-      },
-      select: () => mocks.tasksSelect(),
-    };
-    return fn(tx);
-  },
-
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        query: {
+          agentExecutions: { findFirst: mocks.runFindFirst },
+        },
+        select: () => mocks.tasksSelect(),
+      };
+      return fn(tx);
+    },
   };
 });
 
@@ -84,8 +86,8 @@ import { TEST_CTX as CTX } from "./test-utils/fixtures";
 describe("workflow.status handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.runFindFirst.mockResolvedValue(MOCK_RUN);
-    mocks.tasksOrderBy.mockResolvedValue(MOCK_TASKS);
+    mocks.runFindFirst.mockResolvedValue(MOCK_EXECUTION);
+    mocks.tasksOrderBy.mockResolvedValue(MOCK_STEPS);
     mocks.tasksWhere.mockReturnValue({ orderBy: mocks.tasksOrderBy });
     mocks.tasksFrom.mockReturnValue({ where: mocks.tasksWhere });
     mocks.tasksSelect.mockReturnValue({ from: mocks.tasksFrom });
@@ -100,11 +102,12 @@ describe("workflow.status handler", () => {
 
   it("returns workflow row with correct fields", async () => {
     const result = await workflowStatusHandler({ workflowId: "wfr_ABCDEF" }, CTX);
-    expect(result.workflow.id).toBe(MOCK_RUN.id);
-    expect(result.workflow.publicId).toBe(MOCK_RUN.publicId);
+    expect(result.workflow.id).toBe(MOCK_EXECUTION.id);
+    expect(result.workflow.publicId).toBe(MOCK_EXECUTION.publicId);
     expect(result.workflow.status).toBe("running");
-    expect(result.workflow.totalTasks).toBe(10);
-    expect(result.workflow.completedTasks).toBe(3);
+    // totalTasks and completedTasks are derived from the steps array
+    expect(result.workflow.totalTasks).toBe(1);
+    expect(result.workflow.completedTasks).toBe(1);
   });
 
   it("returns tasks array with ISO timestamps", async () => {

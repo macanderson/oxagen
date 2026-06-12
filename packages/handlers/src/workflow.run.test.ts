@@ -66,7 +66,7 @@ describe("workflow.run handler", () => {
         data: expect.objectContaining({
           orgId: "org_1",
           workspaceId: "ws_1",
-          workflowRunId: ROW.id,
+          executionId: ROW.id,
         }),
       }),
     );
@@ -84,14 +84,15 @@ describe("workflow.run handler", () => {
   it("uses input title when provided", async () => {
     await workflowRunHandler({ ...BASE_INPUT, title: "My Workflow" }, CTX);
     const insertCall = mocks.insertValues.mock.calls[0]![0] as Record<string, unknown>;
-    expect(insertCall.title).toBe("My Workflow");
+    expect((insertCall.inputPayload as Record<string, unknown>).title).toBe("My Workflow");
   });
 
   it("truncates goal to 200 chars as title when title omitted", async () => {
     const longGoal = "A".repeat(300);
     await workflowRunHandler({ ...BASE_INPUT, goal: longGoal }, CTX);
     const insertCall = mocks.insertValues.mock.calls[0]![0] as Record<string, unknown>;
-    expect((insertCall.title as string).length).toBe(200);
+    const payload = insertCall.inputPayload as Record<string, unknown>;
+    expect((payload.title as string).length).toBe(200);
   });
 
   it("forwards maxParallelism to inngest payload", async () => {

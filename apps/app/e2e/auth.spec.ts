@@ -155,7 +155,9 @@ test.describe("auth — email+password login form", () => {
     await page.waitForSelector('input[name="email"]', { state: "visible" });
     await page.fill('input[name="email"]', email);
     await page.fill('input[name="password"]', password);
-    await page.getByRole("button", { name: /sign in|continue|log in/i }).click();
+    // Exact match — a broader /sign in|continue/i regex also catches the
+    // "Continue with Google/GitHub" OAuth buttons and trips strict mode.
+    await page.getByRole("button", { name: /^sign in$/i }).click();
 
     // Better Auth sets the session cookie and redirects to the app.
     // After a successful login, the user should land on an authenticated page
