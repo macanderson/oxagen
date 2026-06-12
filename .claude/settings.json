@@ -125,7 +125,8 @@
     "aws-startup-advisor@claude-plugins-official": false,
     "claude-api@anthropic-agent-skills": false,
     "document-skills@anthropic-agent-skills": false,
-    "modern-web-guidance@googlechrome": true
+    "modern-web-guidance@googlechrome": true,
+    "superpowers@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "googlechrome": {
