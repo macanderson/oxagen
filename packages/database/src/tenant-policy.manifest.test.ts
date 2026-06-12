@@ -19,7 +19,30 @@ describe("tenant policy manifest", () => {
   it("includes the known standard owned tables", () => {
     const tables = POLICY_MANIFEST.map((e) => e.table);
     expect(tables).toContain("agent.skills");
+    expect(tables).toContain("agent.agents");
     expect(tables).toContain("chat.conversations");
+    expect(tables).toContain("graph.outbox");
+  });
+
+  it("covers the playbook domain added by the 2026-06-11 rebuild (OXA-1700)", () => {
+    const find = (t: string) => POLICY_MANIFEST.find((e) => e.table === t);
+    for (const t of [
+      "workflow.playbooks",
+      "workflow.playbook_triggers",
+      "workflow.playbook_runs",
+      "workflow.playbook_step_runs",
+      "workflow.playbook_events",
+      "workflow.playbook_approvals",
+    ]) {
+      expect(find(t)?.policyClass, t).toBe("standard");
+    }
+    // Immutable children carry no org cols — isolation is transitive via FK,
+    // so they must NOT be in the manifest (a policy on them cannot compile).
+    const tables = POLICY_MANIFEST.map((e) => e.table);
+    expect(tables).not.toContain("workflow.playbook_versions");
+    expect(tables).not.toContain("workflow.playbook_steps");
+    expect(tables).not.toContain("workflow.playbook_edges");
+    expect(tables).not.toContain("agent.agent_versions");
   });
 
   it("marks billing tables org_only and security_events workspace_nullable", () => {
@@ -28,21 +51,35 @@ describe("tenant policy manifest", () => {
     expect(find("security.security_events")?.policyClass).toBe("workspace_nullable");
   });
 
-  it("IAM tables live in org.* schema (not iam.*)", () => {
+  it("IAM tables live in iam.* schema after the 2026-06-11 rebuild", () => {
+    const find = (t: string) => POLICY_MANIFEST.find((e) => e.table === t);
+    expect(find("iam.principals")?.policyClass).toBe("workspace_nullable");
+    expect(find("iam.principal_role_assignments")?.policyClass).toBe("workspace_nullable");
+    expect(find("iam.roles")?.policyClass).toBe("org_only");
+    expect(find("iam.role_grants")?.policyClass).toBe("org_only");
+    expect(find("iam.access_requests")?.policyClass).toBe("org_only");
+    // Membership stays in org.*; no stale pre-rewrite org.* IAM entries.
     const tables = POLICY_MANIFEST.map((e) => e.table);
-    // Verify correct schema assignment
-    expect(tables).toContain("org.principals");
-    expect(tables).toContain("org.roles");
-    expect(tables).toContain("org.role_grants");
-    expect(tables).toContain("org.access_requests");
-    expect(tables).toContain("org.principal_role_assignments");
     expect(tables).toContain("org.org_users");
     expect(tables).toContain("org.invitations");
-    // org.grants and org.policies dropped in 0027 (dead schema: zero write paths, read-only stubs)
+    expect(tables).not.toContain("org.principals");
+    expect(tables).not.toContain("org.roles");
     expect(tables).not.toContain("org.grants");
     expect(tables).not.toContain("org.policies");
-    // No iam.* entries should exist
-    expect(tables.every((t) => !t.startsWith("iam."))).toBe(true);
+  });
+
+  it("drops the pre-rewrite tables the old manifest still referenced", () => {
+    const tables = POLICY_MANIFEST.map((e) => e.table);
+    expect(tables).not.toContain("agent.workflow_runs");
+    expect(tables).not.toContain("agent.workflow_run_tasks");
+    expect(tables).not.toContain("agent.mcp_servers"); // moved to mcp.mcp_servers
+    expect(tables).not.toContain("workflow.automations");
+    expect(tables).not.toContain("workflow.automation_runs");
+    expect(tables).not.toContain("auth.privacy_export_requests"); // moved to privacy.*
+    expect(tables).not.toContain("auth.privacy_erasure_requests");
+    expect(tables).toContain("mcp.mcp_servers");
+    expect(tables).toContain("privacy.privacy_export_requests");
+    expect(tables).toContain("privacy.privacy_erasure_requests");
   });
 
   it("content.generated_assets is present as standard", () => {
@@ -59,15 +96,32 @@ describe("tenant policy manifest", () => {
     expect(entry?.policyClass).toBe("workspace_only");
   });
 
+  it("mcp.registries is the only org_or_global table", () => {
+    const orgOrGlobal = POLICY_MANIFEST.filter(
+      (e) => e.policyClass === "org_or_global",
+    ).map((e) => e.table);
+    expect(orgOrGlobal).toEqual(["mcp.registries"]);
+  });
+
   it("excludes tables that carry neither org_id nor a scoping workspace_id", () => {
     const tables = POLICY_MANIFEST.map((e) => e.table);
     // stripe_event_processing has no org_id and no workspace_id (shared catalog)
     expect(tables).not.toContain("billing.stripe_event_processing");
+    expect(tables).not.toContain("billing.plans");
+    expect(tables).not.toContain("mcp.catalog_servers");
+    expect(tables).not.toContain("ingestion.connector_schemas");
+    expect(tables).not.toContain("graph.projection_checkpoints");
   });
 
   it("has no duplicate table entries", () => {
     const tables = POLICY_MANIFEST.map((e) => e.table);
     const unique = new Set(tables);
     expect(unique.size).toBe(tables.length);
+  });
+
+  it("covers exactly the 62 policied tables of the v0.4.x schema", () => {
+    // Intentional ratchet: adding a tenant-owned table means updating BOTH the
+    // manifest and this count (and regenerating the Atlas RLS migration).
+    expect(POLICY_MANIFEST.length).toBe(62);
   });
 });

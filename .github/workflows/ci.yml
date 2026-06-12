@@ -354,13 +354,15 @@ jobs:
   # rls-integration — the single proof that tenant Row-Level Security actually
   # isolates (OXA-1515). Spins up a real Postgres, applies the schema + the
   # generated RLS policy migration, and runs the integration suite with
-  # enforcement ON. PR-gated only (per the CI-gate-on-PRs rule) — it is the
-  # gate that must be green before RLS ships. The suite drops to a non-superuser
-  # role via SET LOCAL ROLE so policies are actually evaluated even though the
-  # CI postgres connects as a superuser.
+  # enforcement ON. Runs on PRs AND on pushes to main (OXA-1700): the job was
+  # PR-only, so the 2026-06-11 Atlas re-baseline — committed directly to main —
+  # shipped with zero RLS policies and nothing went red. Direct-to-main is the
+  # normal pre-launch workflow here, so the proof must run there too.
+  # The suite drops to a non-superuser role via SET LOCAL ROLE so policies are
+  # actually evaluated even though the CI postgres connects as a superuser.
   # ──────────────────────────────────────────────────────────────────────
   rls-integration:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:

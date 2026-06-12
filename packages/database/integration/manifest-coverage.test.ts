@@ -21,14 +21,11 @@ const sql = postgres(process.env["DATABASE_URL"]!, { max: 1, prepare: false });
 afterAll(() => sql.end({ timeout: 5 }));
 
 // Tables that legitimately have org_id but are intentionally NOT row-scoped.
-// These are self-identity tables (the org/workspace IS the tenant, not a
-// member of one) or shared catalogs with no per-tenant rows.
-const ALLOWLIST = new Set<string>([
-  "org.organizations", // self-identity: id IS the org
-  "workspace.workspaces", // self-identity: org_id is the owner, no per-row isolation needed
-  "billing.plans", // shared catalog: no tenant-specific rows
-  "billing.stripe_events", // shared catalog: raw event ledger, no org_id column actually
-]);
+// Empty after OXA-1700: every org_id-bearing table in the rebuilt schema is in
+// the manifest (workspace.workspaces is org_only; org.organizations,
+// billing.plans, billing.stripe_events have no org_id column so they never
+// match the coverage query). Add entries here ONLY with a written reason.
+const ALLOWLIST = new Set<string>([]);
 
 // Tables that have workspace_id but no org_id and are allowlisted (not
 // workspace_only-policy candidates).
@@ -121,6 +118,30 @@ describe("RLS manifest coverage", () => {
     expect(
       notForced,
       `Manifest tables missing FORCE ROW LEVEL SECURITY: ${notForced.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("every manifest table carries a tenant_isolation policy (OXA-1700)", async () => {
+    // FORCE RLS without a policy is default-deny — the app would brick, not
+    // leak — but the dangerous failure mode is the opposite: an Atlas
+    // re-baseline regenerating tables WITHOUT the policy DDL (how the
+    // 2026-06-11 rebuild shipped with zero RLS). relforcerowsecurity alone
+    // would also be lost in that case, but assert the policy explicitly so a
+    // partial loss (table recreated, FORCE re-added by hand, policy forgotten)
+    // is caught too.
+    const rows = await sql<{ rel: string }[]>`
+      SELECT (schemaname || '.' || tablename) AS rel
+      FROM pg_policies
+      WHERE policyname = 'tenant_isolation'
+    `;
+    const policied = new Set(rows.map((r) => r.rel));
+    const missing = POLICY_MANIFEST.filter((e) => !policied.has(e.table)).map(
+      (e) => e.table,
+    );
+
+    expect(
+      missing,
+      `Manifest tables missing the tenant_isolation policy: ${missing.join(", ")}`,
     ).toEqual([]);
   });
 });
