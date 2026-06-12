@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PluginDetailPanel } from "./plugin-detail-panel";
-import { Search, Package, Plug, FileText, ShoppingBag } from "lucide-react";
+import { Search, Package, Plug, FileText, ShoppingBag, Boxes } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -28,7 +28,11 @@ interface CatalogServer {
   authKind: string;
   categories: string[];
   version: string;
-  pluginType: "mcp_server" | "integration" | "content_tool";
+  pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
+  /** Only present for capability entries */
+  tier?: "free" | "premium";
+  /** Only present for capability entries */
+  installed?: boolean;
 }
 
 interface MarketplaceModalProps {
@@ -41,14 +45,16 @@ interface MarketplaceModalProps {
   installAction: (input: {
     orgSlug: string;
     catalogServerId: string;
-    pluginType: "mcp_server" | "integration" | "content_tool";
+    pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
+    pluginId?: string;
   }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
   /** Server action: bulk install */
   installBulkAction: (input: {
     orgSlug: string;
     items: Array<{
-      catalogServerId: string;
-      pluginType: "mcp_server" | "integration" | "content_tool";
+      catalogServerId?: string;
+      pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
+      pluginId?: string;
     }>;
   }) => Promise<{ ok: boolean; error?: string }>;
 }
@@ -57,9 +63,10 @@ const PLUGIN_TABS = [
   { value: "mcp_server", label: "MCP Servers", icon: Plug },
   { value: "integration", label: "Integrations", icon: Package },
   { value: "content_tool", label: "Content Tools", icon: FileText },
+  { value: "capability", label: "Oxagen Plugins", icon: Boxes },
 ] as const;
 
-type PluginTypeValue = "mcp_server" | "integration" | "content_tool";
+type PluginTypeValue = "mcp_server" | "integration" | "content_tool" | "capability";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -151,10 +158,12 @@ export function MarketplaceModal({
     try {
       const result = await installBulkAction({
         orgSlug,
-        items: Array.from(selected).map((id) => ({
-          catalogServerId: id,
-          pluginType: activeTab,
-        })),
+        items: Array.from(selected).map((id) => {
+          if (activeTab === "capability") {
+            return { pluginType: "capability" as const, pluginId: id };
+          }
+          return { catalogServerId: id, pluginType: activeTab };
+        }),
       });
       if (!result.ok) {
         setError(result.error ?? "Bulk install failed");
@@ -179,7 +188,7 @@ export function MarketplaceModal({
             Plugin Marketplace
           </DialogTitle>
           <DialogDescription>
-            Browse and install MCP servers, integrations, and content tools for your organization.
+            Browse and install MCP servers, integrations, content tools, and Oxagen capability plugins for your organization.
           </DialogDescription>
         </DialogHeader>
 
@@ -212,8 +221,8 @@ export function MarketplaceModal({
               </TabsList>
 
               <div className="flex items-center gap-2">
-                {/* Auth filter chips */}
-                {(["", "oauth", "secret", "none"] as const).map((k) => (
+                {/* Auth filter chips — not applicable for capability plugins */}
+                {activeTab !== "capability" && (["", "oauth", "secret", "none"] as const).map((k) => (
                   <button
                     key={k || "all"}
                     type="button"
@@ -273,7 +282,7 @@ export function MarketplaceModal({
                   ) : (
                     <>
                       <p className="mb-3 text-xs text-muted-foreground">
-                        {total} servers
+                        {total} {value === "capability" ? "plugins" : "servers"}
                       </p>
                       <div
                         className="grid grid-cols-2 gap-3"
@@ -368,23 +377,49 @@ export function MarketplaceModal({
                               </div>
 
                               <div className="flex flex-wrap gap-1">
-                                {srv.transportTypes.slice(0, 2).map((t) => (
-                                  <Badge key={t} variant="outline" size="sm">
-                                    {t}
-                                  </Badge>
-                                ))}
-                                <Badge
-                                  variant={
-                                    srv.authKind === "oauth"
-                                      ? "info"
-                                      : srv.authKind === "secret"
-                                        ? "warning"
-                                        : "muted"
-                                  }
-                                  size="sm"
-                                >
-                                  {srv.authKind}
-                                </Badge>
+                                {srv.pluginType === "capability" ? (
+                                  <>
+                                    {srv.tier && (
+                                      <Badge
+                                        variant={srv.tier === "premium" ? "info" : "secondary"}
+                                        size="sm"
+                                        data-testid={`marketplace-tier-badge-${srv.id}`}
+                                      >
+                                        {srv.tier === "premium" ? "Premium" : "Free"}
+                                      </Badge>
+                                    )}
+                                    {srv.installed && (
+                                      <Badge variant="success" size="sm" data-testid={`marketplace-installed-badge-${srv.id}`}>
+                                        Installed
+                                      </Badge>
+                                    )}
+                                    {srv.categories.slice(0, 2).map((c) => (
+                                      <Badge key={c} variant="outline" size="sm">
+                                        {c}
+                                      </Badge>
+                                    ))}
+                                  </>
+                                ) : (
+                                  <>
+                                    {srv.transportTypes.slice(0, 2).map((t) => (
+                                      <Badge key={t} variant="outline" size="sm">
+                                        {t}
+                                      </Badge>
+                                    ))}
+                                    <Badge
+                                      variant={
+                                        srv.authKind === "oauth"
+                                          ? "info"
+                                          : srv.authKind === "secret"
+                                            ? "warning"
+                                            : "muted"
+                                      }
+                                      size="sm"
+                                    >
+                                      {srv.authKind}
+                                    </Badge>
+                                  </>
+                                )}
                               </div>
 
                               {denied && (
@@ -420,21 +455,38 @@ export function MarketplaceModal({
                 {/* Detail panel */}
                 {detailId && (
                   <div className="w-1/2 overflow-auto" data-testid="marketplace-detail-panel">
-                    <PluginDetailPanel
-                      catalogId={detailId}
-                      orgSlug={orgSlug}
-                      pluginType={value as PluginTypeValue}
-                      isDenied={
-                        servers.find((s) => s.id === detailId)
-                          ? deniedNames.includes(
-                              servers.find((s) => s.id === detailId)!.name,
-                            )
-                          : false
-                      }
-                      installAction={installAction}
-                      onInstalled={() => onOpenChange(false)}
-                      onClose={() => setDetailId(null)}
-                    />
+                    {(() => {
+                      const detailServer = servers.find((s) => s.id === detailId);
+                      return (
+                        <PluginDetailPanel
+                          catalogId={detailId}
+                          orgSlug={orgSlug}
+                          pluginType={value as PluginTypeValue}
+                          isDenied={
+                            detailServer
+                              ? deniedNames.includes(detailServer.name)
+                              : false
+                          }
+                          capabilityData={
+                            value === "capability" && detailServer
+                              ? {
+                                  id: detailServer.id,
+                                  name: detailServer.name,
+                                  title: detailServer.title,
+                                  description: detailServer.description,
+                                  version: detailServer.version,
+                                  categories: detailServer.categories,
+                                  tier: detailServer.tier ?? "free",
+                                  installed: detailServer.installed ?? false,
+                                }
+                              : undefined
+                          }
+                          installAction={installAction}
+                          onInstalled={() => onOpenChange(false)}
+                          onClose={() => setDetailId(null)}
+                        />
+                      );
+                    })()}
                   </div>
                 )}
               </div>
