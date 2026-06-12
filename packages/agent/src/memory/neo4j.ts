@@ -29,7 +29,7 @@ export async function recallMemories(args: {
     const minRank = WEIGHT_RANK[args.minWeight];
     const result = await s.run(
       /* cypher */ `
-        CALL db.index.vector.queryNodes('agent_memory_embedding', $limit, $embedding)
+        CALL db.index.vector.queryNodes('memory_embedding_index', $limit, $embedding)
         YIELD node, score
         WHERE node.orgId = $orgId
           AND node.workspaceId = $workspaceId

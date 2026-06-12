@@ -329,7 +329,8 @@
       ],
       "layers": {
         "schema": true,
-        "docs": false
+        "docs": false,
+        "unit": true
       }
     },
     {

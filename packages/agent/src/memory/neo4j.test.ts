@@ -45,7 +45,7 @@ describe("memory neo4j", () => {
     expect(sessionRun).toHaveBeenCalledTimes(1);
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
     // Cypher must reference $orgId (guard) and workspaceId filter
-    expect(cypher).toContain("agent_memory_embedding");
+    expect(cypher).toContain("memory_embedding_index");
     expect(cypher).toContain("node.orgId = $orgId");
     expect(cypher).toContain("workspaceId");
     expect(cypher).toContain("$minRank");

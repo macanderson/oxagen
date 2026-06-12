@@ -34,6 +34,14 @@ export async function interceptAgentStream(
   const delayMs = opts.delayMs ?? 80;
   const urlGlob = opts.urlGlob ?? "**/api/v1/chat/stream";
 
+  // Disable CSS animations and the rAF-based StreamingText reveal so that
+  // streamed text is immediately readable in the DOM without waiting for
+  // animation frames. The MotionProvider wraps motion/react with
+  // reducedMotion="user", so emulating prefers-reduced-motion:reduce causes
+  // useReducedMotion() to return true — StreamingText renders the full
+  // accumulated text in its first paint instead of counting up from 0.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+
   await page.route("**/api/anthropic/**", (route: Route) =>
     route.fulfill({
       status: 200,
