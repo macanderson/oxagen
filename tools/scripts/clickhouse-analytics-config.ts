@@ -32,10 +32,6 @@ function get(key: string): string {
   return process.env[key] ?? env[key] ?? '';
 }
 
-// Try OXAGEN_ANALYTICS_* first (legacy), fall back to ANALYTICS_* (new)
-const host = get('OXAGEN_ANALYTICS_HOST') || extractHostFromUrl(get('ANALYTICS_URL'));
-const port = get('OXAGEN_ANALYTICS_PORT') || '8443';
-
 function extractHostFromUrl(url: string): string {
   if (!url) return '';
   try {
@@ -46,7 +42,12 @@ function extractHostFromUrl(url: string): string {
   }
 }
 
-export const ANALYTICS_URL = get('ANALYTICS_URL') || (host ? `https://${host}:${port}` : '');
+// Always extract hostname from ANALYTICS_URL and use HTTPS on 8443
+const analyticsUrl = get('ANALYTICS_URL');
+const host = get('OXAGEN_ANALYTICS_HOST') || extractHostFromUrl(analyticsUrl);
+const port = get('OXAGEN_ANALYTICS_PORT') || '8443';
+
+export const ANALYTICS_URL = host ? `https://${host}:${port}` : (analyticsUrl || '');
 export const ANALYTICS_USER = get('ANALYTICS_USER') || get('OXAGEN_ANALYTICS_USER');
 export const ANALYTICS_PASSWORD = get('ANALYTICS_PASSWORD') || get('OXAGEN_ANALYTICS_PASSWORD');
 export const ANALYTICS_DATABASE = get('ANALYTICS_DATABASE') || get('OXAGEN_ANALYTICS_DATABASE') || 'internal';
