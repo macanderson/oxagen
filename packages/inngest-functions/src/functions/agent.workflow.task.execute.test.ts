@@ -182,37 +182,12 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
   });
 
   it("finalizes execution when all steps are terminal (completed + failed >= total)", async () => {
-    // Override: completed=2 out of total=2 → triggers finalize
-    let callIdx = 0;
-    vi.mocked(mocks.dbUpdateWhere).mockResolvedValue(undefined);
-    // Re-mock withTenantDb for this test to return completed=2 total=2
-    const { withTenantDb } = await import("@oxagen/database");
-    vi.mocked(withTenantDb).mockImplementationOnce(async (fn) => {
-      callIdx++;
-      if (callIdx >= 3) {
-        // count-steps call — return all-done counts
-        return fn({
-          update: () => ({ set: mocks.dbUpdateSet }),
-          select: () => ({
-            from: () => ({
-              where: () => {
-                mocks.selectCallCount.value += 1;
-                const c = mocks.selectCallCount.value;
-                if (c === 1) return Promise.resolve([{ n: 2 }]);
-                if (c === 2) return Promise.resolve([{ n: 2 }]);
-                return Promise.resolve([{ n: 0 }]);
-              },
-            }),
-          }),
-        } as unknown as Parameters<typeof fn>[0]);
-      }
-      return fn({
-        update: () => ({ set: mocks.dbUpdateSet }),
-      } as unknown as Parameters<typeof fn>[0]);
-    });
+    // completed=2 out of total=2 → triggers finalize-execution update on agentExecutions
+    mocks.countOverride = { total: 2, completed: 2, failed: 0 };
 
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     const setCalls = mocks.dbUpdateSet.mock.calls as Array<[Record<string, unknown>]>;
+    // The finalize-execution step sets status on agentExecutions; completedAt will be set too
     const finalUpdate = setCalls.find(
       ([arg]) =>
         (arg as Record<string, unknown>).status === "completed" ||
