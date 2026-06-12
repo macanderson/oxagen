@@ -1,6 +1,6 @@
 # Oxagen Plugins — first-party capability packs (Phase 1)
 
-Status: implementing (this branch) · Author: Claude (planner) + Mac Anderson · Date: 2026-06-12
+Status: Phase 1 implemented (this branch) · Author: Claude (planner) + Mac Anderson · Date: 2026-06-12
 Related: ADR-013, `docs/architecture/installable-plugins/specs/2026-06-06-installable-plugins-mcp-design.md`
 
 ## What an Oxagen Plugin is
@@ -159,3 +159,42 @@ monetization + preview allowlists; Phase 3 mirrors the manifest schema into a
 `plugin.capability_catalog` Postgres table (same zod schema validates both) and adds
 an `execution` block to the manifest for out-of-process partner handlers. The kernel
 gate and error code need no changes in either phase.
+
+## Implementation notes (Phase 1, this branch)
+
+### Entitlement gate bootstrap call sites
+
+`bootstrapEntitlementRuntime()` is called at the three app entry points, symmetrically with
+`bootstrapBillingRuntime()`:
+
+- `apps/api/src/bootstrap.ts` — called in the Hono startup sequence.
+- `apps/mcp/src/middleware.ts` — called at module load (before any request handling).
+- `apps/app/instrumentation.ts` — called inside the Next.js `register()` hook (dynamic import to
+  avoid an edge-incompatible side-effect in the RSC bundle).
+
+If `bootstrapEntitlementRuntime()` is not called, the kernel gate is left in its default
+allow-all state (matches the IAM/billing default for backward-compatibility), but an `info`
+log is emitted on the first plugin-claimed invocation.
+
+### agent.tool.list filter parity fix
+
+`agent.tool.list` (`packages/agent/src/handlers/agent.tool.list.ts`) was updated to apply the same
+entitlement filter as `materializeTools` in `packages/agent/src/runtime/materialize-tools.ts`. The
+handler imports `listEntitledCapabilityPluginIds` and `pluginForContract` and skips any builtin
+capability whose plugin is not in the org's entitled set. Both surfaces now use the same
+`listEntitledCapabilityPluginIds(ctx.orgId)` call so tool visibility is consistent whether the
+agent queries its tool list or attempts to invoke a tool.
+
+### apps/api dead-import fix
+
+Commit `78948ff6` removed dead `automation.enable` / `automation.disable` route imports from
+`apps/api/src/app.ts`. These imports were introduced in the branch that preceded this one and
+referenced route files that were never committed, causing typecheck and lint failures on main.
+The fix rode along before the plugin work landed to keep the branch green.
+
+### Migration filename
+
+`packages/database/atlas/migrations/20260612150000_add_capability_plugin_type.sql`
+
+Broadens two CHECK constraints on `plugin.org_listings` (adds `'capability'` to `plugin_type`
+and `'oxagen'` to `source`). No new tables, no RLS changes.

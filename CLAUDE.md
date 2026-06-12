@@ -13,7 +13,7 @@ No live customers. **Commit and push directly to `main`** after running `pnpm ga
 Every code change must leave the package's test suite at or above its `vitest.config.ts` `coverage.thresholds`.
 
 - **New code requires new tests.** Route handlers, contracts, utilities — all need tests before the commit lands.
-- **E2E parity.** Any user-facing flow added or changed needs an e2e test in `apps/app/__tests__/`.
+- **E2E parity.** Any user-facing flow added or changed needs an e2e test in `apps/app/e2e/`.
 - **Thresholds are ratchets capped at 90 — never lower them.** When new tested code raises coverage, bump the threshold to match (round down), but **never past 90**: once a metric is at or above 90%, its gate floor is 90 and stays there. Never reduce a threshold below its current value.
 - **Run `pnpm gate` before any push.** Lint (`--max-warnings 0`), typecheck, coverage, tests, builds, migrations — all must pass locally.
 - **Lint is part of the gate.** Zero ESLint warnings; no `eslint-disable` unless genuinely inapplicable (inline comment required).
@@ -23,7 +23,7 @@ Every code change must leave the package's test suite at or above its `vitest.co
 Never claim a task is complete without concrete verification. Always provide evidence: test output, CI status, or rendered result.
 
 - **No task is done until verified.** State what verification you ran and its output.
-- **UI changes require screenshots.** E2E tests must capture screenshots of key success states. Delete and recreate the screenshot directory on every run; add it to `.gitignore` (e.g. `apps/app/__tests__/screenshots/`).
+- **UI changes require screenshots.** E2E tests must capture screenshots of key success states. Delete and recreate the screenshot directory on every run; add it to `.gitignore` (e.g. `apps/app/e2e/screenshots/`).
 - **Forms must be tested end-to-end.** Submit data, verify success via DB query or API response.
 - **Deployments must be verified.** Health check, DB query, or API call after deploying — not just deploy logs.
 - **DB changes must be verified.** Run a `SELECT` after migration to confirm changes landed.
@@ -87,7 +87,7 @@ For files >50k tokens, do NOT read the whole file. Grep or slice first:
 
 1. Implement all code changes; commit.
 2. Write unit tests for all new/changed logic.
-3. Write E2E tests for user-facing changes (screenshots to `__tests__/screenshots/`).
+3. Write E2E tests for user-facing changes (screenshots to `e2e/screenshots/`).
 4. Run `pnpm gate` — all gates green.
 5. Dispatch **test-completeness-judge** to audit coverage. Re-run until APPROVED.
 6. Push to main / open PR only after judge approves.
