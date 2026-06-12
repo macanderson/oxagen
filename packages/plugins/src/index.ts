@@ -22,3 +22,9 @@ export type {
 } from "./credentials/workspace-credential";
 export * from "./registry";
 export * from "./oauth";
+export {
+  listEntitledCapabilityPluginIds,
+  capabilityEntitlementGate,
+  clearEntitlementCacheForTests,
+} from "./entitlements/entitlement-service";
+export { bootstrapEntitlementRuntime } from "./entitlements/bootstrap";

@@ -19,6 +19,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
     "@oxagen/crypto": "workspace:*",
+    "@oxagen/oxagen": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/notifications": "workspace:*",
     "@oxagen/tenancy": "workspace:*",

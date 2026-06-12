@@ -86,6 +86,9 @@ importers:
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../../packages/oxagen
+      '@oxagen/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
@@ -456,6 +459,9 @@ importers:
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../../packages/oxagen
+      '@oxagen/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
@@ -1107,6 +1113,9 @@ importers:
       '@oxagen/notifications':
         specifier: workspace:*
         version: link:../notifications
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../oxagen
       '@oxagen/tenancy':
         specifier: workspace:*
         version: link:../tenancy

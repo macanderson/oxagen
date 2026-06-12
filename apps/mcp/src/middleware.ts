@@ -8,6 +8,7 @@ import "@oxagen/agent/register";
 import { apiKeyAuthMiddleware, type Middleware } from "xmcp";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
+import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
 import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
@@ -27,6 +28,9 @@ bootstrapIAMRuntime();
 // Wire the billing admission gate (suspended / zero-balance refusal +
 // auto-reload) into kernel.invoke(), alongside the IAM gate.
 bootstrapBillingRuntime();
+// Wire the capability entitlement gate — blocks invocations of plugin-owned
+// capabilities when the plugin is not installed+enabled for the org.
+bootstrapEntitlementRuntime();
 
 // Wire the Postgres security event emitter (SOC2 CC6/CC7 audit trail).
 // Registered ONCE, immediately after bootstrapIAMRuntime(), so the db
