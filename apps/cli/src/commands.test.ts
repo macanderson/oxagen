@@ -73,6 +73,8 @@ import { documentReadCommand } from "./commands/document.read.js";
 import { formCreateCommand } from "./commands/form.create.js";
 import { formSubmitCommand } from "./commands/form.submit.js";
 import { automationCreateCommand } from "./commands/automation.create.js";
+import { automationEnableCommand } from "./commands/automation.enable.js";
+import { automationDisableCommand } from "./commands/automation.disable.js";
 import { automationTriggerCommand } from "./commands/automation.trigger.js";
 import { skillWorkspaceListCommand } from "./commands/skill.workspace.list.js";
 import { agentMemoryRecallCommand } from "./commands/agent.memory.recall.js";
@@ -1214,12 +1216,111 @@ describe("automation list", () => {
 });
 
 describe("automation create", () => {
-  it("creates automation", async () => {
+  it("creates automation with the contract payload shape", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockApiRequest.mockResolvedValueOnce({ id: "auto1", name: "My Automation" });
+    mockApiRequest.mockResolvedValueOnce({
+      automation_id: "plt_1",
+      playbook_id: "plb_1",
+      name: "My Automation",
+      status: "inactive",
+      triggerType: "api",
+      enabled: false,
+    });
     await automationCreateCommand.parseAsync(["node", "cli", "-n", "My Automation"]);
     expect(mockApiRequest).toHaveBeenCalledWith("/automation/create", expect.objectContaining({ method: "POST" }));
+    const body = JSON.parse((mockApiRequest.mock.calls[0]?.[1] as { body: string }).body) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      name: "My Automation",
+      triggerType: "api",
+      triggerConfig: {},
+      steps: [],
+      enabled: false,
+    });
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Automation created"));
+    consoleSpy.mockRestore();
+  });
+
+  it("builds event triggerConfig from --entity-type/--event-type/--conditions and passes --enabled", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      automation_id: "plt_2",
+      playbook_id: "plb_2",
+      name: "Watcher",
+      status: "active",
+      triggerType: "event",
+      enabled: true,
+    });
+    await automationCreateCommand.parseAsync([
+      "node", "cli",
+      "-n", "Watcher",
+      "--trigger-type", "event",
+      "--entity-type", "Contact",
+      "--event-type", "node.updated",
+      "--conditions", '[{"property":"status","toValue":"customer","operator":"eq"}]',
+      "--enabled",
+    ]);
+    const body = JSON.parse((mockApiRequest.mock.calls[0]?.[1] as { body: string }).body) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      name: "Watcher",
+      triggerType: "event",
+      triggerConfig: {
+        entityType: "Contact",
+        eventType: "node.updated",
+        propertyConditions: [{ property: "status", toValue: "customer", operator: "eq" }],
+      },
+      enabled: true,
+    });
+    consoleSpy.mockRestore();
+  });
+
+  it("builds schedule triggerConfig from --cron/--timezone", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({
+      automation_id: "plt_3",
+      playbook_id: "plb_3",
+      name: "Report",
+      status: "inactive",
+      triggerType: "schedule",
+      enabled: false,
+    });
+    await automationCreateCommand.parseAsync([
+      "node", "cli",
+      "-n", "Report",
+      "--trigger-type", "schedule",
+      "--cron", "0 9 * * 1",
+      "--timezone", "America/New_York",
+    ]);
+    const body = JSON.parse((mockApiRequest.mock.calls[0]?.[1] as { body: string }).body) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      triggerType: "schedule",
+      triggerConfig: { cronExpression: "0 9 * * 1", timezone: "America/New_York" },
+    });
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("automation enable", () => {
+  it("enables automation", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ automation_id: "plt_1", enabled: true, status: "active" });
+    await automationEnableCommand.parseAsync(["node", "cli", "plt_1"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/automation/enable", expect.objectContaining({ method: "POST" }));
+    const body = JSON.parse((mockApiRequest.mock.calls[0]?.[1] as { body: string }).body) as Record<string, unknown>;
+    expect(body).toEqual({ automation_id: "plt_1" });
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Automation enabled"));
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("automation disable", () => {
+  it("disables automation", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockApiRequest.mockResolvedValueOnce({ automation_id: "plt_1", enabled: false, status: "paused" });
+    await automationDisableCommand.parseAsync(["node", "cli", "plt_1"]);
+    expect(mockApiRequest).toHaveBeenCalledWith("/automation/disable", expect.objectContaining({ method: "POST" }));
+    const body = JSON.parse((mockApiRequest.mock.calls[0]?.[1] as { body: string }).body) as Record<string, unknown>;
+    expect(body).toEqual({ automation_id: "plt_1" });
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Automation disabled"));
     consoleSpy.mockRestore();
   });
 });
@@ -2354,6 +2455,24 @@ describe("branch coverage: ApiError error paths", () => {
     mockApiError(400, "Name required");
     await expect(automationCreateCommand.parseAsync(["node", "cli", "-n", "A"])).rejects.toThrow();
     expect(consoleSpy).toHaveBeenCalledWith("Error: Name required");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("automation enable returns ApiError message", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(404, "Automation not found");
+    await expect(automationEnableCommand.parseAsync(["node", "cli", "plt_missing"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Automation not found");
+    consoleSpy.mockRestore(); exitSpy.mockRestore();
+  });
+
+  it("automation disable returns ApiError message", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("exit"); });
+    mockApiError(404, "Automation not found");
+    await expect(automationDisableCommand.parseAsync(["node", "cli", "plt_missing"])).rejects.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith("Error: Automation not found");
     consoleSpy.mockRestore(); exitSpy.mockRestore();
   });
 

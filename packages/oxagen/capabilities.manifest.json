@@ -408,12 +408,54 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent",
+        "cli"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "automation.disable",
+      "file": "automation.disable.ts",
+      "domain": "automation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "automation.enable",
+      "file": "automation.enable.ts",
+      "domain": "automation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -423,7 +465,9 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent",
+        "cli"
       ],
       "layers": {
         "schema": true,
@@ -438,7 +482,9 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent",
+        "cli"
       ],
       "layers": {
         "schema": true,

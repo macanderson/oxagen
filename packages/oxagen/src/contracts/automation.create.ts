@@ -5,10 +5,10 @@ export const automationCreate = registerCapability({
   name: "automation.create",
   domain: "automation",
   description:
-    "Create a playbook and trigger for an automation. Use triggerType='event' for graph node changes (e.g. Contact status changes), 'schedule' for cron-based runs, or 'api' for manually-triggered playbooks. The steps array scaffolds the initial action — leave it empty to create a blank playbook. Always populate triggerConfig fully based on what the user described.",
+    "Create a playbook and trigger for an automation. Use triggerType='event' for graph node changes (e.g. Contact status changes, new Commit nodes), 'schedule' for cron-based runs, or 'api' for manually-triggered playbooks. The steps array scaffolds the initial action — leave it empty to create a blank playbook. Always populate triggerConfig fully based on what the user described. Automations created by an AI agent ALWAYS start disabled regardless of the `enabled` input — a human must explicitly enable them via automation.enable.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp"],
+  surfaces: ["api", "mcp", "agent", "cli"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "automation" },
   sensitivity: "low",
@@ -112,6 +112,12 @@ export const automationCreate = registerCapability({
       .describe(
         "Initial steps to scaffold. Leave empty to create a blank playbook the user can configure later.",
       ),
+    enabled: z
+      .boolean()
+      .default(false)
+      .describe(
+        "Whether the trigger starts enabled. Honored only for direct human-origin calls (API key, CLI); AI-originated calls (in-app agent, MCP) are forced to false — use automation.enable afterwards.",
+      ),
   }),
   output: z.object({
     automation_id: z
@@ -123,6 +129,11 @@ export const automationCreate = registerCapability({
     name: z.string(),
     status: z.string(),
     triggerType: z.string(),
+    enabled: z
+      .boolean()
+      .describe(
+        "Whether the trigger is live. False when created by an AI agent — call automation.enable (human-gated) to activate.",
+      ),
   }),
 });
 

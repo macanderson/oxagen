@@ -23,6 +23,29 @@ export const automationCreateHandler: CapabilityHandler<typeof automationCreate>
     throw new Error("automation.create requires an authenticated user");
   }
 
+  // Cross-field trigger validation.
+  if (input.triggerType === "event") {
+    if (!input.triggerConfig.entityType || !input.triggerConfig.eventType) {
+      throw new Error(
+        "automation.create: triggerType='event' requires triggerConfig.entityType and triggerConfig.eventType",
+      );
+    }
+  }
+  if (input.triggerType === "schedule") {
+    if (!input.triggerConfig.cronExpression) {
+      throw new Error(
+        "automation.create: triggerType='schedule' requires triggerConfig.cronExpression",
+      );
+    }
+  }
+
+  // Human-origin: direct API/app call without an in-chat messageId.
+  // MCP and runner surfaces are always AI-origin. In-chat agent calls carry a
+  // messageId regardless of surface, so they are AI-origin too.
+  const humanOrigin =
+    (ctx.surface === "api" || ctx.surface === "app") && ctx.messageId == null;
+  const isEnabled = humanOrigin && input.enabled;
+
   const userId = ctx.userId;
 
   const slug =
@@ -39,7 +62,7 @@ export const automationCreateHandler: CapabilityHandler<typeof automationCreate>
       : [{ name: "Run Agent", stepType: "agent" as const, config: { agentSlug: "qa-chat" } }];
 
   const result = await withTenantDb(async (tx) => {
-    // 1. Insert the playbook shell.
+    // 1. Insert the playbook shell. Status is "active" if trigger starts enabled.
     const [playbook] = await tx
       .insert(schema.playbooks)
       .values({
@@ -48,7 +71,7 @@ export const automationCreateHandler: CapabilityHandler<typeof automationCreate>
         name: input.name,
         slug,
         description: input.description ?? null,
-        status: "draft",
+        status: isEnabled ? "active" : "draft",
         visibility: "workspace",
         createdByUserId: userId,
         updatedByUserId: userId,
@@ -102,7 +125,7 @@ export const automationCreateHandler: CapabilityHandler<typeof automationCreate>
         playbookId: playbook.id,
         triggerType: input.triggerType,
         config: input.triggerConfig,
-        isEnabled: true,
+        isEnabled,
         createdByUserId: userId,
         updatedByUserId: userId,
       })
@@ -123,6 +146,8 @@ export const automationCreateHandler: CapabilityHandler<typeof automationCreate>
       playbookId: result.playbook.id,
       playbookPublicId: result.playbook.publicId,
       triggerType: result.trigger.triggerType,
+      isEnabled: result.trigger.isEnabled,
+      humanOrigin,
       orgId: ctx.orgId,
     },
     "automation.create: created playbook trigger",
@@ -134,5 +159,6 @@ export const automationCreateHandler: CapabilityHandler<typeof automationCreate>
     name: input.name,
     status: result.trigger.isEnabled ? "active" : "inactive",
     triggerType: result.trigger.triggerType,
+    enabled: result.trigger.isEnabled,
   };
 };

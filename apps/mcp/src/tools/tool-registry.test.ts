@@ -93,6 +93,8 @@ import { metadata as workflowRunMetadata } from "./workflow.run";
 import { metadata as workflowStatusMetadata } from "./workflow.status";
 import { metadata as workflowCancelMetadata } from "./workflow.cancel";
 import { metadata as automationCreateMetadata } from "./automation.create";
+import { metadata as automationDisableMetadata } from "./automation.disable";
+import { metadata as automationEnableMetadata } from "./automation.enable";
 import { metadata as automationListMetadata } from "./automation.list";
 import { metadata as automationTriggerMetadata } from "./automation.trigger";
 import { metadata as conversationChatMetadata } from "./conversation.chat";
@@ -228,6 +230,8 @@ const allToolMetadata = [
   workflowStatusMetadata,
   workflowCancelMetadata,
   automationCreateMetadata,
+  automationDisableMetadata,
+  automationEnableMetadata,
   automationListMetadata,
   automationTriggerMetadata,
   conversationChatMetadata,

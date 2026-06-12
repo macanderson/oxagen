@@ -281,12 +281,26 @@ describe("automation.create capability", () => {
       name: "My automation",
       status: "active",
       triggerType: "api",
+      enabled: true,
     });
     expect(parsed.automation_id).toBe("trig_abc123");
     expect(parsed.playbook_id).toBe("pb_xyz789");
     expect(parsed.name).toBe("My automation");
     expect(parsed.status).toBe("active");
     expect(parsed.triggerType).toBe("api");
+    expect(parsed.enabled).toBe(true);
+  });
+
+  it("rejects output missing enabled", () => {
+    expect(() =>
+      automationCreate.output.parse({
+        automation_id: "trig_abc123",
+        playbook_id: "pb_xyz789",
+        name: "My automation",
+        status: "active",
+        triggerType: "api",
+      }),
+    ).toThrow();
   });
 
   it("rejects output missing automation_id", () => {

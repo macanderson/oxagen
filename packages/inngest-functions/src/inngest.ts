@@ -127,6 +127,25 @@ type Events = {
     };
   };
 
+  // Stage 4.5: fired after a node is successfully upserted in Neo4j.
+  // Downstream consumers (e.g. playbook trigger matcher) subscribe to this
+  // event to react to new or updated entity nodes without coupling to the
+  // pipeline internals. The properties snapshot is the post-mapping set —
+  // the same view that will land on the Neo4j node.
+  "ingestion/entity.created": {
+    data: {
+      nodeId: string;
+      entityType: string;
+      propertiesSnapshot: Record<string, unknown>;
+      workspaceId: string;
+      orgId: string;
+      /** naturalKey of the upserted node — stable idempotency handle. */
+      naturalKey: string;
+      /** Whether this was a first-time create or an update to an existing node. */
+      isNew: boolean;
+    };
+  };
+
   // Stage 6: async semantic inference after a node has been embedded.
   // LLM worker infers IMPLEMENTS / PART_OF / ASSIGNED_TO / etc. edges.
   "ingestion/entity.infer": {
@@ -225,6 +244,18 @@ type Events = {
       orgId: string;
       workspaceId: string;
       connectionId: string;
+    };
+  };
+
+  // ── Playbook execution ─────────────────────────────────────────────────────
+  // Fired after a playbook_runs row is inserted (status='pending') by either
+  // automation.trigger.ts (manual/api) or playbook.trigger.match.ts (event-driven).
+  // The executor picks it up and runs the steps end-to-end.
+  "playbook/run.execute": {
+    data: {
+      runId: string;
+      orgId: string;
+      workspaceId: string;
     };
   };
 

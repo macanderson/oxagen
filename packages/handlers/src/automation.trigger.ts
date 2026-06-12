@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { automationTrigger } from "@oxagen/oxagen/contracts/automation.trigger";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
+import { inngest } from "@oxagen/inngest-functions/client";
 import { logger } from "./logger";
 
 export const automationTriggerHandler: CapabilityHandler<typeof automationTrigger> = async (
@@ -69,6 +70,16 @@ export const automationTriggerHandler: CapabilityHandler<typeof automationTrigge
   );
 
   if (!run) throw new Error("automation.trigger: run insert returned no row");
+
+  // Dispatch the executor — run is now pending and ready to execute
+  await inngest.send({
+    name: "playbook/run.execute",
+    data: {
+      runId: run.id,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+    },
+  });
 
   logger.info(
     {

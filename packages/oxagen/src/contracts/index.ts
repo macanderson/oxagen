@@ -93,6 +93,8 @@ import { formSubmit } from "./form.submit";
 import { automationList } from "./automation.list";
 import { automationCreate } from "./automation.create";
 import { automationTrigger } from "./automation.trigger";
+import { automationEnable } from "./automation.enable";
+import { automationDisable } from "./automation.disable";
 import { workspaceMemberList } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
 import { skillWorkspaceList } from "./skill.workspace.list";
@@ -227,6 +229,8 @@ export {
   automationList,
   automationCreate,
   automationTrigger,
+  automationEnable,
+  automationDisable,
   workspaceMemberList,
   workspaceInviteSend,
   skillWorkspaceList,
@@ -369,6 +373,8 @@ export const contracts = [
   automationList,
   automationCreate,
   automationTrigger,
+  automationEnable,
+  automationDisable,
   workspaceMemberList,
   workspaceInviteSend,
   skillWorkspaceList,

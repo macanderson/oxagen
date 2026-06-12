@@ -47,6 +47,16 @@ project ID `31ab7de2-021f-486d-9f6f-718a7976c027`).
 | `archive.create` | Bundle assets/blobs into a ZIP in Vercel Blob.     |
 | `asset.upload`   | Ingest binary from URL into object storage.        |
 
+## Automation (5)
+
+| Capability           | Notes                                                                  |
+| -------------------- | ----------------------------------------------------------------------- |
+| `automation.create`  | Create playbook + trigger; AI-origin calls always start disabled.       |
+| `automation.list`    | List automation triggers in the workspace.                              |
+| `automation.enable`  | Human-gated activation (`requiresApproval`); sets trigger live.         |
+| `automation.disable` | Safe deactivation; no approval needed.                                  |
+| `automation.trigger` | Manually fire an enabled automation; creates a playbook run.            |
+
 ## Billing (3)
 
 | Capability                           | Notes                                             |

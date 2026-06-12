@@ -219,22 +219,43 @@ describe("ingestion.pipeline Inngest function", () => {
       expect(renderCall[2]).not.toHaveProperty("title");
     });
 
-    it("fires ingestion/entity.infer event as the 6th step action", async () => {
+    it("fires ingestion/entity.created and ingestion/entity.infer in a single step.sendEvent call", async () => {
       const sendEvent = vi.fn().mockResolvedValue(undefined);
       const step = makeStep({ sendEvent });
       await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
       expect(sendEvent).toHaveBeenCalledWith(
         "schedule-inference",
-        expect.objectContaining({
-          name: "ingestion/entity.infer",
-          data: expect.objectContaining({
-            entityType: "task",
-            orgId: "org-123",
-            workspaceId: "ws-xyz",
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: "ingestion/entity.created",
+            data: expect.objectContaining({
+              entityType: "task",
+              orgId: "org-123",
+              workspaceId: "ws-xyz",
+              naturalKey: "github:conn-abc:42",
+            }),
           }),
-        }),
+          expect.objectContaining({
+            name: "ingestion/entity.infer",
+            data: expect.objectContaining({
+              entityType: "task",
+              orgId: "org-123",
+              workspaceId: "ws-xyz",
+            }),
+          }),
+        ]),
       );
+    });
+
+    it("includes isNew=true for a created_principal action in entity.created event", async () => {
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      const step = makeStep({ sendEvent });
+      await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+      const events = sendEvent.mock.calls[0]![1] as Array<{ name: string; data: Record<string, unknown> }>;
+      const createdEvent = events.find((e) => e.name === "ingestion/entity.created");
+      expect(createdEvent?.data["isNew"]).toBe(true);
     });
 
     it("calls embedEntity with correct EmbedRequest", async () => {

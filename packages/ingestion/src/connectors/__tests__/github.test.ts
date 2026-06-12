@@ -135,9 +135,59 @@ describe("github connector – normalizeRecord", () => {
       expect(result.properties["authorEmail"]).toBe("bob@example.com");
     });
 
+    it("attaches git_branch when the field is present in the raw payload", () => {
+      const raw = {
+        sha: "def456",
+        html_url: "https://github.com/org/repo/commit/def456",
+        git_branch: "main",
+        commit: {
+          message: "feat: add telemetry",
+          author: { name: "Alice", email: "alice@example.com", date: "2024-02-01T10:00:00Z" },
+        },
+      };
+      const result = github.normalizeRecord("commit", raw);
+      expect(result.properties["git_branch"]).toBe("main");
+    });
+
+    it("omits git_branch when the field is absent from the raw payload", () => {
+      const raw = {
+        sha: "def456",
+        html_url: "https://github.com/org/repo/commit/def456",
+        commit: {
+          message: "feat: add telemetry",
+          author: { name: "Alice", email: "alice@example.com", date: "2024-02-01T10:00:00Z" },
+        },
+      };
+      const result = github.normalizeRecord("commit", raw);
+      expect(result.properties).not.toHaveProperty("git_branch");
+    });
+
+    it("includes git_branch in fieldSchema", async () => {
+      const samples = await github.previewRecordTypes(
+        { scheme: "oauth2", _marker: "oauth2" },
+        { organizations: ["oxagen"], syncDepthDays: 90 },
+      );
+      const commit = samples.find((s) => s.sourceRecordType === "commit");
+      expect(commit!.fieldSchema["git_branch"]).toBe("string");
+    });
+
     it("handles empty object gracefully", () => {
       const result = github.normalizeRecord("commit", {});
       expect(result.externalId).toBe("");
+    });
+
+    it("does not include git_branch in properties when raw payload has non-string git_branch", () => {
+      const raw = {
+        sha: "xyz",
+        git_branch: 42, // non-string — should be ignored
+        commit: {
+          message: "chore: misc",
+          author: { name: "Dev", email: "dev@example.com", date: "2024-03-01T00:00:00Z" },
+        },
+      };
+      const result = github.normalizeRecord("commit", raw);
+      // asString(42) returns undefined, so git_branch must not appear
+      expect(result.properties).not.toHaveProperty("git_branch");
     });
   });
 

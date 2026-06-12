@@ -76,3 +76,5 @@ export { semanticEdgeListHandler } from "./semantic.edge.list";
 export { semanticEdgeSuggestHandler } from "./semantic.edge.suggest";
 export { graphNodeListHandler } from "./graph.node.list";
 export { graphStatsHandler } from "./graph.stats";
+export { automationEnableHandler } from "./automation.enable";
+export { automationDisableHandler } from "./automation.disable";

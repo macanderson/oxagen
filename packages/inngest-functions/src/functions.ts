@@ -24,6 +24,8 @@ import { ingestionGithubParseFile } from "./functions/ingestion.github-parse-fil
 import { ingestionGithubInferFeatures } from "./functions/ingestion.github-infer-features";
 import { ingestionSemanticEdgeInfer } from "./functions/ingestion.semantic-edge-infer";
 import { ingestionSyncRequested } from "./functions/ingestion.sync-requested";
+import { playbookTriggerMatch } from "./functions/playbook.trigger.match";
+import { playbookRunExecute } from "./functions/playbook.run.execute";
 
 export const functions = [
   billingRollupUsage,
@@ -55,4 +57,6 @@ export const functions = [
   ingestionGithubInferFeatures,
   ingestionSemanticEdgeInfer,
   ingestionSyncRequested,
+  playbookTriggerMatch,
+  playbookRunExecute,
 ];

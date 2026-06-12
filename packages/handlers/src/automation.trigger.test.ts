@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   triggerFindFirst: vi.fn(),
   playbookFindFirst: vi.fn(),
   insertReturning: vi.fn(),
+  inngestSend: vi.fn(),
 }));
 
 // withTenantDb is called three times:
@@ -46,6 +47,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
+vi.mock("@oxagen/inngest-functions/client", () => ({
+  inngest: { send: mocks.inngestSend },
+}));
+
 import { automationTriggerHandler } from "./automation.trigger";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
@@ -76,6 +81,7 @@ function setupHappyPath() {
   mocks.triggerFindFirst.mockResolvedValue(MOCK_TRIGGER);
   mocks.playbookFindFirst.mockResolvedValue(MOCK_PLAYBOOK);
   mocks.insertReturning.mockResolvedValue([MOCK_RUN]);
+  mocks.inngestSend.mockResolvedValue(undefined);
 }
 
 describe("automationTriggerHandler (@oxagen/handlers)", () => {
@@ -84,6 +90,8 @@ describe("automationTriggerHandler (@oxagen/handlers)", () => {
     withTenantDbCallCount = 0;
     setupHappyPath();
   });
+
+  // ── inngest dispatch ──────────────────────────────────────────────────────
 
   // ── auth guard ────────────────────────────────────────────────────────────
 
@@ -131,5 +139,27 @@ describe("automationTriggerHandler (@oxagen/handlers)", () => {
       CTX,
     );
     expect(result.execution_id).toBe(MOCK_RUN.id);
+  });
+
+  it("sends playbook/run.execute inngest event after inserting the run", async () => {
+    const result = await automationTriggerHandler(BASE_INPUT, CTX);
+    expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
+    expect(mocks.inngestSend).toHaveBeenCalledWith({
+      name: "playbook/run.execute",
+      data: {
+        runId: MOCK_RUN.id,
+        orgId: CTX.orgId,
+        workspaceId: CTX.workspaceId,
+      },
+    });
+    expect(result.execution_id).toBe(MOCK_RUN.id);
+  });
+
+  it("does NOT send inngest event when run insert fails", async () => {
+    mocks.insertReturning.mockResolvedValueOnce([]);
+    await expect(automationTriggerHandler(BASE_INPUT, CTX)).rejects.toThrow(
+      "automation.trigger: run insert returned no row",
+    );
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 });

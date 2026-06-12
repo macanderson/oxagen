@@ -98,4 +98,7 @@ export const CHAT_COMPONENTS = {
   "html-artifact": lazy(
     () => import("@/components/chat/registry-components/artifact-iframe"),
   ),
+  "automation-create-inline": lazy(
+    () => import("@/components/chat/registry-components/automation-create-inline"),
+  ),
 } as unknown as Record<string, AnyLazy>;

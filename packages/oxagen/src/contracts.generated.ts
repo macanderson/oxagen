@@ -26,6 +26,8 @@ import "./contracts/api.key.revoke";
 import "./contracts/archive.create";
 import "./contracts/asset.upload";
 import "./contracts/automation.create";
+import "./contracts/automation.disable";
+import "./contracts/automation.enable";
 import "./contracts/automation.list";
 import "./contracts/automation.trigger";
 import "./contracts/billing.credits.purchase";

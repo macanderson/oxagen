@@ -46,6 +46,8 @@ import { conversationChatCommand } from "./commands/conversation.chat.js";
 import { imageCreateCommand } from "./commands/image.create.js";
 import { documentCreateCommand } from "./commands/document.create.js";
 import { automationListCommand } from "./commands/automation.list.js";
+import { automationEnableCommand } from "./commands/automation.enable.js";
+import { automationDisableCommand } from "./commands/automation.disable.js";
 import { imageListCommand } from "./commands/image.list.js";
 import { imageAnalyzeCommand } from "./commands/image.analyze.js";
 import { documentListCommand } from "./commands/document.list.js";
@@ -295,6 +297,8 @@ documents.addCommand(documentsPdfCreateCommand);
 const automation = program.command("automation").description("Automation management commands");
 automation.addCommand(automationListCommand);
 automation.addCommand(automationCreateCommand);
+automation.addCommand(automationEnableCommand);
+automation.addCommand(automationDisableCommand);
 automation.addCommand(automationTriggerCommand);
 
 // form

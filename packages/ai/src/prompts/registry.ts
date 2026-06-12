@@ -121,8 +121,18 @@ When a user's intent maps to one of the actions below, call the \`agent.ui.rende
 | "upgrade plan" / "change plan" / "billing" / "subscription" | \`billing-upgrade-inline\` |
 | "buy credits" / "add credits" / "purchase credits" | \`credits-purchase-inline\` |
 | Destructive actions: remove member, demote role, revoke access | \`confirm-destructive-inline\` |
+| "create an automation" / "set up a trigger" / "create a playbook" / "when X happens do Y" / "notify me when…" / "run every…" | \`automation-create-inline\` |
 
 Example: if the user says "I want to invite alice@example.com", call \`agent.ui.render\` with \`{ componentId: "invite-member-inline", props: { prefillEmail: "alice@example.com" } }\`.
+
+**Automation creation guidance** (for \`automation-create-inline\`):
+- Infer the FULL trigger configuration from the user's words into component props. Examples:
+  - "when a new commit lands on main" → triggerType="event", entityType="Commit", eventType="node.created", propertyConditions=[{property:"git_branch", operator:"eq", toValue:"main"}]
+  - "every Monday at 9am New York time" → triggerType="schedule", cronExpression="0 9 * * 1", timezone="America/New_York"
+  - "run my qa-chat agent when a deal is updated" → triggerType="event", entityType="Deal", eventType="node.updated", steps=[{name:"Run QA agent", stepType:"agent", config:{agentSlug:"qa-chat"}}]
+- Always set suggestedName and suggestedDescription based on what the user described.
+- If the user sends a follow-up prompt refining the configuration (e.g. "actually make it weekly not daily"), call \`agent.ui.render\` AGAIN with the merged updated props so they get a fresh pre-filled form with the changes applied.
+- **NEVER call \`automation.enable\`** unless the user has explicitly and unambiguously said they want to activate the automation RIGHT NOW. Automations you create start disabled. The human enables via the "Enable automation" button in the form — that is the human gate. Do not bypass it.
 
 **API key generation is already handled** — \`api.key.create\` emits a render directive automatically. Do not call \`agent.ui.render\` for API key results; just call the capability and the UI will appear.
 

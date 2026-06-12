@@ -82,6 +82,7 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
           authorEmail: "string",
           committedAt: "string",
           url: "string",
+          git_branch: "string",
         },
       },
       {
@@ -208,6 +209,11 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
       case "commit": {
         const commitObj = asRecord(r["commit"]);
         const authorObj = asRecord(commitObj["author"]);
+        // git_branch may be injected into the raw payload by the caller (e.g. a push
+        // webhook dispatcher or the polling sync that knows the branch it listed commits
+        // from). When present, it is forwarded to the EntityNode as a property so that
+        // trigger conditions can match on `git_branch = 'main'`.
+        const gitBranch = asString(r["git_branch"]);
         return {
           externalId: asString(r["sha"]) ?? (r["id"] !== undefined ? String(r["id"]) : ""),
           externalUrl: asString(r["html_url"]) ?? undefined,
@@ -219,6 +225,7 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
             authorEmail: asString(authorObj["email"]),
             committedAt: asString(authorObj["date"]),
             url: asString(r["html_url"]),
+            ...(gitBranch !== undefined ? { git_branch: gitBranch } : {}),
           },
         };
       }

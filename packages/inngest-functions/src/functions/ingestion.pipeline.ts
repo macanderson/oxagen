@@ -23,7 +23,8 @@ import { logger } from "../logger";
  *                              vector index is queryable from ingestion context)
  * Step 4: upsert-node         MERGE :EntityNode in Neo4j
  * Step 5: embed               embed text, store vector on node
- * Step 6: schedule-inference  fire ingestion/entity.infer asynchronously
+ * Step 6: schedule-events     fire ingestion/entity.created (trigger matcher) and
+ *                              ingestion/entity.infer (semantic inference) asynchronously
  */
 export const ingestionPipeline = inngest.createFunction(
   {
@@ -164,17 +165,35 @@ export const ingestionPipeline = inngest.createFunction(
       }),
     );
 
-    // ── Step 6: Fire async inference event ───────────────────────────────────
-    await step.sendEvent("schedule-inference", {
-      name: "ingestion/entity.infer",
-      data: {
-        nodeId: dedup.principalNodeId,
-        entityType: mutation.entityType,
-        propertiesSnapshot: mutation.properties,
-        workspaceId: mutation.workspaceId,
-        orgId: mutation.orgId,
+    // ── Step 6: Fire async downstream events ─────────────────────────────────
+    // Both events are sent in a single step.sendEvent call to keep the step
+    // count stable and avoid an extra Inngest checkpoint round-trip.
+    //   - ingestion/entity.created  → consumed by playbook.trigger.match
+    //   - ingestion/entity.infer    → consumed by semantic edge inference
+    await step.sendEvent("schedule-inference", [
+      {
+        name: "ingestion/entity.created" as never,
+        data: {
+          nodeId: dedup.principalNodeId,
+          entityType: mutation.entityType,
+          propertiesSnapshot: mutation.properties,
+          workspaceId: mutation.workspaceId,
+          orgId: mutation.orgId,
+          naturalKey: mutation.naturalKey,
+          isNew: dedup.action === "created_principal",
+        },
       },
-    });
+      {
+        name: "ingestion/entity.infer" as never,
+        data: {
+          nodeId: dedup.principalNodeId,
+          entityType: mutation.entityType,
+          propertiesSnapshot: mutation.properties,
+          workspaceId: mutation.workspaceId,
+          orgId: mutation.orgId,
+        },
+      },
+    ]);
 
     logger.info({ naturalKey: mutation.naturalKey, action: dedup.action, orgId }, "ingestion-pipeline: done");
     return { naturalKey: mutation.naturalKey, action: dedup.action };
