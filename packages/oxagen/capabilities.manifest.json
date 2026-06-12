@@ -1988,7 +1988,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -2006,7 +2006,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
