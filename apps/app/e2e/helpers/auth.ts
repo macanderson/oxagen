@@ -57,10 +57,11 @@ export async function loginAs(
   const domain = url.hostname;
 
   // Parse each Set-Cookie string and inject it into the browser context.
-  const cookies: Parameters<typeof context.addCookies>[0] = [];
+  const cookies: Parameters<typeof context.addCookies>[0][number][] = [];
   for (const raw of setCookies) {
     const parts = raw.split(";").map((p) => p.trim());
     const [nameValue, ...attrs] = parts;
+    if (!nameValue) continue;
     const eqIdx = nameValue.indexOf("=");
     if (eqIdx < 1) continue;
     const name = nameValue.slice(0, eqIdx).trim();

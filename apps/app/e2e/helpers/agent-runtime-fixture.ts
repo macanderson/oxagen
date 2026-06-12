@@ -12,7 +12,22 @@ export interface FixtureOptions {
   orgSlug: string;
   workspaceSlug: string;
   userEmail: string;
+  /**
+   * When true, seed the IAM rows (org Owner role + the user's principal +
+   * org-wide role assignment + role_grants) that the IAM-enforced API surface
+   * (:4000) requires. Opt-in because most fixtures drive the APP surface,
+   * where invoke() does not enforce IAM. Raw SQL mirror of bootstrapOrgIAM —
+   * the fixture stays dependency-free (no @oxagen/handlers import in the
+   * Playwright process). Grants cover IAM_E2E_GRANTS; extend that list when
+   * a new API-surface spec exercises another deny-by-default capability.
+   */
+  bootstrapIam?: boolean;
 }
+
+// Capabilities granted to the seeded Owner role when bootstrapIam is true.
+// Union of every defaultEffect:"deny" capability the API-surface e2e specs
+// call (api-key-lifecycle, workspace-isolation).
+const IAM_E2E_GRANTS = ["conversation.list", "api.key.create", "api.key.revoke"] as const;
 
 export interface DbState {
   toolCalls: Array<{ id: string; capability: string; status: string }>;
@@ -137,6 +152,50 @@ export async function setupAgentRuntimeFixture(
     VALUES ('wsu_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 22), ${workspaceId}, ${userId}, 'owner', now())
     ON CONFLICT (workspace_id, user_id) DO NOTHING
   `;
+
+  // OXA-1498: seed IAM so the user is an authorized principal on the
+  // IAM-enforced API surface. The resolver (rule 7) matches role_grants by
+  // exact capability string from the principal's assigned roles; without
+  // these rows every defaultEffect:"deny" capability 403s. Idempotent —
+  // public_ids are deterministic per org/user, so reruns and the second
+  // fixture of a shared org hit ON CONFLICT.
+  if (opts.bootstrapIam) {
+    // Per-user suffix: two fixtures can share one org (same sfx), so
+    // principal/assignment rows must key off the user, not the org.
+    const userSfx = userId.replace(/-/g, "").slice(0, 16);
+
+    const rolePublicId = `rol_e2e_${sfx}`;
+    const [roleRow] = await sql<{ id: string }[]>`
+      INSERT INTO iam.roles (public_id, org_id, scope_kind, name, is_system_default)
+      VALUES (${rolePublicId}, ${orgId}, 'org', 'Owner', true)
+      ON CONFLICT (public_id) DO UPDATE SET name = EXCLUDED.name
+      RETURNING id
+    `;
+    if (!roleRow) throw new Error("fixture: IAM role upsert returned no row");
+    const roleId = roleRow.id;
+
+    const [principalRow] = await sql<{ id: string }[]>`
+      INSERT INTO iam.principals (public_id, org_id, kind, display_name, status, parent_user_id)
+      VALUES (${`prn_e2e_${userSfx}`}, ${orgId}, 'human', 'E2E Runtime', 'active', ${userId})
+      ON CONFLICT (public_id) DO UPDATE SET status = 'active'
+      RETURNING id
+    `;
+    if (!principalRow) throw new Error("fixture: IAM principal upsert returned no row");
+
+    await sql`
+      INSERT INTO iam.principal_role_assignments (public_id, principal_id, role_id, org_id, assigned_by)
+      VALUES (${`pra_e2e_${userSfx}`}, ${principalRow.id}, ${roleId}, ${orgId}, ${userId})
+      ON CONFLICT (public_id) DO NOTHING
+    `;
+
+    for (const capability of IAM_E2E_GRANTS) {
+      await sql`
+        INSERT INTO iam.role_grants (public_id, org_id, role_id, capability_id, effect)
+        VALUES (${`rlg_e2e_${sfx}_${capability}`}, ${orgId}, ${roleId}, ${capability}, 'allow')
+        ON CONFLICT (public_id) DO NOTHING
+      `;
+    }
+  }
 
   // Better Auth session row — used by the auth helper to inject a logged-in
   // cookie without going through OAuth.

@@ -27,6 +27,9 @@ test.describe("api.key — full lifecycle", () => {
       orgSlug: ORG_SLUG,
       workspaceSlug: WS_SLUG,
       userEmail: USER_EMAIL,
+      // api.key.create/revoke are defaultEffect:"deny" on the IAM-enforced
+      // :4000 surface — the seeded user needs principal + role_grants rows.
+      bootstrapIam: true,
     });
   });
 
