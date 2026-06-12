@@ -15,11 +15,30 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
 import { eq } from "drizzle-orm";
+import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { schema, withSystemDb } from "@oxagen/database";
 import { DbOAuthClientProvider, loadOAuthState, deleteOAuthState } from "@oxagen/plugins";
 import { logger } from "@oxagen/handlers/logger";
 
 export const runtime = "nodejs"; // MCP SDK auth uses Node crypto — edge-unsafe.
+
+/**
+ * Fetch wrapper for mcpAuth — see authorize/route.ts for full explanation.
+ * Prevents Next.js's patched global fetch from hanging on body.cancel() for
+ * non-OK responses by pre-draining the body and returning a plain Response.
+ */
+const safeFetch: FetchLike = async (input, init) => {
+  const resp = await fetch(input, init);
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    return new Response(text || null, {
+      status: resp.status,
+      statusText: resp.statusText,
+      headers: resp.headers,
+    });
+  }
+  return resp;
+};
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -68,6 +87,7 @@ export async function GET(req: NextRequest) {
   const result = await mcpAuth(provider, {
     serverUrl: listing.endpointUrl,
     authorizationCode: code,
+    fetchFn: safeFetch,
   });
 
   // Clean up the ephemeral state regardless of outcome.

@@ -18,8 +18,32 @@ import { DbOAuthClientProvider } from "@oxagen/plugins";
 import { getSession } from "@/lib/session";
 import { resolveOrg, assertMcpManager } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
+import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 export const runtime = "nodejs"; // MCP SDK auth uses Node crypto — edge-unsafe.
+
+/**
+ * Fetch wrapper for mcpAuth that prevents Next.js's patched global fetch from
+ * hanging on response.body?.cancel() for non-OK responses.
+ *
+ * Next.js wraps Response objects with a custom implementation; calling
+ * body.cancel() on a non-2xx response with a streaming body (even an empty
+ * one) can block indefinitely. Pre-draining the body for non-OK responses and
+ * returning a plain Response with a null body makes cancel() a synchronous
+ * no-op.
+ */
+const safeFetch: FetchLike = async (input, init) => {
+  const resp = await fetch(input, init);
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    return new Response(text || null, {
+      status: resp.status,
+      statusText: resp.statusText,
+      headers: resp.headers,
+    });
+  }
+  return resp;
+};
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -86,7 +110,10 @@ export async function GET(req: NextRequest) {
     now: () => Date.now(),
   });
 
-  const result = await mcpAuth(provider, { serverUrl: listing.endpointUrl });
+  const result = await mcpAuth(provider, {
+    serverUrl: listing.endpointUrl,
+    fetchFn: safeFetch,
+  });
 
   if (result === "AUTHORIZED") {
     // Already connected — redirect straight back.
