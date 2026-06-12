@@ -23,14 +23,14 @@
 
 import { boolean, check, index, integer, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { orgSchema } from "./_schemas";
+import { iamSchema } from "./_schemas";
 import { auditMixin, idMixin, softDeleteMixin } from "./_mixins";
 
 // ---------------------------------------------------------------------------
 // principals — every human, agent, or service in the system
 // ---------------------------------------------------------------------------
 
-export const principals = orgSchema.table(
+export const principals = iamSchema.table(
   "principals",
   {
     ...idMixin("prn"),
@@ -73,7 +73,7 @@ export const principals = orgSchema.table(
 // roles — role definitions, system + custom, versioned
 // ---------------------------------------------------------------------------
 
-export const roles = orgSchema.table(
+export const roles = iamSchema.table(
   "roles",
   {
     ...idMixin("rol"),
@@ -101,7 +101,7 @@ export const roles = orgSchema.table(
 // role_grants — role → capability mapping with an effect
 // ---------------------------------------------------------------------------
 
-export const roleGrants = orgSchema.table(
+export const roleGrants = iamSchema.table(
   "role_grants",
   {
     ...idMixin("rlg"),
@@ -130,7 +130,7 @@ export const roleGrants = orgSchema.table(
 // access_requests — JIT access requests
 // ---------------------------------------------------------------------------
 
-export const accessRequests = orgSchema.table(
+export const accessRequests = iamSchema.table(
   "access_requests",
   {
     ...idMixin("arq"),
@@ -178,7 +178,7 @@ export const accessRequests = orgSchema.table(
 // idempotent upserts are safe. workspace_id NULL means org-wide scope.
 // ---------------------------------------------------------------------------
 
-export const principalRoleAssignments = orgSchema.table(
+export const principalRoleAssignments = iamSchema.table(
   "principal_role_assignments",
   {
     ...idMixin("pra"),

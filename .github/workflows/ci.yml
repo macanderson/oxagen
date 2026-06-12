@@ -196,7 +196,7 @@ jobs:
             echo "TURBO_BASE=$BEFORE" >> "$GITHUB_ENV"
           fi
 
-      - name: Apply Postgres init schemas
+      - name: Bootstrap Postgres extensions
         run: |
           sudo apt-get install -y postgresql-client
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
@@ -209,19 +209,31 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Run migrations only when migration files changed in this diff range.
+      - name: Install Atlas CLI
+        run: curl -sSf https://atlasgo.sh | sh
+
+      # Run migrations only when Atlas or telemetry migration files changed.
       - name: Detect migration changes
         id: migration_changes
         run: |
-          if git diff --name-only "${TURBO_BASE}"...HEAD | grep -qE '^packages/database/drizzle/'; then
+          if git diff --name-only "${TURBO_BASE}"...HEAD | grep -qE '^packages/database/atlas/migrations/|^packages/telemetry/'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Migrate
+      - name: Migrate Postgres (Atlas)
         if: steps.migration_changes.outputs.changed == 'true'
-        run: pnpm db:migrate
+        working-directory: packages/database
+        run: atlas migrate apply --env ci
+
+      - name: Migrate ClickHouse + Neo4j
+        if: steps.migration_changes.outputs.changed == 'true'
+        run: DB_MIGRATE_STORES=clickhouse,neo4j tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
+
+      - name: Seed platform defaults
+        if: steps.migration_changes.outputs.changed == 'true'
+        run: tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
       # Affected build + unit tests. test:unit dependsOn ^build, so turbo builds
       # the affected dependency graph then runs the affected tests — all in one
@@ -306,7 +318,7 @@ jobs:
             fi
             echo "TURBO_BASE=$BEFORE" >> "$GITHUB_ENV"
           fi
-      - name: Apply Postgres init schemas
+      - name: Bootstrap Postgres extensions
         run: |
           sudo apt-get install -y postgresql-client
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
@@ -316,8 +328,15 @@ jobs:
           node-version: "24"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Migrate (always for fresh e2e database)
-        run: pnpm db:migrate
+      - name: Install Atlas CLI
+        run: curl -sSf https://atlasgo.sh | sh
+      - name: Migrate Postgres (Atlas — always for fresh e2e database)
+        working-directory: packages/database
+        run: atlas migrate apply --env ci
+      - name: Migrate ClickHouse + Neo4j
+        run: DB_MIGRATE_STORES=clickhouse,neo4j tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
+      - name: Seed platform defaults
+        run: tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
       - name: Build (affected)
         run: pnpm turbo run build --filter="...[${TURBO_BASE}]"
       # Install the Playwright browser + OS deps. Without this the runner has no
@@ -358,12 +377,10 @@ jobs:
     env:
       # Enforcement ON so the RLS policies are load-bearing for the proof.
       TENANT_RLS_ENFORCEMENT_ENABLED: "true"
-      # Only Postgres is needed for the isolation suite.
-      DB_MIGRATE_STORES: postgres
     steps:
       - uses: actions/checkout@v5
 
-      - name: Apply Postgres init schemas
+      - name: Bootstrap Postgres extensions
         run: |
           sudo apt-get install -y postgresql-client
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
@@ -376,9 +393,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Apply baseline + the generated 0001_rls_policies.sql (ENABLE/FORCE RLS).
-      - name: Migrate (postgres — includes RLS policies)
-        run: pnpm db:migrate
+      - name: Install Atlas CLI
+        run: curl -sSf https://atlasgo.sh | sh
+
+      # Apply full Atlas migration set (includes future RLS policy migrations).
+      - name: Migrate Postgres (Atlas)
+        working-directory: packages/database
+        run: atlas migrate apply --env ci
+
+      - name: Seed platform defaults
+        run: tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
       - name: RLS isolation proof + manifest coverage
         run: pnpm --filter @oxagen/database test:integration
@@ -409,8 +433,8 @@ jobs:
       group: db-migrate-${{ github.event_name != 'pull_request' && 'production' || 'preview' }}
       cancel-in-progress: false
     env:
-      # Postgres + ClickHouse only — Neo4j prod/preview creds are not provisioned.
-      DB_MIGRATE_STORES: postgres,clickhouse
+      # ClickHouse only — Postgres is handled by Atlas; Neo4j prod/preview creds not provisioned.
+      DB_MIGRATE_STORES: clickhouse
       # Select the target environment's creds by event. The non-DB env defaults
       # (Better Auth / Stripe / Inngest / Neo4j dummies) are inherited from the
       # workflow-level env block above so loadEnv() validates; only the DB +
@@ -447,7 +471,7 @@ jobs:
               BASE="$(git rev-parse HEAD~1)"
             fi
           fi
-          if git diff --name-only "${BASE}"...HEAD | grep -qE '^packages/database/drizzle/|^packages/telemetry/'; then
+          if git diff --name-only "${BASE}"...HEAD | grep -qE '^packages/database/atlas/migrations/|^packages/telemetry/'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -464,19 +488,29 @@ jobs:
       - run: pnpm install --frozen-lockfile
         if: steps.changes.outputs.changed == 'true'
 
-      # Idempotent bootstrap: creates the extensions + 14 domain schemas that
-      # 0000_baseline.sql attaches to. `if not exists` everywhere, so it is a
-      # no-op against an already-provisioned production database and the required
-      # first step for a fresh preview database.
-      - name: Bootstrap schema (idempotent)
+      - name: Install Atlas CLI
+        if: steps.changes.outputs.changed == 'true'
+        run: curl -sSf https://atlasgo.sh | sh
+
+      # Bootstrap extensions on the target DB (idempotent; no-op if already done).
+      - name: Bootstrap Postgres extensions (idempotent)
         if: steps.changes.outputs.changed == 'true'
         run: |
           sudo apt-get install -y postgresql-client
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
-      - name: Apply migrations (${{ github.event_name != 'pull_request' && 'PRODUCTION' || 'PREVIEW' }} — postgres + clickhouse)
+      - name: Migrate Postgres (${{ github.event_name != 'pull_request' && 'PRODUCTION' || 'PREVIEW' }} — Atlas)
         if: steps.changes.outputs.changed == 'true'
-        run: pnpm db:migrate
+        working-directory: packages/database
+        run: atlas migrate apply --env ci
+
+      - name: Migrate ClickHouse (${{ github.event_name != 'pull_request' && 'PRODUCTION' || 'PREVIEW' }})
+        if: steps.changes.outputs.changed == 'true'
+        run: DB_MIGRATE_STORES=clickhouse tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
+
+      - name: Seed platform defaults (idempotent)
+        if: steps.changes.outputs.changed == 'true'
+        run: tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
   # ──────────────────────────────────────────────────────────────────────
   # deploy — post-merge side-car (main only). The actual app deploys are

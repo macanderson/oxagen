@@ -1,7 +1,7 @@
-import { boolean, index, integer, jsonb, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { ingestionSchema } from "./_schemas";
-import { citext, idMixin, uuidv7Default } from "./_mixins";
+import { auditMixin, citext, idMixin, uuidv7Default } from "./_mixins";
 
 // ── ingestion.source_connections ─────────────────────────────────────────────
 
@@ -18,20 +18,23 @@ export const sourceConnections = ingestionSchema.table(
     authScheme: text("auth_scheme").notNull(),
     deliveryMethod: text("delivery_method").notNull(),
     deliveryConfig: jsonb("delivery_config"),
-    status: citext("status").notNull().default("pending_setup"),
+    status: text("status").notNull().default("pending_setup"),
     entityCount: integer("entity_count").notNull().default(0),
     cursor: jsonb("cursor"),
     lastSyncAt: timestamp("last_sync_at", { withTimezone: true, mode: "date" }),
     errorMessage: text("error_message"),
     deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
-    deletedBy: uuid("deleted_by"),
+    deletedByUserId: uuid("deleted_by_user_id"),
     oauthAccountId: uuid("oauth_account_id"),
+    createdByUserId: uuid("created_by_user_id"),
+    updatedByUserId: uuid("updated_by_user_id"),
   },
   (t) => ({
     workspaceOrgIdx: index("source_connections_workspace_org_idx").on(t.workspaceId, t.orgId),
     connectorIdx: index("source_connections_connector_idx").on(t.connectorId),
     statusIdx: index("source_connections_status_idx").on(t.status),
     oauthAccountIdx: index("source_connections_oauth_account_idx").on(t.oauthAccountId),
+    statusCheck: check("source_connections_status_check", sql`${t.status} IN ('pending_setup', 'connected', 'paused', 'error')`),
   }),
 );
 
@@ -83,7 +86,7 @@ export const webhookSubscriptions = ingestionSchema.table(
     hmacHeader: text("hmac_header"),
     providerSubscriptionId: text("provider_subscription_id"),
     recordTypes: text("record_types").array().notNull().default(sql`'{}'`),
-    status: citext("status").notNull().default("active"),
+    status: text("status").notNull().default("active"),
     lastReceivedAt: timestamp("last_received_at", { withTimezone: true, mode: "date" }),
   },
   (t) => ({
@@ -191,6 +194,7 @@ export const setupSuggestions = ingestionSchema.table(
     publicId: citext("public_id").notNull().unique(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     connectionId: uuid("connection_id").notNull(),
+    orgId: uuid("org_id").notNull(),
     workspaceId: uuid("workspace_id").notNull(),
     sourceRecordType: text("source_record_type").notNull(),
     suggestedEntityType: text("suggested_entity_type").notNull(),
@@ -198,13 +202,14 @@ export const setupSuggestions = ingestionSchema.table(
       .notNull()
       .default(sql`'{}'::jsonb`),
     reasoning: text("reasoning"),
-    status: citext("status").notNull().default("pending"),
+    status: text("status").notNull().default("pending"),
     resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
     resolvedBy: uuid("resolved_by"),
   },
   (t) => ({
     connectionIdx: index("setup_suggestions_connection_idx").on(t.connectionId),
     statusIdx: index("setup_suggestions_status_idx").on(t.status),
+    orgIdx: index("setup_suggestions_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
 
@@ -233,6 +238,8 @@ export const deletionJobs = ingestionSchema.table(
     connectionIdx: index("deletion_jobs_connection_idx").on(t.connectionId),
     workspaceIdx: index("deletion_jobs_workspace_idx").on(t.workspaceId),
     statusIdx: index("deletion_jobs_status_idx").on(t.status),
+    statusCheck: check("deletion_jobs_status_check", sql`${t.status} IN ('pending', 'running', 'completed', 'failed', 'cancelled')`),
+    deleteModeCheck: check("deletion_jobs_delete_mode_check", sql`${t.deleteMode} IN ('soft', 'hard')`),
   }),
 );
 

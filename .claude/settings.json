@@ -253,8 +253,8 @@
     "sonnet",
     "sonnet[1m]",
     "haiku",
-    "fable",
-    "opusplan"
+    "opusplan",
+    "fable"
   ],
   "enableAllProjectMcpServers": true,
   "skillListingMaxDescChars": 512,
@@ -345,13 +345,7 @@
       "target",
       "dist"
     ],
-    "sparsePaths": [
-      "apps",
-      "packages",
-      "tools",
-      ".agents",
-      ".claude"
-    ],
+    "sparsePaths": ["apps", "packages", "tools", ".agents", ".claude"],
     "baseRef": "head",
     "bgIsolation": "none"
   },
@@ -386,11 +380,7 @@
   "sandbox": {
     "enabled": false,
     "filesystem": {
-      "denyRead": [
-        "~/.aws/credentials",
-        "~/.ssh",
-        "~/.config/gcloud"
-      ]
+      "denyRead": ["~/.aws/credentials", "~/.ssh", "~/.config/gcloud"]
     }
   },
   "spinnerTipsEnabled": true,
@@ -412,9 +402,7 @@
     ]
   },
   "alwaysThinkingEnabled": true,
-  "companyAnnouncements": [
-    "Oxagen is REAL - let's get it... 🚀"
-  ],
+  "companyAnnouncements": ["Oxagen is REAL - let's get it... 🚀"],
   "autoUpdatesChannel": "latest",
   "tui": "fullscreen",
   "autoMemoryEnabled": true,

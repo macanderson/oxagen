@@ -1,4 +1,4 @@
-import { boolean, index, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { chatSchema } from "./_schemas";
 import { auditMixin, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
@@ -28,6 +28,7 @@ export const conversations = chatSchema.table(
   (t) => ({
     orgIdx: index("conversations_org_idx").on(t.orgId, t.workspaceId),
     userIdx: index("conversations_user_idx").on(t.userId),
+    statusCheck: check("conversations_status_check", sql`${t.status} IN ('active', 'archived', 'deleted')`),
     // The history nav lists a user's non-deleted conversations in a workspace
     // ordered by recency, split by archive state. This composite index serves
     // that scan without a sort: filter (workspaceId, userId, deletedAt,

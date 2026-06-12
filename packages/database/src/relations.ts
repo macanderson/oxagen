@@ -10,7 +10,12 @@ import {
 import { users, sessions, accounts, apiKeys } from "./schema/auth";
 import { workspaces, workspaceUsers } from "./schema/workspace";
 import {
-  mcpServers,
+  agents,
+  agentVersions,
+  agentExecutions,
+  agentExecutionSteps,
+  agentToolCalls,
+  agentPlans,
   skills,
   skillVersions,
   backgroundTasks,
@@ -18,7 +23,17 @@ import {
   subagentFanouts,
   subagentRuns,
 } from "./schema/agent";
+import { mcpServers } from "./schema/mcp";
 import {
+  playbooks,
+  playbookVersions,
+  playbookSteps,
+  playbookEdges,
+  playbookTriggers,
+  playbookRuns,
+  playbookStepRuns,
+  playbookEvents,
+  playbookApprovals,
 } from "./schema/workflow";
 import { conversations, messages } from "./schema/chat";
 import {
@@ -255,3 +270,152 @@ export const accessRequestsRelations = relations(accessRequests, ({ one }) => ({
   requester: one(principals, { fields: [accessRequests.requesterId], references: [principals.id] }),
   org: one(organizations, { fields: [accessRequests.orgId], references: [organizations.id] }),
 }));
+
+// ── Agent relations ───────────────────────────────────────────────────────────
+
+export const agentsRelations = relations(agents, ({ one, many }) => ({
+  workspace: one(workspaces, { fields: [agents.workspaceId], references: [workspaces.id] }),
+  versions: many(agentVersions),
+  executions: many(agentExecutions),
+}));
+
+export const agentVersionsRelations = relations(agentVersions, ({ one, many }) => ({
+  agent: one(agents, { fields: [agentVersions.agentId], references: [agents.id] }),
+  executions: many(agentExecutions),
+  stepRuns: many(playbookStepRuns),
+}));
+
+export const agentExecutionsRelations = relations(agentExecutions, ({ one, many }) => ({
+  agent: one(agents, { fields: [agentExecutions.agentId], references: [agents.id] }),
+  agentVersion: one(agentVersions, {
+    fields: [agentExecutions.agentVersionId],
+    references: [agentVersions.id],
+  }),
+  workspace: one(workspaces, { fields: [agentExecutions.workspaceId], references: [workspaces.id] }),
+  steps: many(agentExecutionSteps),
+}));
+
+export const agentExecutionStepsRelations = relations(agentExecutionSteps, ({ one, many }) => ({
+  execution: one(agentExecutions, {
+    fields: [agentExecutionSteps.executionId],
+    references: [agentExecutions.id],
+  }),
+  toolCalls: many(agentToolCalls),
+}));
+
+export const agentToolCallsRelations = relations(agentToolCalls, ({ one }) => ({
+  executionStep: one(agentExecutionSteps, {
+    fields: [agentToolCalls.executionStepId],
+    references: [agentExecutionSteps.id],
+  }),
+}));
+
+export const agentPlansRelations = relations(agentPlans, ({ one }) => ({
+  workspace: one(workspaces, { fields: [agentPlans.workspaceId], references: [workspaces.id] }),
+}));
+
+// ── Playbook (workflow domain) relations ──────────────────────────────────────
+
+export const playbooksRelations = relations(playbooks, ({ one, many }) => ({
+  workspace: one(workspaces, { fields: [playbooks.workspaceId], references: [workspaces.id] }),
+  versions: many(playbookVersions),
+  triggers: many(playbookTriggers),
+  runs: many(playbookRuns),
+}));
+
+export const playbookVersionsRelations = relations(playbookVersions, ({ one, many }) => ({
+  playbook: one(playbooks, { fields: [playbookVersions.playbookId], references: [playbooks.id] }),
+  steps: many(playbookSteps),
+  edges: many(playbookEdges),
+  runs: many(playbookRuns),
+}));
+
+export const playbookStepsRelations = relations(playbookSteps, ({ one, many }) => ({
+  version: one(playbookVersions, {
+    fields: [playbookSteps.playbookVersionId],
+    references: [playbookVersions.id],
+  }),
+  outboundEdges: many(playbookEdges, { relationName: "edge_source" }),
+  inboundEdges: many(playbookEdges, { relationName: "edge_target" }),
+  stepRuns: many(playbookStepRuns),
+}));
+
+export const playbookEdgesRelations = relations(playbookEdges, ({ one }) => ({
+  version: one(playbookVersions, {
+    fields: [playbookEdges.playbookVersionId],
+    references: [playbookVersions.id],
+  }),
+  sourceStep: one(playbookSteps, {
+    fields: [playbookEdges.sourceStepId],
+    references: [playbookSteps.id],
+    relationName: "edge_source",
+  }),
+  targetStep: one(playbookSteps, {
+    fields: [playbookEdges.targetStepId],
+    references: [playbookSteps.id],
+    relationName: "edge_target",
+  }),
+}));
+
+export const playbookTriggersRelations = relations(playbookTriggers, ({ one }) => ({
+  playbook: one(playbooks, { fields: [playbookTriggers.playbookId], references: [playbooks.id] }),
+  workspace: one(workspaces, { fields: [playbookTriggers.workspaceId], references: [workspaces.id] }),
+}));
+
+export const playbookRunsRelations = relations(playbookRuns, ({ one, many }) => ({
+  playbook: one(playbooks, { fields: [playbookRuns.playbookId], references: [playbooks.id] }),
+  version: one(playbookVersions, {
+    fields: [playbookRuns.playbookVersionId],
+    references: [playbookVersions.id],
+  }),
+  workspace: one(workspaces, { fields: [playbookRuns.workspaceId], references: [workspaces.id] }),
+  parentRun: one(playbookRuns, {
+    fields: [playbookRuns.parentRunId],
+    references: [playbookRuns.id],
+    relationName: "playbook_run_parent",
+  }),
+  childRuns: many(playbookRuns, { relationName: "playbook_run_parent" }),
+  stepRuns: many(playbookStepRuns),
+  events: many(playbookEvents),
+  approvals: many(playbookApprovals),
+}));
+
+export const playbookStepRunsRelations = relations(playbookStepRuns, ({ one, many }) => ({
+  run: one(playbookRuns, {
+    fields: [playbookStepRuns.playbookRunId],
+    references: [playbookRuns.id],
+  }),
+  step: one(playbookSteps, {
+    fields: [playbookStepRuns.playbookStepId],
+    references: [playbookSteps.id],
+  }),
+  agentVersion: one(agentVersions, {
+    fields: [playbookStepRuns.agentVersionId],
+    references: [agentVersions.id],
+  }),
+  events: many(playbookEvents),
+  approvals: many(playbookApprovals),
+}));
+
+export const playbookEventsRelations = relations(playbookEvents, ({ one }) => ({
+  run: one(playbookRuns, {
+    fields: [playbookEvents.playbookRunId],
+    references: [playbookRuns.id],
+  }),
+  stepRun: one(playbookStepRuns, {
+    fields: [playbookEvents.stepRunId],
+    references: [playbookStepRuns.id],
+  }),
+}));
+
+export const playbookApprovalsRelations = relations(playbookApprovals, ({ one }) => ({
+  run: one(playbookRuns, {
+    fields: [playbookApprovals.playbookRunId],
+    references: [playbookRuns.id],
+  }),
+  stepRun: one(playbookStepRuns, {
+    fields: [playbookApprovals.stepRunId],
+    references: [playbookStepRuns.id],
+  }),
+}));
+

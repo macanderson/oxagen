@@ -8,24 +8,24 @@
 
 import { check, index, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { authSchema } from "./_schemas";
+import { privacySchema } from "./_schemas";
 import { idMixin, auditMixin } from "./_mixins";
 
 // ── Enums ────────────────────────────────────────────────────────────────────
 
-export const privacyRequestScopeEnum = authSchema.enum("privacy_request_scope", [
+export const privacyRequestScopeEnum = privacySchema.enum("privacy_request_scope", [
   "user",
   "org",
 ]);
 
-export const privacyExportStatusEnum = authSchema.enum("privacy_export_status", [
+export const privacyExportStatusEnum = privacySchema.enum("privacy_export_status", [
   "queued",
   "processing",
   "ready",
   "failed",
 ]);
 
-export const privacyErasureStatusEnum = authSchema.enum("privacy_erasure_status", [
+export const privacyErasureStatusEnum = privacySchema.enum("privacy_erasure_status", [
   "queued",
   "processing",
   "completed",
@@ -34,7 +34,7 @@ export const privacyErasureStatusEnum = authSchema.enum("privacy_erasure_status"
 
 // ── privacy_export_requests ──────────────────────────────────────────────────
 
-export const privacyExportRequests = authSchema.table(
+export const privacyExportRequests = privacySchema.table(
   "privacy_export_requests",
   {
     ...idMixin("prexp"),
@@ -63,7 +63,7 @@ export const privacyExportRequests = authSchema.table(
 
 // ── privacy_erasure_requests ─────────────────────────────────────────────────
 
-export const privacyErasureRequests = authSchema.table(
+export const privacyErasureRequests = privacySchema.table(
   "privacy_erasure_requests",
   {
     ...idMixin("preras"),

@@ -17,3 +17,6 @@ export const mcpSchema = pgSchema("mcp");
 export const pluginSchema = pgSchema("plugin");
 export const notificationSchema = pgSchema("notification");
 export const ingestionSchema = pgSchema("ingestion");
+export const iamSchema = pgSchema("iam");
+export const privacySchema = pgSchema("privacy");
+export const graphSchema = pgSchema("graph");

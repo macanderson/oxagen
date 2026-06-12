@@ -1,39 +1,22 @@
--- Initial Postgres bootstrap. Runs once on container init via
--- docker-entrypoint-initdb.d. Drizzle migrations attach to schemas
--- created here; Better Auth tables land under `auth` per spec §15.4.
+-- init-postgres.sql — extension bootstrap only.
+-- Schemas are now managed by Atlas (packages/database/atlas/migrations/).
+-- Run this once before `atlas migrate apply` on any fresh Postgres instance.
 
-create extension if not exists "citext";
-create extension if not exists "ltree";
-create extension if not exists "pgcrypto";
-create extension if not exists "pg_stat_statements";
+CREATE EXTENSION IF NOT EXISTS citext;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS ltree;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 
--- uuid_generate_v7() ships in Postgres 17+. On 16, install via the
--- `pg_uuidv7` extension or fall back to a generated function in
--- migrations. We try the extension; ignore if unavailable so init still
--- succeeds against stock images.
-do $$
-begin
-  begin
-    create extension if not exists "pg_uuidv7";
-  exception when others then
-    raise notice 'pg_uuidv7 unavailable; Drizzle migration will provide a fallback';
-  end;
-end$$;
-
--- 14 domain schemas per spec §6. Names must match the canonical set in
--- packages/database/drizzle.config.ts (schemaFilter) and 0000_baseline.sql.
--- The org schema is `org` (org.organizations), NOT `organization`.
-create schema if not exists org;
-create schema if not exists auth;
-create schema if not exists workspace;
-create schema if not exists integration;
-create schema if not exists agent;
-create schema if not exists workflow;
-create schema if not exists event;
-create schema if not exists execution;
-create schema if not exists chat;
-create schema if not exists content;
-create schema if not exists graph;
-create schema if not exists evaluation;
-create schema if not exists billing;
-create schema if not exists security;
+-- uuid_generate_v7(): try pg_uuidv7 first (Postgres 17+ has it natively).
+-- On Postgres 16, create a v4 stub so Atlas and migrations parse cleanly.
+DO $$
+BEGIN
+  BEGIN
+    CREATE EXTENSION IF NOT EXISTS pg_uuidv7;
+  EXCEPTION WHEN OTHERS THEN
+    -- pg_uuidv7 not available; install a v4 stub.
+    CREATE OR REPLACE FUNCTION public.uuid_generate_v7()
+    RETURNS uuid LANGUAGE sql AS $fn$ SELECT uuid_generate_v4() $fn$;
+  END;
+END$$;

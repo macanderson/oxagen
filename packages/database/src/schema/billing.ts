@@ -76,6 +76,7 @@ export const subscriptions = billingSchema.table(
       "subscriptions_billing_interval_check",
       sql`${t.billingInterval} IN ('month','year')`,
     ),
+    statusCheck: check("subscriptions_status_check", sql`${t.status} IN ('active', 'past_due', 'canceled', 'trialing', 'unpaid', 'incomplete', 'incomplete_expired', 'paused')`),
     // Partial unique: one 'active' subscription per org.
     // Allows multiple non-active subscriptions (past_due, canceled, etc.)
     // without blocking legitimate Stripe lifecycle events.
@@ -139,6 +140,7 @@ export const invoices = billingSchema.table(
   (t) => ({
     stripeInvIdx: uniqueIndex("invoices_stripe_inv_idx").on(t.stripeInvoiceId),
     orgIdx: index("invoices_org_idx").on(t.orgId, t.status),
+    statusCheck: check("invoices_status_check", sql`${t.status} IN ('draft', 'open', 'paid', 'uncollectible', 'void')`),
   }),
 );
 

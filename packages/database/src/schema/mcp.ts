@@ -134,3 +134,35 @@ export const mcpCredentials = mcpSchema.table(
     ),
   }),
 );
+
+/**
+ * mcp.mcp_servers — installed MCP server instances per org/workspace.
+ * Moved from agent.ts so all MCP-protocol artefacts share one domain schema.
+ */
+export const mcpServers = mcpSchema.table(
+  "mcp_servers",
+  {
+    ...idMixin("mcs"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    // Links back to plugin.org_listings — nullable because column was added to an existing
+    // table; the plugin install handler requires it on every new insert.
+    orgListingId: uuid("org_listing_id"),
+    name: text("name").notNull(),
+    transportType: text("transport_type").notNull(),
+    endpointUrl: text("endpoint_url").notNull(),
+    authStrategy: text("auth_strategy").notNull(),
+    authConfig: jsonb("auth_config").notNull().default(sql`'{}'::jsonb`),
+    healthStatus: text("health_status").notNull(),
+    lastHealthcheckAt: timestamp("last_healthcheck_at", { withTimezone: true, mode: "date" }),
+    discoveredTools: jsonb("discovered_tools").notNull().default(sql`'[]'::jsonb`),
+    enabled: boolean("enabled").notNull().default(true),
+  },
+  (t) => ({
+    orgIdx: index("mcp_servers_org_idx").on(t.orgId, t.workspaceId),
+    enabledIdx: index("mcp_servers_enabled_idx").on(t.workspaceId, t.enabled),
+    wsListingUniq: uniqueIndex("mcp_servers_ws_listing_uniq")
+      .on(t.workspaceId, t.orgListingId)
+      .where(sql`org_listing_id IS NOT NULL`),
+  }),
+);
