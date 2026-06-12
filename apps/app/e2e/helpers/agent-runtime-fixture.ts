@@ -182,9 +182,13 @@ export async function setupAgentRuntimeFixture(
     `;
     if (!principalRow) throw new Error("fixture: IAM principal upsert returned no row");
 
+    // Workspace-SCOPED assignment (workspace_id set, not org-wide NULL):
+    // fetch-authz only surfaces the assignment when ctx.workspaceId matches,
+    // so the user is Owner in their own workspace and a stranger everywhere
+    // else — exactly the semantics the workspace-isolation spec asserts.
     await sql`
-      INSERT INTO iam.principal_role_assignments (public_id, principal_id, role_id, org_id, assigned_by)
-      VALUES (${`pra_e2e_${userSfx}`}, ${principalRow.id}, ${roleId}, ${orgId}, ${userId})
+      INSERT INTO iam.principal_role_assignments (public_id, principal_id, role_id, org_id, workspace_id, assigned_by)
+      VALUES (${`pra_e2e_${userSfx}`}, ${principalRow.id}, ${roleId}, ${orgId}, ${workspaceId}, ${userId})
       ON CONFLICT (public_id) DO NOTHING
     `;
 

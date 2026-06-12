@@ -59,16 +59,21 @@ test.describe("workspace.isolation — cross-workspace access denied", () => {
     await page.goto(`/${ORG_SLUG}/${WS_BETA_SLUG}/ask`);
 
     // The proxy/middleware must either redirect to login or show an error page.
-    // Accept /login redirect OR a 403/404 rendered page — both are valid isolation responses.
-    const url = page.url();
-    const isRedirectedToLogin = url.includes("/login");
-    const isErrorPage = await page
+    // Accept /login redirect OR a 403/404 rendered page — both are valid
+    // isolation responses. The 404 boundary is streamed RSC: it can land
+    // AFTER goto() resolves, so wait for either outcome instead of checking
+    // isVisible() at a single instant.
+    const errorHeading = page
       .locator("h1, [data-testid='error-heading']")
-      .filter({ hasText: /not found|forbidden|access denied|403|404/i })
-      .isVisible()
+      .filter({ hasText: /not found|forbidden|access denied|403|404/i });
+    const denied = await Promise.any([
+      page.waitForURL(/\/login/, { timeout: 10_000 }),
+      errorHeading.first().waitFor({ state: "visible", timeout: 10_000 }),
+    ])
+      .then(() => true)
       .catch(() => false);
 
-    expect(isRedirectedToLogin || isErrorPage).toBe(true);
+    expect(denied).toBe(true);
 
     // Must never see ws-beta workspace content.
     await expect(page.locator(`[data-workspace-slug="${WS_BETA_SLUG}"]`)).not.toBeVisible();

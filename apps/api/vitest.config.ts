@@ -16,14 +16,15 @@ export default defineConfig({
         "src/vercel.ts",
         "src/bootstrap.ts",
       ],
-      // Ratchet floors raised after route-handler tests were added:
-      // measured 99.21% lines / 98.17% branches / 95.45% functions.
+      // Ratchet floors raised after the document/form/image, graph, and
+      // integration/plugin/repo/semantic/web route-test sweep: measured
+      // 87.35% lines / 88.59% branches / 90.62% functions.
       // Keep raising as coverage grows — never lower.
       thresholds: {
-        lines: 85,
-        branches: 85,
-        functions: 85,
-        statements: 85,
+        lines: 87,
+        branches: 88,
+        functions: 90,
+        statements: 87,
       },
     },
   },
