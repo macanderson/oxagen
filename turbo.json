@@ -100,7 +100,7 @@
     "typecheck": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "src/**", "tsconfig.json", "package.json"],
-      "outputs": ["*.tsbuildinfo"]
+      "outputs": []
     },
 
     "lint": {
