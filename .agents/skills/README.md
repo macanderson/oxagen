@@ -43,6 +43,7 @@ reference docs under a top-level `SKILL.md`:
 ## Feature workflow
 
 - [`oxagen-feature`](oxagen-feature/SKILL.md) — end-to-end feature build workflow (capability → API route → MCP tool → schema → tests → docs → marketing), with a memory loop and a manifest checker (`references/`, `scripts/`).
+- [`oxagen-plugins`](oxagen-plugins/SKILL.md) — author/modify/retire Oxagen Plugins (first-party capability packs): manifest schema, static registry, tier/visibility, entitlement gating, marketplace surfacing, test/docs checklist.
 
 ## Adding a skill
 

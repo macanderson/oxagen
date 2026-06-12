@@ -2,6 +2,7 @@
   "title": "Plugins",
   "pages": [
     "marketplace",
-    "workspace-plugins"
+    "workspace-plugins",
+    "oxagen-plugins"
   ]
 }

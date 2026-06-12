@@ -14,6 +14,7 @@ import {
   Globe,
   Package,
   FileText,
+  Boxes,
 } from "lucide-react";
 import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
 import type { schema } from "@oxagen/database";
@@ -49,7 +50,8 @@ interface OrgPluginsPanelProps {
   installCatalogAction: (input: {
     orgSlug: string;
     catalogServerId: string;
-    pluginType: "mcp_server" | "integration" | "content_tool";
+    pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
+    pluginId?: string;
   }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
   /** Install a custom MCP server (from the custom plugin form). */
   installAction: (input: {
@@ -68,7 +70,8 @@ interface OrgPluginsPanelProps {
     orgSlug: string;
     items: Array<{
       catalogServerId?: string;
-      pluginType: "mcp_server" | "integration" | "content_tool";
+      pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
+      pluginId?: string;
     }>;
   }) => Promise<{
     ok: boolean;
@@ -91,13 +94,13 @@ interface OrgPluginsPanelProps {
   addDenylistAction: (input: {
     orgSlug: string;
     serverName: string;
-    pluginType: "mcp_server" | "integration" | "content_tool";
+    pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
     reason?: string;
   }) => Promise<{ ok: boolean; error?: string }>;
   removeDenylistAction: (input: {
     orgSlug: string;
     serverName: string;
-    pluginType: "mcp_server" | "integration" | "content_tool";
+    pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
   }) => Promise<{ ok: boolean; error?: string }>;
   addRegistryAction: (input: {
     orgSlug: string;
@@ -115,12 +118,14 @@ interface OrgPluginsPanelProps {
 function pluginTypeIcon(type: string) {
   if (type === "integration") return <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
   if (type === "content_tool") return <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
+  if (type === "capability") return <Boxes className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
   return <Plug className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
 }
 
-function pluginTypeBadgeVariant(type: string): "outline" | "muted" | "secondary" {
+function pluginTypeBadgeVariant(type: string): "outline" | "muted" | "secondary" | "info" {
   if (type === "integration") return "muted";
   if (type === "content_tool") return "secondary";
+  if (type === "capability") return "info";
   return "outline";
 }
 
@@ -663,7 +668,7 @@ function DenylistSection({
   const [showForm, setShowForm] = React.useState(false);
   const [serverName, setServerName] = React.useState("");
   const [reason, setReason] = React.useState("");
-  const [pluginType, setPluginType] = React.useState<"mcp_server" | "integration" | "content_tool">("mcp_server");
+  const [pluginType, setPluginType] = React.useState<"mcp_server" | "integration" | "content_tool" | "capability">("mcp_server");
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -694,7 +699,7 @@ function DenylistSection({
     const result = await removeDenylistAction({
       orgSlug,
       serverName: entry.serverName,
-      pluginType: entry.pluginType as "mcp_server" | "integration" | "content_tool",
+      pluginType: entry.pluginType as "mcp_server" | "integration" | "content_tool" | "capability",
     });
     if (!result.ok) setError(result.error ?? "Remove failed");
   };
@@ -778,12 +783,13 @@ function DenylistSection({
                     id="deny-type"
                     className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     value={pluginType}
-                    onChange={(e) => setPluginType(e.target.value as "mcp_server" | "integration" | "content_tool")}
+                    onChange={(e) => setPluginType(e.target.value as "mcp_server" | "integration" | "content_tool" | "capability")}
                     disabled={pending}
                   >
                     <option value="mcp_server">MCP Server</option>
                     <option value="integration">Integration</option>
                     <option value="content_tool">Content Tool</option>
+                    <option value="capability">Oxagen Plugin</option>
                   </select>
                 </div>
               </div>

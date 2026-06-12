@@ -1,8 +1,13 @@
+import pino from "pino";
 import type { CapabilityContext } from "../types";
 import type { AgentToolListInput, AgentToolListOutput } from "@oxagen/oxagen/contracts/agent.tool.list";
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
+import { pluginForContract } from "@oxagen/oxagen/plugins";
+import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 import { getOxagenRegistry } from "../registry-loader";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.tool.list" } });
 
 export type { AgentToolListInput, AgentToolListOutput };
 
@@ -11,9 +16,32 @@ export async function agentToolListHandler(
   ctx: CapabilityContext,
 ): Promise<AgentToolListOutput> {
   const { listCapabilities, getSurfaces } = await getOxagenRegistry();
-  const builtins = listCapabilities()
-    .filter((c) => getSurfaces(c).includes("agent"))
-    .map((c) => ({
+  // This is the tool-LIST filter only (display/UX layer). The kernel gate is
+  // the real security enforcement boundary.
+  let entitledPluginIds: Set<string> | null = null;
+  let entitlementFetchFailed = false;
+  const builtins: AgentToolListOutput["tools"] = [];
+  for (const c of listCapabilities()) {
+    if (!getSurfaces(c).includes("agent")) continue;
+
+    // Entitlement filter: if this capability is claimed by a plugin, verify the
+    // org has that plugin installed and enabled. Lazily fetch the entitled set
+    // on first plugin-claimed contract to avoid DB round-trips when no plugin
+    // capabilities are present.
+    const plugin = pluginForContract(c.name);
+    if (plugin) {
+      if (!entitlementFetchFailed && entitledPluginIds === null) {
+        try {
+          entitledPluginIds = await listEntitledCapabilityPluginIds(ctx.orgId);
+        } catch (err) {
+          logger.warn({ err, orgId: ctx.orgId }, "entitlement fetch failed — excluding all plugin-claimed capabilities (fail-closed)");
+          entitlementFetchFailed = true;
+        }
+      }
+      // Fail-closed: if fetch threw, exclude all plugin-claimed tools.
+      if (entitlementFetchFailed || (entitledPluginIds !== null && !entitledPluginIds.has(plugin.id))) continue;
+    }
+    builtins.push({
       name: c.name,
       description: c.description,
       domain: c.domain ?? "",
@@ -21,7 +49,8 @@ export async function agentToolListHandler(
       riskLevel: c.agent?.riskLevel ?? "low",
       requiresApproval: c.agent?.requiresApproval ?? false,
       external: false,
-    }));
+    });
+  }
 
   if (!input.includeExternal) return { tools: builtins };
 

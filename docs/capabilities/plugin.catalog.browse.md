@@ -15,9 +15,9 @@ Search and filter the MCP server catalog (latest versions) by text, category, tr
 | Field | Type | Notes |
 |---|---|---|
 | `search` | `string?` | Full-text search string applied to name, title, and description. |
-| `pluginType` | `"mcp_server" \| "integration" \| "content_tool"?` | Filter by plugin type. |
-| `authKind` | `"oauth" \| "secret" \| "none"?` | Filter by authentication kind. |
-| `categories` | `string[]?` | Filter to servers in any of these categories. |
+| `pluginType` | `"mcp_server" \| "integration" \| "content_tool" \| "capability"?` | Filter by plugin type. Passing `"capability"` serves results from the static Oxagen Plugin registry instead of `mcp.catalog_servers`. Omitting the field returns only catalog servers (legacy behaviour preserved). |
+| `authKind` | `"oauth" \| "secret" \| "none"?` | Filter by authentication kind. Ignored when `pluginType` is `"capability"`. |
+| `categories` | `string[]?` | Filter to servers in any of these categories. Ignored when `pluginType` is `"capability"`. |
 | `limit` | `number?` | Max results per page (1–100, default 20). |
 | `offset` | `number?` | Pagination offset. |
 
@@ -28,6 +28,17 @@ Search and filter the MCP server catalog (latest versions) by text, category, tr
 | `servers[]` | `CatalogSummary[]` | Array of catalog server summaries. |
 | `total` | `number` | Total matching records (for pagination UI). |
 | `nextOffset` | `number \| null` | Offset for the next page, or `null` if last page. |
+
+### Additional fields on capability entries
+
+When `pluginType` is `"capability"`, each entry in `servers[]` includes two additional fields:
+
+| Field | Type | Notes |
+|---|---|---|
+| `tier` | `"free" \| "premium"` | Whether the plugin requires a paid plan. |
+| `installed` | `boolean` | Whether the plugin is already installed for the requesting org (regardless of enabled state). |
+
+The `authKind` field is always `"none"` and `transportTypes` is always `[]` for capability entries.
 
 ## Roles
 

@@ -26,6 +26,8 @@ const {
   mockResolveOrg,
   mockRunInTenantScope,
   mockWithTenantDb,
+  mockWithSystemDb,
+  mockIsUniqueViolation,
   mockInvoke,
   mockRevalidatePath,
   dbState,
@@ -46,12 +48,16 @@ const {
   const mockRunInTenantScope = vi.fn(
     (_scope: unknown, fn: () => unknown) => fn(),
   );
+  const mockWithSystemDb = vi.fn();
+  const mockIsUniqueViolation = vi.fn(() => false);
 
   return {
     mockGetSession: vi.fn(),
     mockResolveOrg: vi.fn(),
     mockRunInTenantScope,
     mockWithTenantDb,
+    mockWithSystemDb,
+    mockIsUniqueViolation,
     mockInvoke: vi.fn(),
     mockRevalidatePath: vi.fn(),
     dbState,
@@ -70,8 +76,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: mockWithTenantDb,
-
+    withTenantDb: mockWithTenantDb,
+    withSystemDb: mockWithSystemDb,
+    isUniqueViolation: mockIsUniqueViolation,
   };
 });
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
@@ -402,5 +409,70 @@ describe("installBulkPluginAction", () => {
     });
     expect(res.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("installPluginAction — capability type", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setRole("owner");
+    mockGetSession.mockResolvedValue(SESSION);
+    mockResolveOrg.mockResolvedValue(ORG);
+    mockInvoke.mockResolvedValue({ orgListingId: "ol-cap-1" });
+    mockIsUniqueViolation.mockReturnValue(false);
+  });
+
+  it("calls invoke with plugin.org.install including pluginId for capability type", async () => {
+    const res = await installPluginAction({
+      orgSlug: "acme",
+      pluginType: "capability",
+      pluginId: "oxagen/media-svg",
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.orgListingId).toBe("ol-cap-1");
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "plugin.org.install",
+      expect.objectContaining({ pluginType: "capability", pluginId: "oxagen/media-svg" }),
+      expect.objectContaining({ orgId: "org-1" }),
+      { surface: "agent" },
+    );
+  });
+
+  it("unique-violation fallback looks up existing listing by pluginId (name column)", async () => {
+    // Simulate a unique constraint violation on first invoke
+    const uniqueErr = new Error("duplicate key value violates unique constraint");
+    mockInvoke.mockRejectedValue(uniqueErr);
+    mockIsUniqueViolation.mockReturnValue(true);
+
+    // withSystemDb mock: return an existing listing row
+    const existingId = "ol-existing-cap";
+    mockWithSystemDb.mockImplementation(
+      (fn: (tx: { select: () => { from: () => { where: () => { limit: () => Promise<Array<{ id: string }>> } } } }) => unknown) => {
+        const fakeTx = {
+          select: () => ({
+            from: () => ({
+              where: () => ({
+                limit: () => Promise.resolve([{ id: existingId }]),
+              }),
+            }),
+          }),
+        };
+        return fn(fakeTx);
+      },
+    );
+
+    const res = await installPluginAction({
+      orgSlug: "acme",
+      pluginType: "capability",
+      pluginId: "oxagen/media-svg",
+    });
+
+    // Should return ok:true with the existing listing id (idempotent install)
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.orgListingId).toBe(existingId);
+    // The unique-violation guard must have been checked
+    expect(mockIsUniqueViolation).toHaveBeenCalledWith(uniqueErr);
+    // withSystemDb should have been called to perform the lookup
+    expect(mockWithSystemDb).toHaveBeenCalled();
   });
 });

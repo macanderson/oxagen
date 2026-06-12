@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
-const pluginTypeEnum = z.enum(["mcp_server", "integration", "content_tool"]);
+const pluginTypeEnum = z.enum(["mcp_server", "integration", "content_tool", "capability"]);
 
 export const pluginOrgInstall = registerCapability({
   name: "plugin.org.install",
@@ -17,6 +17,8 @@ export const pluginOrgInstall = registerCapability({
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
   input: z.object({
     pluginType: pluginTypeEnum.default("mcp_server"),
+    // Required when pluginType === "capability"; validated in the handler.
+    pluginId: z.string().optional(),
     catalogServerId: z.string().optional(),
     custom: z
       .object({

@@ -22,17 +22,32 @@ interface CatalogDetail {
   categories: string[];
   readmeHtml: string | null;
   status: string;
+  /** Only present for capability entries (from browse response, no catalog/get endpoint) */
+  tier?: "free" | "premium";
+  installed?: boolean;
 }
 
 interface PluginDetailPanelProps {
   catalogId: string;
   orgSlug: string;
-  pluginType: "mcp_server" | "integration" | "content_tool";
+  pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
   isDenied: boolean;
+  /** Pre-populated data for capability entries (avoids a catalog/get fetch) */
+  capabilityData?: {
+    id: string;
+    name: string;
+    title: string | null;
+    description: string;
+    version: string;
+    categories: string[];
+    tier: "free" | "premium";
+    installed: boolean;
+  };
   installAction: (input: {
     orgSlug: string;
     catalogServerId: string;
-    pluginType: "mcp_server" | "integration" | "content_tool";
+    pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
+    pluginId?: string;
   }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
   onInstalled: () => void;
   onClose: () => void;
@@ -45,16 +60,42 @@ export function PluginDetailPanel({
   orgSlug,
   pluginType,
   isDenied,
+  capabilityData,
   installAction,
   onInstalled,
   onClose,
 }: PluginDetailPanelProps) {
-  const [detail, setDetail] = React.useState<CatalogDetail | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const [detail, setDetail] = React.useState<CatalogDetail | null>(
+    // For capability entries, bootstrap from pre-populated data to avoid a catalog/get fetch.
+    capabilityData
+      ? {
+          id: capabilityData.id,
+          name: capabilityData.name,
+          title: capabilityData.title,
+          description: capabilityData.description,
+          version: capabilityData.version,
+          websiteUrl: null,
+          icons: [],
+          packages: [],
+          remotes: [],
+          transportTypes: [],
+          authKind: "none",
+          categories: capabilityData.categories,
+          readmeHtml: null,
+          status: "active",
+          tier: capabilityData.tier,
+          installed: capabilityData.installed,
+        }
+      : null,
+  );
+  const [loading, setLoading] = React.useState(!capabilityData);
   const [installing, setInstalling] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    // Capability entries are pre-populated; skip the catalog/get fetch.
+    if (pluginType === "capability") return;
+
     const controller = new AbortController();
     // Reset state synchronously so loading is true before the fetch resolves,
     // preventing a race where a fast fetch resolves before deferred state resets fire.
@@ -77,7 +118,7 @@ export function PluginDetailPanel({
     return () => {
       controller.abort();
     };
-  }, [catalogId]);
+  }, [catalogId, pluginType]);
 
   const handleInstall = async () => {
     if (!detail) return;
@@ -88,6 +129,7 @@ export function PluginDetailPanel({
         orgSlug,
         catalogServerId: detail.id,
         pluginType,
+        pluginId: pluginType === "capability" ? detail.id : undefined,
       });
       if (!result.ok) {
         setError(result.error ?? "Install failed");
@@ -172,50 +214,78 @@ export function PluginDetailPanel({
         className="flex flex-wrap gap-1.5 border-b border-border/40 px-6 py-3"
         data-testid="plugin-detail-badges"
       >
-        {detail.transportTypes.map((t) => (
-          <Badge key={t} variant="outline" size="sm">
-            {t}
-          </Badge>
-        ))}
-        <Badge
-          variant={
-            detail.authKind === "oauth"
-              ? "info"
-              : detail.authKind === "secret"
-                ? "warning"
-                : "muted"
-          }
-          size="sm"
-        >
-          {detail.authKind === "none" ? "No auth" : detail.authKind}
-        </Badge>
-        {detail.categories.slice(0, 3).map((c) => (
-          <Badge key={c} variant="secondary" size="sm">
-            {c}
-          </Badge>
-        ))}
-        {detail.status !== "active" && (
-          <Badge variant="destructive" size="sm">
-            {detail.status}
-          </Badge>
+        {pluginType === "capability" ? (
+          <>
+            {detail.tier && (
+              <Badge
+                variant={detail.tier === "premium" ? "info" : "secondary"}
+                size="sm"
+                data-testid="plugin-detail-tier-badge"
+              >
+                {detail.tier === "premium" ? "Premium" : "Free"}
+              </Badge>
+            )}
+            {detail.installed && (
+              <Badge variant="success" size="sm" data-testid="plugin-detail-installed-badge">
+                Installed
+              </Badge>
+            )}
+            {detail.categories.slice(0, 3).map((c) => (
+              <Badge key={c} variant="secondary" size="sm">
+                {c}
+              </Badge>
+            ))}
+          </>
+        ) : (
+          <>
+            {detail.transportTypes.map((t) => (
+              <Badge key={t} variant="outline" size="sm">
+                {t}
+              </Badge>
+            ))}
+            <Badge
+              variant={
+                detail.authKind === "oauth"
+                  ? "info"
+                  : detail.authKind === "secret"
+                    ? "warning"
+                    : "muted"
+              }
+              size="sm"
+            >
+              {detail.authKind === "none" ? "No auth" : detail.authKind}
+            </Badge>
+            {detail.categories.slice(0, 3).map((c) => (
+              <Badge key={c} variant="secondary" size="sm">
+                {c}
+              </Badge>
+            ))}
+            {detail.status !== "active" && (
+              <Badge variant="destructive" size="sm">
+                {detail.status}
+              </Badge>
+            )}
+          </>
         )}
       </div>
 
-      {/* README */}
+      {/* Body — description + README (README omitted for capability entries) */}
       <div className="flex-1 overflow-auto px-6 py-4">
         <p className="mb-3 text-sm text-muted-foreground">{detail.description}</p>
-        {detail.readmeHtml ? (
-          // readmeHtml is sanitized by rehype-sanitize server-side in Plan 2 (catalog sync).
-          // dangerouslySetInnerHTML is safe here — no user-supplied content, only registry README.
-          <div
-            className="prose prose-sm dark:prose-invert max-w-none text-sm"
-            dangerouslySetInnerHTML={{ __html: detail.readmeHtml }}
-            data-testid="plugin-detail-readme"
-          />
-        ) : (
-          <p className="text-xs text-muted-foreground italic" data-testid="plugin-detail-no-readme">
-            No README available.
-          </p>
+        {pluginType !== "capability" && (
+          detail.readmeHtml ? (
+            // readmeHtml is sanitized by rehype-sanitize server-side in Plan 2 (catalog sync).
+            // dangerouslySetInnerHTML is safe here — no user-supplied content, only registry README.
+            <div
+              className="prose prose-sm dark:prose-invert max-w-none text-sm"
+              dangerouslySetInnerHTML={{ __html: detail.readmeHtml }}
+              data-testid="plugin-detail-readme"
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground italic" data-testid="plugin-detail-no-readme">
+              No README available.
+            </p>
+          )
         )}
       </div>
 
@@ -229,11 +299,20 @@ export function PluginDetailPanel({
           >
             Blocked by your organization&apos;s admins — cannot install.
           </p>
+        ) : detail.installed ? (
+          <Button
+            className="w-full"
+            variant="outline"
+            disabled
+            data-testid="plugin-detail-install-btn"
+          >
+            Already installed
+          </Button>
         ) : (
           <Button
             className="w-full"
             onClick={handleInstall}
-            disabled={installing || detail.status !== "active"}
+            disabled={installing || (pluginType !== "capability" && detail.status !== "active")}
             data-testid="plugin-detail-install-btn"
           >
             {installing ? "Installing…" : "Install to organization"}

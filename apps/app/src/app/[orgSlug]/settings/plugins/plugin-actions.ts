@@ -81,8 +81,10 @@ function buildCtx(opts: { orgId: string; userId: string }) {
 const InstallSchema = z.object({
   orgSlug: z.string().min(1),
   catalogServerId: z.string().optional(),
+  /** Required when pluginType === "capability" — the stable plugin id (e.g. "oxagen/media-svg") */
+  pluginId: z.string().optional(),
   pluginType: z
-    .enum(["mcp_server", "integration", "content_tool"])
+    .enum(["mcp_server", "integration", "content_tool", "capability"])
     .default("mcp_server"),
   custom: z
     .object({
@@ -110,6 +112,7 @@ export async function installPluginAction(
       {
         pluginType: parsed.data.pluginType,
         catalogServerId: parsed.data.catalogServerId,
+        pluginId: parsed.data.pluginId,
         custom: parsed.data.custom,
       },
       ctx,
@@ -122,8 +125,14 @@ export async function installPluginAction(
     // Idempotent install: if the listing already exists (unique constraint
     // on org_id + plugin_type + name), look it up and return it as success.
     // This handles the case where a listing was pre-seeded or previously installed.
-    if (isUniqueViolation(err) && parsed.data.catalogServerId) {
+    const lookupName = parsed.data.pluginType === "capability"
+      ? parsed.data.pluginId
+      : parsed.data.catalogServerId;
+    if (isUniqueViolation(err) && lookupName) {
       try {
+        const nameColumn = parsed.data.pluginType === "capability"
+          ? schema.pluginOrgListings.name
+          : schema.pluginOrgListings.catalogServerId;
         const [existing] = await withSystemDb((tx) =>
           tx
             .select({ id: schema.pluginOrgListings.id })
@@ -132,7 +141,7 @@ export async function installPluginAction(
               and(
                 eq(schema.pluginOrgListings.orgId, managed.orgId),
                 eq(schema.pluginOrgListings.pluginType, parsed.data.pluginType),
-                eq(schema.pluginOrgListings.catalogServerId, parsed.data.catalogServerId!),
+                eq(nameColumn, lookupName),
               ),
             )
             .limit(1),
@@ -164,8 +173,10 @@ const InstallBulkSchema = z.object({
     .array(
       z.object({
         catalogServerId: z.string().optional(),
+        /** Required when pluginType === "capability" */
+        pluginId: z.string().optional(),
         pluginType: z
-          .enum(["mcp_server", "integration", "content_tool"])
+          .enum(["mcp_server", "integration", "content_tool", "capability"])
           .default("mcp_server"),
       }),
     )
@@ -287,7 +298,7 @@ const DenylistAddSchema = z.object({
   orgSlug: z.string().min(1),
   serverName: z.string().min(1),
   pluginType: z
-    .enum(["mcp_server", "integration", "content_tool"])
+    .enum(["mcp_server", "integration", "content_tool", "capability"])
     .default("mcp_server"),
   reason: z.string().max(500).optional(),
 });
@@ -327,7 +338,7 @@ const DenylistRemoveSchema = z.object({
   orgSlug: z.string().min(1),
   serverName: z.string().min(1),
   pluginType: z
-    .enum(["mcp_server", "integration", "content_tool"])
+    .enum(["mcp_server", "integration", "content_tool", "capability"])
     .default("mcp_server"),
 });
 

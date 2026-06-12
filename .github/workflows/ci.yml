@@ -360,6 +360,17 @@ jobs:
         run: pnpm --filter @oxagen/app exec playwright install --with-deps chromium
       - name: E2E tests (affected, shard ${{ matrix.shard }}/4)
         run: pnpm turbo run test:e2e --filter="...[${TURBO_BASE}]" -- --shard=${{ matrix.shard }}/4
+      # Failures without traces are undebuggable from logs alone — Playwright
+      # writes traces/screenshots to test-results/ only for failed tests, so
+      # this uploads nothing (and is skipped) on green runs.
+      - name: Upload Playwright traces (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-shard-${{ matrix.shard }}
+          path: apps/app/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
 
   # ──────────────────────────────────────────────────────────────────────
   # rls-integration — the single proof that tenant Row-Level Security actually

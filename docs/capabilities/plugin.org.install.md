@@ -14,9 +14,10 @@ Install a catalog server (from the marketplace) or a custom server to the org al
 
 | Field | Type | Notes |
 |---|---|---|
-| `pluginType` | `"mcp_server" \| "integration" \| "content_tool"` | Default: `"mcp_server"`. |
-| `catalogServerId` | `string?` | Public ID of a catalog server to install. Mutually exclusive with `custom`. |
-| `custom` | `object?` | Custom server descriptor — mutually exclusive with `catalogServerId`. |
+| `pluginType` | `"mcp_server" \| "integration" \| "content_tool" \| "capability"` | Default: `"mcp_server"`. Pass `"capability"` to install an Oxagen Plugin. |
+| `pluginId` | `string?` | Required when `pluginType` is `"capability"`. The stable Oxagen Plugin id (e.g. `"oxagen/media-video"`). Validated against the in-process plugin registry. |
+| `catalogServerId` | `string?` | Public ID of a catalog server to install. Mutually exclusive with `custom` and `pluginId`. |
+| `custom` | `object?` | Custom server descriptor — mutually exclusive with `catalogServerId` and `pluginId`. |
 | `custom.name` | `string` | Unique server name (reverse-DNS recommended). |
 | `custom.title` | `string?` | Display title. |
 | `custom.description` | `string?` | Short description. |

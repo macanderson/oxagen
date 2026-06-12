@@ -184,3 +184,57 @@ describe("PluginDetailPanel — fetch error", () => {
     );
   });
 });
+
+describe("PluginDetailPanel — capability type", () => {
+  const capabilityData = {
+    id: "oxagen/media-svg",
+    name: "oxagen/media-svg",
+    title: "SVG Generation",
+    description: "Generate SVG images from text prompts",
+    version: "1.0.0",
+    categories: ["media"],
+    tier: "free" as const,
+    installed: false,
+  };
+
+  const capabilityProps = {
+    catalogId: "oxagen/media-svg",
+    orgSlug: "acme",
+    pluginType: "capability" as const,
+    isDenied: false,
+    capabilityData,
+    installAction: vi.fn().mockResolvedValue({ ok: true, orgListingId: "ol-cap-1" }),
+    onInstalled: vi.fn(),
+    onClose: vi.fn(),
+  };
+
+  it("does not fetch /api/v1/plugin/catalog/get when capabilityData is provided", () => {
+    render(<PluginDetailPanel {...capabilityProps} />);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("renders the Free tier badge", () => {
+    render(<PluginDetailPanel {...capabilityProps} />);
+    expect(screen.getByTestId("plugin-detail-tier-badge")).toBeInTheDocument();
+    expect(screen.getByTestId("plugin-detail-tier-badge")).toHaveTextContent("Free");
+  });
+
+  it("does not render the README section", () => {
+    render(<PluginDetailPanel {...capabilityProps} />);
+    expect(screen.queryByTestId("plugin-detail-readme")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("plugin-detail-no-readme")).not.toBeInTheDocument();
+  });
+
+  it("shows disabled 'Already installed' button when installed:true", () => {
+    render(
+      <PluginDetailPanel
+        {...capabilityProps}
+        capabilityData={{ ...capabilityData, installed: true }}
+      />,
+    );
+    const btn = screen.getByTestId("plugin-detail-install-btn");
+    expect(btn).toBeInTheDocument();
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveTextContent(/already installed/i);
+  });
+});

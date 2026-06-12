@@ -5,9 +5,10 @@
  * Covers:
  *   - Closed state: dialog not in DOM
  *   - Open state: renders "Plugin Marketplace" title
- *   - Open state: renders the three tabs (MCP Servers, Integrations, Content Tools)
+ *   - Open state: renders the four tabs (MCP Servers, Integrations, Content Tools, Oxagen Plugins)
  *   - Open state: renders search input
  *   - Open state: renders auth filter chips (All, oauth, secret, none)
+ *   - Open state: auth filter chips hidden on capability tab
  *   - Open state: "Select plugins to bulk-install" placeholder shown
  *   - Open state: Cancel button rendered in footer
  *   - Open state: Install selected button is disabled when nothing selected
@@ -15,15 +16,20 @@
  *   - Renders error message when fetch fails
  *   - fetchServers calls GET (not POST) with URLSearchParams
  *   - Tab switching changes activeTab and clears selection
+ *   - Switching to capability tab sends pluginType=capability
  *   - Auth filter chip click triggers refetch
  *   - Search input triggers debounced fetchServers
  *   - Selecting a server enables bulk install button and shows selected count
  *   - Bulk install success calls installBulkAction and closes modal
  *   - Bulk install error displays error message
+ *   - Capability bulk install sends pluginId (not catalogServerId)
  *   - Clicking server card (not denied) opens detail panel
  *   - Load more button triggers paginated fetch
  *   - Server with icon renders img element
  *   - Server with null title falls back to name
+ *   - Capability card renders "Free" tier badge
+ *   - Capability card renders "Premium" tier badge
+ *   - Capability card renders "Installed" badge when installed=true
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -112,6 +118,12 @@ describe("MarketplaceModal — open", () => {
   it("renders Content Tools tab", () => {
     render(<MarketplaceModal {...defaultProps} open />);
     expect(screen.getByText("Content Tools")).toBeInTheDocument();
+  });
+
+  it("renders Oxagen Plugins tab", () => {
+    render(<MarketplaceModal {...defaultProps} open />);
+    expect(screen.getByText("Oxagen Plugins")).toBeInTheDocument();
+    expect(screen.getByTestId("marketplace-tab-capability")).toBeInTheDocument();
   });
 
   it("renders search input", () => {
@@ -648,5 +660,227 @@ describe("MarketplaceModal — server card variants", () => {
         ).toBeInTheDocument(),
       { timeout: 3000 },
     );
+  });
+});
+
+// ── Capability tab ─────────────────────────────────────────────────────────────
+
+describe("MarketplaceModal — capability tab", () => {
+  it("switching to Oxagen Plugins tab sends pluginType=capability", async () => {
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+
+    await userEvent.click(screen.getByTestId("marketplace-tab-capability"));
+    await waitFor(
+      () => {
+        const calls = mockFetch.mock.calls.map((c) => c[0] as string);
+        expect(calls.some((url) => url.includes("pluginType=capability"))).toBe(true);
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it("auth filter chips are hidden on capability tab", async () => {
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+
+    // Auth chips visible on default mcp_server tab.
+    expect(screen.getByTestId("marketplace-filter-auth-all")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId("marketplace-tab-capability"));
+    // After switching to capability, auth filter chips are removed from DOM.
+    await waitFor(
+      () => expect(screen.queryByTestId("marketplace-filter-auth-all")).not.toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+  });
+
+  it("renders 'Free' tier badge for a free capability entry", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          servers: [
+            {
+              id: "oxagen/media-svg",
+              name: "oxagen/media-svg",
+              title: "SVG Generation",
+              description: "Generate SVG images",
+              icons: [],
+              transportTypes: [],
+              authKind: "none",
+              categories: ["media"],
+              version: "1.0.0",
+              pluginType: "capability",
+              tier: "free",
+              installed: false,
+            },
+          ],
+          nextOffset: null,
+          total: 1,
+        }),
+      text: () => Promise.resolve(""),
+    });
+
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+
+    await userEvent.click(screen.getByTestId("marketplace-tab-capability"));
+    await waitFor(
+      () =>
+        expect(
+          screen.getByTestId("marketplace-tier-badge-oxagen/media-svg"),
+        ).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    expect(
+      screen.getByTestId("marketplace-tier-badge-oxagen/media-svg"),
+    ).toHaveTextContent("Free");
+  });
+
+  it("renders 'Premium' tier badge for a premium capability entry", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          servers: [
+            {
+              id: "oxagen/media-video",
+              name: "oxagen/media-video",
+              title: "Video Generation",
+              description: "Generate videos",
+              icons: [],
+              transportTypes: [],
+              authKind: "none",
+              categories: ["media"],
+              version: "1.0.0",
+              pluginType: "capability",
+              tier: "premium",
+              installed: false,
+            },
+          ],
+          nextOffset: null,
+          total: 1,
+        }),
+      text: () => Promise.resolve(""),
+    });
+
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+
+    await userEvent.click(screen.getByTestId("marketplace-tab-capability"));
+    await waitFor(
+      () =>
+        expect(
+          screen.getByTestId("marketplace-tier-badge-oxagen/media-video"),
+        ).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    expect(
+      screen.getByTestId("marketplace-tier-badge-oxagen/media-video"),
+    ).toHaveTextContent("Premium");
+  });
+
+  it("renders 'Installed' badge when installed=true", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          servers: [
+            {
+              id: "oxagen/documents",
+              name: "oxagen/documents",
+              title: "Documents",
+              description: "Generate documents",
+              icons: [],
+              transportTypes: [],
+              authKind: "none",
+              categories: ["documents"],
+              version: "1.0.0",
+              pluginType: "capability",
+              tier: "free",
+              installed: true,
+            },
+          ],
+          nextOffset: null,
+          total: 1,
+        }),
+      text: () => Promise.resolve(""),
+    });
+
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+
+    await userEvent.click(screen.getByTestId("marketplace-tab-capability"));
+    await waitFor(
+      () =>
+        expect(
+          screen.getByTestId("marketplace-installed-badge-oxagen/documents"),
+        ).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+  });
+
+  it("capability bulk install sends pluginId instead of catalogServerId", async () => {
+    const capResponse = {
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          servers: [
+            {
+              id: "oxagen/media-svg",
+              name: "oxagen/media-svg",
+              title: "SVG Generation",
+              description: "desc",
+              icons: [],
+              transportTypes: [],
+              authKind: "none",
+              categories: ["media"],
+              version: "1.0.0",
+              pluginType: "capability",
+              tier: "free",
+              installed: false,
+            },
+          ],
+          nextOffset: null,
+          total: 1,
+        }),
+      text: () => Promise.resolve(""),
+    };
+    mockFetch.mockResolvedValue(capResponse);
+
+    const bulkAction = vi.fn().mockResolvedValue({ ok: true });
+    render(
+      <MarketplaceModal {...defaultProps} open installBulkAction={bulkAction} />,
+    );
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+
+    // Switch to capability tab
+    await userEvent.click(screen.getByTestId("marketplace-tab-capability"));
+    await waitFor(
+      () =>
+        expect(
+          screen.getByTestId("marketplace-server-card-oxagen/media-svg"),
+        ).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+
+    // Select the plugin
+    await userEvent.click(screen.getByTestId("marketplace-select-oxagen/media-svg"));
+    // Click bulk install
+    await userEvent.click(screen.getByTestId("marketplace-bulk-install-btn"));
+
+    await waitFor(() =>
+      expect(bulkAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: expect.arrayContaining([
+            expect.objectContaining({ pluginType: "capability", pluginId: "oxagen/media-svg" }),
+          ]),
+        }),
+      ),
+    );
+    // catalogServerId should NOT be in the capability item
+    const callArg = bulkAction.mock.calls[0]?.[0] as { items: Array<{ catalogServerId?: string }> };
+    expect(callArg?.items[0]?.catalogServerId).toBeUndefined();
   });
 });

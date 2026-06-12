@@ -32,7 +32,10 @@ export async function GET(request: NextRequest) {
       : undefined;
   const rawPluginType = searchParams.get("pluginType");
   const pluginType =
-    rawPluginType === "mcp_server" || rawPluginType === "integration" || rawPluginType === "content_tool"
+    rawPluginType === "mcp_server" ||
+    rawPluginType === "integration" ||
+    rawPluginType === "content_tool" ||
+    rawPluginType === "capability"
       ? rawPluginType
       : undefined;
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "30", 10), 100);

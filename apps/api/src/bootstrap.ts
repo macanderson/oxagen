@@ -8,6 +8,7 @@ import "@oxagen/agent/register";
 import { loadEnv } from "@oxagen/config/env";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
+import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
 import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
@@ -43,6 +44,9 @@ export async function bootstrap(): Promise<void> {
   // Wire the billing admission gate (suspended / zero-balance refusal +
   // auto-reload) into contract.invoke(), alongside the IAM gate.
   bootstrapBillingRuntime();
+  // Wire the capability entitlement gate — blocks invocations of plugin-owned
+  // capabilities when the plugin is not installed+enabled for the org.
+  bootstrapEntitlementRuntime();
 
   // makeSecurityEventInserter() now uses withSystemDb internally — no db() arg.
   const securityInsert = makeSecurityEventInserter();

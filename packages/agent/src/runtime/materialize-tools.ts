@@ -4,6 +4,8 @@ import pino from "pino";
 import { insertToolInvocation, type ToolInvocationRow } from "@oxagen/telemetry";
 import type { CapabilityContext } from "../types";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
+import { pluginForContract } from "@oxagen/oxagen/plugins";
+import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 import { beforeTool, afterTool, onError } from "../hooks/runtime";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { isSandboxAvailable } from "@oxagen/sandbox";
@@ -169,11 +171,34 @@ export async function materializeTools(
     out[alias] = toolDef;
     nameMap[alias] = realName;
   }
+  // This is the tool-LIST filter only (UX layer). The kernel gate is the real
+  // security enforcement boundary.
+  let entitledPluginIds: Set<string> | null = null;
+  let entitlementFetchFailed = false;
+
   for (const cap of all) {
     if (!getSurfaces(cap).includes("agent")) continue;
     if (opts.allowlist && !opts.allowlist.has(cap.name)) continue;
     if (!passesRisk(cap, opts.riskCeiling)) continue;
     if (cap.name === "agent.code.execute" && !sandboxAvailable) continue;
+
+    // Entitlement filter: if this capability is claimed by a plugin, verify the
+    // org has that plugin installed and enabled. Lazily fetch the entitled set
+    // on first plugin-claimed contract to avoid DB round-trips when no plugin
+    // capabilities are present.
+    const plugin = pluginForContract(cap.name);
+    if (plugin) {
+      if (!entitlementFetchFailed && entitledPluginIds === null) {
+        try {
+          entitledPluginIds = await listEntitledCapabilityPluginIds(ctx.orgId);
+        } catch (err) {
+          logger.warn({ err, orgId: ctx.orgId }, "entitlement fetch failed — excluding all plugin-claimed capabilities (fail-closed)");
+          entitlementFetchFailed = true;
+        }
+      }
+      // Fail-closed: if fetch threw, exclude all plugin-claimed tools.
+      if (entitlementFetchFailed || !entitledPluginIds!.has(plugin.id)) continue;
+    }
     const riskLevel: "low" | "medium" | "high" = cap.agent?.riskLevel ?? "low";
     const requiresApproval = cap.agent?.requiresApproval === true;
     register(cap.name, tool({
