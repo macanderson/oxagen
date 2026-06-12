@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { loginAs, E2E_TEST_PASSWORD } from "./helpers/auth";
+import { loginWithSession } from "./helpers/auth";
 import {
   setupAgentRuntimeFixture,
   teardownFixture,
@@ -35,7 +35,7 @@ test.describe("auth — unauthenticated guard", () => {
 // ─── Real sign-in journey ────────────────────────────────────────────────────
 //
 // Seeds a user + session via the fixture (same pattern as agent-runtime-flow),
-// injects the signed session cookie via `loginAs`, and asserts that:
+// injects the signed session cookie via `loginWithSession`, and asserts that:
 //   1. The authed user lands on an org/workspace page (not /login).
 //   2. The session persists across a same-tab navigation.
 //   3. The user's name / org appears somewhere in the authenticated shell.
@@ -69,7 +69,7 @@ test.describe("auth — successful sign-in journey", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, authFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, authFixture.sessionToken, baseURL);
 
     // Navigate to the org root — auth gate should pass.
     await page.goto(`/${AUTH_ORG_SLUG}`);
@@ -86,7 +86,7 @@ test.describe("auth — successful sign-in journey", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, authFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, authFixture.sessionToken, baseURL);
 
     // Start at org root.
     await page.goto(`/${AUTH_ORG_SLUG}`);
@@ -105,7 +105,7 @@ test.describe("auth — successful sign-in journey", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, authFixture.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, authFixture.sessionToken, baseURL);
     await page.goto(`/${AUTH_ORG_SLUG}/${AUTH_WS_SLUG}/chat`);
     await expect(page).not.toHaveURL(/\/login/);
 

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import postgres from "postgres";
-import { loginAs, E2E_TEST_PASSWORD } from "./helpers/auth";
+import { loginWithSession } from "./helpers/auth";
 import {
   setupAgentRuntimeFixture,
   teardownFixture,
@@ -17,7 +17,7 @@ import {
 //   • Two independent orgs are seeded: `e2e-iso-org-a` (the user belongs to
 //     this one) and `e2e-iso-org-b` (the user has NO membership in it).
 //   • A single user is created and made an owner of Org A only.
-//   • The cookie-injection `loginAs` helper is used to give the test a valid
+//   • The cookie-injection `loginWithSession` helper is used to give the test a valid
 //     Better Auth session for that user.
 //   • The spec then asserts:
 //       1. Org A routes return the authed shell (not a redirect to /login).
@@ -107,7 +107,7 @@ test.describe("tenant isolation — cross-org access denial", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, fixtureA.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, fixtureA.sessionToken, baseURL);
     await page.goto(`/${ORG_A_SLUG}`);
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page).toHaveURL(new RegExp(ORG_A_SLUG));
@@ -118,7 +118,7 @@ test.describe("tenant isolation — cross-org access denial", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, fixtureA.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, fixtureA.sessionToken, baseURL);
     await page.goto(`/${ORG_A_SLUG}/billing/subscription`);
     await expect(page).not.toHaveURL(/\/login/);
     // The credit balance card heading must be present (seeded by fixture data).
@@ -130,7 +130,7 @@ test.describe("tenant isolation — cross-org access denial", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, fixtureA.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, fixtureA.sessionToken, baseURL);
     await page.goto(`/${ORG_A_SLUG}/${WS_SLUG}/chat`);
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page).toHaveURL(new RegExp(`${ORG_A_SLUG}/${WS_SLUG}`));
@@ -156,7 +156,7 @@ test.describe("tenant isolation — cross-org access denial", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, fixtureA.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, fixtureA.sessionToken, baseURL);
     await EXPECT_DENIED(page, `/${ORG_B_SLUG}`);
   });
 
@@ -165,7 +165,7 @@ test.describe("tenant isolation — cross-org access denial", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, fixtureA.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, fixtureA.sessionToken, baseURL);
     await EXPECT_DENIED(page, `/${ORG_B_SLUG}/billing/subscription`);
   });
 
@@ -174,7 +174,7 @@ test.describe("tenant isolation — cross-org access denial", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, fixtureA.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, fixtureA.sessionToken, baseURL);
     // Org B slug with Org A's workspace slug — the org-boundary guard fires
     // before workspace resolution.
     await EXPECT_DENIED(page, `/${ORG_B_SLUG}/${WS_SLUG}/chat`);
@@ -185,7 +185,7 @@ test.describe("tenant isolation — cross-org access denial", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, fixtureA.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, fixtureA.sessionToken, baseURL);
     await EXPECT_DENIED(page, `/${ORG_B_SLUG}/members`);
   });
 
@@ -199,7 +199,7 @@ test.describe("tenant isolation — cross-org access denial", () => {
     context,
     baseURL,
   }) => {
-    await loginAs(context, fixtureA.userEmail, E2E_TEST_PASSWORD, baseURL);
+    await loginWithSession(context, fixtureA.sessionToken, baseURL);
     const resp = await page.goto(`/${ORG_B_SLUG}/billing/subscription`);
 
     // Denied via notFound() → 404 boundary, never Org B content.
