@@ -7,27 +7,57 @@
  *
  * WASM bundle note:
  *   The .wasm files from web-tree-sitter, tree-sitter-typescript, and
- *   tree-sitter-python MUST be included in the Vercel function bundle.
- *   In apps/api, add to vercel.json:
- *   {
- *     "functions": {
- *       "src/app/api/**": {
- *         "includeFiles": "node_modules/web-tree-sitter/tree-sitter.wasm,node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm,node_modules/tree-sitter-python/tree-sitter-python.wasm"
- *       }
- *     }
- *   }
- *   The Hono API uses a different bundle strategy — check apps/api/vercel.json
- *   for the correct includeFiles glob pattern for that deployment target.
+ *   tree-sitter-python are binary assets esbuild cannot inline. apps/api's
+ *   build.mjs copies them into the Vercel function directory next to the
+ *   bundle; resolveWasm() below checks there first and falls back to the
+ *   monorepo node_modules walk-up for dev/vitest.
  */
 
 import Parser from "web-tree-sitter";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
-// ESM-compatible __dirname equivalent.
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Resolve this module's directory LAZILY and in both module systems. This must
+// never run at module scope: esbuild's CJS bundle (apps/api → Vercel function)
+// rewrites `import.meta` to an empty object, so a module-scope
+// `fileURLToPath(import.meta.url)` throws ERR_INVALID_ARG_TYPE on every cold
+// start and takes the whole API function down (P0 2026-06-12).
+function moduleDir(): string {
+  try {
+    // Real ESM (tsx dev, vitest): import.meta.url is a file:// string.
+    if (typeof import.meta.url === "string" && import.meta.url.length > 0) {
+      return dirname(fileURLToPath(import.meta.url));
+    }
+  } catch {
+    // fall through to the CJS path
+  }
+  // esbuild CJS bundle: the Node module-wrapper __dirname global exists and
+  // points at the function directory (where build.mjs copies the .wasm files).
+  if (typeof __dirname === "string") return __dirname;
+  return process.cwd();
+}
+
+/**
+ * Locate a tree-sitter .wasm blob. Checks, in order:
+ *  1. next to this module (Vercel bundle — build.mjs copies the wasm files
+ *     into the function directory),
+ *  2. the monorepo node_modules walk-up (dev / vitest, where this file lives
+ *     at packages/ingestion/src/parsers/).
+ */
+function resolveWasm(pkgRelativePath: string): string {
+  const dir = moduleDir();
+  const candidates = [
+    resolve(dir, pkgRelativePath.split("/").pop() ?? pkgRelativePath),
+    resolve(dir, "../../../../../node_modules", pkgRelativePath),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    `tree-sitter wasm not found: ${pkgRelativePath} (looked in: ${candidates.join(", ")})`,
+  );
+}
 
 let initialized = false;
 let tsLanguage: Parser.Language;
@@ -43,19 +73,11 @@ export async function getParser(
   if (!initialized) {
     await Parser.init();
 
-    // Load WASM blobs from node_modules.
-    // The resolve path walks up from packages/ingestion/src/parsers/ → monorepo root.
     const tsWasm = readFileSync(
-      resolve(
-        __dirname,
-        "../../../../../node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm",
-      ),
+      resolveWasm("tree-sitter-typescript/tree-sitter-typescript.wasm"),
     );
     const pyWasm = readFileSync(
-      resolve(
-        __dirname,
-        "../../../../../node_modules/tree-sitter-python/tree-sitter-python.wasm",
-      ),
+      resolveWasm("tree-sitter-python/tree-sitter-python.wasm"),
     );
 
     tsLanguage = await Parser.Language.load(tsWasm);

@@ -7,7 +7,7 @@ export const agentUiRender = registerCapability({
   description: "Render a UI component from an agent response",
   mode: "sync",
   surfaces: ["agent"],
-  layers: ["schema", "docs"],
+  layers: ["schema", "docs", "unit"],
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "ui" },
   sensitivity: "low",

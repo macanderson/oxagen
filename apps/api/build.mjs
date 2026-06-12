@@ -1,5 +1,7 @@
 import { build } from "esbuild";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, copyFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { dirname } from "node:path";
 
 // Emit a Vercel Build Output API directory (.vercel/output) directly, instead
 // of relying on the api/ + functions convention. Why:
@@ -46,6 +48,25 @@ await build({
   // so the shimmed value is never read here. Silence the false-positive.
   logOverride: { "empty-import-meta": "silent" },
 });
+
+// tree-sitter WASM blobs: packages/ingestion/src/parsers/loader.ts loads these
+// lazily at runtime (repo ingestion via the bundled Inngest functions). They
+// are binary assets esbuild can't inline — copy them next to the bundle, where
+// loader.ts's resolveWasm() looks first (module __dirname inside the function).
+// Resolve from packages/ingestion (which declares these deps); the wasm files
+// are not in the packages' exports maps, so resolve each package.json and join.
+const require = createRequire(
+  new URL("../../packages/ingestion/package.json", import.meta.url),
+);
+const WASM_ASSETS = [
+  ["web-tree-sitter", "tree-sitter.wasm"],
+  ["tree-sitter-typescript", "tree-sitter-typescript.wasm"],
+  ["tree-sitter-python", "tree-sitter-python.wasm"],
+];
+for (const [pkg, file] of WASM_ASSETS) {
+  const pkgDir = dirname(require.resolve(`${pkg}/package.json`));
+  await copyFile(`${pkgDir}/${file}`, `${FUNC}/${file}`);
+}
 
 await writeFile(
   `${FUNC}/.vc-config.json`,

@@ -112,9 +112,11 @@ vi.mock("web-tree-sitter", () => {
   return { default: ParserClass };
 });
 
-// Also mock fs.readFileSync so no real WASM file is ever accessed.
+// Also mock fs so no real WASM file is ever accessed. existsSync returns
+// true so loader.resolveWasm() accepts its first candidate path.
 vi.mock("fs", () => ({
   readFileSync: vi.fn().mockReturnValue(Buffer.from("fake-wasm")),
+  existsSync: vi.fn().mockReturnValue(true),
 }));
 
 // ---------------------------------------------------------------------------

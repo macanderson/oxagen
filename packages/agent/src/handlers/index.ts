@@ -30,6 +30,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.skill.load": () => import("./agent.skill.load"),
   "agent.subagent.aggregate": () => import("./agent.subagent.aggregate"),
   "agent.subagent.dispatch": () => import("./agent.subagent.dispatch"),
+  "agent.ui.render": () => import("./agent.ui.render"),
 };
 
 /** Capability names this package supplies handlers for. Consumed by
