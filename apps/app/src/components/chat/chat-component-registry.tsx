@@ -11,6 +11,7 @@
  * and V agent (make-video-form) replace them with full implementations.
  */
 import { lazy, type LazyExoticComponent } from "react";
+import * as React from "react";
 
 // LazyExoticComponent is generic over component props. We widen to a common
 // props shape for the registry map — consumers spread `block.props` which is
@@ -22,12 +23,13 @@ type AnyLazy = LazyExoticComponent<(props: Record<string, unknown>) => React.Rea
  * component bundle is only loaded the first time a matching event arrives.
  *
  * Contract ids (REGISTRY_CONTRACT):
- *   "svg-preview"          — renders an inline SVG string or data-URL (M agent)
- *   "image-preview"        — renders a generated / fetched image (M agent)
- *   "install-instructions" — renders a copy-able installation step block (M agent)
- *   "make-video-form"      — renders the make-a-video request form (V agent)
- *   "file-attachment"      — renders a generated document/spreadsheet/pdf/archive asset card
- *   "html-artifact"        — renders model-generated HTML in a sandboxed iframe
+ *   "svg-preview"              — renders an inline SVG string or data-URL (M agent)
+ *   "image-preview"            — renders a generated / fetched image (M agent)
+ *   "install-instructions"     — renders a copy-able installation step block (M agent)
+ *   "make-video-form"          — renders the make-a-video request form (V agent)
+ *   "file-attachment"          — renders a generated document/spreadsheet/pdf/archive asset card
+ *   "html-artifact"            — renders model-generated HTML in a sandboxed iframe
+ *   "connection-create-inline" — renders an inline GitHub (or fallback) connection wizard card
  */
 /**
  * Emit a structured warning when a componentId arrives with no registered
@@ -40,6 +42,26 @@ type AnyLazy = LazyExoticComponent<(props: Record<string, unknown>) => React.Rea
 export function logUnknownComponent(componentId: string): void {
   console.warn(
     `[chat-component-registry] unknown componentId "${componentId}" — no renderer registered`,
+  );
+}
+
+/**
+ * Visible fallback rendered when a componentId arrives that has no registered
+ * renderer. Replaces the previous `return null` behaviour so the user gets a
+ * clear signal instead of a silent empty gap.
+ */
+export function UnknownComponentCard({
+  componentId,
+}: {
+  componentId: string;
+}): React.ReactElement {
+  return (
+    <div className="rounded-xl border bg-card px-4 py-3" data-testid="unknown-component-card">
+      <p className="text-sm text-muted-foreground">
+        This interactive component isn&apos;t available in this view.{" "}
+        <span className="font-mono text-xs">({componentId})</span>
+      </p>
+    </div>
   );
 }
 
@@ -100,5 +122,8 @@ export const CHAT_COMPONENTS = {
   ),
   "automation-create-inline": lazy(
     () => import("@/components/chat/registry-components/automation-create-inline"),
+  ),
+  "connection-create-inline": lazy(
+    () => import("@/components/chat/registry-components/connection-create-inline"),
   ),
 } as unknown as Record<string, AnyLazy>;

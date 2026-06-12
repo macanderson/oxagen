@@ -104,7 +104,16 @@
     },
 
     "lint": {
-      "inputs": ["$TURBO_DEFAULT$", "src/**", ".eslintrc.*", "eslint.config.*", "package.json"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        ".eslintrc.*",
+        "eslint.config.*",
+        "package.json",
+        "$TURBO_ROOT$/eslint.config.mjs",
+        "$TURBO_ROOT$/eslint.next.mjs",
+        "$TURBO_ROOT$/eslint.tenancy-seams.mjs"
+      ],
       "outputs": []
     },
 
@@ -279,7 +288,13 @@
         "STRIPE_WEBHOOK_SECRET",
         "AUTH_TOKEN_ENCRYPTION_KEY",
         "INNGEST_EVENT_KEY",
-        "INNGEST_SIGNING_KEY"
+        "INNGEST_SIGNING_KEY",
+        "INGESTION_CRYPTO_PROVIDER",
+        "INGESTION_ENCRYPTION_KEY",
+        "AWS_KMS_INGESTION_KEY_ARN",
+        "GITHUB_APP_CLIENT_ID",
+        "GITHUB_APP_CLIENT_SECRET",
+        "GITHUB_APP_INSTALL_STATE_SECRET"
       ],
       "passThroughEnv": ["CI"]
     },

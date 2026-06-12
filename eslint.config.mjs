@@ -21,6 +21,14 @@ export default tseslint.config(
       "**/contracts.generated.ts",
       "**/schema.cypher",
       "**/migrations/**",
+      // Next.js apps lint with their own eslint-config-next stack (see
+      // eslint.next.mjs). Without these ignores, a root-context run applies
+      // THIS config to their files and errors on disable directives for
+      // plugins only registered there (e.g. react-hooks/exhaustive-deps).
+      "apps/app/**",
+      "apps/admin/**",
+      "apps/website/**",
+      "apps/docs/**",
     ],
   },
   // Base TS config without type-checking (fast; runs on all TS files).
@@ -78,10 +86,13 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-return": "off",
       "@typescript-eslint/no-unsafe-argument": "off",
       "@typescript-eslint/no-unused-vars": "off",
-      "@next/next/no-html-link-for-pages": "off",
-      "react-hooks/rules-of-hooks": "off",
-      "react-compiler/react-compiler": "off",
     },
+  },
+  // Plain-JS config files (this file, eslint.next.mjs, …) belong to no
+  // tsconfig project — type-aware parsing fails on them. Lint them untyped.
+  {
+    files: ["**/*.mjs"],
+    ...tseslint.configs.disableTypeChecked,
   },
   // The seam-owning packages legitimately use their own raw clients.
   {

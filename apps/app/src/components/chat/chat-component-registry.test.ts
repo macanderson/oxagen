@@ -10,17 +10,20 @@
  *   3. logUnknownComponent calls console.warn containing the componentId
  *   4. logUnknownComponent does NOT throw for an unknown id
  *   5. CHAT_COMPONENTS does not contain a key for an unknown componentId
+ *   6. "connection-create-inline" is a registered key
+ *   7. UnknownComponentCard renders the componentId and unavailable copy
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock react before importing the registry (which uses React.lazy)
 vi.mock("react", () => ({
-  default: {},
+  default: { createElement: vi.fn((type: unknown, props: unknown, ...children: unknown[]) => ({ type, props, children })) },
+  createElement: vi.fn((type: unknown, props: unknown, ...children: unknown[]) => ({ type, props, children })),
   lazy: (loader: unknown) => ({ $$typeof: Symbol("react.lazy"), _payload: loader, _init: () => null }),
 }));
 
-import { CHAT_COMPONENTS, logUnknownComponent } from "./chat-component-registry";
+import { CHAT_COMPONENTS, logUnknownComponent, UnknownComponentCard } from "./chat-component-registry";
 
 // ---------------------------------------------------------------------------
 // 1 & 2. CONFIG-DERIVED completeness
@@ -63,8 +66,34 @@ describe("CHAT_COMPONENTS — config-derived completeness", () => {
     expect(CHAT_COMPONENTS).toHaveProperty("video-result");
   });
 
+  it("contains 'connection-create-inline' as a registered componentId", () => {
+    expect(CHAT_COMPONENTS).toHaveProperty("connection-create-inline");
+  });
+
   it("does NOT contain an unregistered componentId 'unknown-widget'", () => {
     expect(CHAT_COMPONENTS).not.toHaveProperty("unknown-widget");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. UnknownComponentCard
+// ---------------------------------------------------------------------------
+
+describe("UnknownComponentCard", () => {
+  it("is exported from the registry", () => {
+    expect(UnknownComponentCard).toBeDefined();
+    expect(typeof UnknownComponentCard).toBe("function");
+  });
+
+  it("renders without throwing when called with a componentId", () => {
+    expect(() => UnknownComponentCard({ componentId: "mystery-widget" })).not.toThrow();
+  });
+
+  it("returns an object (React element-like) containing the componentId", () => {
+    // We called React.createElement with a mock, so the result is a plain object.
+    const result = UnknownComponentCard({ componentId: "mystery-widget" }) as unknown;
+    // The componentId should appear somewhere in the serialized structure.
+    expect(JSON.stringify(result)).toContain("mystery-widget");
   });
 });
 

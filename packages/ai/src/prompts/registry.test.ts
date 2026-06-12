@@ -79,3 +79,27 @@ describe("isOverridablePromptKey", () => {
     expect(isOverridablePromptKey("form.fill")).toBe(false);
   });
 });
+
+describe("chatSystemPrompt — connection-create-inline intent", () => {
+  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+
+  it("contains 'connection-create-inline' componentId in the intent table", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("connection-create-inline");
+  });
+
+  it("mentions 'connect github' intent phrase", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt.toLowerCase()).toContain("connect github");
+  });
+
+  it("mentions the connectorId: 'github' guidance", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain('connectorId: "github"');
+  });
+
+  it("contains the hard rule about not inventing componentIds", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("never invent a componentId");
+  });
+});
