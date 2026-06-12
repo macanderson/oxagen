@@ -41,6 +41,20 @@ describe("security event taxonomy invariants", () => {
       expect(t).toMatch(/^[a-z_]+\.[a-z_]+$/);
     }
   });
+
+  it("includes exactly the expected plugin.* governance event types", () => {
+    // SOC2 CC6.3/CC6.8 drift guard — privileged plugin mutations (install,
+    // uninstall, enabled-state change, denylist add/remove) must stay auditable.
+    const pluginTypes = SECURITY_EVENT_TYPES.filter((t) => t.startsWith("plugin."));
+    const expected = [
+      "plugin.installed",
+      "plugin.uninstalled",
+      "plugin.enabled_changed",
+      "plugin.denylist_added",
+      "plugin.denylist_removed",
+    ];
+    expect([...pluginTypes].sort()).toEqual([...expected].sort());
+  });
 });
 
 describe("type guards", () => {

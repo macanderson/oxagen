@@ -5,12 +5,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   withSystemDb: vi.fn(),
   withTenantDb: vi.fn(),
+  emitSecurityEvent: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return { ...real, withSystemDb: mocks.withSystemDb, withTenantDb: mocks.withTenantDb };
 });
+
+vi.mock("@oxagen/database/security", () => ({
+  emitSecurityEvent: mocks.emitSecurityEvent,
+  emitSecurityEventAsync: vi.fn(),
+  makeSecurityEventInserter: vi.fn().mockReturnValue(vi.fn()),
+}));
 
 import { handler } from "./plugin.workspace.set_enabled";
 
@@ -148,6 +155,77 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
       workspaceServerId: string | null;
     };
     expect(result.workspaceServerId).toBe("mcp-pub-1");
+
+    // SOC2: successful enable emits a plugin.enabled_changed audit event.
+    expect(mocks.emitSecurityEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "plugin.enabled_changed",
+        actorUserId: "user-1",
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        capability: "plugin.workspace.set_enabled",
+        outcome: "success",
+      }),
+    );
+  });
+
+  it("disable path emits a plugin.enabled_changed audit event", async () => {
+    mockListingLookup({
+      id: "porg-mcp-1",
+      orgId: "org-1",
+      name: "my-mcp-server",
+      pluginType: "mcp_server",
+      enabled: true,
+      endpointUrl: "https://example.com/mcp",
+      transport: "sse",
+      authKind: "none",
+      deletedAt: null,
+    });
+
+    // withTenantDb for the disable update
+    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        update: () => ({
+          set: () => ({
+            where: () => Promise.resolve(),
+          }),
+        }),
+      }),
+    );
+
+    const result = await handler({ orgListingId: "porg-mcp-1", enabled: false }, ctx) as {
+      workspaceServerId: string | null;
+    };
+    expect(result.workspaceServerId).toBeNull();
+    expect(mocks.emitSecurityEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "plugin.enabled_changed",
+        capability: "plugin.workspace.set_enabled",
+        workspaceId: "ws-1",
+        outcome: "success",
+      }),
+    );
+  });
+
+  it("does NOT emit an audit event when the Phase 2 guard throws", async () => {
+    mockListingLookup({
+      id: "porg-cap-1",
+      orgId: "org-1",
+      name: "oxagen/media-video",
+      pluginType: "capability",
+      enabled: true,
+      endpointUrl: null,
+      transport: null,
+      authKind: "none",
+      deletedAt: null,
+    });
+
+    await expect(
+      handler({ orgListingId: "porg-cap-1", enabled: true }, ctx),
+    ).rejects.toThrow();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
   });
 
   it("throws when workspaceId is missing", async () => {

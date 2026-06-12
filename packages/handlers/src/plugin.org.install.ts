@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
+import { emitSecurityEvent } from "@oxagen/database/security";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import type { CapabilityContext } from "@oxagen/oxagen/types";
 import { getOxagenPlugin } from "@oxagen/oxagen/plugins";
@@ -234,6 +235,20 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     logger.error({ err, orgId: ctx.orgId, pluginType: typed.pluginType }, "plugin.org.install: failed");
     throw err;
   }
+
+  // ── Emit audit event (fire-and-forget; must not fail the capability) ────────
+  emitSecurityEvent({
+    eventType: "plugin.installed",
+    actorUserId: ctx.userId ?? null,
+    orgId: ctx.orgId,
+    workspaceId: null,
+    capability: "plugin.org.install",
+    outcome: "success",
+    ip: null,
+    userAgent: null,
+    requestId: ctx.requestId ?? null,
+  });
+
   logger.info({ orgListingId, orgId: ctx.orgId, pluginType: typed.pluginType }, "plugin.org.install: ok");
   return { orgListingId };
 };

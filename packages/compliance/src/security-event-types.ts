@@ -14,7 +14,7 @@
 // out of sync.
 //
 // RULES (do not relax):
-//   - Group values by domain (auth / api_key / billing / capability / org);
+//   - Group values by domain (auth / api_key / billing / capability / org / plugin);
 //     within a group, order by lifecycle, not alphabetically.
 //   - Never remove a value that has ever shipped — audit rows referencing it
 //     must remain readable. Deprecate in comments instead.
@@ -59,6 +59,12 @@ export const SECURITY_EVENT_TYPES = [
   "org.member_invited",
   "org.member_removed",
   "org.role_changed",
+  // Plugin governance (org-level marketplace administration)
+  "plugin.installed",
+  "plugin.uninstalled",
+  "plugin.enabled_changed",
+  "plugin.denylist_added",
+  "plugin.denylist_removed",
   // Security policy
   "security.mfa_policy_updated",
   "security.session_revoked",

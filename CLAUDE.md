@@ -203,10 +203,10 @@ Authorized and encouraged every session without asking permission. Use `creds.js
 - `apps/mcp` — xmcp. Tools at `apps/mcp/src/tools/<capability>.ts`. Connect at `/mcp`.
 - **Capability parity rule:** new user-facing action → contract in `packages/oxagen/src/contracts/` → API route → MCP tool → CLI command. Run `pnpm check:manifest` to verify.
 - **Static mock sections** (`knowledge.*`, `access.*`, `security.*`, `activity.*`, `developer.*`, `tools/studio.*`, several billing/settings/profile actions) must NOT be wired to live data until a contract exists. Correct order: contract → API route → MCP tool → UI wire-up.
-- **`check:manifest` false positives:** combined route files report false-positive gaps. `workflow.ts` covers `workflow.run/cancel/status`; `connection.ts` covers all 8 `connection.*` capabilities. Verify by reading the file before filing a parity ticket.
+- **`check:manifest` false positives:** combined route files report false-positive gaps. `workflow.ts` covers `workflow.run/cancel/status`; `connection.ts` covers all 8 `connection.*` capabilities; `integration.ts` covers all 7 `integration.*` capabilities; `repo.ts` covers all 5 `repo.*` capabilities; `semantic-edge.ts` covers all 4 `semantic.edge.*` capabilities; `plugin-schema.ts` covers `plugin.schema.get/validate` + `plugin.version.list`. All are mounted in `apps/api/src/app.ts`. Verify by reading the file before filing a parity ticket.
 
 ### `apps/cli`
-Commander + Ink. Entry: `apps/cli/src/index.tsx`. 95 command files. `oxagen dev` is the dev-stack launcher.
+Commander + Ink. Entry: `apps/cli/src/index.tsx`. 108 command files. `oxagen dev` is the dev-stack launcher.
 
 ### `apps/docs`
 Fumadocs/MDX. Statically generated. No interactive runtime.
@@ -255,6 +255,10 @@ git fetch origin && git rebase origin/main  # sync before pushing
 - **`agent.subagent.dispatch` / `agent.subagent.aggregate`** — use these contracts for fan-out; they emit lineage and metering through `invoke()`. Don't hand-roll fan-out.
 - **`prompt.settings.read` / `prompt.settings.write`** — for system-prompt customization, use these contracts (metered, IAM-gated, org+workspace scoped). Don't hard-code strings.
 - **`agent.ui.render`** — `generateObject` structured output only; client maps to React via chat component registry. No `ai/rsc`. Agent surface only — `check:manifest` false-positive gap expected; do not add an MCP/API wrapper.
+- **`bootstrapEntitlementRuntime()` required at startup** — any new runtime (server, worker, script) that invokes capability-gated handlers must call `bootstrapEntitlementRuntime()` from `@oxagen/plugins` at startup; forgetting silently skips the entitlement gate.
+- **Turbo halts on first failing coverage package** — multi-package coverage failures are masked. Use `turbo run test:coverage --continue` to see all failures at once.
+- **Shell-exported env shadows `.env.local`** — a corrupted shell-exported `DATABASE_URL` / `MODAL_RUNNER_URL` / `ANALYTICS_URL` silently overrides `.env.local`. Prefix scripts with `env -u DATABASE_URL …` until the terminal is restarted.
+- **GitHub Actions env vars don't reach turbo tasks** — workflow `env:` values are stripped unless the var is listed in the task's `env[]` in `turbo.json`. Always update `ci.yml` AND `turbo.json` together.
 
 ## All LLM calls must go through `@oxagen/ai`
 
@@ -282,4 +286,4 @@ Authoritative. Document architectural decisions in `docs/adr/`.
 
 - Update when a contract is added, renamed, or removed. Filename: kebab-case capability name (e.g. `workflow.run.md`). Update `_index.md` for new capabilities.
 - Verify `docs/capabilities/` matches contracts in `packages/oxagen/src/contracts/`, `apps/api/src/routes/v1/*`, `apps/mcp/src/tools/*`, `apps/cli/src/commands/*` before pushing.
-- **Gaps (last audited 2026-06-09):** ~26 undocumented capabilities. Run `pnpm check:manifest` for tracked gaps; for untracked ones, add `"docs"` to contract `layers[]`. This count drifts; do not hard-code it.
+- **Gaps (last audited 2026-06-12):** ~38 contracts missing `docs/capabilities/*.md` (26 tracked by `pnpm check:manifest`; 12 more omit `"docs"` from `layers[]`, so the checker never sees them — add `"docs"` to the contract to track). This count drifts; do not hard-code it.

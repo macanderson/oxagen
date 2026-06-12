@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   withSystemDb: vi.fn(),
   getOxagenPlugin: vi.fn(),
+  emitSecurityEvent: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -12,11 +13,17 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...real, withSystemDb: mocks.withSystemDb };
 });
 
+vi.mock("@oxagen/database/security", () => ({
+  emitSecurityEvent: mocks.emitSecurityEvent,
+  emitSecurityEventAsync: vi.fn(),
+  makeSecurityEventInserter: vi.fn().mockReturnValue(vi.fn()),
+}));
+
 vi.mock("@oxagen/oxagen/plugins", () => ({
   getOxagenPlugin: mocks.getOxagenPlugin,
 }));
 
-import { installOne } from "./plugin.org.install";
+import { handler, installOne } from "./plugin.org.install";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -190,5 +197,41 @@ describe("installOne — capability path", () => {
 
     await installOne(ctx, { pluginType: "mcp_server", catalogServerId: "cs-1" });
     expect(mocks.getOxagenPlugin).not.toHaveBeenCalled();
+  });
+});
+
+describe("plugin.org.install handler — audit event", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getOxagenPlugin.mockReturnValue(fakeManifest);
+  });
+
+  it("emits plugin.installed on success (SOC2 audit trail)", async () => {
+    mockHappyPath("porg-audited");
+    const out = (await handler(
+      { pluginType: "capability", pluginId: "oxagen/media-video" },
+      ctx,
+    )) as { orgListingId: string };
+    expect(out.orgListingId).toBe("porg-audited");
+    expect(mocks.emitSecurityEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "plugin.installed",
+        actorUserId: "user-1",
+        orgId: "org-1",
+        workspaceId: null,
+        capability: "plugin.org.install",
+        outcome: "success",
+        requestId: "req-1",
+      }),
+    );
+  });
+
+  it("does NOT emit an audit event when install fails", async () => {
+    mocks.getOxagenPlugin.mockReturnValue(undefined);
+    await expect(
+      handler({ pluginType: "capability", pluginId: "oxagen/nonexistent" }, ctx),
+    ).rejects.toThrow("Unknown capability plugin");
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
   });
 });

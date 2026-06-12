@@ -1,5 +1,6 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
+import { emitSecurityEvent } from "@oxagen/database/security";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
 
@@ -121,6 +122,19 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       return inserted ?? null;
     });
 
+    // ── Emit audit event (fire-and-forget; must not fail the capability) ──────
+    emitSecurityEvent({
+      eventType: "plugin.enabled_changed",
+      actorUserId: ctx.userId ?? null,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      capability: "plugin.workspace.set_enabled",
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: ctx.requestId ?? null,
+    });
+
     logger.info(
       { orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId, workspaceServerId: row?.publicId ?? null },
       "plugin.workspace.set_enabled: enabled",
@@ -147,6 +161,19 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       );
       throw err;
     }
+
+    // ── Emit audit event (fire-and-forget; must not fail the capability) ──────
+    emitSecurityEvent({
+      eventType: "plugin.enabled_changed",
+      actorUserId: ctx.userId ?? null,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      capability: "plugin.workspace.set_enabled",
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: ctx.requestId ?? null,
+    });
 
     logger.info(
       { orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
