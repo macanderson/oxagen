@@ -7,7 +7,7 @@
  *   - mcp.registries row (mock registry, org-scoped)
  *   - mcp.catalog_servers row (one mock server entry)
  *   - plugin.org_listings row (pre-installed, disabled — ready to enable)
- *   - agent.mcp_servers row (workspace-enabled — ready for agent integration)
+ *   - mcp.mcp_servers row (workspace-enabled — ready for agent integration)
  *
  * All inserts use ON CONFLICT DO NOTHING for idempotency.
  * cleanup() deletes in FK-safe order.
@@ -16,7 +16,7 @@
  *   mcp.registries          → packages/database/src/schema/mcp.ts
  *   mcp.catalog_servers     → packages/database/src/schema/mcp.ts
  *   plugin.org_listings     → packages/database/src/schema/plugin.ts
- *   agent.mcp_servers       → packages/database/src/schema/agent.ts
+ *   mcp.mcp_servers         → packages/database/src/schema/mcp.ts
  */
 import postgres from "postgres";
 import { randomBytes, scrypt } from "node:crypto";
@@ -252,11 +252,11 @@ export async function seedPlugin(opts: PluginFixtureOptions): Promise<PluginFixt
   const orgListingId = listingFetch.id;
 
   // ── Workspace MCP server row (enabled — for agent-integration spec) ───────────
-  // agent.mcp_servers: (public_id, org_id, workspace_id, org_listing_id uuid,
+  // mcp.mcp_servers: (public_id, org_id, workspace_id, org_listing_id uuid,
   //   name, transport_type, endpoint_url, auth_strategy, health_status, enabled)
   const mcpPubId = `mcs_e2e_${id}`;
   await sql`
-    INSERT INTO agent.mcp_servers (
+    INSERT INTO mcp.mcp_servers (
       public_id, org_id, workspace_id, org_listing_id, name,
       endpoint_url, transport_type, auth_strategy, enabled, health_status
     )
@@ -279,7 +279,7 @@ export async function seedPlugin(opts: PluginFixtureOptions): Promise<PluginFixt
   const cleanup = async (): Promise<void> => {
     const csql = postgres(DATABASE_URL, { max: 2, prepare: false });
     try {
-      await csql`DELETE FROM agent.mcp_servers WHERE public_id = ${mcpPubId}`;
+      await csql`DELETE FROM mcp.mcp_servers WHERE public_id = ${mcpPubId}`;
       await csql`DELETE FROM plugin.org_listings WHERE public_id = ${listingPubId}`;
       await csql`DELETE FROM mcp.catalog_servers WHERE public_id = ${catalogPubId}`;
       await csql`DELETE FROM mcp.registries WHERE public_id = ${registryPubId}`;

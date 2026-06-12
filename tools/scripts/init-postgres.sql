@@ -24,18 +24,10 @@ BEGIN
   END;
 END$$;
 
--- atlas_dev: scratch database Atlas uses for migration diff computation.
--- Needs the same extensions as the main database, or diff fails on citext/uuidv7.
-CREATE DATABASE atlas_dev OWNER oxagen;
-\c atlas_dev
-CREATE EXTENSION IF NOT EXISTS citext;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-DO $$
-BEGIN
-  BEGIN
-    CREATE EXTENSION IF NOT EXISTS pg_uuidv7;
-  EXCEPTION WHEN OTHERS THEN
-    CREATE OR REPLACE FUNCTION public.uuid_generate_v7()
-    RETURNS uuid LANGUAGE sql AS $fn$ SELECT uuid_generate_v4() $fn$;
-  END;
-END$$;
+-- NOTE: atlas_dev (the scratch database Atlas uses for `migrate diff`) is
+-- deliberately NOT created here. This file also runs against MANAGED targets
+-- (the CI migrate job applies it to preview/production), where the `oxagen`
+-- role does not exist and CREATE DATABASE is not permitted — it previously
+-- aborted the prod migrate job at `\c atlas_dev`. Local diff workflows
+-- bootstrap atlas_dev via tools/scripts/atlas-dev-setup.sh
+-- (`pnpm db:atlas-dev-setup`), which `pnpm db:migrate:diff` runs automatically.

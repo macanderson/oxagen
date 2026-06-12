@@ -5,7 +5,7 @@
  * at the workspace layer.
  *
  * seedPlugin seeds the org with an org_listings row (enabled=false) and
- * an agent.mcp_servers row. The spec:
+ * an mcp.mcp_servers row. The spec:
  *   1. Enables the listing at the org layer so it appears in the workspace panel.
  *   2. Navigates to the workspace integrations page.
  *   3. Toggles the MCP server on.

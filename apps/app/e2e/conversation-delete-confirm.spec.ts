@@ -25,7 +25,7 @@ test.describe("conversation.delete.confirm — delete via confirm dialog", () =>
     await expect(composer).toBeVisible({ timeout: 10_000 });
 
     await composer.fill("A conversation to be deleted");
-    await page.getByRole("button", { name: /^send$/i }).click();
+    await page.getByRole("button", { name: /^send message$/i }).click();
 
     // The server action persists the conversation before any model call.
     // Reload so the server-rendered nav list includes the new row.
@@ -82,7 +82,7 @@ test.describe("conversation.delete.confirm — negative: cancel keeps conversati
     await expect(composer).toBeVisible({ timeout: 10_000 });
 
     await composer.fill("A conversation that should survive cancel");
-    await page.getByRole("button", { name: /^send$/i }).click();
+    await page.getByRole("button", { name: /^send message$/i }).click();
 
     await page.goto(`/${orgSlug}/default/ask`);
 

@@ -14,7 +14,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { schema, withSystemDb } from "@oxagen/database";
 import { DbOAuthClientProvider, loadOAuthState, deleteOAuthState } from "@oxagen/plugins";
@@ -115,6 +115,9 @@ export async function GET(req: NextRequest) {
         })
         .onConflictDoUpdate({
           target: [schema.mcpServers.workspaceId, schema.mcpServers.orgListingId],
+          // mcp_servers_ws_listing_uniq is a PARTIAL unique index; ON CONFLICT
+          // only matches it when the inference clause carries the same predicate.
+          targetWhere: sql`org_listing_id IS NOT NULL`,
           set: {
             healthStatus: "healthy",
             enabled: true,

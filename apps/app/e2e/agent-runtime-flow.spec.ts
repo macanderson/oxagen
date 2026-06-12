@@ -56,7 +56,7 @@ test.describe("agent runtime end-to-end", () => {
     await page
       .getByPlaceholder(/send a message/i)
       .fill("Summarize this workspace");
-    await page.getByRole("button", { name: /^send$/i }).click();
+    await page.getByRole("button", { name: /^send message$/i }).click();
 
     // 1. Plan card renders with the proposed steps.
     await expect(page.locator('[data-component="plan-card"]')).toBeVisible();

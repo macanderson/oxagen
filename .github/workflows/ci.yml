@@ -26,7 +26,10 @@ concurrency:
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-  DATABASE_URL: postgres://oxagen:oxagen@localhost:5432/oxagen
+  # sslmode=disable: Atlas (Go lib/pq) defaults to sslmode=require and fails
+  # against the plain-TCP CI service container ("SSL is not enabled").
+  # node-postgres ignores the param locally, so it is safe for every consumer.
+  DATABASE_URL: postgres://oxagen:oxagen@localhost:5432/oxagen?sslmode=disable
   CLICKHOUSE_URL: http://localhost:8123
   CLICKHOUSE_USERNAME: default
   CLICKHOUSE_PASSWORD: ""

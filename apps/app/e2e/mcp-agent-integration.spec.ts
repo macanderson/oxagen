@@ -5,7 +5,7 @@
  * is callable within an interactive Q&A agent turn.
  *
  * Design:
- *   - seedPlugin inserts an agent.mcp_servers row pointing at the mock MCP
+ *   - seedPlugin inserts an mcp.mcp_servers row pointing at the mock MCP
  *     server (health_status='healthy', enabled=true).
  *   - interceptAgentStream intercepts POST /api/v1/chat/stream and returns a
  *     deterministic SSE response containing a tool-call-start / tool-call-end

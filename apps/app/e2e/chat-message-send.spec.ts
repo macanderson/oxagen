@@ -37,7 +37,7 @@ test.describe("chat.message.send — authenticated composer", () => {
     await expect(composer).toHaveValue("Hello, Oxagen!");
 
     // The send button must be present.
-    const sendBtn = page.getByRole("button", { name: /^send$/i });
+    const sendBtn = page.getByRole("button", { name: /^send message$/i });
     await expect(sendBtn).toBeVisible();
   });
 });

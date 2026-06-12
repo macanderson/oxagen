@@ -73,7 +73,7 @@ test.describe("agent.plan.approve — authenticated, interactive flow", () => {
 
     await page.goto(`/${PLAN_ORG_SLUG}/${PLAN_WS_SLUG}/chat`);
     await page.getByPlaceholder(/send a message/i).fill("Summarize this workspace");
-    await page.getByRole("button", { name: /^send$/i }).click();
+    await page.getByRole("button", { name: /^send message$/i }).click();
 
     // Plan card must appear.
     const planCard = page.locator('[data-component="plan-card"]');
@@ -100,7 +100,7 @@ test.describe("agent.plan.approve — authenticated, interactive flow", () => {
 
     await page.goto(`/${PLAN_ORG_SLUG}/${PLAN_WS_SLUG}/chat`);
     await page.getByPlaceholder(/send a message/i).fill("Summarize this workspace");
-    await page.getByRole("button", { name: /^send$/i }).click();
+    await page.getByRole("button", { name: /^send message$/i }).click();
 
     // Approval card must appear inside the stream.
     const approvalCard = page.locator('[data-component="approval-card"]');
@@ -131,7 +131,7 @@ test.describe("agent.plan.approve — authenticated, interactive flow", () => {
 
     await page.goto(`/${PLAN_ORG_SLUG}/${PLAN_WS_SLUG}/chat`);
     await page.getByPlaceholder(/send a message/i).fill("Summarize this workspace");
-    await page.getByRole("button", { name: /^send$/i }).click();
+    await page.getByRole("button", { name: /^send message$/i }).click();
 
     // Wait for the approval card and then approve.
     const approvalCard = page.locator('[data-component="approval-card"]');
@@ -174,7 +174,7 @@ test.describe("agent.plan.approve — authenticated, interactive flow", () => {
 
     await page.goto(`/${PLAN_ORG_SLUG}/${PLAN_WS_SLUG}/chat`);
     await page.getByPlaceholder(/send a message/i).fill("Summarize this workspace");
-    await page.getByRole("button", { name: /^send$/i }).click();
+    await page.getByRole("button", { name: /^send message$/i }).click();
 
     const approvalCard = page.locator('[data-component="approval-card"]');
     await expect(approvalCard).toBeVisible();

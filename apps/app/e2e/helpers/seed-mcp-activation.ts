@@ -22,7 +22,7 @@ const DATABASE_URL = deQuote(
 );
 
 export interface McpActivationFixture extends PluginFixture {
-  /** publicId of the seeded agent.mcp_servers row (e.g. "mcs_e2e_*"). */
+  /** publicId of the seeded mcp.mcp_servers row (e.g. "mcs_e2e_*"). */
   mcpPublicId: string;
 }
 
@@ -42,7 +42,7 @@ export async function seedMcpActivation(
 
     // Fetch the mcp_servers publicId for this fixture's workspace.
     const [row] = await sql<{ public_id: string }[]>`
-      SELECT public_id FROM agent.mcp_servers
+      SELECT public_id FROM mcp.mcp_servers
       WHERE workspace_id = ${base.workspaceId}
         AND enabled = true
       LIMIT 1

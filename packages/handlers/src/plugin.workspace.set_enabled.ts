@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
@@ -95,6 +95,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         })
         .onConflictDoUpdate({
           target: [schema.mcpServers.workspaceId, schema.mcpServers.orgListingId],
+          // mcp_servers_ws_listing_uniq is a PARTIAL unique index; ON CONFLICT
+          // only matches it when the inference clause carries the same predicate.
+          targetWhere: sql`org_listing_id IS NOT NULL`,
           set: {
             enabled: true,
             healthStatus: "unknown",

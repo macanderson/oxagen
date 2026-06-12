@@ -50,7 +50,7 @@ test.describe("conversation.list — history nav surface", () => {
     const composer = page.getByPlaceholder(/send a message/i);
     await expect(composer).toBeVisible({ timeout: 10_000 });
     await composer.fill("First conversation about widgets");
-    await page.getByRole("button", { name: /^send$/i }).click();
+    await page.getByRole("button", { name: /^send message$/i }).click();
 
     // The server action persists the conversation; reload to read it back from
     // the server-rendered nav list.

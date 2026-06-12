@@ -390,10 +390,10 @@ export async function teardownFixture(opts: {
     // live in the `org` schema and reference the org + its users — delete them in
     // FK-safe order BEFORE the org/user rows, or org deletion hits a FK violation.
     // Safe no-op when bootstrapIam was not used (deletes 0 rows).
-    await sql`DELETE FROM org.principal_role_assignments WHERE org_id = ${orgId}`;
-    await sql`DELETE FROM org.role_grants WHERE role_id IN (SELECT id FROM org.roles WHERE org_id = ${orgId})`;
-    await sql`DELETE FROM org.roles WHERE org_id = ${orgId}`;
-    await sql`DELETE FROM org.principals WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM iam.principal_role_assignments WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM iam.role_grants WHERE role_id IN (SELECT id FROM iam.roles WHERE org_id = ${orgId})`;
+    await sql`DELETE FROM iam.roles WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM iam.principals WHERE org_id = ${orgId}`;
     // Collect user IDs BEFORE deleting org_users (needed for session + auth.user cleanup).
     const orgUserRows = await sql<{ userId: string }[]>`
       SELECT user_id::text AS "userId" FROM org.org_users WHERE org_id = ${orgId}
@@ -411,15 +411,15 @@ export async function teardownFixture(opts: {
     await sql`DELETE FROM org.org_users WHERE org_id = ${orgId}`;
     // IAM rows (bootstrapped by bootstrapOrgIAM when bootstrapIam:true).
     // Delete in FK-safe order: assignments → role_grants → principals → roles.
-    // principal_role_assignments.principal_id → org.principals
-    // principal_role_assignments.role_id → org.roles
-    // role_grants.role_id → org.roles
-    await sql`DELETE FROM org.principal_role_assignments WHERE org_id = ${orgId}`;
-    await sql`DELETE FROM org.role_grants WHERE role_id IN (
-      SELECT id FROM org.roles WHERE org_id = ${orgId}
+    // principal_role_assignments.principal_id → iam.principals
+    // principal_role_assignments.role_id → iam.roles
+    // role_grants.role_id → iam.roles
+    await sql`DELETE FROM iam.principal_role_assignments WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM iam.role_grants WHERE role_id IN (
+      SELECT id FROM iam.roles WHERE org_id = ${orgId}
     )`;
-    await sql`DELETE FROM org.principals WHERE org_id = ${orgId}`;
-    await sql`DELETE FROM org.roles WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM iam.principals WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM iam.roles WHERE org_id = ${orgId}`;
     // Delete auth.users — sessions already deleted above, org_users already deleted.
     if (orgUserIds.length > 0) {
       await sql`DELETE FROM auth.users WHERE id = ANY(${orgUserIds}::uuid[])`;
