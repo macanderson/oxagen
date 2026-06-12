@@ -39,7 +39,7 @@ export async function agentToolListHandler(
         }
       }
       // Fail-closed: if fetch threw, exclude all plugin-claimed tools.
-      if (entitlementFetchFailed || !entitledPluginIds!.has(plugin.id)) continue;
+      if (entitlementFetchFailed || (entitledPluginIds !== null && !entitledPluginIds.has(plugin.id))) continue;
     }
     builtins.push({
       name: c.name,
