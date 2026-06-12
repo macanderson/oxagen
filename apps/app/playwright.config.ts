@@ -104,6 +104,10 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
       env: { ...process.env, E2E_TEST: "true" },
+      // Forward the API's pino output into the Playwright (and CI) log — a
+      // sanitized 500 from a route is undebuggable without the server stack.
+      stdout: "pipe",
+      stderr: "pipe",
     },
   ],
 });
