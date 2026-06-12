@@ -65,7 +65,11 @@ vi.mock("./activity-timeline", () => ({
 }));
 
 vi.mock("./chat-component-registry", () => ({
-  CHAT_COMPONENTS: {},
+  CHAT_COMPONENTS: {
+    "known-component": (props: Record<string, unknown>) => (
+      <div data-testid="known-component">{String(props.label ?? "")}</div>
+    ),
+  },
   logUnknownComponent: vi.fn(),
   UnknownComponentCard: ({ componentId }: { componentId: string }) => (
     <div data-testid="unknown-component-card">{componentId}</div>
@@ -175,6 +179,130 @@ describe("MessageBubble", () => {
     expect(screen.getByTestId("unknown-component-card")).toHaveTextContent(
       "not-a-registered-component",
     );
+  });
+
+  it("renders every persisted block type through its card", async () => {
+    const { MessageBubble } = await import("./message-bubble");
+    render(
+      <MessageBubble
+        message={{
+          ...baseMessage,
+          role: "assistant",
+          contentBlocks: [
+            { type: "text", text: "intro" },
+            { type: "reasoning", reasoningId: "r1", text: "thinking…", durationMs: 1200 },
+            {
+              type: "tool-call",
+              toolCallId: "tc1",
+              capability: "agent.ui.render",
+              inputPreview: {},
+              riskLevel: "low",
+              status: "completed",
+            },
+            {
+              type: "code-execute",
+              toolCallId: "tc2",
+              language: "node",
+              code: "1+1",
+              status: "failed",
+            },
+            {
+              type: "approval-request",
+              approvalId: "ap1",
+              capability: "automation.enable",
+              inputPreview: {},
+              riskLevel: "high",
+              expiresAt: "2026-06-12T00:00:00Z",
+              resolution: "approved",
+            },
+            { type: "plan", planId: "pl1", title: "Plan", steps: [], status: "pending" },
+            {
+              type: "subagent-fanout",
+              fanoutId: "f1",
+              parentMessageId: "m1",
+              children: [],
+              status: "running",
+            },
+            { type: "memory-recall", queryId: "q1", memories: [] },
+            {
+              type: "component",
+              toolCallId: "tc3",
+              componentId: "known-component",
+              props: { label: "hello" },
+            },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByTestId("activity-timeline")).toBeInTheDocument();
+    expect(screen.getByTestId("reasoning-card")).toBeInTheDocument();
+    expect(screen.getByTestId("tool-call-card")).toBeInTheDocument();
+    expect(screen.getByTestId("code-execute-card")).toBeInTheDocument();
+    expect(screen.getByTestId("approval-card")).toBeInTheDocument();
+    expect(screen.getByTestId("plan-card")).toBeInTheDocument();
+    expect(screen.getByTestId("subagent-fanout")).toBeInTheDocument();
+    expect(screen.getByTestId("memory-card")).toBeInTheDocument();
+    // Registered componentId renders the real registry component (lazy path).
+    expect(await screen.findByTestId("known-component")).toHaveTextContent("hello");
+  });
+
+  it("renders terminal-state variants of status-bearing blocks", async () => {
+    const { MessageBubble } = await import("./message-bubble");
+    render(
+      <MessageBubble
+        message={{
+          ...baseMessage,
+          role: "assistant",
+          contentBlocks: [
+            {
+              type: "tool-call",
+              toolCallId: "tc1",
+              capability: "x",
+              inputPreview: {},
+              riskLevel: "medium",
+              status: "running",
+            },
+            {
+              type: "code-execute",
+              toolCallId: "tc2",
+              language: "python",
+              code: "pass",
+              status: "completed",
+            },
+            {
+              type: "approval-request",
+              approvalId: "ap1",
+              capability: "y",
+              inputPreview: {},
+              riskLevel: "low",
+              expiresAt: "2026-06-12T00:00:00Z",
+            },
+            { type: "plan", planId: "pl1", title: "Plan", steps: [], status: "approved" },
+            {
+              type: "subagent-fanout",
+              fanoutId: "f1",
+              parentMessageId: "m1",
+              children: [],
+              status: "completed",
+            },
+            {
+              type: "subagent-fanout",
+              fanoutId: "f2",
+              parentMessageId: "m1",
+              children: [],
+              status: "timed_out",
+            },
+          ],
+        }}
+      />,
+    );
+    // All blocks render inside the timeline; each card type appears.
+    expect(screen.getByTestId("activity-timeline")).toBeInTheDocument();
+    expect(screen.getByTestId("tool-call-card")).toBeInTheDocument();
+    expect(screen.getByTestId("code-execute-card")).toBeInTheDocument();
+    expect(screen.getByTestId("approval-card")).toBeInTheDocument();
+    expect(screen.getByTestId("plan-card")).toBeInTheDocument();
+    expect(screen.getAllByTestId("subagent-fanout")).toHaveLength(2);
   });
 
   it("renders children when passed", async () => {
