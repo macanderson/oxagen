@@ -15,7 +15,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -33,7 +33,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -50,7 +50,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -70,7 +70,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -88,7 +88,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -107,7 +107,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -126,7 +126,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -145,7 +145,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -182,7 +182,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -200,7 +200,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": true
       }
@@ -219,7 +219,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -238,7 +238,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -258,7 +258,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -277,7 +277,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -296,7 +296,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -315,7 +315,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -396,7 +396,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -479,7 +479,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -498,7 +498,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -696,7 +696,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -766,7 +766,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": true,
+        "e2e": false,
         "docs": true
       }
     },
@@ -948,7 +948,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -967,7 +967,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -986,7 +986,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -1005,7 +1005,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -1024,7 +1024,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -1042,7 +1042,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1061,7 +1061,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -1080,7 +1080,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -1098,7 +1098,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1180,7 +1180,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1199,7 +1199,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1218,7 +1218,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1237,7 +1237,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1256,7 +1256,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1274,7 +1274,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1293,7 +1293,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1691,7 +1691,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1709,7 +1709,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1743,7 +1743,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1848,7 +1848,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1866,7 +1866,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1885,7 +1885,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1904,7 +1904,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1923,7 +1923,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -1977,7 +1977,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -1995,7 +1995,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -2013,7 +2013,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -2031,7 +2031,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -2152,7 +2152,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -2171,7 +2171,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
