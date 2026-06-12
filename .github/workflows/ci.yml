@@ -57,6 +57,11 @@ env:
   GITHUB_APP_CLIENT_ID: Iv1.cie2e0000000000
   GITHUB_APP_CLIENT_SECRET: ci-github-app-secret
   GITHUB_APP_INSTALL_STATE_SECRET: ci-github-install-state-secret
+  # POST /connections envelope-encrypts connector config at rest
+  # (packages/crypto/src/ingestion.ts); without this key the route 500s and
+  # the github-connect-start e2e fails. CI-only dummy — must be 32 bytes of
+  # base64 to pass the key-length check; never used outside ephemeral CI DBs.
+  INGESTION_ENCRYPTION_KEY: ok27sK24YByPiShvEpN6CDf8AOaDL1ThM28PW25GU+4=
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────
@@ -355,6 +360,17 @@ jobs:
         run: pnpm --filter @oxagen/app exec playwright install --with-deps chromium
       - name: E2E tests (affected, shard ${{ matrix.shard }}/4)
         run: pnpm turbo run test:e2e --filter="...[${TURBO_BASE}]" -- --shard=${{ matrix.shard }}/4
+      # Failures without traces are undebuggable from logs alone — Playwright
+      # writes traces/screenshots to test-results/ only for failed tests, so
+      # this uploads nothing (and is skipped) on green runs.
+      - name: Upload Playwright traces (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-shard-${{ matrix.shard }}
+          path: apps/app/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
 
   # ──────────────────────────────────────────────────────────────────────
   # rls-integration — the single proof that tenant Row-Level Security actually
