@@ -3,49 +3,54 @@ import { ANALYTICS_URL, ANALYTICS_USER, ANALYTICS_PASSWORD, ANALYTICS_DATABASE }
 
 interface TelemetryData {
   userEmail?: string;
-  sessionId?: string;
+  conversationId?: string;
+  provider?: string;
   model: string;
-  prompt: string;
-  tokensIn: number;
-  tokensOut: number;
-  cacheTokensRead: number;
-  cacheTokensCreated: number;
-  filesModified: string[];
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  cacheMisses: number;
+  costUsdMicros?: number;
   durationMs: number;
-  status?: 'success' | 'error';
+  surface?: 'claude-code' | 'app' | 'api' | 'mcp';
+  promptHash?: string;
 }
 
 async function writeTelemetry(data: TelemetryData): Promise<void> {
   return new Promise((resolve, reject) => {
-    const filesJson = JSON.stringify(data.filesModified);
-
     const insertSql = `
       INSERT INTO ${ANALYTICS_DATABASE}.agent_executions (
-        type,
+        conversation_id,
         user_email,
-        session_id,
+        provider,
         model,
-        prompt,
-        tokens_in,
-        tokens_out,
-        cache_tokens_read,
-        cache_tokens_created,
-        files_modified,
+        input_tokens,
+        output_tokens,
+        cached_tokens,
+        cache_misses,
+        cost_usd_micros,
         duration_ms,
-        status
+        surface,
+        prompt_hash,
+        type,
+        status,
+        created_at
       ) VALUES (
-        'claude_code',
+        '${data.conversationId || '00000000-0000-0000-0000-000000000000'}',
         '${data.userEmail || 'unknown'}',
-        '${data.sessionId || ''}',
+        '${data.provider || ''}',
         '${data.model.replace(/'/g, "\\'")}',
-        '${data.prompt.replace(/'/g, "\\'")}',
-        ${data.tokensIn},
-        ${data.tokensOut},
-        ${data.cacheTokensRead},
-        ${data.cacheTokensCreated},
-        ${filesJson},
+        ${data.inputTokens},
+        ${data.outputTokens},
+        ${data.cachedTokens},
+        ${data.cacheMisses},
+        ${data.costUsdMicros || 0},
         ${data.durationMs},
-        '${data.status || 'success'}'
+        '${data.surface || 'claude-code'}',
+        '${data.promptHash || ''}',
+        'claude_code',
+        'completed',
+        now()
       )
     `;
 

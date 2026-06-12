@@ -48,6 +48,7 @@ export const automationListHandler: CapabilityHandler<typeof automationList> = a
     id: row.publicId,
     name: row.name,
     status: row.isEnabled ? "active" : "inactive",
+    triggerType: row.triggerType,
     triggers: [row.triggerType],
   }));
 };

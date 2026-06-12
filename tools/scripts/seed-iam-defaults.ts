@@ -85,7 +85,7 @@ async function main(): Promise<void> {
     // Fetch all existing system roles to obtain their UUIDs.
     const systemRoles = await sql<{ id: string; org_id: string; scope_kind: string; name: string }[]>`
       SELECT id, org_id, scope_kind, name
-      FROM org.roles
+      FROM iam.roles
       WHERE is_system_default = 'true'
     `;
 
@@ -122,7 +122,7 @@ async function main(): Promise<void> {
         const publicId = makePublicId(role.id, spec.capabilityId);
 
         const result = await sql`
-          INSERT INTO org.role_grants (id, public_id, org_id, role_id, capability_id, effect)
+          INSERT INTO iam.role_grants (id, public_id, org_id, role_id, capability_id, effect)
           VALUES (
             gen_random_uuid(),
             ${publicId},

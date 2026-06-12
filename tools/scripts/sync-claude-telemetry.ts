@@ -70,7 +70,7 @@ async function syncTelemetry() {
   });
 
   let lineNumber = 0;
-  let entries: TelemetryEntry[] = [];
+  const entries: TelemetryEntry[] = [];
 
   for await (const line of rl) {
     lineNumber++;
@@ -88,7 +88,10 @@ async function syncTelemetry() {
 
   // Insert into ClickHouse
   for (const entry of entries) {
-    const filesJson = JSON.stringify(entry.files_modified);
+    // Format array for ClickHouse: escape single quotes in file paths
+    const filesArray = entry.files_modified
+      .map(f => `'${f.replace(/'/g, "''")}'`)
+      .join(',');
     const insertSql = `
       INSERT INTO ${ANALYTICS_DATABASE}.agent_executions (
         type,
@@ -101,7 +104,7 @@ async function syncTelemetry() {
         'claude_code',
         '${os.userInfo().username || 'unknown'}@${os.hostname()}',
         'unknown',
-        ${filesJson},
+        [${filesArray}],
         0,
         'logged'
       )

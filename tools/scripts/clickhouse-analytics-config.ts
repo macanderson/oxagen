@@ -32,10 +32,21 @@ function get(key: string): string {
   return process.env[key] ?? env[key] ?? '';
 }
 
-const host = get('OXAGEN_ANALYTICS_HOST');
+// Try OXAGEN_ANALYTICS_* first (legacy), fall back to ANALYTICS_* (new)
+const host = get('OXAGEN_ANALYTICS_HOST') || extractHostFromUrl(get('ANALYTICS_URL'));
 const port = get('OXAGEN_ANALYTICS_PORT') || '8443';
 
-export const ANALYTICS_URL = host ? `https://${host}:${port}` : '';
-export const ANALYTICS_USER = get('OXAGEN_ANALYTICS_USER');
-export const ANALYTICS_PASSWORD = get('OXAGEN_ANALYTICS_PASSWORD');
-export const ANALYTICS_DATABASE = get('OXAGEN_ANALYTICS_DATABASE') || 'internal';
+function extractHostFromUrl(url: string): string {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname || '';
+  } catch {
+    return '';
+  }
+}
+
+export const ANALYTICS_URL = get('ANALYTICS_URL') || (host ? `https://${host}:${port}` : '');
+export const ANALYTICS_USER = get('ANALYTICS_USER') || get('OXAGEN_ANALYTICS_USER');
+export const ANALYTICS_PASSWORD = get('ANALYTICS_PASSWORD') || get('OXAGEN_ANALYTICS_PASSWORD');
+export const ANALYTICS_DATABASE = get('ANALYTICS_DATABASE') || get('OXAGEN_ANALYTICS_DATABASE') || 'internal';

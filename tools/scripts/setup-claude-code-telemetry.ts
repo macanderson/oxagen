@@ -43,22 +43,30 @@ async function setupTelemetry() {
     console.log('Creating agent_executions table...');
     const createTableSql = `
       CREATE TABLE IF NOT EXISTS ${ANALYTICS_DATABASE}.agent_executions (
-        timestamp DateTime DEFAULT now(),
-        type String,
-        user_email String,
-        session_id String,
-        model String,
-        prompt String,
-        tokens_in UInt32,
-        tokens_out UInt32,
-        cache_tokens_read UInt32 DEFAULT 0,
-        cache_tokens_created UInt32 DEFAULT 0,
-        files_modified Array(String),
-        duration_ms UInt32,
-        status String DEFAULT 'success'
-      ) ENGINE = MergeTree()
-      ORDER BY (timestamp, type)
-      TTL timestamp + INTERVAL 1 YEAR DELETE;
+        conversation_id UUID DEFAULT toUUID('00000000-0000-0000-0000-000000000000'),
+        execution_id UUID DEFAULT generateUUIDv4(),
+        user_email String DEFAULT '',
+        provider LowCardinality(String) DEFAULT '',
+        model LowCardinality(String) DEFAULT '',
+        input_tokens UInt64 DEFAULT 0,
+        output_tokens UInt64 DEFAULT 0,
+        cached_tokens UInt64 DEFAULT 0,
+        cache_misses UInt64 DEFAULT 0,
+        cost_usd_micros UInt64 DEFAULT 0,
+        duration_ms UInt32 DEFAULT 0,
+        surface LowCardinality(String) DEFAULT 'claude-code',
+        prompt_hash String DEFAULT '',
+        session_recap String DEFAULT '',
+        recap_generated_at Nullable(DateTime64(3)),
+        type String DEFAULT 'claude_code',
+        files_modified String DEFAULT '[]',
+        status String DEFAULT 'completed',
+        created_at DateTime64(3) DEFAULT now(),
+        updated_at DateTime64(3) DEFAULT now()
+      ) ENGINE = ReplacingMergeTree(updated_at)
+      PARTITION BY toYYYYMM(created_at)
+      ORDER BY (user_email, conversation_id, created_at)
+      TTL toDateTime(created_at) + INTERVAL 365 DAY;
     `;
 
     await executeClickHouseSql(createTableSql);
@@ -66,19 +74,19 @@ async function setupTelemetry() {
 
     console.log('\n✅ ClickHouse setup complete!');
     console.log('\nTable schema:');
-    console.log('- timestamp: DateTime (auto-populated with current time)');
-    console.log('- type: String (populated with "claude_code")');
+    console.log('- conversation_id: UUID (session grouping)');
     console.log('- user_email: String');
-    console.log('- session_id: String');
-    console.log('- model: String (e.g., claude-haiku-4-5)');
-    console.log('- prompt: String');
-    console.log('- tokens_in: UInt32');
-    console.log('- tokens_out: UInt32');
-    console.log('- cache_tokens_read: UInt32');
-    console.log('- cache_tokens_created: UInt32');
-    console.log('- files_modified: Array(String)');
-    console.log('- duration_ms: UInt32');
-    console.log('- status: String');
+    console.log('- provider: LowCardinality(String) - anthropic, openai, google, etc');
+    console.log('- model: LowCardinality(String) - model identifier');
+    console.log('- input_tokens: UInt64');
+    console.log('- output_tokens: UInt64');
+    console.log('- cached_tokens: UInt64 - cache hit tokens');
+    console.log('- cache_misses: UInt64 - cache misses');
+    console.log('- duration_ms: UInt32 - call latency');
+    console.log('- surface: LowCardinality(String) - claude-code, app, api, mcp');
+    console.log('- prompt_hash: String - SHA256 hash of prompt (PII-free)');
+    console.log('- session_recap: String - LLM-powered session summary');
+    console.log('- recap_generated_at: DateTime64(3) - when recap was generated');
 
   } catch (error) {
     console.error('❌ Setup failed:', error instanceof Error ? error.message : error);
