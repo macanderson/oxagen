@@ -9,13 +9,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // Ratcheted after the full contract test sweep (measured 91.96 lines /
-      // 83.33 branches / 80 functions). Thresholds only go up.
+      // Ratcheted after plugins phase 1 (manifest + registry + kernel gate).
+      // Measured 95.39 lines / 84.12 branches / 88.67 functions. Thresholds only go up.
       thresholds: {
-        lines: 91,
-        branches: 83,
-        functions: 80,
-        statements: 91,
+        lines: 95,
+        branches: 84,
+        functions: 88,
+        statements: 95,
       },
     },
   },

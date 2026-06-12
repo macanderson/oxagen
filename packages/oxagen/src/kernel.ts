@@ -1,6 +1,7 @@
 import type { CapabilityContext, CapabilitySurface, CapabilityEffect, ResolvedPrincipal } from "./types";
 import { getSurfaces } from "./types";
 import { getCapability, listCapabilities } from "./registry";
+import { pluginForContract } from "./plugins/registry";
 import { runInTenantScope } from "@oxagen/tenancy";
 
 // ── Billing admission gate (injected at bootstrap) ───────────────────────────
@@ -30,6 +31,62 @@ export function setBillingAdmissionGate(gate: BillingAdmissionGateFn): void {
 /** Remove the billing gate. Used in tests. */
 export function clearBillingAdmissionGate(): void {
   _billingGate = null;
+}
+
+// ── Capability entitlement gate (injected at bootstrap) ──────────────────────
+//
+// Mirrors the billing admission gate pattern. The gate is registered once at
+// service bootstrap (apps/api/src/index.ts, apps/mcp middleware, apps/app
+// server component init) via `setCapabilityEntitlementGate`.
+//
+// The gate fires AFTER the billing gate and only for capabilities whose
+// contract is claimed by a plugin (pluginForContract returns a manifest).
+// Builtin capabilities (unclaimed contracts) always bypass the gate.
+//
+// When no gate is registered (tests, CLI, system invocations) the call
+// proceeds unconditionally — matches the IAM/billing default-open injection
+// pattern; all three apps bootstrap it.
+//
+// The gate must throw `CapabilityError(name, "capability_not_installed", ...)`
+// to refuse a turn. Use `capabilityNotInstalledError()` below to produce the
+// canonical error shape.
+
+export type CapabilityEntitlementGateFn = (
+  capabilityName: string,
+  orgId: string,
+) => Promise<void>;
+
+let _entitlementGate: CapabilityEntitlementGateFn | null = null;
+
+/**
+ * Register the capability entitlement gate. Call once at service bootstrap.
+ * The gate must throw a CapabilityError with code "capability_not_installed"
+ * to refuse access (use `capabilityNotInstalledError()` for the canonical shape).
+ */
+export function setCapabilityEntitlementGate(gate: CapabilityEntitlementGateFn): void {
+  _entitlementGate = gate;
+}
+
+/** Remove the capability entitlement gate. Used in tests. */
+export function clearCapabilityEntitlementGate(): void {
+  _entitlementGate = null;
+}
+
+/**
+ * Canonical "plugin not installed" error for use by the entitlement gate
+ * implementation in packages/plugins. Carries the plugin id and a direct
+ * install hint so the error message is actionable on every surface.
+ */
+export function capabilityNotInstalledError(
+  capability: string,
+  pluginId: string,
+  pluginName: string,
+): CapabilityError {
+  return new CapabilityError(
+    capability,
+    "capability_not_installed",
+    `Capability "${capability}" requires the "${pluginName}" plugin (${pluginId}). Install and enable it from the marketplace.`,
+  );
 }
 
 // ── IAM runtime injection ─────────────────────────────────────────────────────
@@ -122,7 +179,8 @@ export type CapabilityErrorCode =
   | "surface_denied"
   | "authz_denied"
   | "invalid_input"
-  | "invalid_output";
+  | "invalid_output"
+  | "capability_not_installed";
 
 export class CapabilityError extends Error {
   constructor(
@@ -461,6 +519,24 @@ export async function invoke(
         await _billingGate(ctx.orgId);
       }
       // ── End billing admission gate ───────────────────────────────────────────
+
+      // ── Capability entitlement gate ──────────────────────────────────────────
+      // Runs after the billing gate. Only fires when:
+      //   1. The contract is claimed by a registered plugin (builtin contracts
+      //      are always available — no gate call).
+      //   2. A gate function has been registered (default-open when absent,
+      //      matching the IAM/billing injection pattern — all three apps
+      //      bootstrap it via bootstrapEntitlementRuntime()).
+      //   3. orgId is non-empty (system/internal invocations — e.g. Inngest
+      //      background jobs that carry no org context — skip the gate to
+      //      avoid locking out platform-internal work).
+      // The gate throws CapabilityError(code="capability_not_installed") to
+      // refuse. Use capabilityNotInstalledError() for the canonical shape.
+      const claimingPlugin = pluginForContract(name);
+      if (claimingPlugin !== undefined && _entitlementGate !== null && ctx.orgId) {
+        await _entitlementGate(name, ctx.orgId);
+      }
+      // ── End capability entitlement gate ─────────────────────────────────────
 
       const handler = await resolveHandler(name);
       return handler(inputResult.data, ctx);

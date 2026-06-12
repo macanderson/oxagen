@@ -12,7 +12,8 @@
     "./kernel": "./src/kernel.ts",
     "./types": "./src/types.ts",
     "./iam": "./src/iam/index.ts",
-    "./contracts": "./src/contracts/index.ts"
+    "./contracts": "./src/contracts/index.ts",
+    "./plugins": "./src/plugins/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
