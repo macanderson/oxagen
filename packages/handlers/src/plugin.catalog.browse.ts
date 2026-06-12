@@ -38,9 +38,12 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     const total = manifests.length;
     const page = manifests.slice(offset, offset + limit);
 
-    // Resolve which plugins are already installed for this org.
+    // Resolve which plugins are already installed for this org. Catalog
+    // browse is also served without org context (apps/app global catalog
+    // route passes orgId "") — comparing a uuid column to "" throws, so an
+    // org-less browse simply reports nothing as installed.
     const installedNames = await withSystemDb(async (tx) => {
-      if (page.length === 0) return new Set<string>();
+      if (page.length === 0 || !ctx.orgId) return new Set<string>();
       const rows = await tx
         .select({ name: schema.pluginOrgListings.name })
         .from(schema.pluginOrgListings)

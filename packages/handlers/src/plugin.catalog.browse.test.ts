@@ -167,6 +167,30 @@ describe("plugin.catalog.browse handler — capability path", () => {
     expect(img!.installed).toBe(false);
   });
 
+  it("org-less browse (orgId '') reports nothing installed and never queries by org", async () => {
+    // apps/app serves the global catalog route without org context; comparing
+    // the uuid org_id column to "" would throw, so the handler must skip the
+    // installed lookup entirely.
+    const selectSpy = vi.fn();
+    mocks.withSystemDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => {
+          selectSpy();
+          return {
+            from: () => ({ where: () => Promise.resolve([]) }),
+          };
+        },
+      }),
+    );
+    const result = await handler(
+      { pluginType: "capability", limit: 30, offset: 0 },
+      { ...ctx, orgId: "" },
+    ) as { servers: Array<{ installed: boolean }> };
+    expect(result.servers.length).toBeGreaterThan(0);
+    expect(result.servers.every((s) => s.installed === false)).toBe(true);
+    expect(selectSpy).not.toHaveBeenCalled();
+  });
+
   it("filters by search term (case-insensitive, matches id, name, description)", async () => {
     mockInstalledNames([]);
     const result = await handler(

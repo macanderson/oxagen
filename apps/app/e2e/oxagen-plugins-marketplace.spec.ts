@@ -26,8 +26,6 @@ import path from "node:path";
 
 const SCREENSHOTS_DIR = path.resolve(
   import.meta.dirname,
-  "..",
-  "__tests__",
   "screenshots",
 );
 
