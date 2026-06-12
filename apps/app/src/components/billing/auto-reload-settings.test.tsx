@@ -10,10 +10,12 @@
  *   - canManage=false disables all controls
  *   - Renders payment method select when methods are provided
  *   - Save button present
+ *   - useRegisterFillableForm is called with a formId containing "billing-auto-reload"
+ *   - apply round-trip: enabled, threshold, amount values are reflected
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, cleanup, act } from "@testing-library/react";
 import { AutoReloadSettings, type AutoReloadSettingsProps } from "./auto-reload-settings";
 import type { OrgBillingSettings, PaymentMethodView } from "@oxagen/billing";
 
@@ -31,6 +33,17 @@ vi.mock("@/app/[orgSlug]/billing/actions", () => ({
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ add: vi.fn() }),
 }));
+
+const { mockUseRegisterFillableForm } = vi.hoisted(() => ({
+  mockUseRegisterFillableForm: vi.fn(),
+}));
+
+vi.mock("@/lib/page-context", () => ({
+  useRegisterFillableForm: mockUseRegisterFillableForm,
+}));
+
+// Capture the apply callback for round-trip tests.
+let capturedApply: ((proposed: Record<string, unknown>) => void) | null = null;
 
 const settings: OrgBillingSettings = {
   orgId: "org-test",
@@ -125,5 +138,93 @@ describe("AutoReloadSettings — canManage=false", () => {
   it("still renders the toggle when canManage=false", () => {
     render(<AutoReloadSettings {...defaultProps} canManage={false} />);
     expect(screen.getByRole("switch")).toBeInTheDocument();
+  });
+});
+
+describe("AutoReloadSettings — fill registration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedApply = null;
+    // Set the implementation after clearAllMocks so we can capture the apply cb.
+    mockUseRegisterFillableForm.mockImplementation(
+      (spec: {
+        formId: string;
+        fields: unknown[];
+        apply: (proposed: Record<string, unknown>) => void;
+      }) => {
+        capturedApply = spec.apply;
+      },
+    );
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    capturedApply = null;
+  });
+
+  it("calls useRegisterFillableForm with a formId containing 'billing-auto-reload'", () => {
+    render(<AutoReloadSettings {...defaultProps} />);
+    expect(mockUseRegisterFillableForm).toHaveBeenCalled();
+    const callArg = (mockUseRegisterFillableForm.mock.calls[0] as unknown as [
+      { formId: string; fields: { name: string }[] },
+    ])[0];
+    expect(callArg.formId).toContain("billing-auto-reload");
+    expect(callArg.formId).toContain("acme");
+  });
+
+  it("registers 3 fields: enabled, threshold, amount", () => {
+    render(<AutoReloadSettings {...defaultProps} />);
+    const callArg = (mockUseRegisterFillableForm.mock.calls[0] as unknown as [
+      { formId: string; fields: { name: string }[] },
+    ])[0];
+    const names = callArg.fields.map((f) => f.name);
+    expect(names).toContain("enabled");
+    expect(names).toContain("threshold");
+    expect(names).toContain("amount");
+  });
+
+  it("apply round-trip: enabled=true is reflected in component state (switch becomes checked)", () => {
+    render(<AutoReloadSettings {...defaultProps} settings={settings} />);
+
+    // Initially disabled (autoReloadEnabled: false)
+    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+
+    expect(capturedApply).not.toBeNull();
+    act(() => {
+      capturedApply!({ enabled: true });
+    });
+
+    // After apply, the switch should be checked
+    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("apply round-trip: threshold and amount strings are updated", () => {
+    render(<AutoReloadSettings {...defaultProps} settings={enabledSettings} />);
+
+    expect(capturedApply).not.toBeNull();
+    act(() => {
+      capturedApply!({ threshold: "10.00", amount: "25.00" });
+    });
+
+    const thresholdInput = screen.getByLabelText(/reload when balance falls below/i) as HTMLInputElement;
+    expect(thresholdInput.value).toBe("10.00");
+
+    const amountInput = screen.getByLabelText(/buy this many credits/i) as HTMLInputElement;
+    expect(amountInput.value).toBe("25.00");
+  });
+
+  it("apply round-trip: numeric threshold and amount are coerced to strings", () => {
+    render(<AutoReloadSettings {...defaultProps} settings={enabledSettings} />);
+
+    expect(capturedApply).not.toBeNull();
+    act(() => {
+      capturedApply!({ threshold: 15, amount: 50 });
+    });
+
+    const thresholdInput = screen.getByLabelText(/reload when balance falls below/i) as HTMLInputElement;
+    expect(thresholdInput.value).toBe("15");
+
+    const amountInput = screen.getByLabelText(/buy this many credits/i) as HTMLInputElement;
+    expect(amountInput.value).toBe("50");
   });
 });

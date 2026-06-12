@@ -13,6 +13,8 @@ import type { ModelDefaultsValue } from "@/components/settings/model-defaults-fi
 import { ModelDefaultsFields } from "@/components/settings/model-defaults-fields";
 import type { WorkspaceModelsActionResult } from "./models-action";
 import { updateWorkspaceModelsAction } from "./models-action";
+import { useRegisterFillableForm } from "@/lib/page-context";
+import type { FieldDescriptor } from "@/lib/ask/fill-types";
 
 // ── Props ──────────────────────────────────────────────────────────────────────
 
@@ -37,6 +39,67 @@ export function WorkspaceModelsForm({
   const [isSaving, setIsSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<Date | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+
+  const modelDefaultsFields = React.useMemo<FieldDescriptor[]>(
+    () => [
+      {
+        name: "textTier",
+        label: "Default text tier",
+        type: "select",
+        current: value.textTier ?? "",
+        options: [
+          { label: "Fast", value: "fast" },
+          { label: "Balanced", value: "balanced" },
+          { label: "Precise", value: "precise" },
+        ],
+        required: false,
+      },
+      {
+        name: "textModel",
+        label: "Default text model",
+        type: "text",
+        current: value.textModel ?? "",
+        required: false,
+      },
+      {
+        name: "imageModel",
+        label: "Default image model",
+        type: "text",
+        current: value.imageModel ?? "",
+        required: false,
+      },
+      {
+        name: "videoModel",
+        label: "Default video model",
+        type: "text",
+        current: value.videoModel ?? "",
+        required: false,
+      },
+    ],
+    [value],
+  );
+
+  const applyModelDefaults = React.useCallback(
+    (proposed: Record<string, unknown>) => {
+      setValue((prev) => ({
+        textTier:
+          proposed.textTier === "fast" || proposed.textTier === "balanced" || proposed.textTier === "precise"
+            ? proposed.textTier
+            : prev.textTier,
+        textModel: typeof proposed.textModel === "string" ? proposed.textModel || null : prev.textModel,
+        imageModel: typeof proposed.imageModel === "string" ? proposed.imageModel || null : prev.imageModel,
+        videoModel: typeof proposed.videoModel === "string" ? proposed.videoModel || null : prev.videoModel,
+      }));
+    },
+    [],
+  );
+
+  useRegisterFillableForm({
+    formId: `workspace-models-${workspaceSlug}`,
+    title: "Workspace model defaults",
+    fields: modelDefaultsFields,
+    apply: applyModelDefaults,
+  });
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

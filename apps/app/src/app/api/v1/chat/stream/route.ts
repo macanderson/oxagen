@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { tool, type ToolSet } from "ai";
 import { and, desc, eq } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
@@ -17,6 +18,9 @@ import {
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { invoke } from "@oxagen/oxagen";
+import { formFill } from "@oxagen/oxagen/contracts/form.fill";
+import { fieldDescriptorSchema } from "@oxagen/oxagen/contracts/form.fill";
 import { randomUUID } from "node:crypto";
 import type { ModelMessage } from "ai";
 import type { StreamEvent } from "@/components/chat/stream-event-types";
@@ -59,6 +63,32 @@ const BodySchema = z.object({
   // Per-turn MCP server allowlist: publicIds of servers the user has activated
   // in the chat composer. When non-empty, only those servers' tools are loaded.
   activeServerIds: z.array(z.string()).optional().default([]),
+  // Optional page context forwarded from the client at send-time. Carries the
+  // current route and, when a fillable form is registered, its field list so
+  // the agent can propose fill values via the `page_form_fill` tool.
+  // Null / absent when no form is registered (ask/chat full pages, etc.).
+  pageContext: z
+    .object({
+      route: z.string().min(1).max(2048),
+      entitySummary: z.string().max(500).optional(),
+      fillableForm: z
+        .object({
+          formId: z.string().min(1).max(256),
+          title: z.string().min(1).max(256),
+          // Hard cap: 60 fields, each string capped to 256 chars.
+          fields: z
+            .array(
+              fieldDescriptorSchema.extend({
+                name: z.string().min(1).max(256),
+                label: z.string().min(1).max(256),
+              }),
+            )
+            .max(60),
+        })
+        .optional(),
+    })
+    .nullable()
+    .default(null),
 });
 
 // Maximum number of prior messages to include in the context window. Keeps
@@ -122,6 +152,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     mediaModel,
     newConversation,
     activeServerIds,
+    pageContext,
   } = parsed.data;
 
   let tenant: Awaited<ReturnType<typeof resolveOrg>>;
@@ -298,20 +329,22 @@ export async function POST(request: NextRequest): Promise<Response> {
         // withTenantDb and need an active ALS scope. The prompt config lets a
         // workspace append "additional instructions" to the (append-only) core
         // chat prompt; a load failure degrades to the untouched baseline.
+        const capCtx = {
+          orgId: tenant.id,
+          workspaceId: workspace.id,
+          userId: session.user.id,
+          apiKeyId: null as string | null,
+          requestId,
+          surface: "app" as const,
+          messageId: parentMessageId ?? requestId,
+          clientIp,
+        };
+
         const [{ tools: agentTools, nameMap: toolNameMap }, promptConfig] =
           await runInTenantScope({ orgId: tenant.id, workspaceId: workspace.id }, () =>
             Promise.all([
               materializeTools(
-                {
-                  orgId: tenant.id,
-                  workspaceId: workspace.id,
-                  userId: session.user.id,
-                  apiKeyId: null,
-                  requestId,
-                  surface: "app",
-                  messageId: parentMessageId ?? requestId,
-                  clientIp,
-                },
+                capCtx,
                 {
                   serverAllowlist: activeServerIds.length > 0 ? new Set(activeServerIds) : undefined,
                   onApprovalRequired: (approvalEvent) => {
@@ -330,18 +363,109 @@ export async function POST(request: NextRequest): Promise<Response> {
             ]),
           );
 
+        // ── Page-form-fill tool (request-scoped) ────────────────────────────
+        // When the client sends a fillableForm in pageContext, register a
+        // request-scoped `page_form_fill` tool that routes through the
+        // kernel.invoke() boundary (IAM + metering). The tool is NOT part of
+        // materializeTools — it is assembled here against the live pageContext
+        // fields so the handler closure captures the exact field list.
+        let pageFormFillTool: ToolSet | undefined;
+        let pageFormFillSystemSuffix = "";
+
+        if (pageContext?.fillableForm) {
+          const { route: pcRoute, entitySummary: pcEntitySummary } = pageContext;
+          const { formId: pcFormId, title: pcFormTitle, fields: pcFields } = pageContext.fillableForm;
+
+          // Build a compact field list for the system prompt.
+          const fieldLines = pcFields.map((f) => {
+            const optPart =
+              f.options && f.options.length > 0
+                ? ` options=[${f.options.map((o) => `"${o.label}"`).join(", ")}]`
+                : "";
+            const reqPart = f.required ? " required" : "";
+            const curPart = f.current !== null && f.current !== undefined && f.current !== ""
+              ? ` current="${String(f.current)}"`
+              : "";
+            return `  - ${f.name} (${f.label}) type=${f.type}${reqPart}${curPart}${optPart}`;
+          });
+
+          pageFormFillSystemSuffix = [
+            "",
+            "---",
+            "",
+            "## Current page form",
+            "",
+            `Route: ${pcRoute}`,
+            ...(pcEntitySummary ? [`Entity: ${pcEntitySummary}`] : []),
+            `Form: "${pcFormTitle}" (id: ${pcFormId})`,
+            "Fields:",
+            ...fieldLines,
+            "",
+            "**Behavior rules for form fill:**",
+            "- When the user asks to fill, update, or change this form, call the `page_form_fill` tool with a clear natural-language instruction.",
+            "- If the request is ambiguous (you cannot determine which field or what value without guessing), **ask a clarifying question** instead of calling the tool — never call `page_form_fill` with invented values.",
+            "- After the tool returns, briefly summarize the proposed changes and tell the user to review the suggestion panel. The proposals do NOT apply until the user accepts them.",
+          ].join("\n");
+
+          pageFormFillTool = {
+            page_form_fill: tool({
+              description:
+                "Fill or suggest values for the page form the user is currently viewing. " +
+                "Call this when the user asks to fill, update, or change the form. " +
+                "Pass a clear natural-language instruction describing the desired changes. " +
+                "If the request is ambiguous, ask a clarifying question instead.",
+              inputSchema: z.object({
+                instruction: z.string().min(1).describe(
+                  "Natural-language instruction describing the desired form changes.",
+                ),
+              }),
+              execute: async (input: { instruction: string }) => {
+                const { instruction } = input;
+                const rawResult = await invoke(
+                  "form.fill",
+                  {
+                    route: pcRoute,
+                    entitySummary: pcEntitySummary,
+                    instruction,
+                    fields: pcFields.map((f) => ({
+                      name: f.name,
+                      label: f.label,
+                      type: f.type,
+                      current: f.current,
+                      options: f.options,
+                      required: f.required,
+                    })),
+                  },
+                  capCtx,
+                  { surface: "agent" },
+                );
+                return formFill.output.parse(rawResult);
+              },
+            }),
+          };
+        }
+
+        // Merge the page_form_fill tool (when present) alongside the
+        // materialized agent tools. The toolNameMap does not need an entry for
+        // page_form_fill — translate-stream.ts already falls back to
+        // toolNameMap[name] ?? name so it will display as "page_form_fill".
+        const allTools = pageFormFillTool
+          ? { ...agentTools, ...pageFormFillTool }
+          : agentTools;
+
         const result = streamAgentReply({
           messages: coreMessages,
           model: turnModel,
-          tools: agentTools,
+          tools: allTools,
           system: resolvePrompt({
             key: "chat.system",
-            baseline: chatSystemPrompt({
-              orgSlug,
-              workspaceSlug,
-              orgName: tenant.name,
-              workspaceName: workspace.name,
-            }),
+            baseline:
+              chatSystemPrompt({
+                orgSlug,
+                workspaceSlug,
+                orgName: tenant.name,
+                workspaceName: workspace.name,
+              }) + pageFormFillSystemSuffix,
             config: promptConfig,
           }),
           ...(turnEffort ? { effort: turnEffort } : {}),

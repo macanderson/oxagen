@@ -46,6 +46,8 @@ import { wandSendAction, wandResolveApprovalAction, wandResolvePlanAction } from
 import type { ComposerAction } from "@/components/chat/message-composer";
 import type { ChatShellProps } from "@/components/chat/chat-shell";
 import type { ChatMessage } from "@/components/chat/message-bubble";
+import type { ChatPageContext } from "@/components/chat/chat-shell-client";
+import type { FormFillResult } from "@/lib/ask/fill-types";
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
 
@@ -70,8 +72,37 @@ export interface WandPanelProps {
 // ---------------------------------------------------------------------------
 
 export function WandPanel({ orgSlug, availableWorkspaces, modelConfig }: WandPanelProps) {
-  const { isWandOpen, closeWand } = usePageContext();
+  const { isWandOpen, closeWand, fillableForm, entity, _setIsFilling, _setFillResult } = usePageContext();
   const pathname = usePathname();
+
+  // Build the serialisable page context from current PageContext state at send-time.
+  const buildPageContext = React.useCallback((): ChatPageContext | null => {
+    const route = pathname;
+    const entitySummary = entity?.summary ?? undefined;
+    if (!fillableForm) return { route, entitySummary };
+    return {
+      route,
+      entitySummary,
+      fillableForm: {
+        formId: fillableForm.formId,
+        title: fillableForm.title,
+        fields: fillableForm.fields,
+      },
+    };
+  }, [pathname, entity, fillableForm]);
+
+  // Callbacks to wire fill tool results back into PageContext.
+  const handleFormFillStart = React.useCallback(() => {
+    _setIsFilling(true);
+  }, [_setIsFilling]);
+
+  const handleFormFillEnd = React.useCallback(
+    (result: FormFillResult) => {
+      _setIsFilling(false);
+      _setFillResult(result);
+    },
+    [_setIsFilling, _setFillResult],
+  );
 
   // Resolve the active workspace slug from the URL (mirrors ShellFrame).
   // Falls back to the first available workspace when the path is org-level.
@@ -168,6 +199,9 @@ export function WandPanel({ orgSlug, availableWorkspaces, modelConfig }: WandPan
             resolveApprovalAction={scopedResolveApprovalAction}
             resolvePlanAction={scopedResolvePlanAction}
             modelConfig={modelConfig}
+            buildPageContext={buildPageContext}
+            onFormFillStart={handleFormFillStart}
+            onFormFillEnd={handleFormFillEnd}
           />
         </div>
       </SheetPopup>
@@ -192,6 +226,9 @@ function WandChatShell({
   resolveApprovalAction,
   resolvePlanAction,
   modelConfig,
+  buildPageContext,
+  onFormFillStart,
+  onFormFillEnd,
 }: {
   orgSlug: string;
   workspaceSlug: string;
@@ -199,7 +236,12 @@ function WandChatShell({
   resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
   resolvePlanAction: ChatShellProps["resolvePlanAction"];
   modelConfig: ResolvedTierCatalog;
+  buildPageContext: () => ChatPageContext | null;
+  onFormFillStart: () => void;
+  onFormFillEnd: (result: FormFillResult) => void;
 }) {
+  const pageCtx = buildPageContext();
+
   return (
     <Suspense
       fallback={
@@ -222,6 +264,9 @@ function WandChatShell({
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
         modelConfig={modelConfig}
+        pageContext={pageCtx}
+        onFormFillStart={onFormFillStart}
+        onFormFillEnd={onFormFillEnd}
       />
     </Suspense>
   );

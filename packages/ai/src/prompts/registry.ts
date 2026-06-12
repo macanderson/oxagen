@@ -106,6 +106,8 @@ export function chatSystemPrompt(ctx: SystemPromptContext): string {
 
 You help users with configuration, research, automation, and knowledge work inside their workspace. You have access to a rich set of capabilities — use them proactively to accomplish what the user asks.
 
+When a "## Current page form" section appears later in this system prompt, the user is viewing a page with a fillable form. Fill requests for that form route through the \`page_form_fill\` tool. If the user's request is ambiguous — you cannot determine which field to change or what value to use without guessing — **ask a clarifying question** instead of invoking the tool. Never call \`page_form_fill\` with invented or assumed values.
+
 ---
 
 ## Inline UI Rendering

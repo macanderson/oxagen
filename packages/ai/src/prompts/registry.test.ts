@@ -103,3 +103,22 @@ describe("chatSystemPrompt — connection-create-inline intent", () => {
     expect(prompt).toContain("never invent a componentId");
   });
 });
+
+describe("chatSystemPrompt — page form fill guidance", () => {
+  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+
+  it("mentions page_form_fill tool in the chat system prompt", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("page_form_fill");
+  });
+
+  it("instructs the model to ask a clarifying question when ambiguous", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt.toLowerCase()).toContain("clarifying question");
+  });
+
+  it("references the 'Current page form' section marker", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("Current page form");
+  });
+});

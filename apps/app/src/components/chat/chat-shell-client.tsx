@@ -25,6 +25,23 @@ import type { McpServerSummary } from "./mcp-types";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import { ConversationFiles } from "./conversation-files";
 import { useLatestRef } from "@/lib/use-latest-ref";
+import type { FieldDescriptor } from "@/lib/ask/fill-types";
+import type { FormFillResult } from "@/lib/ask/fill-types";
+import { interceptFormFillEvents } from "./intercept-form-fill";
+
+/**
+ * Serialisable page context forwarded from the current page to the stream
+ * route. Mirrors the `pageContext` field in the route's BodySchema.
+ */
+export interface ChatPageContext {
+  route: string;
+  entitySummary?: string;
+  fillableForm?: {
+    formId: string;
+    title: string;
+    fields: FieldDescriptor[];
+  };
+}
 
 // Client surface for the chat. The RSC `ChatShell` resolves the messages
 // promise and hands them in; this component:
@@ -56,6 +73,9 @@ export function ChatShellClient({
   pendingPromptBehavior = "queue",
   initialModelState,
   availableMcpServers,
+  pageContext,
+  onFormFillStart,
+  onFormFillEnd,
 }: {
   conversationId: string | null;
   /** publicId used for the files-panel fetch. */
@@ -77,6 +97,22 @@ export function ChatShellClient({
   initialModelState?: ComposerModelState;
   /** Available MCP servers for the per-turn activation picker. */
   availableMcpServers?: McpServerSummary[];
+  /**
+   * Page context forwarded from the current page. When a fillable form is
+   * registered (e.g. in AskDrawer/WandPanel wrappers), this is passed to the
+   * /api/v1/chat/stream body so the server can inject the `page_form_fill` tool.
+   */
+  pageContext?: ChatPageContext | null;
+  /**
+   * Called when the agent starts invoking `page_form_fill` (tool-call-start).
+   * Use this to set isFilling=true in PageContext.
+   */
+  onFormFillStart?: () => void;
+  /**
+   * Called when `page_form_fill` completes (tool-call-end) with the fill result.
+   * Use this to set fillResult in PageContext.
+   */
+  onFormFillEnd?: (result: import("@/lib/ask/fill-types").FormFillResult) => void;
 }) {
   const {
     plans,
@@ -131,6 +167,10 @@ export function ChatShellClient({
   const orgSlugRef = useLatestRef(orgSlug);
   const workspaceSlugRef = useLatestRef(workspaceSlug);
   const setIsStreamingRef = useLatestRef(setIsStreaming);
+  // Page-form-fill callback refs — stable so wrappedSendAction deps don't change.
+  const pageContextRef = useLatestRef(pageContext ?? null);
+  const onFormFillStartRef = useLatestRef(onFormFillStart ?? null);
+  const onFormFillEndRef = useLatestRef(onFormFillEnd ?? null);
 
   // AbortController for the in-flight SSE fetch. A new controller is created
   // for every turn. Aborted on interrupt and on unmount.
@@ -243,6 +283,8 @@ export function ChatShellClient({
                 if (!raw) return [];
                 try { return JSON.parse(raw) as string[]; } catch { return []; }
               })(),
+              // Forward page context so the route can inject the page_form_fill tool.
+              pageContext: pageContextRef.current ?? null,
             }),
           });
 
@@ -254,7 +296,16 @@ export function ChatShellClient({
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
 
-          await consumeRef.current(sseToEvents(reader, decoder, signal));
+          // Wrap the SSE event stream to intercept page_form_fill tool events
+          // before they reach the reducer. On tool-call-start we signal that a
+          // fill is in progress; on tool-call-end we surface the fill result.
+          const rawStream = sseToEvents(reader, decoder, signal);
+          const fillAwareStream = interceptFormFillEvents(
+            rawStream,
+            onFormFillStartRef.current,
+            onFormFillEndRef.current,
+          );
+          await consumeRef.current(fillAwareStream);
 
           // Turn finished cleanly: pull the now-persisted assistant reply into
           // the RSC `messages` prop. The [messages] effect above then clears

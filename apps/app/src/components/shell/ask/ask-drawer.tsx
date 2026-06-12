@@ -32,6 +32,8 @@ import {
 import type { ComposerAction } from "@/components/chat/message-composer";
 import type { ChatShellProps } from "@/components/chat/chat-shell";
 import type { ChatMessage } from "@/components/chat/message-bubble";
+import type { ChatPageContext } from "@/components/chat/chat-shell-client";
+import type { FormFillResult } from "@/lib/ask/fill-types";
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
 
@@ -42,8 +44,38 @@ export interface AskDrawerProps {
 }
 
 export function AskDrawer({ orgSlug, availableWorkspaces, modelConfig }: AskDrawerProps) {
-  const { isAskOpen, closeAsk } = usePageContext();
+  const { isAskOpen, closeAsk, fillableForm, entity, _setIsFilling, _setFillResult } = usePageContext();
   const pathname = usePathname();
+
+  // Build the serialisable page context from the current PageContext state at
+  // send-time. Captured once per send so the closure always has latest values.
+  const buildPageContext = React.useCallback((): ChatPageContext | null => {
+    const route = pathname;
+    const entitySummary = entity?.summary ?? undefined;
+    if (!fillableForm) return { route, entitySummary };
+    return {
+      route,
+      entitySummary,
+      fillableForm: {
+        formId: fillableForm.formId,
+        title: fillableForm.title,
+        fields: fillableForm.fields,
+      },
+    };
+  }, [pathname, entity, fillableForm]);
+
+  // Callbacks forwarded to ChatShellClient to wire fill results into PageContext.
+  const handleFormFillStart = React.useCallback(() => {
+    _setIsFilling(true);
+  }, [_setIsFilling]);
+
+  const handleFormFillEnd = React.useCallback(
+    (result: FormFillResult) => {
+      _setIsFilling(false);
+      _setFillResult(result);
+    },
+    [_setIsFilling, _setFillResult],
+  );
 
   const ctx = resolveSidebarCtx(pathname, { orgSlug });
   const activeWorkspaceSlug =
@@ -121,6 +153,9 @@ export function AskDrawer({ orgSlug, availableWorkspaces, modelConfig }: AskDraw
             resolveApprovalAction={scopedResolveApprovalAction}
             resolvePlanAction={scopedResolvePlanAction}
             modelConfig={modelConfig}
+            buildPageContext={buildPageContext}
+            onFormFillStart={handleFormFillStart}
+            onFormFillEnd={handleFormFillEnd}
           />
         </div>
       </SheetPopup>
@@ -141,6 +176,9 @@ function AskDrawerChatShell({
   resolveApprovalAction,
   resolvePlanAction,
   modelConfig,
+  buildPageContext,
+  onFormFillStart,
+  onFormFillEnd,
 }: {
   orgSlug: string;
   workspaceSlug: string;
@@ -148,7 +186,14 @@ function AskDrawerChatShell({
   resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
   resolvePlanAction: ChatShellProps["resolvePlanAction"];
   modelConfig: ResolvedTierCatalog;
+  buildPageContext: () => ChatPageContext | null;
+  onFormFillStart: () => void;
+  onFormFillEnd: (result: FormFillResult) => void;
 }) {
+  // Snapshot page context at render time so LazyChatShellClient gets a stable
+  // value each render without capturing the mutable ref directly.
+  const pageCtx = buildPageContext();
+
   return (
     <Suspense
       fallback={
@@ -171,6 +216,9 @@ function AskDrawerChatShell({
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
         modelConfig={modelConfig}
+        pageContext={pageCtx}
+        onFormFillStart={onFormFillStart}
+        onFormFillEnd={onFormFillEnd}
       />
     </Suspense>
   );

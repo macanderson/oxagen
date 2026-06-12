@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { updateAutoReloadAction } from "@/app/[orgSlug]/billing/actions";
+import { useRegisterFillableForm } from "@/lib/page-context";
+import type { FieldDescriptor } from "@/lib/ask/fill-types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -60,6 +62,55 @@ export function AutoReloadSettings({
       undefined,
   );
   const [saving, setSaving] = React.useState(false);
+
+  // ── Fill registration ─────────────────────────────────────────────────────
+
+  const autoReloadFields = React.useMemo<FieldDescriptor[]>(
+    () => [
+      {
+        name: "enabled",
+        label: "Enable automatic reload",
+        type: "boolean",
+        current: enabled,
+        required: false,
+      },
+      {
+        name: "threshold",
+        label: "Reload threshold ($)",
+        type: "number",
+        current: threshold,
+        required: false,
+      },
+      {
+        name: "amount",
+        label: "Reload amount ($)",
+        type: "number",
+        current: amount,
+        required: false,
+      },
+    ],
+    [enabled, threshold, amount],
+  );
+
+  const applyAutoReload = React.useCallback(
+    (proposed: Record<string, unknown>) => {
+      if (typeof proposed.enabled === "boolean") setEnabled(proposed.enabled);
+      if (typeof proposed.threshold === "string" || typeof proposed.threshold === "number") {
+        setThreshold(String(proposed.threshold));
+      }
+      if (typeof proposed.amount === "string" || typeof proposed.amount === "number") {
+        setAmount(String(proposed.amount));
+      }
+    },
+    [],
+  );
+
+  useRegisterFillableForm({
+    formId: `billing-auto-reload-${orgSlug}`,
+    title: "Automatic reload settings",
+    fields: autoReloadFields,
+    apply: applyAutoReload,
+  });
 
   const disabled = !canManage;
   const inputsDisabled = disabled || !enabled;

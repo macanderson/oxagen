@@ -22,6 +22,8 @@ import { useToast } from "@/components/ui/toast";
 import type { PromptSettingsActionResult, PromptSettingsInput } from "./prompt-settings-action";
 import { updatePromptSettingsAction } from "./prompt-settings-action";
 import type { PromptSettingsReadOutput } from "./prompt-settings-action";
+import { useRegisterFillableForm } from "@/lib/page-context";
+import type { FieldDescriptor } from "@/lib/ask/fill-types";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -101,6 +103,43 @@ export function PromptSettingsForm({
   });
   const [overridesOpen, setOverridesOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+
+  // ── Fill registration ─────────────────────────────────────────────────────
+
+  const promptSettingsFields = React.useMemo<FieldDescriptor[]>(
+    () => [
+      {
+        name: "autoImprove",
+        label: "Auto-improve prompts",
+        type: "boolean",
+        current: autoImprove,
+        required: false,
+      },
+      {
+        name: "additionalInstructions",
+        label: "Workspace instructions",
+        type: "textarea",
+        current: additionalInstructions,
+        required: false,
+      },
+    ],
+    [autoImprove, additionalInstructions],
+  );
+
+  const applyPromptSettings = React.useCallback(
+    (proposed: Record<string, unknown>) => {
+      if (typeof proposed.autoImprove === "boolean") setAutoImprove(proposed.autoImprove);
+      if (typeof proposed.additionalInstructions === "string") setAdditionalInstructions(proposed.additionalInstructions);
+    },
+    [],
+  );
+
+  useRegisterFillableForm({
+    formId: `workspace-prompts-${workspaceSlug}`,
+    title: "Workspace prompt settings",
+    fields: promptSettingsFields,
+    apply: applyPromptSettings,
+  });
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
