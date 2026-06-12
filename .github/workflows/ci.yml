@@ -57,6 +57,11 @@ env:
   GITHUB_APP_CLIENT_ID: Iv1.cie2e0000000000
   GITHUB_APP_CLIENT_SECRET: ci-github-app-secret
   GITHUB_APP_INSTALL_STATE_SECRET: ci-github-install-state-secret
+  # connection.create encrypts credentials via the ingestion crypto adapter —
+  # the API webServer in the e2e job throws 500 on POST /connections without a
+  # valid AES-256 key. CI-only throwaway key (never decrypts real data).
+  INGESTION_CRYPTO_PROVIDER: env
+  INGESTION_ENCRYPTION_KEY: Z+kVBYRa3uc8nyyvgm+Z5tayV3Nawkg/YMzgzJnLh0U=
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────

@@ -44,8 +44,18 @@ test("GitHub connect wizard reaches the OAuth redirect (no failed-to-fetch)", as
   );
   await page.getByTestId("github-connect-btn").click();
 
-  expect((await createResponse).ok()).toBe(true);
-  expect((await authUrlResponse).ok()).toBe(true);
+  // Surface status + body on failure — a bare ok()=false told us nothing when
+  // CI's API was missing INGESTION_ENCRYPTION_KEY and 500'd this POST.
+  const createRes = await createResponse;
+  expect(
+    createRes.ok(),
+    `POST /connections → ${createRes.status()}: ${await createRes.text().catch(() => "<no body>")}`,
+  ).toBe(true);
+  const authUrlRes = await authUrlResponse;
+  expect(
+    authUrlRes.ok(),
+    `GET auth-url → ${authUrlRes.status()}: ${await authUrlRes.text().catch(() => "<no body>")}`,
+  ).toBe(true);
 
   // The wizard hands off to GitHub's authorize page with the app client and
   // an HMAC-signed state param.
