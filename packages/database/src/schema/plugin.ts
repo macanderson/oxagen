@@ -11,14 +11,14 @@ import {
 import { pluginSchema } from "./_schemas";
 import { auditMixin, idMixin, softDeleteMixin } from "./_mixins";
 
-/** The three installable plugin types. The discriminator stored in
+/** The four installable plugin types. The discriminator stored in
  *  plugin.org_listings.plugin_type and used by the runtime PluginType registry. */
-export const PLUGIN_TYPES = ["mcp_server", "integration", "content_tool"] as const;
+export const PLUGIN_TYPES = ["mcp_server", "integration", "content_tool", "capability"] as const;
 export type PluginType = (typeof PLUGIN_TYPES)[number];
 
 /**
  * plugin.org_listings — the org allow-list. Polymorphic across plugin types
- * (mcp_server | integration | content_tool). A row with catalog_server_id set
+ * (mcp_server | integration | content_tool | capability). A row with catalog_server_id set
  * came from a registry; NULL means a custom admin-added plugin. Newly added
  * listings are disabled by default but available to all child workspaces.
  */
@@ -29,9 +29,9 @@ export const pluginOrgListings = pluginSchema.table(
     ...auditMixin(),
     ...softDeleteMixin(),
     orgId: uuid("org_id").notNull(),
-    pluginType: text("plugin_type").notNull(), // mcp_server | integration | content_tool
+    pluginType: text("plugin_type").notNull(), // mcp_server | integration | content_tool | capability
     catalogServerId: uuid("catalog_server_id"), // NULL ⇒ custom
-    source: text("source").notNull(), // registry | custom
+    source: text("source").notNull(), // registry | custom | oxagen
     name: text("name").notNull(),
     title: text("title"),
     description: text("description"),
@@ -52,11 +52,11 @@ export const pluginOrgListings = pluginSchema.table(
     orgTypeIdx: index("org_listings_org_type_idx").on(t.orgId, t.pluginType),
     typeCheck: check(
       "org_listings_type_check",
-      sql`${t.pluginType} IN ('mcp_server','integration','content_tool')`,
+      sql`${t.pluginType} IN ('mcp_server','integration','content_tool','capability')`,
     ),
     sourceCheck: check(
       "org_listings_source_check",
-      sql`${t.source} IN ('registry','custom')`,
+      sql`${t.source} IN ('registry','custom','oxagen')`,
     ),
     authKindCheck: check(
       "org_listings_auth_kind_check",
@@ -89,7 +89,7 @@ export const pluginOrgDenylist = pluginSchema.table(
     ),
     typeCheck: check(
       "org_denylist_type_check",
-      sql`${t.pluginType} IN ('mcp_server','integration','content_tool')`,
+      sql`${t.pluginType} IN ('mcp_server','integration','content_tool','capability')`,
     ),
   }),
 );
