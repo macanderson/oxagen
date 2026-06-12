@@ -24,11 +24,11 @@ export const runtime = "nodejs"; // MCP SDK auth uses Node crypto — edge-unsaf
 
 /**
  * Fetch wrapper for mcpAuth — see authorize/route.ts for full explanation.
- * Prevents Next.js's patched global fetch from hanging on body.cancel() for
- * non-OK responses by pre-draining the body and returning a plain Response.
+ * `cache: "no-store"` bypasses Next's per-URL dedup locks; pre-draining
+ * non-OK bodies prevents the patched Response's body.cancel() from hanging.
  */
 const safeFetch: FetchLike = async (input, init) => {
-  const resp = await fetch(input, init);
+  const resp = await fetch(input, { ...init, cache: "no-store" });
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
     return new Response(text || null, {

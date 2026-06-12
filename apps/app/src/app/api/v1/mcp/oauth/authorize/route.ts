@@ -23,17 +23,19 @@ import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js';
 export const runtime = 'nodejs'; // MCP SDK auth uses Node crypto — edge-unsafe.
 
 /**
- * Fetch wrapper for mcpAuth that prevents Next.js's patched global fetch from
- * hanging on response.body?.cancel() for non-OK responses.
+ * Fetch wrapper for mcpAuth that works around two Next.js patched-fetch
+ * behaviours that hang the OAuth discovery sequence:
  *
- * Next.js wraps Response objects with a custom implementation; calling
- * body.cancel() on a non-2xx response with a streaming body (even an empty
- * one) can block indefinitely. Pre-draining the body for non-OK responses and
- * returning a plain Response with a null body makes cancel() a synchronous
- * no-op.
+ * 1. Next's caching layer takes per-URL locks for request deduplication;
+ *    mcpAuth's sequential well-known fetches can deadlock on the lock held by
+ *    the previous request. `cache: "no-store"` bypasses the lock entirely.
+ * 2. Next wraps Response objects; calling body.cancel() on a non-2xx response
+ *    (the SDK cancels the 404 from /.well-known/oauth-protected-resource) can
+ *    block indefinitely. Pre-draining non-OK bodies and returning a plain
+ *    Response makes cancel() a synchronous no-op.
  */
 const safeFetch: FetchLike = async (input, init) => {
-  const resp = await fetch(input, init);
+  const resp = await fetch(input, { ...init, cache: 'no-store' });
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
     return new Response(text || null, {
@@ -124,20 +126,11 @@ export async function GET(req: NextRequest) {
     now: () => Date.now(),
   });
 
-  // Next.js patches globalThis.fetch with a caching layer that uses per-URL
-  // locks for deduplication. When mcpAuth fires multiple sequential fetches
-  // to the same well-known URLs (first a 404 for /oauth-protected-resource,
-  // then /oauth-authorization-server), the lock held by the first fetch is
-  // not released quickly, and the second fetch deadlocks waiting to acquire
-  // the same lock. Passing cache:"no-store" bypasses the lock entirely.
-  const uncachedFetch: typeof fetch = (input, init) =>
-    fetch(input, { ...init, cache: 'no-store' });
-
   let result: string;
   try {
     result = await mcpAuth(provider, {
       serverUrl: listing.endpointUrl,
-      fetchFn: uncachedFetch,
+      fetchFn: safeFetch,
     });
   } catch (err) {
     logger.error(
