@@ -10,7 +10,7 @@ import { MemoryCard } from "./memory-card";
 import { CodeExecuteCard } from "./code-execute-card";
 import { ReasoningCard } from "./reasoning-card";
 import { ActivityTimeline, TimelineItem, type TimelineItemProps } from "./activity-timeline";
-import { CHAT_COMPONENTS, logUnknownComponent } from "./chat-component-registry";
+import { CHAT_COMPONENTS, logUnknownComponent, UnknownComponentCard } from "./chat-component-registry";
 import type { AssistantContentBlock } from "./stream-event-types";
 import { MarkdownMessage } from "./markdown-message";
 
@@ -194,10 +194,15 @@ function renderBlock(
     case "component": {
       const Component = CHAT_COMPONENTS[block.componentId];
       if (!Component) {
-        // Unknown componentId — log intent but render nothing rather than
-        // crashing so a stale persisted block doesn't break the whole chat.
+        // Unknown componentId — log for observability and render a visible
+        // fallback so the user gets a clear signal instead of a silent gap.
         logUnknownComponent(block.componentId);
-        return null;
+        return (
+          <UnknownComponentCard
+            key={`component:${block.toolCallId}`}
+            componentId={block.componentId}
+          />
+        );
       }
       return (
         <Suspense

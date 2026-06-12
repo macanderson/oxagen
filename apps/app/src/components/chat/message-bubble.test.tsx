@@ -67,6 +67,9 @@ vi.mock("./activity-timeline", () => ({
 vi.mock("./chat-component-registry", () => ({
   CHAT_COMPONENTS: {},
   logUnknownComponent: vi.fn(),
+  UnknownComponentCard: ({ componentId }: { componentId: string }) => (
+    <div data-testid="unknown-component-card">{componentId}</div>
+  ),
 }));
 
 vi.mock("./markdown-message", () => ({
@@ -147,6 +150,31 @@ describe("MessageBubble", () => {
       />,
     );
     expect(screen.getByTestId("activity-timeline")).toBeInTheDocument();
+  });
+
+  it("renders the UnknownComponentCard fallback for an unregistered componentId", async () => {
+    const { MessageBubble } = await import("./message-bubble");
+    render(
+      <MessageBubble
+        message={{
+          ...baseMessage,
+          role: "assistant",
+          contentBlocks: [
+            { type: "text", text: "Here you go" },
+            {
+              type: "component",
+              toolCallId: "tc_unknown_1",
+              componentId: "not-a-registered-component",
+              props: {},
+            },
+          ],
+        }}
+      />,
+    );
+    // The unknown componentId renders a visible fallback, never a silent gap.
+    expect(screen.getByTestId("unknown-component-card")).toHaveTextContent(
+      "not-a-registered-component",
+    );
   });
 
   it("renders children when passed", async () => {

@@ -12,7 +12,7 @@ import { ToolCallCard } from "./tool-call-card";
 import { CodeExecuteCard } from "./code-execute-card";
 import { MemoryCard } from "./memory-card";
 import { SubagentFanout } from "./subagent-fanout";
-import { CHAT_COMPONENTS, logUnknownComponent } from "./chat-component-registry";
+import { CHAT_COMPONENTS, logUnknownComponent, UnknownComponentCard } from "./chat-component-registry";
 import { StreamingText } from "./streaming-text";
 import { ReasoningCard } from "./reasoning-card";
 import { ActivityTimeline, TimelineItem } from "./activity-timeline";
@@ -513,8 +513,14 @@ export function ChatShellClient({
         if (!lc) return null;
         const Component = CHAT_COMPONENTS[lc.componentId];
         if (!Component) {
+          // Unknown componentId — log for observability and return a visible
+          // fallback entry so the user sees a clear signal instead of silence.
           logUnknownComponent(lc.componentId);
-          return null;
+          return {
+            node: <UnknownComponentCard componentId={lc.componentId} />,
+            tone: "done" as const,
+            active: false,
+          };
         }
         return {
           node: (

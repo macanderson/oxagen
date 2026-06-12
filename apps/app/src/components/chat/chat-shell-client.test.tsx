@@ -25,6 +25,11 @@ vi.mock("next/navigation", () => ({
 }));
 
 // ── Streaming hook stub ──────────────────────────────────────────────────────
+// Hoisted mutable overlay so individual tests can inject live-stream state
+// (e.g. a streamed component directive) without re-mocking the module.
+const mockStream = vi.hoisted(() => ({
+  overrides: {} as Record<string, unknown>,
+}));
 vi.mock("./use-tool-stream", () => ({
   useToolStream: () => ({
     plans: {},
@@ -43,6 +48,7 @@ vi.mock("./use-tool-stream", () => ({
     reset: vi.fn(),
     hasBlockingApproval: false,
     signalApprovalResolved: vi.fn(),
+    ...mockStream.overrides,
   }),
 }));
 
@@ -66,6 +72,9 @@ vi.mock("./activity-timeline", () => ({
 vi.mock("./chat-component-registry", () => ({
   CHAT_COMPONENTS: {},
   logUnknownComponent: vi.fn(),
+  UnknownComponentCard: ({ componentId }: { componentId: string }) => (
+    <div data-testid="unknown-component-card">{componentId}</div>
+  ),
 }));
 vi.mock("./streaming-text", () => ({
   StreamingText: ({ text }: { text: string }) => <span>{text}</span>,
@@ -251,5 +260,29 @@ describe("ChatShellClient — activeServerIds in stream request body", () => {
     await submitWithFormData(fd);
     expect(capturedFetchBody).not.toBeNull();
     expect(capturedFetchBody!.activeServerIds).toEqual([]);
+  });
+});
+
+describe("ChatShellClient — live-timeline unknown componentId fallback", () => {
+  afterEach(() => {
+    mockStream.overrides = {};
+  });
+
+  it("renders UnknownComponentCard for a streamed component with an unregistered componentId", async () => {
+    mockStream.overrides = {
+      components: {
+        tc_unknown_live: {
+          toolCallId: "tc_unknown_live",
+          componentId: "bogus-live-component",
+          props: {},
+        },
+      },
+      order: ["component:tc_unknown_live"],
+    };
+    await renderClient();
+    // The live timeline shows a visible fallback, never a silent empty entry.
+    expect(screen.getByTestId("unknown-component-card")).toHaveTextContent(
+      "bogus-live-component",
+    );
   });
 });

@@ -122,8 +122,15 @@ When a user's intent maps to one of the actions below, call the \`agent.ui.rende
 | "buy credits" / "add credits" / "purchase credits" | \`credits-purchase-inline\` |
 | Destructive actions: remove member, demote role, revoke access | \`confirm-destructive-inline\` |
 | "create an automation" / "set up a trigger" / "create a playbook" / "when X happens do Y" / "notify me when…" / "run every…" | \`automation-create-inline\` |
+| "connect github" / "connect a repo" / "connect a repository" / "add a source" / "connect a data source" | \`connection-create-inline\` |
 
 Example: if the user says "I want to invite alice@example.com", call \`agent.ui.render\` with \`{ componentId: "invite-member-inline", props: { prefillEmail: "alice@example.com" } }\`.
+
+**GitHub connection guidance** (for \`connection-create-inline\`):
+- Always pass \`props: { connectorId: "github" }\`. GitHub is the only connector with an inline connect flow today.
+- Example: if the user says "connect github repo" or "add a github source", call \`agent.ui.render\` with \`{ componentId: "connection-create-inline", props: { connectorId: "github" } }\`.
+
+**Hard rule — only use registered componentIds:** Only use componentIds that appear in this table — never invent a componentId. Unknown ids render an unavailable-component notice to the user.
 
 **Automation creation guidance** (for \`automation-create-inline\`):
 - Infer the FULL trigger configuration from the user's words into component props. Examples:
