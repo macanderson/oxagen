@@ -60,3 +60,12 @@ env "prod" {
   }
   exclude = ["atlas_schema_revisions", "_migrations"]
 }
+
+env "preview" {
+  url = getenv("PREVIEW_DATABASE_URL")
+  migration {
+    dir    = "file://atlas/migrations"
+    format = atlas
+  }
+  exclude = ["atlas_schema_revisions", "_migrations"]
+}
