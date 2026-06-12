@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { coverageConfigDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
@@ -9,13 +9,24 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // lines floor 91 (measured 91.44); branches floor 83 (measured 83.43);
-      // functions floor 76 (measured 76.13) — ratcheted after serverAllowlist tests.
+      exclude: [
+        ...coverageConfigDefaults.exclude,
+        // Barrels and side-effect wiring with no testable logic of their own:
+        // register.ts binds handlers into the kernel (exercised by every
+        // surface boot + kernel tests); types.ts is type-only; the package
+        // barrels just re-export. Same policy as @oxagen/handlers.
+        "src/index.ts",
+        "src/register.ts",
+        "src/types.ts",
+        "src/test-utils/**",
+      ],
+      // Ratcheted after barrel/test-util excludes: measured 92.08 lines /
+      // 83.72 branches / 77.9 functions. Thresholds only go up.
       thresholds: {
-        lines: 91,
+        lines: 92,
         branches: 83,
-        functions: 76,
-        statements: 91,
+        functions: 77,
+        statements: 92,
       },
     },
   },
