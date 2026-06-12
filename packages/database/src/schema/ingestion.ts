@@ -1,9 +1,7 @@
 import { boolean, index, integer, jsonb, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { pgSchema } from "drizzle-orm/pg-core";
+import { ingestionSchema } from "./_schemas";
 import { citext, idMixin, uuidv7Default } from "./_mixins";
-
-export const ingestionSchema = pgSchema("ingestion");
 
 // ── ingestion.source_connections ─────────────────────────────────────────────
 

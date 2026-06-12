@@ -27,9 +27,6 @@ test.describe("api.key — full lifecycle", () => {
       orgSlug: ORG_SLUG,
       workspaceSlug: WS_SLUG,
       userEmail: USER_EMAIL,
-      // api.key.create is IAM-enforced (defaultEffect:"deny") on the API surface,
-      // so the seeded owner needs a real Owner principal/role to be authorized.
-      bootstrapIam: true,
     });
   });
 

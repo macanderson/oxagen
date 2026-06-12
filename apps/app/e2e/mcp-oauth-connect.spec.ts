@@ -142,7 +142,13 @@ test.describe("mcp-oauth-connect", () => {
     const authorizeHref = await connectBtn.getAttribute("href");
     if (!authorizeHref) throw new Error("Connect button has no href");
 
-    await page.goto(authorizeHref, { waitUntil: "load", timeout: 30_000 });
+    await page.goto(authorizeHref, { waitUntil: "commit", timeout: 30_000 });
+    // Check if we got an error response from the server (debug helper).
+    const currentUrl = page.url();
+    if (currentUrl.includes("/api/v1/mcp/oauth/authorize")) {
+      const content = await page.content();
+      throw new Error(`Authorize route did not redirect. Page content: ${content.slice(0, 500)}`);
+    }
     // The goto follows redirects: authorize → mock OAuth → callback → integrations?mcp=connected
     await expect(page).toHaveURL(
       (url) =>

@@ -9,18 +9,18 @@
  * On REDIRECT: redirects the browser to the authorization server's authorize URL.
  * On AUTHORIZED (already connected): redirects to the workspace integrations page.
  */
-import { NextResponse, type NextRequest } from "next/server";
-import { randomUUID } from "node:crypto";
-import { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
-import { and, eq } from "drizzle-orm";
-import { schema, withSystemDb } from "@oxagen/database";
-import { DbOAuthClientProvider } from "@oxagen/plugins";
-import { getSession } from "@/lib/session";
-import { resolveOrg, assertMcpManager } from "@/lib/resolve-org";
-import { logger } from "@oxagen/handlers/logger";
-import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { NextResponse, type NextRequest } from 'next/server';
+import { randomUUID } from 'node:crypto';
+import { auth as mcpAuth } from '@modelcontextprotocol/sdk/client/auth.js';
+import { and, eq } from 'drizzle-orm';
+import { schema, withSystemDb } from '@oxagen/database';
+import { DbOAuthClientProvider } from '@oxagen/plugins';
+import { getSession } from '@/lib/session';
+import { resolveOrg, assertMcpManager } from '@/lib/resolve-org';
+import { logger } from '@oxagen/handlers/logger';
+import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js';
 
-export const runtime = "nodejs"; // MCP SDK auth uses Node crypto — edge-unsafe.
+export const runtime = 'nodejs'; // MCP SDK auth uses Node crypto — edge-unsafe.
 
 /**
  * Fetch wrapper for mcpAuth that prevents Next.js's patched global fetch from
@@ -35,7 +35,7 @@ export const runtime = "nodejs"; // MCP SDK auth uses Node crypto — edge-unsaf
 const safeFetch: FetchLike = async (input, init) => {
   const resp = await fetch(input, init);
   if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
+    const text = await resp.text().catch(() => '');
     return new Response(text || null, {
       status: resp.status,
       statusText: resp.statusText,
@@ -48,19 +48,25 @@ const safeFetch: FetchLike = async (input, init) => {
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const url = new URL(req.url);
-  const orgSlug = url.searchParams.get("orgSlug");
-  const workspaceSlug = url.searchParams.get("workspaceSlug");
-  const orgListingId = url.searchParams.get("orgListingId");
+  const orgSlug = url.searchParams.get('orgSlug');
+  const workspaceSlug = url.searchParams.get('workspaceSlug');
+  const orgListingId = url.searchParams.get('orgListingId');
 
   if (!orgSlug || !workspaceSlug || !orgListingId) {
-    return NextResponse.json({ error: "missing params: orgSlug, workspaceSlug, orgListingId" }, { status: 400 });
+    return NextResponse.json(
+      { error: 'missing params: orgSlug, workspaceSlug, orgListingId' },
+      { status: 400 },
+    );
   }
 
-  logger.info({ orgSlug, workspaceSlug, orgListingId }, "mcp-oauth: authorize flow started");
+  logger.info(
+    { orgSlug, workspaceSlug, orgListingId },
+    'mcp-oauth: authorize flow started',
+  );
 
   const tenant = await resolveOrg(orgSlug);
 
@@ -78,7 +84,10 @@ export async function GET(req: NextRequest) {
   });
 
   if (!listing || listing.orgId !== tenant.id || !listing.endpointUrl) {
-    return NextResponse.json({ error: "listing not found or not connectable" }, { status: 404 });
+    return NextResponse.json(
+      { error: 'listing not found or not connectable' },
+      { status: 404 },
+    );
   }
 
   // Resolve workspaceId from (orgId, slug) — scoped to the org to avoid cross-org confusion.
@@ -86,13 +95,18 @@ export async function GET(req: NextRequest) {
     const [w] = await tx
       .select({ id: schema.workspaces.id })
       .from(schema.workspaces)
-      .where(and(eq(schema.workspaces.orgId, tenant.id), eq(schema.workspaces.slug, workspaceSlug)))
+      .where(
+        and(
+          eq(schema.workspaces.orgId, tenant.id),
+          eq(schema.workspaces.slug, workspaceSlug),
+        ),
+      )
       .limit(1);
     return w ?? null;
   });
 
   if (!workspace) {
-    return NextResponse.json({ error: "workspace not found" }, { status: 404 });
+    return NextResponse.json({ error: 'workspace not found' }, { status: 404 });
   }
 
   const state = randomUUID();
@@ -106,25 +120,67 @@ export async function GET(req: NextRequest) {
     redirectUrl,
     state,
     returnTo,
-    clientName: "Oxagen",
+    clientName: 'Oxagen',
     now: () => Date.now(),
   });
 
-  const result = await mcpAuth(provider, {
-    serverUrl: listing.endpointUrl,
-    fetchFn: safeFetch,
-  });
+  // Next.js patches globalThis.fetch with a caching layer that uses per-URL
+  // locks for deduplication. When mcpAuth fires multiple sequential fetches
+  // to the same well-known URLs (first a 404 for /oauth-protected-resource,
+  // then /oauth-authorization-server), the lock held by the first fetch is
+  // not released quickly, and the second fetch deadlocks waiting to acquire
+  // the same lock. Passing cache:"no-store" bypasses the lock entirely.
+  const uncachedFetch: typeof fetch = (input, init) =>
+    fetch(input, { ...init, cache: 'no-store' });
 
-  if (result === "AUTHORIZED") {
+  let result: string;
+  try {
+    result = await mcpAuth(provider, {
+      serverUrl: listing.endpointUrl,
+      fetchFn: uncachedFetch,
+    });
+  } catch (err) {
+    logger.error(
+      {
+        orgId: tenant.id,
+        orgListingId,
+        err: String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      },
+      'mcp-oauth: mcpAuth threw during authorize',
+    );
+    return NextResponse.json(
+      { error: 'mcp auth failed', detail: String(err) },
+      { status: 502 },
+    );
+  }
+
+  logger.info(
+    { orgId: tenant.id, orgListingId, result },
+    'mcp-oauth: mcpAuth completed',
+  );
+
+  if (result === 'AUTHORIZED') {
     // Already connected — redirect straight back.
-    logger.info({ orgId: tenant.id, orgListingId }, "mcp-oauth: already authorized, skipping flow");
-    return NextResponse.redirect(`${url.origin}${returnTo}?mcp=already-connected`);
+    logger.info(
+      { orgId: tenant.id, orgListingId },
+      'mcp-oauth: already authorized, skipping flow',
+    );
+    return NextResponse.redirect(
+      `${url.origin}${returnTo}?mcp=already-connected`,
+    );
   }
 
   if (!provider.pendingRedirect) {
-    return NextResponse.json({ error: "authorization server did not return a redirect URL" }, { status: 502 });
+    return NextResponse.json(
+      { error: 'authorization server did not return a redirect URL' },
+      { status: 502 },
+    );
   }
 
-  logger.info({ orgId: tenant.id, orgListingId }, "mcp-oauth: redirecting to authorization server");
+  logger.info(
+    { orgId: tenant.id, orgListingId },
+    'mcp-oauth: redirecting to authorization server',
+  );
   return NextResponse.redirect(provider.pendingRedirect.toString());
 }

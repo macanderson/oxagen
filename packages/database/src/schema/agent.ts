@@ -287,7 +287,7 @@ export const agentToolCalls = agentSchema.table(
 export const agentPlans = agentSchema.table(
   "agent_plans",
   {
-    ...idMixin("pln"),
+    ...idMixin("apl"),
     ...auditMixin(),
     ...orgScopeMixin(),
     // status constrained via CHECK in migration
