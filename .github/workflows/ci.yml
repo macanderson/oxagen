@@ -232,11 +232,11 @@ jobs:
 
       - name: Migrate ClickHouse + Neo4j
         if: steps.migration_changes.outputs.changed == 'true'
-        run: DB_MIGRATE_STORES=clickhouse,neo4j tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
+        run: DB_MIGRATE_STORES=clickhouse,neo4j pnpm exec tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
 
       - name: Seed platform defaults
         if: steps.migration_changes.outputs.changed == 'true'
-        run: tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
+        run: pnpm exec tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
       # Affected build + unit tests. test:unit dependsOn ^build, so turbo builds
       # the affected dependency graph then runs the affected tests — all in one
