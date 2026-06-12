@@ -59,7 +59,7 @@
           },
           {
             "type": "command",
-            "command": "npx tsx $CLAUDE_TELEMETRY_LOGGER",
+            "command": "node $CLAUDE_TELEMETRY_LOGGER",
             "timeout": 3,
             "statusMessage": "Recording telemetry...",
             "async": true
@@ -78,7 +78,7 @@
           },
           {
             "type": "command",
-            "command": "npx tsx $CLAUDE_TELEMETRY_LOGGER",
+            "command": "node $CLAUDE_TELEMETRY_LOGGER",
             "timeout": 3,
             "statusMessage": "Recording telemetry...",
             "async": true
