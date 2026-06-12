@@ -19,6 +19,7 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { ThemeProvider, THEME_COOKIE_NAME, parseTheme, themeClass, MotionProvider } from "@oxagen/ui";
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: "Oxagen",
@@ -109,6 +110,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </ToastProvider>
           </MotionProvider>
         </ThemeProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
