@@ -104,7 +104,16 @@
     },
 
     "lint": {
-      "inputs": ["$TURBO_DEFAULT$", "src/**", ".eslintrc.*", "eslint.config.*", "package.json"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        ".eslintrc.*",
+        "eslint.config.*",
+        "package.json",
+        "$TURBO_ROOT$/eslint.config.mjs",
+        "$TURBO_ROOT$/eslint.next.mjs",
+        "$TURBO_ROOT$/eslint.tenancy-seams.mjs"
+      ],
       "outputs": []
     },
 
