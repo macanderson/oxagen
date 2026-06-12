@@ -39,6 +39,12 @@ mocks.txFn.mockImplementation(async (cb: (tx: Record<string, unknown>) => Promis
   return cb(tx as unknown as Parameters<typeof cb>[0]);
 });
 
+// Stub bootstrapWorkspaceAgents to isolate workspace.create tests from DB
+// agent-seeding behaviour — that is covered by workspace-agents unit tests.
+vi.mock("./workspace-agents", () => ({
+  bootstrapWorkspaceAgents: vi.fn(async () => undefined),
+}));
+
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {

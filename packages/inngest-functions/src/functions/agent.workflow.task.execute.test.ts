@@ -4,8 +4,11 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   dbUpdateSet: vi.fn(),
   dbUpdateWhere: vi.fn(),
-  dbUpdateReturning: vi.fn(),
   dbUpdate: vi.fn(),
+  // selectCallCount tracks which of the three count queries is being called.
+  selectCallCount: { value: 0 },
+  // countOverride: when set, all three count queries return this scenario
+  countOverride: { total: 2, completed: 1, failed: 0 } as { total: number; completed: number; failed: number },
   generateObjectFor: vi.fn(),
   insertToolInvocation: vi.fn(),
   inngestCreateFunction: vi.fn(),
@@ -13,26 +16,38 @@ const mocks = vi.hoisted(() => ({
 
 const MOCK_OUTPUT = { summary: "Tim Cook is the CEO of Apple", data: { ceo: "Tim Cook" } };
 
-mocks.dbUpdateReturning.mockResolvedValue([
-  { completedTasks: 1, failedTasks: 0, totalTasks: 2, status: "running" },
-]);
-mocks.dbUpdateWhere.mockReturnValue({ returning: mocks.dbUpdateReturning });
+mocks.dbUpdateWhere.mockResolvedValue(undefined);
 mocks.dbUpdateSet.mockReturnValue({ where: mocks.dbUpdateWhere });
 mocks.dbUpdate.mockReturnValue({ set: mocks.dbUpdateSet });
 mocks.generateObjectFor.mockResolvedValue({ object: MOCK_OUTPUT });
 mocks.insertToolInvocation.mockResolvedValue(undefined);
 
+// withTenantDb mock: supports update() and select() chains.
+// For count-steps, the impl does 3 sequential selects: total, completed, failed.
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
-    const tx = {
-      update: (_table: unknown) => ({ set: mocks.dbUpdateSet }),
-    };
-    return fn(tx);
-  },
-
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        update: (_table: unknown) => ({ set: mocks.dbUpdateSet }),
+        // Returns [{n: count}] — the impl destructures [totalRow], [completedRow], [failedRow].
+        select: (_fields: unknown) => ({
+          from: (_table: unknown) => ({
+            where: (_cond: unknown) => {
+              mocks.selectCallCount.value += 1;
+              // Call order: 1=total, 2=completed, 3=failed
+              const call = mocks.selectCallCount.value;
+              const { total, completed, failed } = mocks.countOverride;
+              if (call === 1) return Promise.resolve([{ n: total }]);
+              if (call === 2) return Promise.resolve([{ n: completed }]);
+              return Promise.resolve([{ n: failed }]);
+            },
+          }),
+        }),
+      };
+      return fn(tx);
+    },
   };
 });
 
@@ -87,8 +102,8 @@ const BASE_EVENT = {
   data: {
     orgId: "org-1",
     workspaceId: "ws-1",
-    workflowRunId: "wfr-uuid-1",
-    taskId: "wft-uuid-1",
+    executionId: "exec-uuid-1",
+    stepId: "step-uuid-1",
     taskIndex: 0,
     goal: "Find CEO of Apple",
     outputFormat: "json",
@@ -98,23 +113,22 @@ const BASE_EVENT = {
 describe("agentWorkflowTaskExecute Inngest handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.dbUpdateReturning.mockResolvedValue([
-      { completedTasks: 1, failedTasks: 0, totalTasks: 2, status: "running" },
-    ]);
-    mocks.dbUpdateWhere.mockReturnValue({ returning: mocks.dbUpdateReturning });
+    mocks.selectCallCount.value = 0;
+    mocks.countOverride = { total: 2, completed: 1, failed: 0 };
+    mocks.dbUpdateWhere.mockResolvedValue(undefined);
     mocks.dbUpdateSet.mockReturnValue({ where: mocks.dbUpdateWhere });
     mocks.dbUpdate.mockReturnValue({ set: mocks.dbUpdateSet });
     mocks.generateObjectFor.mockResolvedValue({ object: MOCK_OUTPUT });
     mocks.insertToolInvocation.mockResolvedValue(undefined);
   });
 
-  it("marks task running, calls generateObjectFor, marks task completed", async () => {
+  it("marks step running, calls generateObjectFor, marks step completed", async () => {
     const result = (await capturedHandler!({
       event: BASE_EVENT,
       step: makeStep(),
     })) as Record<string, unknown>;
 
-    expect(result.taskId).toBe("wft-uuid-1");
+    expect(result.stepId).toBe("step-uuid-1");
     expect(result.status).toBe("completed");
     expect(mocks.generateObjectFor).toHaveBeenCalledOnce();
   });
@@ -125,17 +139,17 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
     expect(args.prompt).toContain("Find CEO of Apple");
   });
 
-  it("saves output_json on the task row when completed", async () => {
+  it("saves outputPayload on the step row when completed", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     const setCalls = mocks.dbUpdateSet.mock.calls as Array<[Record<string, unknown>]>;
     const completedCall = setCalls.find(
       ([arg]) => (arg as Record<string, unknown>).status === "completed",
     );
     expect(completedCall).toBeTruthy();
-    expect((completedCall![0] as Record<string, unknown>).outputJson).toEqual(MOCK_OUTPUT);
+    expect((completedCall![0] as Record<string, unknown>).outputPayload).toEqual(MOCK_OUTPUT);
   });
 
-  it("marks task failed and increments failed_tasks when generateObjectFor throws", async () => {
+  it("marks step failed and stores failureReason when generateObjectFor throws", async () => {
     mocks.generateObjectFor.mockRejectedValueOnce(new Error("LLM error"));
     await expect(
       capturedHandler!({ event: BASE_EVENT, step: makeStep() }),
@@ -146,7 +160,7 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
       ([arg]) => (arg as Record<string, unknown>).status === "failed",
     );
     expect(failedCall).toBeTruthy();
-    expect((failedCall![0] as Record<string, unknown>).error).toBe("LLM error");
+    expect((failedCall![0] as Record<string, unknown>).failureReason).toBe("LLM error");
   });
 
   it("writes a completed tool invocation row to telemetry", async () => {
@@ -158,7 +172,7 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
     expect(telArgs.org_id).toBe("org-1");
   });
 
-  it("writes a failed tool invocation row when the task fails", async () => {
+  it("writes a failed tool invocation row when the step fails", async () => {
     mocks.generateObjectFor.mockRejectedValueOnce(new Error("fail"));
     await expect(
       capturedHandler!({ event: BASE_EVENT, step: makeStep() }),
@@ -167,10 +181,36 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
     expect(telArgs.status).toBe("failed");
   });
 
-  it("marks workflow completed when all tasks are done", async () => {
-    mocks.dbUpdateReturning.mockResolvedValue([
-      { completedTasks: 2, failedTasks: 0, totalTasks: 2, status: "running" },
-    ]);
+  it("finalizes execution when all steps are terminal (completed + failed >= total)", async () => {
+    // Override: completed=2 out of total=2 → triggers finalize
+    let callIdx = 0;
+    vi.mocked(mocks.dbUpdateWhere).mockResolvedValue(undefined);
+    // Re-mock withTenantDb for this test to return completed=2 total=2
+    const { withTenantDb } = await import("@oxagen/database");
+    vi.mocked(withTenantDb).mockImplementationOnce(async (fn) => {
+      callIdx++;
+      if (callIdx >= 3) {
+        // count-steps call — return all-done counts
+        return fn({
+          update: () => ({ set: mocks.dbUpdateSet }),
+          select: () => ({
+            from: () => ({
+              where: () => {
+                mocks.selectCallCount.value += 1;
+                const c = mocks.selectCallCount.value;
+                if (c === 1) return Promise.resolve([{ n: 2 }]);
+                if (c === 2) return Promise.resolve([{ n: 2 }]);
+                return Promise.resolve([{ n: 0 }]);
+              },
+            }),
+          }),
+        } as unknown as Parameters<typeof fn>[0]);
+      }
+      return fn({
+        update: () => ({ set: mocks.dbUpdateSet }),
+      } as unknown as Parameters<typeof fn>[0]);
+    });
+
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     const setCalls = mocks.dbUpdateSet.mock.calls as Array<[Record<string, unknown>]>;
     const finalUpdate = setCalls.find(
