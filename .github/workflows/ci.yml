@@ -337,9 +337,9 @@ jobs:
         working-directory: packages/database
         run: atlas migrate apply --env ci
       - name: Migrate ClickHouse + Neo4j
-        run: DB_MIGRATE_STORES=clickhouse,neo4j tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
+        run: DB_MIGRATE_STORES=clickhouse,neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
       - name: Seed platform defaults
-        run: tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
+        run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
       - name: Build (affected)
         run: pnpm turbo run build --filter="...[${TURBO_BASE}]"
       # Install the Playwright browser + OS deps. Without this the runner has no
@@ -405,7 +405,7 @@ jobs:
         run: atlas migrate apply --env ci
 
       - name: Seed platform defaults
-        run: tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
+        run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
       - name: RLS isolation proof + manifest coverage
         run: pnpm --filter @oxagen/database test:integration
@@ -509,11 +509,11 @@ jobs:
 
       - name: Migrate ClickHouse (${{ github.event_name != 'pull_request' && 'PRODUCTION' || 'PREVIEW' }})
         if: steps.changes.outputs.changed == 'true'
-        run: DB_MIGRATE_STORES=clickhouse tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
+        run: DB_MIGRATE_STORES=clickhouse npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
 
       - name: Seed platform defaults (idempotent)
         if: steps.changes.outputs.changed == 'true'
-        run: tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
+        run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
   # ──────────────────────────────────────────────────────────────────────
   # deploy — post-merge side-car (main only). The actual app deploys are
