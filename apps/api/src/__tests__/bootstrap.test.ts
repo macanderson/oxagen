@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   assertRlsConnectionSafe: vi.fn().mockResolvedValue(undefined),
   bootstrapIAMRuntime: vi.fn(),
   bootstrapBillingRuntime: vi.fn(),
+  bootstrapEntitlementRuntime: vi.fn(),
   setSecurityEventEmitter: vi.fn(),
   recordSecurityEvent: vi.fn(),
   makeSecurityEventInserter: vi.fn().mockReturnValue(vi.fn()),
@@ -52,6 +53,10 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     processStripeEvent: vi.fn(),
   };
 });
+
+vi.mock("@oxagen/plugins", () => ({
+  bootstrapEntitlementRuntime: mocks.bootstrapEntitlementRuntime,
+}));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
   setSecurityEventEmitter: mocks.setSecurityEventEmitter,
@@ -101,6 +106,7 @@ describe("bootstrap() idempotency", () => {
     expect(mocks.assertRlsConnectionSafe).toHaveBeenCalledTimes(1);
     expect(mocks.bootstrapIAMRuntime).toHaveBeenCalledTimes(1);
     expect(mocks.bootstrapBillingRuntime).toHaveBeenCalledTimes(1);
+    expect(mocks.bootstrapEntitlementRuntime).toHaveBeenCalledTimes(1);
     expect(mocks.setSecurityEventEmitter).toHaveBeenCalledTimes(1);
   });
 
