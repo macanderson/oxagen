@@ -20,28 +20,39 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     throw new Error("[plugin.workspace.set_enabled] workspaceId is required (scoped capability)");
   }
 
-  if (enabled) {
-    // Load and validate the org listing.
-    const listing = await withSystemDb(async (tx) => {
-      const [row] = await tx
-        .select()
-        .from(schema.pluginOrgListings)
-        .where(
-          and(
-            eq(schema.pluginOrgListings.id, orgListingId),
-            eq(schema.pluginOrgListings.orgId, ctx.orgId),
-            isNull(schema.pluginOrgListings.deletedAt),
-          ),
-        )
-        .limit(1);
-      return row ?? null;
-    });
+  // Load the org listing upfront so both enable and disable paths can guard on
+  // plugin_type. This is needed because capability packs are org-level only in
+  // Phase 1 — workspace-level enable/disable arrives in Phase 2.
+  const listing = await withSystemDb(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(schema.pluginOrgListings)
+      .where(
+        and(
+          eq(schema.pluginOrgListings.id, orgListingId),
+          eq(schema.pluginOrgListings.orgId, ctx.orgId),
+          isNull(schema.pluginOrgListings.deletedAt),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  });
 
-    if (!listing) {
-      throw new Error(
-        `[plugin.workspace.set_enabled] Org listing not found or deleted: ${orgListingId}`,
-      );
-    }
+  if (!listing) {
+    throw new Error(
+      `[plugin.workspace.set_enabled] Org listing not found or deleted: ${orgListingId}`,
+    );
+  }
+
+  // Guard: capability packs cannot be workspace-toggled in Phase 1.
+  if (listing.pluginType === "capability") {
+    throw new Error(
+      "[plugin.workspace.set_enabled] Workspace-level enable/disable for Oxagen Plugins arrives in Phase 2. " +
+        "Capability packs are org-level — use plugin.org.set_enabled instead.",
+    );
+  }
+
+  if (enabled) {
     if (!listing.enabled) {
       throw new Error(
         `[plugin.workspace.set_enabled] Org listing "${listing.name}" is disabled at the org level.`,

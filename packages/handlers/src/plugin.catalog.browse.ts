@@ -1,18 +1,83 @@
-import { and, desc, eq, ilike, arrayOverlaps, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, arrayOverlaps, isNull, sql } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { listOxagenPlugins } from "@oxagen/oxagen/plugins";
 import { logger } from "./logger";
 
-export const handler: CapabilityHandlerFn = async (input) => {
+export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const { search, pluginType, categories, transportTypes, authKind, limit, offset } = input as {
     search?: string;
-    pluginType?: "mcp_server" | "integration" | "content_tool";
+    pluginType?: "mcp_server" | "integration" | "content_tool" | "capability";
     categories?: string[];
     transportTypes?: string[];
     authKind?: string;
     limit: number;
     offset: number;
   };
+
+  // ── Capability path ──────────────────────────────────────────────────────────
+  // Capability entries come from the static Oxagen plugin registry, NOT from
+  // mcp.catalog_servers. They only appear when pluginType is explicitly "capability".
+  // An omitted pluginType browses only catalog_servers (existing behaviour preserved).
+  if (pluginType === "capability") {
+    let manifests = listOxagenPlugins().filter(
+      (m) => m.visibility !== "hidden" && m.visibility !== "preview",
+    );
+
+    // Apply text search against id, name, and description.
+    if (search) {
+      const lower = search.toLowerCase();
+      manifests = manifests.filter(
+        (m) =>
+          m.id.toLowerCase().includes(lower) ||
+          m.name.toLowerCase().includes(lower) ||
+          m.description.toLowerCase().includes(lower),
+      );
+    }
+
+    const total = manifests.length;
+    const page = manifests.slice(offset, offset + limit);
+
+    // Resolve which plugins are already installed for this org.
+    const installedNames = await withSystemDb(async (tx) => {
+      if (page.length === 0) return new Set<string>();
+      const rows = await tx
+        .select({ name: schema.pluginOrgListings.name })
+        .from(schema.pluginOrgListings)
+        .where(
+          and(
+            eq(schema.pluginOrgListings.orgId, ctx.orgId),
+            eq(schema.pluginOrgListings.pluginType, "capability"),
+            isNull(schema.pluginOrgListings.deletedAt),
+          ),
+        );
+      return new Set(rows.map((r) => r.name));
+    });
+
+    logger.info({ limit, offset, total, orgId: ctx.orgId }, "plugin.catalog.browse capability: ok");
+
+    return {
+      servers: page.map((m) => ({
+        // name = stable install key (matches org_listings.name = plugin id)
+        id: m.id,
+        name: m.id,
+        title: m.name,
+        description: m.description,
+        icons: [],
+        transportTypes: [],
+        authKind: "none",
+        categories: [m.category],
+        version: m.version,
+        pluginType: "capability" as const,
+        tier: m.tier,
+        installed: installedNames.has(m.id),
+      })),
+      nextOffset: offset + page.length < total ? offset + limit : null,
+      total,
+    };
+  }
+
+  // ── MCP server / integration / content_tool path (unchanged) ────────────────
   const conds = [
     eq(schema.mcpCatalogServers.isLatest, true),
     eq(schema.mcpCatalogServers.status, "active"),

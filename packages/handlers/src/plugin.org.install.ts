@@ -2,10 +2,13 @@ import { and, eq, sql } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import type { CapabilityContext } from "@oxagen/oxagen/types";
+import { getOxagenPlugin } from "@oxagen/oxagen/plugins";
 import { logger } from "./logger";
 
 export interface InstallOneInput {
-  pluginType: "mcp_server" | "integration" | "content_tool";
+  pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
+  // Required when pluginType === "capability". Ignored for other types.
+  pluginId?: string;
   catalogServerId?: string;
   custom?: {
     name: string;
@@ -25,7 +28,88 @@ export async function installOne(
   ctx: CapabilityContext,
   input: InstallOneInput,
 ): Promise<string> {
-  const { pluginType, catalogServerId, custom } = input;
+  const { pluginType, pluginId, catalogServerId, custom } = input;
+
+  // ── Capability (Oxagen Plugin) path ─────────────────────────────────────────
+  if (pluginType === "capability") {
+    if (!pluginId) {
+      throw new Error(
+        "[plugin.org.install] pluginId is required when pluginType is 'capability'.",
+      );
+    }
+    const manifest = getOxagenPlugin(pluginId);
+    if (!manifest) {
+      throw new Error(
+        `[plugin.org.install] Unknown capability plugin: "${pluginId}". Check the Oxagen plugin registry.`,
+      );
+    }
+    if (manifest.visibility === "hidden") {
+      throw new Error(
+        `[plugin.org.install] Plugin "${pluginId}" is not publicly installable (visibility: hidden).`,
+      );
+    }
+
+    // Reject if the name is on the denylist for this org + capability type.
+    const denied = await withSystemDb(async (tx) => {
+      const [row] = await tx
+        .select({ id: schema.pluginOrgDenylist.id })
+        .from(schema.pluginOrgDenylist)
+        .where(
+          and(
+            eq(schema.pluginOrgDenylist.orgId, ctx.orgId),
+            eq(schema.pluginOrgDenylist.pluginType, "capability"),
+            eq(schema.pluginOrgDenylist.serverName, pluginId),
+          ),
+        )
+        .limit(1);
+      return row ?? null;
+    });
+    if (denied) {
+      throw new Error(
+        `[plugin.org.install] Plugin "${pluginId}" is on the org denylist for type "capability".`,
+      );
+    }
+
+    // Upsert the listing. Capability listings have no endpoint/transport — both
+    // columns are nullable in plugin.org_listings (no notNull constraint in schema).
+    // authKind is "none" since capability packs are invoked internally, not over
+    // a network transport. source="oxagen" distinguishes first-party capability packs.
+    const inserted = await withSystemDb(async (tx) => {
+      const [row] = await tx
+        .insert(schema.pluginOrgListings)
+        .values({
+          orgId: ctx.orgId,
+          pluginType: "capability",
+          catalogServerId: null,
+          source: "oxagen",
+          name: pluginId,
+          title: manifest.name,
+          description: manifest.description,
+          iconUrl: manifest.icon ?? null,
+          endpointUrl: null,
+          transport: null,
+          authKind: "none",
+          enabled: false,
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.pluginOrgListings.orgId,
+            schema.pluginOrgListings.pluginType,
+            schema.pluginOrgListings.name,
+          ],
+          set: { updatedAt: sql`now()` },
+        })
+        .returning({ id: schema.pluginOrgListings.id });
+      return row ?? null;
+    });
+
+    if (!inserted) {
+      throw new Error("[plugin.org.install] Capability insert returned no row.");
+    }
+    return inserted.id;
+  }
+
+  // ── MCP server / integration / content_tool path ────────────────────────────
 
   // Exactly one of catalogServerId / custom must be provided.
   const hasCatalog = catalogServerId !== undefined && catalogServerId !== null;

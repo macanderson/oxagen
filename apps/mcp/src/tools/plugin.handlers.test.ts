@@ -261,6 +261,7 @@ describe("plugin.org.install handler", () => {
 
     const args = {
       pluginType: "mcp_server" as const,
+      pluginId: undefined,
       catalogServerId: "cat_1" as string | undefined,
       custom: undefined,
     };
@@ -293,7 +294,7 @@ describe("plugin.org.install_bulk handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = {
-      items: [{ pluginType: "mcp_server" as const, catalogServerId: "cat_1" }],
+      items: [{ pluginType: "mcp_server" as const, pluginId: undefined, catalogServerId: "cat_1" }],
     };
     await handler_pluginOrgInstallBulk(args);
 
