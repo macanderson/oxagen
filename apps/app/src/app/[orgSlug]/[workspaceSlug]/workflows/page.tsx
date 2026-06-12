@@ -65,22 +65,26 @@ function formatDate(d: Date): string {
   });
 }
 
-type WorkflowRow = typeof schema.workflowRuns.$inferSelect;
+type WorkflowRow = typeof schema.agentExecutions.$inferSelect;
 
 function WorkflowTableRow({ run }: { run: WorkflowRow }) {
+  const payload = (run.inputPayload ?? {}) as {
+    title?: string;
+    goal?: string;
+  };
   const cfg = STATUS_CONFIG[run.status as WorkflowStatus] ?? STATUS_CONFIG.failed;
   const Icon = cfg.icon;
-  const pct =
-    run.totalTasks > 0 ? Math.round((run.completedTasks / run.totalTasks) * 100) : 0;
 
   return (
     <tr className="group border-b border-border/50 hover:bg-muted/30 transition-colors">
       <td className="py-3 pl-4 pr-3">
         <div className="flex flex-col gap-0.5 min-w-0">
           <span className="text-sm font-medium text-foreground truncate max-w-xs">
-            {run.title}
+            {payload.title ?? "—"}
           </span>
-          <span className="text-xs text-muted-foreground truncate max-w-xs">{run.goal}</span>
+          <span className="text-xs text-muted-foreground truncate max-w-xs">
+            {payload.goal ?? ""}
+          </span>
         </div>
       </td>
       <td className="py-3 px-3">
@@ -95,29 +99,7 @@ function WorkflowTableRow({ run }: { run: WorkflowRow }) {
         </span>
       </td>
       <td className="py-3 px-3 min-w-[100px]">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>
-              {run.completedTasks}/{run.totalTasks}
-            </span>
-            {run.totalTasks > 0 && <span>{pct}%</span>}
-          </div>
-          {run.totalTasks > 0 && (
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className={cn(
-                  "h-full rounded-full",
-                  run.status === "failed"
-                    ? "bg-destructive"
-                    : run.status === "cancelled"
-                      ? "bg-muted-foreground"
-                      : "bg-primary",
-                )}
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-          )}
-        </div>
+        <span className="text-xs text-muted-foreground">—</span>
       </td>
       <td className="py-3 px-3 text-xs tabular-nums text-muted-foreground whitespace-nowrap">
         {formatDuration(run.startedAt, run.completedAt)}
@@ -143,9 +125,9 @@ export default async function WorkflowsPage({
     withTenantDb((db) =>
       db
         .select()
-        .from(schema.workflowRuns)
-        .where(eq(schema.workflowRuns.workspaceId, ws.id))
-        .orderBy(desc(schema.workflowRuns.createdAt))
+        .from(schema.agentExecutions)
+        .where(eq(schema.agentExecutions.workspaceId, ws.id))
+        .orderBy(desc(schema.agentExecutions.createdAt))
         .limit(50),
     ),
   );

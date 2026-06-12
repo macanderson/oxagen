@@ -84,6 +84,7 @@ Return suggestions for all ${input.recordTypes.length} record types.`;
         result.object.suggestions.map((s: z.infer<typeof SuggestionSchema>["suggestions"][number]) => ({
           publicId: `sug_${Date.now().toString(36)}_${s.sourceRecordType}`,
           connectionId: conn.id,
+          orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
           sourceRecordType: s.sourceRecordType,
           suggestedEntityType: s.suggestedEntityType,

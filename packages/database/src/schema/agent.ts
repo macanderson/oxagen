@@ -219,8 +219,9 @@ export const agentExecutions = agentSchema.table(
     ...idMixin("aex"),
     ...auditMixin(),
     ...orgScopeMixin(),
-    agentId: uuid("agent_id").notNull().references(() => agents.id),
-    agentVersionId: uuid("agent_version_id").notNull().references(() => agentVersions.id),
+    // Nullable: dynamic supervisor runs don't have a pre-registered agent definition.
+    agentId: uuid("agent_id").references(() => agents.id),
+    agentVersionId: uuid("agent_version_id").references(() => agentVersions.id),
     originType: text("origin_type").notNull(),
     originId: uuid("origin_id").notNull(),
     status: text("status").notNull().default("planning"),
@@ -262,6 +263,8 @@ export const agentExecutionSteps = agentSchema.table(
     latencyMs: bigint("latency_ms", { mode: "number" }),
     inputTokens: integer("input_tokens"),
     outputTokens: integer("output_tokens"),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
   },
   (t) => ({
     executionIdx: index("agent_execution_steps_execution_idx").on(t.executionId),

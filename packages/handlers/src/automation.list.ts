@@ -16,20 +16,27 @@ export const automationListHandler: CapabilityHandler<typeof automationList> = a
   const rows = await withTenantDb((tx) =>
     tx
       .select({
-        publicId: schema.automations.publicId,
-        name: schema.automations.name,
-        status: schema.automations.status,
-        triggerConfig: schema.automations.triggerConfig,
+        publicId: schema.playbookTriggers.publicId,
+        triggerType: schema.playbookTriggers.triggerType,
+        isEnabled: schema.playbookTriggers.isEnabled,
+        name: schema.playbooks.name,
+        deletedAt: schema.playbooks.deletedAt,
       })
-      .from(schema.automations)
-      .where(
+      .from(schema.playbookTriggers)
+      .innerJoin(
+        schema.playbooks,
         and(
-          eq(schema.automations.orgId, ctx.orgId),
-          eq(schema.automations.workspaceId, ctx.workspaceId),
-          isNull(schema.automations.deletedAt),
+          eq(schema.playbookTriggers.playbookId, schema.playbooks.id),
+          isNull(schema.playbooks.deletedAt),
         ),
       )
-      .orderBy(desc(schema.automations.createdAt)),
+      .where(
+        and(
+          eq(schema.playbookTriggers.orgId, ctx.orgId),
+          eq(schema.playbookTriggers.workspaceId, ctx.workspaceId),
+        ),
+      )
+      .orderBy(desc(schema.playbookTriggers.createdAt)),
   );
 
   logger.info(
@@ -40,7 +47,7 @@ export const automationListHandler: CapabilityHandler<typeof automationList> = a
   return rows.map((row) => ({
     id: row.publicId,
     name: row.name,
-    status: row.status,
-    triggers: Array.isArray(row.triggerConfig) ? (row.triggerConfig as string[]) : [],
+    status: row.isEnabled ? "active" : "inactive",
+    triggers: [row.triggerType],
   }));
 };

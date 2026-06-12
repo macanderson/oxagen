@@ -1,7 +1,7 @@
 import { boolean, check, index, integer, jsonb, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { ingestionSchema } from "./_schemas";
-import { auditMixin, citext, idMixin, uuidv7Default } from "./_mixins";
+import { citext, idMixin, uuidv7Default } from "./_mixins";
 
 // ── ingestion.source_connections ─────────────────────────────────────────────
 

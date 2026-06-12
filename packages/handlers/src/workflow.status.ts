@@ -8,74 +8,85 @@ export const workflowStatusHandler: CapabilityHandler<typeof workflowStatus> = a
   input,
   ctx,
 ) => {
-  const run = await withTenantDb((tx) =>
-    tx.query.workflowRuns.findFirst({
+  const execution = await withTenantDb((tx) =>
+    tx.query.agentExecutions.findFirst({
       where: and(
         or(
-          eq(schema.workflowRuns.id, input.workflowId),
-          eq(schema.workflowRuns.publicId, input.workflowId),
+          eq(schema.agentExecutions.id, input.workflowId),
+          eq(schema.agentExecutions.publicId, input.workflowId),
         ),
-        eq(schema.workflowRuns.orgId, ctx.orgId),
-        eq(schema.workflowRuns.workspaceId, ctx.workspaceId),
+        eq(schema.agentExecutions.orgId, ctx.orgId),
+        eq(schema.agentExecutions.workspaceId, ctx.workspaceId),
       ),
     }),
   );
 
-  if (!run) {
+  if (!execution) {
     logger.warn({ workflowId: input.workflowId, orgId: ctx.orgId }, "workflow.status: not found");
     throw new Error(`workflow not found: ${input.workflowId}`);
   }
 
-  const tasks = await withTenantDb((tx) =>
+  const steps = await withTenantDb((tx) =>
     tx
       .select()
-      .from(schema.workflowRunTasks)
+      .from(schema.agentExecutionSteps)
       .where(
         and(
-          eq(schema.workflowRunTasks.workflowRunId, run.id),
-          eq(schema.workflowRunTasks.orgId, ctx.orgId),
+          eq(schema.agentExecutionSteps.executionId, execution.id),
+          eq(schema.agentExecutionSteps.orgId, ctx.orgId),
         ),
       )
-      .orderBy(asc(schema.workflowRunTasks.taskIndex)),
+      .orderBy(asc(schema.agentExecutionSteps.stepNumber)),
   );
+
+  const inputPayload = execution.inputPayload as {
+    title?: string;
+    goal?: string;
+    outputFormat?: string;
+    maxParallelism?: number;
+    plan?: unknown[];
+  };
 
   const toIso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 
   return {
     workflow: {
-      id: run.id,
-      publicId: run.publicId,
-      orgId: run.orgId,
-      workspaceId: run.workspaceId,
-      title: run.title,
-      goal: run.goal,
-      status: run.status as "planning" | "running" | "completed" | "failed" | "cancelled",
-      planJson: run.planJson,
-      totalTasks: run.totalTasks,
-      completedTasks: run.completedTasks,
-      failedTasks: run.failedTasks,
-      maxParallelism: run.maxParallelism,
-      outputFormat: run.outputFormat as "json" | "csv",
-      resultUrl: run.resultUrl ?? null,
-      startedAt: toIso(run.startedAt),
-      completedAt: toIso(run.completedAt),
-      createdAt: run.createdAt.toISOString(),
-      updatedAt: run.updatedAt.toISOString(),
+      id: execution.id,
+      publicId: execution.publicId,
+      orgId: execution.orgId,
+      workspaceId: execution.workspaceId,
+      title: inputPayload.title ?? "",
+      goal: inputPayload.goal ?? "",
+      status: execution.status as "planning" | "running" | "completed" | "failed" | "cancelled",
+      planJson: (inputPayload.plan as object[]) ?? [],
+      totalTasks: steps.length,
+      completedTasks: steps.filter((s) => s.status === "completed").length,
+      failedTasks: steps.filter((s) => s.status === "failed").length,
+      maxParallelism: inputPayload.maxParallelism ?? 50,
+      outputFormat: (inputPayload.outputFormat ?? "json") as "json" | "csv",
+      resultUrl: null,
+      startedAt: toIso(execution.startedAt),
+      completedAt: toIso(execution.completedAt),
+      createdAt: execution.createdAt.toISOString(),
+      updatedAt: execution.updatedAt.toISOString(),
     },
-    tasks: tasks.map((t) => ({
-      id: t.id,
-      publicId: t.publicId,
-      workflowRunId: t.workflowRunId,
-      taskIndex: t.taskIndex,
-      title: t.title,
-      goal: t.goal,
-      status: t.status as "pending" | "running" | "completed" | "failed" | "cancelled",
-      inngestRunId: t.inngestRunId ?? null,
-      outputJson: t.outputJson ?? null,
-      error: t.error ?? null,
-      startedAt: toIso(t.startedAt),
-      completedAt: toIso(t.completedAt),
-      createdAt: t.createdAt.toISOString(),
-    })),
+    tasks: steps.map((s) => {
+      const sp = s.inputPayload as { title?: string; goal?: string } | null;
+      return {
+        id: s.id,
+        publicId: s.publicId,
+        workflowRunId: execution.id,
+        taskIndex: s.stepNumber,
+        title: sp?.title ?? "",
+        goal: sp?.goal ?? "",
+        status: s.status as "pending" | "running" | "completed" | "failed" | "cancelled",
+        inngestRunId: null,
+        outputJson: (s.outputPayload as object | null) ?? null,
+        error: s.failureReason ?? null,
+        startedAt: toIso(s.startedAt),
+        completedAt: toIso(s.completedAt),
+        createdAt: s.createdAt.toISOString(),
+      };
+    }),
   };
 };

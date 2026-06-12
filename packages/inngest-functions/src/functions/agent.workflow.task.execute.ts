@@ -1,6 +1,6 @@
 import { inngest } from "../inngest";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, sql } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { generateObjectFor } from "@oxagen/ai";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { insertToolInvocation } from "@oxagen/telemetry";
@@ -21,18 +21,18 @@ export const agentWorkflowTaskExecute = inngest.createFunction(
     cancelOn: [
       {
         event: "agent/workflow.cancel",
-        if: "event.data.workflowRunId == async.data.workflowRunId",
+        if: "event.data.executionId == async.data.executionId",
       },
     ],
   },
   { event: "agent/workflow.task.execute" },
   async ({ event, step }) => {
-    const { orgId, workspaceId, workflowRunId, taskId, taskIndex, goal, outputFormat } =
+    const { orgId, workspaceId, executionId, stepId, taskIndex, goal, outputFormat } =
       event.data as {
         orgId: string;
         workspaceId: string;
-        workflowRunId: string;
-        taskId: string;
+        executionId: string;
+        stepId: string;
         taskIndex: number;
         goal: string;
         outputFormat: string;
@@ -41,17 +41,17 @@ export const agentWorkflowTaskExecute = inngest.createFunction(
     const invocationId = crypto.randomUUID();
     const startedAt = Date.now();
 
-    // Mark task running.
+    // Mark step running.
     await step.run("mark-running", () =>
       runInTenantScope({ orgId, workspaceId }, () =>
         withTenantDb((tx) =>
           tx
-            .update(schema.workflowRunTasks)
+            .update(schema.agentExecutionSteps)
             .set({ status: "running", startedAt: new Date(), updatedAt: new Date() })
             .where(
               and(
-                eq(schema.workflowRunTasks.id, taskId),
-                eq(schema.workflowRunTasks.orgId, orgId),
+                eq(schema.agentExecutionSteps.id, stepId),
+                eq(schema.agentExecutionSteps.orgId, orgId),
               ),
             ),
         ),
@@ -70,47 +70,32 @@ Provide a summary, any relevant structured data, and source references if applic
             orgId,
             workspaceId,
             surface: "runner" as const,
-            messageId: taskId,
+            messageId: stepId,
           },
         }),
       );
       output = result.object;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error({ taskId, workflowRunId, orgId, err }, "agent.workflow.task.execute: failed");
+      logger.error({ stepId, executionId, orgId, err }, "agent.workflow.task.execute: failed");
 
       await step.run("mark-failed", () =>
         runInTenantScope({ orgId, workspaceId }, () =>
           withTenantDb((tx) =>
             tx
-              .update(schema.workflowRunTasks)
+              .update(schema.agentExecutionSteps)
               .set({
                 status: "failed",
-                error: errMsg,
+                failureReason: errMsg,
                 completedAt: new Date(),
                 updatedAt: new Date(),
               })
               .where(
                 and(
-                  eq(schema.workflowRunTasks.id, taskId),
-                  eq(schema.workflowRunTasks.orgId, orgId),
+                  eq(schema.agentExecutionSteps.id, stepId),
+                  eq(schema.agentExecutionSteps.orgId, orgId),
                 ),
               ),
-          ),
-        ),
-      );
-
-      // Increment failed_tasks counter on parent run.
-      await step.run("increment-failed", () =>
-        runInTenantScope({ orgId, workspaceId }, () =>
-          withTenantDb((tx) =>
-            tx
-              .update(schema.workflowRuns)
-              .set({
-                failedTasks: sql`${schema.workflowRuns.failedTasks} + 1`,
-                updatedAt: new Date(),
-              })
-              .where(eq(schema.workflowRuns.id, workflowRunId)),
           ),
         ),
       );
@@ -121,8 +106,8 @@ Provide a summary, any relevant structured data, and source references if applic
           org_id: orgId,
           workspace_id: workspaceId,
           capability_name: "workflow.task.execute",
-          message_id: taskId,
-          parent_message_id: workflowRunId,
+          message_id: stepId,
+          parent_message_id: executionId,
           execution_step_id: null,
           status: "failed",
           input_size_bytes: 0,
@@ -138,7 +123,7 @@ Provide a summary, any relevant structured data, and source references if applic
           created_at: new Date().toISOString(),
         });
       } catch (telErr) {
-        logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
+        logger.warn({ err: telErr }, "insertToolInvocation failed — telemetry loss");
       }
 
       throw err;
@@ -149,64 +134,81 @@ Provide a summary, any relevant structured data, and source references if applic
       runInTenantScope({ orgId, workspaceId }, () =>
         withTenantDb((tx) =>
           tx
-            .update(schema.workflowRunTasks)
+            .update(schema.agentExecutionSteps)
             .set({
               status: "completed",
-              outputJson: output as object,
+              outputPayload: output as object,
               completedAt: new Date(),
               updatedAt: new Date(),
             })
             .where(
               and(
-                eq(schema.workflowRunTasks.id, taskId),
-                eq(schema.workflowRunTasks.orgId, orgId),
+                eq(schema.agentExecutionSteps.id, stepId),
+                eq(schema.agentExecutionSteps.orgId, orgId),
               ),
             ),
         ),
       ),
     );
 
-    // Increment completed_tasks counter and check if all tasks are done.
-    const updatedRun = await step.run("increment-completed", () =>
+    // Check if all steps for this execution are done.
+    const stepCounts = await step.run("count-steps", () =>
       runInTenantScope({ orgId, workspaceId }, () =>
         withTenantDb(async (tx) => {
-          const [updated] = await tx
-            .update(schema.workflowRuns)
-            .set({
-              completedTasks: sql`${schema.workflowRuns.completedTasks} + 1`,
-              updatedAt: new Date(),
-            })
-            .where(eq(schema.workflowRuns.id, workflowRunId))
-            .returning({
-              completedTasks: schema.workflowRuns.completedTasks,
-              failedTasks: schema.workflowRuns.failedTasks,
-              totalTasks: schema.workflowRuns.totalTasks,
-              status: schema.workflowRuns.status,
-            });
-          return updated;
+          const [totalRow] = await tx
+            .select({ n: count(schema.agentExecutionSteps.id) })
+            .from(schema.agentExecutionSteps)
+            .where(
+              and(
+                eq(schema.agentExecutionSteps.executionId, executionId),
+                eq(schema.agentExecutionSteps.orgId, orgId),
+              ),
+            );
+          const [completedRow] = await tx
+            .select({ n: count(schema.agentExecutionSteps.id) })
+            .from(schema.agentExecutionSteps)
+            .where(
+              and(
+                eq(schema.agentExecutionSteps.executionId, executionId),
+                eq(schema.agentExecutionSteps.orgId, orgId),
+                eq(schema.agentExecutionSteps.status, "completed"),
+              ),
+            );
+          const [failedRow] = await tx
+            .select({ n: count(schema.agentExecutionSteps.id) })
+            .from(schema.agentExecutionSteps)
+            .where(
+              and(
+                eq(schema.agentExecutionSteps.executionId, executionId),
+                eq(schema.agentExecutionSteps.orgId, orgId),
+                eq(schema.agentExecutionSteps.status, "failed"),
+              ),
+            );
+          return {
+            total: totalRow?.n ?? 0,
+            completed: completedRow?.n ?? 0,
+            failed: failedRow?.n ?? 0,
+          };
         }),
       ),
     );
 
-    // If all tasks are done, mark the workflow completed.
-    if (
-      updatedRun &&
-      updatedRun.status === "running" &&
-      updatedRun.completedTasks + updatedRun.failedTasks >= updatedRun.totalTasks
-    ) {
-      const finalStatus =
-        updatedRun.completedTasks > 0 ? "completed" : "failed";
-      await step.run("finalize-workflow", () =>
+    const { total, completed, failed } = stepCounts ?? { total: 0, completed: 0, failed: 0 };
+
+    // If all steps are terminal, finalize the execution.
+    if (completed + failed >= total) {
+      const finalStatus = completed > 0 ? "completed" : "failed";
+      await step.run("finalize-execution", () =>
         runInTenantScope({ orgId, workspaceId }, () =>
           withTenantDb((tx) =>
             tx
-              .update(schema.workflowRuns)
+              .update(schema.agentExecutions)
               .set({
                 status: finalStatus,
                 completedAt: new Date(),
                 updatedAt: new Date(),
               })
-              .where(eq(schema.workflowRuns.id, workflowRunId)),
+              .where(eq(schema.agentExecutions.id, executionId)),
           ),
         ),
       );
@@ -218,8 +220,8 @@ Provide a summary, any relevant structured data, and source references if applic
         org_id: orgId,
         workspace_id: workspaceId,
         capability_name: "workflow.task.execute",
-        message_id: taskId,
-        parent_message_id: workflowRunId,
+        message_id: stepId,
+        parent_message_id: executionId,
         execution_step_id: null,
         status: "completed",
         input_size_bytes: 0,
@@ -235,10 +237,10 @@ Provide a summary, any relevant structured data, and source references if applic
         created_at: new Date().toISOString(),
       });
     } catch (telErr) {
-      logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
+      logger.warn({ err: telErr }, "insertToolInvocation failed — telemetry loss");
     }
 
-    logger.info({ taskId, taskIndex, workflowRunId, orgId }, "agent.workflow.task.execute: completed");
-    return { taskId, taskIndex, status: "completed" };
+    logger.info({ stepId, taskIndex, executionId, orgId }, "agent.workflow.task.execute: completed");
+    return { stepId, taskIndex, status: "completed" };
   },
 );

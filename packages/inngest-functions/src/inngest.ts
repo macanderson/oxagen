@@ -74,7 +74,7 @@ type Events = {
     data: {
       orgId: string;
       workspaceId: string;
-      workflowRunId: string;
+      executionId: string;
       maxParallelism: number;
       maxTasksGuard: number;
     };
@@ -83,15 +83,15 @@ type Events = {
     data: {
       orgId: string;
       workspaceId: string;
-      workflowRunId: string;
-      taskId: string;
+      executionId: string;
+      stepId: string;
       taskIndex: number;
       goal: string;
       outputFormat: "json" | "csv";
     };
   };
   "agent/workflow.cancel": {
-    data: { orgId: string; workflowRunId: string };
+    data: { orgId: string; executionId: string };
   };
   "privacy/export.process": {
     data: {

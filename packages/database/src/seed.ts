@@ -7,6 +7,8 @@ import {
   users,
   workspaces,
   workspaceUsers,
+  agents,
+  agentVersions,
 } from "./schema/index";
 
 // Seed runs idempotently. Re-running won't duplicate plans, the dev
@@ -113,6 +115,60 @@ export async function seedDev(): Promise<void> {
       joinedAt: new Date(),
     })
     .onConflictDoNothing({ target: [workspaceUsers.workspaceId, workspaceUsers.userId] });
+
+  // Seed the built-in qa-chat agent for the dev workspace. Inline logic avoids
+  // importing @oxagen/handlers (would create a database ↔ handlers dep cycle).
+  await database
+    .insert(agents)
+    .values({
+      workspaceId: workspaceRow.id,
+      orgId: orgRow.id,
+      slug: "qa-chat",
+      name: "QA Chat Agent",
+      agentType: "interactive_chat",
+      status: "active",
+      createdByUserId: userRow.id,
+      updatedByUserId: userRow.id,
+    })
+    .onConflictDoNothing();
+
+  const agentRow = (
+    await database
+      .select({ id: agents.id, activeVersionId: agents.activeVersionId })
+      .from(agents)
+      .where(and(eq(agents.workspaceId, workspaceRow.id), eq(agents.slug, "qa-chat")))
+      .limit(1)
+  )[0];
+  if (!agentRow) throw new Error("Failed to upsert dev qa-chat agent");
+
+  // Only insert the version and wire activeVersionId when it is missing.
+  if (!agentRow.activeVersionId) {
+    await database
+      .insert(agentVersions)
+      .values({
+        agentId: agentRow.id,
+        version: 1,
+        isPublished: true,
+        checksum: null,
+        config: {},
+        createdByUserId: userRow.id,
+      })
+      .onConflictDoNothing();
+
+    const versionRow = (
+      await database
+        .select({ id: agentVersions.id })
+        .from(agentVersions)
+        .where(and(eq(agentVersions.agentId, agentRow.id), eq(agentVersions.version, 1)))
+        .limit(1)
+    )[0];
+    if (!versionRow) throw new Error("Failed to upsert dev qa-chat agent version");
+
+    await database
+      .update(agents)
+      .set({ activeVersionId: versionRow.id, updatedByUserId: userRow.id })
+      .where(eq(agents.id, agentRow.id));
+  }
 }
 
 /**

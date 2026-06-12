@@ -14,6 +14,7 @@ import {
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { invoke } from "@oxagen/oxagen/kernel";
 import type { ModelMessage } from "ai";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
@@ -64,18 +65,58 @@ type ApiStreamEvent =
   | { type: "usage"; usage: { promptTokens: number; completionTokens: number; totalTokens: number } }
   | { type: "error"; message: string };
 
+// Collected token + step data returned by consumeStream for execution recording.
+type CollectedExecutionToolCall = {
+  toolCallId: string;
+  toolName: string;
+  inputPreview: unknown;
+  output?: unknown;
+  status: "completed" | "failed";
+  durationMs: number;
+};
+
+type CollectedExecutionStep = {
+  stepNumber: number;
+  stepType: string;
+  status: "completed";
+  inputPayload: unknown;
+  toolCalls: CollectedExecutionToolCall[];
+  latencyMs: number;
+};
+
+type CollectedExecution = {
+  inputTokens: number;
+  outputTokens: number;
+  steps: CollectedExecutionStep[];
+};
+
+type ConsumeStreamResult = {
+  assistantText: string;
+  execution: CollectedExecution;
+};
+
 // Consume the agent fullStream, emit SSE events, and return the accumulated
-// assistant text for persistence. Mirrors translateAgentStream in the app route
-// but without component/render-directive handling (no React registry in the API).
+// assistant text plus collected execution metadata for persistence. Mirrors
+// translateAgentStream in the app route but without component/render-directive
+// handling (no React registry in the API).
 async function consumeStream(
   fullStream: AsyncIterable<unknown>,
   toolNameMap: Record<string, string>,
   emit: (event: ApiStreamEvent) => void,
-): Promise<string> {
+): Promise<ConsumeStreamResult> {
   let assistantText = "";
   const toolStartedAt: Record<string, number> = {};
   const reasoningStartedAt: Record<string, number> = {};
   let stepIndex = -1;
+
+  // Execution collection state.
+  const collectedSteps: CollectedExecutionStep[] = [];
+  const stepStartedAt: Record<number, number> = {};
+  // Per-step tool call accumulation (keyed by toolCallId → stepNumber).
+  const toolCallToStep: Record<string, number> = {};
+  const collectedToolCalls: Record<string, CollectedExecutionToolCall> = {};
+  let collectedInputTokens = 0;
+  let collectedOutputTokens = 0;
 
   for await (const raw of fullStream) {
     const pType = partType(raw);
@@ -97,9 +138,26 @@ async function consumeStream(
       emit({ type: "reasoning-end", reasoningId: id, durationMs });
     } else if (pType === "start-step") {
       stepIndex += 1;
+      stepStartedAt[stepIndex] = Date.now();
       emit({ type: "step-start", stepIndex });
     } else if (pType === "finish-step") {
-      if (stepIndex >= 0) emit({ type: "step-finish", stepIndex });
+      if (stepIndex >= 0) {
+        const latencyMs = stepStartedAt[stepIndex] !== undefined
+          ? Date.now() - (stepStartedAt[stepIndex] as number) : 0;
+        // Collect all tool calls that were emitted for this step.
+        const stepToolCalls = Object.values(collectedToolCalls).filter(
+          (tc) => toolCallToStep[tc.toolCallId] === stepIndex,
+        );
+        collectedSteps.push({
+          stepNumber: stepIndex,
+          stepType: "llm_turn",
+          status: "completed",
+          inputPayload: null,
+          toolCalls: stepToolCalls,
+          latencyMs,
+        });
+        emit({ type: "step-finish", stepIndex });
+      }
     } else if (pType === "tool-input-start") {
       const { id, toolName } = raw as { id: string; toolName: string };
       emit({
@@ -113,6 +171,15 @@ async function consumeStream(
     } else if (pType === "tool-call") {
       const { toolCallId, toolName, input } = raw as { toolCallId: string; toolName: string; input: unknown };
       toolStartedAt[toolCallId] = Date.now();
+      // Associate this tool call with the current step.
+      toolCallToStep[toolCallId] = stepIndex;
+      collectedToolCalls[toolCallId] = {
+        toolCallId,
+        toolName,
+        inputPreview: input,
+        status: "completed",
+        durationMs: 0,
+      };
       emit({
         type: "tool-call-start",
         toolCallId,
@@ -124,19 +191,36 @@ async function consumeStream(
       const { toolCallId, output } = raw as { toolCallId: string; output: unknown };
       const durationMs = toolStartedAt[toolCallId] !== undefined
         ? Date.now() - (toolStartedAt[toolCallId] as number) : 0;
+      if (collectedToolCalls[toolCallId]) {
+        collectedToolCalls[toolCallId] = {
+          ...collectedToolCalls[toolCallId] as CollectedExecutionToolCall,
+          output,
+          status: "completed",
+          durationMs,
+        };
+      }
       emit({ type: "tool-call-end", toolCallId, status: "completed", output, durationMs });
     } else if (pType === "tool-error") {
       const { toolCallId, error } = raw as { toolCallId: string; error: unknown };
       const durationMs = toolStartedAt[toolCallId] !== undefined
         ? Date.now() - (toolStartedAt[toolCallId] as number) : 0;
+      if (collectedToolCalls[toolCallId]) {
+        collectedToolCalls[toolCallId] = {
+          ...collectedToolCalls[toolCallId] as CollectedExecutionToolCall,
+          status: "failed",
+          durationMs,
+        };
+      }
       emit({ type: "tool-call-end", toolCallId, status: "failed", errorReason: errorMessageOf(error), durationMs });
     } else if (pType === "finish") {
       const { totalUsage } = raw as { totalUsage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } };
+      collectedInputTokens = totalUsage.inputTokens ?? 0;
+      collectedOutputTokens = totalUsage.outputTokens ?? 0;
       emit({
         type: "usage",
         usage: {
-          promptTokens: totalUsage.inputTokens ?? 0,
-          completionTokens: totalUsage.outputTokens ?? 0,
+          promptTokens: collectedInputTokens,
+          completionTokens: collectedOutputTokens,
           totalTokens: totalUsage.totalTokens ?? 0,
         },
       });
@@ -148,7 +232,14 @@ async function consumeStream(
     }
   }
 
-  return assistantText;
+  return {
+    assistantText,
+    execution: {
+      inputTokens: collectedInputTokens,
+      outputTokens: collectedOutputTokens,
+      steps: collectedSteps,
+    },
+  };
 }
 
 export const chatStreamRoute = new Hono<AppEnv>();
@@ -239,6 +330,46 @@ chatStreamRoute.post("/", async (c) => {
 
   const coreMessages: ModelMessage[] = injectContext(messagesWithCurrent, contextBlocks);
 
+  // Look up the qa-chat agent for execution recording (SOC 2 audit trail).
+  // Graceful degradation: if not found, the stream still proceeds.
+  type QaAgent = { id: string; activeVersionId: string };
+  let qaAgent: QaAgent | null = null;
+  if (conversationId) {
+    try {
+      const [agentRow] = await runInTenantScope(
+        { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        () =>
+          withTenantDb((tx) =>
+            tx
+              .select({
+                id: schema.agents.id,
+                activeVersionId: schema.agents.activeVersionId,
+              })
+              .from(schema.agents)
+              .where(
+                and(
+                  eq(schema.agents.workspaceId, ctx.workspaceId),
+                  eq(schema.agents.slug, "qa-chat"),
+                ),
+              )
+              .limit(1),
+          ),
+      );
+      if (agentRow?.activeVersionId) {
+        qaAgent = { id: agentRow.id, activeVersionId: agentRow.activeVersionId };
+      } else {
+        console.warn(
+          `[chat.stream] qa-chat agent not found or missing activeVersionId for workspace ${ctx.workspaceId} — execution will not be recorded`,
+        );
+      }
+    } catch {
+      // Non-fatal: agent lookup failure must not block the stream.
+      console.warn(
+        `[chat.stream] Failed to look up qa-chat agent for workspace ${ctx.workspaceId} — execution will not be recorded`,
+      );
+    }
+  }
+
   const encoder = new TextEncoder();
 
   const responseStream = new ReadableStream<Uint8Array>({
@@ -246,6 +377,13 @@ chatStreamRoute.post("/", async (c) => {
       function emit(event: ApiStreamEvent): void {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       }
+
+      // Track turn start time for latency measurement.
+      const turnStartMs = Date.now();
+      const turnStartedAt = new Date();
+
+      // Hoisted so the execution recording block can access it after persistence.
+      let assistantMsgId: string | null = null;
 
       try {
         const [{ tools: agentTools, nameMap: toolNameMap }, promptConfig] =
@@ -303,7 +441,7 @@ chatStreamRoute.post("/", async (c) => {
           },
         });
 
-        const assistantText = await consumeStream(
+        const { assistantText, execution: collectedExecution } = await consumeStream(
           result.fullStream as AsyncIterable<unknown>,
           toolNameMap,
           emit,
@@ -348,6 +486,7 @@ chatStreamRoute.post("/", async (c) => {
                     .returning({ id: schema.messages.id });
 
                   if (assistantMsg) {
+                    assistantMsgId = assistantMsg.id;
                     await tx
                       .update(schema.conversations)
                       .set({ activeLeafMessageId: assistantMsg.id, updatedAt: new Date() })
@@ -357,6 +496,52 @@ chatStreamRoute.post("/", async (c) => {
             );
           } catch {
             // Persistence failure must not corrupt the already-sent SSE response.
+          }
+        }
+
+        // Record agent execution for SOC 2 audit trail.
+        // Only fires when: the qa-chat agent was found, a conversationId was used,
+        // and the assistant message was persisted.
+        if (qaAgent && conversationId && assistantMsgId) {
+          try {
+            await invoke(
+              "chat.message.execution",
+              {
+                messageId: assistantMsgId,
+                agentId: qaAgent.id,
+                agentVersionId: qaAgent.activeVersionId,
+                originType: "chat",
+                originId: assistantMsgId,
+                status: "completed",
+                inputPayload: { content, conversationId },
+                outputPayload: { text: collectedExecution.inputTokens > 0 || collectedExecution.outputTokens > 0 ? "[streamed]" : null },
+                startedAt: turnStartedAt,
+                completedAt: new Date(),
+                latencyMs: Date.now() - turnStartMs,
+                inputTokens: collectedExecution.inputTokens,
+                outputTokens: collectedExecution.outputTokens,
+                updateMessageMetadata: true,
+                steps: collectedExecution.steps.map((s) => ({
+                  stepNumber: s.stepNumber,
+                  stepType: "llm_turn",
+                  status: "completed" as const,
+                  inputPayload: s.inputPayload,
+                  latencyMs: s.latencyMs,
+                  toolCalls: s.toolCalls.map((tc) => ({
+                    toolName: tc.toolName,
+                    toolType: "mcp",
+                    requestPayload: tc.inputPreview,
+                    responsePayload: tc.output,
+                    status: tc.status,
+                    latencyMs: tc.durationMs,
+                  })),
+                })),
+              },
+              { ...ctx, surface: "api" as const },
+              { surface: "api" },
+            );
+          } catch {
+            // Execution recording failure must not corrupt the already-sent SSE response.
           }
         }
       } catch (err) {

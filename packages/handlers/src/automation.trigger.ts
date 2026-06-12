@@ -13,41 +13,58 @@ export const automationTriggerHandler: CapabilityHandler<typeof automationTrigge
     throw new Error("automation.trigger requires an authenticated user");
   }
 
-  const userId = ctx.userId;
-
-  // Resolve the automation by publicId within this workspace (tenant-scoped via withTenantDb).
-  const automation = await withTenantDb((tx) =>
-    tx.query.automations.findFirst({
+  // Resolve the playbook trigger by publicId within this workspace.
+  const trigger = await withTenantDb((tx) =>
+    tx.query.playbookTriggers.findFirst({
       where: and(
-        eq(schema.automations.publicId, input.automation_id),
-        eq(schema.automations.orgId, ctx.orgId),
-        eq(schema.automations.workspaceId, ctx.workspaceId),
-        isNull(schema.automations.deletedAt),
+        eq(schema.playbookTriggers.publicId, input.automation_id),
+        eq(schema.playbookTriggers.orgId, ctx.orgId),
+        eq(schema.playbookTriggers.workspaceId, ctx.workspaceId),
+        eq(schema.playbookTriggers.isEnabled, true),
       ),
-      columns: { id: true, publicId: true },
+      columns: { id: true, publicId: true, playbookId: true, pinnedVersionId: true },
     }),
   );
 
-  if (!automation) {
-    throw new Error(`automation.trigger: automation not found: ${input.automation_id}`);
+  if (!trigger) {
+    throw new Error(`automation.trigger: trigger not found: ${input.automation_id}`);
   }
+
+  // Load the playbook's active version.
+  const playbook = await withTenantDb((tx) =>
+    tx.query.playbooks.findFirst({
+      where: and(
+        eq(schema.playbooks.id, trigger.playbookId),
+        eq(schema.playbooks.orgId, ctx.orgId),
+        isNull(schema.playbooks.deletedAt),
+      ),
+      columns: { id: true, activeVersionId: true },
+    }),
+  );
+
+  if (!playbook?.activeVersionId) {
+    throw new Error(`automation.trigger: playbook has no active version: ${trigger.playbookId}`);
+  }
+
+  const versionId = trigger.pinnedVersionId ?? playbook.activeVersionId;
 
   const [run] = await withTenantDb((tx) =>
     tx
-      .insert(schema.automationRuns)
+      .insert(schema.playbookRuns)
       .values({
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
-        automationId: automation.id,
-        status: "running",
-        payload: input.payload ?? {},
-        startedAt: new Date(),
-        createdByUserId: userId,
-        updatedByUserId: userId,
+        playbookId: trigger.playbookId,
+        playbookVersionId: versionId,
+        triggerId: trigger.id,
+        source: "api",
+        status: "pending",
+        input: input.payload ?? {},
+        startedByUserId: ctx.userId!,
       })
       .returning({
-        publicId: schema.automationRuns.publicId,
-        status: schema.automationRuns.status,
+        id: schema.playbookRuns.id,
+        status: schema.playbookRuns.status,
       }),
   );
 
@@ -55,16 +72,16 @@ export const automationTriggerHandler: CapabilityHandler<typeof automationTrigge
 
   logger.info(
     {
-      executionId: run.publicId,
-      automationId: automation.id,
+      runId: run.id,
+      triggerId: trigger.id,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
     },
-    "automation.trigger: dispatched automation run",
+    "automation.trigger: dispatched playbook run",
   );
 
   return {
-    execution_id: run.publicId,
+    execution_id: run.id,
     status: run.status,
   };
 };

@@ -4,6 +4,7 @@ import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
+import { bootstrapWorkspaceAgents } from "./workspace-agents";
 
 export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> = async (
   input,
@@ -70,6 +71,13 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
         joinedAt: new Date(),
         createdByUserId: ctx.userId,
         updatedByUserId: ctx.userId,
+      });
+
+      await bootstrapWorkspaceAgents({
+        workspaceId: ws.id,
+        orgId: ctx.orgId,
+        userId: ctx.userId!,
+        tx,
       });
 
       const result = {

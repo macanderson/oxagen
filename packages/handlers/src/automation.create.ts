@@ -14,36 +14,64 @@ export const automationCreateHandler: CapabilityHandler<typeof automationCreate>
 
   const userId = ctx.userId;
 
-  const [row] = await withTenantDb((tx) =>
+  // Create the playbook shell, then a trigger for it.
+  const [playbook] = await withTenantDb((tx) =>
     tx
-      .insert(schema.automations)
+      .insert(schema.playbooks)
       .values({
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
         name: input.name,
-        status: "active",
-        triggerConfig: input.trigger ? [input.trigger] : [],
-        actionConfig: input.action ? { action: input.action } : {},
+        slug: input.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "")
+          .slice(0, 80) || "automation",
+        status: "draft",
+        visibility: "workspace",
+        createdByUserId: userId,
+        updatedByUserId: userId,
+      })
+      .returning({ id: schema.playbooks.id }),
+  );
+
+  if (!playbook) throw new Error("automation.create: playbook insert returned no row");
+
+  const triggerType = input.trigger?.includes("schedule") ? "schedule" : "api";
+
+  const [trigger] = await withTenantDb((tx) =>
+    tx
+      .insert(schema.playbookTriggers)
+      .values({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        playbookId: playbook.id,
+        triggerType,
+        config: {
+          trigger: input.trigger ?? null,
+          action: input.action ?? null,
+        },
+        isEnabled: true,
         createdByUserId: userId,
         updatedByUserId: userId,
       })
       .returning({
-        publicId: schema.automations.publicId,
-        name: schema.automations.name,
-        status: schema.automations.status,
+        publicId: schema.playbookTriggers.publicId,
+        triggerType: schema.playbookTriggers.triggerType,
+        isEnabled: schema.playbookTriggers.isEnabled,
       }),
   );
 
-  if (!row) throw new Error("automation.create: insert returned no row");
+  if (!trigger) throw new Error("automation.create: trigger insert returned no row");
 
   logger.info(
-    { publicId: row.publicId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-    "automation.create: created automation",
+    { publicId: trigger.publicId, playbookId: playbook.id, orgId: ctx.orgId },
+    "automation.create: created playbook trigger",
   );
 
   return {
-    automation_id: row.publicId,
-    name: row.name,
-    status: row.status,
+    automation_id: trigger.publicId,
+    name: input.name,
+    status: trigger.isEnabled ? "active" : "inactive",
   };
 };

@@ -12,27 +12,31 @@ export const workflowRunHandler: CapabilityHandler<typeof workflowRun> = async (
     throw new Error("workflow.run requires an authenticated user");
   }
 
-  const title = input.title ?? input.goal.slice(0, 200);
   const outputFormat = input.outputFormat ?? "json";
   const maxParallelism = input.maxParallelism ?? 50;
 
   const [row] = await withTenantDb((tx) =>
     tx
-      .insert(schema.workflowRuns)
+      .insert(schema.agentExecutions)
       .values({
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
-        title,
-        goal: input.goal,
+        // agentId/agentVersionId are null for dynamic (LLM-planned) runs.
+        originType: "workflow.run",
+        originId: ctx.userId!,
         status: "planning",
-        outputFormat,
-        maxParallelism,
+        inputPayload: {
+          title: input.title ?? input.goal.slice(0, 200),
+          goal: input.goal,
+          outputFormat,
+          maxParallelism,
+        },
         createdByUserId: ctx.userId!,
         updatedByUserId: ctx.userId!,
       })
       .returning({
-        id: schema.workflowRuns.id,
-        publicId: schema.workflowRuns.publicId,
+        id: schema.agentExecutions.id,
+        publicId: schema.agentExecutions.publicId,
       }),
   );
 
@@ -43,14 +47,14 @@ export const workflowRunHandler: CapabilityHandler<typeof workflowRun> = async (
     data: {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
-      workflowRunId: row.id,
+      executionId: row.id,
       maxParallelism,
       maxTasksGuard: MAX_TASKS_PER_WORKFLOW,
     },
   });
 
   logger.info(
-    { workflowRunId: row.id, publicId: row.publicId, orgId: ctx.orgId },
+    { executionId: row.id, publicId: row.publicId, orgId: ctx.orgId },
     "workflow.run: dispatched supervisor",
   );
 

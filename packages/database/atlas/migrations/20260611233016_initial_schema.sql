@@ -1,3 +1,17 @@
+-- Install required extensions. These are idempotent; safe to run on any existing DB.
+CREATE EXTENSION IF NOT EXISTS citext;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- uuid_generate_v7(): native on PG17+; stub on PG16 via pg_uuidv7 or v4 fallback.
+DO $$
+BEGIN
+  BEGIN
+    CREATE EXTENSION IF NOT EXISTS pg_uuidv7;
+  EXCEPTION WHEN OTHERS THEN
+    CREATE OR REPLACE FUNCTION public.uuid_generate_v7()
+    RETURNS uuid LANGUAGE sql AS $fn$ SELECT uuid_generate_v4() $fn$;
+  END;
+END$$;
+
 -- Add new schema named "agent"
 CREATE SCHEMA "agent";
 -- Add new schema named "auth"

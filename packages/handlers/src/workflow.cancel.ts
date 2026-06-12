@@ -9,44 +9,43 @@ export const workflowCancelHandler: CapabilityHandler<typeof workflowCancel> = a
   input,
   ctx,
 ) => {
-  const run = await withTenantDb((tx) =>
-    tx.query.workflowRuns.findFirst({
+  const execution = await withTenantDb((tx) =>
+    tx.query.agentExecutions.findFirst({
       where: and(
         or(
-          eq(schema.workflowRuns.id, input.workflowId),
-          eq(schema.workflowRuns.publicId, input.workflowId),
+          eq(schema.agentExecutions.id, input.workflowId),
+          eq(schema.agentExecutions.publicId, input.workflowId),
         ),
-        eq(schema.workflowRuns.orgId, ctx.orgId),
-        eq(schema.workflowRuns.workspaceId, ctx.workspaceId),
+        eq(schema.agentExecutions.orgId, ctx.orgId),
+        eq(schema.agentExecutions.workspaceId, ctx.workspaceId),
       ),
       columns: { id: true, status: true },
     }),
   );
 
-  if (!run) {
+  if (!execution) {
     logger.warn({ workflowId: input.workflowId, orgId: ctx.orgId }, "workflow.cancel: not found");
     throw new Error(`workflow not found: ${input.workflowId}`);
   }
 
-  if (run.status === "completed" || run.status === "cancelled") {
+  if (execution.status === "completed" || execution.status === "cancelled") {
     return { cancelled: false };
   }
 
   await withTenantDb((tx) =>
     tx
-      .update(schema.workflowRuns)
+      .update(schema.agentExecutions)
       .set({ status: "cancelled", updatedByUserId: ctx.userId ?? undefined })
-      .where(eq(schema.workflowRuns.id, run.id)),
+      .where(eq(schema.agentExecutions.id, execution.id)),
   );
 
-  // Signal Inngest to cancel in-flight task functions.
   await inngest.send({
     name: "agent/workflow.cancel",
-    data: { orgId: ctx.orgId, workflowRunId: run.id },
+    data: { orgId: ctx.orgId, executionId: execution.id },
   });
 
   logger.info(
-    { workflowRunId: run.id, orgId: ctx.orgId },
+    { executionId: execution.id, orgId: ctx.orgId },
     "workflow.cancel: cancelled",
   );
 

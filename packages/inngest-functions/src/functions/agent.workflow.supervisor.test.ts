@@ -6,23 +6,22 @@ const mocks = vi.hoisted(() => ({
   dbUpdateSet: vi.fn(),
   dbUpdateWhere: vi.fn(),
   dbUpdate: vi.fn(),
-  dbInsert: vi.fn(),
   dbInsertValues: vi.fn(),
-  dbSelect: vi.fn(),
-  dbFrom: vi.fn(),
-  dbWhere: vi.fn(),
+  dbSelectFromWhere: vi.fn(),
   generateObjectFor: vi.fn(),
   inngestSend: vi.fn(),
   inngestCreateFunction: vi.fn(),
 }));
 
-const MOCK_RUN = {
-  id: "wfr-uuid-1",
+const MOCK_EXECUTION = {
+  id: "exec-uuid-1",
   orgId: "org-1",
   workspaceId: "ws-1",
-  goal: "Profile all Fortune 500 CEOs",
-  outputFormat: "json",
   status: "planning",
+  inputPayload: {
+    goal: "Profile all Fortune 500 CEOs",
+    outputFormat: "json",
+  },
 };
 
 const MOCK_PLAN = {
@@ -32,39 +31,39 @@ const MOCK_PLAN = {
   ],
 };
 
-const MOCK_TASK_ROWS = [
-  { id: "wft-uuid-1", taskIndex: 0, goal: "Find CEO of Apple" },
-  { id: "wft-uuid-2", taskIndex: 1, goal: "Find CEO of Microsoft" },
+const MOCK_STEP_ROWS = [
+  { id: "step-uuid-1", stepNumber: 0, inputPayload: { goal: "Find CEO of Apple", outputFormat: "json" } },
+  { id: "step-uuid-2", stepNumber: 1, inputPayload: { goal: "Find CEO of Microsoft", outputFormat: "json" } },
 ];
 
-mocks.dbFindFirst.mockResolvedValue(MOCK_RUN);
+mocks.dbFindFirst.mockResolvedValue(MOCK_EXECUTION);
 mocks.generateObjectFor.mockResolvedValue({ object: MOCK_PLAN });
 mocks.dbInsertValues.mockResolvedValue(undefined);
-mocks.dbInsert.mockReturnValue({ values: mocks.dbInsertValues });
 mocks.dbUpdateWhere.mockResolvedValue(undefined);
 mocks.dbUpdateSet.mockReturnValue({ where: mocks.dbUpdateWhere });
 mocks.dbUpdate.mockReturnValue({ set: mocks.dbUpdateSet });
-mocks.dbWhere.mockResolvedValue(MOCK_TASK_ROWS);
-mocks.dbFrom.mockReturnValue({ where: mocks.dbWhere });
-mocks.dbSelect.mockReturnValue({ from: mocks.dbFrom });
+mocks.dbSelectFromWhere.mockResolvedValue(MOCK_STEP_ROWS);
 mocks.inngestSend.mockResolvedValue(undefined);
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
-    const tx = {
-      query: {
-        workflowRuns: { findFirst: mocks.dbFindFirst },
-      },
-      update: (_table: unknown) => ({ set: mocks.dbUpdateSet }),
-      insert: (_table: unknown) => ({ values: mocks.dbInsertValues }),
-      select: () => (mocks.dbSelect() as { from: ReturnType<typeof mocks.dbFrom> }),
-    };
-    return fn(tx);
-  },
-
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        query: {
+          agentExecutions: { findFirst: mocks.dbFindFirst },
+        },
+        update: (_table: unknown) => ({ set: mocks.dbUpdateSet }),
+        insert: (_table: unknown) => ({ values: mocks.dbInsertValues }),
+        select: (_fields: unknown) => ({
+          from: (_table: unknown) => ({
+            where: mocks.dbSelectFromWhere,
+          }),
+        }),
+      };
+      return fn(tx);
+    },
   };
 });
 
@@ -112,7 +111,7 @@ const BASE_EVENT = {
   data: {
     orgId: "org-1",
     workspaceId: "ws-1",
-    workflowRunId: "wfr-uuid-1",
+    executionId: "exec-uuid-1",
     maxParallelism: 50,
     maxTasksGuard: 500,
   },
@@ -121,26 +120,23 @@ const BASE_EVENT = {
 describe("agentWorkflowSupervisor Inngest handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.dbFindFirst.mockResolvedValue(MOCK_RUN);
+    mocks.dbFindFirst.mockResolvedValue(MOCK_EXECUTION);
     mocks.generateObjectFor.mockResolvedValue({ object: MOCK_PLAN });
     mocks.dbInsertValues.mockResolvedValue(undefined);
-    mocks.dbInsert.mockReturnValue({ values: mocks.dbInsertValues });
     mocks.dbUpdateWhere.mockResolvedValue(undefined);
     mocks.dbUpdateSet.mockReturnValue({ where: mocks.dbUpdateWhere });
     mocks.dbUpdate.mockReturnValue({ set: mocks.dbUpdateSet });
-    mocks.dbWhere.mockResolvedValue(MOCK_TASK_ROWS);
-    mocks.dbFrom.mockReturnValue({ where: mocks.dbWhere });
-    mocks.dbSelect.mockReturnValue({ from: mocks.dbFrom });
+    mocks.dbSelectFromWhere.mockResolvedValue(MOCK_STEP_ROWS);
     mocks.inngestSend.mockResolvedValue(undefined);
   });
 
-  it("returns failed when the workflow run is not found", async () => {
+  it("returns failed when the execution is not found", async () => {
     mocks.dbFindFirst.mockResolvedValueOnce(null);
     const result = await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
-    expect(result).toEqual({ status: "failed", reason: "run not found" });
+    expect(result).toEqual({ status: "failed", reason: "execution not found" });
   });
 
-  it("calls generateObjectFor with the run goal", async () => {
+  it("calls generateObjectFor with the execution goal", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     expect(mocks.generateObjectFor).toHaveBeenCalledOnce();
     const args = mocks.generateObjectFor.mock.calls[0]![0] as Record<string, unknown>;
@@ -152,26 +148,25 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
     });
   });
 
-  it("inserts workflow_run_tasks rows for each planned task", async () => {
+  it("inserts agent_execution_steps rows for each planned task", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     expect(mocks.dbInsertValues).toHaveBeenCalledOnce();
-    const insertedTasks = mocks.dbInsertValues.mock.calls[0]![0] as Array<Record<string, unknown>>;
-    expect(insertedTasks).toHaveLength(2);
-    expect(insertedTasks[0]).toMatchObject({ taskIndex: 0, goal: "Find CEO of Apple" });
+    const insertedSteps = mocks.dbInsertValues.mock.calls[0]![0] as Array<Record<string, unknown>>;
+    expect(insertedSteps).toHaveLength(2);
+    expect(insertedSteps[0]).toMatchObject({ stepNumber: 0, stepType: "research" });
+    expect((insertedSteps[0]!.inputPayload as Record<string, unknown>).goal).toBe("Find CEO of Apple");
   });
 
-  it("dispatches inngest events for each task", async () => {
+  it("dispatches inngest events for each step", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     expect(mocks.inngestSend).toHaveBeenCalled();
-    // vitest mock.calls[0] returns any[] — suppress eslint warnings for this assertion block
-     
     const sendArg = mocks.inngestSend.mock.calls[0]?.[0] as
       | Array<Record<string, unknown>>
       | undefined;
     expect(sendArg).toBeDefined();
     expect(sendArg?.[0]).toMatchObject({
       name: "agent/workflow.task.execute",
-      data: expect.objectContaining({ orgId: "org-1", workflowRunId: "wfr-uuid-1" }),
+      data: expect.objectContaining({ orgId: "org-1", executionId: "exec-uuid-1" }),
     });
   });
 
@@ -184,20 +179,28 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
       })),
     };
     mocks.generateObjectFor.mockResolvedValueOnce({ object: bigPlan });
+    mocks.dbSelectFromWhere.mockResolvedValueOnce(
+      Array.from({ length: 500 }, (_, i) => ({
+        id: `step-${i}`,
+        stepNumber: i,
+        inputPayload: { goal: `Goal ${i}`, outputFormat: "json" },
+      })),
+    );
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
-    const insertedTasks = mocks.dbInsertValues.mock.calls[0]![0] as Array<unknown>;
-    expect(insertedTasks.length).toBeLessThanOrEqual(500);
+    const insertedSteps = mocks.dbInsertValues.mock.calls[0]![0] as Array<unknown>;
+    expect(insertedSteps.length).toBeLessThanOrEqual(500);
   });
 
-  it("returns tasksDispatched count", async () => {
+  it("returns tasksDispatched count and executionId", async () => {
     const result = (await capturedHandler!({
       event: BASE_EVENT,
       step: makeStep(),
     })) as Record<string, unknown>;
     expect(result.tasksDispatched).toBe(2);
+    expect(result.executionId).toBe("exec-uuid-1");
   });
 
-  it("updates workflow status to running after planning", async () => {
+  it("updates execution status to running after planning", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     const updateArgs = mocks.dbUpdateSet.mock.calls;
     const runningUpdate = updateArgs.find(

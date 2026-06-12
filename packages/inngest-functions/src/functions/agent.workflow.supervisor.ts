@@ -29,38 +29,43 @@ export const agentWorkflowSupervisor = inngest.createFunction(
     cancelOn: [
       {
         event: "agent/workflow.cancel",
-        if: "event.data.workflowRunId == async.data.workflowRunId",
+        if: "event.data.executionId == async.data.executionId",
       },
     ],
   },
   { event: "agent/workflow.supervisor.start" },
   async ({ event, step }) => {
-    const { orgId, workspaceId, workflowRunId, maxParallelism, maxTasksGuard } = event.data as {
+    const { orgId, workspaceId, executionId, maxParallelism, maxTasksGuard } = event.data as {
       orgId: string;
       workspaceId: string;
-      workflowRunId: string;
+      executionId: string;
       maxParallelism: number;
       maxTasksGuard?: number;
     };
     const effectiveMaxTasks = Math.min(maxTasksGuard ?? MAX_TASKS_PER_WORKFLOW, MAX_TASKS_PER_WORKFLOW);
 
-    const run = await step.run("load-run", () =>
+    const execution = await step.run("load-execution", () =>
       runInTenantScope({ orgId, workspaceId }, () =>
         withTenantDb((tx) =>
-          tx.query.workflowRuns.findFirst({
+          tx.query.agentExecutions.findFirst({
             where: and(
-              eq(schema.workflowRuns.id, workflowRunId),
-              eq(schema.workflowRuns.orgId, orgId),
+              eq(schema.agentExecutions.id, executionId),
+              eq(schema.agentExecutions.orgId, orgId),
             ),
           }),
         ),
       ),
     );
 
-    if (!run) {
-      logger.error({ workflowRunId, orgId }, "agent.workflow.supervisor: run not found");
-      return { status: "failed", reason: "run not found" };
+    if (!execution) {
+      logger.error({ executionId, orgId }, "agent.workflow.supervisor: execution not found");
+      return { status: "failed", reason: "execution not found" };
     }
+
+    const { goal, outputFormat } = execution.inputPayload as {
+      goal: string;
+      outputFormat: "json" | "csv";
+    };
 
     // ── Step 1: Plan ────────────────────────────────────────────────────────
     const { object: plan } = await step.run("plan", () =>
@@ -69,12 +74,12 @@ export const agentWorkflowSupervisor = inngest.createFunction(
         system: `You are a workflow planner. Given a high-level goal, decompose it into discrete, independently executable sub-tasks.
 Each task should be specific and achievable by a single web search + data extraction agent.
 Return between 2 and ${effectiveMaxTasks} tasks. Number them starting from 0.`,
-        prompt: `Goal: ${run.goal}\n\nDecompose this into specific, parallel research sub-tasks. Each task should have a clear, searchable goal.`,
+        prompt: `Goal: ${goal}\n\nDecompose this into specific, parallel research sub-tasks. Each task should have a clear, searchable goal.`,
         telemetry: {
           orgId,
           workspaceId,
           surface: "runner" as const,
-          messageId: workflowRunId,
+          messageId: executionId,
         },
       }),
     );
@@ -86,25 +91,24 @@ Return between 2 and ${effectiveMaxTasks} tasks. Number them starting from 0.`,
       runInTenantScope({ orgId, workspaceId }, () =>
         withTenantDb(async (tx) => {
           await tx
-            .update(schema.workflowRuns)
+            .update(schema.agentExecutions)
             .set({
               status: "running",
-              planJson: tasks,
-              totalTasks: tasks.length,
+              inputPayload: { goal, outputFormat, plan: tasks },
               startedAt: new Date(),
               updatedAt: new Date(),
             })
-            .where(eq(schema.workflowRuns.id, workflowRunId));
+            .where(eq(schema.agentExecutions.id, executionId));
 
-          await tx.insert(schema.workflowRunTasks).values(
+          await tx.insert(schema.agentExecutionSteps).values(
             tasks.map((t) => ({
+              executionId,
               orgId,
               workspaceId,
-              workflowRunId,
-              taskIndex: t.taskIndex,
-              title: t.title,
-              goal: t.goal,
-              status: "pending" as const,
+              stepNumber: t.taskIndex,
+              stepType: "research",
+              status: "pending",
+              inputPayload: { title: t.title, goal: t.goal, outputFormat },
               createdByUserId: null,
               updatedByUserId: null,
             })),
@@ -113,21 +117,21 @@ Return between 2 and ${effectiveMaxTasks} tasks. Number them starting from 0.`,
       ),
     );
 
-    // Load inserted task IDs for dispatching.
-    const taskRows = await step.run("load-task-ids", () =>
+    // Load inserted step IDs for dispatching.
+    const stepRows = await step.run("load-step-ids", () =>
       runInTenantScope({ orgId, workspaceId }, () =>
         withTenantDb((tx) =>
           tx
             .select({
-              id: schema.workflowRunTasks.id,
-              taskIndex: schema.workflowRunTasks.taskIndex,
-              goal: schema.workflowRunTasks.goal,
+              id: schema.agentExecutionSteps.id,
+              stepNumber: schema.agentExecutionSteps.stepNumber,
+              inputPayload: schema.agentExecutionSteps.inputPayload,
             })
-            .from(schema.workflowRunTasks)
+            .from(schema.agentExecutionSteps)
             .where(
               and(
-                eq(schema.workflowRunTasks.workflowRunId, workflowRunId),
-                eq(schema.workflowRunTasks.orgId, orgId),
+                eq(schema.agentExecutionSteps.executionId, executionId),
+                eq(schema.agentExecutionSteps.orgId, orgId),
               ),
             ),
         ),
@@ -136,32 +140,35 @@ Return between 2 and ${effectiveMaxTasks} tasks. Number them starting from 0.`,
 
     // ── Step 3: Dispatch in batches respecting maxParallelism ───────────────
     const batchSize = Math.min(maxParallelism, 100);
-    for (let i = 0; i < taskRows.length; i += batchSize) {
-      const batch = taskRows.slice(i, i + batchSize);
+    for (let i = 0; i < stepRows.length; i += batchSize) {
+      const batch = stepRows.slice(i, i + batchSize);
       const batchLabel = `dispatch-batch-${Math.floor(i / batchSize)}`;
       await step.run(batchLabel, () =>
         inngest.send(
-          batch.map((t: { id: string; taskIndex: number; goal: string }) => ({
-            name: "agent/workflow.task.execute" as const,
-            data: {
-              orgId,
-              workspaceId,
-              workflowRunId,
-              taskId: t.id,
-              taskIndex: t.taskIndex,
-              goal: t.goal,
-              outputFormat: run.outputFormat as "json" | "csv",
-            },
-          })),
+          batch.map((s: { id: string; stepNumber: number; inputPayload: unknown }) => {
+            const payload = s.inputPayload as { goal: string; outputFormat: "json" | "csv" };
+            return {
+              name: "agent/workflow.task.execute" as const,
+              data: {
+                orgId,
+                workspaceId,
+                executionId,
+                stepId: s.id,
+                taskIndex: s.stepNumber,
+                goal: payload.goal,
+                outputFormat: payload.outputFormat,
+              },
+            };
+          }),
         ),
       );
     }
 
     logger.info(
-      { workflowRunId, orgId, tasksDispatched: tasks.length },
+      { executionId, orgId, tasksDispatched: tasks.length },
       "agent.workflow.supervisor: dispatched all tasks",
     );
 
-    return { workflowRunId, tasksDispatched: tasks.length };
+    return { executionId, tasksDispatched: tasks.length };
   },
 );
