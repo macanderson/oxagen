@@ -55,6 +55,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
   setSecurityEventEmitter: mocks.setSecurityEventEmitter,
+  setCapabilityEntitlementGate: vi.fn(),
   invoke: vi.fn(),
   clearHandlersForTests: vi.fn(),
 }));
