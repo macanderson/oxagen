@@ -42,8 +42,24 @@ function extractHostFromUrl(url: string): string {
   }
 }
 
+// Shell sessions can carry stale/mangled exports (e.g. a value truncated at
+// "#") that would shadow a valid .env.local value, so take the first source
+// that is actually a parseable URL instead of the first that is non-empty.
+function firstParseableUrl(key: string): string {
+  for (const value of [process.env[key], env[key]]) {
+    if (!value) continue;
+    try {
+      new URL(value);
+      return value;
+    } catch {
+      continue;
+    }
+  }
+  return '';
+}
+
 // Always extract hostname from ANALYTICS_URL and use HTTPS on 8443
-const analyticsUrl = get('ANALYTICS_URL');
+const analyticsUrl = firstParseableUrl('ANALYTICS_URL');
 const host = get('OXAGEN_ANALYTICS_HOST') || extractHostFromUrl(analyticsUrl);
 const port = get('OXAGEN_ANALYTICS_PORT') || '8443';
 

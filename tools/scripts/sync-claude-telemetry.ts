@@ -54,8 +54,10 @@ async function syncTelemetry() {
     return;
   }
 
-  // Skip sync if credentials are not configured
+  // Skip sync if credentials are not configured — say so instead of failing
+  // silently, since a silent skip here is indistinguishable from success.
   if (!ANALYTICS_URL || !ANALYTICS_USER || !ANALYTICS_PASSWORD) {
+    console.error('Telemetry sync skipped: analytics URL/credentials not configured or unparseable.');
     return;
   }
 
