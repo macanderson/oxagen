@@ -21,6 +21,7 @@ import { createHash } from "node:crypto";
 import postgres from "postgres";
 import kleur from "kleur";
 import { loadEnv } from "@oxagen/config/env";
+import { formatError } from "./lib/format-error";
 
 // System role names seeded in 0008_iam_seed_defaults.sql.
 const ORG_ROLES = ["Owner", "Admin", "Compliance", "Billing"] as const;
@@ -156,6 +157,6 @@ async function main(): Promise<void> {
 main()
   .then(() => process.exit(0))
   .catch((err: unknown) => {
-    console.error(kleur.red(err instanceof Error ? err.message : String(err)));
+    console.error(kleur.red(formatError(err)));
     process.exit(1);
   });

@@ -7,6 +7,7 @@
  */
 
 import postgres from "postgres";
+import { formatError } from "./lib/format-error";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -48,8 +49,7 @@ async function seedMcpRegistry(): Promise<void> {
     console.log("✅ MCP registry seeded successfully");
     await sql.end();
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("❌ Error seeding MCP registry:", message);
+    console.error("❌ Error seeding MCP registry:", formatError(err));
     process.exit(1);
   }
 }

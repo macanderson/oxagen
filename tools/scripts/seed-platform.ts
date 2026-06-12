@@ -9,6 +9,7 @@
 import kleur from "kleur";
 import { seedPlatform } from "@oxagen/database/seed";
 import { closeDatabase } from "@oxagen/database/client";
+import { formatError } from "./lib/format-error";
 
 async function main(): Promise<void> {
   await seedPlatform();
@@ -18,7 +19,7 @@ async function main(): Promise<void> {
 main()
   .then(() => process.exit(0))
   .catch((err: unknown) => {
-    console.error(kleur.red(err instanceof Error ? err.message : String(err)));
+    console.error(kleur.red(formatError(err)));
     process.exit(1);
   })
   .finally(() => closeDatabase());

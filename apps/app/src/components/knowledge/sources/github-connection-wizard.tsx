@@ -86,11 +86,14 @@ function Step1Connect({ orgSlug, workspaceSlug, onConnectionCreated, error }: St
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
+          // Shape is the connection.create contract input. The credential
+          // carries only its type — real tokens arrive via the OAuth
+          // callback after the GitHub redirect, never through this POST.
           body: JSON.stringify({
             connectorId: "github",
-            authScheme: "oauth2_authorization_code",
             displayName: "GitHub",
-            config: { organizations: [], syncDepthDays: 90 },
+            authCredential: { type: "oauth2_authorization_code" },
+            connectionConfig: { organizations: [], syncDepthDays: 90 },
           }),
         },
       );

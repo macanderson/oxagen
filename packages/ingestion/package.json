@@ -7,7 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./connectors": "./src/connectors/types.ts",
+    "./connectors": "./src/connectors/index.ts",
     "./connector-schema-loader": "./src/connector-schema-loader.ts",
     "./pipeline": "./src/pipeline.ts",
     "./filters": "./src/filters.ts",

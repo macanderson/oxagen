@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { requestLogger } from "./middleware/logger";
+import { corsMiddleware } from "./middleware/cors";
 import { errorMiddleware } from "./middleware/error";
 import { authMiddleware } from "./middleware/auth";
 import { orgMiddleware } from "./middleware/org";
@@ -93,6 +94,8 @@ import { formCreateRoute } from "./routes/v1/form.create";
 import { formSubmitRoute } from "./routes/v1/form.submit";
 import { automationListRoute } from "./routes/v1/automation.list";
 import { automationCreateRoute } from "./routes/v1/automation.create";
+import { automationEnableRoute } from "./routes/v1/automation.enable";
+import { automationDisableRoute } from "./routes/v1/automation.disable";
 import { automationTriggerRoute } from "./routes/v1/automation.trigger";
 import { skillWorkspaceListRoute } from "./routes/v1/skill.workspace.list";
 import { agentSubagentDispatchRoute } from "./routes/v1/agent.subagent.dispatch";
@@ -133,6 +136,9 @@ export type AppEnv = {
 export const app = new Hono<AppEnv>();
 
 app.use("*", requestLogger);
+// CORS must run before auth: a preflight OPTIONS carries no credentials, so
+// it has to short-circuit here or the browser never sends the real request.
+app.use("*", corsMiddleware);
 app.onError(errorMiddleware);
 
 // Public routes — health and Stripe webhook bypass auth. The webhook needs
@@ -243,6 +249,8 @@ orgScoped.route("/form/create", formCreateRoute);
 orgScoped.route("/form/submit", formSubmitRoute);
 orgScoped.route("/automation/list", automationListRoute);
 orgScoped.route("/automation/create", automationCreateRoute);
+orgScoped.route("/automation/enable", automationEnableRoute);
+orgScoped.route("/automation/disable", automationDisableRoute);
 orgScoped.route("/automation/trigger", automationTriggerRoute);
 orgScoped.route("/skill/workspace/list", skillWorkspaceListRoute);
 orgScoped.route("/privacy/export", privacyDataExportRoute);

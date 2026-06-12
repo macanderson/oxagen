@@ -1,4 +1,5 @@
 import postgres from 'postgres';
+import { formatError } from "./lib/format-error";
 
 const PRODUCTION_DATABASE_URL = process.env.PRODUCTION_DATABASE_URL;
 
@@ -30,16 +31,14 @@ async function dropSchemas() {
         await sql.unsafe(`DROP SCHEMA IF EXISTS "${schema_name}" CASCADE`);
         console.log(`    ✓ Success`);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`    ✗ Error: ${message}`);
+        console.error(`    ✗ Error: ${formatError(err)}`);
       }
     }
 
     console.log('\n✅ All schemas dropped successfully');
     await sql.end();
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('❌ Error:', message);
+    console.error('❌ Error:', formatError(err));
     process.exit(1);
   }
 }

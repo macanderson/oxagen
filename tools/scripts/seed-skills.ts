@@ -18,6 +18,7 @@ import { eq, and } from "drizzle-orm";
 import kleur from "kleur";
 import { loadEnv } from "@oxagen/config/env";
 import { db, closeDatabase } from "@oxagen/database";
+import { formatError } from "./lib/format-error";
 import { skills, skillVersions } from "@oxagen/database/schema";
 import { seedSkillsFromFilesystem } from "@oxagen/skills";
 import type { SkillSeedAdapter } from "@oxagen/skills";
@@ -78,6 +79,6 @@ main()
   .then(() => closeDatabase())
   .then(() => process.exit(0))
   .catch((err: unknown) => {
-    console.error(kleur.red(err instanceof Error ? err.message : String(err)));
+    console.error(kleur.red(formatError(err)));
     process.exit(1);
   });

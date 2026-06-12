@@ -1,9 +1,11 @@
 #!/usr/bin/env tsx
 import { execa } from "execa";
 import kleur from "kleur";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { computeEnvPins } from "./lib/pin-env";
 import { startStripeTunnel } from "./stripe-tunnel";
+import { formatError } from "./lib/format-error";
 
 const ROOT = resolve(process.cwd());
 const COMPOSE_FILE = "docker-compose.dev.yml";
@@ -111,6 +113,26 @@ async function main(): Promise<void> {
     }
   }
   await ensureEnvFile();
+  // .env.local is authoritative for the local stack. tsx/node --env-file
+  // never overrides inherited shell env, so a stale `export DATABASE_URL=...`
+  // in the launching terminal would silently retarget every migrate/seed/dev
+  // child — pin the file's values before anything spawns.
+  const envPath = resolve(ROOT, ".env.local");
+  if (existsSync(envPath)) {
+    const { assignments, overridden } = computeEnvPins(
+      readFileSync(envPath, "utf8"),
+      process.env,
+    );
+    Object.assign(process.env, assignments);
+    if (overridden.length > 0) {
+      console.warn(
+        kleur.yellow(
+          `[dev] shell env differed from .env.local and was repinned for: ` +
+            `${overridden.join(", ")} — unset these in your terminal to silence this`,
+        ),
+      );
+    }
+  }
   await checkDocker();
   await up();
   await waitForHealthy();
@@ -122,6 +144,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(kleur.red(err instanceof Error ? err.message : String(err)));
+  console.error(kleur.red(formatError(err)));
   process.exit(1);
 });

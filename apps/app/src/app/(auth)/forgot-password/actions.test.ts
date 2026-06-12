@@ -28,6 +28,17 @@ vi.mock("@oxagen/auth", () => ({
   },
 }));
 
+const { mockLoadEnv } = vi.hoisted(() => ({
+  mockLoadEnv: vi.fn(() => ({ BETTER_AUTH_URL: "http://localhost:3000" })),
+}));
+
+// Hermetic env: without this mock the action's loadEnv() reads ambient
+// process.env, so the suite's outcome depended on the developer's shell
+// exports (it failed under a stale terminal env and passed in CI by luck).
+vi.mock("@oxagen/config/env", () => ({
+  loadEnv: mockLoadEnv,
+}));
+
 // next/headers and next/cache are not needed here (no session or revalidatePath)
 // but must be mocked if transitively imported.
 
@@ -61,7 +72,7 @@ describe("requestResetAction", () => {
         expect.objectContaining({
           body: expect.objectContaining({
             email: "someone@example.com",
-            redirectTo: expect.stringContaining("/reset-password"),
+            redirectTo: "http://localhost:3000/reset-password",
           }),
         }),
       );
@@ -102,6 +113,28 @@ describe("requestResetAction", () => {
       const result = await requestResetAction({ email: "user@example.com" });
 
       expect(result.ok).toBe(true);
+    });
+  });
+
+  describe("(d) config error — surfaced, not swallowed", () => {
+    it("returns ok:false and never calls the API when loadEnv throws", async () => {
+      mockLoadEnv.mockImplementationOnce(() => {
+        throw new Error("Invalid environment");
+      });
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+      try {
+        const result = await requestResetAction({ email: "user@example.com" });
+
+        // A misconfigured server is the same failure for every email — no
+        // enumeration risk — and must NOT report ok while no email was sent.
+        expect(result.ok).toBe(false);
+        expect((result as { ok: false; error: string }).error).toMatch(/unavailable/i);
+        expect(mockRequestPasswordReset).not.toHaveBeenCalled();
+        expect(consoleError).toHaveBeenCalled();
+      } finally {
+        consoleError.mockRestore();
+      }
     });
   });
 });

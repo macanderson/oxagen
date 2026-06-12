@@ -5,5 +5,5 @@
     "moduleResolution": "Bundler",
     "noEmit": true
   },
-  "include": ["*.ts", "*.mjs"]
+  "include": ["*.ts", "*.mjs", "lib/**/*.ts"]
 }

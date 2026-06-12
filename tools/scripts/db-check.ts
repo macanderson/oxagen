@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 import { execa } from "execa";
 import kleur from "kleur";
+import { formatError } from "./lib/format-error";
 
 // Lightweight schema-presence probe. Each store gets one cheap query;
 // non-zero exit blocks the gate. The full drift check belongs in the
@@ -26,7 +27,7 @@ async function checkPostgres(): Promise<Result> {
     return {
       name: "postgres",
       ok: false,
-      detail: err instanceof Error ? err.message : String(err),
+      detail: formatError(err),
     };
   }
 }
@@ -49,7 +50,7 @@ async function checkClickhouse(): Promise<Result> {
     return {
       name: "clickhouse",
       ok: false,
-      detail: err instanceof Error ? err.message : String(err),
+      detail: formatError(err),
     };
   }
 }
@@ -80,7 +81,7 @@ async function checkNeo4j(): Promise<Result> {
     return {
       name: "neo4j",
       ok: false,
-      detail: err instanceof Error ? err.message : String(err),
+      detail: formatError(err),
     };
   }
 }

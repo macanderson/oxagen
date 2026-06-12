@@ -15,6 +15,7 @@
  * this script with DB_MIGRATE_STORES=clickhouse,neo4j for the other stores.
  */
 import kleur from "kleur";
+import { formatError } from "./lib/format-error";
 import { migrate as migrateClickhouse } from "@oxagen/telemetry/migrate";
 import { closeClickhouse } from "@oxagen/telemetry";
 import { migrate as migrateNeo4j } from "@oxagen/ontology/migrate";
@@ -61,6 +62,6 @@ async function main(): Promise<void> {
 main()
   .then(() => process.exit(0))
   .catch((err: unknown) => {
-    console.error(kleur.red(err instanceof Error ? err.message : String(err)));
+    console.error(kleur.red(formatError(err)));
     process.exit(1);
   });

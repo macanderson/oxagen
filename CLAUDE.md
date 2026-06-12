@@ -14,7 +14,7 @@ Every code change must leave the package's test suite at or above its `vitest.co
 
 - **New code requires new tests.** Route handlers, contracts, utilities — all need tests before the commit lands.
 - **E2E parity.** Any user-facing flow added or changed needs an e2e test in `apps/app/__tests__/`.
-- **Thresholds are ratchets — never lower them.** When new tested code raises coverage, bump the threshold to match (round down). Never reduce.
+- **Thresholds are ratchets capped at 90 — never lower them.** When new tested code raises coverage, bump the threshold to match (round down), but **never past 90**: once a metric is at or above 90%, its gate floor is 90 and stays there. Never reduce a threshold below its current value.
 - **Run `pnpm gate` before any push.** Lint (`--max-warnings 0`), typecheck, coverage, tests, builds, migrations — all must pass locally.
 - **Lint is part of the gate.** Zero ESLint warnings; no `eslint-disable` unless genuinely inapplicable (inline comment required).
 

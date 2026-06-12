@@ -51,6 +51,12 @@ env:
   # where the auth startup guard requires the credential-encryption master key.
   # Real 256-bit key from repo secrets — dummies fail the base64-length check.
   AUTH_TOKEN_ENCRYPTION_KEY: ${{ secrets.AUTH_TOKEN_ENCRYPTION_KEY }}
+  # GitHub source-connect e2e: /connections/github/auth-url only BUILDS the
+  # authorize URL (no GitHub API call) and the spec stubs the redirect, so
+  # dummy values are sufficient — the state secret just feeds the HMAC.
+  GITHUB_APP_CLIENT_ID: Iv1.cie2e0000000000
+  GITHUB_APP_CLIENT_SECRET: ci-github-app-secret
+  GITHUB_APP_INSTALL_STATE_SECRET: ci-github-install-state-secret
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────

@@ -20,6 +20,7 @@
  */
 import postgres from "postgres";
 import kleur from "kleur";
+import { formatError } from "./lib/format-error";
 
 const ROLE = "oxagen_app";
 
@@ -117,6 +118,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  console.error(kleur.red(err instanceof Error ? err.message : String(err)));
+  console.error(kleur.red(formatError(err)));
   process.exit(1);
 });

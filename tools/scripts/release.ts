@@ -43,6 +43,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { argv, env, exit } from "node:process";
 import { join, resolve } from "node:path";
 import kleur from "kleur";
+import { formatError } from "./lib/format-error";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const DEFAULT_TEAM_ID = "team_DiMizWNDHKFFU5ajKe2ZVKl9";
@@ -363,7 +364,7 @@ function buildCli(): void {
       maxBuffer: 64 * 1024 * 1024,
     });
   } catch (err) {
-    throw new Error(`CLI build failed: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(`CLI build failed: ${formatError(err)}`);
   }
 }
 
@@ -406,7 +407,7 @@ async function publishCliToNpm(version: string): Promise<void> {
     console.log(kleur.green(`    ✓ @oxagen/cli v${version} published to npm`));
   } catch (err) {
     throw new Error(
-      `npm publish failed: ${err instanceof Error ? err.message : String(err)}. ` +
+      `npm publish failed: ${formatError(err)}. ` +
         `Ensure NPM_TOKEN is set and the CLI package is not marked as private.`,
     );
   }

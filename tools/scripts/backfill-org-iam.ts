@@ -45,6 +45,7 @@ import { createInterface } from "node:readline";
 import { URL } from "node:url";
 import kleur from "kleur";
 import { requireEnv } from "@oxagen/config/env";
+import { formatError } from "./lib/format-error";
 import { db, closeDatabase, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { bootstrapOrgIAM, provisionMemberPrincipal } from "@oxagen/handlers";
@@ -246,7 +247,7 @@ async function main(): Promise<void> {
         durationMs,
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = formatError(err);
       console.log(kleur.red(`  [fail] ${org.name} (${org.publicId}) — ${msg}`));
       results.push({
         orgId: org.id,
@@ -307,6 +308,6 @@ async function main(): Promise<void> {
 main()
   .then(() => process.exit(0))
   .catch((err: unknown) => {
-    console.error(kleur.red("[backfill-iam] Fatal:"), err instanceof Error ? err.message : String(err));
+    console.error(kleur.red("[backfill-iam] Fatal:"), formatError(err));
     process.exit(1);
   });

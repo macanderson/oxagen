@@ -49,5 +49,8 @@ import "./microsoft/index";
 import "./custom-sql/index";
 import "./custom-webhook/index";
 
-// Re-export registry helpers for convenience
-export { getConnector, listConnectors, registerConnector } from "./types";
+// Re-export the full registry surface (helpers + connector types) so this
+// barrel is a drop-in replacement for "./types" — the package's
+// "./connectors" subpath resolves here, making registration a side effect
+// of the import itself.
+export * from "./types";

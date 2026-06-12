@@ -117,11 +117,32 @@ export interface ConnectorDefinition<TConfig extends z.ZodTypeAny = z.ZodTypeAny
   ): boolean;
 }
 
-const registry = new Map<string, ConnectorDefinition>();
+// Connector registrations are module-level side effects reachable through
+// both the package "." barrel and the "./connectors" subpath export, and
+// Next's RSC/SSR module graphs (plus dev HMR) can evaluate those modules more
+// than once. Anchor the registry on globalThis and treat re-registration of
+// the same connectorId as benign — keep the first — mirroring the capability
+// registry in @oxagen/oxagen/registry.
+const REGISTRY_KEY = Symbol.for("@oxagen/ingestion.connectorRegistry");
+
+type GlobalWithRegistry = typeof globalThis & {
+  [REGISTRY_KEY]?: Map<string, ConnectorDefinition>;
+};
+
+const globalRef = globalThis as GlobalWithRegistry;
+const registry: Map<string, ConnectorDefinition> =
+  globalRef[REGISTRY_KEY] ??
+  (globalRef[REGISTRY_KEY] = new Map<string, ConnectorDefinition>());
 
 export function registerConnector(connector: ConnectorDefinition): void {
   if (registry.has(connector.connectorId)) {
-    throw new Error(`Connector "${connector.connectorId}" is already registered`);
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(
+        `[ingestion] Connector "${connector.connectorId}" re-registered; ` +
+          `keeping the first registration (likely a dev bundler/HMR artifact).`,
+      );
+    }
+    return;
   }
   registry.set(connector.connectorId, connector);
 }

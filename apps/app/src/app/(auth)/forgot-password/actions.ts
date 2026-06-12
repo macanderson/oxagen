@@ -58,9 +58,18 @@ export async function requestResetAction(
     };
   }
 
+  // Resolve config OUTSIDE the anti-enumeration try. A broken environment is
+  // identical for every email (nothing to enumerate), and swallowing it below
+  // silently disabled reset emails while still reporting ok:true.
+  let appBaseUrl: string;
   try {
-    const appBaseUrl = loadEnv().BETTER_AUTH_URL;
+    appBaseUrl = loadEnv().BETTER_AUTH_URL;
+  } catch (err) {
+    console.error("[forgot-password] loadEnv failed — reset email not sent", err);
+    return { ok: false, error: "Password reset is temporarily unavailable" };
+  }
 
+  try {
     await auth.api.requestPasswordReset({
       body: {
         email: parsed.data.email,

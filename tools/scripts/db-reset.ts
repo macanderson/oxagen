@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 import { execa } from "execa";
 import kleur from "kleur";
+import { formatError } from "./lib/format-error";
 
 // Destructive. Drops volumes and re-applies migrations.
 async function main(): Promise<void> {
@@ -26,6 +27,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(kleur.red(err instanceof Error ? err.message : String(err)));
+  console.error(kleur.red(formatError(err)));
   process.exit(1);
 });
