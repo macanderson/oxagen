@@ -9,15 +9,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // lines floor 75 (measured 76.18 after new contracts added; new capabilities
-      //   are schema/config — raise once dedicated contract tests exist).
-      // functions floor 55 (measured 56.45); new registerCapability closures counted
-      //   as untested functions until contract-level tests land.
+      // Ratcheted after the full contract test sweep (measured 91.96 lines /
+      // 83.33 branches / 80 functions). Thresholds only go up.
       thresholds: {
-        lines: 75,
-        branches: 78,
-        functions: 55,
-        statements: 75,
+        lines: 91,
+        branches: 83,
+        functions: 80,
+        statements: 91,
       },
     },
   },
