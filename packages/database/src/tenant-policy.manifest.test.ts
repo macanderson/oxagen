@@ -9,6 +9,7 @@ describe("tenant policy manifest", () => {
       "org_only",
       "workspace_only",
       "org_or_global",
+      "standard_or_builtin",
     ];
     for (const entry of POLICY_MANIFEST) {
       expect(classes).toContain(entry.policyClass);
@@ -94,6 +95,13 @@ describe("tenant policy manifest", () => {
       (e) => e.table === "workspace.workspace_users",
     );
     expect(entry?.policyClass).toBe("workspace_only");
+  });
+
+  it("skills tables are the only standard_or_builtin tables — builtin catalog readable, writes tenant-only", () => {
+    const builtinReadable = POLICY_MANIFEST.filter(
+      (e) => e.policyClass === "standard_or_builtin",
+    ).map((e) => e.table);
+    expect(builtinReadable).toEqual(["agent.skills", "agent.skill_versions"]);
   });
 
   it("mcp.registries is the only org_or_global table", () => {

@@ -75,6 +75,18 @@ function predicates(cls: PolicyClass): Predicates {
       check: `${BYPASS} OR (org_id = ${ORG})`,
     };
   }
+  if (cls === "standard_or_builtin") {
+    // Nil-UUID sentinel rows (packages/skills BUILTIN_ORG_ID/WORKSPACE_ID) are
+    // a platform-global catalog: readable by every tenant, writable only via
+    // the bypass/seeding path. Same read/write asymmetry rationale as
+    // org_or_global — a symmetric predicate would let any tenant publish a
+    // platform-wide builtin row.
+    const NIL = `'00000000-0000-0000-0000-000000000000'::uuid`;
+    return {
+      using: `${BYPASS} OR (org_id = ${ORG} AND workspace_id = ${WS}) OR (org_id = ${NIL} AND workspace_id = ${NIL})`,
+      check: `${BYPASS} OR (org_id = ${ORG} AND workspace_id = ${WS})`,
+    };
+  }
   // standard: org_id + workspace_id both required
   const p = `${BYPASS} OR (org_id = ${ORG} AND workspace_id = ${WS})`;
   return { using: p, check: p };

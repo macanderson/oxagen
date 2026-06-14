@@ -6,7 +6,14 @@ export type PolicyClass =
   // org_or_global: org_id is NULLABLE — NULL rows are a shared/global catalog
   // visible to every tenant, non-NULL rows are tenant-private. Used by
   // mcp.registries (global default-seed registry + optional per-org registries).
-  | "org_or_global";
+  | "org_or_global"
+  // standard_or_builtin: like standard, but rows stamped with the nil-UUID
+  // sentinel org/workspace (packages/skills BUILTIN_*) are a platform-global
+  // catalog READABLE by every tenant. WRITES stay tenant-only — creating or
+  // altering a builtin row is reserved for the seeding/system path
+  // (app.rls_bypass='on'), mirroring the org_or_global asymmetry. Used by the
+  // skills tables so seeded builtin skills are visible through withTenantDb.
+  | "standard_or_builtin";
 
 export interface PolicyEntry {
   readonly table: string; // schema-qualified (schema.table_name)
@@ -42,8 +49,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ── agent.* (orgScopeMixin: org_id + workspace_id NOT NULL) ──────────────
   // agent.agent_versions excluded: immutable child, no org cols, FK → agents.
   { table: "agent.agents", policyClass: "standard" },
-  { table: "agent.skills", policyClass: "standard" },
-  { table: "agent.skill_versions", policyClass: "standard" },
+  { table: "agent.skills", policyClass: "standard_or_builtin" },
+  { table: "agent.skill_versions", policyClass: "standard_or_builtin" },
   { table: "agent.agent_plans", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
