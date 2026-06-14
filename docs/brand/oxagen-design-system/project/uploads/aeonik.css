@@ -1,0 +1,71 @@
+/**
+ * Aeonik typeface — variable @font-face declarations (ACTIVE)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * The licensed Aeonik variable-font binaries live alongside this file in
+ * packages/ui/src/styles/fonts/ and are wired into every app through the shared
+ * entrypoint:
+ *
+ *   @oxagen/ui/styles/globals.css → @import "./fonts/aeonik.css"
+ *
+ * The `src` url()s are bundler-relative (`./Aeonik-VF.woff2`), so each app's
+ * Next/Turbopack build fingerprints and emits the woff2 from this ONE shared
+ * location — no per-app `public/fonts/` copies, no drift across surfaces.
+ *
+ * Three families cover the whole type system:
+ *
+ *   "Aeonik"        sans    — UI + body copy          (wght 100–900, + italic)
+ *   "Aeonik Fono"   display — h1–h6 / hero metrics    (wght 400–700)
+ *   "Aeonik Mono"   mono    — code, eyebrows, metrics  (wght 400–500)
+ *
+ * The families are bound to --font-sans / --font-display / --font-mono in
+ * globals.css and surface as the Tailwind `font-sans` / `font-display` /
+ * `font-mono` utilities. Each stack keeps a system-font fallback so text still
+ * renders if a woff2 fails to load.
+ *
+ * LICENSE — Aeonik is a commercial typeface by CoType Foundry
+ * (https://cotypefoundry.com/aeonik). The web license grants self-hosted woff2
+ * delivery from your own origin only; do NOT redistribute these binaries.
+ *
+ * Optional future optimisation: migrate per-app to next/font/local for
+ * automatic preload + size-adjust fallback metrics. NOT required — the variable
+ * fonts are already self-hosted and active through this file.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/* ── Aeonik Sans (UI + body copy) — variable, wght 100–900 ─────────────────── */
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("./Aeonik-VF.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("./Aeonik-VF-italic.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* ── Aeonik Fono (display / headings) — variable, wght 400–700 ─────────────── */
+
+@font-face {
+  font-family: "Aeonik Fono";
+  src: url("./AeonikFono-VF.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Aeonik Mono (code / eyebrows / metric labels) — variable, wght 400–500 ── */
+
+@font-face {
+  font-family: "Aeonik Mono";
+  src: url("./AeonikMono-VF.woff2") format("woff2");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}

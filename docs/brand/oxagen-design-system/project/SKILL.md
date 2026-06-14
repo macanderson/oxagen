@@ -1,0 +1,30 @@
+---
+name: oxagen-design
+description: Use this skill to generate well-branded interfaces and assets for Oxagen, either for production or throwaway prototypes/mocks/etc. Contains essential design guidelines, colors, type, fonts, assets, and UI kit components for prototyping. Oxagen gives AI agents secure, RBAC-scoped context from a typed Neo4j knowledge graph — jewel-tone, high-contrast, developer-focused, dark-first.
+user-invocable: true
+---
+
+Read the `readme.md` file within this skill, and explore the other available files.
+
+If creating visual artifacts (slides, mocks, throwaway prototypes, etc), copy
+assets out and create static HTML files for the user to view. If working on
+production code, you can copy assets and read the rules here to become an expert
+in designing with this brand.
+
+Quick start:
+- **Tokens & fonts** — link `styles.css` (it `@import`s everything: jewel-tone
+  color ramps, Aeonik fonts, type/spacing/motion, base + brand utilities).
+  `:root` is the dark "deep space" theme; add `class="light"` for the light theme.
+- **Brand** — Cyan `#7CE8F4` · Violet `#7C5AED` (primary) · Cosmos `#DF2A5D`,
+  over deep-indigo→cyan. Signature gradients: nebula / aurora / cosmos / sunset.
+  Type: Aeonik Fono (display), Aeonik (UI/body), Aeonik Mono (code/eyebrows/IDs).
+  Icons: **Lucide**, thin stroke, currentColor. No emoji. Sentence case.
+- **Components** — load the compiled `_ds_bundle.js`, then
+  `const { Button, Card, Badge, NodeChip, ConfidenceBar, OxagenLogo } = window.OxagenDesignSystem_2dfe15`.
+  See `components/*/*.prompt.md` for usage and `components/*/*.card.html` for live demos.
+- **Full product look** — see `ui_kits/app/index.html` (Login → Ask chat,
+  Knowledge graph, Access/RBAC). Reuse its `Shell.jsx` + `icons.jsx` patterns.
+
+If the user invokes this skill without any other guidance, ask them what they
+want to build or design, ask some questions, and act as an expert designer who
+outputs HTML artifacts *or* production code, depending on the need.

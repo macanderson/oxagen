@@ -1,0 +1,40 @@
+<!-- @dsCard group="Brand" viewport="1080x1920" name="PWA launch screen" subtitle="Home-screen app splash · centered mark + loading" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html, body { margin: 0; }
+  .splash { width: 1080px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 64px;
+    background:
+      radial-gradient(46% 30% at 50% 34%, color-mix(in oklch, #7c5aed 40%, transparent), transparent 66%),
+      radial-gradient(40% 26% at 22% 80%, color-mix(in oklch, #22e1ff 18%, transparent), transparent 66%),
+      radial-gradient(40% 26% at 80% 86%, color-mix(in oklch, #df2a5d 20%, transparent), transparent 66%),
+      #0b0a11; }
+  .dots { position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,.05) 1.6px, transparent 1.6px); background-size: 46px 46px; }
+  .lockup { position: relative; display: flex; flex-direction: column; align-items: center; gap: 40px; }
+  .wm { font-family: var(--font-display); font-weight: 500; font-size: 116px; letter-spacing: -.04em; color: #f4f6fb; }
+  .ring { animation: spin 2.4s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .dotsrow { position: absolute; bottom: 220px; display: flex; gap: 18px; }
+  .d { width: 16px; height: 16px; border-radius: 50%; background: #9b7bff; opacity: .35; animation: pulse 1.2s ease-in-out infinite; }
+  .d:nth-child(2) { animation-delay: .2s; }
+  .d:nth-child(3) { animation-delay: .4s; }
+  @keyframes pulse { 0%,100% { opacity: .25; transform: scale(.85);} 50% { opacity: 1; transform: scale(1);} }
+  .tag { position: absolute; bottom: 130px; font-family: var(--font-sans); font-size: 30px; color: #8b90a3; letter-spacing: .01em; }
+</style>
+</head>
+<body>
+  <div class="splash">
+    <div class="dots"></div>
+    <div class="lockup">
+      <svg class="ring" viewBox="0 0 100 100" width="280" height="280" fill="none"><defs><linearGradient id="g" x1="12" y1="12" x2="88" y2="88" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#7ce8f4"/><stop offset=".52" stop-color="#9b7bff"/><stop offset="1" stop-color="#df2a5d"/></linearGradient></defs><circle cx="50" cy="50" r="37" stroke="url(#g)" stroke-width="13"/></svg>
+      <span class="wm">Oxagen</span>
+    </div>
+    <div class="dotsrow"><span class="d"></span><span class="d"></span><span class="d"></span></div>
+    <div class="tag">Securing your context…</div>
+  </div>
+</body>
+</html>

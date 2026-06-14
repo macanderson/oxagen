@@ -1,0 +1,23 @@
+<!-- @dsCard group="Colors" viewport="700x140" name="Semantic status" subtitle="Info · Success · Warning · Danger" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 24px; }
+  .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .sw { border-radius: var(--radius-md); padding: 12px 14px; height: 64px; display: flex; flex-direction: column; justify-content: space-between; }
+  .nm { font-family: var(--font-display); font-size: 14px; font-weight: 500; }
+  .hx { font-family: var(--font-mono); font-size: 10.5px; opacity: .9; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw" style="background:var(--info);color:#fff"><div class="nm">Info</div><div class="hx">#2074D5</div></div>
+    <div class="sw" style="background:var(--success);color:#fff"><div class="nm">Success</div><div class="hx">#37A04D</div></div>
+    <div class="sw" style="background:var(--warning);color:#1f0a00"><div class="nm">Warning</div><div class="hx">#FF9900</div></div>
+    <div class="sw" style="background:var(--danger);color:#fff"><div class="nm">Danger</div><div class="hx">#E2320E</div></div>
+  </div>
+</body>
+</html>

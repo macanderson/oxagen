@@ -1,0 +1,27 @@
+<!-- @dsCard group="Spacing" viewport="700x150" name="Spacing scale" subtitle="4px base grid · 1 → 16" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 28px; }
+  .row { display: flex; align-items: flex-end; gap: 18px; }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .bar { width: 100%; background: var(--grad-aurora); border-radius: 3px; }
+  .v { font-family: var(--font-mono); font-size: 10px; color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="col" style="width:16px"><div class="bar" style="height:4px"></div><div class="v">1</div></div>
+    <div class="col" style="width:16px"><div class="bar" style="height:8px"></div><div class="v">2</div></div>
+    <div class="col" style="width:16px"><div class="bar" style="height:12px"></div><div class="v">3</div></div>
+    <div class="col" style="width:16px"><div class="bar" style="height:16px"></div><div class="v">4</div></div>
+    <div class="col" style="width:20px"><div class="bar" style="height:24px"></div><div class="v">6</div></div>
+    <div class="col" style="width:28px"><div class="bar" style="height:32px"></div><div class="v">8</div></div>
+    <div class="col" style="width:36px"><div class="bar" style="height:48px"></div><div class="v">12</div></div>
+    <div class="col" style="width:48px"><div class="bar" style="height:64px"></div><div class="v">16</div></div>
+  </div>
+</body>
+</html>

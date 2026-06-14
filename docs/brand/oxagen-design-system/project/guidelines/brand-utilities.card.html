@@ -1,0 +1,28 @@
+<!-- @dsCard group="Brand" viewport="700x180" name="Brand utilities" subtitle="Gradient text · gradient ring · mono eyebrow" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 28px; }
+  .grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items: center; }
+  h2 { font-family: var(--font-display); font-size: 30px; font-weight: 500; letter-spacing: -0.025em; margin: 8px 0 0; }
+  .ring { border-radius: var(--radius-xl); padding: 20px; background: var(--card); }
+  .ring h3 { font-family: var(--font-display); font-size: 16px; margin: 0 0 4px; }
+  .ring p { font-size: 13px; color: var(--muted-foreground); margin: 0; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div>
+      <div class="ox-eyebrow">Knowledge graph</div>
+      <h2>Context that <span class="ox-gradient-text">agents trust</span></h2>
+    </div>
+    <div class="ox-gradient-ring ring">
+      <h3>Gradient ring</h3>
+      <p>Hairline nebula border on any surface via <code style="font-size:12px">.ox-gradient-ring</code>.</p>
+    </div>
+  </div>
+</body>
+</html>

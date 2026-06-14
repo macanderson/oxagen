@@ -1,0 +1,76 @@
+<!-- @dsCard group="Components" viewport="700x460" name="Flows" subtitle="Stepper · OnboardingWizard — animated multi-step" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 24px; }
+  .lab { font-family: var(--font-sans); font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted-foreground); margin: 0 0 14px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12.5px; font-weight: 600; }
+  .opt { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; background: var(--background-2); }
+  .opt.sel { border-color: var(--ring); box-shadow: var(--glow-violet); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/framer-motion@11.18.2/dist/framer-motion.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel">
+const { OnboardingWizard, Input, Badge } = window.OxagenDesignSystem_2dfe15;
+function Demo() {
+  return (
+    <div style={{ maxWidth: 600 }}>
+      <div className="lab">Onboarding wizard</div>
+      <OnboardingWizard
+        initialData={{ source: "github" }}
+        steps={[
+          { label: "Organization", description: "Name & slug", render: ({ data, setData }) => (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 18 }}>Name your organization</h3>
+              <div className="field"><label>Organization name</label><Input defaultValue="Acme Robotics" onChange={(e) => setData({ org: e.target.value })} /></div>
+              <div className="field"><label>Workspace slug</label><Input defaultValue="acme" startIcon={<span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>@</span>} /></div>
+            </div>
+          )},
+          { label: "Connect source", description: "First knowledge source", render: ({ data, setData }) => (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 18 }}>Connect your first source</h3>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--muted-foreground)" }}>Oxagen builds your typed graph from a connected source.</p>
+              {["github", "okta", "notion"].map((s) => (
+                <div key={s} className={"opt" + (data.source === s ? " sel" : "")} onClick={() => setData({ source: s })}>
+                  <span style={{ width: 9, height: 9, borderRadius: "50%", background: data.source === s ? "var(--ox-violet-bright)" : "var(--border-strong)" }} />
+                  <span style={{ fontSize: 13.5, fontWeight: 500, textTransform: "capitalize" }}>{s}</span>
+                  {s === "github" && <Badge variant="cyan" style={{ marginLeft: "auto" }}>recommended</Badge>}
+                </div>
+              ))}
+            </div>
+          )},
+          { label: "Invite", description: "Add your team", render: () => (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 18 }}>Invite your team</h3>
+              <div className="field"><label>Email addresses</label><Input placeholder="dev@acme.dev, security@acme.dev" /></div>
+              <p style={{ margin: 0, fontSize: 12.5, color: "var(--muted-foreground)" }}>They'll join as Members with RBAC-scoped access. You can change roles later in Access.</p>
+            </div>
+          )},
+          { label: "Done", render: () => (
+            <div style={{ textAlign: "center", padding: "20px 0" }}>
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--grad-sunset)", display: "inline-flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", boxShadow: "var(--glow-violet)" }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              </div>
+              <h3 style={{ margin: 0, fontSize: 20 }}>You're all set</h3>
+              <p style={{ margin: "6px 0 0", fontSize: 13.5, color: "var(--muted-foreground)" }}>Your knowledge graph is building. Ask your first question.</p>
+            </div>
+          )},
+        ]}
+      />
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!-- @dsCard group="Components" viewport="700x540" name="Layout & Nav" subtitle="Panel · Collapse · Sidebar · MainNav" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 24px; }
+  .lab { font-family: var(--font-sans); font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted-foreground); margin: 0 0 12px; }
+  .sec { margin-bottom: 22px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/framer-motion@11.18.2/dist/framer-motion.js"></script>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel">
+const { Panel, Collapse, Sidebar, MainNav, Button, Badge, OxagenLogo } = window.OxagenDesignSystem_2dfe15;
+function I({ n, s = 16 }) {
+  const r = React.useRef(null);
+  React.useEffect(() => { if (r.current && window.lucide) { r.current.innerHTML = `<i data-lucide="${n}"></i>`; window.lucide.createIcons({ attrs: { width: s, height: s, "stroke-width": 1.9 } }); } });
+  return <span ref={r} style={{ display: "inline-flex" }} />;
+}
+function Demo() {
+  const [nav, setNav] = React.useState("ask");
+  const [top, setTop] = React.useState("product");
+  return (
+    <div>
+      <div className="sec">
+        <div className="lab">MainNav — horizontal</div>
+        <div style={{ borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--border)" }}>
+          <MainNav
+            brand={<OxagenLogo size={20} />}
+            items={[{ id: "product", label: "Product" }, { id: "graph", label: "Knowledge graph" }, { id: "docs", label: "Docs" }, { id: "pricing", label: "Pricing" }]}
+            active={top} onSelect={setTop}
+            actions={<><Button variant="ghost" size="sm">Sign in</Button><Button variant="gradient" size="sm">Get started</Button></>}
+          />
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 18, alignItems: "start" }}>
+        <div>
+          <div className="lab">Sidebar</div>
+          <div style={{ height: 300 }}>
+            <Sidebar
+              width={220}
+              active={nav} onSelect={setNav}
+              header={<div style={{ height: 48, display: "flex", alignItems: "center", padding: "0 14px" }}><OxagenLogo size={18} /></div>}
+              groups={[
+                { label: "Workspace", items: [
+                  { id: "ask", label: "Ask", icon: <I n="message-square" /> },
+                  { id: "knowledge", label: "Knowledge", icon: <I n="book-open" />, badge: 6 },
+                  { id: "activity", label: "Activity", icon: <I n="activity" /> },
+                ]},
+                { label: "Tools", items: [
+                  { id: "access", label: "Access", icon: <I n="key-round" /> },
+                  { id: "studio", label: "Studio", icon: <I n="sparkles" /> },
+                ]},
+              ]}
+            />
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="lab">Panel</div>
+          <Panel title="Connected sources" eyebrow="Knowledge" actions={<Button size="sm" variant="outline">Add source</Button>}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Badge variant="cyan" dot>GitHub</Badge>
+              <Badge variant="cyan" dot>Okta</Badge>
+              <Badge variant="cyan" dot>Notion</Badge>
+              <Badge variant="warning" dot>Slack · syncing</Badge>
+            </div>
+          </Panel>
+          <div className="lab" style={{ marginTop: 6 }}>Collapse</div>
+          <Collapse title="How is retrieval scoped?" subtitle="RBAC enforcement" icon={<I n="shield-check" />} defaultOpen>
+            Every query is filtered to the caller's read grants before the agent sees a single node. Edges you can't read simply don't exist from the agent's perspective.
+          </Collapse>
+          <Collapse title="What is an inferred edge?" icon={<I n="git-pull-request-arrow" />}>
+            A relationship the system proposes from a connected source, pending your approval with a confidence score.
+          </Collapse>
+        </div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script>
+</body>
+</html>
