@@ -126,3 +126,30 @@ CREATE TABLE IF NOT EXISTS tool_invocations (
 PARTITION BY toYYYYMM(created_at)
 ORDER BY (org_id, capability_name, created_at)
 TTL toDateTime(created_at) + INTERVAL 180 DAY;
+
+-- Typed agent model (docs/reference/agent-schema.ts §6). One row per
+-- AgentLogEntry — the append-only, info+ baseline traceability record for a
+-- run. DebugOptions raises verbosity (promoting debug-level entries into this
+-- stream); it does not toggle logging. Definition id/version and org/workspace
+-- are denormalized so logs are queryable in isolation without a join back to
+-- the Postgres definition. entry_data carries the type-specific payload as a
+-- JSON string (the SEAM left loosely typed in agent-schema.ts).
+CREATE TABLE IF NOT EXISTS agent_logs (
+  log_id String,
+  run_id String,
+  definition_id String,
+  definition_version String,
+  org_id String,
+  workspace_id String,
+  entry_id String,
+  entry_type LowCardinality(String),
+  entry_level LowCardinality(String),
+  entry_message String,
+  entry_data String,
+  entry_timestamp DateTime64(3),
+  created_at DateTime64(3) DEFAULT now64(3)
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(entry_timestamp)
+ORDER BY (org_id, workspace_id, run_id, entry_timestamp)
+-- Matches execution_logs' 90-day window: agent logs are raw run telemetry.
+TTL toDateTime(entry_timestamp) + INTERVAL 90 DAY;

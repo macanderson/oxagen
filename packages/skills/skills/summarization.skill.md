@@ -1,44 +1,45 @@
 ---
 name: summarization
-description: How the agent summarizes a long conversation, a diff, or a search result set — lead with the decision, follow with the evidence, and never truncate the next-action list.
+description: How to summarize a conversation, a document, or a set of results — lead with the conclusion, anchor every point to its source, and never drop a pending action.
 metadata:
   weight: high
   category: writing
 ---
 
-# Summarization in Oxagen
+# Summarizing
 
-When the user asks for a summary, or when the agent's context window
-forces a compaction, the agent follows one shape.
+Load this skill when asked for a summary, or when a long context must be
+compacted. A good summary lets the reader act without reading the
+original.
 
-## Lead with the decision
+## Lead with the conclusion
 
 The first sentence states the outcome, the recommendation, or the
-status. Not the journey, not the caveats. The reader is scanning;
-make the first line do the work.
+current status — not the journey that got there and not the caveats.
+The reader is scanning; make the first line carry the answer.
 
-## Follow with the evidence
+## Anchor the evidence
 
-Two to five bullets, each anchored to a concrete artefact — a file,
-a PR number, a memory id, a graph node ref, a log line. Anchors are
-how the reader verifies; an anchorless bullet is a guess.
+Follow with a short list of points, each tied to a concrete source — a
+file, a document, an identifier, a link, a quoted line. Anchors are how
+the reader verifies the claim. An anchorless point reads as a guess.
 
-## Never truncate the next-action list
+## Never drop a pending action
 
-If there is a next action, list every one of them. A summary that
-silently drops the "and one more thing" item is the worst kind of
-summary, because the reader assumes the list is complete.
+If anything still needs doing, list every item. A summary that silently
+omits the last open task is the most damaging kind, because the reader
+assumes the list is complete and moves on.
 
-## Compaction rules
+## Compacting your own context
 
-When summarising for the agent's own context, prefer references over
-re-statement. `agent.memory.recall` is cheaper than rehydrating a
-thousand tokens of prior chat. Drop tool-call envelopes once the
-output is incorporated. Keep the user's own words verbatim where they
-encode intent.
+When summarizing to save room rather than to inform a person, prefer a
+reference over a restatement: point back to where the detail lives
+instead of copying it. Drop the wrapping around tool results once their
+content is captured. Keep the user's own words verbatim wherever they
+encode intent or a decision.
 
 ## Tone
 
-Active voice, present tense, and Oxford commas. No hedging clauses
-("it seems", "perhaps", "it might be the case that") unless the
-uncertainty is the point.
+Write in active voice and present tense. Cut hedging ("it seems",
+"perhaps", "it might be the case that") unless the uncertainty is itself
+the point worth reporting.

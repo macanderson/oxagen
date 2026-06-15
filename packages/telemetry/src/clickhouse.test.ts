@@ -8,6 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { hashPrompt, providerFromModelId } from "./clickhouse";
 import type {
+  AgentLogRow,
   ApiKeyEventRow,
   AuditEventRow,
   EventRow,
@@ -391,6 +392,35 @@ describe("insert helpers — insertRows delegation", () => {
       values: [row],
       format: "JSONEachRow",
     });
+  });
+
+  it("insertAgentLogs delegates to agent_logs table", async () => {
+    const row: AgentLogRow = {
+      log_id: "log-1",
+      run_id: "run-1",
+      definition_id: "agt-1",
+      definition_version: "1",
+      org_id: "o1",
+      workspace_id: "w1",
+      entry_id: "entry-1",
+      entry_type: "tool_call",
+      entry_level: "info",
+      entry_message: "called tool",
+      entry_data: "{}",
+      entry_timestamp: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    };
+    await mod.insertAgentLogs([row]);
+    expect(insertMock).toHaveBeenCalledWith({
+      table: "agent_logs",
+      values: [row],
+      format: "JSONEachRow",
+    });
+  });
+
+  it("no-ops when rows array is empty (insertAgentLogs)", async () => {
+    await mod.insertAgentLogs([]);
+    expect(insertMock).not.toHaveBeenCalled();
   });
 
   it("insertAuditEvent delegates to audit_events table", async () => {

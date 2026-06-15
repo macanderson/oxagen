@@ -26,14 +26,59 @@ export const agents = agentSchema.table(
     activeVersionId: uuid("active_version_id"),
     // status: text + check per spec §6
     status: text("status").notNull().default("draft"),
+    // deploymentStatus is the deploy on/off toggle, distinct from the
+    // draft/active/archived authoring lifecycle in `status`.
+    deploymentStatus: text("deployment_status").notNull().default("inactive"),
   },
   (t) => ({
     workspaceSlugUniq: uniqueIndex("agents_workspace_slug_uniq")
       .on(t.workspaceId, t.slug)
       .where(sql`deleted_at IS NULL`),
     orgIdx: index("agents_org_idx").on(t.orgId, t.workspaceId),
+    deploymentStatusIdx: index("agents_deployment_status_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.deploymentStatus,
+    ),
     statusCheck: check("agents_status_check", sql`${t.status} IN ('draft', 'active', 'archived')`),
+    deploymentStatusCheck: check(
+      "agents_deployment_status_check",
+      sql`${t.deploymentStatus} IN ('inactive', 'active')`,
+    ),
     slugCheck: check("agents_slug_check", sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
+  }),
+);
+
+// Agent triggers: how a deployed agent is invoked — manual, scheduled (cron),
+// or by an external event. connectionId references a connected source
+// (app-enforced; no cross-schema FK per CLAUDE.md storage rules).
+export const agentTriggers = agentSchema.table(
+  "agent_triggers",
+  {
+    ...idMixin("atr"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...softDeleteMixin(),
+    agentId: uuid("agent_id").notNull().references(() => agents.id),
+    triggerType: text("trigger_type").notNull(),
+    // eventSource/eventType are null for manual/schedule triggers.
+    eventSource: text("event_source"),
+    eventType: text("event_type"),
+    connectionId: uuid("connection_id"),
+    // filter scopes event triggers, e.g. { branches: [...], pathGlobs: [...] }.
+    filter: jsonb("filter").notNull().default(sql`'{}'::jsonb`),
+    // schedule is a cron expression; null unless triggerType = 'schedule'.
+    schedule: text("schedule"),
+    enabled: boolean("enabled").notNull().default(false),
+  },
+  (t) => ({
+    agentIdx: index("agent_triggers_agent_idx").on(t.agentId),
+    orgIdx: index("agent_triggers_org_idx").on(t.orgId, t.workspaceId),
+    typeEnabledIdx: index("agent_triggers_type_enabled_idx").on(t.triggerType, t.enabled),
+    triggerTypeCheck: check(
+      "agent_triggers_trigger_type_check",
+      sql`${t.triggerType} IN ('manual', 'schedule', 'event')`,
+    ),
   }),
 );
 
@@ -235,11 +280,17 @@ export const agentExecutions = agentSchema.table(
     outputTokens: integer("output_tokens"),
     estimatedCostUsd: numeric("estimated_cost_usd", { precision: 10, scale: 6 }),
     syncedToGraphAt: timestamp("synced_to_graph_at", { withTimezone: true, mode: "date" }),
+    // AgentInstance shape (agent-schema.ts §4): self-reference for subagent/A2A
+    // lineage (app-enforced, no FK), per-run debug posture, live thread state.
+    parentExecutionId: uuid("parent_execution_id"),
+    debug: jsonb("debug").notNull().default(sql`'{}'::jsonb`),
+    state: jsonb("state").notNull().default(sql`'{}'::jsonb`),
   },
   (t) => ({
     orgStatusIdx: index("agent_executions_org_status_idx").on(t.orgId, t.workspaceId, t.status),
     originIdx: index("agent_executions_origin_idx").on(t.originType, t.originId),
     agentIdx: index("agent_executions_agent_idx").on(t.agentId),
+    parentExecutionIdx: index("agent_executions_parent_execution_idx").on(t.parentExecutionId),
     createdAtIdx: index("agent_executions_created_at_idx").on(t.createdAt),
     statusCheck: check("agent_executions_status_check", sql`${t.status} IN ('planning', 'running', 'completed', 'failed', 'cancelled')`),
   }),

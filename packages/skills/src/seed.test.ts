@@ -72,22 +72,28 @@ describe("seedSkillsFromFilesystem", () => {
     adapter = makeFakeAdapter(store);
   });
 
-  it("upserts all three built-in skills on first run", async () => {
+  it("upserts all built-in skills on first run", async () => {
     const result = await seedSkillsFromFilesystem(adapter, {
       fsRoot: SKILLS_FS_ROOT,
     });
 
-    expect(result.processed).toBe(3);
+    expect(result.processed).toBe(5);
 
     const slugs = [...store.skills.values()].map((r) => r.slug).sort();
-    expect(slugs).toEqual(["coding", "debugging", "summarization"]);
+    expect(slugs).toEqual([
+      "agent-builder",
+      "coding",
+      "debugging",
+      "skill-builder",
+      "summarization",
+    ]);
   });
 
   it("inserts one skill_version row per skill", async () => {
     await seedSkillsFromFilesystem(adapter, { fsRoot: SKILLS_FS_ROOT });
 
     // Each skill gets exactly one version (version_number=1).
-    expect(store.skillVersions.size).toBe(3);
+    expect(store.skillVersions.size).toBe(5);
     for (const v of store.skillVersions.values()) {
       expect(v.versionNumber).toBe(1);
     }
@@ -148,13 +154,13 @@ describe("seedSkillsFromFilesystem", () => {
     expect(store.skills.size).toBe(skillsAfterFirstRun);
     expect(store.skillVersions.size).toBe(versionsAfterFirstRun);
 
-    // The upsert methods were each called twice (once per run × 3 skills = 6
+    // The upsert methods were each called twice (once per run × 5 skills = 10
     // total for skills; adapter silently skips duplicates on the second pass).
-    expect(skillInserts).toBe(6);
-    expect(versionInserts).toBe(6);
+    expect(skillInserts).toBe(10);
+    expect(versionInserts).toBe(10);
   });
 
-  it("returns processed === 3 on both first and second runs", async () => {
+  it("returns the same processed count on both first and second runs", async () => {
     const first = await seedSkillsFromFilesystem(adapter, {
       fsRoot: SKILLS_FS_ROOT,
     });
@@ -162,8 +168,8 @@ describe("seedSkillsFromFilesystem", () => {
       fsRoot: SKILLS_FS_ROOT,
     });
 
-    expect(first.processed).toBe(3);
-    expect(second.processed).toBe(3);
+    expect(first.processed).toBe(5);
+    expect(second.processed).toBe(5);
   });
 
   it("skips a skill if findSkillId returns undefined", async () => {
@@ -182,8 +188,8 @@ describe("seedSkillsFromFilesystem", () => {
       fsRoot: SKILLS_FS_ROOT,
     });
 
-    // Still counts 3 files processed; just no versions were written.
-    expect(result.processed).toBe(3);
+    // Still counts every file processed; just no versions were written.
+    expect(result.processed).toBe(5);
     expect(brokenAdapter.upsertSkillVersion).not.toHaveBeenCalled();
   });
 });
