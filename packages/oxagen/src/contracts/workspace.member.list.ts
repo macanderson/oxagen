@@ -7,7 +7,7 @@ export const workspaceMemberList = registerCapability({
   description: "List members of a workspace",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp"],
+  layers: ["schema", "api", "mcp", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   sensitivity: "low",
