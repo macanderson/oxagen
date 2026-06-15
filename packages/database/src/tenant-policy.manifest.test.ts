@@ -127,9 +127,10 @@ describe("tenant policy manifest", () => {
     expect(unique.size).toBe(tables.length);
   });
 
-  it("covers exactly the 62 policied tables of the v0.4.x schema", () => {
+  it("covers exactly the 63 policied tables of the v0.4.x schema", () => {
     // Intentional ratchet: adding a tenant-owned table means updating BOTH the
     // manifest and this count (and regenerating the Atlas RLS migration).
-    expect(POLICY_MANIFEST.length).toBe(62);
+    // 63 = 62 baseline + agent.agent_triggers (typed agent model).
+    expect(POLICY_MANIFEST.length).toBe(63);
   });
 });

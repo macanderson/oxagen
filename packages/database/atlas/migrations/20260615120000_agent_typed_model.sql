@@ -63,3 +63,15 @@ ALTER TABLE "agent"."agent_executions"
   ADD COLUMN IF NOT EXISTS "state" jsonb NOT NULL DEFAULT '{}'::jsonb;
 CREATE INDEX IF NOT EXISTS "agent_executions_parent_execution_idx"
   ON "agent"."agent_executions" ("parent_execution_id");
+
+-- 4. Tenant RLS for agent_triggers (POLICY_MANIFEST: standard class). Matches
+--    tools/scripts/gen-rls-migration.ts output so the new org-scoped table is
+--    covered by integration/manifest-coverage.test.ts. oxagen_app picks up
+--    table privileges via the ALTER DEFAULT PRIVILEGES set in
+--    20260612052000_regrant_oxagen_app.sql.
+ALTER TABLE agent.agent_triggers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent.agent_triggers FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON agent.agent_triggers;
+CREATE POLICY tenant_isolation ON agent.agent_triggers
+  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
