@@ -89,13 +89,9 @@ test.describe("oxagen plugins marketplace — install + enable flow", () => {
       timeout: 5_000,
     });
 
-    // Tier badges: media-video is premium, the others are free.
-    await expect(
-      page.getByTestId("marketplace-tier-badge-oxagen/media-video"),
-    ).toHaveText("Premium");
-    await expect(
-      page.getByTestId("marketplace-tier-badge-oxagen/media-svg"),
-    ).toHaveText("Free");
+    // Tier is no longer surfaced on the marketplace cards (they show category
+    // badges instead); the tier badge now lives in the detail panel, asserted
+    // below via plugin-detail-tier-badge once the card is opened.
 
     // ── 6. Install oxagen/media-svg via the detail panel ───────────────────
     await page.getByTestId("marketplace-server-card-oxagen/media-svg").click();
