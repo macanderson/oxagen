@@ -21,7 +21,7 @@ test.describe("auth — unauthenticated guard", () => {
 
   test("signup page links back to login", async ({ page }) => {
     await page.goto("/signup");
-    await expect(page.getByRole("heading", { name: /create your account/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /create an account/i })).toBeVisible();
     await page.getByRole("link", { name: /sign in/i }).click();
     await expect(page).toHaveURL(/\/login$/);
   });

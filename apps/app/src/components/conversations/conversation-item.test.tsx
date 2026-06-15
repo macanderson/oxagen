@@ -118,8 +118,11 @@ describe("ConversationItem — rendering", () => {
 
   it("applies active class when isActive=true", () => {
     const { container } = render(<ConversationItem {...baseProps} isActive={true} />);
-    const wrapper = container.querySelector(".bg-accent");
+    // The active row is the outer wrapper div; isActive swaps in the highlight
+    // styling (glass background) instead of the transparent hover-only state.
+    const wrapper = container.firstElementChild as HTMLElement | null;
     expect(wrapper).toBeTruthy();
+    expect(wrapper!.className).toContain("bg-white/[0.08]");
   });
 });
 

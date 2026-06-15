@@ -258,6 +258,12 @@ describe("plugin.catalog.browse handler — catalog_server path (omitted pluginT
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listOxagenPlugins.mockReturnValue(fakeManifests);
+    // When the catalog looks empty (count < 5, no search/pluginType) the handler
+    // fires a SECOND, fire-and-forget withSystemDb call to kick a background
+    // registry sync. Each test below mocks the FIRST call via mockImplementationOnce
+    // (the main rows+count query); this persistent fallback resolves the
+    // background-sync call to a no-op so its `.catch` has a promise to attach to.
+    mocks.withSystemDb.mockImplementation(async () => undefined);
   });
 
   /**
