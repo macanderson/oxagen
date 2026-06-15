@@ -16,6 +16,16 @@ import type { OrgScopeResolution } from "@oxagen/auth";
 export type { ApiKeyResolution, WorkspaceScopeResolution, OrgScopeResolution };
 
 /**
+ * Canonical test tenant IDs. These MUST be valid UUIDs: runInTenantScope()
+ * fail-closes with a TenantScopeError on non-UUID org/workspace ids
+ * (packages/tenancy assertUuid), and production tenant ids are always UUIDs.
+ * Any route that enters a tenant scope (e.g. github-oauth /installations,
+ * chat.stream) would otherwise 500 in tests with placeholder string ids.
+ */
+export const TEST_ORG_ID = "11111111-1111-1111-1111-111111111111";
+export const TEST_WORKSPACE_ID = "22222222-2222-2222-2222-222222222222";
+
+/**
  * Build a WHATWG Request pointing at http://localhost.
  * Accepts a path (must start with `/`) and standard RequestInit options.
  */
@@ -43,8 +53,8 @@ export function makeApiKeyOk(
   return {
     ok: true,
     apiKeyId: overrides?.apiKeyId ?? "key-id-test",
-    orgId: overrides?.orgId ?? "org-id-test",
-    workspaceId: overrides?.workspaceId ?? "ws-id-test",
+    orgId: overrides?.orgId ?? TEST_ORG_ID,
+    workspaceId: overrides?.workspaceId ?? TEST_WORKSPACE_ID,
   };
 }
 
@@ -69,7 +79,7 @@ export function makeSessionValid(userId = "user-id-test"): { userId: string } {
 }
 
 /** Successful org scope resolution. */
-export function makeOrgScopeOk(orgId = "org-id-test"): OrgScopeResolution {
+export function makeOrgScopeOk(orgId = TEST_ORG_ID): OrgScopeResolution {
   return { ok: true, orgId };
 }
 
@@ -79,7 +89,7 @@ export function makeOrgNotFound(): OrgScopeResolution {
 }
 
 /** Successful workspace scope resolution. */
-export function makeWorkspaceScopeOk(workspaceId = "ws-id-test"): WorkspaceScopeResolution {
+export function makeWorkspaceScopeOk(workspaceId = TEST_WORKSPACE_ID): WorkspaceScopeResolution {
   return { ok: true, workspaceId };
 }
 

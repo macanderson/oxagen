@@ -69,10 +69,17 @@ vi.mock("@oxagen/auth", () => ({
   resolveWorkspaceScope: mocks.resolveWorkspaceScope,
 }));
 
-vi.mock("@oxagen/oxagen/kernel", () => ({
-  invoke: vi.fn(),
-  clearHandlersForTests: vi.fn(),
-}));
+vi.mock("@oxagen/oxagen/kernel", async (importOriginal) => {
+  // Partial mock: stub invoke/clearHandlersForTests but KEEP real exports such
+  // as CapabilityError — error.ts does `err instanceof CapabilityError`, which
+  // throws if the class is missing from the mock.
+  const real = await importOriginal<typeof import("@oxagen/oxagen/kernel")>();
+  return {
+    ...real,
+    invoke: vi.fn(),
+    clearHandlersForTests: vi.fn(),
+  };
+});
 
 vi.mock("@oxagen/billing", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/billing")>();
