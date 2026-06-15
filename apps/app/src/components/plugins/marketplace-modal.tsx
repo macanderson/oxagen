@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PluginDetailPanel } from "./plugin-detail-panel";
+import { useToast } from "@/components/ui/toast";
 import { Search, Package, Plug, FileText, ShoppingBag, Boxes } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -85,9 +86,12 @@ export function MarketplaceModal({
   installAction,
   installBulkAction,
 }: MarketplaceModalProps) {
+  const toast = useToast();
   const [activeTab, setActiveTab] = React.useState<PluginTypeValue>("mcp_server");
   const [search, setSearch] = React.useState("");
   const [authFilter, setAuthFilter] = React.useState<"" | "oauth" | "secret" | "none">("");
+  // Installed filter: "" = all, "yes" = installed only, "no" = not installed only.
+  const [installedFilter, setInstalledFilter] = React.useState<"" | "yes" | "no">("");
   const [servers, setServers] = React.useState<CatalogServer[]>([]);
   const [total, setTotal] = React.useState(0);
   const [nextOffset, setNextOffset] = React.useState<number | null>(null);
@@ -110,6 +114,8 @@ export function MarketplaceModal({
         });
         if (search.trim()) params.set("search", search.trim());
         if (authFilter) params.set("authKind", authFilter);
+        if (installedFilter === "yes") params.set("installed", "true");
+        else if (installedFilter === "no") params.set("installed", "false");
         if (orgId) params.set("orgId", orgId);
         if (workspaceId) params.set("workspaceId", workspaceId);
         const res = await fetch(`/api/v1/plugin/catalog/browse?${params.toString()}`);
@@ -128,7 +134,7 @@ export function MarketplaceModal({
         setLoading(false);
       }
     },
-    [activeTab, search, authFilter],
+    [activeTab, search, authFilter, installedFilter, orgId, workspaceId],
   );
 
   // Re-fetch when the modal opens or filters change.
@@ -142,7 +148,7 @@ export function MarketplaceModal({
       void fetchServers(0, true);
     }, 0);
     return () => clearTimeout(t);
-  }, [open, activeTab, authFilter, fetchServers]);
+  }, [open, activeTab, authFilter, installedFilter, fetchServers]);
 
   // Debounce search input
   const searchTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -177,10 +183,25 @@ export function MarketplaceModal({
       });
       if (!result.ok) {
         setError(result.error ?? "Bulk install failed");
+        toast.add({
+          title: "Install failed",
+          description: result.error ?? "Some plugins could not be installed.",
+          type: "error",
+        });
         return;
       }
+      const count = selected.size;
       setSelected(new Set());
+      toast.add({
+        title: count === 1 ? "Plugin installed" : `${count} plugins installed`,
+        description: "You can use it now.",
+        type: "success",
+      });
       onOpenChange(false);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Bulk install failed";
+      setError(message);
+      toast.add({ title: "Install failed", description: message, type: "error" });
     } finally {
       setBulkPending(false);
     }
@@ -249,6 +270,33 @@ export function MarketplaceModal({
                   {k === "" ? "All" : k}
                 </button>
               ))}
+
+              {/* Installed filter chips — applies to every tab */}
+              {activeTab !== "capability" && (
+                <span className="mx-1 h-4 w-px bg-border/60" aria-hidden="true" />
+              )}
+              {(
+                [
+                  ["", "All"],
+                  ["yes", "Installed"],
+                  ["no", "Not installed"],
+                ] as const
+              ).map(([k, label]) => (
+                <button
+                  key={`installed-${k || "all"}`}
+                  type="button"
+                  onClick={() => setInstalledFilter(k)}
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                    installedFilter === k
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border/60 text-muted-foreground hover:border-foreground/40"
+                  }`}
+                  data-testid={`marketplace-filter-installed-${k || "all"}`}
+                >
+                  {label}
+                </button>
+              ))}
+
               <div className="relative ml-auto">
                 <Search
                   className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground"

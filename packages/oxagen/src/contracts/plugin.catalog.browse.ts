@@ -19,6 +19,11 @@ export const pluginCatalogBrowse = registerCapability({
     categories: z.array(z.string()).optional(),
     transportTypes: z.array(z.string()).optional(),
     authKind: z.enum(["oauth", "secret", "none"]).optional(),
+    // Filter by install status within the org (+ optional workspace) scope:
+    //   true  ⇒ only plugins already installed
+    //   false ⇒ only plugins not yet installed
+    //   omit  ⇒ all plugins (installed flag still returned per entry)
+    installed: z.boolean().optional(),
     limit: z.number().int().min(1).max(100).default(30),
     offset: z.number().int().min(0).default(0),
     workspaceId: z.string().optional(),

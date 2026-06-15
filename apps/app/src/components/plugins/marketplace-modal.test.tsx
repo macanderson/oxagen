@@ -63,6 +63,12 @@ vi.mock("./plugin-detail-panel", () => ({
   ),
 }));
 
+// useToast requires a <Toast.Provider> ancestor at runtime; mock it so the modal
+// can be unit-tested in isolation.
+vi.mock("@/components/ui/toast", () => ({
+  useToast: () => ({ add: vi.fn() }),
+}));
+
 afterEach(cleanup);
 
 const installAction = vi.fn().mockResolvedValue({ ok: true, orgListingId: "listing-1" });
