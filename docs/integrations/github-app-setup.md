@@ -256,7 +256,11 @@ and drive the pause-on-uninstall reconciliation.
 All GitHub connector variables live in the **`api`** service (read in `apps/api`). Schema:
 `packages/config/src/env.ts:38-45`; registry: `packages/config/src/registry.ts:315-351`.
 
-| Variable | Secret | Required where | Dev value (`.env.local`) | Prod value (`oxagen-v2-api` on Vercel) |
+> ⚠️ **Local dev: put these in `apps/api/.env.local`, not the repo-root `.env.local`.** `apps/api`
+> loads its env via `tsx --env-file`, which is CWD-relative — `GITHUB_APP_*` placed only in the root
+> `.env.local` silently no-op and the connector returns 503. (This exact gap bit the connector once.)
+
+| Variable | Secret | Required where | Dev value (`apps/api/.env.local`) | Prod value (`oxagen-v2-api` on Vercel) |
 | --- | --- | --- | --- | --- |
 | `GITHUB_APP_CLIENT_ID` | no | api | Dev App → Client ID | Prod App → Client ID |
 | `GITHUB_APP_CLIENT_SECRET` | yes | api | Dev App → generated client secret | Prod App → generated client secret |
