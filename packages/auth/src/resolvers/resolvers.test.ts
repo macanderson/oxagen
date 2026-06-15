@@ -177,6 +177,46 @@ describe("parseSessionCookie", () => {
     const header = `better-auth.session_token=${signed}`;
     expect(parseSessionCookie(header)).toBeNull();
   });
+
+  // ---------------------------------------------------------------------------
+  // Production secure-cookie prefix.
+  //
+  // In production Better Auth sets `advanced.useSecureCookies = true`, which
+  // prepends the `__Secure-` prefix to EVERY cookie name — so the real session
+  // cookie on https is `__Secure-oxagen.session_token`, NOT the bare name. The
+  // parser must accept the prefixed name or every client→API call 401s with
+  // "Missing credentials" in production while passing in dev/E2E (http, no
+  // prefix). This is the prod-only failure behind the GitHub-connection and
+  // conversation-files-drawer 401s.
+  // ---------------------------------------------------------------------------
+  it("matches the production __Secure- prefixed cookie name", () => {
+    const rawToken = "prod_secure_tok";
+    const signed = makeSignedCookieValue(rawToken);
+    const header = `__Secure-oxagen.session_token=${encodeURIComponent(signed)}`;
+    expect(parseSessionCookie(header)).toBe(rawToken);
+  });
+
+  it("matches the __Host- prefixed cookie name", () => {
+    const rawToken = "host_tok";
+    const signed = makeSignedCookieValue(rawToken);
+    const header = `__Host-oxagen.session_token=${signed}`;
+    expect(parseSessionCookie(header)).toBe(rawToken);
+  });
+
+  it("finds the __Secure- cookie among other cookies in the header", () => {
+    const rawToken = "tok_amid_others";
+    const signed = makeSignedCookieValue(rawToken);
+    const header = `theme=dark; __Secure-oxagen.session_token=${signed}; other=1`;
+    expect(parseSessionCookie(header)).toBe(rawToken);
+  });
+
+  it("does NOT match a __Secure- prefix on the OLD default cookie name", () => {
+    // Defense in depth: prefixing the wrong base name must still miss.
+    const rawToken = "abc123";
+    const signed = makeSignedCookieValue(rawToken);
+    const header = `__Secure-better-auth.session_token=${signed}`;
+    expect(parseSessionCookie(header)).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

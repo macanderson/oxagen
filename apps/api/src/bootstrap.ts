@@ -14,14 +14,35 @@ import { recordSecurityEvent } from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
 
-let booted = false;
+let bootPromise: Promise<void> | null = null;
 
 /**
  * One-time process bootstrap shared by both entrypoints — the standalone Node
  * server (`src/index.ts`, local dev via tsx) and the Vercel serverless function
- * (`api/index.ts`). Idempotent: safe to call on every cold start / hot reload.
+ * (`api/index.ts`).
  *
- * Order matters:
+ * Memoized: the first caller kicks off the work and every concurrent or later
+ * caller awaits the SAME promise (so the wiring runs exactly once per process).
+ * On FAILURE the memo is cleared so a subsequent call retries — a transient
+ * cold-start failure (e.g. the DB briefly unreachable during
+ * assertRlsConnectionSafe) must not permanently wedge a serverless instance.
+ * Callers MUST await the returned promise and handle rejection (the Vercel
+ * entrypoint returns a 503; the standalone server fails fast on boot).
+ */
+export function bootstrap(): Promise<void> {
+  if (!bootPromise) {
+    bootPromise = runBootstrap().catch((err: unknown) => {
+      // Clear the memo so the next call re-attempts rather than caching the
+      // rejection forever; rethrow so this caller still sees the failure.
+      bootPromise = null;
+      throw err;
+    });
+  }
+  return bootPromise;
+}
+
+/**
+ * The actual bootstrap work. Order matters:
  *  1. env validates first — any missing required key throws before a request is
  *     served (fail-closed per spec §11).
  *  2. assertRlsConnectionSafe — refuse to boot if TENANT_RLS_ENFORCEMENT_ENABLED=true
@@ -31,10 +52,7 @@ let booted = false;
  *  4. register the Postgres security-event emitter (SOC2 CC6/CC7 audit trail);
  *     the kernel calls it fire-and-forget after every capability invocation.
  */
-export async function bootstrap(): Promise<void> {
-  if (booted) return;
-  booted = true;
-
+async function runBootstrap(): Promise<void> {
   loadEnv();
 
   // Refuse to boot if the DB role silently bypasses RLS while enforcement is on.
@@ -75,7 +93,7 @@ export async function bootstrap(): Promise<void> {
   });
 }
 
-// Internal: reset booted state for testing. Not exported in production.
+// Internal: reset memoized boot state for testing. Not used in production.
 export function __resetBootForTesting(): void {
-  booted = false;
+  bootPromise = null;
 }

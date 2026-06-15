@@ -123,3 +123,41 @@ describe("bootstrap() idempotency", () => {
     expect(result).toBeUndefined();
   });
 });
+
+describe("bootstrap() retry on transient failure", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetBootForTesting();
+  });
+
+  it("clears the memo on failure so a later call retries and recovers", async () => {
+    // A transient cold-start failure (e.g. DB briefly unreachable during
+    // assertRlsConnectionSafe) must NOT permanently wedge the instance.
+    mocks.assertRlsConnectionSafe.mockRejectedValueOnce(new Error("db unreachable"));
+
+    await expect(bootstrap()).rejects.toThrow("db unreachable");
+    // Failed at step 2 (assertRls) → later wiring steps never ran.
+    expect(mocks.assertRlsConnectionSafe).toHaveBeenCalledTimes(1);
+    expect(mocks.bootstrapIAMRuntime).not.toHaveBeenCalled();
+
+    // Recover: the memo was cleared, so the next call re-attempts and succeeds
+    // (the one-time reject is consumed; the default resolves).
+    await expect(bootstrap()).resolves.toBeUndefined();
+    expect(mocks.assertRlsConnectionSafe).toHaveBeenCalledTimes(2);
+    expect(mocks.bootstrapIAMRuntime).toHaveBeenCalledTimes(1);
+    expect(mocks.setSecurityEventEmitter).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed bootstrap rejects every concurrent caller, then a fresh call recovers", async () => {
+    mocks.assertRlsConnectionSafe.mockRejectedValueOnce(new Error("boot blip"));
+
+    const [a, b] = await Promise.allSettled([bootstrap(), bootstrap()]);
+    expect(a.status).toBe("rejected");
+    expect(b.status).toBe("rejected");
+    // Both shared the SAME in-flight promise — init attempted once.
+    expect(mocks.assertRlsConnectionSafe).toHaveBeenCalledTimes(1);
+
+    await expect(bootstrap()).resolves.toBeUndefined();
+    expect(mocks.assertRlsConnectionSafe).toHaveBeenCalledTimes(2);
+  });
+});

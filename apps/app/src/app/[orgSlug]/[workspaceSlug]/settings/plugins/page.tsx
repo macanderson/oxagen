@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
-import { WorkspacePluginsPanel, type InstalledPlugin } from "./workspace-plugins-panel";
+import { WorkspacePluginsPanel } from "./workspace-plugins-panel";
+import { shapeInstalledPlugins } from "./plugin-shape";
 import { installPlugin, installBulkPlugin, togglePlugin, uninstallPlugin } from "./plugin-actions";
 
 export const metadata: Metadata = {
@@ -27,7 +28,10 @@ export default async function WorkspacePluginsPage({ params }: PageProps) {
   const ws = await resolveWorkspace(org.id, workspaceSlug);
   await assertOrgMember(org.id, session.user.id);
 
-  // Fetch the org allow-list (plugins available to this workspace)
+  // Fetch the org allow-list (all non-deleted listings for this org). We
+  // intentionally do NOT filter by `enabled` here: capability packs are shown
+  // even when org-disabled so the workspace toggle can re-enable them. The
+  // per-plugin-type visibility/enabled rules live in shapeInstalledPlugins().
   const orgListings = await runInTenantScope(
     { orgId: org.id, workspaceId: ORG_ONLY_WS },
     () =>
@@ -38,7 +42,7 @@ export default async function WorkspacePluginsPage({ params }: PageProps) {
           .where(
             and(
               eq(schema.pluginOrgListings.orgId, org.id),
-              eq(schema.pluginOrgListings.enabled, true),
+              isNull(schema.pluginOrgListings.deletedAt),
             ),
           )
           .orderBy(schema.pluginOrgListings.name),
@@ -57,29 +61,10 @@ export default async function WorkspacePluginsPage({ params }: PageProps) {
       ),
   ).catch(() => [] as (typeof schema.mcpServers.$inferSelect)[]);
 
-  // Build a map: orgListingId → workspace install row
-  const wsInstallMap: Record<string, (typeof wsInstalls)[number]> = {};
-  for (const row of wsInstalls) {
-    if (row.orgListingId) wsInstallMap[row.orgListingId] = row;
-  }
-
-  // Shape into InstalledPlugin (org allow-list items that have a ws install row)
-  const initialPlugins: InstalledPlugin[] = orgListings
-    .filter((listing) => wsInstallMap[listing.id] !== undefined)
-    .map((listing) => {
-      const wsRow = wsInstallMap[listing.id];
-      return {
-        id: listing.id,
-        name: listing.name,
-        title: listing.title,
-        description: listing.description,
-        iconUrl: listing.iconUrl,
-        pluginType: listing.pluginType,
-        authKind: listing.authKind,
-        enabled: listing.enabled,
-        wsEnabled: wsRow?.enabled ?? false,
-      };
-    });
+  // Shape into InstalledPlugin. Capability packs (org-level) show from the org
+  // listing alone; MCP servers / integrations / content tools require a
+  // workspace install row. See shapeInstalledPlugins() for the full rules.
+  const initialPlugins = shapeInstalledPlugins(orgListings, wsInstalls);
 
   return (
     <WorkspacePluginsPanel

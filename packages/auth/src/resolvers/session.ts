@@ -32,6 +32,27 @@ export interface SessionResult {
 export const SESSION_COOKIE_NAME = "oxagen.session_token" as const;
 
 /**
+ * Cookie-name prefixes Better Auth prepends in production.
+ *
+ * When `advanced.useSecureCookies` is true (auth.ts sets this for
+ * NODE_ENV === "production"), Better Auth renames EVERY cookie with the
+ * `__Secure-` prefix — so the real session cookie served over https is
+ * `__Secure-oxagen.session_token`, NOT the bare `oxagen.session_token` used in
+ * dev/E2E (http, no prefix). `__Host-` is included for forward-compat in case
+ * the cookie config tightens to host-locked cookies. The parser must accept
+ * the prefixed name or EVERY browser→API call 401s with "Missing credentials"
+ * in production while passing locally — the prod-only failure behind the
+ * GitHub-connection and conversation-files-drawer 401s.
+ *
+ * Order matters only for readability; each candidate is an exact-match check.
+ */
+const SESSION_COOKIE_NAMES = [
+  SESSION_COOKIE_NAME,
+  `__Secure-${SESSION_COOKIE_NAME}`,
+  `__Host-${SESSION_COOKIE_NAME}`,
+] as const;
+
+/**
  * Expected length of Better Auth's session-cookie HMAC signature suffix.
  *
  * better-call signs cookies as `${token}.${signature}`, where the signature is
@@ -133,7 +154,7 @@ export function parseSessionCookie(cookieHeader: string | undefined): string | n
     if (eqIdx < 0) continue;
     const key = part.slice(0, eqIdx).trim();
     const val = part.slice(eqIdx + 1).trim();
-    if (key === SESSION_COOKIE_NAME && val) {
+    if (val && (SESSION_COOKIE_NAMES as readonly string[]).includes(key)) {
       return stripCookieSignature(decodeURIComponent(val));
     }
   }

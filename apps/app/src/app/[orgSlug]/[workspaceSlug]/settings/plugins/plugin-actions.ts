@@ -64,6 +64,33 @@ async function resolveAndAuthWorkspace(orgSlug: string, workspaceSlug: string) {
   return { session, org, ws, canManage };
 }
 
+/**
+ * Resolve a listing's plugin_type so toggle/uninstall can route to the correct
+ * contract. Capability packs are org-scoped (Phase 1): they have no per-workspace
+ * mcp_servers row and `plugin.workspace.set_enabled` THROWS for them — they must
+ * go through the org-level `plugin.org.*` contracts instead.
+ */
+async function getListingPluginType(
+  orgId: string,
+  orgListingId: string,
+): Promise<string | null> {
+  const rows = await runInTenantScope({ orgId, workspaceId: ORG_ONLY_WS }, () =>
+    withTenantDb((tx) =>
+      tx
+        .select({ pluginType: schema.pluginOrgListings.pluginType })
+        .from(schema.pluginOrgListings)
+        .where(
+          and(
+            eq(schema.pluginOrgListings.id, orgListingId),
+            eq(schema.pluginOrgListings.orgId, orgId),
+          ),
+        )
+        .limit(1),
+    ),
+  ).catch(() => [] as { pluginType: string }[]);
+  return rows[0]?.pluginType ?? null;
+}
+
 // ── installPlugin ─────────────────────────────────────────────────────────────
 //
 // Matches the shape MarketplaceModal expects for installAction.
@@ -231,17 +258,25 @@ export async function togglePlugin(
   const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
   if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
 
-  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
+  const pluginType = await getListingPluginType(org.id, orgListingId);
 
   try {
-    await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-      invoke(
-        "plugin.workspace.set_enabled",
-        { orgListingId, enabled },
-        ctx,
-        { surface: "agent" },
-      ),
-    );
+    if (pluginType === "capability") {
+      // Capability packs are org-scoped (Phase 1) — toggle the org listing.
+      // plugin.workspace.set_enabled throws for capability type.
+      const orgCtx = buildCtx({ orgId: org.id, workspaceId: ORG_ONLY_WS, userId: session.user.id });
+      await invoke("plugin.org.set_enabled", { orgListingId, enabled }, orgCtx, {
+        surface: "agent",
+      });
+    } else {
+      // Workspace-level plugins — toggle the per-workspace install row.
+      const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
+      await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+        invoke("plugin.workspace.set_enabled", { orgListingId, enabled }, ctx, {
+          surface: "agent",
+        }),
+      );
+    }
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(workspace.settings.plugins(routeCtx));
     return { ok: true };
@@ -274,17 +309,24 @@ export async function uninstallPlugin(
   const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
   if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
 
-  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
+  const pluginType = await getListingPluginType(org.id, orgListingId);
 
   try {
-    await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-      invoke(
-        "plugin.workspace.set_enabled",
-        { orgListingId, enabled: false },
-        ctx,
-        { surface: "agent" },
-      ),
-    );
+    if (pluginType === "capability") {
+      // Capability packs are org-scoped — remove from the org allow-list
+      // (soft-delete + drop dependent workspace installs). There is no
+      // workspace-only disable path for capabilities in Phase 1.
+      const orgCtx = buildCtx({ orgId: org.id, workspaceId: ORG_ONLY_WS, userId: session.user.id });
+      await invoke("plugin.org.uninstall", { orgListingId }, orgCtx, { surface: "agent" });
+    } else {
+      // Workspace-level uninstall = disable the listing for this workspace only.
+      const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
+      await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+        invoke("plugin.workspace.set_enabled", { orgListingId, enabled: false }, ctx, {
+          surface: "agent",
+        }),
+      );
+    }
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(workspace.settings.plugins(routeCtx));
     return { ok: true };
