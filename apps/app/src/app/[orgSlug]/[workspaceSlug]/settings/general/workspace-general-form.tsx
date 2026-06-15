@@ -4,9 +4,10 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useRegisterFillableForm, useRegisterPageEntity } from "@/lib/page-context";
 import type { FillableFormSpec, FieldDescriptor } from "@/lib/ask/fill-types";
-import { cn } from "@/lib/utils";
 import { slugify } from "@/lib/slug";
 import { updateWorkspaceGeneralAction } from "./actions";
 
@@ -201,7 +202,7 @@ export function WorkspaceGeneralForm({
               *
             </span>
           </label>
-          <input
+          <Input
             id="ws-name"
             name="name"
             type="text"
@@ -211,12 +212,6 @@ export function WorkspaceGeneralForm({
             onChange={(e) => handleChange("name", e.target.value)}
             onFocus={handleNameFocus}
             placeholder="Production"
-            className={cn(
-              "h-10 w-full rounded-xl border border-border/70 bg-background px-3 py-2",
-              "text-sm text-foreground placeholder:text-muted-foreground",
-              "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              "disabled:cursor-not-allowed disabled:opacity-50",
-            )}
           />
           <p className="text-xs text-muted-foreground">
             Visible to all workspace members.
@@ -234,7 +229,7 @@ export function WorkspaceGeneralForm({
               *
             </span>
           </label>
-          <input
+          <Input
             id="ws-slug"
             name="slug"
             type="text"
@@ -246,12 +241,7 @@ export function WorkspaceGeneralForm({
             value={values.slug}
             onChange={(e) => handleSlugChange(e.target.value)}
             placeholder="production"
-            className={cn(
-              "h-10 w-full rounded-xl border border-border/70 bg-background px-3 py-2",
-              "font-mono text-sm text-foreground placeholder:text-muted-foreground",
-              "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              "disabled:cursor-not-allowed disabled:opacity-50",
-            )}
+            className="font-mono"
           />
           <p className="text-xs text-muted-foreground">
             Used in this workspace&rsquo;s URL. Lowercase letters, numbers, and
@@ -267,7 +257,7 @@ export function WorkspaceGeneralForm({
           >
             Description
           </label>
-          <textarea
+          <Textarea
             id="ws-description"
             name="description"
             rows={3}
@@ -275,12 +265,7 @@ export function WorkspaceGeneralForm({
             value={values.description}
             onChange={(e) => handleChange("description", e.target.value)}
             placeholder="What this workspace is for…"
-            className={cn(
-              "w-full resize-none rounded-xl border border-border/70 bg-background px-3 py-2.5",
-              "text-sm text-foreground placeholder:text-muted-foreground",
-              "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              "disabled:cursor-not-allowed disabled:opacity-50",
-            )}
+            className="resize-none"
           />
           <p className="text-xs text-muted-foreground">
             Displayed in the workspace switcher and surfaced to the Ask system.

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { ArrowRight, CheckCircle2, XCircle, RefreshCw, Bot, Clock } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import type { SemanticEdge } from "@oxagen/oxagen/contracts/semantic.edge.list";
 
 // ── Display helpers ────────────────────────────────────────────────────────────
@@ -217,14 +218,14 @@ export function InferenceApprovalModal({
             >
               Comment (optional)
             </label>
-            <textarea
+            <Textarea
               id="review-comment"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Add a note for the audit trail…"
               rows={2}
               maxLength={1000}
-              className="w-full resize-none rounded-md border border-border/60 bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="resize-none"
               disabled={processing}
             />
           </div>
