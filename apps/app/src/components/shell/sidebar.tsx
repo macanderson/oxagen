@@ -155,6 +155,8 @@ export function Sidebar({ ctx, user }: SidebarProps) {
           without requiring a page navigation to org settings → plugins. */}
       <MarketplaceModal
         orgSlug={effectiveCtx.orgSlug}
+        workspaceSlug={effectiveCtx.workspaceSlug ?? ""}
+        workspaceId=""
         open={marketplaceOpen}
         onOpenChange={setMarketplaceOpen}
         installAction={installPluginAction}

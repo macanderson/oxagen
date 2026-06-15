@@ -1,11 +1,12 @@
-import { and, desc, eq, ilike, arrayOverlaps, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, arrayOverlaps, isNull, or, sql } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { listOxagenPlugins } from "@oxagen/oxagen/plugins";
+import { syncRegistry, createSystemSyncPersistence } from "@oxagen/plugins/registry";
 import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
-  const { search, pluginType, categories, transportTypes, authKind, limit, offset } = input as {
+  const { search, pluginType, categories, transportTypes, authKind, limit, offset, workspaceId } = input as {
     search?: string;
     pluginType?: "mcp_server" | "integration" | "content_tool" | "capability";
     categories?: string[];
@@ -13,6 +14,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     authKind?: string;
     limit: number;
     offset: number;
+    workspaceId?: string;
   };
 
   // ── Capability path ──────────────────────────────────────────────────────────
@@ -42,8 +44,15 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     // browse is also served without org context (apps/app global catalog
     // route passes orgId "") — comparing a uuid column to "" throws, so an
     // org-less browse simply reports nothing as installed.
+    // When workspaceId is provided, include both workspace-scoped and org-level (NULL workspace_id) rows.
     const installedNames = await withSystemDb(async (tx) => {
       if (page.length === 0 || !ctx.orgId) return new Set<string>();
+      const wsCond = workspaceId
+        ? or(
+            eq(schema.pluginOrgListings.workspaceId, workspaceId),
+            isNull(schema.pluginOrgListings.workspaceId),
+          )
+        : isNull(schema.pluginOrgListings.workspaceId);
       const rows = await tx
         .select({ name: schema.pluginOrgListings.name })
         .from(schema.pluginOrgListings)
@@ -52,6 +61,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
             eq(schema.pluginOrgListings.orgId, ctx.orgId),
             eq(schema.pluginOrgListings.pluginType, "capability"),
             isNull(schema.pluginOrgListings.deletedAt),
+            wsCond,
           ),
         );
       return new Set(rows.map((r) => r.name));
@@ -120,6 +130,52 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         .where(where);
       const countRow = countRows[0];
       const count = countRow?.count ?? 0;
+
+      // Fire-and-forget background sync when the catalog appears empty.
+      // Returns immediately; the sync runs asynchronously.
+      if (count < 5 && !search && !pluginType) {
+        withSystemDb(async (syncTx) => {
+          const [regRow] = await syncTx
+            .select({ id: schema.mcpRegistries.id })
+            .from(schema.mcpRegistries)
+            .where(and(eq(schema.mcpRegistries.enabled, true), isNull(schema.mcpRegistries.orgId)))
+            .limit(1);
+          if (regRow) {
+            syncRegistry(regRow.id, { mode: "full" }, createSystemSyncPersistence()).catch((err) => {
+              logger.warn({ err }, "plugin.catalog.browse: background sync failed");
+            });
+          }
+        }).catch((err) => {
+          logger.warn({ err }, "plugin.catalog.browse: background sync setup failed");
+        });
+      }
+
+      // Resolve installed server names for this org (by listing name field).
+      // Compares against the `name` column — registry servers use their registry name as the
+      // install key. When workspaceId is provided, include workspace-scoped and org-level rows.
+      const installedNames = await (async () => {
+        if (!ctx.orgId) return new Set<string>();
+        const wsCond = workspaceId
+          ? or(
+              eq(schema.pluginOrgListings.workspaceId, workspaceId),
+              isNull(schema.pluginOrgListings.workspaceId),
+            )
+          : isNull(schema.pluginOrgListings.workspaceId);
+        const resolvedPluginType = pluginType ?? "mcp_server";
+        const listingRows = await tx
+          .select({ name: schema.pluginOrgListings.name })
+          .from(schema.pluginOrgListings)
+          .where(
+            and(
+              eq(schema.pluginOrgListings.orgId, ctx.orgId),
+              eq(schema.pluginOrgListings.pluginType, resolvedPluginType),
+              isNull(schema.pluginOrgListings.deletedAt),
+              wsCond,
+            ),
+          );
+        return new Set(listingRows.map((r) => r.name));
+      })();
+
       logger.info({ limit, offset, total: count }, "plugin.catalog.browse: ok");
       return {
         servers: rows.map((r) => {
@@ -139,6 +195,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
             categories: r.categories,
             version: r.version,
             pluginType: serverPluginType,
+            installed: installedNames.has(r.name),
           };
         }),
         nextOffset: offset + rows.length < count ? offset + limit : null,

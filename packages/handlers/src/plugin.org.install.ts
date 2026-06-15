@@ -19,6 +19,8 @@ export interface InstallOneInput {
     transport: string;
     authKind: "oauth" | "secret" | "none";
   };
+  /** When provided, the install is scoped to this workspace. NULL = org-level (legacy). */
+  workspaceId?: string;
 }
 
 /**
@@ -29,7 +31,7 @@ export async function installOne(
   ctx: CapabilityContext,
   input: InstallOneInput,
 ): Promise<string> {
-  const { pluginType, pluginId, catalogServerId, custom } = input;
+  const { pluginType, pluginId, catalogServerId, custom, workspaceId } = input;
 
   // ── Capability (Oxagen Plugin) path ─────────────────────────────────────────
   if (pluginType === "capability") {
@@ -80,6 +82,7 @@ export async function installOne(
         .insert(schema.pluginOrgListings)
         .values({
           orgId: ctx.orgId,
+          workspaceId: workspaceId ?? null,
           pluginType: "capability",
           catalogServerId: null,
           source: "oxagen",
@@ -95,11 +98,12 @@ export async function installOne(
           endpointUrl: null,
           transport: null,
           authKind: "none",
-          enabled: false,
+          enabled: true,
         })
         .onConflictDoUpdate({
           target: [
             schema.pluginOrgListings.orgId,
+            schema.pluginOrgListings.workspaceId,
             schema.pluginOrgListings.pluginType,
             schema.pluginOrgListings.name,
           ],
@@ -197,14 +201,15 @@ export async function installOne(
     );
   }
 
-  // Upsert the listing (enabled: false by default).
-  // ON CONFLICT on the (org_id, plugin_type, name) unique index returns the
+  // Upsert the listing (enabled: true — all plugins are free, enable on install).
+  // ON CONFLICT on the (org_id, workspace_id, plugin_type, name) unique index returns the
   // existing row's id — making install idempotent when the listing already exists.
   const inserted = await withSystemDb(async (tx) => {
     const [row] = await tx
       .insert(schema.pluginOrgListings)
       .values({
         orgId: ctx.orgId,
+        workspaceId: workspaceId ?? null,
         pluginType,
         catalogServerId: catalogServerId ?? null,
         source,
@@ -215,10 +220,15 @@ export async function installOne(
         endpointUrl,
         transport,
         authKind,
-        enabled: false,
+        enabled: true,
       })
       .onConflictDoUpdate({
-        target: [schema.pluginOrgListings.orgId, schema.pluginOrgListings.pluginType, schema.pluginOrgListings.name],
+        target: [
+          schema.pluginOrgListings.orgId,
+          schema.pluginOrgListings.workspaceId,
+          schema.pluginOrgListings.pluginType,
+          schema.pluginOrgListings.name,
+        ],
         set: { updatedAt: sql`now()` },
       })
       .returning({ id: schema.pluginOrgListings.id });

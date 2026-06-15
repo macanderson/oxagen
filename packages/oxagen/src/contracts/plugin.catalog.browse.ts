@@ -21,6 +21,7 @@ export const pluginCatalogBrowse = registerCapability({
     authKind: z.enum(["oauth", "secret", "none"]).optional(),
     limit: z.number().int().min(1).max(100).default(30),
     offset: z.number().int().min(0).default(0),
+    workspaceId: z.string().optional(),
   }),
   output: z.object({
     servers: z.array(
@@ -37,7 +38,7 @@ export const pluginCatalogBrowse = registerCapability({
         pluginType: z.enum(["mcp_server", "integration", "content_tool", "capability"]),
         // Present only for capability entries (pluginType === "capability"):
         tier: z.enum(["free", "premium"]).optional(),
-        installed: z.boolean().optional(),
+        installed: z.boolean(),
       }),
     ),
     nextOffset: z.number().nullable(),

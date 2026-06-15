@@ -27,8 +27,8 @@
  *   - Load more button triggers paginated fetch
  *   - Server with icon renders img element
  *   - Server with null title falls back to name
- *   - Capability card renders "Free" tier badge
- *   - Capability card renders "Premium" tier badge
+ *   - Capability card does NOT render a tier badge (tier UI removed)
+ *   - mcp_server card renders "Installed" badge when installed=true
  *   - Capability card renders "Installed" badge when installed=true
  */
 
@@ -70,6 +70,8 @@ const installBulkAction = vi.fn().mockResolvedValue({ ok: true });
 
 const defaultProps = {
   orgSlug: "acme",
+  workspaceSlug: "acme-ws",
+  workspaceId: "ws-123",
   open: false,
   onOpenChange: vi.fn(),
   installAction,
@@ -383,6 +385,7 @@ describe("MarketplaceModal — selection and bulk install", () => {
 
     await waitFor(() => expect(bulkAction).toHaveBeenCalledWith({
       orgSlug: "acme",
+      workspaceId: "ws-123",
       items: [{ catalogServerId: "srv-a", pluginType: "mcp_server" }],
     }));
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
@@ -695,7 +698,7 @@ describe("MarketplaceModal — capability tab", () => {
     );
   });
 
-  it("renders 'Free' tier badge for a free capability entry", async () => {
+  it("does NOT render a tier badge for a capability entry (tier UI removed)", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () =>
@@ -727,36 +730,33 @@ describe("MarketplaceModal — capability tab", () => {
 
     await userEvent.click(screen.getByTestId("marketplace-tab-capability"));
     await waitFor(
-      () =>
-        expect(
-          screen.getByTestId("marketplace-tier-badge-oxagen/media-svg"),
-        ).toBeInTheDocument(),
+      () => expect(screen.getByTestId("marketplace-server-card-oxagen/media-svg")).toBeInTheDocument(),
       { timeout: 3000 },
     );
-    expect(
-      screen.getByTestId("marketplace-tier-badge-oxagen/media-svg"),
-    ).toHaveTextContent("Free");
+    // Tier badges are intentionally not rendered
+    expect(screen.queryByTestId("marketplace-tier-badge-oxagen/media-svg")).not.toBeInTheDocument();
+    expect(screen.queryByText("Free")).not.toBeInTheDocument();
+    expect(screen.queryByText("Premium")).not.toBeInTheDocument();
   });
 
-  it("renders 'Premium' tier badge for a premium capability entry", async () => {
+  it("renders 'Installed' badge for mcp_server entries when installed=true", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () =>
         Promise.resolve({
           servers: [
             {
-              id: "oxagen/media-video",
-              name: "oxagen/media-video",
-              title: "Video Generation",
-              description: "Generate videos",
+              id: "srv-installed-mcp",
+              name: "installed-mcp",
+              title: "Installed MCP",
+              description: "desc",
               icons: [],
-              transportTypes: [],
+              transportTypes: ["http"],
               authKind: "none",
-              categories: ["media"],
-              version: "1.0.0",
-              pluginType: "capability",
-              tier: "premium",
-              installed: false,
+              categories: [],
+              version: "1.0",
+              pluginType: "mcp_server",
+              installed: true,
             },
           ],
           nextOffset: null,
@@ -766,19 +766,16 @@ describe("MarketplaceModal — capability tab", () => {
     });
 
     render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
-
-    await userEvent.click(screen.getByTestId("marketplace-tab-capability"));
     await waitFor(
       () =>
         expect(
-          screen.getByTestId("marketplace-tier-badge-oxagen/media-video"),
+          screen.getByTestId("marketplace-installed-badge-srv-installed-mcp"),
         ).toBeInTheDocument(),
       { timeout: 3000 },
     );
     expect(
-      screen.getByTestId("marketplace-tier-badge-oxagen/media-video"),
-    ).toHaveTextContent("Premium");
+      screen.getByTestId("marketplace-installed-badge-srv-installed-mcp"),
+    ).toHaveTextContent("Installed");
   });
 
   it("renders 'Installed' badge when installed=true", async () => {

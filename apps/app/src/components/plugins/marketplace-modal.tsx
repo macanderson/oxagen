@@ -29,14 +29,16 @@ interface CatalogServer {
   categories: string[];
   version: string;
   pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
-  /** Only present for capability entries */
+  /** Returned by the API but not rendered in the UI */
   tier?: "free" | "premium";
-  /** Only present for capability entries */
   installed?: boolean;
 }
 
 interface MarketplaceModalProps {
   orgSlug: string;
+  orgId?: string;
+  workspaceSlug: string;
+  workspaceId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Deny-listed server names (for greying out) */
@@ -44,6 +46,7 @@ interface MarketplaceModalProps {
   /** Server action: install single plugin */
   installAction: (input: {
     orgSlug: string;
+    workspaceId: string;
     catalogServerId: string;
     pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
     pluginId?: string;
@@ -51,6 +54,7 @@ interface MarketplaceModalProps {
   /** Server action: bulk install */
   installBulkAction: (input: {
     orgSlug: string;
+    workspaceId: string;
     items: Array<{
       catalogServerId?: string;
       pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
@@ -72,6 +76,9 @@ type PluginTypeValue = "mcp_server" | "integration" | "content_tool" | "capabili
 
 export function MarketplaceModal({
   orgSlug,
+  orgId,
+  workspaceSlug: _workspaceSlug,
+  workspaceId,
   open,
   onOpenChange,
   deniedNames = [],
@@ -103,6 +110,8 @@ export function MarketplaceModal({
         });
         if (search.trim()) params.set("search", search.trim());
         if (authFilter) params.set("authKind", authFilter);
+        if (orgId) params.set("orgId", orgId);
+        if (workspaceId) params.set("workspaceId", workspaceId);
         const res = await fetch(`/api/v1/plugin/catalog/browse?${params.toString()}`);
         if (!res.ok) throw new Error(await res.text());
         const data = (await res.json()) as {
@@ -158,6 +167,7 @@ export function MarketplaceModal({
     try {
       const result = await installBulkAction({
         orgSlug,
+        workspaceId,
         items: Array.from(selected).map((id) => {
           if (activeTab === "capability") {
             return { pluginType: "capability" as const, pluginId: id };
@@ -378,22 +388,13 @@ export function MarketplaceModal({
                               </div>
 
                               <div className="flex flex-wrap gap-1">
+                                {srv.installed && (
+                                  <Badge variant="success" size="sm" data-testid={`marketplace-installed-badge-${srv.id}`}>
+                                    Installed
+                                  </Badge>
+                                )}
                                 {srv.pluginType === "capability" ? (
                                   <>
-                                    {srv.tier && (
-                                      <Badge
-                                        variant={srv.tier === "premium" ? "info" : "secondary"}
-                                        size="sm"
-                                        data-testid={`marketplace-tier-badge-${srv.id}`}
-                                      >
-                                        {srv.tier === "premium" ? "Premium" : "Free"}
-                                      </Badge>
-                                    )}
-                                    {srv.installed && (
-                                      <Badge variant="success" size="sm" data-testid={`marketplace-installed-badge-${srv.id}`}>
-                                        Installed
-                                      </Badge>
-                                    )}
                                     {srv.categories.slice(0, 2).map((c) => (
                                       <Badge key={c} variant="outline" size="sm">
                                         {c}
@@ -482,7 +483,9 @@ export function MarketplaceModal({
                                 }
                               : undefined
                           }
-                          installAction={installAction}
+                          installAction={(input) =>
+                            installAction({ ...input, workspaceId })
+                          }
                           onInstalled={() => onOpenChange(false)}
                           onClose={() => setDetailId(null)}
                         />

@@ -30,6 +30,7 @@ export const pluginOrgInstall = registerCapability({
         authKind: z.enum(["oauth", "secret", "none"]),
       })
       .optional(),
+    workspaceId: z.string().optional(),
   }),
   output: z.object({
     orgListingId: z.string(),

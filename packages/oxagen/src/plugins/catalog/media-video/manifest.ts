@@ -5,7 +5,7 @@ export const mediaVideoManifest: OxagenPluginManifest = {
   name: "Video Generation",
   description: "Generate videos from text prompts and images using state-of-the-art AI models.",
   version: "1.0.0",
-  tier: "premium",
+  tier: "free",
   visibility: "ga",
   category: "media",
   icon: "clapperboard",

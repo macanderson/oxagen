@@ -40,6 +40,13 @@ interface StatusConfig {
 }
 
 const STATUS_CONFIG: Record<string, StatusConfig> = {
+  // "connected" is what the DB stores for a live, healthy connection.
+  connected: {
+    label: "Connected",
+    icon: CheckCircle2,
+    className: "text-emerald-600 dark:text-emerald-400",
+  },
+  // "active" kept for backwards-compat in case any older record uses it.
   active: {
     label: "Synced",
     icon: CheckCircle2,
@@ -51,8 +58,19 @@ const STATUS_CONFIG: Record<string, StatusConfig> = {
     className: "text-blue-500 dark:text-blue-400",
     iconClassName: "animate-spin",
   },
+  in_progress: {
+    label: "Syncing…",
+    icon: RefreshCw,
+    className: "text-blue-500 dark:text-blue-400",
+    iconClassName: "animate-pulse",
+  },
   error: {
     label: "Error",
+    icon: AlertTriangle,
+    className: "text-red-500 dark:text-red-400",
+  },
+  has_errors: {
+    label: "Has Errors",
     icon: AlertTriangle,
     className: "text-red-500 dark:text-red-400",
   },
@@ -63,6 +81,11 @@ const STATUS_CONFIG: Record<string, StatusConfig> = {
   },
   pending_setup: {
     label: "Pending Setup",
+    icon: Clock,
+    className: "text-muted-foreground",
+  },
+  pending: {
+    label: "Pending",
     icon: Clock,
     className: "text-muted-foreground",
   },
@@ -159,7 +182,7 @@ function ConnectionRow({ connection, orgSlug: _orgSlug, workspaceSlug: _workspac
         </div>
       </div>
       <div className="flex flex-shrink-0 items-center gap-2">
-        {(connection.status === "active" || connection.status === "paused" || connection.status === "error") && (
+        {(connection.status === "connected" || connection.status === "active" || connection.status === "paused" || connection.status === "error" || connection.status === "has_errors") && (
           <button
             type="button"
             className="flex items-center gap-1 rounded-md border border-border/60 bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
@@ -241,7 +264,7 @@ export function KnowledgeSourcesClient({
   const [resyncing, setResyncing] = React.useState<Set<string>>(new Set());
 
   const activeConnections = connections.filter((c) => c.status !== "deleted");
-  const syncedCount = activeConnections.filter((c) => c.status === "active").length;
+  const syncedCount = activeConnections.filter((c) => c.status === "connected" || c.status === "active").length;
   const totalRecords = activeConnections.reduce((s, c) => s + c.entityCount, 0);
 
   const handleResync = React.useCallback(

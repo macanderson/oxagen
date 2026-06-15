@@ -36,6 +36,8 @@ interface Registry {
 
 interface OrgPluginsPanelProps {
   orgSlug: string;
+  workspaceSlug: string;
+  workspaceId: string;
   canManage: boolean;
   registries: Registry[];
   listings: OrgListing[];
@@ -50,6 +52,7 @@ interface OrgPluginsPanelProps {
   /** Install a catalog-based plugin (from the marketplace modal). */
   installCatalogAction: (input: {
     orgSlug: string;
+    workspaceId: string;
     catalogServerId: string;
     pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
     pluginId?: string;
@@ -69,6 +72,7 @@ interface OrgPluginsPanelProps {
   }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
   installBulkAction: (input: {
     orgSlug: string;
+    workspaceId: string;
     items: Array<{
       catalogServerId?: string;
       pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
@@ -930,6 +934,8 @@ function AuthAlertsSection({
 
 export function OrgPluginsPanel({
   orgSlug,
+  workspaceSlug,
+  workspaceId,
   canManage,
   registries,
   listings,
@@ -994,6 +1000,8 @@ export function OrgPluginsPanel({
 
       <MarketplaceModal
         orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+        workspaceId={workspaceId}
         open={marketplaceOpen}
         onOpenChange={setMarketplaceOpen}
         deniedNames={denylisted.map((d) => d.serverName)}

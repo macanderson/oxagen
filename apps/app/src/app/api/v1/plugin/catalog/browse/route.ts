@@ -40,11 +40,14 @@ export async function GET(request: NextRequest) {
       : undefined;
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "30", 10), 100);
   const offset = Math.max(parseInt(searchParams.get("offset") ?? "0", 10), 0);
+  const workspaceId = searchParams.get("workspaceId") ?? undefined;
+  // orgId: passed from query param when available so installed state is resolved per-org.
+  // Falls back to empty string (catalog is global; installed=false for anonymous browse).
+  const orgId = searchParams.get("orgId") ?? "";
 
-  // Catalog browse is not scoped to an org — pass empty strings for org context.
   const ctx = {
-    orgId: "",
-    workspaceId: "",
+    orgId,
+    workspaceId: workspaceId ?? "",
     userId: session.user.id,
     apiKeyId: null as string | null,
     requestId: crypto.randomUUID(),
@@ -55,7 +58,7 @@ export async function GET(request: NextRequest) {
   try {
     const result = await invoke(
       "plugin.catalog.browse",
-      { search, authKind, pluginType, limit, offset },
+      { search, authKind, pluginType, limit, offset, workspaceId },
       ctx,
       { surface: "agent" },
     );

@@ -15,6 +15,7 @@ export const pluginOrgList = registerCapability({
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
   input: z.object({
     pluginType: z.enum(["mcp_server", "integration", "content_tool"]).optional(),
+    workspaceId: z.string().optional(),
   }),
   output: z.object({
     listings: z.array(
@@ -28,6 +29,7 @@ export const pluginOrgList = registerCapability({
         deletedAt: z.string().nullable(),
         deletedByUserId: z.string().nullable(),
         orgId: z.string(),
+        workspaceId: z.string().nullable(),
         pluginType: z.string(),
         catalogServerId: z.string().nullable(),
         source: z.string(),

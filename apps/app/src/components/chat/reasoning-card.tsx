@@ -91,16 +91,20 @@ export function ReasoningCard({
   return (
     <div
       className={cn(
-        "rounded-xl border bg-muted/30 text-sm overflow-hidden my-1.5",
-        // Thin indigo left accent while thinking, neutral when done.
-        status === "thinking"
-          ? "border-l-2 border-l-[#9b7bff] border-border/60"
-          : "border-border/60",
+        "relative rounded-xl border border-border/60 bg-muted/30 text-sm overflow-hidden my-1.5",
         className,
       )}
       data-component="reasoning-card"
       data-status={status}
     >
+      {/* Brand gradient left accent (indigo → green) while thinking.
+          Absolute-positioned so it doesn't affect layout. */}
+      {status === "thinking" && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 left-0 w-0.5 bg-gradient-to-b from-[#7182ff] via-[#9b7bff] to-[#3cff52] z-10"
+        />
+      )}
       {/* Header row. Only a toggle when there's reasoning text to reveal;
           otherwise it's a static "Thinking…/Thought for Xs" pill (redacted). */}
       <button
@@ -150,7 +154,7 @@ export function ReasoningCard({
             transition={transition.base}
             style={{ overflow: "hidden" }}
           >
-            <div className="border-t border-border/40 px-3 py-2.5">
+            <div className="border-t border-border/40 px-3 py-2.5 max-h-72 overflow-y-auto">
               {status === "thinking" ? (
                 <StreamingText
                   text={text}

@@ -147,6 +147,8 @@ export default async function OrgPluginsPage({ params }: PageProps) {
   return (
     <OrgPluginsPanel
       orgSlug={orgSlug}
+      workspaceSlug=""
+      workspaceId={ORG_ONLY_WS}
       canManage={canManage}
       registries={registries}
       listings={listings}

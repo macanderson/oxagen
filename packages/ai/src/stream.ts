@@ -8,6 +8,7 @@ import {
   type Surface,
 } from "@oxagen/telemetry";
 import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
+import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 import { defaultModel, modelIdOf } from "./models";
 import type { EffortLevel } from "./catalog";
 
@@ -172,6 +173,12 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
   const modelId = modelIdOf(model);
   const provider = providerFromModelId(modelId);
   const startedAt = Date.now();
+  // Capture the ALS tenant scope NOW, while we are still inside the request
+  // handler's scope. The AI SDK's onFinish callback fires asynchronously after
+  // the stream completes — by then the AsyncLocalStorage context has ended, so
+  // withTenantDb / requireScope throw TenantScopeError. We restore the scope
+  // inside onFinish using runInTenantScope with the captured context.
+  const capturedScope: TenantScope | null = getScope();
   // Render the user-message content into a stable hash key. The prompt
   // text itself stays in Postgres `chat.messages.content` — we ship only
   // the cohort key to ClickHouse per memory.
@@ -266,12 +273,27 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
       // failure must never fail the user's turn. Admission control (refusing a
       // turn when the balance is empty) is the caller's pre-turn guard via
       // billing.hasCreditBalance.
+      //
+      // chargeUsageCredits calls withTenantDb internally, which calls
+      // requireScope(). The AI SDK fires onFinish after the stream ends, outside
+      // the original request ALS context. We re-establish the scope using the
+      // context captured synchronously before the stream was started.
       try {
-        await chargeUsageCredits({
-          orgId: args.telemetry.orgId,
-          referenceId: args.telemetry.messageId,
-          ...usage,
-        });
+        const charge = async () => {
+          await chargeUsageCredits({
+            orgId: args.telemetry.orgId,
+            referenceId: args.telemetry.messageId,
+            ...usage,
+          });
+        };
+        if (capturedScope) {
+          await runInTenantScope(capturedScope, charge);
+        } else {
+          // No scope was active when the stream started (e.g. background job
+          // that passes orgId directly). Fall back to the direct call; the
+          // caller is responsible for any scope requirements.
+          await charge();
+        }
       } catch (err) {
         // Swallow — credit metering must never fail the chat turn.
         logger.error({ err }, "stream credit charge failed");

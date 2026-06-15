@@ -80,6 +80,8 @@ function buildCtx(opts: { orgId: string; userId: string }) {
 
 const InstallSchema = z.object({
   orgSlug: z.string().min(1),
+  /** Workspace context — accepted but not used at the org-settings layer */
+  workspaceId: z.string().optional(),
   catalogServerId: z.string().optional(),
   /** Required when pluginType === "capability" — the stable plugin id (e.g. "oxagen/media-svg") */
   pluginId: z.string().optional(),
@@ -169,6 +171,8 @@ export async function installPluginAction(
 
 const InstallBulkSchema = z.object({
   orgSlug: z.string().min(1),
+  /** Workspace context — accepted but not used at the org-settings layer */
+  workspaceId: z.string().optional(),
   items: z
     .array(
       z.object({

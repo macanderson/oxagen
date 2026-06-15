@@ -1,11 +1,14 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, or, SQL } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const orgId = ctx.orgId;
-  const { pluginType } = input as { pluginType?: "mcp_server" | "integration" | "content_tool" };
+  const { pluginType, workspaceId } = input as {
+    pluginType?: "mcp_server" | "integration" | "content_tool";
+    workspaceId?: string;
+  };
 
   const listingConds = [
     eq(schema.pluginOrgListings.orgId, orgId),
@@ -13,6 +16,15 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   ];
   if (pluginType) {
     listingConds.push(eq(schema.pluginOrgListings.pluginType, pluginType));
+  }
+  // When workspaceId is provided, include workspace-scoped rows and org-level (NULL) rows.
+  // When not provided, return all listings for the org (org-level + all workspace installs).
+  if (workspaceId) {
+    const wsCond = or(
+      eq(schema.pluginOrgListings.workspaceId, workspaceId),
+      isNull(schema.pluginOrgListings.workspaceId),
+    ) as SQL<unknown>;
+    listingConds.push(wsCond);
   }
 
   const denylistConds = [eq(schema.pluginOrgDenylist.orgId, orgId)];
@@ -47,6 +59,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
           deletedAt: r.deletedAt?.toISOString() ?? null,
           deletedByUserId: r.deletedByUserId ?? null,
           orgId: r.orgId,
+          workspaceId: r.workspaceId ?? null,
           pluginType: r.pluginType,
           catalogServerId: r.catalogServerId ?? null,
           source: r.source,

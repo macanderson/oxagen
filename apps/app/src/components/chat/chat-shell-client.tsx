@@ -28,6 +28,7 @@ import { useLatestRef } from "@/lib/use-latest-ref";
 import type { FieldDescriptor } from "@/lib/ask/fill-types";
 import type { FormFillResult } from "@/lib/ask/fill-types";
 import { interceptFormFillEvents } from "./intercept-form-fill";
+import { ThinkingBubble } from "./thinking-bubble";
 
 /**
  * Serialisable page context forwarded from the current page to the stream
@@ -346,6 +347,66 @@ export function ChatShellClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- *Ref values are stable refs via useLatestRef; no dependencies needed
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Auto-scroll: always follow content to the bottom unless the user has
+  // manually scrolled up mid-turn. Three triggers:
+  //   1. isStreaming becomes true (user submitted) → force-jump + re-enable.
+  //   2. order / textSegments change (SSE deltas) → follow if at bottom.
+  //   3. messages prop updates (history load / persisted reply) → follow.
+  // All use direct scrollTop assignment (instant, idempotent, no stacking
+  // scroll-animation jank) instead of scrollTo({behavior:'smooth'}).
+  // ---------------------------------------------------------------------------
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  // True while the user is at (or near) the bottom of the scroll container.
+  // Reset to true every time a new turn starts so new turns always auto-follow.
+  const shouldAutoScrollRef = React.useRef(true);
+
+  const scrollToBottom = React.useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, []);
+
+  // Scroll to the bottom on initial mount so persisted history shows the
+  // most recent messages without a flash of the top. useLayoutEffect fires
+  // synchronously after DOM mutations but before paint.
+  React.useLayoutEffect(() => {
+    scrollToBottom();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Force-scroll + re-enable auto-scroll when the user submits a new turn.
+  React.useEffect(() => {
+    if (isStreaming) {
+      shouldAutoScrollRef.current = true;
+      scrollToBottom();
+    }
+  }, [isStreaming, scrollToBottom]);
+
+  // Follow content as SSE deltas arrive. `order` grows with each new timeline
+  // entry; `textSegments` reference changes on every text delta. React already
+  // re-renders on these — we just piggyback the scroll.
+  React.useEffect(() => {
+    if (shouldAutoScrollRef.current) scrollToBottom();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order, textSegments]);
+
+  // Scroll when the persisted messages prop updates (history load or after
+  // router.refresh() completes and the RSC reply lands).
+  React.useEffect(() => {
+    if (shouldAutoScrollRef.current) scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  // Detect when the user scrolls up mid-turn — disable auto-scroll so we
+  // don't yank them back. Re-enable automatically once they're near the bottom.
+  const handleScroll = React.useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    // "Near the bottom" = within 80px (accounts for mobile rubber-banding
+    // and 1px rounding differences across browsers).
+    const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    shouldAutoScrollRef.current = fromBottom < 80;
+  }, []);
+
   const callbacks: MessageBubbleCallbacks = {
     onResolveApproval: wrappedResolveApproval,
     onResolvePlan: resolvePlanAction,
@@ -602,7 +663,11 @@ export function ChatShellClient({
         <ConversationFiles conversationPublicId={conversationPublicId} />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pr-2">
+      <div
+        ref={scrollContainerRef}
+        className="min-h-0 flex-1 overflow-y-auto pr-2"
+        onScroll={handleScroll}
+      >
         {messages.length === 0 && !hasLiveContent ? (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-sm text-muted-foreground">
             <div>
@@ -625,6 +690,19 @@ export function ChatShellClient({
             {hasLiveContent ? (
               <div data-live-turn>
                 <ActivityTimeline>
+                  {/* Show the thinking bubble when streaming has started but no
+                      timeline entries have arrived yet — covers the gap between
+                      the user submitting and the first SSE event landing. */}
+                  {isStreaming && timelineEntries.length === 0 ? (
+                    <TimelineItem
+                      key="thinking-bubble"
+                      tone="thinking"
+                      isActive={true}
+                      isLast={true}
+                    >
+                      <ThinkingBubble />
+                    </TimelineItem>
+                  ) : null}
                   {timelineEntries.map((entry, i) => (
                     <TimelineItem
                       key={entry.key}

@@ -29,6 +29,7 @@ export const pluginOrgListings = pluginSchema.table(
     ...auditMixin(),
     ...softDeleteMixin(),
     orgId: uuid("org_id").notNull(),
+    workspaceId: uuid("workspace_id"),
     pluginType: text("plugin_type").notNull(), // mcp_server | integration | content_tool | capability
     catalogServerId: uuid("catalog_server_id"), // NULL ⇒ custom
     source: text("source").notNull(), // registry | custom | oxagen
@@ -44,12 +45,13 @@ export const pluginOrgListings = pluginSchema.table(
     config: jsonb("config").notNull().default(sql`'{}'::jsonb`),
   },
   (t) => ({
-    uniqueName: uniqueIndex("org_listings_org_type_name_uniq").on(
+    uniqueName: uniqueIndex("org_listings_org_ws_type_name_uniq").on(
       t.orgId,
+      t.workspaceId,
       t.pluginType,
       t.name,
     ),
-    orgTypeIdx: index("org_listings_org_type_idx").on(t.orgId, t.pluginType),
+    orgTypeIdx: index("org_listings_org_ws_type_idx").on(t.orgId, t.workspaceId, t.pluginType),
     typeCheck: check(
       "org_listings_type_check",
       sql`${t.pluginType} IN ('mcp_server','integration','content_tool','capability')`,

@@ -50,7 +50,7 @@ describe("plugin.catalog.browse handler", () => {
     const fakeOutput = { servers: [], nextOffset: null, total: 0 };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { limit: 30, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined, pluginType: undefined };
+    const args = { limit: 30, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined, pluginType: undefined, workspaceId: undefined };
     const result = await handler_pluginCatalogBrowse(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
@@ -66,7 +66,7 @@ describe("plugin.catalog.browse handler", () => {
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("catalog unavailable"));
     await expect(
-      handler_pluginCatalogBrowse({ limit: 10, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined, pluginType: undefined }),
+      handler_pluginCatalogBrowse({ limit: 10, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined, pluginType: undefined, workspaceId: undefined }),
     ).rejects.toThrow("catalog unavailable");
   });
 });
@@ -264,6 +264,7 @@ describe("plugin.org.install handler", () => {
       pluginId: undefined,
       catalogServerId: "cat_1" as string | undefined,
       custom: undefined,
+      workspaceId: undefined,
     };
     await handler_pluginOrgInstall(args);
 
@@ -324,7 +325,7 @@ describe("plugin.org.list handler", () => {
     const fakeOutput = { listings: [], denylist: [] };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { pluginType: "mcp_server" as const };
+    const args = { pluginType: "mcp_server" as const, workspaceId: undefined };
     await handler_pluginOrgList(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -337,7 +338,7 @@ describe("plugin.org.list handler", () => {
 
   it("works with empty args", async () => {
     mocks.invoke.mockResolvedValue({ listings: [], denylist: [] });
-    await handler_pluginOrgList({ pluginType: undefined });
+    await handler_pluginOrgList({ pluginType: undefined, workspaceId: undefined });
     expect(mocks.invoke).toHaveBeenCalledOnce();
   });
 });

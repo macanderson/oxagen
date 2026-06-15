@@ -150,6 +150,7 @@ export const workspace = {
     brandKits: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/brand-kits`,
     integrations: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/integrations`,
     prompts: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/prompts`,
+    plugins: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/plugins`,
   },
 } as const;
 
