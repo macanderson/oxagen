@@ -25,8 +25,12 @@ export const graphNodeGetHandler: CapabilityHandler<typeof graphNodeGet> = async
   await runInTenantScope({ orgId, workspaceId }, async () => {
     const session = scopedSession();
     try {
+      // Scope by BOTH orgId AND workspaceId. Filtering on org alone lets a
+      // node from another workspace in the same org be read if publicIds
+      // collide — a tenant-isolation breach (policy §0). workspaceId is
+      // matched in the node pattern so the index can prune up front.
       const result = await session.run(
-        `MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId})
+        `MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          RETURN
            n.publicId    AS nodeId,
            n.label       AS label,

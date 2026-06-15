@@ -1015,7 +1015,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1053,7 +1053,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1072,7 +1072,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1109,7 +1109,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
