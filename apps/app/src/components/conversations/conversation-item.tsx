@@ -101,8 +101,10 @@ export function ConversationItem({
     <>
       <div
         className={cn(
-          "group/item relative flex items-center rounded-md text-sm transition-colors",
-          isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
+          "group/item relative flex items-center rounded-md text-sm transition-all border",
+          isActive
+            ? "bg-white/[0.08] backdrop-blur-md border-white/[0.12] text-foreground"
+            : "border-transparent hover:bg-white/[0.05] hover:backdrop-blur-sm hover:border-white/[0.07]",
         )}
       >
         <Link

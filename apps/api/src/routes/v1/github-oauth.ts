@@ -24,6 +24,7 @@ import { createHmac } from "node:crypto";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { encrypt, decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
 import { and, eq, isNull } from "drizzle-orm";
+import { runInTenantScope } from "@oxagen/tenancy";
 import type { AppEnv } from "../../app";
 import { requireEnv } from "@oxagen/config/env";
 
@@ -159,25 +160,27 @@ githubOauthRoute.get("/installations", async (c) => {
   }
 
   // Look up the OAuth account linked to this connection.
-  const rows = await withTenantDb((tx) =>
-    tx
-      .select({
-        accessTokenEnc: schema.oauthAccounts.accessTokenEnc,
-      })
-      .from(schema.sourceConnections)
-      .innerJoin(
-        schema.oauthAccounts,
-        eq(schema.oauthAccounts.id, schema.sourceConnections.oauthAccountId),
-      )
-      .where(
-        and(
-          eq(schema.sourceConnections.publicId, connectionPublicId),
-          eq(schema.sourceConnections.orgId, orgId),
-          eq(schema.sourceConnections.workspaceId, workspaceId),
-          isNull(schema.sourceConnections.deletedAt),
-        ),
-      )
-      .limit(1),
+  const rows = await runInTenantScope({ orgId, workspaceId }, () =>
+    withTenantDb((tx) =>
+      tx
+        .select({
+          accessTokenEnc: schema.oauthAccounts.accessTokenEnc,
+        })
+        .from(schema.sourceConnections)
+        .innerJoin(
+          schema.oauthAccounts,
+          eq(schema.oauthAccounts.id, schema.sourceConnections.oauthAccountId),
+        )
+        .where(
+          and(
+            eq(schema.sourceConnections.publicId, connectionPublicId),
+            eq(schema.sourceConnections.orgId, orgId),
+            eq(schema.sourceConnections.workspaceId, workspaceId),
+            isNull(schema.sourceConnections.deletedAt),
+          ),
+        )
+        .limit(1),
+    ),
   );
 
   const row = rows[0];
@@ -190,7 +193,15 @@ githubOauthRoute.get("/installations", async (c) => {
     return c.json({ error: "OAuth token not found for connection" }, 404);
   }
 
-  const accessToken = await decryptToken(tokenEnc);
+  let accessToken: string;
+  try {
+    accessToken = await decryptToken(tokenEnc);
+  } catch (_e) {
+    return c.json(
+      { error: "Failed to decrypt OAuth token — token may be corrupted or the encryption key is unavailable" },
+      500,
+    );
+  }
 
   // Page through all installations (GitHub paginates at 100/page).
   const allInstallations: GitHubInstallation[] = [];
@@ -276,25 +287,27 @@ githubOauthRoute.get("/installations/:installationId/repositories", async (c) =>
   }
 
   // Same token lookup as /installations.
-  const rows = await withTenantDb((tx) =>
-    tx
-      .select({
-        accessTokenEnc: schema.oauthAccounts.accessTokenEnc,
-      })
-      .from(schema.sourceConnections)
-      .innerJoin(
-        schema.oauthAccounts,
-        eq(schema.oauthAccounts.id, schema.sourceConnections.oauthAccountId),
-      )
-      .where(
-        and(
-          eq(schema.sourceConnections.publicId, connectionPublicId),
-          eq(schema.sourceConnections.orgId, orgId),
-          eq(schema.sourceConnections.workspaceId, workspaceId),
-          isNull(schema.sourceConnections.deletedAt),
-        ),
-      )
-      .limit(1),
+  const rows = await runInTenantScope({ orgId, workspaceId }, () =>
+    withTenantDb((tx) =>
+      tx
+        .select({
+          accessTokenEnc: schema.oauthAccounts.accessTokenEnc,
+        })
+        .from(schema.sourceConnections)
+        .innerJoin(
+          schema.oauthAccounts,
+          eq(schema.oauthAccounts.id, schema.sourceConnections.oauthAccountId),
+        )
+        .where(
+          and(
+            eq(schema.sourceConnections.publicId, connectionPublicId),
+            eq(schema.sourceConnections.orgId, orgId),
+            eq(schema.sourceConnections.workspaceId, workspaceId),
+            isNull(schema.sourceConnections.deletedAt),
+          ),
+        )
+        .limit(1),
+    ),
   );
 
   const row = rows[0];
@@ -307,7 +320,15 @@ githubOauthRoute.get("/installations/:installationId/repositories", async (c) =>
     return c.json({ error: "OAuth token not found for connection" }, 404);
   }
 
-  const accessToken = await decryptToken(tokenEnc);
+  let accessToken: string;
+  try {
+    accessToken = await decryptToken(tokenEnc);
+  } catch (_e) {
+    return c.json(
+      { error: "Failed to decrypt OAuth token — token may be corrupted or the encryption key is unavailable" },
+      500,
+    );
+  }
 
   const resp = await fetch(
     `https://api.github.com/user/installations/${installationId}/repositories?per_page=100`,

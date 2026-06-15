@@ -43,7 +43,7 @@ const MenuPopup = React.forwardRef<
       <MenuPrimitive.Popup
         ref={ref}
         className={cn(
-          "z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
+          "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-white/[0.1] bg-popover/75 backdrop-blur-2xl p-1 text-popover-foreground shadow-2xl",
           "origin-[var(--transform-origin)] transition-[opacity,transform] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
           className,
         )}
@@ -66,7 +66,7 @@ const MenuItem = React.forwardRef<
   <MenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+      "relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors data-[highlighted]:bg-white/[0.1] data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
       inset && "pl-8",
       className,
     )}
@@ -184,7 +184,7 @@ const MenuSubPopup = React.forwardRef<
       <MenuPrimitive.Popup
         ref={ref}
         className={cn(
-          "z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg",
+          "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-white/[0.1] bg-popover/75 backdrop-blur-2xl p-1 text-popover-foreground shadow-2xl",
           "origin-[var(--transform-origin)] transition-[opacity,transform] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
           className,
         )}
