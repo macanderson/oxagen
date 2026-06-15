@@ -191,6 +191,8 @@ project ID `31ab7de2-021f-486d-9f6f-718a7976c027`).
 | `graph.edge.delete` | Delete a directed relationship between two nodes.           |
 | `graph.cypher`      | Execute a read-only Cypher query against the tenant graph.  |
 | `graph.stats`       | Workspace graph statistics: node/edge counts by type.       |
+| `ontology.query`     | Typed multi-hop traversal from a start node over named relationship types. |
+| `ontology.neighbors` | One-hop neighborhood of a node, filtered by type and direction.            |
 
 ## Web (2)
 

@@ -80,6 +80,8 @@ import "./contracts/integration.metrics";
 import "./contracts/integration.sync";
 import "./contracts/notifications.list";
 import "./contracts/notifications.mark";
+import "./contracts/ontology.neighbors";
+import "./contracts/ontology.query";
 import "./contracts/org.member.add";
 import "./contracts/org.member.invite.accept";
 import "./contracts/org.member.invite.decline";

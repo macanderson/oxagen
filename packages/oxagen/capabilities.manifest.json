@@ -52,7 +52,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -164,7 +164,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -221,7 +221,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -240,7 +240,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -329,7 +329,7 @@
       ],
       "layers": {
         "schema": true,
-        "docs": false,
+        "docs": true,
         "unit": true
       }
     },
@@ -582,7 +582,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -618,7 +618,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -636,7 +636,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -654,7 +654,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -672,7 +672,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -690,7 +690,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -708,7 +708,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -726,7 +726,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -744,7 +744,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -996,7 +996,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1034,7 +1034,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1128,7 +1128,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1374,6 +1374,44 @@
         "api": true,
         "mcp": true,
         "unit": true
+      }
+    },
+    {
+      "name": "ontology.neighbors",
+      "file": "ontology.neighbors.ts",
+      "domain": "ontology",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "ontology.query",
+      "file": "ontology.query.ts",
+      "domain": "ontology",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
       }
     },
     {
@@ -1989,7 +2027,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -2007,7 +2045,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -2025,7 +2063,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -2201,7 +2239,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -2220,7 +2258,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -2308,7 +2346,8 @@
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true
+        "mcp": true,
+        "docs": true
       }
     },
     {

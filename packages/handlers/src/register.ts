@@ -481,4 +481,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "graph.stats",
     async () => (await import("./graph.stats")).graphStatsHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "ontology.query",
+    async () => (await import("./ontology.query")).ontologyQueryHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "ontology.neighbors",
+    async () =>
+      (await import("./ontology.neighbors")).ontologyNeighborsHandler as CapabilityHandlerFn,
+  );
 });
