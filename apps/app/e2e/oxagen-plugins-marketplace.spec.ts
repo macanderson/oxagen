@@ -114,7 +114,14 @@ test.describe("oxagen plugins marketplace — install + enable flow", () => {
 
     // ── 7. Assert the plugin appears in org listings (disabled by default) ──
     // The page revalidates on install — wait for the listing row to appear.
-    await expect(page.getByText("SVG Generation")).toBeVisible({ timeout: 15_000 });
+    // Scope to the listing display-name cell: a bare getByText("SVG Generation")
+    // also matches the "SVG Generation installed" success toast, which would trip
+    // Playwright strict mode (two matching elements).
+    await expect(
+      page
+        .locator('[data-testid^="org-listing-display-name-"]')
+        .filter({ hasText: "SVG Generation" }),
+    ).toBeVisible({ timeout: 15_000 });
 
     // Find the listing row for oxagen/media-svg and assert it is disabled.
     // The toggle is in the row; we find the row by display name and check the Switch.

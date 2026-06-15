@@ -113,8 +113,11 @@ describe("ConversationList — active state", () => {
         actions={makeActions()}
       />
     );
-    // The active item has bg-accent class
-    const activeItem = container.querySelector(".bg-accent");
+    // The active item swaps in the glass highlight styling (bg-white/[0.08])
+    // instead of the transparent hover-only state — see conversation-item.tsx.
+    const activeItem = Array.from(container.querySelectorAll("div")).find((el) =>
+      el.className.includes("bg-white/[0.08]"),
+    );
     expect(activeItem).toBeInTheDocument();
   });
 });
