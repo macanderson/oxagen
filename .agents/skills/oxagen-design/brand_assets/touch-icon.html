@@ -1,0 +1,28 @@
+<!-- @dsCard group="Brand" viewport="512x512" name="Touch icon (512)" subtitle="apple-touch-icon / maskable PWA icon" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html, body { margin: 0; }
+  .icon { width: 512px; height: 512px; position: relative; display: grid; place-items: center;
+    background:
+      radial-gradient(60% 60% at 30% 22%, color-mix(in oklch, #7c5aed 40%, transparent), transparent 70%),
+      radial-gradient(55% 55% at 82% 86%, color-mix(in oklch, #df2a5d 32%, transparent), transparent 70%),
+      radial-gradient(50% 50% at 88% 14%, color-mix(in oklch, #22e1ff 26%, transparent), transparent 70%),
+      #0b0a11;
+    overflow: hidden; }
+</style>
+</head>
+<body>
+  <div class="icon">
+    <svg viewBox="0 0 100 100" width="300" height="300" fill="none">
+      <defs><linearGradient id="g" x1="12" y1="12" x2="88" y2="88" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#7ce8f4"/><stop offset=".52" stop-color="#9b7bff"/><stop offset="1" stop-color="#df2a5d"/>
+      </linearGradient></defs>
+      <circle cx="50" cy="50" r="37" stroke="url(#g)" stroke-width="13"/>
+    </svg>
+  </div>
+</body>
+</html>

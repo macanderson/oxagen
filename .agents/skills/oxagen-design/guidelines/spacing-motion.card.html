@@ -1,0 +1,24 @@
+<!-- @dsCard group="Spacing" viewport="700x150" name="Motion" subtitle="Easings & durations — hover any bar" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 24px 28px; }
+  .r { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 16px; padding: 7px 0; }
+  .nm { font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); }
+  .track { height: 12px; background: var(--muted); border-radius: var(--radius-full); position: relative; overflow: hidden; }
+  .dot { position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; border-radius: 50%; background: var(--grad-aurora); }
+  body:hover .e1 { transform: translateX(calc(100% + 530px)); transition: transform 1s var(--ease-entry); }
+  body:hover .e2 { transform: translateX(calc(100% + 530px)); transition: transform 1s var(--ease-hover); }
+  body:hover .e3 { transform: translateX(calc(100% + 530px)); transition: transform 1s var(--ease-exit); }
+</style>
+</head>
+<body>
+  <div class="r"><span class="nm">ease-entry</span><div class="track"><div class="dot e1"></div></div></div>
+  <div class="r"><span class="nm">ease-hover</span><div class="track"><div class="dot e2"></div></div></div>
+  <div class="r"><span class="nm">ease-exit</span><div class="track"><div class="dot e3"></div></div></div>
+  <div class="r"><span class="nm" style="grid-column:1/3">micro 160 · base 220 · overlay 200 · entry 320</span></div>
+</body>
+</html>

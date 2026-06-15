@@ -1,0 +1,10 @@
+/*
+ * Oxagen Design System — global entrypoint.
+ * Consumers link THIS one file. It is an @import manifest only; every token,
+ * font-face and base style lives in the files below.
+ */
+@import "./tokens/fonts.css";
+@import "./tokens/colors.css";
+@import "./tokens/typography.css";
+@import "./tokens/spacing.css";
+@import "./tokens/base.css";

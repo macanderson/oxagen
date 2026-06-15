@@ -1,0 +1,30 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Cyan ramp" subtitle="Knowledge / interactive accent — 50 → 900" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 24px; }
+  .ramp { display: grid; grid-template-columns: repeat(10, 1fr); border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border); }
+  .c { height: 72px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px; font-family: var(--font-mono); font-size: 10px; }
+  .lbl { display: grid; grid-template-columns: repeat(10, 1fr); margin-top: 8px; }
+  .lbl span { text-align: center; font-family: var(--font-mono); font-size: 10px; color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+  <div class="ramp">
+    <div class="c" style="background:var(--cyan-50);color:#0c4150"></div>
+    <div class="c" style="background:var(--cyan-100);color:#0c4150"></div>
+    <div class="c" style="background:var(--cyan-200);color:#0c4150"></div>
+    <div class="c" style="background:var(--cyan-300);color:#0c4150">300</div>
+    <div class="c" style="background:var(--cyan-400);color:#0c4150"></div>
+    <div class="c" style="background:var(--cyan-500);color:#0c4150">500</div>
+    <div class="c" style="background:var(--cyan-600);color:#fff"></div>
+    <div class="c" style="background:var(--cyan-700);color:#fff"></div>
+    <div class="c" style="background:var(--cyan-800);color:#fff"></div>
+    <div class="c" style="background:var(--cyan-900);color:#fff"></div>
+  </div>
+  <div class="lbl"><span>50</span><span>100</span><span>200</span><span>300</span><span>400</span><span>500</span><span>600</span><span>700</span><span>800</span><span>900</span></div>
+</body>
+</html>

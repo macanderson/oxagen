@@ -1,0 +1,58 @@
+/*
+ * Oxagen typography tokens.
+ *
+ * Aeonik Fono = display (headings, hero metrics) — tight tracking, medium wt.
+ * Aeonik      = sans (UI + body).
+ * Aeonik Mono = mono (code, eyebrows, metric labels, node IDs).
+ *
+ * The product is developer-facing, so MONO carries real semantic weight:
+ * eyebrows, kbd, IDs, metrics and code all use Aeonik Mono, usually uppercased
+ * with positive tracking for the eyebrow/label role.
+ */
+
+:root {
+  /* Families */
+  --font-sans:
+    "Aeonik", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-display:
+    "Aeonik Fono", "Aeonik", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    "Aeonik Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo,
+    Consolas, "DejaVu Sans Mono", monospace;
+
+  /* Type scale (rem, 16px base) */
+  --text-xs: 0.75rem;     /* 12 */
+  --text-sm: 0.8125rem;   /* 13 — base UI label */
+  --text-base: 0.875rem;  /* 14 — body */
+  --text-md: 1rem;        /* 16 */
+  --text-lg: 1.125rem;    /* 18 */
+  --text-xl: 1.375rem;    /* 22 */
+  --text-2xl: 1.75rem;    /* 28 */
+  --text-3xl: 2.25rem;    /* 36 */
+  --text-4xl: 3rem;       /* 48 */
+  --text-5xl: 4rem;       /* 64 */
+  --text-6xl: 5.5rem;     /* 88 — hero */
+
+  /* Weights */
+  --weight-light: 300;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Line heights */
+  --leading-none: 1;
+  --leading-tight: 1.12;
+  --leading-snug: 1.3;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.7;
+
+  /* Tracking */
+  --tracking-tighter: -0.03em;
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;
+  --tracking-eyebrow: 0.16em;  /* mono uppercase eyebrows */
+}

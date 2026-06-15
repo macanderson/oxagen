@@ -1,0 +1,32 @@
+<!-- @dsCard group="Social" viewport="1500x500" name="X banner" subtitle="X / Twitter profile header · 1500×500" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html, body { margin: 0; }
+  .b { width: 1500px; height: 500px; box-sizing: border-box; position: relative; overflow: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+    background:
+      radial-gradient(44% 80% at 50% 0%, color-mix(in oklch, #7c5aed 36%, transparent), transparent 64%),
+      radial-gradient(40% 80% at 12% 100%, color-mix(in oklch, #22e1ff 18%, transparent), transparent 64%),
+      radial-gradient(40% 80% at 90% 100%, color-mix(in oklch, #df2a5d 22%, transparent), transparent 64%),
+      #0b0a11; color: #f4f6fb; }
+  .dots { position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,.05) 1.4px, transparent 1.4px); background-size: 40px 40px; }
+  .row { position: relative; display: flex; align-items: center; gap: 20px; }
+  .wm { font-family: var(--font-display); font-weight: 500; font-size: 76px; letter-spacing: -.04em; }
+  .sub { position: relative; font-family: var(--font-sans); font-size: 28px; color: #aab0c2; letter-spacing: .01em; }
+</style>
+</head>
+<body>
+  <div class="b">
+    <div class="dots"></div>
+    <div class="row">
+      <svg width="84" height="84" viewBox="0 0 100 100" fill="none"><defs><linearGradient id="g" x1="12" y1="12" x2="88" y2="88" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#7ce8f4"/><stop offset=".52" stop-color="#9b7bff"/><stop offset="1" stop-color="#df2a5d"/></linearGradient></defs><circle cx="50" cy="50" r="37" stroke="url(#g)" stroke-width="13"/></svg>
+      <span class="wm">Oxagen</span>
+    </div>
+    <div class="sub">Secure, RBAC-scoped context for AI agents · from a typed knowledge graph</div>
+  </div>
+</body>
+</html>

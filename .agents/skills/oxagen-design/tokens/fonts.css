@@ -1,0 +1,43 @@
+/*
+ * Oxagen typefaces — Aeonik (CoType Foundry), self-hosted variable fonts.
+ * Three families cover the whole system:
+ *   "Aeonik"       sans    — UI + body copy        (wght 100–900, + italic)
+ *   "Aeonik Fono"  display — h1–h6 / hero metrics   (wght 400–700)
+ *   "Aeonik Mono"  mono    — code, eyebrows, metrics (wght 400–500)
+ *
+ * LICENSE: Aeonik is commercial (https://cotypefoundry.com/aeonik). The web
+ * license permits self-hosted woff2 delivery from your own origin only — do
+ * NOT redistribute these binaries. Each stack keeps a system fallback.
+ */
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("../assets/fonts/Aeonik-VF.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("../assets/fonts/Aeonik-VF-italic.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik Fono";
+  src: url("../assets/fonts/AeonikFono-VF.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Aeonik Mono";
+  src: url("../assets/fonts/AeonikMono-VF.woff2") format("woff2");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}

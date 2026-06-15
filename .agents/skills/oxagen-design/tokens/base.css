@@ -1,0 +1,134 @@
+/*
+ * Oxagen base layer + brand utilities.
+ * Element defaults (body, headings, code) and the signature brand helpers.
+ *
+ * TYPE RULE: Aeonik (sans) is the system face for EVERYTHING — headings, UI,
+ * body. Aeonik Fono is reserved exclusively for the "Oxagen" logo wordmark.
+ * Aeonik Mono appears only when rendering source code / identifiers / debug
+ * context (code, kbd, entity IDs).
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+  margin: 0;
+  text-wrap: balance;
+}
+
+/* The Oxagen logo wordmark — the ONLY place Aeonik Fono is used. */
+.ox-wordmark {
+  font-family: var(--font-display);
+  font-weight: var(--weight-medium);
+  letter-spacing: -0.04em;
+}
+
+code, kbd, samp, pre {
+  font-family: var(--font-mono);
+}
+
+a { color: inherit; }
+
+/* ── Eyebrow — wide-tracked uppercase label (Aeonik sans) ─────────────────── */
+.ox-eyebrow {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* ── Gradient text — nebula sweep clipped to glyphs ──────────────────────── */
+.ox-gradient-text {
+  background: var(--grad-nebula);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ox-gradient-text-aurora {
+  background: var(--grad-aurora);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── Gradient ring — hairline jewel border via masked pseudo-element ──────── */
+.ox-gradient-ring {
+  position: relative;
+  isolation: isolate;
+}
+.ox-gradient-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--grad-nebula);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── Brand tile — the gradient app-icon lockup chip ──────────────────────── */
+.ox-brand-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--grad-cosmos);
+  color: #ffffff;
+  border-radius: var(--radius-md);
+  box-shadow: var(--glow-violet);
+}
+
+/* ── Glows ────────────────────────────────────────────────────────────────── */
+.ox-glow-violet { box-shadow: var(--glow-violet); }
+.ox-glow-cyan { box-shadow: var(--glow-cyan); }
+
+/* ── Ambient mesh background — radial jewel blooms over deep space ────────── */
+.ox-mesh {
+  position: relative;
+  background-color: var(--background);
+}
+.ox-mesh::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 50% at 12% 8%, color-mix(in oklch, var(--violet-600) 28%, transparent), transparent 70%),
+    radial-gradient(50% 40% at 92% 12%, color-mix(in oklch, var(--cyan-500) 18%, transparent), transparent 70%),
+    radial-gradient(60% 60% at 78% 96%, color-mix(in oklch, var(--cosmos-500) 16%, transparent), transparent 72%);
+}
+
+/* ── Dotted graph grid — knowledge-graph canvas backdrop ─────────────────── */
+.ox-grid-dots {
+  background-image: radial-gradient(color-mix(in oklch, var(--foreground) 12%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,31 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Neutral ink ramp" subtitle="Cool-tinted neutrals — deep-space surfaces" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 24px; }
+  .ramp { display: grid; grid-template-columns: repeat(11, 1fr); border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border); }
+  .c { height: 72px; }
+  .lbl { display: grid; grid-template-columns: repeat(11, 1fr); margin-top: 8px; }
+  .lbl span { text-align: center; font-family: var(--font-mono); font-size: 9.5px; color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+  <div class="ramp">
+    <div class="c" style="background:var(--ink-50)"></div>
+    <div class="c" style="background:var(--ink-100)"></div>
+    <div class="c" style="background:var(--ink-200)"></div>
+    <div class="c" style="background:var(--ink-300)"></div>
+    <div class="c" style="background:var(--ink-400)"></div>
+    <div class="c" style="background:var(--ink-500)"></div>
+    <div class="c" style="background:var(--ink-600)"></div>
+    <div class="c" style="background:var(--ink-700)"></div>
+    <div class="c" style="background:var(--ink-800)"></div>
+    <div class="c" style="background:var(--ink-900)"></div>
+    <div class="c" style="background:var(--ink-950)"></div>
+  </div>
+  <div class="lbl"><span>50</span><span>100</span><span>200</span><span>300</span><span>400</span><span>500</span><span>600</span><span>700</span><span>800</span><span>900</span><span>950</span></div>
+</body>
+</html>
