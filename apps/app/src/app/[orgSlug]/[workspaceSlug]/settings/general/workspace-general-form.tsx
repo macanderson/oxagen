@@ -120,7 +120,7 @@ export function WorkspaceGeneralForm({
   // -------------------------------------------------------------------------
   // Save handler — calls the server action, never throws on the happy path.
   // -------------------------------------------------------------------------
-  async function handleSave(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSave(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsSaving(true);
     try {
@@ -291,11 +291,11 @@ export function WorkspaceGeneralForm({
         <div className="flex items-center gap-3 pt-2">
           <Button
             type="submit"
+            variant="gradient"
             size="sm"
             disabled={isSaving || !values.name.trim() || !values.slug.trim()}
-            className="gap-1.5"
+            startIcon={<Save className="h-3.5 w-3.5" aria-hidden="true" />}
           >
-            <Save className="h-3.5 w-3.5" aria-hidden="true" />
             {isSaving ? "Saving…" : "Save changes"}
           </Button>
 

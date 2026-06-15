@@ -77,7 +77,7 @@ export function ShellFrame({
       : availableWorkspaces?.find((w) => w.slug === ctx.workspaceSlug)) ?? null;
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-muted/40 md:gap-2 md:p-2">
+    <div className="ox-mesh flex h-dvh w-full overflow-hidden md:gap-2 md:p-2">
       {/* Floating, collapsible sidebar (desktop). Mobile uses MobileBottomBar. */}
       <Sidebar ctx={ctx} user={user} />
 

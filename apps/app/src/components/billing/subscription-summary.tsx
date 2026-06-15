@@ -237,7 +237,7 @@ function SeatControl({ orgSlug, currentSeats, onChangeCard }: SeatControlProps) 
                     Change card
                   </Button>
                 ) : null}
-                <Button onClick={handleConfirm} disabled={confirmPending}>
+                <Button variant="gradient" onClick={handleConfirm} disabled={confirmPending}>
                   {confirmPending
                     ? "Processing…"
                     : preview.isCharge
@@ -314,7 +314,7 @@ function ReactivateDialog({ orgSlug }: { orgSlug: string }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="default" size="sm" />}>
+      <DialogTrigger render={<Button variant="gradient" size="sm" />}>
         Reactivate subscription
       </DialogTrigger>
       <DialogPopup>
@@ -326,7 +326,7 @@ function ReactivateDialog({ orgSlug }: { orgSlug: string }) {
         </DialogHeader>
         <DialogFooter>
           <DialogClose render={<Button variant="ghost" />}>Never mind</DialogClose>
-          <Button onClick={handleReactivate} disabled={pending}>
+          <Button variant="gradient" onClick={handleReactivate} disabled={pending}>
             {pending ? "Reactivating…" : "Yes, reactivate"}
           </Button>
         </DialogFooter>

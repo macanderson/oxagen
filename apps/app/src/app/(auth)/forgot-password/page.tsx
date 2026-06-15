@@ -9,7 +9,7 @@ export default function ForgotPasswordPage() {
         <OxagenLogo variant="vertical" size={40} />
       </div>
 
-      <div className="rounded-xl border bg-card p-8 shadow-md space-y-6">
+      <div className="rounded-xl border bg-card p-8 shadow-xl space-y-6">
         <div className="space-y-1 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Reset your password</h1>
           <p className="text-sm text-muted-foreground">

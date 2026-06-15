@@ -191,7 +191,7 @@ export function PlansGrid({ orgSlug, currentPlanSlug, currentTier = "free", plan
           </DialogPanel>
           <DialogFooter>
             <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
-            <Button onClick={handleConfirm} disabled={confirmPending}>
+            <Button variant="gradient" onClick={handleConfirm} disabled={confirmPending}>
               {confirmPending ? "Processing…" : "Confirm"}
             </Button>
           </DialogFooter>

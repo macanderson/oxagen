@@ -33,7 +33,7 @@ export function EnterpriseUpsell({ orgSlug, feature, currentTier }: EnterpriseUp
           Enterprise plan. Everything below is shown as a preview.
         </span>
         <Button
-          variant="default"
+          variant="gradient"
           size="sm"
           className="shrink-0 self-start sm:self-auto"
           render={<Link href={org.billing.subscription({ orgSlug })} />}

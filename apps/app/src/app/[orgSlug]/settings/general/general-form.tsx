@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { Save } from "lucide-react";
 import { AvatarUpload } from "@/components/media/avatar-upload";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -111,7 +112,7 @@ export function OrgGeneralForm({
   const [pending, startTransition] = React.useTransition();
   const isSaving = status === "saving" || pending;
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setStatus("saving");
     setErrorMsg(null);
@@ -227,8 +228,10 @@ export function OrgGeneralForm({
         <div className="flex items-center gap-3 pt-1">
           <Button
             type="submit"
+            variant="gradient"
             size="lg"
             disabled={isSaving || !canEdit || !name.trim() || !slug.trim()}
+            startIcon={<Save className="h-4 w-4" aria-hidden="true" />}
           >
             {isSaving ? "Saving…" : "Save changes"}
           </Button>

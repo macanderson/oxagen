@@ -57,7 +57,7 @@ function AddCardForm({ orgSlug, onSuccess, onCancel }: AddCardFormProps) {
     layout: "tabs",
   };
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!stripe || !elements) return;
 
@@ -94,7 +94,7 @@ function AddCardForm({ orgSlug, onSuccess, onCancel }: AddCardFormProps) {
         <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
           Cancel
         </Button>
-        <Button type="submit" disabled={submitting || !stripe || !elements}>
+        <Button type="submit" variant="gradient" disabled={submitting || !stripe || !elements}>
           {submitting ? "Saving…" : "Save card"}
         </Button>
       </DialogFooter>

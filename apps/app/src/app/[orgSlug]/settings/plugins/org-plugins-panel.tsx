@@ -919,7 +919,7 @@ function AuthAlertsSection({
 
       {error && <p className="mb-2 text-xs text-destructive">{error}</p>}
       {saved && <p className="mb-2 text-xs text-success">Settings saved.</p>}
-      <Button size="sm" onClick={handleSave} disabled={saving}>
+      <Button size="sm" variant="gradient" onClick={handleSave} disabled={saving}>
         {saving ? "Saving…" : "Save alert settings"}
       </Button>
     </div>

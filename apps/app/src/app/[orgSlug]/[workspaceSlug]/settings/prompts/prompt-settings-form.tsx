@@ -143,7 +143,7 @@ export function PromptSettingsForm({
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsSaving(true);
 
@@ -354,11 +354,11 @@ export function PromptSettingsForm({
       <div className="flex items-center gap-3 border-t border-border/40 pt-4">
         <Button
           type="submit"
+          variant="gradient"
           size="sm"
           disabled={isSaving || !canEdit}
-          className="gap-1.5"
+          startIcon={<Save className="h-3.5 w-3.5" aria-hidden="true" />}
         >
-          <Save className="h-3.5 w-3.5" aria-hidden="true" />
           {isSaving ? "Saving…" : "Save changes"}
         </Button>
 

@@ -16,7 +16,7 @@ export default async function ResetPasswordPage({ searchParams }: ResetPasswordP
         <OxagenLogo variant="vertical" size={40} />
       </div>
 
-      <div className="rounded-xl border bg-card p-8 shadow-md space-y-6">
+      <div className="rounded-xl border bg-card p-8 shadow-xl space-y-6">
         <div className="space-y-1 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Set a new password</h1>
           <p className="text-sm text-muted-foreground">Enter your new password below</p>
