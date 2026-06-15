@@ -1,28 +1,10 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<!-- Created with Linearity Curve (http://linearity.io/curve) -->
-<svg height="100%" stroke-miterlimit="10" style="fill-rule:nonzero;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;" version="1.1" viewBox="0 0 1080 1080" width="100%" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:vectornator="http://vectornator.io" xmlns:xlink="http://www.w3.org/1999/xlink">
-<defs>
-<linearGradient gradientTransform="matrix(1050.07 0.187751 1.10103 1653.76 12.1994 36.5445)" gradientUnits="userSpaceOnUse" id="LinearGradient" x1="0" x2="1" y1="0" y2="0">
-<stop offset="0" stop-color="#4926a6"/>
-<stop offset="0.541684" stop-color="#3c1f89"/>
-<stop offset="1" stop-color="#00d7ff"/>
-</linearGradient>
-<linearGradient gradientTransform="matrix(1050.08 0.710147 1.19611 1438.19 11.6097 1039.98)" gradientUnits="userSpaceOnUse" id="LinearGradient_2" x1="0" x2="1" y1="0" y2="0">
-<stop offset="0" stop-color="#4926a6"/>
-<stop offset="0.541387" stop-color="#3c1f89"/>
-<stop offset="1" stop-color="#50d5ee"/>
-</linearGradient>
-</defs>
-<g id="Layer-1" vectornator:layerName="Layer 1">
-<g opacity="1" vectornator:layerName="Group 1">
-<g opacity="1" vectornator:layerName="Group 1">
-<path d="M11.3368 11.1838L61.3368 11.1838L61.3368 1061.18L11.3368 1061.18L11.3368 11.1838Z" fill="#452c87" fill-rule="nonzero" opacity="1" stroke="none" vectornator:layerName="Rectangle 1"/>
-<path d="M1062.26 15.6868L1062.21 62.1753L12.2134 57.59L12.261 11.1014L1062.26 15.6868Z" fill="url(#LinearGradient)" fill-rule="nonzero" opacity="1" stroke="none" vectornator:layerName="Rectangle 4"/>
-<path d="M1061.8 1065.68L1017.36 1065.88L1018.18 15.8645L1062.62 15.6638L1061.8 1065.68Z" fill="#04caf7" fill-rule="nonzero" opacity="1" stroke="none" vectornator:layerName="Rectangle 5"/>
-<path d="M1061.67 1019.02L1061.62 1065.82L11.6277 1061.65L11.6711 1014.85L1061.67 1019.02Z" fill="url(#LinearGradient_2)" fill-rule="nonzero" opacity="1" stroke="none" vectornator:layerName="Rectangle 3"/>
-</g>
-<path d="M549.975 221.807C617.048 221.807 674.717 235.341 722.982 262.409C771.248 289.477 808.381 328.344 834.381 379.01C860.381 429.677 873.381 490.609 873.381 561.807C873.381 633.005 860.381 693.938 834.381 744.604C808.381 795.271 771.248 834.138 722.982 861.206C674.717 888.273 617.048 901.807 549.975 901.807C483.308 901.807 425.743 888.273 377.279 861.206C328.816 834.138 291.482 795.271 265.279 744.604C239.076 693.938 225.975 633.005 225.975 561.807C225.975 490.609 239.076 429.677 265.279 379.01C291.482 328.344 328.816 289.477 377.279 262.409C425.743 235.341 483.308 221.807 549.975 221.807ZM549.975 356.807C518.245 356.807 491.415 364.508 469.482 379.909C447.55 395.31 430.883 418.143 419.482 448.409C408.081 478.675 402.381 516.474 402.381 561.807C402.381 606.745 408.081 644.445 419.482 674.909C430.883 705.372 447.55 728.305 469.482 743.706C491.415 759.107 518.245 766.807 549.975 766.807C581.975 766.807 608.876 759.107 630.678 743.706C652.48 728.305 668.982 705.372 680.186 674.909C691.389 644.445 696.99 606.745 696.99 561.807C696.99 516.474 691.389 478.675 680.186 448.409C668.982 418.143 652.48 395.31 630.678 379.909C608.876 364.508 581.975 356.807 549.975 356.807Z" fill="#000000" opacity="1" stroke="none" vectornator:layerName="O"/>
-</g>
-</g>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 100 100" fill="none" aria-label="Oxagen">
+  <title>Oxagen logomark</title>
+  <desc>Thick circle outline stroked in the nebula gradient (cyan to violet to cosmos).</desc>
+  <defs>
+    <linearGradient id="oxneb" x1="12" y1="12" x2="88" y2="88" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7ce8f4"/><stop offset="0.52" stop-color="#9b7bff"/><stop offset="1" stop-color="#df2a5d"/>
+    </linearGradient>
+  </defs>
+  <circle cx="50" cy="50" r="37" stroke="url(#oxneb)" stroke-width="13"/>
 </svg>

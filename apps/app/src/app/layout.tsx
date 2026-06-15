@@ -52,7 +52,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#4926a6",
+  // Match the browser/OS chrome to the active theme: deep-space ink on dark,
+  // clean white on light. (Manifest theme_color is a single value for the
+  // standalone PWA toolbar — kept on the deep-space ink.)
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0b0a11" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+  ],
 };
 
 /** Valid font-size cookie values; default 'medium' when absent/invalid. */

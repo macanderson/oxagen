@@ -64,6 +64,10 @@
 
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  --color-brand-2: var(--brand-2);
+  --color-brand-2-foreground: var(--brand-2-foreground);
+  --color-brand-3: var(--brand-3);
+  --color-brand-3-foreground: var(--brand-3-foreground);
 
   --color-accent2: var(--accent2);
   --color-accent2-foreground: var(--accent2-foreground);
@@ -131,9 +135,12 @@
   }
 
   /*
-   * Headings default to the display face (Aeonik Fono) per the Oxagen design
-   * system — medium weight, tight tracking. Per-element `font-sans`/`font-mono`
-   * utilities still override when a different face is wanted.
+   * TYPE RULE (Oxagen Design System): Aeonik SANS is the system face for
+   * EVERYTHING — headings, UI, body. Aeonik Fono (--font-display) is reserved
+   * EXCLUSIVELY for the "Oxagen" wordmark (.ox-wordmark below). Aeonik Mono
+   * appears only when rendering source code / identifiers / debug context
+   * (the code/kbd/samp/pre rule below). Headings keep medium weight + tight
+   * tracking for the brand feel, but in the sans face.
    */
   h1,
   h2,
@@ -141,9 +148,11 @@
   h4,
   h5,
   h6 {
-    font-family: var(--font-display);
+    font-family: var(--font-sans);
     font-weight: 500;
-    letter-spacing: -0.025em;
+    letter-spacing: -0.02em;
+    line-height: 1.12;
+    text-wrap: balance;
   }
 
   /*
@@ -182,47 +191,48 @@
 }
 
 /*
- * Brand utility layer.
+ * Brand utility layer — the signature Oxagen jewel-tone treatments.
  *
- * Brand gradient utilities are intentionally neutralized to monochrome.
- * Class names are preserved so consumers don't break. Restore the colored
- * versions by reverting tokens.css (grad-from/via/to) — these utilities
- * already reference those token vars.
+ * Restored from the monochrome detour: gradient utilities now render the real
+ * nebula sweep (cyan → violet → cosmos) via the --grad-* tokens in tokens.css.
+ * Used SPARINGLY — one gradient moment per surface; the rest stays flat neutral.
  *
- * NOTE: the translucent `.glass` / `.glass-strong` / `.glass-subtle`
- * glassmorphism utilities were removed — surfaces use the opaque `bg-card` /
- * `bg-popover` / `bg-background` tokens so nothing renders see-through.
+ * NOTE: glassmorphism (`.glass*`) stays removed by design — surfaces use the
+ * opaque `bg-card` / `bg-popover` / `bg-background` tokens, never see-through.
+ * Depth on dark reads as GLOW (jewel focus rings), not heavy shadow.
  */
 @layer utilities {
   /*
-   * .brand-gradient — was indigo→green; now a flat near-black fill.
-   * Consumers (BrandMark tile, active tab indicator) render as solid dark.
-   * The grad-* tokens are also achromatic, so restoring color is a token-only
-   * change; the gradient syntax is intentionally kept to make that easy.
+   * .brand-gradient — the nebula sweep (cyan → violet → cosmos).
+   * Consumers: brand tiles, hero CTAs, active indicators. Reads the --grad-*
+   * tokens so the whole sweep is a token-level change.
    */
   .brand-gradient {
     background-image: linear-gradient(
       135deg,
       var(--grad-from),
-      var(--grad-via) 50%,
+      var(--grad-via) 48%,
       var(--grad-to)
     );
   }
 
   /*
-   * .gradient-text — was colored sweep; now inherits currentColor (no clip).
-   * The background-clip trick is removed so text renders opaquely.
+   * .gradient-text — nebula sweep clipped to the glyphs.
    */
   .gradient-text {
-    color: currentColor;
+    background: var(--grad-nebula);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   /*
-   * .gradient-ring — was hairline indigo→green border ring.
-   * Now a plain 1px neutral border via the ::before pseudo-element.
+   * .gradient-ring — hairline nebula border via a masked ::before. The mask
+   * punches out the center so only the 1px padding ring shows the gradient.
    */
   .gradient-ring {
     position: relative;
+    isolation: isolate;
   }
   .gradient-ring::before {
     content: "";
@@ -230,7 +240,7 @@
     inset: 0;
     border-radius: inherit;
     padding: 1px;
-    background: var(--border);
+    background: var(--grad-nebula);
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
@@ -240,12 +250,23 @@
   }
 
   /*
-   * .app-bg — was multi-color radial mesh bloom.
-   * With --mesh-opacity: 0 in tokens.css the radial gradients are already
-   * invisible; we also simplify to a no-op so there is no pseudo-element cost.
+   * .app-bg — ambient radial jewel mesh over deep space. Driven by
+   * --mesh-opacity (subtle on light, full on dark). Apply to hero/auth shells.
    */
+  .app-bg {
+    position: relative;
+  }
   .app-bg::before {
-    content: none;
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: var(--mesh-opacity);
+    background:
+      radial-gradient(60% 50% at 12% 8%, color-mix(in oklch, var(--violet-600) 28%, transparent), transparent 70%),
+      radial-gradient(50% 40% at 92% 12%, color-mix(in oklch, var(--cyan-500) 18%, transparent), transparent 70%),
+      radial-gradient(60% 60% at 78% 96%, color-mix(in oklch, var(--cosmos-500) 16%, transparent), transparent 72%);
   }
 
   /* Motion helpers — driven by the shared --ease-… and --motion-… tokens. */
@@ -311,6 +332,110 @@
     background-color: currentColor;
     border-radius: 1px;
     animation: caret-blink 1s steps(1) infinite;
+  }
+
+  /* ── Oxagen Design System brand utilities (`ox-*`) ────────────────────────
+   * The named brand treatments from the design system. Use sparingly: one
+   * gradient moment per surface. See the oxagen-design-system / oxagen-design
+   * skills for usage. */
+
+  /* The Oxagen logo wordmark — the ONLY place Aeonik Fono (--font-display) is
+   * used. Everything else is Aeonik sans per the type rule. */
+  .ox-wordmark {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+
+  /* Wide-tracked uppercase eyebrow label (sans). */
+  .ox-eyebrow {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  /* Gradient text — nebula / aurora sweeps clipped to the glyphs. */
+  .ox-gradient-text {
+    background: var(--grad-nebula);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .ox-gradient-text-aurora {
+    background: var(--grad-aurora);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Hairline nebula border ring (alias of .gradient-ring, design-system name). */
+  .ox-gradient-ring {
+    position: relative;
+    isolation: isolate;
+  }
+  .ox-gradient-ring::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--grad-nebula);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* The gradient app-icon lockup chip. */
+  .ox-brand-tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--grad-cosmos);
+    color: #ffffff;
+    border-radius: var(--radius);
+    box-shadow: var(--glow-violet);
+  }
+
+  /* Jewel focus glows. */
+  .ox-glow-violet {
+    box-shadow: var(--glow-violet);
+  }
+  .ox-glow-cyan {
+    box-shadow: var(--glow-cyan);
+  }
+
+  /* Ambient mesh background (design-system name; same bloom as .app-bg). */
+  .ox-mesh {
+    position: relative;
+    background-color: var(--background);
+  }
+  .ox-mesh::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: var(--mesh-opacity);
+    background:
+      radial-gradient(60% 50% at 12% 8%, color-mix(in oklch, var(--violet-600) 28%, transparent), transparent 70%),
+      radial-gradient(50% 40% at 92% 12%, color-mix(in oklch, var(--cyan-500) 18%, transparent), transparent 70%),
+      radial-gradient(60% 60% at 78% 96%, color-mix(in oklch, var(--cosmos-500) 16%, transparent), transparent 72%);
+  }
+
+  /* Dotted graph grid — knowledge-graph canvas backdrop. */
+  .ox-grid-dots {
+    background-image: radial-gradient(
+      color-mix(in oklch, var(--foreground) 12%, transparent) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
   }
 }
 

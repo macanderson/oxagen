@@ -1,74 +1,107 @@
 /*
- * Oxagen design tokens.
+ * Oxagen design tokens — JEWEL TONE, high-contrast, futuristic.
  *
- * Authored in oklch (perceptually-uniform) so values compose directly with the
- * `var(--token)` mappings in the @theme block of globals.css — no hsl() wrapper.
- * Light values live on :root; dark overrides live on .dark (toggled by
- * ThemeProvider via the `class` attribute).
+ * The true Oxagen brand is a jewel-tone triad — cyan #7CE8F4, violet #7C5AED,
+ * cosmos #DF2A5D — radiating from a deep indigo → cyan core. (A monochrome
+ * detour shipped earlier; this file RESTORES the jewel identity systematized by
+ * the Oxagen Design System.)
  *
- * SIMPLIFIED PALETTE — black / white / neutral gray. Brand identity (indigo →
- * green gradient ring) is intentionally removed. Restore by reverting this file
- * and the brand utility section of globals.css.
+ * THEME MODEL (unchanged from the product's self-hosted theming):
+ *   :root          → LIGHT theme (clean neutral surfaces, jewel accents)
+ *   .dark          → DARK "deep space" theme (jewel tones glow) — toggled by
+ *                    ThemeProvider via the `class` attribute
+ *   @media (prefers-color-scheme: dark) on :root:not(.light):not(.dark)
+ *                  → "system" users get the dark palette with zero JS
  *
- * All chroma values are 0 (achromatic). Hue argument is kept as 0 for clarity.
- * Destructive (red) is retained because it backs error/alert states in the UI.
- * Semantic status tokens (info/success/warning) are retained for Badge/Alert
- * variants; those are functional signals, not brand color.
+ * Base brand/neutral RAMPS, signature GRADIENTS and MOTION tokens live on :root
+ * unconditionally (theme-independent). Only the SEMANTIC surface aliases
+ * (--background, --card, --foreground, --primary, --border …) re-map per theme.
+ * Components reference the semantic aliases, NEVER the raw ramps. That single
+ * indirection is what lets one class flip the whole system.
  *
  * Restyle the product by editing these tokens, not the component class strings.
  */
 @layer base {
   :root {
-    /* Native form controls / scrollbars follow the theme. Overridden on .dark
-     * and (for "system") by the prefers-color-scheme media query below. */
+    /* Native form controls / scrollbars follow the theme. */
     color-scheme: light;
 
-    /* Light mode: white backgrounds, near-black text, mid-gray borders. */
-    --background: oklch(0.98 0 0);
-    --foreground: oklch(0.13 0 0);
+    /* ── Brand jewel triad (raw, theme-independent) ───────────────────────── */
+    --ox-cyan: #7ce8f4; /* calm — knowledge */
+    --ox-cyan-bright: #22e1ff; /* electric cyan — interactive glow */
+    --ox-violet: #7c5aed; /* primary brand */
+    --ox-violet-bright: #9b7bff; /* lifted violet — hover / on-dark */
+    --ox-cosmos: #df2a5d; /* energy */
+    --ox-indigo: #3c1f89; /* gradient anchor */
+    --ox-indigo-deep: #2a1566;
 
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.13 0 0);
+    /* Violet ramp */
+    --violet-50: #f1edfe;
+    --violet-100: #e3d9fd;
+    --violet-200: #c7b4fb;
+    --violet-300: #a98ff7;
+    --violet-400: #8f72f1;
+    --violet-500: #7c5aed;
+    --violet-600: #6740d6;
+    --violet-700: #5430ad;
+    --violet-800: #3c1f89;
+    --violet-900: #2a1566;
 
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.13 0 0);
+    /* Cyan ramp */
+    --cyan-50: #e6fbff;
+    --cyan-100: #c4f5fc;
+    --cyan-200: #9beef7;
+    --cyan-300: #7ce8f4;
+    --cyan-400: #45dcef;
+    --cyan-500: #22e1ff;
+    --cyan-600: #11b4d6;
+    --cyan-700: #0e8aa6;
+    --cyan-800: #0d6175;
+    --cyan-900: #0c4150;
 
-    /* Near-black primary (buttons, emphasis). */
-    --primary: oklch(0.2 0 0);
-    --primary-foreground: oklch(0.98 0 0);
+    /* Cosmos (rose/magenta) ramp */
+    --cosmos-300: #f088a6;
+    --cosmos-400: #ea5a82;
+    --cosmos-500: #df2a5d;
+    --cosmos-600: #c01a49;
+    --cosmos-700: #921338;
 
-    --secondary: oklch(0.96 0 0);
-    --secondary-foreground: oklch(0.2 0 0);
+    /* ── Neutral ink ramp — cool, slightly blue-violet tinted ─────────────── */
+    --ink-25: #fafafd;
+    --ink-50: #f5f6fa;
+    --ink-100: #eeedf2;
+    --ink-200: #dbdbe1;
+    --ink-300: #bebdc2;
+    --ink-400: #9e9ca5;
+    --ink-500: #747281;
+    --ink-600: #544f69;
+    --ink-700: #353143;
+    --ink-750: #272431;
+    --ink-800: #1b1924;
+    --ink-850: #14131b;
+    --ink-900: #0f0e15;
+    --ink-950: #08080d;
 
-    --muted: oklch(0.95 0 0);
-    --muted-foreground: oklch(0.45 0 0);
+    /* ── Signature brand gradients (theme-independent) ────────────────────── */
+    --grad-nebula: linear-gradient(135deg, #7ce8f4 0%, #7c5aed 48%, #df2a5d 100%);
+    --grad-aurora: linear-gradient(135deg, #22e1ff 0%, #7c5aed 100%);
+    --grad-cosmos: linear-gradient(120deg, #3c1f89 0%, #7c5aed 55%, #22e1ff 100%);
+    --grad-sunset: linear-gradient(90deg, #df2a5d 0%, #7c5aed 100%);
+    --grad-ring: conic-gradient(from 180deg, #7ce8f4, #7c5aed, #df2a5d, #7ce8f4);
 
-    --accent: oklch(0.93 0 0);
-    --accent-foreground: oklch(0.2 0 0);
-
-    --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.98 0 0);
-
-    /* Semantic status colours (Badge/Alert info/success/warning/error). */
-    --info: oklch(0.55 0.16 250);
-    --info-foreground: oklch(0.98 0 0);
-    --success: oklch(0.6 0.16 150);
-    --success-foreground: oklch(0.98 0 0);
-    --warning: oklch(0.78 0.15 80);
-    --warning-foreground: oklch(0.27 0.05 80);
-
-    --border: oklch(0.88 0 0);
-    --input: oklch(0.88 0 0);
-    --ring: oklch(0.5 0 0);
-
-    --radius: 0.75rem;
+    /*
+     * Legacy gradient stops — the .brand-gradient / .gradient-text /
+     * .gradient-ring utilities in globals.css read these three. Restored to the
+     * nebula sweep (cyan → violet → cosmos).
+     */
+    --grad-from: #7ce8f4;
+    --grad-via: #7c5aed;
+    --grad-to: #df2a5d;
 
     /*
      * Motion tokens — easing curves + durations (oxagen-design-system).
-     * Theme-independent, so declared once on :root. The CSS-transition
-     * components (menu/select/dialog/sheet/toast popups, hover-lift) consume
-     * the var() forms; the framer-motion layer mirrors the same numbers in
-     * packages/ui/src/lib/motion.ts. Keep the two in sync.
+     * Theme-independent. The CSS-transition components consume the var() forms;
+     * the framer-motion layer mirrors the same numbers in lib/motion.ts.
      *
      *   --ease-entry  rise + settle for elements coming in (decelerate)
      *   --ease-hover  hover/focus micro-interactions (gentle ease-out)
@@ -82,119 +115,155 @@
     --motion-overlay: 200ms;
     --motion-entry: 320ms;
 
-    /*
-     * Brand tokens neutralized — set to mid-gray so any consumer of
-     * bg-brand / text-brand / border-brand gets a neutral swatch rather than
-     * the old indigo. Restore to oklch(0.52 0.22 285) to bring back the color.
-     */
-    --brand: oklch(0.35 0 0);
-    --brand-foreground: oklch(0.98 0 0);
+    --radius: 0.75rem;
 
-    /* accent2 (formerly teal) — neutralized. */
-    --accent2: oklch(0.6 0 0);
-    --accent2-foreground: oklch(0.13 0 0);
+    /* ════════════════════════════════════════════════════════════════════════
+     * LIGHT THEME (default) — clean neutral surfaces, jewel accents
+     * ════════════════════════════════════════════════════════════════════════ */
+    --background: var(--ink-50);
+    --foreground: #16191f;
 
-    /*
-     * Gradient stops neutralized — dark→light gray so gradient utilities
-     * (.brand-gradient, .gradient-text, .gradient-ring, .app-bg) render as
-     * a flat neutral rather than the indigo→green sweep.
-     */
-    --grad-from: oklch(0.25 0 0);
-    --grad-via: oklch(0.45 0 0);
-    --grad-to: oklch(0.65 0 0);
+    --card: #ffffff;
+    --card-foreground: #16191f;
 
-    /* Ambient mesh — zeroed out on light (no visible bloom). */
-    --mesh-opacity: 0;
+    --popover: #ffffff;
+    --popover-foreground: #16191f;
 
-    /* Chart ramp — neutral gray scale. */
-    --chart-1: oklch(0.25 0 0);
-    --chart-2: oklch(0.38 0 0);
-    --chart-3: oklch(0.52 0 0);
-    --chart-4: oklch(0.66 0 0);
-    --chart-5: oklch(0.78 0 0);
+    /* Primary action — violet, the brand's action color */
+    --primary: var(--violet-600);
+    --primary-foreground: #ffffff;
 
-    /* Sidebar — white background, neutral accents. */
-    --sidebar: oklch(0.99 0 0);
-    --sidebar-foreground: oklch(0.13 0 0);
-    --sidebar-primary: oklch(0.2 0 0);
-    --sidebar-primary-foreground: oklch(0.98 0 0);
-    --sidebar-accent: oklch(0.93 0 0);
-    --sidebar-accent-foreground: oklch(0.2 0 0);
-    --sidebar-border: oklch(0.88 0 0);
-    --sidebar-ring: oklch(0.5 0 0);
+    --secondary: var(--ink-100);
+    --secondary-foreground: #353143;
+
+    --muted: var(--ink-100);
+    --muted-foreground: #6b6878;
+
+    --accent: var(--violet-50);
+    --accent-foreground: var(--violet-800);
+
+    --destructive: #e2320e;
+    --destructive-foreground: #ffffff;
+
+    /* Semantic status (functional signals — retained across themes) */
+    --info: #2074d5;
+    --info-foreground: #ffffff;
+    --success: #37a04d;
+    --success-foreground: #04200a;
+    --warning: #ff9900;
+    --warning-foreground: #1f0a00;
+
+    --border: #e6e5ec;
+    --input: #dbdbe1;
+    --ring: var(--violet-500);
+
+    /* Brand tokens (drive bg-brand / text-brand / hover-glow) */
+    --brand: var(--violet-600);
+    --brand-foreground: #ffffff;
+    --brand-2: var(--cyan-700); /* cyan accent — readable on light */
+    --brand-2-foreground: #ffffff;
+    --brand-3: var(--cosmos-500); /* cosmos accent — energy */
+    --brand-3-foreground: #ffffff;
+
+    /* accent2 — cyan (knowledge surfaces). Kept for existing consumers. */
+    --accent2: var(--cyan-700);
+    --accent2-foreground: #ffffff;
+
+    /* Ambient mesh bloom — subtle on light. */
+    --mesh-opacity: 0.4;
+
+    /* Glow / focus rings (jewel-tinted) — softer on light. */
+    --glow-violet: 0 0 0 1px color-mix(in oklch, var(--violet-500) 35%, transparent), 0 1px 2px rgba(60, 31, 137, 0.12);
+    --glow-cyan: 0 0 0 1px color-mix(in oklch, var(--cyan-600) 35%, transparent), 0 1px 2px rgba(13, 97, 117, 0.12);
+
+    /* Chart ramp — jewel scale (theme-independent). */
+    --chart-1: var(--violet-500);
+    --chart-2: var(--cyan-500);
+    --chart-3: var(--cosmos-500);
+    --chart-4: var(--violet-300);
+    --chart-5: #ffb020;
+
+    /* Sidebar — clean white, violet accents. */
+    --sidebar: #ffffff;
+    --sidebar-foreground: #16191f;
+    --sidebar-primary: var(--violet-600);
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: var(--violet-50);
+    --sidebar-accent-foreground: var(--violet-800);
+    --sidebar-border: #ededf2;
+    --sidebar-ring: var(--violet-500);
   }
 
+  /* ════════════════════════════════════════════════════════════════════════
+   * DARK THEME — deep-space surfaces, glowing jewel accents (the hero)
+   * ════════════════════════════════════════════════════════════════════════ */
   .dark {
     color-scheme: dark;
 
-    /* Dark mode: near-black backgrounds, white text, dark-gray borders. */
-    --background: oklch(0.13 0 0);
-    --foreground: oklch(0.98 0 0);
+    --background: var(--ink-950);
+    --foreground: #f4f6fb;
 
-    --card: oklch(0.18 0 0);
-    --card-foreground: oklch(0.98 0 0);
+    --card: var(--ink-850);
+    --card-foreground: #f4f6fb;
 
-    --popover: oklch(0.18 0 0);
-    --popover-foreground: oklch(0.98 0 0);
+    --popover: var(--ink-800);
+    --popover-foreground: #f4f6fb;
 
-    --primary: oklch(0.98 0 0);
-    --primary-foreground: oklch(0.18 0 0);
+    --primary: var(--violet-500);
+    --primary-foreground: #ffffff;
 
-    --secondary: oklch(0.25 0 0);
-    --secondary-foreground: oklch(0.98 0 0);
+    --secondary: var(--ink-750);
+    --secondary-foreground: #e7e8ef;
 
-    --muted: oklch(0.25 0 0);
-    --muted-foreground: oklch(0.65 0 0);
+    --muted: var(--ink-800);
+    --muted-foreground: #9aa0b2;
 
-    --accent: oklch(0.28 0 0);
-    --accent-foreground: oklch(0.98 0 0);
+    --accent: var(--ink-750);
+    --accent-foreground: #f4f6fb;
 
-    --destructive: oklch(0.704 0.191 22.216);
-    --destructive-foreground: oklch(0.98 0 0);
+    --destructive: #f0502f;
+    --destructive-foreground: #ffffff;
 
-    /* Semantic status colours — retained for functional signals. */
-    --info: oklch(0.62 0.16 250);
-    --info-foreground: oklch(0.98 0 0);
-    --success: oklch(0.68 0.16 150);
-    --success-foreground: oklch(0.18 0.03 150);
-    --warning: oklch(0.82 0.15 80);
-    --warning-foreground: oklch(0.27 0.05 80);
+    --info: #3b8ee8;
+    --info-foreground: #ffffff;
+    --success: #46b85f;
+    --success-foreground: #eafdee;
+    --warning: #ffab33;
+    --warning-foreground: #1f0a00;
 
-    --border: oklch(0.3 0 0);
-    --input: oklch(0.3 0 0);
-    --ring: oklch(0.55 0 0);
+    --border: #262531;
+    --input: #2a2937;
+    --ring: var(--violet-400);
 
-    /* Brand neutralized to light-gray so it reads on dark backgrounds. */
-    --brand: oklch(0.75 0 0);
-    --brand-foreground: oklch(0.13 0 0);
+    --brand: var(--violet-500);
+    --brand-foreground: #ffffff;
+    --brand-2: var(--cyan-300);
+    --brand-2-foreground: #08080d;
+    --brand-3: var(--cosmos-500);
+    --brand-3-foreground: #ffffff;
 
-    --accent2: oklch(0.65 0 0);
-    --accent2-foreground: oklch(0.13 0 0);
+    --accent2: var(--cyan-300);
+    --accent2-foreground: #08080d;
 
-    /* Gradient stops — light gray sweep on dark (still achromatic). */
-    --grad-from: oklch(0.6 0 0);
-    --grad-via: oklch(0.72 0 0);
-    --grad-to: oklch(0.85 0 0);
+    --mesh-opacity: 1;
 
-    /* Ambient mesh — zeroed out. */
-    --mesh-opacity: 0;
+    --glow-violet: 0 0 0 1px color-mix(in oklch, var(--violet-500) 55%, transparent), 0 0 24px color-mix(in oklch, var(--violet-500) 28%, transparent);
+    --glow-cyan: 0 0 0 1px color-mix(in oklch, var(--cyan-400) 55%, transparent), 0 0 24px color-mix(in oklch, var(--cyan-400) 26%, transparent);
 
-    /* Chart ramp — neutral gray scale against dark canvas. */
-    --chart-1: oklch(0.75 0 0);
-    --chart-2: oklch(0.65 0 0);
-    --chart-3: oklch(0.55 0 0);
-    --chart-4: oklch(0.45 0 0);
-    --chart-5: oklch(0.35 0 0);
+    --chart-1: var(--violet-400);
+    --chart-2: var(--cyan-300);
+    --chart-3: var(--cosmos-400);
+    --chart-4: var(--violet-200);
+    --chart-5: #ffc04d;
 
-    /* Sidebar — slightly lighter than background, neutral. */
-    --sidebar: oklch(0.16 0 0);
-    --sidebar-foreground: oklch(0.98 0 0);
-    --sidebar-primary: oklch(0.98 0 0);
-    --sidebar-primary-foreground: oklch(0.18 0 0);
-    --sidebar-accent: oklch(0.28 0 0);
-    --sidebar-accent-foreground: oklch(0.98 0 0);
-    --sidebar-border: oklch(0.3 0 0);
-    --sidebar-ring: oklch(0.55 0 0);
+    --sidebar: var(--ink-900);
+    --sidebar-foreground: #f4f6fb;
+    --sidebar-primary: var(--violet-500);
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: var(--ink-800);
+    --sidebar-accent-foreground: #f4f6fb;
+    --sidebar-border: #222230;
+    --sidebar-ring: var(--violet-400);
   }
 
   /*
@@ -211,67 +280,70 @@
     :root:not(.light):not(.dark) {
       color-scheme: dark;
 
-      --background: oklch(0.13 0 0);
-      --foreground: oklch(0.98 0 0);
+      --background: var(--ink-950);
+      --foreground: #f4f6fb;
 
-      --card: oklch(0.18 0 0);
-      --card-foreground: oklch(0.98 0 0);
+      --card: var(--ink-850);
+      --card-foreground: #f4f6fb;
 
-      --popover: oklch(0.18 0 0);
-      --popover-foreground: oklch(0.98 0 0);
+      --popover: var(--ink-800);
+      --popover-foreground: #f4f6fb;
 
-      --primary: oklch(0.98 0 0);
-      --primary-foreground: oklch(0.18 0 0);
+      --primary: var(--violet-500);
+      --primary-foreground: #ffffff;
 
-      --secondary: oklch(0.25 0 0);
-      --secondary-foreground: oklch(0.98 0 0);
+      --secondary: var(--ink-750);
+      --secondary-foreground: #e7e8ef;
 
-      --muted: oklch(0.25 0 0);
-      --muted-foreground: oklch(0.65 0 0);
+      --muted: var(--ink-800);
+      --muted-foreground: #9aa0b2;
 
-      --accent: oklch(0.28 0 0);
-      --accent-foreground: oklch(0.98 0 0);
+      --accent: var(--ink-750);
+      --accent-foreground: #f4f6fb;
 
-      --destructive: oklch(0.704 0.191 22.216);
-      --destructive-foreground: oklch(0.98 0 0);
+      --destructive: #f0502f;
+      --destructive-foreground: #ffffff;
 
-      --info: oklch(0.62 0.16 250);
-      --info-foreground: oklch(0.98 0 0);
-      --success: oklch(0.68 0.16 150);
-      --success-foreground: oklch(0.18 0.03 150);
-      --warning: oklch(0.82 0.15 80);
-      --warning-foreground: oklch(0.27 0.05 80);
+      --info: #3b8ee8;
+      --info-foreground: #ffffff;
+      --success: #46b85f;
+      --success-foreground: #eafdee;
+      --warning: #ffab33;
+      --warning-foreground: #1f0a00;
 
-      --border: oklch(0.3 0 0);
-      --input: oklch(0.3 0 0);
-      --ring: oklch(0.55 0 0);
+      --border: #262531;
+      --input: #2a2937;
+      --ring: var(--violet-400);
 
-      --brand: oklch(0.75 0 0);
-      --brand-foreground: oklch(0.13 0 0);
+      --brand: var(--violet-500);
+      --brand-foreground: #ffffff;
+      --brand-2: var(--cyan-300);
+      --brand-2-foreground: #08080d;
+      --brand-3: var(--cosmos-500);
+      --brand-3-foreground: #ffffff;
 
-      --accent2: oklch(0.65 0 0);
-      --accent2-foreground: oklch(0.13 0 0);
+      --accent2: var(--cyan-300);
+      --accent2-foreground: #08080d;
 
-      --grad-from: oklch(0.6 0 0);
-      --grad-via: oklch(0.72 0 0);
-      --grad-to: oklch(0.85 0 0);
+      --mesh-opacity: 1;
 
-      --mesh-opacity: 0;
+      --glow-violet: 0 0 0 1px color-mix(in oklch, var(--violet-500) 55%, transparent), 0 0 24px color-mix(in oklch, var(--violet-500) 28%, transparent);
+      --glow-cyan: 0 0 0 1px color-mix(in oklch, var(--cyan-400) 55%, transparent), 0 0 24px color-mix(in oklch, var(--cyan-400) 26%, transparent);
 
-      --chart-1: oklch(0.75 0 0);
-      --chart-2: oklch(0.65 0 0);
-      --chart-3: oklch(0.55 0 0);
-      --chart-4: oklch(0.45 0 0);
-      --chart-5: oklch(0.35 0 0);
+      --chart-1: var(--violet-400);
+      --chart-2: var(--cyan-300);
+      --chart-3: var(--cosmos-400);
+      --chart-4: var(--violet-200);
+      --chart-5: #ffc04d;
 
-      --sidebar: oklch(0.16 0 0);
-      --sidebar-foreground: oklch(0.98 0 0);
-      --sidebar-primary: oklch(0.98 0 0);
-      --sidebar-primary-foreground: oklch(0.18 0 0);
-      --sidebar-accent: oklch(0.28 0 0);
-      --sidebar-accent-foreground: oklch(0.98 0 0);
-      --sidebar-border: oklch(0.3 0 0);
-      --sidebar-ring: oklch(0.55 0 0);
+      --sidebar: var(--ink-900);
+      --sidebar-foreground: #f4f6fb;
+      --sidebar-primary: var(--violet-500);
+      --sidebar-primary-foreground: #ffffff;
+      --sidebar-accent: var(--ink-800);
+      --sidebar-accent-foreground: #f4f6fb;
+      --sidebar-border: #222230;
+      --sidebar-ring: var(--violet-400);
     }
   }
 }

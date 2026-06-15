@@ -71,7 +71,14 @@ export function DevStatus() {
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Text bold>Oxagen dev stack</Text>
+      <Text>
+        {/* Brand banner: cyan ring glyph + violet "Oxagen" wordmark (Oxagen jewel palette). */}
+        <Text color="#7CE8F4">◯ </Text>
+        <Text color="#7C5AED" bold>
+          Oxagen
+        </Text>
+        <Text dimColor> dev stack</Text>
+      </Text>
       <Box marginTop={1} flexDirection="column">
         {statuses.map((row) => (
           <Text key={row.name}>

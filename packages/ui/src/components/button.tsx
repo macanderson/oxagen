@@ -23,6 +23,9 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 hover:-translate-y-px active:translate-y-0",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        // Brand nebula gradient fill with white text and a violet glow on hover.
+        gradient:
+          "brand-gradient text-white shadow-sm hover:-translate-y-px hover:[box-shadow:var(--glow-violet)] active:translate-y-0",
       },
       // coss ui scale — intentionally more compact than shadcn/ui. To preserve
       // a shadcn `default` height (36px) use `lg`; for a shadcn `lg` use `xl`.

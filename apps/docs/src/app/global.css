@@ -9,3 +9,14 @@
 @import "fumadocs-ui/css/preset.css";
 
 @source "../../../../node_modules/fumadocs-ui/dist/**/*.js";
+
+/*
+ * Brand the Fumadocs accent: map its primary/ring tokens to the Oxagen violet
+ * (theme-mapped in @oxagen/ui tokens.css, so it adapts light/dark). Links,
+ * active nav, focus rings and the TOC marker pick this up; the neutral base
+ * surfaces stay on Fumadocs' own tokens.
+ */
+:root {
+  --color-fd-primary: var(--primary);
+  --color-fd-ring: var(--ring);
+}

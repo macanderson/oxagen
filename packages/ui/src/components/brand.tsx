@@ -1,116 +1,253 @@
 /**
- * Oxagen brand marks.
+ * Oxagen brand marks — jewel-tone identity.
  *
- * The logomark is the signature broken ring with connector nodes; the wordmark
- * is the "Oxagen" lettering. Both draw with `currentColor` so they inherit the
- * surrounding text color and adapt to light/dark automatically.
+ * LOGOMARK: a thick circle ("O") stroked in the nebula gradient
+ * (cyan → violet → cosmos). WORDMARK: "Oxagen" in Aeonik Fono — the ONLY place
+ * the display face is used (everything else is Aeonik sans per the type rule).
  *
- *   <OxagenLogomark className="size-7 text-foreground" />
- *   <OxagenWordmark className="h-4 w-auto text-foreground" />
- *   <BrandMark />                       // gradient tile + logomark, the app chrome lockup
- *   <OxagenLockup className="flex items-center gap-2" />
+ *   <OxagenLogomark className="size-7" />        // the gradient ring
+ *   <OxagenWordmark className="text-xl" />       // "Oxagen" in Aeonik Fono
+ *   <BrandMark />                                // ring at the app-chrome size
+ *   <OxagenLockup />                             // ring + wordmark, side by side
+ *   <OxagenLogo variant="vertical" size={48} />  // full lockup API
+ *   <NodeChip kind="document" id="doc_41be09" /> // typed knowledge-graph node
+ *   <ConfidenceBar score={0.82} />               // edge-inference confidence
  *
- * `BrandMark` places the logomark inside a neutral `bg-primary` rounded tile,
- * which is the treatment used in the app shell topbar and mobile nav.
+ * All marks are pure presentational (no hooks) so they render in Server
+ * Components. The ring shares a single fixed gradient id — every instance paints
+ * the identical nebula gradient, so a shared def is safe and avoids forcing a
+ * client boundary with useId().
  */
 
+import type { CSSProperties } from "react";
 import { cn } from "../lib/utils";
 
-export function OxagenLogomark({ className }: { className?: string }) {
+const NEBULA_ID = "oxagenNebula";
+
+export type LogoTone = "gradient" | "mono-light" | "mono-dark" | "solid";
+
+function monoColor(tone: LogoTone): string | null {
+  if (tone === "mono-light") return "#f4f6fb";
+  if (tone === "mono-dark") return "#0f0e15";
+  if (tone === "solid") return "currentColor";
+  return null; // gradient
+}
+
+/** The Oxagen logomark — a thick circle stroked in the nebula gradient. */
+export function OxagenLogomark({
+  className,
+  tone = "gradient",
+  style,
+}: {
+  className?: string;
+  tone?: LogoTone;
+  style?: CSSProperties;
+}) {
+  const mono = monoColor(tone);
+  const stroke = mono ?? `url(#${NEBULA_ID})`;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 256 256"
+      viewBox="0 0 100 100"
       fill="none"
       role="img"
       aria-label="Oxagen logomark"
       className={className}
+      style={style}
     >
-      <g>
-        <circle cx="138.37" cy="128" r="50.69" fill="none" stroke="currentColor" strokeWidth="11.52" />
-        <line x1="174.22" y1="92.15" x2="212.1" y2="54.26" stroke="currentColor" strokeWidth="10.37" strokeLinecap="round" />
-        <line x1="174.22" y1="163.85" x2="212.1" y2="201.74" stroke="currentColor" strokeWidth="10.37" strokeLinecap="round" />
-        <line x1="87.67" y1="128" x2="46.2" y2="128" stroke="currentColor" strokeWidth="10.37" strokeLinecap="round" />
-        <circle cx="138.37" cy="128" r="16.13" fill="currentColor" />
-        <circle cx="221.33" cy="45.04" r="12.67" fill="currentColor" />
-        <circle cx="221.33" cy="210.96" r="12.67" fill="currentColor" />
-        <circle cx="34.67" cy="128" r="12.67" fill="currentColor" />
-      </g>
+      {!mono && (
+        <defs>
+          <linearGradient id={NEBULA_ID} x1="10" y1="10" x2="90" y2="90" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#7ce8f4" />
+            <stop offset="0.52" stopColor="#7c5aed" />
+            <stop offset="1" stopColor="#df2a5d" />
+          </linearGradient>
+        </defs>
+      )}
+      <circle cx="50" cy="50" r="37" stroke={stroke} strokeWidth="13" />
     </svg>
   );
 }
 
-export function OxagenWordmark({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 498.4 174.4"
-      fill="none"
-      role="img"
-      aria-label="Oxagen"
-      className={className}
-    >
-      {/* O */}
-      <path
-        d="M1141 523C1141 904 905 1079 620 1079C335 1079 99 904 99 523C99 143 335 -24 620 -24C905 -24 1141 143 1141 523ZM883 524C883 267 773 176 620 176C467 176 357 267 357 524C357 781 467 879 620 879C773 879 883 781 883 524Z"
-        transform="translate(26 110) scale(0.06 -0.06)"
-        fill="currentColor"
-      />
-      {/* x */}
-      <path
-        d="M74 1055 472 537 58 0H348L605 363L884 0H1182L769 536L1166 1055H885L636 707L368 1055Z"
-        transform="translate(100.4 110) scale(0.06 -0.06)"
-        fill="currentColor"
-      />
-      {/* a */}
-      <path
-        d="M586 1079C270 1079 149 951 149 770V718H377L378 759C379 864 457 904 571 904C684 904 762 867 762 735V592C459 595 114 555 114 259C114 83 235 -24 420 -24C569 -24 678 45 753 127H778C788 41 832 -22 972 -22C1019 -22 1070 -15 1126 0V184C1039 175 1017 193 1017 260V747C1017 991 852 1079 586 1079ZM379 293C379 406 492 458 690 458C715 458 739 457 762 454V235C698 190 627 160 546 160C442 160 379 209 379 293Z"
-        transform="translate(174.8 110) scale(0.06 -0.06)"
-        fill="currentColor"
-      />
-      {/* g */}
-      <path
-        d="M99 584C99 294 242 95 494 95C644 95 748 166 815 251H828V33C828 -159 733 -221 596 -221C469 -221 399 -166 362 -66L131 -115C169 -276 287 -397 596 -397C920 -397 1083 -264 1083 61V1055H861L848 922H814C757 1007 653 1077 502 1077C247 1077 99 877 99 584ZM357 584C357 765 451 866 614 866C686 866 758 846 828 796V377C759 327 687 307 613 307C448 307 357 406 357 584Z"
-        transform="translate(249.2 110) scale(0.06 -0.06)"
-        fill="currentColor"
-      />
-      {/* e */}
-      <path
-        d="M99 529C99 164 317 -24 631 -24C844 -24 1040 64 1115 283L868 319C824 220 739 176 631 176C461 176 366 287 358 498H1118V598C1118 920 943 1079 641 1079C320 1079 99 895 99 529ZM368 653C400 811 498 880 633 880C773 880 870 808 870 653Z"
-        transform="translate(323.6 110) scale(0.06 -0.06)"
-        fill="currentColor"
-      />
-      {/* n */}
-      <path
-        d="M1083 0V769C1083 987 980 1078 796 1078C630 1078 523 1003 427 899H394L379 1055H157V0H412V752C485 826 571 874 673 874C761 874 828 838 828 702V0Z"
-        transform="translate(398 110) scale(0.06 -0.06)"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
-/** Brand mark tile — renders the logomark in a neutral tile. */
-export function BrandMark({ className }: { className?: string }) {
+/** The Oxagen wordmark — "Oxagen" set in Aeonik Fono (the only Fono usage). */
+export function OxagenWordmark({
+  className,
+  tone = "gradient",
+  style,
+}: {
+  className?: string;
+  tone?: LogoTone;
+  style?: CSSProperties;
+}) {
+  const mono = monoColor(tone);
+  const color = mono && mono !== "currentColor" ? mono : undefined;
   return (
     <span
-      className={cn(
-        "bg-primary inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-primary-foreground shadow-sm",
-        className,
-      )}
-      aria-hidden="true"
+      className={cn("ox-wordmark inline-block", className)}
+      style={color ? { color, ...style } : style}
     >
-      <OxagenLogomark className="size-5" />
+      Oxagen
     </span>
   );
 }
 
-/** Brand lockup: gradient-tile logomark + wordmark, side by side. */
+/** Brand mark — the gradient ring at the app-chrome size. */
+export function BrandMark({ className }: { className?: string }) {
+  return <OxagenLogomark className={cn("size-7 shrink-0", className)} />;
+}
+
+/** Brand lockup: ring + wordmark, side by side. Wordmark hides on mobile. */
 export function OxagenLockup({ className }: { className?: string }) {
   return (
     <span className={cn("flex items-center gap-2", className)}>
       <BrandMark />
-      <OxagenWordmark className="hidden h-4 w-auto text-foreground sm:block" />
+      <OxagenWordmark className="hidden text-xl text-foreground sm:inline-block" />
+    </span>
+  );
+}
+
+/**
+ * Full logo lockup API mirroring the design system.
+ *   variant: mark | wordmark | horizontal | vertical
+ *   tone:    gradient | mono-light | mono-dark | solid
+ *   size:    mark height in px (wordmark scales relative to it)
+ */
+export function OxagenLogo({
+  variant = "horizontal",
+  tone = "gradient",
+  size = 28,
+  className,
+}: {
+  variant?: "mark" | "wordmark" | "horizontal" | "vertical";
+  tone?: LogoTone;
+  size?: number;
+  className?: string;
+}) {
+  // size the ring/wordmark via inline style so callers can pass any px size.
+  const ringStyle: CSSProperties = { width: size, height: size };
+
+  if (variant === "mark") {
+    return (
+      <span className={cn("inline-flex", className)} style={ringStyle} aria-label="Oxagen">
+        <OxagenLogomark tone={tone} className="size-full" />
+      </span>
+    );
+  }
+  if (variant === "wordmark") {
+    return (
+      <OxagenWordmark
+        tone={tone}
+        className={cn("text-foreground", className)}
+        // wordmark cap-height ~= ring height
+      />
+    );
+  }
+  if (variant === "vertical") {
+    return (
+      <span className={cn("inline-flex flex-col items-center", className)} style={{ gap: size * 0.34 }} aria-label="Oxagen">
+        <OxagenLogomark tone={tone} style={ringStyle} className="shrink-0" />
+        <OxagenWordmark tone={tone} style={{ fontSize: size * 0.92 }} className="text-foreground" />
+      </span>
+    );
+  }
+  // horizontal (default)
+  return (
+    <span className={cn("inline-flex items-center", className)} style={{ gap: size * 0.42 }} aria-label="Oxagen">
+      <OxagenLogomark tone={tone} style={ringStyle} className="shrink-0" />
+      <OxagenWordmark tone={tone} style={{ fontSize: size * 1.02 }} className="text-foreground" />
+    </span>
+  );
+}
+
+/* ── Knowledge-graph brand primitives ──────────────────────────────────────── */
+
+export type NodeKind = "user" | "document" | "service" | "policy" | "resource" | "default";
+
+const NODE_KIND_COLOR: Record<NodeKind, string> = {
+  user: "var(--cyan-400)",
+  document: "var(--violet-400)",
+  service: "#67d182",
+  policy: "var(--cosmos-400)",
+  resource: "var(--warning)",
+  default: "var(--muted-foreground)",
+};
+
+/**
+ * NodeChip — a typed knowledge-graph node reference: a colour-coded dot + mono
+ * entity id, the way the product renders entities in edge diagrams and tool
+ * output. `kind` colours the dot by entity class.
+ */
+export function NodeChip({
+  kind = "default",
+  id,
+  label,
+  className,
+}: {
+  kind?: NodeKind;
+  id?: string;
+  label?: string;
+  className?: string;
+}) {
+  const color = NODE_KIND_COLOR[kind] ?? NODE_KIND_COLOR.default;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card py-0.5 pl-2 pr-2.5 font-mono text-[11px] text-foreground",
+        className,
+      )}
+    >
+      <span
+        className="size-[7px] shrink-0 rounded-full"
+        style={{ background: color, boxShadow: `0 0 6px ${color}` }}
+      />
+      {label && <span className="font-sans font-medium">{label}</span>}
+      {id && <span className="tracking-wide text-muted-foreground">{id}</span>}
+    </span>
+  );
+}
+
+function confidenceBand(score: number): [track: string, text: string] {
+  if (score >= 0.8) return ["#37a04d", "#67d182"];
+  if (score >= 0.6) return ["var(--warning)", "#ffbe63"];
+  return ["var(--destructive)", "#ff8a6b"];
+}
+
+/**
+ * ConfidenceBar — inference-confidence meter for semantic edges. Colour follows
+ * the product thresholds: ≥0.8 success, ≥0.6 warning, else danger.
+ */
+export function ConfidenceBar({
+  score = 0,
+  showValue = true,
+  width = 120,
+  className,
+}: {
+  score?: number;
+  showValue?: boolean;
+  width?: number;
+  className?: string;
+}) {
+  const s = Math.max(0, Math.min(1, score));
+  const [track, text] = confidenceBand(s);
+  return (
+    <span className={cn("inline-flex items-center gap-2", className)}>
+      <span
+        className="relative h-1.5 shrink-0 overflow-hidden rounded-full bg-muted"
+        style={{ width }}
+      >
+        <span
+          className="absolute inset-y-0 left-0 rounded-full"
+          style={{ width: `${s * 100}%`, background: track, boxShadow: `0 0 8px ${track}` }}
+        />
+      </span>
+      {showValue && (
+        <span
+          className="font-sans text-[11px] font-semibold tabular-nums"
+          style={{ color: text }}
+        >
+          {Math.round(s * 100)}%
+        </span>
+      )}
     </span>
   );
 }

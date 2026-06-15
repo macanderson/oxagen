@@ -97,7 +97,8 @@ const TabsIndicator = React.forwardRef<
     ref={ref}
     className={cn(
       // Base positioning — Base UI CSS vars drive left/width automatically.
-      "absolute bottom-0 left-0 h-0.5 rounded-full bg-foreground",
+      // Active indicator carries the brand nebula sweep.
+      "absolute bottom-0 left-0 h-0.5 rounded-full brand-gradient",
       "transition-all duration-[var(--motion-base)] ease-[var(--ease-entry)]",
       // Override width/left from Base UI CSS vars.
       "[left:var(--active-tab-left)] [width:var(--active-tab-width)]",

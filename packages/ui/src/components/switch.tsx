@@ -23,8 +23,8 @@ const Switch = React.forwardRef<
       "disabled:cursor-not-allowed disabled:opacity-50",
       // Unchecked track
       "bg-input",
-      // Checked track — on-state uses `--primary`
-      "data-[checked]:bg-primary",
+      // Checked track — on-state uses `--primary` with a violet glow
+      "data-[checked]:bg-primary data-[checked]:[box-shadow:var(--glow-violet)]",
       className,
     )}
     {...props}

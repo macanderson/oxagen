@@ -17,6 +17,9 @@ const badgeVariants = cva(
           "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
         outline: "text-foreground",
         muted: "border-transparent bg-muted text-muted-foreground",
+        // Brand jewel tones — violet primary and cyan accent.
+        brand: "border-transparent bg-brand text-brand-foreground",
+        cyan: "border-transparent bg-brand-2 text-brand-2-foreground",
         // Semantic colour variants (require the --info/--success/--warning
         // tokens declared in tokens.css).
         info: "border-transparent bg-info text-info-foreground",

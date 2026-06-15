@@ -55,6 +55,20 @@ describe("buttonVariants", () => {
     expect(cls).toContain("border-destructive/50");
   });
 
+  it("applies gradient variant classes (brand nebula fill + violet glow)", () => {
+    const cls = buttonVariants({ variant: "gradient" });
+    expect(cls).toContain("brand-gradient");
+    expect(cls).toContain("text-white");
+    expect(cls).toContain("hover:[box-shadow:var(--glow-violet)]");
+  });
+
+  it("composes the gradient variant with sizes", () => {
+    const cls = buttonVariants({ variant: "gradient", size: "lg" });
+    expect(cls).toContain("brand-gradient");
+    expect(cls).toContain("h-9");
+    expect(cls).toContain("px-6");
+  });
+
   it("applies the compact coss default size (32px / h-8)", () => {
     const cls = buttonVariants({ size: "default" });
     expect(cls).toContain("h-8");
