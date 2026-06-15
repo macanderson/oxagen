@@ -5,8 +5,9 @@
 // forwarding, event handlers) require @testing-library/react to be added as a
 // devDependency — tracked separately.
 
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { buttonVariants } from "./button";
+import { Button, buttonVariants } from "./button";
 
 describe("buttonVariants", () => {
   it("includes the base classes for the default variant", () => {
@@ -112,5 +113,69 @@ describe("buttonVariants", () => {
     const cls = buttonVariants({ className: "my-custom-class" });
     expect(cls).toContain("my-custom-class");
     expect(cls).toContain("bg-primary");
+  });
+});
+
+// startIcon/endIcon render composition. Exercised through SSR (renderToStaticMarkup)
+// so we verify the actual DOM order Base UI's `useRender` produces — no
+// @testing-library/react needed and it stays in the node test environment.
+describe("Button startIcon / endIcon", () => {
+  it("renders nothing extra when no icons are passed", () => {
+    const html = renderToStaticMarkup(<Button>Save</Button>);
+    expect(html).toContain("Save");
+    expect(html).not.toContain("data-icon");
+  });
+
+  it("renders startIcon before the label", () => {
+    const html = renderToStaticMarkup(
+      <Button startIcon={<span data-icon="start">→</span>}>Run agent</Button>,
+    );
+    const iconAt = html.indexOf('data-icon="start"');
+    const labelAt = html.indexOf("Run agent");
+    expect(iconAt).toBeGreaterThanOrEqual(0);
+    expect(labelAt).toBeGreaterThan(iconAt);
+  });
+
+  it("renders endIcon after the label", () => {
+    const html = renderToStaticMarkup(
+      <Button endIcon={<span data-icon="end">↗</span>}>Open</Button>,
+    );
+    const labelAt = html.indexOf("Open");
+    const iconAt = html.indexOf('data-icon="end"');
+    expect(labelAt).toBeGreaterThanOrEqual(0);
+    expect(iconAt).toBeGreaterThan(labelAt);
+  });
+
+  it("brackets the label with both icons in order", () => {
+    const html = renderToStaticMarkup(
+      <Button
+        startIcon={<span data-icon="start" />}
+        endIcon={<span data-icon="end" />}
+      >
+        Deploy
+      </Button>,
+    );
+    const startAt = html.indexOf('data-icon="start"');
+    const labelAt = html.indexOf("Deploy");
+    const endAt = html.indexOf('data-icon="end"');
+    expect(startAt).toBeGreaterThanOrEqual(0);
+    expect(labelAt).toBeGreaterThan(startAt);
+    expect(endAt).toBeGreaterThan(labelAt);
+  });
+
+  it("forwards icons onto a custom `render` target (e.g. an anchor)", () => {
+    const html = renderToStaticMarkup(
+      <Button
+        variant="gradient"
+        render={<a href="/run" />}
+        startIcon={<span data-icon="start" />}
+      >
+        Run
+      </Button>,
+    );
+    expect(html).toContain("<a");
+    expect(html).toContain('href="/run"');
+    expect(html).toContain('data-icon="start"');
+    expect(html).toContain("brand-gradient");
   });
 });

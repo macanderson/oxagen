@@ -132,7 +132,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
         </p>
       ) : null}
 
-      <Button type="submit" size="lg" disabled={isSubmitting}>
+      <Button type="submit" variant="gradient" size="lg" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? "Updating…" : "Set new password"}
       </Button>
     </form>

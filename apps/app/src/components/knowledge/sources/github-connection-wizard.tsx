@@ -13,8 +13,9 @@
 
 import * as React from "react";
 
-// Base URL for the Hono API. In dev: http://localhost:4000. In prod: https://oxagen-v2-api.vercel.app
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
+// Use relative /api/v1 so requests stay same-origin and the Better Auth session
+// cookie is forwarded automatically. next.config.mjs rewrites these to the Hono API.
+const API_BASE = "/api";
 import {
   Dialog,
   DialogPopup,

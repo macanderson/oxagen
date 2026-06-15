@@ -1,27 +1,35 @@
 import Link from "next/link";
-import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { OxagenLogo } from "@oxagen/ui/components/brand";
 import { ForgotPasswordForm } from "./forgot-password-form";
 
 export default function ForgotPasswordPage() {
   return (
-    <div className="grid min-h-dvh place-items-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Forgot your password?</CardTitle>
-          <CardDescription>
-            Enter your email and we&rsquo;ll send you a link to reset it.
-          </CardDescription>
-        </CardHeader>
-        <CardPanel>
-          <ForgotPasswordForm />
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            Remembered it?{" "}
-            <Link href="/login" className="text-accent hover:underline">
-              Sign in
-            </Link>
+    <div className="w-full max-w-sm space-y-6">
+      <div className="flex justify-center">
+        <OxagenLogo variant="vertical" size={40} />
+      </div>
+
+      <div className="rounded-xl border bg-card p-8 shadow-md space-y-6">
+        <div className="space-y-1 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight">Reset your password</h1>
+          <p className="text-sm text-muted-foreground">
+            Enter your email and we&rsquo;ll send you a link
           </p>
-        </CardPanel>
-      </Card>
+        </div>
+
+        <ForgotPasswordForm />
+
+        <p className="text-center text-sm text-muted-foreground">
+          Remembered it?{" "}
+          <Link href="/login" className="text-accent hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </div>
+
+      <p className="text-center text-xs text-muted-foreground">
+        SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
+      </p>
     </div>
   );
 }

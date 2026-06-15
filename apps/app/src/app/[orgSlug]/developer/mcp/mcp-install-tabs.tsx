@@ -11,7 +11,7 @@
 
 import * as React from "react";
 import { Check, Copy } from "lucide-react";
-import { Tabs, TabsList, TabsTab, TabsPanel } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTab, TabsPanel, TabsIndicator } from "@/components/ui/tabs";
 
 export interface McpTabEntry {
   /** Display label shown in the tab strip (e.g. "Claude Code"). */
@@ -83,12 +83,13 @@ export function McpInstallTabs({ entries }: McpInstallTabsProps) {
   return (
     <Tabs defaultValue={firstKey}>
       {/* Tab strip */}
-      <TabsList className="mb-0">
+      <TabsList variant="underline" className="mb-0 relative">
         {entries.map((entry) => (
           <TabsTab key={entry.key} value={entry.key}>
             {entry.client}
           </TabsTab>
         ))}
+        <TabsIndicator />
       </TabsList>
 
       {/* Panels */}

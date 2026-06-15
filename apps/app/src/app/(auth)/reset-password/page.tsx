@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { OxagenLogo } from "@oxagen/ui/components/brand";
 import { ResetPasswordForm } from "./reset-password-form";
 
 interface ResetPasswordPageProps {
@@ -11,23 +11,29 @@ export default async function ResetPasswordPage({ searchParams }: ResetPasswordP
   const token = params.token ?? "";
 
   return (
-    <div className="grid min-h-dvh place-items-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Set a new password</CardTitle>
-          <CardDescription>
-            Choose a strong password with at least 8 characters.
-          </CardDescription>
-        </CardHeader>
-        <CardPanel>
-          <ResetPasswordForm token={token} />
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            <Link href="/login" className="text-accent hover:underline">
-              Back to sign in
-            </Link>
-          </p>
-        </CardPanel>
-      </Card>
+    <div className="w-full max-w-sm space-y-6">
+      <div className="flex justify-center">
+        <OxagenLogo variant="vertical" size={40} />
+      </div>
+
+      <div className="rounded-xl border bg-card p-8 shadow-md space-y-6">
+        <div className="space-y-1 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight">Set a new password</h1>
+          <p className="text-sm text-muted-foreground">Enter your new password below</p>
+        </div>
+
+        <ResetPasswordForm token={token} />
+
+        <p className="text-center text-sm text-muted-foreground">
+          <Link href="/login" className="text-accent hover:underline">
+            Back to sign in
+          </Link>
+        </p>
+      </div>
+
+      <p className="text-center text-xs text-muted-foreground">
+        SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
+      </p>
     </div>
   );
 }

@@ -9,7 +9,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTab, TabsPanel } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTab, TabsPanel, TabsIndicator } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -206,7 +206,7 @@ export function MarketplaceModal({
             data-testid="marketplace-tab-bar"
           >
             <div className="flex items-center justify-between gap-4">
-              <TabsList variant="underline" className="gap-6">
+              <TabsList variant="underline" className="gap-6 relative">
                 {PLUGIN_TABS.map(({ value, label, icon: Icon }) => (
                   <TabsTab
                     key={value}
@@ -218,6 +218,7 @@ export function MarketplaceModal({
                     {label}
                   </TabsTab>
                 ))}
+                <TabsIndicator />
               </TabsList>
 
               <div className="flex items-center gap-2">

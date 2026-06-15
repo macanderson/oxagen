@@ -146,7 +146,7 @@ export function PageTabs({ tabs, className }: PageTabsProps) {
               {isActive && (
                 <motion.span
                   layoutId="page-tab-indicator"
-                  className="bg-foreground absolute inset-x-0 bottom-0 h-0.5 rounded-full"
+                  className="brand-gradient absolute inset-x-0 bottom-0 h-0.5 rounded-full"
                   aria-hidden="true"
                   transition={transition.entry}
                 />

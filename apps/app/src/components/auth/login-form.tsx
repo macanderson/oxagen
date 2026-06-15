@@ -71,7 +71,7 @@ export function LoginForm({ mode = "signin" }: { mode?: "signin" | "signup" }) {
         />
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="submit" size="lg" disabled={pending}>
+      <Button type="submit" variant="gradient" size="lg" className="w-full" disabled={pending}>
         {pending ? "Working…" : mode === "signup" ? "Create account" : "Sign in"}
       </Button>
     </form>

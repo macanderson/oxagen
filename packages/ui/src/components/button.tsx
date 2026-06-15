@@ -54,10 +54,23 @@ export interface ButtonProps
    *   <Button render={<Link href="/login" />}>Login</Button>
    */
   render?: React.ReactElement;
+  /**
+   * Leading icon rendered before the label (oxagen-design-system Button spec).
+   * Auto-sized to 1rem via the base `[&_svg]:size-4` rule; the `gap-2` between
+   * icon and label is already part of the variant base.
+   *
+   *   <Button variant="gradient" startIcon={<ArrowUp />}>Run agent</Button>
+   */
+  startIcon?: React.ReactNode;
+  /** Trailing icon rendered after the label. */
+  endIcon?: React.ReactNode;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, render, children, type, ...props }, ref) =>
+  (
+    { className, variant, size, render, children, startIcon, endIcon, type, ...props },
+    ref,
+  ) =>
     useRender({
       render: render ?? <button type={type ?? "button"} />,
       ref,
@@ -68,7 +81,20 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         // they are its content; for a `render` element (e.g. a Link/anchor)
         // Base UI merges them in, so icon/label children still render —
         // e.g. <Button render={<Link href />}>Login</Button>.
-        children,
+        //
+        // startIcon/endIcon bracket the label. We only wrap in a fragment when
+        // an icon is present so the common (no-icon) case forwards `children`
+        // untouched — important for `render` targets that expect a single child.
+        children:
+          startIcon || endIcon ? (
+            <>
+              {startIcon}
+              {children}
+              {endIcon}
+            </>
+          ) : (
+            children
+          ),
       },
     }),
 );

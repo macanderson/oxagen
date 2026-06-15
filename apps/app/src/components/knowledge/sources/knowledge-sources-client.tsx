@@ -2,8 +2,7 @@
 
 import * as React from "react";
 
-// Base URL for the Hono API. In dev: http://localhost:4000. In prod: https://oxagen-v2-api.vercel.app
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
+const API_BASE = "/api";
 import {
   Database,
   Plus,

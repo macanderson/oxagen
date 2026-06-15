@@ -12,8 +12,23 @@ const serverActionsAllowedOrigins = [
   .map((origin) => origin?.trim())
   .filter((origin) => Boolean(origin) && origin !== "");
 
+// Hono API base — strips trailing slash so the rewrite destination path is clean.
+const honoApiBase = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Proxy /api/v1/* requests to the Hono API so browser calls stay same-origin
+  // and the Better Auth session cookie is forwarded server-side. Next.js
+  // filesystem routes (e.g. /api/v1/chat/stream) take precedence — only paths
+  // without a local handler fall through to this rewrite.
+  async rewrites() {
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${honoApiBase}/v1/:path*`,
+      },
+    ];
+  },
   reactStrictMode: true,
   transpilePackages: ["@oxagen/auth", "@oxagen/ai", "@oxagen/config", "@oxagen/database", "@oxagen/oxagen", "@oxagen/ui"],
   // Server-only packages with native deps (docker, ssh2) must stay external

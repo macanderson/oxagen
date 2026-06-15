@@ -84,11 +84,19 @@ export function Sidebar({ ctx, user }: SidebarProps) {
       aria-label="Primary navigation"
       data-collapsed={collapsed}
       className={cn(
-        "hidden h-full shrink-0 flex-col overflow-hidden border-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex",
-        "md:rounded-xl md:border md:shadow-sm",
+        "relative hidden h-full shrink-0 flex-col overflow-hidden border-border bg-sidebar text-sidebar-foreground md:flex",
+        "md:rounded-xl md:border-t md:border-r md:border-b md:shadow-sm",
+        "transition-[width] [transition-duration:var(--motion-base)] [transition-timing-function:var(--ease-entry)]",
         collapsed ? "w-[3.75rem]" : "w-64",
       )}
     >
+      {/* Gradient left accent — nebula sweep (cyan → violet → cosmos).
+          overflow-hidden + rounded-xl clips this to the corner radius automatically. */}
+      <div
+        className="pointer-events-none absolute bottom-0 left-0 top-0 w-[2px]"
+        style={{ background: "var(--grad-nebula)" }}
+        aria-hidden="true"
+      />
       {/* Brand header */}
       <div className={cn("flex h-14 shrink-0 items-center px-3", collapsed && "justify-center px-0")}>
         <Link href={homeHref} aria-label="Oxagen home" className="flex items-center gap-2">

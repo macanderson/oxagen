@@ -6,7 +6,7 @@ import type { SemanticEdge } from "@oxagen/oxagen/contracts/semantic.edge.list";
 
 // ── Display helpers ────────────────────────────────────────────────────────────
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
+const API_BASE = "/api";
 
 function confidenceLabel(score: number): { label: string; className: string } {
   if (score >= 0.8) return { label: "High", className: "text-emerald-600 dark:text-emerald-400" };

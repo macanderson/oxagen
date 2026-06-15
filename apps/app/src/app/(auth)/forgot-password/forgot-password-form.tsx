@@ -89,7 +89,7 @@ export function ForgotPasswordForm() {
         </p>
       ) : null}
 
-      <Button type="submit" size="lg" disabled={isSubmitting}>
+      <Button type="submit" variant="gradient" size="lg" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? "Sending…" : "Send reset link"}
       </Button>
     </form>

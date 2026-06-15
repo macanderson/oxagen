@@ -58,7 +58,7 @@ export function useConnectorSchema(): ConnectorSchemaContextValue {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
+const API_BASE = "/api";
 
 function buildDefaultValues(schema: ConnectorPluginSchema | null): FormValues {
   if (!schema) return {};

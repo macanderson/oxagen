@@ -73,8 +73,8 @@ export function SidebarItem({
         "px-3 py-2.5 text-sm font-medium",
         // Rail mode: center the icon, drop horizontal padding
         collapsed && "justify-center gap-0 px-0",
-        // Transition
-        "transition-colors",
+        // Transition — design-system micro easing for hover micro-interactions
+        "[transition:background-color_var(--motion-micro)_var(--ease-hover),color_var(--motion-micro)_var(--ease-hover)]",
         // Focus ring
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
         // Inactive — neutral hover
@@ -100,7 +100,7 @@ export function SidebarItem({
       {(collapsed || affordance !== "return") && (
         <Icon
           className={cn(
-            "h-4 w-4 shrink-0 transition-colors",
+            "h-4 w-4 shrink-0 [transition:color_var(--motion-micro)_var(--ease-hover)]",
             active
               ? "text-sidebar-accent-foreground"
               : "text-muted-foreground group-hover:text-sidebar-accent-foreground",
