@@ -155,6 +155,17 @@ describe("github app webhook – configuration & signature", () => {
     expect(res.status).toBe(503);
   });
 
+  it("returns 401 when the signature header is absent", async () => {
+    const res = await app.fetch(
+      makeRequest(PATH, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-github-event": "pull_request" },
+        body: JSON.stringify({ installation: { id: 555 } }),
+      }),
+    );
+    expect(res.status).toBe(401);
+  });
+
   it("returns 401 on an invalid signature", async () => {
     const res = await app.fetch(
       signedPost("pull_request", { installation: { id: 555 } }, { badSig: true }),
@@ -222,6 +233,14 @@ describe("github app webhook – lifecycle events", () => {
     expect(res.status).toBe(200);
     expect(tx.update).not.toHaveBeenCalled();
   });
+
+  it("acks an installation event with no action field", async () => {
+    const tx = makeTx([]);
+    mocks.withSystemDb.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx));
+    const res = await app.fetch(signedPost("installation", { installation: { id: 555 } }));
+    expect(res.status).toBe(200);
+    expect(tx.update).not.toHaveBeenCalled();
+  });
 });
 
 describe("github app webhook – routing & dispatch", () => {
@@ -249,6 +268,62 @@ describe("github app webhook – routing & dispatch", () => {
     expect(sent[0]?.data.connectorType).toBe("github");
     expect(sent[0]?.data.sourceRecordType).toBe("pull_request");
     expect(sent[0]?.data.payload).toEqual({ number: 7, title: "PR" });
+  });
+
+  it("fans out to all installation connections for events without a repository", async () => {
+    // No `repository` in the payload (org-level event) → repo filter is skipped.
+    const res = await app.fetch(
+      signedPost("pull_request", {
+        installation: { id: 555 },
+        pull_request: { number: 7 },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dispatched: number }).dispatched).toBe(1);
+  });
+
+  it("dispatches nothing when the connector has no parseWebhookEvent", async () => {
+    mocks.getConnector.mockReturnValue({});
+    const res = await app.fetch(
+      signedPost("pull_request", {
+        installation: { id: 555 },
+        repository: { full_name: "acme/widgets" },
+        pull_request: { number: 7 },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dispatched: number }).dispatched).toBe(0);
+  });
+
+  it("handles a null extracted record without throwing", async () => {
+    mocks.parseWebhookEvent.mockReturnValue([{ sourceRecordType: "repository", record: null }]);
+    const res = await app.fetch(
+      signedPost("repository", {
+        installation: { id: 555 },
+        repository: { full_name: "acme/widgets" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dispatched: number }).dispatched).toBe(1);
+  });
+
+  it("dispatches when the event header is absent (empty event name)", async () => {
+    const body = JSON.stringify({
+      installation: { id: 555 },
+      repository: { full_name: "acme/widgets" },
+      pull_request: { number: 7 },
+    });
+    const sig =
+      "sha256=" + createHmac("sha256", SECRET).update(Buffer.from(body)).digest("hex");
+    const res = await app.fetch(
+      makeRequest(PATH, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-hub-signature-256": sig },
+        body,
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dispatched: number }).dispatched).toBe(1);
   });
 
   it("does not dispatch when the event repo does not match the connection", async () => {

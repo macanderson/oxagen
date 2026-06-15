@@ -56,8 +56,15 @@ When you connect a repository, Oxagen performs a first pass over its default bra
 - Larger repositories are processed in batches. The sync runs in the background — you can
   leave the page and come back.
 
-The connection's status moves to **Active** once the sync has started. You can re-run a sync
+The connection's status moves to **Connected** once the sync has started. You can re-run a sync
 at any time from the source's settings.
+
+### Staying up to date automatically
+
+After the initial sync, Oxagen keeps your knowledge graph current as your repository changes —
+new commits, pull requests, issues, comments, and releases are ingested automatically as they
+happen, with no action required. Records are added for the activity types your workspace has
+chosen to ingest; you can also trigger a manual **Re-sync** at any time.
 
 <Callout type="info">
   The initial sync focuses on common source-code file types and skips generated/vendor
