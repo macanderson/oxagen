@@ -22,6 +22,11 @@ import { activeHrefFor, getSidebarConfig, resolveSidebarCtx, resolveSidebarMode 
 import { SidebarItem } from "@/components/shell/sidebar-item";
 import { UserSwitcher, type SessionUser } from "@/components/shell/user-switcher";
 import { BrandMark, OxagenWordmark } from "@/components/ui/brand";
+import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
+import {
+  installPluginAction,
+  installBulkPluginAction,
+} from "@/app/[orgSlug]/settings/plugins/plugin-actions";
 import { useSidebar } from "./sidebar-context";
 import { cn } from "@/lib/utils";
 import type { ScopeContext } from "@/lib/scope";
@@ -46,6 +51,8 @@ function GroupLabel({ children, collapsed }: { children: React.ReactNode; collap
 export function Sidebar({ ctx, user }: SidebarProps) {
   const pathname = usePathname();
   const { collapsed } = useSidebar();
+  const [marketplaceOpen, setMarketplaceOpen] = React.useState(false);
+
   // Recover the workspace slug from the URL (the org layout doesn't supply it),
   // then resolve the single active href as the most specific match.
   const effectiveCtx = resolveSidebarCtx(pathname, ctx);
@@ -60,6 +67,21 @@ export function Sidebar({ ctx, user }: SidebarProps) {
   const renderItem = (item: (typeof config.items)[number]) => {
     const href = item.href(effectiveCtx);
     const badge = item.badge ? item.badge(effectiveCtx) : undefined;
+    // Marketplace opens a modal directly instead of navigating to settings.
+    if (item.id === "marketplace") {
+      return (
+        <SidebarItem
+          key={item.id}
+          href={href}
+          label={item.label}
+          icon={item.icon}
+          active={false}
+          badge={badge}
+          collapsed={collapsed}
+          onClick={() => setMarketplaceOpen(true)}
+        />
+      );
+    }
     return (
       <SidebarItem
         key={item.id}
@@ -128,6 +150,16 @@ export function Sidebar({ ctx, user }: SidebarProps) {
           className={collapsed ? "mx-auto" : undefined}
         />
       </div>
+
+      {/* Marketplace modal — mounted here so it's always available from the sidebar
+          without requiring a page navigation to org settings → plugins. */}
+      <MarketplaceModal
+        orgSlug={effectiveCtx.orgSlug}
+        open={marketplaceOpen}
+        onOpenChange={setMarketplaceOpen}
+        installAction={installPluginAction}
+        installBulkAction={installBulkPluginAction}
+      />
     </aside>
   );
 }

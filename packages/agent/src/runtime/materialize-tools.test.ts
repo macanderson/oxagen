@@ -113,6 +113,39 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
   authorizeExternalCapability: vi.fn(async () => ({ allowed: true, outcome: "allow", reason: null })),
 }));
 
+// Lightweight @oxagen/tenancy shim. The real runInTenantScope asserts UUIDs and
+// uses a module-singleton AsyncLocalStorage; both fight this file (fake ids like
+// "ten_1", plus vi.resetModules() re-imports that would fork the ALS). The shim
+// stores the active scope in a vi.hoisted object — created ONCE and shared across
+// every re-imported module instance — so getScope() observed in the test reflects
+// the scope set by the (possibly re-imported) materializeTools. This is what lets
+// us assert the approval write + MCP IAM gate run INSIDE a tenant scope (the
+// regression for "No active tenant scope — data access out of bounds").
+const tenancyMock = vi.hoisted(() => ({
+  state: { current: null as null | { orgId: string; workspaceId: string } },
+}));
+vi.mock("@oxagen/tenancy", () => ({
+  runInTenantScope: async <T>(
+    scope: { orgId: string; workspaceId: string },
+    fn: () => Promise<T> | T,
+  ): Promise<T> => {
+    const prev = tenancyMock.state.current;
+    tenancyMock.state.current = scope;
+    try {
+      return await fn();
+    } finally {
+      tenancyMock.state.current = prev;
+    }
+  },
+  getScope: () => tenancyMock.state.current,
+  requireScope: () => {
+    if (!tenancyMock.state.current) {
+      throw new Error("No active tenant scope — data access out of bounds");
+    }
+    return tenancyMock.state.current;
+  },
+}));
+
 // Stub @oxagen/sandbox so isSandboxAvailable() is mockable and never tries to
 // detect a real driver.
 vi.mock("@oxagen/sandbox", () => ({
@@ -377,6 +410,39 @@ describe("materializeTools", () => {
     await (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 });
     expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
   });
+
+  // Regression: the approval write (createApprovalRequest → withTenantDb →
+  // requireScope) runs from the AI SDK's deferred execute() OUTSIDE the route's
+  // runInTenantScope. Without re-entering scope here it failed fast with
+  // "No active tenant scope — data access out of bounds" before the approval
+  // card could render. Assert the write now happens INSIDE the turn's scope.
+  it("writes the approval request inside the turn's tenant scope (regression: no 'No active tenant scope')", async () => {
+    let scopeAtApproval: unknown = "UNSET";
+    mocks.createApprovalRequest.mockReset();
+    mocks.createApprovalRequest.mockImplementationOnce(async () => {
+      // tenancyMock.state.current is the active scope set by runInTenantScope.
+      scopeAtApproval = tenancyMock.state.current;
+      return { approvalId: "appr_scoped" };
+    });
+    const fixtureGated = [
+      { ...FIXTURE[2], agent: { riskLevel: "high" as const, requiresApproval: true } },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => fixtureGated,
+      getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+    }));
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+    const { tools } = await mt({ ...CTX, messageId: "msg_42" });
+    await (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 });
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    // The approval write saw an active scope carrying the turn's tenant ids.
+    expect(scopeAtApproval).toEqual({ orgId: CTX.orgId, workspaceId: CTX.workspaceId });
+    // And the scope is unwound afterwards (no leak across tool calls).
+    expect(tenancyMock.state.current).toBeNull();
+    // Restore the shared default impl for subsequent tests.
+    mocks.createApprovalRequest.mockImplementation(async () => ({ approvalId: "appr_x" }));
+  });
 });
 
 // ── GAP-4: External MCP tool IAM enforcement ─────────────────────────────────
@@ -433,6 +499,19 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     );
     // Transport must have run on allow.
     expect(fakeExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs the IAM gate inside the turn's tenant scope (regression: fetchAuthz needs withTenantDb)", async () => {
+    let scopeAtIam: unknown = "UNSET";
+    vi.mocked(authorizeExternalCapability).mockImplementationOnce(async () => {
+      scopeAtIam = tenancyMock.state.current;
+      return { allowed: true, outcome: "allow", reason: null };
+    });
+    const { tools } = await materializeTools(CTX);
+    const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    await (tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
+    expect(scopeAtIam).toEqual({ orgId: CTX.orgId, workspaceId: CTX.workspaceId });
+    expect(tenancyMock.state.current).toBeNull();
   });
 
   it("blocks transport and returns tool-error string when IAM denies (GAP-4)", async () => {

@@ -4,6 +4,7 @@ import pino from "pino";
 import { insertToolInvocation, type ToolInvocationRow } from "@oxagen/telemetry";
 import type { CapabilityContext } from "../types";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 import { beforeTool, afterTool, onError } from "../hooks/runtime";
@@ -216,14 +217,27 @@ export async function materializeTools(
           // gate (their auth surface is responsible for authorization).
           if (requiresApproval && ctx.messageId) {
             const expiresAt = new Date(Date.now() + APPROVAL_TTL_MS).toISOString();
-            const { approvalId } = await createApprovalRequest({
-              orgId: ctx.orgId,
-              workspaceId: ctx.workspaceId,
-              messageId: ctx.messageId,
-              capabilityName: cap.name,
-              inputPreview: input,
-              riskLevel,
-            });
+            // createApprovalRequest writes the approval row via withTenantDb,
+            // which requires an active ALS tenant scope. This execute() closure
+            // is invoked by the AI SDK mid-stream — OUTSIDE the route's
+            // runInTenantScope (that scope only wrapped the materializeTools
+            // call itself, not the deferred tool executions). Without re-entering
+            // scope here, every requiresApproval capability (workspace.create,
+            // etc.) fails fast with "No active tenant scope" before the approval
+            // card can render. The handler call below (invoke) re-establishes
+            // scope independently inside the kernel.
+            const { approvalId } = await runInTenantScope(
+              { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+              () =>
+                createApprovalRequest({
+                  orgId: ctx.orgId,
+                  workspaceId: ctx.workspaceId,
+                  messageId: ctx.messageId!,
+                  capabilityName: cap.name,
+                  inputPreview: input,
+                  riskLevel,
+                }),
+            );
             // Emit approval-required event BEFORE blocking so the stream route
             // can forward it to the client immediately. Without this, the SSE
             // channel goes silent during the waitForApproval block and the
@@ -311,10 +325,16 @@ export async function materializeTools(
           // defaultEffect="allow" — the admin intentionally installed +
           // enabled this plugin, but an explicit deny/require_approval policy
           // against the synthetic id is honoured when IAM is enforced.
-          const iamResult = await authorizeExternalCapability(
-            capturedKey,
-            ctx,
-            "allow",
+          // The IAM check's fetchAuthz reads tenant tables via withTenantDb,
+          // which requires an active ALS tenant scope. Like the approval write
+          // above, this MCP execute() closure runs mid-stream OUTSIDE the
+          // route's runInTenantScope, so re-enter scope here. (In apps/app the
+          // IAM checkFn is currently null and short-circuits to "allow" before
+          // any DB call, but this keeps the gate correct if IAM enforcement is
+          // ever enabled on the agent surface.)
+          const iamResult = await runInTenantScope(
+            { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+            () => authorizeExternalCapability(capturedKey, ctx, "allow"),
           );
           if (!iamResult.allowed) {
             try {

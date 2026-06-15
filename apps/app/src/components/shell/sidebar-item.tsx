@@ -46,6 +46,8 @@ export interface SidebarItemProps {
   /** Icon-rail mode: hide the label/badge/affordances, center the icon. */
   collapsed?: boolean;
   className?: string;
+  /** When provided, renders a <button> that calls onClick instead of a <Link>. */
+  onClick?: () => void;
 }
 
 export function SidebarItem({
@@ -58,32 +60,29 @@ export function SidebarItem({
   isReturn = false,
   collapsed = false,
   className,
+  onClick,
 }: SidebarItemProps) {
   const affordance = sidebarItemAffordance({ external, isReturn });
 
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      aria-label={collapsed ? label : undefined}
-      title={collapsed ? label : undefined}
-      className={cn(
-        // Layout: flex row, icon + label + badge, full-width, mobile tap target
-        "group relative flex min-h-[2.75rem] w-full items-center gap-2.5 rounded-md",
-        "px-3 py-2.5 text-sm font-medium",
-        // Rail mode: center the icon, drop horizontal padding
-        collapsed && "justify-center gap-0 px-0",
-        // Transition — design-system micro easing for hover micro-interactions
-        "[transition:background-color_var(--motion-micro)_var(--ease-hover),color_var(--motion-micro)_var(--ease-hover)]",
-        // Focus ring
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-        // Inactive — neutral hover
-        !active && "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-        // Active — neutral accent fill
-        active && "bg-sidebar-accent text-sidebar-accent-foreground",
-        className,
-      )}
-    >
+  const sharedClasses = cn(
+    // Layout: flex row, icon + label + badge, full-width, mobile tap target
+    "group relative flex min-h-[2.75rem] w-full items-center gap-2.5 rounded-md",
+    "px-3 py-2.5 text-sm font-medium",
+    // Rail mode: center the icon, drop horizontal padding
+    collapsed && "justify-center gap-0 px-0",
+    // Transition — design-system micro easing for hover micro-interactions
+    "[transition:background-color_var(--motion-micro)_var(--ease-hover),color_var(--motion-micro)_var(--ease-hover)]",
+    // Focus ring
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+    // Inactive — neutral hover
+    !active && "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+    // Active — neutral accent fill
+    active && "bg-sidebar-accent text-sidebar-accent-foreground",
+    className,
+  );
+
+  const children = (
+    <>
       {/* Return arrow (←) — appears before the icon when isReturn (full mode only) */}
       {!collapsed && affordance === "return" && (
         <ArrowLeft
@@ -133,6 +132,32 @@ export function SidebarItem({
           aria-hidden="true"
         />
       )}
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={collapsed ? label : undefined}
+        title={collapsed ? label : undefined}
+        className={sharedClasses}
+      >
+        {children}
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      aria-label={collapsed ? label : undefined}
+      title={collapsed ? label : undefined}
+      className={sharedClasses}
+    >
+      {children}
     </Link>
   );
 }

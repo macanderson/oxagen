@@ -1,4 +1,4 @@
-h1:0XXl7a3reZcW9Uewtq9UrCf8SEzMPt/nqcHQGmJOTdA=
+h1:NbKaXJAufy1WPmRnYzBTxrXbbE5cyifGxuA+s/e/9E8=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:rkdyIpu+hw+f+fGZHzpXyfm5feAL2GK9qitZROPXTpo=
@@ -6,3 +6,4 @@ h1:0XXl7a3reZcW9Uewtq9UrCf8SEzMPt/nqcHQGmJOTdA=
 20260612150000_add_capability_plugin_type.sql h1:By+WHhg3gq3pEYfojs3zDtlYJDw+B6ZnlPQkrsvhuCA=
 20260612200000_plugin_governance_security_events.sql h1:s95nmGdZORB28518DpRrqJtvLcrCvVKZe6KUk2+x/qQ=
 20260612210000_skills_builtin_readable_rls.sql h1:WhvzP8u8KS2RlGfI2SEXa2fuRfHwesH9j8rlHAX/F+Q=
+20260614000000_seed_official_mcp_registry.sql h1:p/R/Ukn92TIjCdAWzuZzHMOveZdpTCYkdTPo7yn2vuc=

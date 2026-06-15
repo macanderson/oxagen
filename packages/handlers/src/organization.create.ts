@@ -2,8 +2,9 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
 import { schema, withSystemDb, isUniqueViolation } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { grantFreeCredits } from "@oxagen/billing";
+import { inngest } from "@oxagen/inngest-functions/client";
 import { logger } from "./logger";
 import { bootstrapOrgIAM } from "./iam-provision";
 
@@ -162,6 +163,26 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
       "organization.create: grantFreeCredits failed — org created, credits not granted",
     );
   });
+
+  // Trigger a one-shot sync of the global MCP registry so the plugin catalog
+  // is populated within seconds of signup (no waiting for the 6-hour cron).
+  // Fire-and-forget — a sync failure must never fail org creation.
+  withSystemDb((tx) =>
+    tx.query.mcpRegistries.findFirst({
+      where: and(isNull(schema.mcpRegistries.orgId), eq(schema.mcpRegistries.isDefaultSeed, true)),
+      columns: { id: true },
+    }),
+  )
+    .then((registry) => {
+      if (!registry) return;
+      return inngest.send({
+        name: "plugin/registry.sync",
+        data: { registryId: registry.id, mode: "full" },
+      });
+    })
+    .catch((err: unknown) => {
+      logger.warn({ err, orgId }, "organization.create: MCP registry sync trigger failed (non-fatal)");
+    });
 
   return result;
 };

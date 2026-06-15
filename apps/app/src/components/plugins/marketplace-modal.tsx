@@ -179,7 +179,7 @@ export function MarketplaceModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup
-        className="max-w-5xl h-[80vh] flex flex-col gap-0 p-0"
+        className="max-w-[1100px] w-[calc(100vw-2rem)] h-[80vh] flex flex-col gap-0 p-0"
         data-testid="marketplace-modal"
       >
         <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-border/40">
@@ -200,59 +200,59 @@ export function MarketplaceModal({
           }}
           className="flex flex-col flex-1 min-h-0"
         >
-          {/* Tab bar + search row */}
+          {/* Tab bar + filter/search — two rows so content never overflows */}
           <div
             className="flex-shrink-0 px-6 pt-3 pb-0 border-b border-border/40"
             data-testid="marketplace-tab-bar"
           >
-            <div className="flex items-center justify-between gap-4">
-              <TabsList variant="underline" className="gap-6 relative">
-                {PLUGIN_TABS.map(({ value, label, icon: Icon }) => (
-                  <TabsTab
-                    key={value}
-                    value={value}
-                    className="flex items-center gap-1.5 text-sm"
-                    data-testid={`marketplace-tab-${value}`}
-                  >
-                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                    {label}
-                  </TabsTab>
-                ))}
-                <TabsIndicator />
-              </TabsList>
+            {/* Row 1: type tabs */}
+            <TabsList variant="underline" className="gap-6 relative">
+              {PLUGIN_TABS.map(({ value, label, icon: Icon }) => (
+                <TabsTab
+                  key={value}
+                  value={value}
+                  className="flex items-center gap-1.5 text-sm"
+                  data-testid={`marketplace-tab-${value}`}
+                >
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  {label}
+                </TabsTab>
+              ))}
+              <TabsIndicator />
+            </TabsList>
 
-              <div className="flex items-center gap-2">
-                {/* Auth filter chips — not applicable for capability plugins */}
-                {activeTab !== "capability" && (["", "oauth", "secret", "none"] as const).map((k) => (
-                  <button
-                    key={k || "all"}
-                    type="button"
-                    onClick={() => setAuthFilter(k)}
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
-                      authFilter === k
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border/60 text-muted-foreground hover:border-foreground/40"
-                    }`}
-                    data-testid={`marketplace-filter-auth-${k || "all"}`}
-                  >
-                    {k === "" ? "All" : k}
-                  </button>
-                ))}
-                <div className="relative ml-2">
-                  <Search
-                    className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <Input
-                    type="search"
-                    placeholder="Search…"
-                    size="sm"
-                    className="pl-7 w-52"
-                    value={search}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    data-testid="marketplace-search-input"
-                  />
-                </div>
+            {/* Row 2: auth filter chips + search */}
+            <div className="flex items-center gap-2 py-2.5">
+              {/* Auth filter chips — not applicable for capability plugins */}
+              {activeTab !== "capability" && (["", "oauth", "secret", "none"] as const).map((k) => (
+                <button
+                  key={k || "all"}
+                  type="button"
+                  onClick={() => setAuthFilter(k)}
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                    authFilter === k
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border/60 text-muted-foreground hover:border-foreground/40"
+                  }`}
+                  data-testid={`marketplace-filter-auth-${k || "all"}`}
+                >
+                  {k === "" ? "All" : k}
+                </button>
+              ))}
+              <div className="relative ml-auto">
+                <Search
+                  className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  type="search"
+                  placeholder="Search…"
+                  size="sm"
+                  className="pl-7 w-64"
+                  value={search}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  data-testid="marketplace-search-input"
+                />
               </div>
             </div>
           </div>
