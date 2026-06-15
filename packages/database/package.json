@@ -22,6 +22,7 @@
     "atlas:diff": "atlas migrate diff --env local",
     "atlas:apply": "atlas migrate apply --env local",
     "atlas:status": "atlas migrate status --env local",
+    "atlas:validate": "atlas migrate validate --dir \"file://atlas/migrations\"",
     "studio": "drizzle-kit studio",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",

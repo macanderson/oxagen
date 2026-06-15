@@ -1,0 +1,7 @@
+pre-commit:
+  commands:
+    atlas-validate:
+      # Only run when migration files are staged — avoids the overhead on
+      # every commit. Catches stale atlas.sum before it reaches CI.
+      glob: "packages/database/atlas/migrations/**"
+      run: cd packages/database && atlas migrate validate --dir "file://atlas/migrations"

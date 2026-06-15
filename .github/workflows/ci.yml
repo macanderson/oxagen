@@ -26,6 +26,9 @@ concurrency:
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+  # Pin Atlas CLI version across all jobs — prevents silent breakage if Atlas
+  # ships a major change. Update intentionally when upgrading Atlas.
+  ATLAS_VERSION: "v1.2.3"
   # sslmode=disable: Atlas (Go lib/pq) defaults to sslmode=require and fails
   # against the plain-TCP CI service container ("SSL is not enabled").
   # node-postgres ignores the param locally, so it is safe for every consumer.
@@ -73,6 +76,24 @@ env:
   INGESTION_ENCRYPTION_KEY: Z+kVBYRa3uc8nyyvgm+Z5tayV3Nawkg/YMzgzJnLh0U=
 
 jobs:
+  # ──────────────────────────────────────────────────────────────────────
+  # atlas-validate — fast (~15s) pre-flight: verifies atlas.sum matches all
+  # migration files before any DB-backed job spins up a Postgres container.
+  # A stale checksum fails here immediately instead of burning 3–5 minutes
+  # waiting for service containers before getting the same error. No DB needed.
+  # ──────────────────────────────────────────────────────────────────────
+  atlas-validate:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Atlas CLI
+        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
+      - name: Validate Atlas migration checksums
+        working-directory: packages/database
+        run: atlas migrate validate --dir "file://atlas/migrations"
+
   # ──────────────────────────────────────────────────────────────────────
   # checks — lint + typecheck (affected only) + repo-wide invariants.
   # No DB service containers: these tasks never touch a live store, so this
@@ -233,7 +254,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Install Atlas CLI
-        run: curl -sSf https://atlasgo.sh | sh
+        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
 
       # Run migrations only when Atlas or telemetry migration files changed.
       - name: Detect migration changes
@@ -352,7 +373,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Install Atlas CLI
-        run: curl -sSf https://atlasgo.sh | sh
+        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
       - name: Migrate Postgres (Atlas — always for fresh e2e database)
         working-directory: packages/database
         run: atlas migrate apply --env ci
@@ -430,7 +451,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Install Atlas CLI
-        run: curl -sSf https://atlasgo.sh | sh
+        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
 
       # Apply full Atlas migration set (includes future RLS policy migrations).
       - name: Migrate Postgres (Atlas)
@@ -532,7 +553,7 @@ jobs:
 
       - name: Install Atlas CLI
         if: steps.changes.outputs.changed == 'true'
-        run: curl -sSf https://atlasgo.sh | sh
+        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
 
       # Bootstrap extensions on the target DB (idempotent; no-op if already done).
       - name: Bootstrap Postgres extensions (idempotent)

@@ -9,6 +9,7 @@
   },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
+    "prepare": "lefthook install",
     "dev": "tsx tools/scripts/dev.ts",
     "kill": "tsx tools/scripts/kill.ts",
     "env:pull": "tsx tools/scripts/env-pull.ts",
@@ -23,6 +24,7 @@
     "db:migrate:pg": "pnpm --filter @oxagen/database exec atlas migrate apply --env local",
     "db:migrate:diff": "bash tools/scripts/atlas-dev-setup.sh && pnpm --filter @oxagen/database exec atlas migrate diff --env local",
     "db:atlas-dev-setup": "bash tools/scripts/atlas-dev-setup.sh",
+    "db:atlas-validate": "pnpm --filter @oxagen/database run atlas:validate",
     "db:seed-platform": "tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts",
     "db:generate": "pnpm --filter @oxagen/database run generate",
     "db:check": "tsx --env-file-if-exists=.env.local tools/scripts/db-check.ts",
@@ -34,7 +36,7 @@
     "e2e:failure-ticket": "tsx --env-file-if-exists=.env.local tools/scripts/ensure-e2e-failure-ticket.ts",
     "check:contracts": "node tools/scripts/check-contracts.mjs",
     "env:check": "tsx tools/scripts/env-check.ts",
-    "gate": "turbo run lint typecheck test:unit build --filter=...[origin/main] && pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations",
+    "gate": "turbo run lint typecheck test:unit build --filter=...[origin/main] && pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations && pnpm db:atlas-validate",
     "release": "tsx --env-file-if-exists=.env.local tools/scripts/release.ts",
     "release:patch": "tsx --env-file-if-exists=.env.local tools/scripts/release.ts patch",
     "release:minor": "tsx --env-file-if-exists=.env.local tools/scripts/release.ts minor",
@@ -43,8 +45,12 @@
     "db:seed-skills": "tsx --env-file-if-exists=.env.local tools/scripts/seed-skills.ts",
     "db:backfill-iam": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-org-iam.ts"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["lefthook"]
+  },
   "devDependencies": {
     "@changesets/cli": "2.31.0",
+    "lefthook": "latest",
     "@eslint/js": "9.39.4",
     "@types/node": "25.9.1",
     "eslint": "9.39.4",
