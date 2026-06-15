@@ -1,70 +1,69 @@
 ---
 name: coding
-description: How the agent writes code in the Oxagen monorepo — capability-first, ESM with .js suffixes, no narration comments, @base-ui/react components from @oxagen/ui on the frontend.
+description: How to write code well as an agent — understand the codebase first, match its conventions, make small reviewable changes, cover them with tests, and never weaken security or performance.
 metadata:
   weight: high
   category: engineering
 ---
 
-# Coding in Oxagen
+# Writing code
 
-When the user asks the agent to write code, the agent follows the
-patterns this skill documents. The standards are not preferences;
-they are conditions for the code being accepted by review.
+Load this skill before adding or changing code. The goal is a change a
+human reviewer accepts on the first pass: it fits the project, does one
+thing, and proves it works.
 
-## Capability-driven design
+## Understand before you write
 
-Every feature in Oxagen is a capability. A capability is declared
-exactly once in `packages/oxagen/src/contracts/<name>.ts` with its
-Zod input and output schemas, then fanned out across the API route,
-the MCP tool, the unit test, the E2E stub, and the docs page. Do not
-write a route, a tool, or a test that imports its own schema; import
-the capability declaration and reuse its `input` and `output` parsers.
+Read the surrounding code before you touch it. Find how the project
+already solves the problem — its naming, its file layout, its error
+handling, its test style — and follow that, even when your personal
+preference differs. A change that reads like the rest of the codebase is
+the change that gets merged.
 
-Before writing a new capability, query the typed code graph through
-the Oxagen plugin to confirm nothing in the registry already covers
-the work. Adding a parallel implementation is the most common defect
-the gate catches.
+If a utility, component, or helper already exists, reuse it. Adding a
+second way to do something the project already does is the most common
+reason a change is rejected.
 
-## TypeScript conventions
+## Keep changes small and focused
 
-- ESM everywhere. Module imports always carry a `.js` suffix in source
-  even though the file on disk is `.ts`. The bundler resolves the
-  suffix; the suffix keeps Node ESM happy when the bundle ships.
-- `import type { … }` for type-only imports. The repo runs with
-  `verbatimModuleSyntax` so this is enforced by the compiler.
-- No narration comments. Comments document architectural decisions —
-  why this transaction boundary, why this denormalisation, why this
-  N+1 is acceptable. They never restate the next line of code.
-- Active voice, present tense, and Oxford commas in any prose.
+One change should do one thing. Resist the urge to refactor unrelated
+code in the same edit — separate concerns into separate changes so each
+is easy to review and easy to revert. If a change grows past what a
+reviewer can hold in their head, split it.
 
-## Frontend aesthetic
+## Types, validation, and errors
 
-User-facing surfaces in `apps/app` use `@base-ui/react` components
-imported from `@oxagen/ui` (the coss/Base UI layer). The aesthetic is
-stock neutral — zero glass/translucency, zero brand gradient in the
-shell. Use `--primary` for brand colour accents; `--accent` is a
-neutral grey. Active state is signalled with `data-[active]`, not
-`data-[state]`. Both light and dark themes are supported. New
-components compose existing primitives from `@oxagen/ui`; copying a
-primitive into a feature folder is a defect. Do not introduce Radix
-UI, shadcn, or any glassmorphism treatment.
+- Prefer explicit types at boundaries (function signatures, API inputs,
+  stored records). They are the cheapest documentation a reader gets.
+- Validate untrusted input where it enters the system, not deep inside.
+- Handle the failure path. Surface a clear error; never swallow one
+  silently or leave a `catch` block empty.
+
+## Test what you write
+
+New behavior needs a new test. Cover the happy path and at least one
+failure or edge case. A bug fix lands with a test that fails before the
+fix and passes after, so the bug cannot return unnoticed. Run the test
+suite before declaring the work done.
+
+## Security defaults
+
+- Never hard-code secrets, tokens, or credentials. Read them from
+  configuration or environment.
+- Treat all external input as hostile until validated.
+- Scope every data access to the current user, tenant, or workspace.
+  A query that can read another tenant's data is a security defect, not
+  just a bug.
 
 ## Performance defaults
 
-- No N+1 queries. Batch and join. A query inside a loop over rows is
-  always a bug.
-- Every tenant-scoped query filters on an indexed `tenant_id` plus
-  `workspace_id` where relevant. An unindexed scoped query is both a
-  performance and an isolation defect.
-- Paginate every list endpoint. No endpoint returns "all rows".
-- Stream or chunk anything that could plausibly exceed a few MB.
+- No queries inside a loop over rows — batch or join instead.
+- Paginate anything that lists records; no endpoint returns "all rows".
+- Stream or chunk anything that could grow large rather than buffering
+  it whole in memory.
 
-## Memory write-back
+## Comments
 
-When the agent completes a non-trivial change, it records a weighted
-memory against the touched graph node via `agent.memory.write` so the
-next agent inherits the lesson rather than rediscovering it. Pick the
-weight honestly: `low` for one-off observations, `high` for lessons
-that will save the next contributor real time, `critical` for
-gotchas that would have caused an outage if missed.
+Comment the *why*, not the *what*. Explain a non-obvious decision, a
+trade-off, or a constraint a future reader would otherwise have to
+rediscover. Never write a comment that just restates the next line.

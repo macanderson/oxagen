@@ -243,6 +243,37 @@ export interface ToolInvocationRow {
 export const insertToolInvocation = (row: ToolInvocationRow) =>
   insertRows("tool_invocations", [row]);
 
+// Typed agent model (docs/reference/agent-schema.ts §6). One row per
+// AgentLogEntry; the durable definition stays in Postgres. definition_id/version
+// and org/workspace are denormalized so logs query in isolation.
+export interface AgentLogRow {
+  log_id: string;
+  run_id: string;
+  definition_id: string;
+  definition_version: string;
+  org_id: string;
+  workspace_id: string;
+  entry_id: string;
+  entry_type:
+    | "lifecycle"
+    | "decision"
+    | "graph_query"
+    | "graph_write"
+    | "tool_call"
+    | "subagent_call"
+    | "memory"
+    | "error";
+  entry_level: "debug" | "info" | "warn" | "error";
+  entry_message: string;
+  /** Type-specific structured payload, serialized to a JSON string. */
+  entry_data: string;
+  entry_timestamp: string;
+  created_at: string;
+}
+
+export const insertAgentLogs = (rows: readonly AgentLogRow[]) =>
+  insertRows("agent_logs", rows);
+
 /**
  * Deterministic, PII-free cohort key for prompts. SHA-256, first 16 bytes
  * hex. Stable across runs so analytics can group "same prompt asked N
