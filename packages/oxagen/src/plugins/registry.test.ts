@@ -45,7 +45,7 @@ describe("getOxagenPlugin", () => {
     const plugin = getOxagenPlugin("oxagen/media-video");
     expect(plugin).toBeDefined();
     expect(plugin?.id).toBe("oxagen/media-video");
-    expect(plugin?.tier).toBe("premium");
+    expect(plugin?.tier).toBe("free");
   });
 
   it("returns undefined for an unknown plugin id", () => {
@@ -128,9 +128,9 @@ describe("plugin registry invariants — Phase 1 pack assignments", () => {
     clearPluginRegistryForTests();
   });
 
-  it("media-video has tier=premium and visibility=ga", () => {
+  it("media-video has tier=free and visibility=ga", () => {
     const p = getOxagenPlugin("oxagen/media-video");
-    expect(p?.tier).toBe("premium");
+    expect(p?.tier).toBe("free");
     expect(p?.visibility).toBe("ga");
     expect(p?.icon).toBe("clapperboard");
   });
