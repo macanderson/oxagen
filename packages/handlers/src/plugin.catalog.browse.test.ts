@@ -242,6 +242,34 @@ describe("plugin.catalog.browse handler — capability path", () => {
     }
   });
 
+  it("installed:true returns only installed plugins (total reflects filtered set)", async () => {
+    mockInstalledNames(["oxagen/media-video", "oxagen/documents"]);
+    const result = await handler(
+      { pluginType: "capability", installed: true, limit: 30, offset: 0 },
+      ctx,
+    ) as { servers: Array<{ id: string; installed: boolean }>; total: number };
+    expect(result.total).toBe(2);
+    expect(result.servers.map((s) => s.id).sort()).toEqual([
+      "oxagen/documents",
+      "oxagen/media-video",
+    ]);
+    expect(result.servers.every((s) => s.installed === true)).toBe(true);
+  });
+
+  it("installed:false returns only not-installed plugins", async () => {
+    mockInstalledNames(["oxagen/media-video", "oxagen/documents"]);
+    const result = await handler(
+      { pluginType: "capability", installed: false, limit: 30, offset: 0 },
+      ctx,
+    ) as { servers: Array<{ id: string; installed: boolean }>; total: number };
+    expect(result.total).toBe(2);
+    expect(result.servers.map((s) => s.id).sort()).toEqual([
+      "oxagen/media-image",
+      "oxagen/media-svg",
+    ]);
+    expect(result.servers.every((s) => s.installed === false)).toBe(true);
+  });
+
   it("returns empty results when search matches nothing", async () => {
     mockInstalledNames([]);
     const result = await handler(
@@ -267,33 +295,41 @@ describe("plugin.catalog.browse handler — catalog_server path (omitted pluginT
   });
 
   /**
-   * Helper: builds a mock tx that handles BOTH the rows query (with .orderBy)
-   * and the count query (without .orderBy) inside the same withSystemDb callback.
-   * The catalog browse handler runs both queries against the same tx object.
+   * Helper: builds a mock tx that handles the rows query, the count query, and
+   * the optional installed-filter EXISTS subquery inside the same withSystemDb
+   * callback. Branches on the select() projection argument (not call order) so it
+   * tolerates the extra subquery select() emitted when an `installed` filter is set.
    */
   function makeCatalogTx(rows: unknown[], count: number) {
-    let callCount = 0;
     return {
-      select: () => {
-        callCount++;
-        if (callCount === 1) {
-          // First select: rows query — chain includes orderBy/limit/offset
-          return {
-            from: () => ({
-              where: () => ({
-                orderBy: () => ({
-                  limit: () => ({
-                    offset: () => Promise.resolve(rows),
-                  }),
+      select: (proj?: Record<string, unknown>) => {
+        // installed-filter subquery: select({ one: sql`1` })
+        if (proj && "one" in proj) {
+          return { from: () => ({ where: () => ({}) }) };
+        }
+        // count query: select({ count: ... })
+        if (proj && "count" in proj) {
+          return { from: () => ({ where: () => Promise.resolve([{ count }]) }) };
+        }
+        // installedNames lookup: select({ name: ... }) — no installs in these fixtures
+        if (proj && "name" in proj) {
+          return { from: () => ({ where: () => Promise.resolve([]) }) };
+        }
+        // background empty-catalog sync registry lookup: select({ id }).from().where().limit()
+        // Return no registry so syncRegistry never fires during unit tests.
+        if (proj && "id" in proj) {
+          return { from: () => ({ where: () => ({ limit: () => Promise.resolve([]) }) }) };
+        }
+        // rows query: select() — chain includes orderBy/limit/offset
+        return {
+          from: () => ({
+            where: () => ({
+              orderBy: () => ({
+                limit: () => ({
+                  offset: () => Promise.resolve(rows),
                 }),
               }),
             }),
-          };
-        }
-        // Second select: count query — chain is select().from().where()
-        return {
-          from: () => ({
-            where: () => Promise.resolve([{ count }]),
           }),
         };
       },
@@ -301,7 +337,7 @@ describe("plugin.catalog.browse handler — catalog_server path (omitted pluginT
   }
 
   it("does NOT call listOxagenPlugins when pluginType is omitted", async () => {
-    mocks.withSystemDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn(makeCatalogTx([], 0)),
     );
 
@@ -326,7 +362,7 @@ describe("plugin.catalog.browse handler — catalog_server path (omitted pluginT
       remotes: [],
     };
 
-    mocks.withSystemDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn(makeCatalogTx([fakeCatalogRow], 1)),
     );
 
@@ -335,5 +371,47 @@ describe("plugin.catalog.browse handler — catalog_server path (omitted pluginT
     };
     // No capability entries should appear
     expect(result.servers.every((s) => s.pluginType !== "capability")).toBe(true);
+  });
+
+  it("applies the installed EXISTS subquery (with org context) without error", async () => {
+    const fakeCatalogRow = {
+      id: "cid-2",
+      name: "installed-server",
+      title: "Installed Server",
+      description: "An installed MCP server.",
+      icons: [],
+      transportTypes: ["sse"],
+      authKind: "none",
+      categories: [],
+      version: "1.0.0",
+      publishedAt: new Date(),
+      isLatest: true,
+      status: "active",
+      remotes: [],
+    };
+    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(makeCatalogTx([fakeCatalogRow], 1)),
+    );
+
+    const result = await handler(
+      { pluginType: "mcp_server", installed: true, limit: 30, offset: 0 },
+      ctx,
+    ) as { servers: Array<{ id: string }>; total: number };
+    expect(result.total).toBe(1);
+    expect(result.servers[0]!.id).toBe("cid-2");
+  });
+
+  it("installed:true with no org context returns empty (nothing can be installed)", async () => {
+    // orgId "" ⇒ the handler short-circuits the EXISTS subquery and forces an
+    // empty result via a `false` predicate; the mock count reflects that.
+    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(makeCatalogTx([], 0)),
+    );
+    const result = await handler(
+      { pluginType: "mcp_server", installed: true, limit: 30, offset: 0 },
+      { ...ctx, orgId: "" },
+    ) as { servers: unknown[]; total: number };
+    expect(result.total).toBe(0);
+    expect(result.servers).toHaveLength(0);
   });
 });

@@ -19,6 +19,12 @@ import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PluginDetailPanel } from "./plugin-detail-panel";
 
+// useToast requires a <Toast.Provider> ancestor at runtime; mock it so the
+// detail panel can be unit-tested in isolation.
+vi.mock("@/components/ui/toast", () => ({
+  useToast: () => ({ add: vi.fn() }),
+}));
+
 afterEach(cleanup);
 
 const mockDetail = {

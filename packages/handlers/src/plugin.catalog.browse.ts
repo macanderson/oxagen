@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, arrayOverlaps, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, ilike, arrayOverlaps, isNull, notExists, or, sql } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { listOxagenPlugins } from "@oxagen/oxagen/plugins";
@@ -6,12 +6,13 @@ import { syncRegistry, createSystemSyncPersistence } from "@oxagen/plugins/regis
 import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
-  const { search, pluginType, categories, transportTypes, authKind, limit, offset, workspaceId } = input as {
+  const { search, pluginType, categories, transportTypes, authKind, installed, limit, offset, workspaceId } = input as {
     search?: string;
     pluginType?: "mcp_server" | "integration" | "content_tool" | "capability";
     categories?: string[];
     transportTypes?: string[];
     authKind?: string;
+    installed?: boolean;
     limit: number;
     offset: number;
     workspaceId?: string;
@@ -37,16 +38,14 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       );
     }
 
-    const total = manifests.length;
-    const page = manifests.slice(offset, offset + limit);
-
     // Resolve which plugins are already installed for this org. Catalog
     // browse is also served without org context (apps/app global catalog
     // route passes orgId "") — comparing a uuid column to "" throws, so an
     // org-less browse simply reports nothing as installed.
     // When workspaceId is provided, include both workspace-scoped and org-level (NULL workspace_id) rows.
+    // Computed BEFORE pagination so the `installed` filter can be applied across all manifests.
     const installedNames = await withSystemDb(async (tx) => {
-      if (page.length === 0 || !ctx.orgId) return new Set<string>();
+      if (!ctx.orgId) return new Set<string>();
       const wsCond = workspaceId
         ? or(
             eq(schema.pluginOrgListings.workspaceId, workspaceId),
@@ -66,6 +65,14 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         );
       return new Set(rows.map((r) => r.name));
     });
+
+    // Apply the installed filter (if requested) before pagination so totals and
+    // pagination reflect the filtered set.
+    if (installed === true) manifests = manifests.filter((m) => installedNames.has(m.id));
+    else if (installed === false) manifests = manifests.filter((m) => !installedNames.has(m.id));
+
+    const total = manifests.length;
+    const page = manifests.slice(offset, offset + limit);
 
     logger.info({ limit, offset, total, orgId: ctx.orgId }, "plugin.catalog.browse capability: ok");
 
@@ -113,10 +120,43 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   }
   if (categories?.length) conds.push(arrayOverlaps(schema.mcpCatalogServers.categories, categories));
   if (transportTypes?.length) conds.push(arrayOverlaps(schema.mcpCatalogServers.transportTypes, transportTypes));
-  const where = and(...conds);
 
   try {
     return await withSystemDb(async (tx) => {
+      // Apply the installed filter as a correlated EXISTS/NOT EXISTS subquery so
+      // pagination and the total count stay correct (install status can't be a
+      // post-hoc filter on the page without breaking offset/total).
+      const allConds = [...conds];
+      if (installed !== undefined) {
+        if (!ctx.orgId) {
+          // No org context ⇒ nothing is installed: installed-only is empty,
+          // not-installed is everything (no extra condition needed).
+          if (installed) allConds.push(sql`false`);
+        } else {
+          const resolvedPluginType = pluginType ?? "mcp_server";
+          const wsCond = workspaceId
+            ? or(
+                eq(schema.pluginOrgListings.workspaceId, workspaceId),
+                isNull(schema.pluginOrgListings.workspaceId),
+              )
+            : isNull(schema.pluginOrgListings.workspaceId);
+          const installedSub = tx
+            .select({ one: sql`1` })
+            .from(schema.pluginOrgListings)
+            .where(
+              and(
+                eq(schema.pluginOrgListings.orgId, ctx.orgId),
+                eq(schema.pluginOrgListings.pluginType, resolvedPluginType),
+                isNull(schema.pluginOrgListings.deletedAt),
+                eq(schema.pluginOrgListings.name, schema.mcpCatalogServers.name),
+                wsCond,
+              ),
+            );
+          allConds.push(installed ? exists(installedSub) : notExists(installedSub));
+        }
+      }
+      const where = and(...allConds);
+
       const rows = await tx
         .select()
         .from(schema.mcpCatalogServers)

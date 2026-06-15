@@ -18,6 +18,7 @@ Search and filter the MCP server catalog (latest versions) by text, category, tr
 | `pluginType` | `"mcp_server" \| "integration" \| "content_tool" \| "capability"?` | Filter by plugin type. Passing `"capability"` serves results from the static Oxagen Plugin registry instead of `mcp.catalog_servers`. Omitting the field returns only catalog servers (legacy behaviour preserved). |
 | `authKind` | `"oauth" \| "secret" \| "none"?` | Filter by authentication kind. Ignored when `pluginType` is `"capability"`. |
 | `categories` | `string[]?` | Filter to servers in any of these categories. Ignored when `pluginType` is `"capability"`. |
+| `installed` | `boolean?` | Filter by install status within the org (and optional `workspaceId`) scope: `true` returns only installed plugins, `false` only not-yet-installed, omit for all. Requires org context; an org-less browse treats everything as not installed. |
 | `limit` | `number?` | Max results per page (1–100, default 20). |
 | `offset` | `number?` | Pagination offset. |
 
