@@ -1,7 +1,30 @@
 pre-commit:
+  parallel: false
   commands:
     atlas-validate:
       # Only run when migration files are staged — avoids the overhead on
       # every commit. Catches stale atlas.sum before it reaches CI.
       glob: "packages/database/atlas/migrations/**"
       run: cd packages/database && atlas migrate validate --dir "file://atlas/migrations"
+
+    # Lint staged TS/JS, auto-fix, and re-stage the fixes.
+    # docs/, .agents/, and .claude/ are excluded (docs + agent/skill assets
+    # are not part of the typed source tree).
+    lint:
+      glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
+      exclude:
+        - "docs/**"
+        - ".agents/**"
+        - ".claude/**"
+      run: pnpm exec eslint --fix --no-warn-ignored {staged_files}
+      stage_fixed: true
+
+    # Typecheck the monorepo, but only when non-excluded TS/JS is staged.
+    # (pnpm typecheck is whole-repo; the glob/exclude just gates whether it runs.)
+    typecheck:
+      glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
+      exclude:
+        - "docs/**"
+        - ".agents/**"
+        - ".claude/**"
+      run: pnpm typecheck
