@@ -69,7 +69,13 @@ export default defineConfig({
   // Helpers under `e2e/helpers/**` are imported by specs but contain no
   // tests themselves — exclude them from the Playwright test matcher so
   // they don't get reported as empty test files.
-  testIgnore: ["**/helpers/**"],
+  //
+  // `*-verify.spec.ts` are ONE-OFF live verification specs that hit the real
+  // AI Gateway (no mocks) — they require AI_GATEWAY_API_KEY and are not part
+  // of the deterministic CI suite (the mocked equivalent, e.g.
+  // ask-drawer-form-fill.spec.ts, provides CI coverage). Excluding them keeps
+  // the sharded CI run green; run them locally with a real gateway key.
+  testIgnore: ["**/helpers/**", "**/*-verify.spec.ts"],
   timeout: 60_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

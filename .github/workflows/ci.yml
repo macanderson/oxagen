@@ -28,7 +28,11 @@ env:
   TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
   # Pin Atlas CLI version across all jobs — prevents silent breakage if Atlas
   # ships a major change. Update intentionally when upgrading Atlas.
-  ATLAS_VERSION: "v1.2.3"
+  # Atlas distributes its CLI binaries under CalVer (v0.x.y) on
+  # release.ariga.io — NOT the v1.x marketing/canary version `atlas version`
+  # prints. Pinning a non-existent download path (v1.2.3) 404s every install
+  # step. v0.38.0 is the latest published distributed binary.
+  ATLAS_VERSION: "v0.38.0"
   # sslmode=disable: Atlas (Go lib/pq) defaults to sslmode=require and fails
   # against the plain-TCP CI service container ("SSL is not enabled").
   # node-postgres ignores the param locally, so it is safe for every consumer.
