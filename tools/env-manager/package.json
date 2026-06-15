@@ -5,9 +5,12 @@
   "type": "module",
   "description": "Local-only web UI to view env/secrets per environment and deploy the right values to the right Vercel project + environment. No auth — binds to 127.0.0.1.",
   "scripts": {
-    "dev": "tsx --env-file-if-exists=../../.env.local src/server.ts",
-    "start": "tsx --env-file-if-exists=../../.env.local src/server.ts",
-    "typecheck": "tsc --noEmit"
+    "dev": "NODE_NO_WARNINGS=1 tsx --env-file-if-exists=../../.env.local src/server.ts",
+    "start": "NODE_NO_WARNINGS=1 tsx --env-file-if-exists=../../.env.local src/server.ts",
+    "pull": "NODE_NO_WARNINGS=1 tsx --env-file-if-exists=../../.env.local src/pull-secrets.ts",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "NODE_NO_WARNINGS=1 vitest run",
+    "test:coverage": "NODE_NO_WARNINGS=1 vitest run --coverage"
   },
   "dependencies": {
     "@hono/node-server": "1.19.14",
@@ -16,7 +19,9 @@
   },
   "devDependencies": {
     "@types/node": "25.9.1",
+    "@vitest/coverage-v8": "2.1.9",
     "tsx": "4.22.3",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "2.1.9"
   }
 }

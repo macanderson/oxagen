@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample, type WebhookExtraction } from "../types";
 
 const connectionConfigSchema = z.object({
   organizations: z.array(z.string()).min(1),
@@ -339,6 +339,77 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
 
       default:
         throw new Error(`github.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
+    }
+  },
+
+  // Translate a GitHub webhook delivery into ingestable records.
+  //
+  // GitHub's event names (the `x-github-event` header) do not match this
+  // connector's sourceRecordType keys, and the ingestable record is nested
+  // inside the event envelope. This method bridges both gaps so the downstream
+  // pipeline receives a (sourceRecordType, record) pair that normalizeRecord()
+  // and the entity_type_mappings lookup both understand.
+  parseWebhookEvent(eventName: string, raw: unknown): WebhookExtraction[] {
+    const p = asRecord(raw);
+
+    const one = (sourceRecordType: string, key: string): WebhookExtraction[] => {
+      const record = asRecord(p[key]);
+      return Object.keys(record).length > 0 ? [{ sourceRecordType, record }] : [];
+    };
+
+    switch (eventName) {
+      case "pull_request":
+        return one("pull_request", "pull_request");
+      case "issues":
+        return one("issue", "issue");
+      case "issue_comment":
+      case "pull_request_review_comment":
+        return one("comment", "comment");
+      case "pull_request_review":
+        return one("code_review", "review");
+      case "release":
+        return one("release", "release");
+      case "repository":
+        return one("repository", "repository");
+
+      // A push carries N commits. Reshape each into the shape normalizeRecord("commit")
+      // expects: top-level sha + html_url, nested commit.{message, author.{name,email,date}},
+      // plus the branch (derived from refs/heads/<branch>) as git_branch so trigger
+      // conditions can match on the branch.
+      case "push": {
+        const ref = asString(p["ref"]);
+        const branch =
+          ref && ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref;
+        return asArray(p["commits"]).flatMap((c): WebhookExtraction[] => {
+          const commit = asRecord(c);
+          const author = asRecord(commit["author"]);
+          const sha = asString(commit["id"]);
+          if (!sha) return [];
+          return [
+            {
+              sourceRecordType: "commit",
+              record: {
+                sha,
+                html_url: asString(commit["url"]),
+                ...(branch !== undefined ? { git_branch: branch } : {}),
+                commit: {
+                  message: asString(commit["message"]),
+                  author: {
+                    name: asString(author["name"]),
+                    email: asString(author["email"]),
+                    date: asString(commit["timestamp"]),
+                  },
+                },
+              },
+            },
+          ];
+        });
+      }
+
+      // ping, installation, installation_repositories, create, delete, fork, star,
+      // check_run, … — no ingestable data record (lifecycle handled by the route).
+      default:
+        return [];
     }
   },
 

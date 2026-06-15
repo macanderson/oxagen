@@ -174,12 +174,14 @@ export const ingestionGithubInitialSync = inngest.createFunction(
       }
     });
 
-    // ── Step 5: Mark connection as active ─────────────────────────────────────
+    // ── Step 5: Mark connection as connected ──────────────────────────────────
+    // "connected" is the live state allowed by source_connections_status_check
+    // (pending_setup | connected | paused | error); "active" would fail the CHECK.
     await step.run("update-status", () =>
       withSystemDb((tx) =>
         tx.execute(sql`
           UPDATE ingestion.source_connections
-          SET    status       = 'active',
+          SET    status       = 'connected',
                  last_sync_at = NOW(),
                  updated_at   = NOW()
           WHERE  id     = ${connectionId}::uuid

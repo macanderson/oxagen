@@ -121,7 +121,7 @@ describe("connectionMappingsSetHandler — not found", () => {
 describe("connectionMappingsSetHandler — new mapping (insert)", () => {
   it("inserts a new mapping when none exists and returns mappingsCreated=1", async () => {
     // connection found, no existing mapping → insert path
-    setupDbSequence([{ ...GITHUB_CONN_ROW, status: "active" }], []);
+    setupDbSequence([{ ...GITHUB_CONN_ROW, status: "connected" }], []);
 
     const result = await connectionMappingsSetHandler(
       { ...ONE_MAPPING_INPUT, activateConnection: false },
@@ -132,7 +132,7 @@ describe("connectionMappingsSetHandler — new mapping (insert)", () => {
   });
 
   it("does not fire inngest when already active connector", async () => {
-    setupDbSequence([{ ...GITHUB_CONN_ROW, status: "active" }], []);
+    setupDbSequence([{ ...GITHUB_CONN_ROW, status: "connected" }], []);
 
     await connectionMappingsSetHandler(
       { ...ONE_MAPPING_INPUT, activateConnection: true }, // activateConnection=true but already active
@@ -147,7 +147,7 @@ describe("connectionMappingsSetHandler — new mapping (insert)", () => {
 describe("connectionMappingsSetHandler — update existing mapping", () => {
   it("updates an existing mapping and returns mappingsUpdated=1", async () => {
     // connection found (active), existing mapping found → update path
-    setupDbSequence([{ ...GITHUB_CONN_ROW, status: "active" }], [{ id: "etm-uuid-1" }]);
+    setupDbSequence([{ ...GITHUB_CONN_ROW, status: "connected" }], [{ id: "etm-uuid-1" }]);
 
     const result = await connectionMappingsSetHandler(
       { ...ONE_MAPPING_INPUT, activateConnection: false },
@@ -166,7 +166,7 @@ describe("connectionMappingsSetHandler — connection activation", () => {
     setupDbSequence([GITHUB_CONN_ROW], []);
 
     const result = await connectionMappingsSetHandler(ONE_MAPPING_INPUT, CTX);
-    expect(result.connectionStatus).toBe("active");
+    expect(result.connectionStatus).toBe("connected");
   });
 
   it("leaves status unchanged when activateConnection=false", async () => {
@@ -181,10 +181,10 @@ describe("connectionMappingsSetHandler — connection activation", () => {
   });
 
   it("leaves status unchanged when already active", async () => {
-    setupDbSequence([{ ...GITHUB_CONN_ROW, status: "active" }], []);
+    setupDbSequence([{ ...GITHUB_CONN_ROW, status: "connected" }], []);
 
     const result = await connectionMappingsSetHandler(ONE_MAPPING_INPUT, CTX);
-    expect(result.connectionStatus).toBe("active");
+    expect(result.connectionStatus).toBe("connected");
     expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 });

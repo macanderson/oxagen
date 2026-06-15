@@ -73,6 +73,15 @@ export interface RawRecord {
   receivedAt: string; // ISO-8601
 }
 
+// One ingestable record extracted from a raw webhook delivery. `record` is the
+// sub-object ready to hand to normalizeRecord(sourceRecordType, record) — e.g.
+// for a GitHub `pull_request` event this is payload.pull_request, and for a
+// `push` event one entry per commit (reshaped into the connector's commit shape).
+export interface WebhookExtraction {
+  sourceRecordType: string;
+  record: unknown;
+}
+
 export interface ConnectorDefinition<TConfig extends z.ZodTypeAny = z.ZodTypeAny> {
   readonly connectorId: string;
   readonly displayName: string;
@@ -93,6 +102,12 @@ export interface ConnectorDefinition<TConfig extends z.ZodTypeAny = z.ZodTypeAny
   // Pure field extraction: raw API record → NormalizedRecord.
   // No entity type knowledge — that mapping lives in ingestion.entity_type_mappings.
   normalizeRecord(sourceRecordType: string, raw: unknown): NormalizedRecord;
+
+  // Optional: translate a raw webhook delivery (the provider's event name + the
+  // full JSON payload) into zero or more ingestable records. Each returned
+  // sourceRecordType must be one this connector's normalizeRecord() understands.
+  // Returns [] for events the connector does not ingest (pings, lifecycle, etc.).
+  parseWebhookEvent?(eventName: string, payload: unknown): WebhookExtraction[];
 
   // Optional: subscribe to webhooks at the source after the connection goes active.
   subscribeWebhooks?(

@@ -280,3 +280,108 @@ describe("github connector – verifyWebhook", () => {
     expect(github.verifyWebhook!(payload, { "x-hub-signature-256": sig }, null)).toBe(false);
   });
 });
+
+describe("github connector – parseWebhookEvent", () => {
+  it("maps pull_request → pull_request and unwraps the payload", () => {
+    const out = github.parseWebhookEvent!("pull_request", {
+      action: "opened",
+      pull_request: { number: 7, title: "Add feature", html_url: "https://gh/pr/7" },
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]?.sourceRecordType).toBe("pull_request");
+    // The unwrapped record is what normalizeRecord("pull_request") consumes.
+    const norm = github.normalizeRecord("pull_request", out[0]!.record);
+    expect(norm.externalId).toBe("7");
+    expect(norm.displayName).toBe("Add feature");
+  });
+
+  it("maps issues → issue (singular record type)", () => {
+    const out = github.parseWebhookEvent!("issues", {
+      action: "opened",
+      issue: { number: 12, title: "Bug" },
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]?.sourceRecordType).toBe("issue");
+  });
+
+  it("maps issue_comment and pull_request_review_comment → comment", () => {
+    expect(
+      github.parseWebhookEvent!("issue_comment", { comment: { id: 1, body: "hi" } })[0]
+        ?.sourceRecordType,
+    ).toBe("comment");
+    expect(
+      github.parseWebhookEvent!("pull_request_review_comment", {
+        comment: { id: 2, body: "nit" },
+      })[0]?.sourceRecordType,
+    ).toBe("comment");
+  });
+
+  it("maps pull_request_review → code_review (record from `review`)", () => {
+    const out = github.parseWebhookEvent!("pull_request_review", {
+      review: { id: 99, body: "LGTM", html_url: "https://gh/r/99" },
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]?.sourceRecordType).toBe("code_review");
+    expect(github.normalizeRecord("code_review", out[0]!.record).externalId).toBe("99");
+  });
+
+  it("expands a push into one commit record per commit, reshaped for normalizeRecord", () => {
+    const out = github.parseWebhookEvent!("push", {
+      ref: "refs/heads/main",
+      commits: [
+        {
+          id: "abc123",
+          message: "first\nbody",
+          url: "https://gh/c/abc123",
+          timestamp: "2026-06-14T00:00:00Z",
+          author: { name: "Dev", email: "dev@example.com" },
+        },
+        {
+          id: "def456",
+          message: "second",
+          url: "https://gh/c/def456",
+          timestamp: "2026-06-14T01:00:00Z",
+          author: { name: "Dev", email: "dev@example.com" },
+        },
+      ],
+    });
+    expect(out).toHaveLength(2);
+    expect(out.every((e) => e.sourceRecordType === "commit")).toBe(true);
+    // Reshaped record must satisfy normalizeRecord("commit").
+    const norm = github.normalizeRecord("commit", out[0]!.record);
+    expect(norm.externalId).toBe("abc123");
+    expect(norm.displayName).toBe("first"); // first line of the message
+    expect(norm.properties.git_branch).toBe("main");
+    expect(norm.properties.author).toBe("Dev");
+    expect(norm.properties.committedAt).toBe("2026-06-14T00:00:00Z");
+  });
+
+  it("skips push commits with no id", () => {
+    const out = github.parseWebhookEvent!("push", {
+      ref: "refs/heads/main",
+      commits: [{ message: "no id" }],
+    });
+    expect(out).toHaveLength(0);
+  });
+
+  it("maps release and repository events", () => {
+    expect(
+      github.parseWebhookEvent!("release", { release: { id: 5, tag_name: "v1" } })[0]
+        ?.sourceRecordType,
+    ).toBe("release");
+    expect(
+      github.parseWebhookEvent!("repository", { repository: { id: 8, name: "repo" } })[0]
+        ?.sourceRecordType,
+    ).toBe("repository");
+  });
+
+  it("returns [] for events with no ingestable record (ping/installation/etc.)", () => {
+    expect(github.parseWebhookEvent!("ping", { zen: "..." })).toEqual([]);
+    expect(github.parseWebhookEvent!("installation", { action: "created" })).toEqual([]);
+    expect(github.parseWebhookEvent!("star", { action: "created" })).toEqual([]);
+  });
+
+  it("returns [] when the expected sub-object is missing", () => {
+    expect(github.parseWebhookEvent!("pull_request", { action: "opened" })).toEqual([]);
+  });
+});

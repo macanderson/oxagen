@@ -81,6 +81,14 @@ creds.txt
 # Local dev login credentials for browser-driven frontend verification
 creds.json
 
+# env-manager local secrets mirror (GCP Secret Manager values + metadata).
+# Built by `pnpm env:secrets:pull`; holds live secret values — never commit.
+secrets.db
+secrets.db-journal
+secrets.db-wal
+secrets.db-shm
+tools/env-manager/secrets.db*
+
 # playwright test artifacts
 .playwright-mcp*/
 .playwright*

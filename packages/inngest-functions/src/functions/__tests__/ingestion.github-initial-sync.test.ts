@@ -252,7 +252,7 @@ describe("ingestion.github-initial-sync Inngest function", () => {
     );
   });
 
-  it("calls withSystemDb to update source_connections status to active", async () => {
+  it("calls withSystemDb to update source_connections status to connected", async () => {
     // The update-status step calls withSystemDb. Verify withSystemDb is called
     // more than once (once for token fetch + once for update-status).
     const step = makeStep();

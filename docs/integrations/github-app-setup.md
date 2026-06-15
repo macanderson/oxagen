@@ -21,7 +21,7 @@ For the customer-facing "how do I connect my repo" walkthrough, see
 | What kind of credential? | A **GitHub App** (not an OAuth App). The flow calls `/user/installations`, which only exists for GitHub Apps. |
 | What grants repo access today? | The App's **permissions** + the **user-to-server OAuth token**. The App private key / App ID are **not** used yet (no installation tokens). |
 | OAuth callback URL | `{NEXT_PUBLIC_API_URL}/oauth/github/callback` |
-| Webhook URL | Per-connection `{NEXT_PUBLIC_API_URL}/webhooks/github/{connectionId}` — **scaffolded, not yet provisioned**. See [Webhooks](#webhooks-current-state--gaps). |
+| Webhook URL | App-level `{NEXT_PUBLIC_API_URL}/webhooks/github/app` — **live**. See [Webhooks](#webhooks). |
 | Setup URL | Optional. Recommended → app sources page, with **Redirect on update** ON. See [Setup URL](#setup-url-post-install-redirect). |
 
 ---
@@ -30,8 +30,9 @@ For the customer-facing "how do I connect my repo" walkthrough, see
 
 The connector is defined in `packages/ingestion/src/connectors/github/index.ts`
 (`connectorId: "github"`, `deliveryMethod: "webhook"`, auth schemes
-`oauth2_authorization_code` / `api_key`). Despite `deliveryMethod: "webhook"`, the **only
-fully-wired ingestion path today is a pull-based initial sync** driven by the user's OAuth token:
+`oauth2_authorization_code` / `api_key`). There are **two ingestion paths**: a one-time
+**pull-based initial sync** that backfills the repo's file tree (below), and **live webhooks** that
+stream subsequent changes ([Webhooks](#webhooks)). Both run on the user's OAuth token today:
 
 1. **Create connection.** The app creates a `ingestion.source_connections` row in
    `status = "pending_setup"`.
@@ -189,39 +190,37 @@ Keep everything **read-only** — the connector never writes to GitHub.
 
 ---
 
-## Webhooks (current state + gaps)
+## Webhooks
 
-> ⚠️ **Webhooks are scaffolded but not functional end-to-end.** Configure them only if you are
-> actively building out continuous sync; the live ingestion path above does not depend on them.
+Continuous sync is **live**. GitHub delivers every event for every installation to the App's single
+global webhook URL; Oxagen verifies the signature, resolves the affected connection(s) from the
+payload, and fires the same ingestion pipeline the initial sync uses.
 
-What exists:
+**Route:** `POST {NEXT_PUBLIC_API_URL}/webhooks/github/app`
+(`apps/api/src/routes/v1/github-webhook.ts`, mounted at `apps/api/src/app.ts` **before** the generic
+`/webhooks` route so the static path isn't captured as `connectorId=github, connectionId=app`).
 
-- A route: `POST /webhooks/{connectorId}/{connectionId}` (`apps/api/src/routes/v1/webhook.ts`,
-  mounted at `apps/api/src/app.ts:149`). For GitHub: `POST {API}/webhooks/github/{con_...}`.
-- It reads the raw body, looks up the connection + its **per-connection** HMAC secret from
-  `ingestion.webhook_subscriptions.secret_enc`, and verifies the `x-hub-signature-256` header
-  (`github.verifyWebhook`, HMAC-SHA256, constant-time). On success it fires
-  `ingestion/entity.received` with `sourceRecordType = x-github-event`.
+How it works:
 
-What is **missing** (do not assume webhooks work until these are closed):
+1. **Verify** the raw body's `x-hub-signature-256` (HMAC-SHA256, constant-time) against the App's
+   single webhook secret `GITHUB_APP_WEBHOOK_SECRET`. Missing secret → **503**; bad signature → **401**.
+2. **Lifecycle** events (`ping`, `installation`, `installation_repositories`) are acked. On
+   `installation` `deleted`/`suspend`, the matching connections are set to `paused`.
+3. **Resolve** target connection(s): `connector_id = 'github'`, `status = 'connected'`, matching
+   `delivery_config->>'installationId'` and `delivery_config.owner/repo` against the payload's
+   `repository.full_name`.
+4. **Extract** ingestable records via the connector's `parseWebhookEvent()`, which both translates
+   GitHub's event name to the connector's record type and unwraps the payload (e.g. `issues` →
+   `issue` from `payload.issue`; a `push` fans out to one `commit` per commit, reshaped for
+   `normalizeRecord`).
+5. **Fan out** one `ingestion/entity.received` per (connection × record). The 6-step pipeline then
+   maps/dedups/embeds — exactly as the initial sync does.
 
-1. **No subscription provisioning.** Nothing inserts `webhook_subscriptions` rows or stores a
-   `secret_enc`. With no secret, `verifyWebhook` returns `false` and every delivery gets **401**.
-2. **`GITHUB_APP_WEBHOOK_SECRET` is declared but never read** (`packages/config/src/registry.ts:334`,
-   `env.ts:44`). The route uses the per-connection decrypted secret, not this env var.
-3. **Per-connection URL vs App-level webhook.** A GitHub App has **one** webhook URL; the route
-   expects a `{connectionId}` path segment. The intended design is per-repo webhooks created via the
-   REST API (`POST /repos/{owner}/{repo}/hooks`) pointing at the per-connection URL — that
-   provisioning code does not exist. Alternatively, add an App-level resolver route
-   (`/webhooks/github/app`) that resolves the connection from `installation_id` in the payload.
-4. **Event-name → record-type mismatch.** GitHub emits `push`, `issues`, `issue_comment`,
-   `pull_request_review`; the connector's `normalizeRecord` switch expects `commit`, `issue`,
-   `comment`, `code_review`. Without a translation layer, those deliveries throw
-   "unknown sourceRecordType" inside the pipeline. `pull_request`, `release`, and `repository` match.
+> **Mapping still governs ingestion.** A webhook record is only persisted if the connection has an
+> `entity_type_mappings` row for that record type (created via `connection.mappings.set`). Unmapped
+> record types are received and skipped by design — map the types you want to ingest continuously.
 
-### Recommended webhook config (for when the above is wired)
-
-If/when you complete webhook support, configure on the **App-level** webhook:
+### Webhook config on the App
 
 | Field | Dev | Prod |
 | --- | --- | --- |
@@ -230,21 +229,21 @@ If/when you complete webhook support, configure on the **App-level** webhook:
 | **Secret** | value of `GITHUB_APP_WEBHOOK_SECRET` (dev) | value of `GITHUB_APP_WEBHOOK_SECRET` (prod) |
 | **SSL verification** | Enable | Enable |
 
-**Subscribe to events** (maps to the connector's record types):
+**Subscribe to events** (each maps to a connector record type handled by `parseWebhookEvent`):
 
-| GitHub event | Feeds record type | Notes |
-| --- | --- | --- |
-| `push` | `commit` / `source` | Commits + changed files. Needs event→type mapping. |
-| `pull_request` | `pull_request` | ✅ name already matches. |
-| `pull_request_review` | `code_review` | Needs mapping. |
-| `pull_request_review_comment` | `comment` | Needs mapping. |
-| `issues` | `issue` | Needs mapping (`issues` → `issue`). |
-| `issue_comment` | `comment` | Needs mapping. |
-| `release` | `release` | ✅ matches. |
-| `repository` | `repository` | ✅ matches. |
+| GitHub event | Feeds record type |
+| --- | --- |
+| `push` | `commit` (one per commit) |
+| `pull_request` | `pull_request` |
+| `pull_request_review` | `code_review` |
+| `pull_request_review_comment` | `comment` |
+| `issues` | `issue` |
+| `issue_comment` | `comment` |
+| `release` | `release` |
+| `repository` | `repository` |
 
-`installation` and `installation_repositories` are delivered to the App webhook **automatically**
-(no subscription needed); add handling to reconcile repo add/remove and uninstalls.
+`installation` and `installation_repositories` are delivered automatically (no subscription needed)
+and drive the pause-on-uninstall reconciliation.
 
 > **Dev webhooks need a public tunnel.** GitHub cannot reach `localhost`. Use smee.io,
 > `cloudflared tunnel`, or `ngrok` and set the dev App's Webhook URL to the tunnel origin
@@ -261,7 +260,7 @@ All GitHub connector variables live in the **`api`** service (read in `apps/api`
 | --- | --- | --- | --- | --- |
 | `GITHUB_APP_CLIENT_ID` | no | api | Dev App → Client ID | Prod App → Client ID |
 | `GITHUB_APP_CLIENT_SECRET` | yes | api | Dev App → generated client secret | Prod App → generated client secret |
-| `GITHUB_APP_WEBHOOK_SECRET` | yes | api (when webhooks wired) | Dev App webhook secret | Prod App webhook secret |
+| `GITHUB_APP_WEBHOOK_SECRET` | yes | api (required for webhooks) | Dev App webhook secret | Prod App webhook secret |
 | `GITHUB_APP_INSTALL_STATE_SECRET` | yes | api | `openssl rand -hex 32` (dev value) | `openssl rand -hex 32` (distinct prod value) |
 | `NEXT_PUBLIC_API_URL` | no | all | `http://localhost:4000` | `https://oxagen-v2-api.vercel.app` |
 | `NEXT_PUBLIC_APP_URL` | no | all | `http://localhost:3000` | `https://oxagen-v2-app.vercel.app` |
@@ -303,25 +302,35 @@ After configuring an App and its env vars:
    data (not 404/502).
 5. **Sync:** activate a repo; confirm `ingestion/github.initial-sync` fired (API logs:
    `"connection.mappings.set: fired ingestion/github.initial-sync"`), the connection moves to
-   `status = 'active'`, and `:EntityNode`s appear in Neo4j for the repo.
+   `status = 'connected'`, and `:EntityNode`s appear in Neo4j for the repo.
+6. **Webhook:** with the App's webhook pointed at `/webhooks/github/app`, push a commit (or open a
+   PR) to a connected repo; confirm a 2xx delivery in the App's **Advanced → Recent Deliveries** and
+   an `ingestion/entity.received` event in Inngest. (Records persist only for mapped record types.)
 
 ---
 
 ## Known gaps / follow-ups
 
-These are real and worth tracking in Linear (`oxagen-v2`, labels `connectors`, `ingestion`):
+Resolved in code (kept here for history):
 
-1. **Webhook subscription provisioning** — insert `webhook_subscriptions` rows + store a
-   per-connection `secret_enc` (or adopt an App-level `/webhooks/github/app` resolver keyed on
-   `installation_id`). Until done, inbound webhooks 401.
-2. **`GITHUB_APP_WEBHOOK_SECRET` is unused** — wire it into verification (or delete it and document
-   the per-connection secret as the source of truth).
-3. **Event-name → record-type mapping** — translate `push`/`issues`/`issue_comment`/
-   `pull_request_review` to the connector's `commit`/`issue`/`comment`/`code_review` keys before
-   `normalizeRecord`.
-4. **`installation` / `installation_repositories` handling** — reconcile repo add/remove and
-   uninstall events; today they would hit `normalizeRecord` and throw.
-5. **`/connections/github/setup` landing route** — implement the Setup URL target so GitHub-initiated
+- ✅ **App-level webhook receiver** — `POST /webhooks/github/app` resolves connections from the
+  payload's `installation.id` + `repository.full_name`.
+- ✅ **`GITHUB_APP_WEBHOOK_SECRET` wired** — used for HMAC verification on the App-level route.
+- ✅ **Event-name → record-type mapping** — `github.parseWebhookEvent()` translates and unwraps each
+  event (incl. `push` → per-commit fan-out).
+- ✅ **`installation` / `installation_repositories` handling** — acked; uninstall/suspend pauses the
+  installation's connections.
+- ✅ **Status-constraint bug** — activation now writes `connected` (was the invalid `active`, which
+  violated `source_connections_status_check`).
+
+Still open — worth tracking in Linear (`oxagen-v2`, labels `connectors`, `ingestion`):
+
+1. **`/connections/github/setup` landing route** — implement the Setup URL target so GitHub-initiated
    installs resolve the current session's org/workspace.
-6. **Installation-token auth** — move unattended sync off the user token onto GitHub App installation
+2. **Installation-token auth** — move unattended sync off the user token onto GitHub App installation
    access tokens (JWT signed with the App private key), so sync survives the authorizing user leaving.
+3. **Webhook receipt bookkeeping** — optionally stamp `last_sync_at` / a `webhook_subscriptions`
+   row on delivery for observability (functional sync does not require it).
+4. **`push` → `source` file ingestion** — webhook `push` currently ingests commits; ingesting the
+   changed *files* (added/modified/removed) as `source` records on push is a follow-up. Initial
+   sync still covers the full file tree.

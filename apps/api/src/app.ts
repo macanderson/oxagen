@@ -104,6 +104,7 @@ import { privacyDataEraseRoute } from "./routes/v1/privacy.data.erase";
 import { connectionRoute } from "./routes/v1/connection";
 import { webhookRoute } from "./routes/v1/webhook";
 import { githubOauthRoute, githubOauthCallbackRoute } from "./routes/v1/github-oauth";
+import { githubAppWebhookRoute } from "./routes/v1/github-webhook";
 import { graphNodeUpsertRoute } from "./routes/v1/graph.node.upsert";
 import { graphNodeGetRoute } from "./routes/v1/graph.node.get";
 import { graphNodeDeleteRoute } from "./routes/v1/graph.node.delete";
@@ -145,6 +146,10 @@ app.onError(errorMiddleware);
 // the raw body for signature verification and is its own auth surface.
 app.route("/health", health);
 app.route("/webhooks/stripe", stripeWebhook);
+// GitHub App webhook: single global URL, resolves connections from the payload's
+// installation id. Mounted BEFORE the generic /webhooks route so "/webhooks/github/app"
+// is not captured as connectorId=github, connectionId=app.
+app.route("/webhooks/github/app", githubAppWebhookRoute);
 // Connector webhooks: unauthenticated — HMAC validation is the security boundary.
 app.route("/webhooks", webhookRoute);
 // Inngest cloud polls /api/inngest for the function manifest; signing-key

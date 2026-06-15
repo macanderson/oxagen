@@ -10,14 +10,52 @@ import { listEnv, upsertEnv } from "./vercel";
 import { resolveSource } from "./sources";
 import { SERVICE_NAMES } from "./types";
 import type { DeployResult, EnvName, ServiceName } from "./types";
+import { openDb, listSecrets, editSecret } from "./secrets-db";
+import type { EditableField } from "./secrets-db";
+import { listWorkspace } from "./secrets-usage";
 
 const cfg = loadConfig();
 const here = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(here, "..", "..", "..");
 const HTML = readFileSync(join(here, "../public/index.html"), "utf8");
+const SECRETS_HTML = readFileSync(join(here, "../public/secrets.html"), "utf8");
 
 const app = new Hono();
 
 app.get("/", (c) => c.html(HTML));
+
+// ── Secrets spreadsheet (backed by the local secrets.db GCP mirror) ──────────
+app.get("/secrets", (c) => c.html(SECRETS_HTML));
+
+// List every secret row plus the workspace apps/packages for the usage dropdown.
+app.get("/api/secrets", (c) => {
+  try {
+    const db = openDb();
+    return c.json({ secrets: listSecrets(db), workspace: listWorkspace(REPO_ROOT) });
+  } catch (e) {
+    return c.json(
+      { error: `secrets.db not available — run \`pnpm env:secrets:pull\` first (${(e as Error).message})` },
+      400,
+    );
+  }
+});
+
+// Inline edit one column of one secret; the puller won't clobber it afterward.
+const EDITABLE: ReadonlySet<EditableField> = new Set<EditableField>(["value", "description", "vendor_url", "usage"]);
+app.patch("/api/secrets/:key", async (c) => {
+  const key = c.req.param("key");
+  const body = (await c.req.json().catch(() => ({}))) as { field?: string; value?: string | string[] };
+  const field = body.field as EditableField | undefined;
+  if (!field || !EDITABLE.has(field)) return c.json({ error: "field must be value|description|vendor_url|usage" }, 400);
+  if (body.value === undefined) return c.json({ error: "value is required" }, 400);
+  try {
+    const db = openDb();
+    const row = editSecret(db, key, field, body.value);
+    return c.json({ secret: row });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
 
 app.get("/api/catalog", (c) =>
   c.json({
@@ -197,7 +235,7 @@ app.get("/api/gaps", async (c) => {
 });
 
 serve({ fetch: app.fetch, hostname: "127.0.0.1", port: cfg.port }, (info) => {
-  // eslint-disable-next-line no-console
+   
   console.log(
     `\n  env-manager → http://127.0.0.1:${info.port}` +
       `\n  vercel token: ${cfg.vercelToken ? "set" : "MISSING (set VERCEL_TOKEN in .env.local)"}\n`,

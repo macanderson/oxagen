@@ -84,16 +84,19 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
     }
   }
 
-  // Activate the connection if requested and currently in pending_setup
+  // Activate the connection if requested and currently in pending_setup.
+  // "connected" is the live state in the source_connections_status_check
+  // constraint (pending_setup | connected | paused | error) — "active" is not
+  // a valid value and would fail the CHECK on write.
   let connectionStatus = conn.status;
   if (input.activateConnection && conn.status === "pending_setup") {
     await withTenantDb((tx) =>
       tx
         .update(schema.sourceConnections)
-        .set({ status: "active", updatedAt: now })
+        .set({ status: "connected", updatedAt: now })
         .where(eq(schema.sourceConnections.id, conn.id)),
     );
-    connectionStatus = "active";
+    connectionStatus = "connected";
 
     // Fire the GitHub initial-sync Inngest event when activating a GitHub connection.
     // deliveryConfig carries { selectedRepos, installationId, owner, repo, defaultBranch }
