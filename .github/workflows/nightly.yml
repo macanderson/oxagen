@@ -6,6 +6,9 @@ on:
   # full run duplicated CI spend + service-container startup for no added
   # signal). Use the schedule for the daily full-tree regression sweep.
   workflow_dispatch: {}
+
+env:
+  ATLAS_VERSION: "v0.38.0"
 jobs:
   # Full (un-filtered) regression sweep. Unlike the PR `affected` matrix this
   # also runs `build`, which executes loadEnv() during `next build` — so the
@@ -102,6 +105,8 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - name: Install Atlas CLI
+        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
       # Apply committed Drizzle migrations on top of the init baseline.
       # Unconditional (unlike ci.yml's diff-gated step): the service
       # containers start fresh every run, so the full schema must always
@@ -198,6 +203,8 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - name: Install Atlas CLI
+        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
       - name: Migrate
         run: pnpm db:migrate
       - name: Install Playwright browsers
