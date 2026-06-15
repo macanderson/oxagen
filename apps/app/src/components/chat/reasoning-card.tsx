@@ -94,7 +94,7 @@ export function ReasoningCard({
         "rounded-xl border bg-muted/30 text-sm overflow-hidden my-1.5",
         // Thin indigo left accent while thinking, neutral when done.
         status === "thinking"
-          ? "border-l-2 border-l-[#7182ff] border-border/60"
+          ? "border-l-2 border-l-[#9b7bff] border-border/60"
           : "border-border/60",
         className,
       )}
@@ -113,7 +113,7 @@ export function ReasoningCard({
         aria-expanded={hasText ? open : undefined}
         disabled={!hasText}
       >
-        <Brain className="h-3.5 w-3.5 shrink-0 text-[#7182ff]" aria-hidden="true" />
+        <Brain className="h-3.5 w-3.5 shrink-0 text-[#9b7bff]" aria-hidden="true" />
 
         {status === "thinking" ? (
           <motion.span

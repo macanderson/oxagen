@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "getting-started",
+    "connections",
     "security",
     "governance",
     "enterprise",

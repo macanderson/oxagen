@@ -3,21 +3,15 @@
  * risk-badge.test.tsx
  *
  * Render tests for RiskBadge:
- *   - Each risk level renders expected text and badge variant
+ *   - Each risk level renders expected text
+ *   - Each risk level applies the correct jewel-tone color and background
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { RiskBadge } from "./risk-badge";
 
 afterEach(cleanup);
-
-// Badge from @oxagen/ui just renders its children; stub it simply.
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children, variant }: { children: React.ReactNode; variant?: string }) => (
-    <span data-variant={variant}>{children}</span>
-  ),
-}));
 
 describe("RiskBadge", () => {
   it("renders 'low risk' text for low risk level", () => {
@@ -35,18 +29,21 @@ describe("RiskBadge", () => {
     expect(screen.getByText("high risk")).toBeInTheDocument();
   });
 
-  it("uses 'muted' variant for low risk", () => {
-    const { container } = render(<RiskBadge risk="low" />);
-    expect(container.querySelector("[data-variant='muted']")).not.toBeNull();
+  it("applies green jewel-tone color for low risk", () => {
+    render(<RiskBadge risk="low" />);
+    const el = screen.getByText("low risk");
+    expect(el).toHaveStyle({ color: "rgb(103, 209, 130)" });
   });
 
-  it("uses 'warning' variant for medium risk", () => {
-    const { container } = render(<RiskBadge risk="medium" />);
-    expect(container.querySelector("[data-variant='warning']")).not.toBeNull();
+  it("applies amber jewel-tone color for medium risk", () => {
+    render(<RiskBadge risk="medium" />);
+    const el = screen.getByText("medium risk");
+    expect(el).toHaveStyle({ color: "rgb(255, 190, 99)" });
   });
 
-  it("uses 'destructive' variant for high risk", () => {
-    const { container } = render(<RiskBadge risk="high" />);
-    expect(container.querySelector("[data-variant='destructive']")).not.toBeNull();
+  it("applies salmon jewel-tone color for high risk", () => {
+    render(<RiskBadge risk="high" />);
+    const el = screen.getByText("high risk");
+    expect(el).toHaveStyle({ color: "rgb(255, 138, 107)" });
   });
 });

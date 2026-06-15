@@ -15,7 +15,7 @@ export function StatusIcon({ status }: { status: ToolCallStatus }) {
     // Args still streaming in — a soft pulsing indigo dot reads as "composing".
     return (
       <span
-        className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#7182ff]"
+        className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#9b7bff]"
         aria-label="Composing"
       />
     );
@@ -24,7 +24,7 @@ export function StatusIcon({ status }: { status: ToolCallStatus }) {
     return <Loader2 className={cn("h-3.5 w-3.5 animate-spin text-foreground")} aria-label="Running" />;
   }
   if (status === "completed") {
-    return <Check className="h-3.5 w-3.5 text-emerald-500" aria-label="Completed" />;
+    return <Check className="h-3.5 w-3.5" style={{ color: "#67d182" }} aria-label="Completed" />;
   }
   return <X className="h-3.5 w-3.5 text-destructive" aria-label="Failed" />;
 }

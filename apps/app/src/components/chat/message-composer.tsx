@@ -445,6 +445,16 @@ export function MessageComposer({
                   ? "Queue message"
                   : "Send message"
             }
+            style={
+              !pending && !disabled
+                ? {
+                    background: "var(--grad-sunset)",
+                    boxShadow: "var(--glow-violet)",
+                    border: "none",
+                    color: "#ffffff",
+                  }
+                : undefined
+            }
           >
             <Send className="h-3.5 w-3.5" />
             {pending

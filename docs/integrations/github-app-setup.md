@@ -1,0 +1,327 @@
+# GitHub App setup — source-code ingestion connector
+
+**Audience:** operators / platform engineers configuring the GitHub connector.
+**Last verified against code:** 2026-06-14.
+
+This document is the authoritative setup reference for the GitHub App(s) that power the
+**source-code ingestion connector**. It lists every configuration value, the exact callback
+and webhook endpoints the code expects, the permissions and events to subscribe to, and which
+values differ between **development** and **production**.
+
+For the customer-facing "how do I connect my repo" walkthrough, see
+`apps/docs/content/docs/connections/github.mdx`.
+
+---
+
+## TL;DR
+
+| Decision | Answer |
+| --- | --- |
+| One GitHub App or two? | **Two.** One for dev/localhost, one for production. See [Why two apps](#why-two-separate-apps). |
+| What kind of credential? | A **GitHub App** (not an OAuth App). The flow calls `/user/installations`, which only exists for GitHub Apps. |
+| What grants repo access today? | The App's **permissions** + the **user-to-server OAuth token**. The App private key / App ID are **not** used yet (no installation tokens). |
+| OAuth callback URL | `{NEXT_PUBLIC_API_URL}/oauth/github/callback` |
+| Webhook URL | Per-connection `{NEXT_PUBLIC_API_URL}/webhooks/github/{connectionId}` — **scaffolded, not yet provisioned**. See [Webhooks](#webhooks-current-state--gaps). |
+| Setup URL | Optional. Recommended → app sources page, with **Redirect on update** ON. See [Setup URL](#setup-url-post-install-redirect). |
+
+---
+
+## How source code is ingested (the live path)
+
+The connector is defined in `packages/ingestion/src/connectors/github/index.ts`
+(`connectorId: "github"`, `deliveryMethod: "webhook"`, auth schemes
+`oauth2_authorization_code` / `api_key`). Despite `deliveryMethod: "webhook"`, the **only
+fully-wired ingestion path today is a pull-based initial sync** driven by the user's OAuth token:
+
+1. **Create connection.** The app creates a `ingestion.source_connections` row in
+   `status = "pending_setup"`.
+2. **Build the authorize URL.**
+   `GET /v1/{org_slug}/{workspace_slug}/connections/github/auth-url?connectionId={con_...}`
+   (`apps/api/src/routes/v1/github-oauth.ts:71`) returns a signed
+   `https://github.com/login/oauth/authorize?...` URL with:
+   - `client_id = GITHUB_APP_CLIENT_ID`
+   - `scope = repo,read:org` *(see note below — ignored for GitHub Apps)*
+   - `redirect_uri = {NEXT_PUBLIC_API_URL}/oauth/github/callback`
+   - `state = base64url(json).hmac` signed with `GITHUB_APP_INSTALL_STATE_SECRET`, 10-minute TTL.
+3. **User authorizes** on GitHub.
+4. **Callback.** `GET /oauth/github/callback?code=&state=`
+   (`github-oauth.ts:363`, mounted at `apps/api/src/app.ts:283`) verifies the state HMAC
+   (constant-time), exchanges the `code` at `https://github.com/login/oauth/access_token`,
+   **envelope-encrypts** the access + refresh tokens (`@oxagen/crypto`, AES-256-GCM), upserts
+   `ingestion.oauth_accounts` (unique on `org_id, provider, provider_user_id`), links it to the
+   connection, and **302-redirects** to:
+   `{NEXT_PUBLIC_APP_URL}/{org_slug}/{ws_slug}/knowledge/sources?setup=github&connectionId={con_...}`.
+5. **Pick an installation + repo.**
+   `GET .../connections/github/installations` →
+   `GET .../connections/github/installations/{installationId}/repositories`
+   (both decrypt the stored user token and call the GitHub REST API).
+6. **Activate + sync.** Saving the repo selection calls `connection.mappings.set` with
+   `activateConnection: true` (`packages/handlers/src/connection.mappings.set.ts:98`), which fires
+   the `ingestion/github.initial-sync` Inngest event using `deliveryConfig.{owner, repo, defaultBranch}`.
+7. **Initial sync.** `ingestion.github-initial-sync`
+   (`packages/inngest-functions/src/functions/ingestion.github-initial-sync.ts`) decrypts the user
+   token, calls `GET /repos/{owner}/{repo}/git/trees/{branch}?recursive=1`, filters to source
+   blobs (extensions `.ts/.tsx/.py`, `size > 0`, skipping `node_modules/`, `dist/`, `.git/`,
+   `__pycache__/`, capped at 500 files), upserts a `:SourceConnection` node in Neo4j, and fans out
+   `ingestion/github.parse-file` events. The shared pipeline
+   (`ingestion.pipeline.ts`, event `ingestion/entity.received`) normalizes → dedups → upserts
+   `:EntityNode`s with embeddings, following the dual-write pattern of
+   [ADR-012](../adr/ADR-012-connector-dual-write-pattern.md) (Postgres = durable cursor/health,
+   Neo4j = graph index).
+
+> **Note on `scope`.** The authorize URL passes `scope=repo,read:org`, but **GitHub Apps ignore the
+> `scope` parameter** — a user-to-server token's access is governed entirely by the App's configured
+> **permissions** and which installations/repos the user can reach. Set the permissions below
+> correctly; the `scope` value is a harmless vestige.
+
+> **Note on tokens.** Ingestion runs on the **user's** OAuth token, not an installation access
+> token (the App private key/App ID are never read). This is simpler but means sync is tied to the
+> authorizing user's continued access. Migrating to installation tokens (JWT signed with the App
+> private key → installation access token) is a recommended future hardening — see
+> [Known gaps](#known-gaps--follow-ups).
+
+---
+
+## Why two separate apps
+
+Create **two** GitHub Apps and keep their credentials in separate environments:
+
+| App | Used by | API origin (`NEXT_PUBLIC_API_URL`) | App origin (`NEXT_PUBLIC_APP_URL`) |
+| --- | --- | --- | --- |
+| **Oxagen (Dev)** | localhost + Vercel preview | `http://localhost:4000` | `http://localhost:3000` |
+| **Oxagen** | production | `https://oxagen-v2-api.vercel.app` | `https://oxagen-v2-app.vercel.app` |
+
+Reasons:
+
+1. **A GitHub App has a single global webhook URL.** Dev must point at a public tunnel
+   (smee.io / cloudflared) or a preview URL; prod points at the Vercel API. One App cannot serve both.
+2. **Secret isolation (SOC 2).** A leaked dev client secret / webhook secret / state secret must
+   never grant access to production data.
+3. **Blast-radius separation.** Re-generating the dev App's secret or rotating its private key must
+   not disrupt production ingestion.
+
+GitHub Apps *do* allow up to 10 callback URLs, so callbacks alone could be shared — but the
+single webhook URL and secret-isolation reasons make two apps the correct choice.
+
+---
+
+## GitHub App configuration
+
+Create each App at **GitHub → Settings → Developer settings → GitHub Apps → New GitHub App**
+(or under an organization's settings to own it at the org level).
+
+### Identity
+
+| Field | Dev | Prod |
+| --- | --- | --- |
+| **GitHub App name** | `Oxagen (Dev)` | `Oxagen` |
+| **Homepage URL** | `http://localhost:3000` | `https://oxagen-v2-app.vercel.app` |
+| **Description** | Source-code & repo-activity ingestion for the Oxagen knowledge graph. | same |
+
+### Identifying and authorizing users (OAuth)
+
+| Field | Dev | Prod |
+| --- | --- | --- |
+| **Callback URL** | `http://localhost:4000/oauth/github/callback` | `https://oxagen-v2-api.vercel.app/oauth/github/callback` |
+| **Request user authorization (OAuth) during installation** | ✅ recommended | ✅ recommended |
+| **Enable Device Flow** | ❌ off | ❌ off |
+| **Expire user authorization tokens** | ❌ off (recommended) | ❌ off (recommended) |
+
+- The **Callback URL** must exactly match `{NEXT_PUBLIC_API_URL}/oauth/github/callback`. Localhost
+  is valid here because the *browser* performs the redirect (GitHub's servers don't call it).
+- **Expire user authorization tokens — leave OFF for now.** The callback stores a `refresh_token`
+  when present, but there is **no token-refresh job wired yet**. Non-expiring user tokens avoid
+  silent sync failures until refresh is implemented. (Revisit when installation tokens land.)
+- Enabling **OAuth during installation** lets a GitHub-initiated install run the OAuth handshake in
+  one hop, returning both `code` and `installation_id` to the callback.
+
+### Setup URL (post-install redirect)
+
+The **Setup URL** is where GitHub sends users *after they install or reconfigure the App from
+GitHub's own UI* (it receives `installation_id` and `setup_action=install|update`). It is **distinct
+from the OAuth Callback URL**.
+
+| Field | Dev | Prod |
+| --- | --- | --- |
+| **Setup URL** | `http://localhost:3000/connections/github/setup` | `https://oxagen-v2-app.vercel.app/connections/github/setup` |
+| **Redirect on update** | ✅ on | ✅ on |
+
+**Recommendation: set a Setup URL and enable "Redirect on update".**
+
+- It guarantees that a user who installs the App directly from GitHub (rather than starting inside
+  Oxagen) lands back in the product to finish wiring the connection.
+- **Redirect on update = ON** brings the user back whenever they add/remove repositories from the
+  installation, so Oxagen can reconcile the repo selection.
+- **Today the primary flow starts inside Oxagen** (the app generates the authorize URL and the
+  `/oauth/github/callback` route already redirects to the sources page), so the Setup URL is a
+  secondary entry point. The `/connections/github/setup` landing route is **not implemented yet** —
+  until it exists, point the Setup URL at the sources page
+  (`/{org}/{ws}/knowledge/sources`) or leave it blank and rely on the in-app flow. Tracked in
+  [Known gaps](#known-gaps--follow-ups).
+
+### Permissions
+
+These are what actually grant the connector access (the OAuth `scope` is ignored for GitHub Apps).
+
+**Repository permissions:**
+
+| Permission | Access | Why |
+| --- | --- | --- |
+| **Contents** | Read-only | Read the repo tree + file blobs — **required for source ingestion**. |
+| **Metadata** | Read-only | Mandatory (auto-selected); repo names, default branch, languages. |
+| **Pull requests** | Read-only | Ingest PRs (`pull_request` record type). |
+| **Issues** | Read-only | Ingest issues + issue comments. |
+| **Commit statuses** | Read-only *(optional)* | Useful if status/check context is ingested later. |
+
+**Organization permissions:**
+
+| Permission | Access | Why |
+| --- | --- | --- |
+| **Members** | Read-only *(optional)* | Resolve author/org membership; only needed if you map GitHub users to org members. |
+
+Keep everything **read-only** — the connector never writes to GitHub.
+
+### Where can this App be installed?
+
+- **Dev:** "Only on this account" is fine.
+- **Prod:** "Any account" if customers will install it into their own orgs; "Only on this account"
+  if it is internal-only for now.
+
+---
+
+## Webhooks (current state + gaps)
+
+> ⚠️ **Webhooks are scaffolded but not functional end-to-end.** Configure them only if you are
+> actively building out continuous sync; the live ingestion path above does not depend on them.
+
+What exists:
+
+- A route: `POST /webhooks/{connectorId}/{connectionId}` (`apps/api/src/routes/v1/webhook.ts`,
+  mounted at `apps/api/src/app.ts:149`). For GitHub: `POST {API}/webhooks/github/{con_...}`.
+- It reads the raw body, looks up the connection + its **per-connection** HMAC secret from
+  `ingestion.webhook_subscriptions.secret_enc`, and verifies the `x-hub-signature-256` header
+  (`github.verifyWebhook`, HMAC-SHA256, constant-time). On success it fires
+  `ingestion/entity.received` with `sourceRecordType = x-github-event`.
+
+What is **missing** (do not assume webhooks work until these are closed):
+
+1. **No subscription provisioning.** Nothing inserts `webhook_subscriptions` rows or stores a
+   `secret_enc`. With no secret, `verifyWebhook` returns `false` and every delivery gets **401**.
+2. **`GITHUB_APP_WEBHOOK_SECRET` is declared but never read** (`packages/config/src/registry.ts:334`,
+   `env.ts:44`). The route uses the per-connection decrypted secret, not this env var.
+3. **Per-connection URL vs App-level webhook.** A GitHub App has **one** webhook URL; the route
+   expects a `{connectionId}` path segment. The intended design is per-repo webhooks created via the
+   REST API (`POST /repos/{owner}/{repo}/hooks`) pointing at the per-connection URL — that
+   provisioning code does not exist. Alternatively, add an App-level resolver route
+   (`/webhooks/github/app`) that resolves the connection from `installation_id` in the payload.
+4. **Event-name → record-type mismatch.** GitHub emits `push`, `issues`, `issue_comment`,
+   `pull_request_review`; the connector's `normalizeRecord` switch expects `commit`, `issue`,
+   `comment`, `code_review`. Without a translation layer, those deliveries throw
+   "unknown sourceRecordType" inside the pipeline. `pull_request`, `release`, and `repository` match.
+
+### Recommended webhook config (for when the above is wired)
+
+If/when you complete webhook support, configure on the **App-level** webhook:
+
+| Field | Dev | Prod |
+| --- | --- | --- |
+| **Active** | ✅ | ✅ |
+| **Webhook URL** | `https://{your-tunnel}/webhooks/github/app` | `https://oxagen-v2-api.vercel.app/webhooks/github/app` |
+| **Secret** | value of `GITHUB_APP_WEBHOOK_SECRET` (dev) | value of `GITHUB_APP_WEBHOOK_SECRET` (prod) |
+| **SSL verification** | Enable | Enable |
+
+**Subscribe to events** (maps to the connector's record types):
+
+| GitHub event | Feeds record type | Notes |
+| --- | --- | --- |
+| `push` | `commit` / `source` | Commits + changed files. Needs event→type mapping. |
+| `pull_request` | `pull_request` | ✅ name already matches. |
+| `pull_request_review` | `code_review` | Needs mapping. |
+| `pull_request_review_comment` | `comment` | Needs mapping. |
+| `issues` | `issue` | Needs mapping (`issues` → `issue`). |
+| `issue_comment` | `comment` | Needs mapping. |
+| `release` | `release` | ✅ matches. |
+| `repository` | `repository` | ✅ matches. |
+
+`installation` and `installation_repositories` are delivered to the App webhook **automatically**
+(no subscription needed); add handling to reconcile repo add/remove and uninstalls.
+
+> **Dev webhooks need a public tunnel.** GitHub cannot reach `localhost`. Use smee.io,
+> `cloudflared tunnel`, or `ngrok` and set the dev App's Webhook URL to the tunnel origin
+> forwarding to `http://localhost:4000`.
+
+---
+
+## Environment variables
+
+All GitHub connector variables live in the **`api`** service (read in `apps/api`). Schema:
+`packages/config/src/env.ts:38-45`; registry: `packages/config/src/registry.ts:315-351`.
+
+| Variable | Secret | Required where | Dev value (`.env.local`) | Prod value (`oxagen-v2-api` on Vercel) |
+| --- | --- | --- | --- | --- |
+| `GITHUB_APP_CLIENT_ID` | no | api | Dev App → Client ID | Prod App → Client ID |
+| `GITHUB_APP_CLIENT_SECRET` | yes | api | Dev App → generated client secret | Prod App → generated client secret |
+| `GITHUB_APP_WEBHOOK_SECRET` | yes | api (when webhooks wired) | Dev App webhook secret | Prod App webhook secret |
+| `GITHUB_APP_INSTALL_STATE_SECRET` | yes | api | `openssl rand -hex 32` (dev value) | `openssl rand -hex 32` (distinct prod value) |
+| `NEXT_PUBLIC_API_URL` | no | all | `http://localhost:4000` | `https://oxagen-v2-api.vercel.app` |
+| `NEXT_PUBLIC_APP_URL` | no | all | `http://localhost:3000` | `https://oxagen-v2-app.vercel.app` |
+| `INGESTION_CRYPTO_PROVIDER` | no | optional | `env` | `env` (or `kms`) |
+| `INGESTION_ENCRYPTION_KEY` | yes | preview/prod | `openssl rand -base64 32` | required — wraps OAuth token encryption |
+| `AUTH_TOKEN_ENCRYPTION_KEY` | yes | preview/prod | blank ok locally | required (auth startup guard) |
+
+Notes:
+
+- **`GITHUB_APP_INSTALL_STATE_SECRET`** signs the OAuth `state` param (CSRF/replay protection).
+  Use a **different** value per environment.
+- **`INGESTION_ENCRYPTION_KEY`** is the master key that envelope-encrypts the stored GitHub
+  access/refresh tokens. If it's wrong or rotated without re-encryption, stored tokens become
+  undecryptable and sync fails.
+- The GitHub App **private key (.pem)** and **App ID** are **not** consumed by current code — do not
+  add them to env until installation-token auth is implemented.
+
+### Setting prod values
+
+Set the four `GITHUB_APP_*` vars on the **`oxagen-v2-api`** Vercel project across the
+environments it serves (production + preview if the dev App also covers preview). Datastore/auth
+vars (`INGESTION_ENCRYPTION_KEY`, `AUTH_TOKEN_ENCRYPTION_KEY`) are team-shared — confirm they're
+present before first use.
+
+---
+
+## Verification checklist
+
+After configuring an App and its env vars:
+
+1. **Config presence:** `pnpm env:check` passes; `GITHUB_APP_CLIENT_ID` /
+   `GITHUB_APP_INSTALL_STATE_SECRET` resolve (the `auth-url` route returns **503** if either is missing).
+2. **Authorize URL:** `GET /v1/{org}/{ws}/connections/github/auth-url?connectionId=con_...` returns a
+   `https://github.com/login/oauth/authorize?...` URL whose `redirect_uri` is
+   `{NEXT_PUBLIC_API_URL}/oauth/github/callback` and matches the App's Callback URL exactly.
+3. **Round-trip:** complete the browser flow; confirm a row in `ingestion.oauth_accounts`
+   (`provider = 'github'`, non-null `access_token_enc`) and that the connection links to it.
+4. **Installations/repos:** `.../connections/github/installations` and `.../repositories` return
+   data (not 404/502).
+5. **Sync:** activate a repo; confirm `ingestion/github.initial-sync` fired (API logs:
+   `"connection.mappings.set: fired ingestion/github.initial-sync"`), the connection moves to
+   `status = 'active'`, and `:EntityNode`s appear in Neo4j for the repo.
+
+---
+
+## Known gaps / follow-ups
+
+These are real and worth tracking in Linear (`oxagen-v2`, labels `connectors`, `ingestion`):
+
+1. **Webhook subscription provisioning** — insert `webhook_subscriptions` rows + store a
+   per-connection `secret_enc` (or adopt an App-level `/webhooks/github/app` resolver keyed on
+   `installation_id`). Until done, inbound webhooks 401.
+2. **`GITHUB_APP_WEBHOOK_SECRET` is unused** — wire it into verification (or delete it and document
+   the per-connection secret as the source of truth).
+3. **Event-name → record-type mapping** — translate `push`/`issues`/`issue_comment`/
+   `pull_request_review` to the connector's `commit`/`issue`/`comment`/`code_review` keys before
+   `normalizeRecord`.
+4. **`installation` / `installation_repositories` handling** — reconcile repo add/remove and
+   uninstall events; today they would hit `normalizeRecord` and throw.
+5. **`/connections/github/setup` landing route** — implement the Setup URL target so GitHub-initiated
+   installs resolve the current session's org/workspace.
+6. **Installation-token auth** — move unattended sync off the user token onto GitHub App installation
+   access tokens (JWT signed with the App private key), so sync survives the authorizing user leaving.
