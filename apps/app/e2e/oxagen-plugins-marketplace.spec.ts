@@ -112,35 +112,43 @@ test.describe("oxagen plugins marketplace — install + enable flow", () => {
     // Modal closes after successful install.
     await expect(page.getByTestId("marketplace-modal")).not.toBeVisible({ timeout: 15_000 });
 
-    // ── 7. Assert the plugin appears in org listings (disabled by default) ──
+    // ── 7. Assert the plugin appears in org listings (enabled by default) ──
     // The page revalidates on install — wait for the listing row to appear.
-    await expect(page.getByText("SVG Generation")).toBeVisible({ timeout: 15_000 });
+    // Scope to the listing display-name cell: a bare getByText("SVG Generation")
+    // also matches the "SVG Generation installed" success toast, which would trip
+    // Playwright strict mode (two matching elements).
+    await expect(
+      page
+        .locator('[data-testid^="org-listing-display-name-"]')
+        .filter({ hasText: "SVG Generation" }),
+    ).toBeVisible({ timeout: 15_000 });
 
-    // Find the listing row for oxagen/media-svg and assert it is disabled.
-    // The toggle is in the row; we find the row by display name and check the Switch.
+    // Find the listing row for oxagen/media-svg and assert it is enabled.
+    // Free plugins enable on install (see plugin.org.install handler — the listing
+    // is inserted with enabled: true), so the toggle starts checked.
     const listingRows = page.locator('[data-testid^="org-listing-row-"]');
     const svgRow = listingRows.filter({ hasText: "SVG Generation" });
     await expect(svgRow).toBeVisible({ timeout: 10_000 });
 
     const toggle = svgRow.locator('[data-testid^="org-listing-enable-toggle-"]');
-    // checked=false (aria-checked="false") means disabled.
-    await expect(toggle).toHaveAttribute("aria-checked", "false");
-
-    // Screenshot: installed listing in disabled state.
-    await page.screenshot({
-      path: path.join(SCREENSHOTS_DIR, "02-oxagen-plugin-installed-disabled.png"),
-      fullPage: false,
-    });
-
-    // ── 8. Enable the plugin ────────────────────────────────────────────────
-    await toggle.click();
-
-    // ── 9. Assert enabled ──────────────────────────────────────────────────
+    // checked=true (aria-checked="true") means enabled.
     await expect(toggle).toHaveAttribute("aria-checked", "true", { timeout: 10_000 });
 
     // Screenshot: installed listing in enabled state.
     await page.screenshot({
-      path: path.join(SCREENSHOTS_DIR, "03-oxagen-plugin-enabled.png"),
+      path: path.join(SCREENSHOTS_DIR, "02-oxagen-plugin-installed-enabled.png"),
+      fullPage: false,
+    });
+
+    // ── 8. Disable the plugin (exercise the toggle) ─────────────────────────
+    await toggle.click();
+
+    // ── 9. Assert disabled ──────────────────────────────────────────────────
+    await expect(toggle).toHaveAttribute("aria-checked", "false", { timeout: 10_000 });
+
+    // Screenshot: installed listing in disabled state.
+    await page.screenshot({
+      path: path.join(SCREENSHOTS_DIR, "03-oxagen-plugin-disabled.png"),
       fullPage: false,
     });
   });
