@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Plug, CheckCircle2, AlertCircle, Circle, ExternalLink } from "lucide-react";
 import { org } from "@/lib/routes";
+import { isRenderableImageUrl } from "@/lib/plugin-icon";
 import Link from "next/link";
 import type { schema } from "@oxagen/database";
 
@@ -276,12 +277,15 @@ export function WorkspaceIntegrationsPanel({
                     {/* Plugin name + icon */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        {listing.iconUrl ? (
+                        {isRenderableImageUrl(listing.iconUrl) ? (
                           <Image
                             src={listing.iconUrl}
                             alt=""
                             width={24}
                             height={24}
+                            // Catalog icons are arbitrary remote URLs not in
+                            // next.config remotePatterns — bypass the optimizer.
+                            unoptimized
                             className="h-6 w-6 rounded object-contain flex-shrink-0"
                             aria-hidden="true"
                           />

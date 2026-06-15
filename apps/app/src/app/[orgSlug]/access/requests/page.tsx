@@ -8,19 +8,12 @@
  */
 
 import {
-  Clock,
   CheckCircle2,
   XCircle,
   AlertTriangle,
   Hourglass,
 } from "lucide-react";
-import {
-  Card,
-  CardPanel,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 
 // ---------------------------------------------------------------------------
@@ -152,64 +145,38 @@ export default function AccessRequestsPage() {
 
       {/* Pending requests */}
       {pending.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-                <Clock
-                  className="h-4 w-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
+        <Panel
+          title={
+            <>
+              Pending requests{" "}
+              <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                {pending.length}
               </span>
-              <div>
-                <CardTitle>
-                  Pending requests{" "}
-                  <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
-                    {pending.length}
-                  </span>
-                </CardTitle>
-                <CardDescription>
-                  JIT access requests awaiting your review.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardPanel>
-            <div className="flex flex-col gap-2">
-              {pending.map((r) => (
-                <RequestRow key={r.id} request={r} />
-              ))}
-            </div>
-          </CardPanel>
-        </Card>
-      )}
-
-      {/* History */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <CheckCircle2
-                className="h-4 w-4 text-muted-foreground"
-                aria-hidden="true"
-              />
-            </span>
-            <div>
-              <CardTitle>Request history</CardTitle>
-              <CardDescription>
-                Past JIT access requests — approved, denied, and expired.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel>
+            </>
+          }
+        >
+          <p className="mb-4 text-sm text-muted-foreground">
+            JIT access requests awaiting your review.
+          </p>
           <div className="flex flex-col gap-2">
-            {past.map((r) => (
+            {pending.map((r) => (
               <RequestRow key={r.id} request={r} />
             ))}
           </div>
-        </CardPanel>
-      </Card>
+        </Panel>
+      )}
+
+      {/* History */}
+      <Panel title="Request history">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Past JIT access requests — approved, denied, and expired.
+        </p>
+        <div className="flex flex-col gap-2">
+          {past.map((r) => (
+            <RequestRow key={r.id} request={r} />
+          ))}
+        </div>
+      </Panel>
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
   Boxes,
 } from "lucide-react";
 import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
+import { isRenderableImageUrl } from "@/lib/plugin-icon";
 import type { schema } from "@oxagen/database";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -418,12 +419,16 @@ function AllowListSection({
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        {listing.iconUrl ? (
+                        {isRenderableImageUrl(listing.iconUrl) ? (
                           <Image
                             src={listing.iconUrl}
                             alt=""
                             width={24}
                             height={24}
+                            // Catalog icons are arbitrary remote URLs that can't be
+                            // allowlisted in next.config remotePatterns — bypass the
+                            // optimizer so the original src renders verbatim.
+                            unoptimized
                             className="h-6 w-6 rounded object-contain flex-shrink-0"
                             aria-hidden="true"
                           />

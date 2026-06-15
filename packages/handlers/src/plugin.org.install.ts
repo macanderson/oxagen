@@ -86,7 +86,12 @@ export async function installOne(
           name: pluginId,
           title: manifest.name,
           description: manifest.description,
-          iconUrl: manifest.icon ?? null,
+          // iconUrl is a URL column (rendered via next/image for MCP/integration
+          // catalog servers). Capability-pack manifests expose `icon` as a *Lucide
+          // icon name* (e.g. "image"), NOT a URL — writing it here produced an
+          // invalid next/image src and crashed the org plugins panel. Capability
+          // packs render the plugin-type icon in the UI, so leave this null.
+          iconUrl: null,
           endpointUrl: null,
           transport: null,
           authKind: "none",

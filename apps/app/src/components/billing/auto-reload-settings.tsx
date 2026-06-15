@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { Save } from "lucide-react";
 import type { OrgBillingSettings, PaymentMethodView } from "@oxagen/billing";
-import { Card, CardHeader, CardTitle, CardPanel } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -152,11 +153,8 @@ export function AutoReloadSettings({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Automatic reload</CardTitle>
-      </CardHeader>
-      <CardPanel className="flex flex-col gap-5">
+    <Panel title="Automatic reload">
+      <div className="flex flex-col gap-5">
         {/* Enable toggle */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-col gap-1">
@@ -252,12 +250,12 @@ export function AutoReloadSettings({
         {/* Save */}
         {canManage && (
           <div className="flex justify-end">
-            <Button size="sm" onClick={handleSave} disabled={saving}>
+            <Button size="sm" variant="gradient" startIcon={<Save className="h-3.5 w-3.5" />} onClick={handleSave} disabled={saving}>
               {saving ? "Saving…" : "Save"}
             </Button>
           </div>
         )}
-      </CardPanel>
-    </Card>
+      </div>
+    </Panel>
   );
 }

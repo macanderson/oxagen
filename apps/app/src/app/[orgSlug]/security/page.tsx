@@ -28,15 +28,12 @@ import {
   XCircle,
   ClipboardCheck,
   ArrowRight,
-  FileClock,
 } from "lucide-react";
 import {
   Card,
   CardPanel,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 
 // Org-only route — sentinel workspaceId (no workspace context). — OXA-1515
@@ -319,116 +316,87 @@ export default async function SecurityOverviewPage({
       </div>
 
       {/* SOC 2 control status */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <ClipboardCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>SOC 2 control status</CardTitle>
-              <CardDescription>
-                Live status for the Trust Service Criteria this workspace touches, derived from
-                current platform signals.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <div className="flex flex-col gap-2">
-            {controls.map((c) => (
-              <div
-                key={c.criterion}
-                className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 sm:flex-row sm:items-start sm:gap-4"
-              >
-                <div className="flex flex-1 items-start gap-3 min-w-0">
-                  <ControlIcon state={c.state} />
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs font-semibold text-foreground">
-                        {c.criterion}
-                      </span>
-                      <span className="text-sm font-medium text-foreground">{c.title}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-snug">{c.rationale}</p>
+      <Panel title="SOC 2 control status">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Live status for the Trust Service Criteria this workspace touches, derived from
+          current platform signals.
+        </p>
+        <div className="flex flex-col gap-2">
+          {controls.map((c) => (
+            <div
+              key={c.criterion}
+              className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 sm:flex-row sm:items-start sm:gap-4"
+            >
+              <div className="flex flex-1 items-start gap-3 min-w-0">
+                <ControlIcon state={c.state} />
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs font-semibold text-foreground">
+                      {c.criterion}
+                    </span>
+                    <span className="text-sm font-medium text-foreground">{c.title}</span>
                   </div>
+                  <p className="text-xs text-muted-foreground leading-snug">{c.rationale}</p>
                 </div>
-                <Badge variant={CONTROL_BADGE[c.state]} className="shrink-0 text-xs">
-                  {CONTROL_LABEL[c.state]}
-                </Badge>
               </div>
-            ))}
-          </div>
-        </CardPanel>
-      </Card>
+              <Badge variant={CONTROL_BADGE[c.state]} className="shrink-0 text-xs">
+                {CONTROL_LABEL[c.state]}
+              </Badge>
+            </div>
+          ))}
+        </div>
+      </Panel>
 
       {/* Evidence snapshot status + quick links */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-                <FileClock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              </span>
-              <div>
-                <CardTitle>Evidence snapshots</CardTitle>
-                <CardDescription>Automated monthly compliance evidence bundles.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardPanel>
-            <div className="flex items-center gap-3 rounded-xl border border-dashed border-border/60 bg-muted/20 px-4 py-3">
-              <Badge variant="outline" className="shrink-0 text-xs">
-                Pending
-              </Badge>
-              <p className="text-sm text-muted-foreground">
-                Automated monthly evidence snapshots are not yet enabled. Once live, the most
-                recent bundles will appear here for one-click auditor download.
-              </p>
-            </div>
-          </CardPanel>
-        </Card>
+        <Panel title="Evidence snapshots">
+          <p className="mb-4 text-sm text-muted-foreground">Automated monthly compliance evidence bundles.</p>
+          <div className="flex items-center gap-3 rounded-xl border border-dashed border-border/60 bg-muted/20 px-4 py-3">
+            <Badge variant="outline" className="shrink-0 text-xs">
+              Pending
+            </Badge>
+            <p className="text-sm text-muted-foreground">
+              Automated monthly evidence snapshots are not yet enabled. Once live, the most
+              recent bundles will appear here for one-click auditor download.
+            </p>
+          </div>
+        </Panel>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Jump to</CardTitle>
-            <CardDescription>Drill into the underlying security surfaces.</CardDescription>
-          </CardHeader>
-          <CardPanel>
-            <div className="flex flex-col gap-2">
-              <Link
-                href={org.security.audit(ctx)}
-                className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span className="flex items-center gap-2">
-                  <ScrollText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  Audit log
-                </span>
-                <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              </Link>
-              <Link
-                href={org.security.compliance(ctx)}
-                className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span className="flex items-center gap-2">
-                  <ClipboardCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  Compliance controls
-                </span>
-                <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              </Link>
-              <Link
-                href={org.security.incidents(ctx)}
-                className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  Incidents
-                </span>
-                <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              </Link>
-            </div>
-          </CardPanel>
-        </Card>
+        <Panel title="Jump to">
+          <p className="mb-4 text-sm text-muted-foreground">Drill into the underlying security surfaces.</p>
+          <div className="flex flex-col gap-2">
+            <Link
+              href={org.security.audit(ctx)}
+              className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="flex items-center gap-2">
+                <ScrollText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                Audit log
+              </span>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            </Link>
+            <Link
+              href={org.security.compliance(ctx)}
+              className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="flex items-center gap-2">
+                <ClipboardCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                Compliance controls
+              </span>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            </Link>
+            <Link
+              href={org.security.incidents(ctx)}
+              className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                Incidents
+              </span>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            </Link>
+          </div>
+        </Panel>
       </div>
     </div>
   );

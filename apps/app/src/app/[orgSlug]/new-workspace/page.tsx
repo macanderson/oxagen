@@ -1,4 +1,4 @@
-import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { NewWorkspaceForm } from "@/components/workspace/new-workspace-form";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
@@ -21,18 +21,13 @@ export default async function NewWorkspacePage({
 
   return (
     <div className="mx-auto max-w-lg py-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>Create a workspace</CardTitle>
-          <CardDescription>
-            Workspaces scope the knowledge graph, data, and agents inside {org.name}. You&rsquo;ll
-            be the workspace owner.
-          </CardDescription>
-        </CardHeader>
-        <CardPanel>
-          <NewWorkspaceForm orgSlug={orgSlug} action={action} />
-        </CardPanel>
-      </Card>
+      <Panel title="Create a workspace" className="w-full max-w-3xl">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Workspaces scope the knowledge graph, data, and agents inside {org.name}. You&rsquo;ll
+          be the workspace owner.
+        </p>
+        <NewWorkspaceForm orgSlug={orgSlug} action={action} />
+      </Panel>
     </div>
   );
 }

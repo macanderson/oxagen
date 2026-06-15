@@ -9,20 +9,13 @@
  */
 
 import {
-  MonitorDot,
   Globe,
   Laptop,
   Smartphone,
   Bot,
   CircleSlash,
 } from "lucide-react";
-import {
-  Card,
-  CardPanel,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { eq, and, gt, inArray } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
@@ -156,114 +149,106 @@ export default async function AccessSessionsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <MonitorDot className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      <Panel
+        title={
+          <>
+            Active sessions{" "}
+            <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+              {sessions.length}
             </span>
-            <div>
-              <CardTitle>
-                Active sessions{" "}
-                <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
-                  {sessions.length}
+          </>
+        }
+      >
+        <p className="mb-4 text-sm text-muted-foreground">
+          All unexpired sessions for members of this organization.
+          Owner and admin roles can revoke any session (CC6.1).
+        </p>
+
+        {sessions.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No active sessions found.</p>
+        ) : (
+          <>
+            {/* Column headers (desktop) */}
+            <div
+              className="mb-2 hidden px-4 sm:grid sm:gap-4"
+              style={{
+                gridTemplateColumns: canRevoke
+                  ? "minmax(0,1.6fr) 110px 110px 160px 120px"
+                  : "minmax(0,1.6fr) 110px 110px 160px",
+              }}
+            >
+              {["User", "Device", "IP", "Last active", ...(canRevoke ? [""] : [])].map((h) => (
+                <span
+                  key={h}
+                  className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                >
+                  {h}
                 </span>
-              </CardTitle>
-              <CardDescription>
-                All unexpired sessions for members of this organization.
-                Owner and admin roles can revoke any session (CC6.1).
-              </CardDescription>
+              ))}
             </div>
-          </div>
-        </CardHeader>
 
-        <CardPanel>
-          {sessions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No active sessions found.</p>
-          ) : (
-            <>
-              {/* Column headers (desktop) */}
-              <div
-                className="mb-2 hidden px-4 sm:grid sm:gap-4"
-                style={{
-                  gridTemplateColumns: canRevoke
-                    ? "minmax(0,1.6fr) 110px 110px 160px 120px"
-                    : "minmax(0,1.6fr) 110px 110px 160px",
-                }}
-              >
-                {["User", "Device", "IP", "Last active", ...(canRevoke ? [""] : [])].map((h) => (
-                  <span
-                    key={h}
-                    className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-                  >
-                    {h}
-                  </span>
-                ))}
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                {sessions.map((s) => (
-                  <div
-                    key={s.id}
-                    className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm grid grid-cols-1 gap-y-1 sm:gap-4 sm:items-center"
-                    style={{
-                      gridTemplateColumns: canRevoke
-                        ? "minmax(0,1.6fr) 110px 110px 160px 120px"
-                        : "minmax(0,1.6fr) 110px 110px 160px",
-                    }}
-                  >
-                    {/* User */}
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <span className="font-medium text-foreground truncate">
-                        {s.userName ?? s.userEmail}
-                      </span>
-                      <span className="text-xs text-muted-foreground truncate">
-                        {s.userName ? s.userEmail : ""}
-                      </span>
-                    </div>
-
-                    {/* Device */}
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <DeviceIcon kind={s.deviceKind} />
-                      <span className="truncate">{extractBrowser(s.userAgent)}</span>
-                    </div>
-
-                    {/* IP */}
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
-                      <Globe className="h-3 w-3 shrink-0" aria-hidden="true" />
-                      <span className="truncate">{s.ip ?? "—"}</span>
-                    </div>
-
-                    {/* Last active */}
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-xs text-muted-foreground">{formatTs(s.updatedAt)}</span>
-                      <span className="text-[11px] text-muted-foreground/60">
-                        Expires {formatTs(s.expiresAt)}
-                      </span>
-                    </div>
-
-                    {/* Revoke */}
-                    {canRevoke && (
-                      <div className="flex items-center">
-                        {s.userId === session.user.id ? (
-                          <Badge variant="muted" className="text-[10px]">Your session</Badge>
-                        ) : (
-                          <RevokeSessionButton
-                            orgSlug={orgSlug}
-                            sessionId={s.id}
-                            targetUserId={s.userId}
-                            userName={s.userName ?? s.userEmail}
-                          />
-                        )}
-                      </div>
-                    )}
+            <div className="flex flex-col gap-1.5">
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm grid grid-cols-1 gap-y-1 sm:gap-4 sm:items-center"
+                  style={{
+                    gridTemplateColumns: canRevoke
+                      ? "minmax(0,1.6fr) 110px 110px 160px 120px"
+                      : "minmax(0,1.6fr) 110px 110px 160px",
+                  }}
+                >
+                  {/* User */}
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="font-medium text-foreground truncate">
+                      {s.userName ?? s.userEmail}
+                    </span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {s.userName ? s.userEmail : ""}
+                    </span>
                   </div>
-                ))}
-              </div>
-            </>
-          )}
-        </CardPanel>
-      </Card>
+
+                  {/* Device */}
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <DeviceIcon kind={s.deviceKind} />
+                    <span className="truncate">{extractBrowser(s.userAgent)}</span>
+                  </div>
+
+                  {/* IP */}
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+                    <Globe className="h-3 w-3 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{s.ip ?? "—"}</span>
+                  </div>
+
+                  {/* Last active */}
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground">{formatTs(s.updatedAt)}</span>
+                    <span className="text-[11px] text-muted-foreground/60">
+                      Expires {formatTs(s.expiresAt)}
+                    </span>
+                  </div>
+
+                  {/* Revoke */}
+                  {canRevoke && (
+                    <div className="flex items-center">
+                      {s.userId === session.user.id ? (
+                        <Badge variant="muted" className="text-[10px]">Your session</Badge>
+                      ) : (
+                        <RevokeSessionButton
+                          orgSlug={orgSlug}
+                          sessionId={s.id}
+                          targetUserId={s.userId}
+                          userName={s.userName ?? s.userEmail}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </Panel>
 
       {!canRevoke && (
         <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">

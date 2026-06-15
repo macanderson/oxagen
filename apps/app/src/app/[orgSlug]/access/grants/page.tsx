@@ -10,15 +10,8 @@ import {
   Shield,
   XCircle,
   AlertTriangle,
-  ShieldCheck,
 } from "lucide-react";
-import {
-  Card,
-  CardPanel,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 
 // ---------------------------------------------------------------------------
@@ -156,87 +149,72 @@ export default function AccessGrantsPage() {
         Preview &middot; not yet wired to live data
       </p>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <ShieldCheck
-                className="h-4 w-4 text-muted-foreground"
-                aria-hidden="true"
-              />
-            </span>
-            <div>
-              <CardTitle>Capability grants</CardTitle>
-              <CardDescription>
-                Direct principal-to-capability grants outside of roles. These
-                supplement role-based access for specific principals.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
+      <Panel title="Capability grants">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Direct principal-to-capability grants outside of roles. These
+          supplement role-based access for specific principals.
+        </p>
 
-        <CardPanel>
-          {/* Table header */}
-          <div className="mb-2 hidden grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_80px_80px_100px_100px] gap-4 px-4 sm:grid">
-            {["Principal", "Capability", "Scope", "Effect", "Granted by", "Expires"].map(
-              (h) => (
-                <span
-                  key={h}
-                  className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-                >
-                  {h}
-                </span>
-              ),
-            )}
-          </div>
+        {/* Table header */}
+        <div className="mb-2 hidden grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_80px_80px_100px_100px] gap-4 px-4 sm:grid">
+          {["Principal", "Capability", "Scope", "Effect", "Granted by", "Expires"].map(
+            (h) => (
+              <span
+                key={h}
+                className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                {h}
+              </span>
+            ),
+          )}
+        </div>
 
-          <div className="flex flex-col gap-1.5">
-            {MOCK_GRANTS.map((g) => (
-              <div
-                key={g.id}
-                className="grid rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm
+        <div className="flex flex-col gap-1.5">
+          {MOCK_GRANTS.map((g) => (
+            <div
+              key={g.id}
+              className="grid rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm
                   grid-cols-1 gap-y-1
                   sm:grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_80px_80px_100px_100px] sm:gap-4 sm:items-center"
-              >
-                {/* Principal */}
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="font-medium text-foreground truncate">
-                    {g.principal}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {PRINCIPAL_KIND_LABEL[g.principalKind]}
-                  </span>
-                </div>
-
-                {/* Capability */}
-                <span className="font-mono text-xs text-foreground truncate">
-                  {g.capabilityId}
+            >
+              {/* Principal */}
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="font-medium text-foreground truncate">
+                  {g.principal}
                 </span>
-
-                {/* Scope */}
-                <Badge variant="outline" className="w-fit text-xs capitalize">
-                  {g.scope}
-                </Badge>
-
-                {/* Effect */}
-                <EffectBadge effect={g.effect} />
-
-                {/* Granted by */}
-                <span className="text-xs text-muted-foreground truncate">
-                  {g.grantedBy}
-                  <br />
-                  <span className="text-muted-foreground/60">{g.grantedAt}</span>
-                </span>
-
-                {/* Expires */}
                 <span className="text-xs text-muted-foreground">
-                  {g.expiresAt ?? "Never"}
+                  {PRINCIPAL_KIND_LABEL[g.principalKind]}
                 </span>
               </div>
-            ))}
-          </div>
-        </CardPanel>
-      </Card>
+
+              {/* Capability */}
+              <span className="font-mono text-xs text-foreground truncate">
+                {g.capabilityId}
+              </span>
+
+              {/* Scope */}
+              <Badge variant="outline" className="w-fit text-xs capitalize">
+                {g.scope}
+              </Badge>
+
+              {/* Effect */}
+              <EffectBadge effect={g.effect} />
+
+              {/* Granted by */}
+              <span className="text-xs text-muted-foreground truncate">
+                {g.grantedBy}
+                <br />
+                <span className="text-muted-foreground/60">{g.grantedAt}</span>
+              </span>
+
+              {/* Expires */}
+              <span className="text-xs text-muted-foreground">
+                {g.expiresAt ?? "Never"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Panel>
     </div>
   );
 }

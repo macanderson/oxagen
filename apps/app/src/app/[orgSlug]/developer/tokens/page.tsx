@@ -5,8 +5,8 @@ import { resolveOrg } from "@/lib/resolve-org";
 
 // Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
-import { KeySquare, Clock, Layers } from "lucide-react";
-import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Clock, Layers } from "lucide-react";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 
 function formatDate(d: Date | null | undefined): string {
@@ -60,21 +60,10 @@ export default async function DeveloperTokensPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <KeySquare className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>API tokens</CardTitle>
-              <CardDescription>
-                Scoped service-principal credentials for programmatic access.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel>
+      <Panel title="API tokens">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Scoped service-principal credentials for programmatic access.
+        </p>
           {active.length === 0 && revoked.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No API tokens yet. Tokens can be created via the Oxagen API.
@@ -142,8 +131,7 @@ export default async function DeveloperTokensPage({
               )}
             </div>
           )}
-        </CardPanel>
-      </Card>
+      </Panel>
     </div>
   );
 }

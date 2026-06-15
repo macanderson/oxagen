@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { Card, CardPanel, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCents, formatDate } from "@/lib/utils";
@@ -21,14 +21,7 @@ export interface CreditBalanceProps {
 export function CreditBalance({ balanceCents, ledger }: CreditBalanceProps) {
   const [open, setOpen] = React.useState(false);
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span>Credit balance</span>
-          <span className="text-2xl font-bold tabular-nums">{formatCents(balanceCents)}</span>
-        </CardTitle>
-      </CardHeader>
-      <CardPanel>
+    <Panel title={<span className="flex items-center justify-between w-full"><span>Credit balance</span><span className="text-2xl font-bold tabular-nums">{formatCents(balanceCents)}</span></span>}>
         <Button variant="ghost" size="sm" onClick={() => setOpen((v) => !v)} className="-mx-2">
           {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           Recent ledger entries
@@ -53,7 +46,6 @@ export function CreditBalance({ balanceCents, ledger }: CreditBalanceProps) {
             )}
           </ul>
         ) : null}
-      </CardPanel>
-    </Card>
+    </Panel>
   );
 }

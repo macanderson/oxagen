@@ -76,16 +76,16 @@ describe("resolveSidebarMode", () => {
 // 2. getSidebarConfig — item counts per mode
 //
 // Spec (application-shell spec §4):
-//   workspace: 6 items (Ask, Knowledge, Automation, Activity, Studio, Settings)
+//   workspace: 8 items (Ask, Knowledge, Automation, Activity, Studio, Marketplace, Workflows, Settings)
 //   org:       6 items (Workspaces, Members, Access, Security, Billing, Developer)
 //   account:   4 items (Back to app, Profile, Preferences, Security)
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 7 items", () => {
+  it("workspace config has exactly 8 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    expect(config.items).toHaveLength(7);
+    expect(config.items).toHaveLength(8);
   });
 
   it("org config has exactly 7 items", () => {
@@ -107,12 +107,13 @@ describe("getSidebarConfig item counts", () => {
     expect(returnItems[0]?.id).toBe("back");
   });
 
-  it("workspace config has exactly two 'tools' group items (Studio, Workflows)", () => {
+  it("workspace config has exactly three 'tools' group items (Studio, Marketplace, Workflows)", () => {
     const items = getSidebarConfig("workspace").items;
     const toolsItems = items.filter((item) => item.group === "tools");
-    expect(toolsItems).toHaveLength(2);
+    expect(toolsItems).toHaveLength(3);
     const ids = toolsItems.map((i) => i.id);
     expect(ids).toContain("studio");
+    expect(ids).toContain("marketplace");
     expect(ids).toContain("workflows");
   });
 
@@ -164,6 +165,10 @@ describe("href builders produce correct paths", () => {
 
     it("studio -> /{org}/{ws}/studio", () => {
       expect(findItem("studio").href(wsCtx)).toBe("/acme/production/studio");
+    });
+
+    it("marketplace -> /{org}/settings/plugins (org-level, from ws ctx)", () => {
+      expect(findItem("marketplace").href(wsCtx)).toBe("/acme/settings/plugins");
     });
 
     it("settings -> /{org}/{ws}/settings", () => {

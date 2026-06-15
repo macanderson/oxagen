@@ -1,5 +1,4 @@
 import {
-  AlertTriangle,
   CheckCircle2,
   Clock,
   User,
@@ -7,13 +6,7 @@ import {
   ChevronRight,
   Plus,
 } from "lucide-react";
-import {
-  Card,
-  CardPanel,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -264,29 +257,18 @@ export default function SecurityIncidentsPage() {
       </div>
 
       {/* Incident list */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-                <AlertTriangle className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              </span>
-              <div>
-                <CardTitle>Security Incidents</CardTitle>
-                <CardDescription>
-                  Triage, track, and resolve security incidents with a structured response
-                  workflow.
-                </CardDescription>
-              </div>
-            </div>
-            <Button size="sm">
-              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              New incident
-            </Button>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <div className="flex flex-col gap-4">
+      <Panel
+        title="Security incidents"
+        actions={
+          <Button size="sm" variant="gradient" startIcon={<Plus className="h-3.5 w-3.5" />}>
+            New incident
+          </Button>
+        }
+      >
+        <p className="mb-4 text-sm text-muted-foreground">
+          Triage, track, and resolve security incidents with a structured response workflow.
+        </p>
+        <div className="flex flex-col gap-4">
             {MOCK_INCIDENTS.map((inc) => (
               <div
                 key={inc.id}
@@ -373,8 +355,7 @@ export default function SecurityIncidentsPage() {
               </div>
             ))}
           </div>
-        </CardPanel>
-      </Card>
+      </Panel>
     </div>
   );
 }

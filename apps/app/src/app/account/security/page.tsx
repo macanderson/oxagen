@@ -12,20 +12,12 @@
  */
 
 import {
-  ShieldCheck,
-  MonitorDot,
   Laptop,
   Smartphone,
   Bot,
   Globe,
 } from "lucide-react";
-import {
-  Card,
-  CardPanel,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { headers } from "next/headers";
 import { gt } from "drizzle-orm";
@@ -163,76 +155,51 @@ export default async function AccountSecurityPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* MFA status — honest current state */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-                <ShieldCheck
-                  className="h-4 w-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </span>
-              <div>
-                <CardTitle>Multi-factor authentication</CardTitle>
-                <CardDescription>
-                  MFA adds a second verification step when you sign in.
-                </CardDescription>
-              </div>
-            </div>
-            <Badge variant="muted" className="shrink-0 text-xs">
-              Not enrolled
-            </Badge>
+      <Panel
+        title="Multi-factor authentication"
+        actions={
+          <Badge variant="muted" className="shrink-0 text-xs">
+            Not enrolled
+          </Badge>
+        }
+      >
+        <p className="mb-4 text-sm text-muted-foreground">
+          MFA adds a second verification step when you sign in.
+        </p>
+        <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/30 px-4 py-4">
+          <p className="text-sm text-muted-foreground">
+            TOTP (authenticator app) enrollment is not yet available in this version of the
+            platform. MFA enforcement at the org level can be configured by an org owner or admin
+            from the <strong>Security → MFA</strong> section.
+          </p>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-medium">Sign-in methods active:</span>
+            {connectedAccountsState.accounts.map((a) => (
+              <Badge key={a.id} variant="outline" className="text-xs capitalize">
+                {a.providerId === "credential" ? "Password" : a.providerId}
+              </Badge>
+            ))}
+            {connectedAccountsState.accounts.length === 0 && (
+              <span className="text-muted-foreground/60">None on record</span>
+            )}
           </div>
-        </CardHeader>
-        <CardPanel>
-          <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/30 px-4 py-4">
-            <p className="text-sm text-muted-foreground">
-              TOTP (authenticator app) enrollment is not yet available in this
-              version of the platform. MFA enforcement at the org level can be
-              configured by an org owner or admin from the{" "}
-              <strong>Security → MFA</strong> section.
-            </p>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="font-medium">Sign-in methods active:</span>
-              {connectedAccountsState.accounts.map((a) => (
-                <Badge key={a.id} variant="outline" className="text-xs capitalize">
-                  {a.providerId === "credential" ? "Password" : a.providerId}
-                </Badge>
-              ))}
-              {connectedAccountsState.accounts.length === 0 && (
-                <span className="text-muted-foreground/60">None on record</span>
-              )}
-            </div>
-          </div>
-        </CardPanel>
-      </Card>
+        </div>
+      </Panel>
 
       {/* Active sessions */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <MonitorDot
-                className="h-4 w-4 text-muted-foreground"
-                aria-hidden="true"
-              />
+      <Panel
+        title={
+          <>
+            Active sessions{" "}
+            <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+              {sessions.length}
             </span>
-            <div>
-              <CardTitle>
-                Active sessions{" "}
-                <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
-                  {sessions.length}
-                </span>
-              </CardTitle>
-              <CardDescription>
-                All active sessions for your account. You can revoke any session
-                you do not recognize.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel>
+          </>
+        }
+      >
+        <p className="mb-4 text-sm text-muted-foreground">
+          All active sessions for your account. You can revoke any session you do not recognize.
+        </p>
           {sessions.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No active sessions found.
@@ -325,8 +292,7 @@ export default async function AccountSecurityPage() {
               </div>
             </>
           )}
-        </CardPanel>
-      </Card>
+      </Panel>
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { AreaChart, AreaSeries, LinearXAxis, LinearXAxisTickSeries, LinearXAxisTickLabel, LinearYAxis, LinearYAxisTickSeries, GridlineSeries } from "reaviz";
 import { Card, CardHeader, CardTitle, CardDescription, CardPanel } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { formatCents } from "@/lib/utils";
 
@@ -183,13 +184,9 @@ function PeriodSummaryCard() {
   const overIncluded = TOTAL_SPENT_CENTS > INCLUDED_CENTS;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Current period</CardTitle>
-        <CardDescription>June 1 – June 30, 2026</CardDescription>
-      </CardHeader>
-      <CardPanel>
-        <div className="flex items-end justify-between mb-3">
+    <Panel title="Current period">
+      <p className="mb-4 text-sm text-muted-foreground">June 1 – June 30, 2026</p>
+      <div className="flex items-end justify-between mb-3">
           <div>
             <span className="text-3xl font-bold tabular-nums">{formatCents(TOTAL_SPENT_CENTS)}</span>
             <span className="ml-2 text-sm text-muted-foreground">of {formatCents(INCLUDED_CENTS)} included</span>
@@ -227,20 +224,15 @@ function PeriodSummaryCard() {
             <p className="font-semibold tabular-nums">{Math.max(0, INCLUDED_CENTS - TOTAL_SPENT_CENTS).toLocaleString()} cr</p>
           </div>
         </div>
-      </CardPanel>
-    </Card>
+    </Panel>
   );
 }
 
 function CreditBurnChart() {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Credit burn — last 30 days</CardTitle>
-        <CardDescription>Daily credit spend (1 credit = $0.01)</CardDescription>
-      </CardHeader>
-      <CardPanel>
-        <div style={{ height: 220 }}>
+    <Panel title="Credit burn — last 30 days">
+      <p className="mb-4 text-sm text-muted-foreground">Daily credit spend (1 credit = $0.01)</p>
+      <div style={{ height: 220 }}>
           <AreaChart
             data={BURN_DATA}
             height={220}
@@ -281,19 +273,14 @@ function CreditBurnChart() {
             gridlines={<GridlineSeries />}
           />
         </div>
-      </CardPanel>
-    </Card>
+    </Panel>
   );
 }
 
 function TokenSummaryCard() {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Token usage</CardTitle>
-        <CardDescription>Input / output tokens this period</CardDescription>
-      </CardHeader>
-      <CardPanel>
+    <Panel title="Token usage">
+      <p className="mb-4 text-sm text-muted-foreground">Input / output tokens this period</p>
         <div className="grid grid-cols-3 gap-4 text-sm">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Input</span>
@@ -330,8 +317,7 @@ function TokenSummaryCard() {
             Output {Math.round((OUTPUT_TOKENS / TOTAL_TOKENS) * 100)}%
           </span>
         </div>
-      </CardPanel>
-    </Card>
+    </Panel>
   );
 }
 
@@ -339,12 +325,8 @@ function ModelBreakdownTable() {
   const totalCost = MODEL_ROWS.reduce((s, r) => s + r.costCents, 0);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Per-model breakdown</CardTitle>
-        <CardDescription>AI model calls, tokens, and credit cost this period</CardDescription>
-      </CardHeader>
-      <CardPanel>
+    <Panel title="Per-model breakdown">
+      <p className="mb-4 text-sm text-muted-foreground">AI model calls, tokens, and credit cost this period</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -396,8 +378,7 @@ function ModelBreakdownTable() {
             </tfoot>
           </table>
         </div>
-      </CardPanel>
-    </Card>
+    </Panel>
   );
 }
 
@@ -405,12 +386,8 @@ function CapabilityTable() {
   const totalCost = CAPABILITY_ROWS.reduce((s, r) => s + r.costCents, 0);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Per-capability usage</CardTitle>
-        <CardDescription>API and MCP capability call volume and cost</CardDescription>
-      </CardHeader>
-      <CardPanel>
+    <Panel title="Per-capability usage">
+      <p className="mb-4 text-sm text-muted-foreground">API and MCP capability call volume and cost</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -440,19 +417,14 @@ function CapabilityTable() {
             </tbody>
           </table>
         </div>
-      </CardPanel>
-    </Card>
+    </Panel>
   );
 }
 
 function WorkspaceTable() {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Per-workspace usage</CardTitle>
-        <CardDescription>Credit spend split across workspaces this period</CardDescription>
-      </CardHeader>
-      <CardPanel>
+    <Panel title="Per-workspace usage">
+      <p className="mb-4 text-sm text-muted-foreground">Credit spend split across workspaces this period</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -489,8 +461,7 @@ function WorkspaceTable() {
             </tbody>
           </table>
         </div>
-      </CardPanel>
-    </Card>
+    </Panel>
   );
 }
 

@@ -6,8 +6,7 @@
  * Emits security.mfa_policy_updated on save (CC6.1 / CC6.2 evidence).
  */
 
-import { ShieldCheck } from "lucide-react";
-import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { resolveOrg, getOrgRole, SECURITY_MANAGER_ROLES } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
@@ -36,54 +35,38 @@ export default async function SecurityMfaPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-                <ShieldCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              </span>
-              <div>
-                <CardTitle>MFA Policy</CardTitle>
-                <CardDescription>
-                  Require multi-factor authentication for every member in this
-                  organization. Satisfies SOC 2 CC6.1 logical access controls and
-                  CC6.2 authentication requirements.
-                </CardDescription>
-              </div>
-            </div>
-            <Badge
-              variant={mfaRequired ? "success" : "muted"}
-              className="shrink-0 text-xs"
-            >
-              {mfaRequired ? "Enforced" : "Not enforced"}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <MfaPolicyForm
-            orgSlug={orgSlug}
-            canEdit={canEdit}
-            initialMfaRequired={mfaRequired}
-            initialMfaGraceHours={mfaGraceHours}
-          />
-        </CardPanel>
-      </Card>
+      <Panel
+        title="MFA policy"
+        actions={
+          <Badge
+            variant={mfaRequired ? "success" : "muted"}
+            className="shrink-0 text-xs"
+          >
+            {mfaRequired ? "Enforced" : "Not enforced"}
+          </Badge>
+        }
+      >
+        <p className="mb-4 text-sm text-muted-foreground">
+          Require multi-factor authentication for every member in this organization. Satisfies SOC
+          2 CC6.1 logical access controls and CC6.2 authentication requirements.
+        </p>
+        <MfaPolicyForm
+          orgSlug={orgSlug}
+          canEdit={canEdit}
+          initialMfaRequired={mfaRequired}
+          initialMfaGraceHours={mfaGraceHours}
+        />
+      </Panel>
 
       {/* Evidence note */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Audit evidence</CardTitle>
-          <CardDescription>
-            Every policy change is recorded as a{" "}
-            <code className="text-xs font-mono bg-muted px-1 rounded">
-              security.mfa_policy_updated
-            </code>{" "}
-            event in the append-only audit log with actor, timestamp, and outcome —
-            satisfying CC6.1 and CC6.2 change evidence requirements.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <Panel title="Audit evidence">
+        Every policy change is recorded as a{" "}
+        <code className="text-xs font-mono bg-muted px-1 rounded">
+          security.mfa_policy_updated
+        </code>{" "}
+        event in the append-only audit log with actor, timestamp, and outcome — satisfying CC6.1
+        and CC6.2 change evidence requirements.
+      </Panel>
     </div>
   );
 }

@@ -11,19 +11,12 @@
  */
 
 import {
-  ClipboardCheck,
   CheckCircle2,
   AlertTriangle,
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import {
-  Card,
-  CardPanel,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -153,71 +146,57 @@ export default async function SecurityCompliancePage({
       )}
 
       {/* SOC 2 summary card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <CardTitle>SOC 2 Type II</CardTitle>
-              <CardDescription>
-                Trust Service Criteria control status — derived from live
-                platform signals, not static declarations.
-              </CardDescription>
-            </div>
-            <Badge
-              variant={pct >= 80 ? "success" : pct >= 50 ? "warning" : "error"}
-              className="shrink-0 text-sm font-semibold px-2.5"
-            >
-              {pct}% ready
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <div className="mb-3 h-2 w-full rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <div className="flex gap-4 text-xs text-muted-foreground">
-            <span>
-              <span className="font-semibold text-[hsl(142_71%_45%)]">{summary.active}</span>{" "}
-              active
-            </span>
-            <span>
-              <span className="font-semibold text-[hsl(38_92%_50%)]">{summary.partial}</span>{" "}
-              partial
-            </span>
-            <span>
-              <span className="font-semibold text-destructive">{summary.notStarted}</span>{" "}
-              not started
-            </span>
-          </div>
-        </CardPanel>
-      </Card>
+      <Panel
+        title="SOC 2 Type II"
+        actions={
+          <Badge
+            variant={pct >= 80 ? "success" : pct >= 50 ? "warning" : "error"}
+            className="shrink-0 text-sm font-semibold px-2.5"
+          >
+            {pct}% ready
+          </Badge>
+        }
+      >
+        <p className="mb-4 text-sm text-muted-foreground">
+          Trust Service Criteria control status — derived from live platform signals, not static
+          declarations.
+        </p>
+        <div className="mb-3 h-2 w-full rounded-full bg-muted overflow-hidden">
+          <div
+            className="h-full rounded-full bg-primary transition-all"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div className="flex gap-4 text-xs text-muted-foreground">
+          <span>
+            <span className="font-semibold text-[hsl(142_71%_45%)]">{summary.active}</span>{" "}
+            active
+          </span>
+          <span>
+            <span className="font-semibold text-[hsl(38_92%_50%)]">{summary.partial}</span>{" "}
+            partial
+          </span>
+          <span>
+            <span className="font-semibold text-destructive">{summary.notStarted}</span>{" "}
+            not started
+          </span>
+        </div>
+      </Panel>
 
       {/* Control catalog */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-                <ClipboardCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              </span>
-              <div>
-                <CardTitle>Control catalog</CardTitle>
-                <CardDescription>
-                  Trust Service Criteria controls and their current status.
-                  Every status is derived from live system signals.
-                </CardDescription>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" render={<Link href={org.security.audit(ctx)} />}>
-              View audit log
-            </Button>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          {categories.map((category, catIdx) => {
+      <Panel
+        title="Control catalog"
+        actions={
+          <Button variant="outline" size="sm" render={<Link href={org.security.audit(ctx)} />}>
+            View audit log
+          </Button>
+        }
+      >
+        <p className="mb-4 text-sm text-muted-foreground">
+          Trust Service Criteria controls and their current status. Every status is derived from
+          live system signals.
+        </p>
+        {categories.map((category, catIdx) => {
             const catControls = controls.filter((c) => c.category === category);
             return (
               <div key={category}>
@@ -262,8 +241,7 @@ export default async function SecurityCompliancePage({
               </div>
             );
           })}
-        </CardPanel>
-      </Card>
+      </Panel>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Card, CardPanel, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -84,14 +84,10 @@ export function BuyCredits({ orgSlug }: BuyCreditsProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Buy usage credits</CardTitle>
-        <CardDescription>
+    <Panel title="Buy usage credits">
+        <p className="mb-4 text-sm text-muted-foreground">
           1 credit = 1¢. Volume discounts apply for larger purchases.
-        </CardDescription>
-      </CardHeader>
-      <CardPanel>
+        </p>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="credit-amount">Amount (USD)</Label>
@@ -138,12 +134,12 @@ export function BuyCredits({ orgSlug }: BuyCreditsProps) {
           <Button
             onClick={handleBuy}
             disabled={!isValid || pending}
+            variant="gradient"
             className="w-full"
           >
             {pending ? "Redirecting to Stripe…" : "Buy credits"}
           </Button>
         </div>
-      </CardPanel>
-    </Card>
+    </Panel>
   );
 }

@@ -1,5 +1,5 @@
 import { ExternalLink, FileText } from "lucide-react";
-import { Card, CardPanel, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCents, formatDate } from "@/lib/utils";
@@ -19,11 +19,7 @@ export interface Invoice {
 
 export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Invoices</CardTitle>
-      </CardHeader>
-      <CardPanel>
+    <Panel title="Invoices">
         {invoices.length === 0 ? (
           <p className="text-sm text-muted-foreground">No invoices yet.</p>
         ) : (
@@ -62,7 +58,6 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
             ))}
           </ul>
         )}
-      </CardPanel>
-    </Card>
+    </Panel>
   );
 }

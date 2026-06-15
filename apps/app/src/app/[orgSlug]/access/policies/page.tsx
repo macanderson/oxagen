@@ -7,20 +7,13 @@
  */
 
 import {
-  FileText,
   Shield,
   XCircle,
   AlertTriangle,
   Lock,
   Tag,
 } from "lucide-react";
-import {
-  Card,
-  CardPanel,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 
 // ---------------------------------------------------------------------------
@@ -174,87 +167,72 @@ export default function AccessPoliciesPage() {
         Preview &middot; not yet wired to live data
       </p>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <FileText
-                className="h-4 w-4 text-muted-foreground"
-                aria-hidden="true"
-              />
-            </span>
-            <div>
-              <CardTitle>Conditional policies</CardTitle>
-              <CardDescription>
-                Enforced capability policies with optional CEL conditions and
-                sensitivity tags. Evaluated after role grants.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
+      <Panel title="Conditional policies">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Enforced capability policies with optional CEL conditions and
+          sensitivity tags. Evaluated after role grants.
+        </p>
 
-        <CardPanel>
-          <div className="flex flex-col gap-2">
-            {MOCK_POLICIES.map((p) => (
-              <div
-                key={p.id}
-                className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3"
-              >
-                <div className="flex flex-wrap items-start gap-3">
-                  {/* Left: name + capability + condition */}
-                  <div className="flex flex-1 flex-col gap-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium text-foreground">
-                        {p.name}
-                      </p>
-                      {p.enforced && (
-                        <Badge variant="destructive" className="text-[10px]">
-                          <Lock
-                            className="mr-1 h-2.5 w-2.5"
-                            aria-hidden="true"
-                          />
-                          Enforced
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="font-mono text-xs text-muted-foreground">
-                      {p.capabilityId}
+        <div className="flex flex-col gap-2">
+          {MOCK_POLICIES.map((p) => (
+            <div
+              key={p.id}
+              className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3"
+            >
+              <div className="flex flex-wrap items-start gap-3">
+                {/* Left: name + capability + condition */}
+                <div className="flex flex-1 flex-col gap-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium text-foreground">
+                      {p.name}
                     </p>
-                    {p.condition && (
-                      <p className="font-mono text-[11px] text-muted-foreground/70 bg-muted/40 rounded-md px-2 py-1 mt-0.5 truncate">
-                        if {p.condition}
-                      </p>
-                    )}
-                    <p className="text-[11px] text-muted-foreground/60 mt-0.5">
-                      Created {p.createdAt}
-                    </p>
-                  </div>
-
-                  {/* Right: badges */}
-                  <div className="flex shrink-0 flex-wrap items-center gap-2 mt-0.5">
-                    <Badge variant="outline" className="text-xs capitalize">
-                      {p.scope}
-                    </Badge>
-                    {p.sensitivityTag && (
-                      <Badge
-                        variant={SENSITIVITY_VARIANT[p.sensitivityTag]}
-                        className="text-xs capitalize"
-                      >
-                        <Tag
+                    {p.enforced && (
+                      <Badge variant="destructive" className="text-[10px]">
+                        <Lock
                           className="mr-1 h-2.5 w-2.5"
                           aria-hidden="true"
                         />
-                        {p.sensitivityTag}
+                        Enforced
                       </Badge>
                     )}
-                    <EffectBadge effect={p.effect} />
                   </div>
+                  <p className="font-mono text-xs text-muted-foreground">
+                    {p.capabilityId}
+                  </p>
+                  {p.condition && (
+                    <p className="font-mono text-[11px] text-muted-foreground/70 bg-muted/40 rounded-md px-2 py-1 mt-0.5 truncate">
+                      if {p.condition}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                    Created {p.createdAt}
+                  </p>
+                </div>
+
+                {/* Right: badges */}
+                <div className="flex shrink-0 flex-wrap items-center gap-2 mt-0.5">
+                  <Badge variant="outline" className="text-xs capitalize">
+                    {p.scope}
+                  </Badge>
+                  {p.sensitivityTag && (
+                    <Badge
+                      variant={SENSITIVITY_VARIANT[p.sensitivityTag]}
+                      className="text-xs capitalize"
+                    >
+                      <Tag
+                        className="mr-1 h-2.5 w-2.5"
+                        aria-hidden="true"
+                      />
+                      {p.sensitivityTag}
+                    </Badge>
+                  )}
+                  <EffectBadge effect={p.effect} />
                 </div>
               </div>
-            ))}
-          </div>
-        </CardPanel>
-      </Card>
+            </div>
+          ))}
+        </div>
+      </Panel>
     </div>
   );
 }

@@ -1,5 +1,4 @@
-import { Users } from "lucide-react";
-import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 
 export default async function SecurityScimPage({
@@ -9,36 +8,23 @@ export default async function SecurityScimPage({
 }) {
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>SCIM Provisioning</CardTitle>
-              <CardDescription>
-                Automate user and group lifecycle management via SCIM 2.0 —
-                letting your identity provider provision, update, and deprovision
-                Oxagen members in real time, a key control for enterprise access
-                governance and SOC 2 user-access reviews.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <div className="flex items-center gap-3 rounded-xl border border-dashed border-border/60 bg-muted/20 px-5 py-4">
-            <Badge variant="outline" className="shrink-0 text-xs">
-              Coming soon
-            </Badge>
-            <p className="text-sm text-muted-foreground">
-              SCIM provisioning will be available in an upcoming release. Planned
-              features include bearer-token endpoint generation, group-to-role
-              mapping, and automatic deprovisioning on IdP suspension.
-            </p>
-          </div>
-        </CardPanel>
-      </Card>
+      <Panel title="SCIM provisioning">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Automate user and group lifecycle management via SCIM 2.0 — letting your identity
+          provider provision, update, and deprovision Oxagen members in real time, a key control
+          for enterprise access governance and SOC 2 user-access reviews.
+        </p>
+        <div className="flex items-center gap-3 rounded-xl border border-dashed border-border/60 bg-muted/20 px-5 py-4">
+          <Badge variant="outline" className="shrink-0 text-xs">
+            Coming soon
+          </Badge>
+          <p className="text-sm text-muted-foreground">
+            SCIM provisioning will be available in an upcoming release. Planned features include
+            bearer-token endpoint generation, group-to-role mapping, and automatic deprovisioning
+            on IdP suspension.
+          </p>
+        </div>
+      </Panel>
     </div>
   );
 }

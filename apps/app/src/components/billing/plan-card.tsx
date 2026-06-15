@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { Check } from "lucide-react";
-import { Card, CardPanel, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCents, cn } from "@/lib/utils";
@@ -48,37 +48,19 @@ export function PlanCard({ plan, interval, relation, onSelect, pending }: PlanCa
   const isCur = effectiveRelation === "current";
 
   return (
-    <Card className={cn(isCur && "ring-2 ring-primary")}>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>{plan.name}</CardTitle>
+    <Panel
+      className={cn(isCur && "ring-2 ring-primary")}
+      title={
+        <span className="flex items-center justify-between w-full">
+          <span>{plan.name}</span>
           {isCur ? <Badge variant="success">Current</Badge> : null}
-        </div>
-        <CardDescription className="capitalize">{plan.tier} tier</CardDescription>
-      </CardHeader>
-      <CardPanel>
-        <div className="text-3xl font-semibold">
-          {formatCents(price)}
-          <span className="ml-1 text-sm font-normal text-muted-foreground">/{interval}</span>
-        </div>
-        <ul className="mt-4 space-y-2 text-sm">
-          <li className="flex items-center gap-2">
-            <Check className="h-3.5 w-3.5 text-primary" /> {plan.includedSeats} seats included
-          </li>
-          <li className="flex items-center gap-2">
-            <Check className="h-3.5 w-3.5 text-primary" /> {formatCents(plan.includedCreditCents)} in credits / month
-          </li>
-          {plan.features.map((f) => (
-            <li key={f.label} className="flex items-center gap-2">
-              <Check className="h-3.5 w-3.5 text-primary" /> {f.label}
-            </li>
-          ))}
-        </ul>
-      </CardPanel>
-      <CardFooter>
+        </span>
+      }
+      eyebrow={<span className="capitalize">{plan.tier} tier</span>}
+      footer={
         <Button
           className="w-full"
-          variant={isCur ? "outline" : "default"}
+          variant={isCur ? "outline" : "gradient"}
           disabled={pending || isCur}
           onClick={() => onSelect(plan.slug, interval)}
         >
@@ -88,7 +70,25 @@ export function PlanCard({ plan, interval, relation, onSelect, pending }: PlanCa
               ? "Processing…"
               : RELATION_LABEL[effectiveRelation]}
         </Button>
-      </CardFooter>
-    </Card>
+      }
+    >
+      <div className="text-3xl font-semibold">
+        {formatCents(price)}
+        <span className="ml-1 text-sm font-normal text-muted-foreground">/{interval}</span>
+      </div>
+      <ul className="mt-4 space-y-2 text-sm">
+        <li className="flex items-center gap-2">
+          <Check className="h-3.5 w-3.5 text-primary" /> {plan.includedSeats} seats included
+        </li>
+        <li className="flex items-center gap-2">
+          <Check className="h-3.5 w-3.5 text-primary" /> {formatCents(plan.includedCreditCents)} in credits / month
+        </li>
+        {plan.features.map((f) => (
+          <li key={f.label} className="flex items-center gap-2">
+            <Check className="h-3.5 w-3.5 text-primary" /> {f.label}
+          </li>
+        ))}
+      </ul>
+    </Panel>
   );
 }

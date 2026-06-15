@@ -9,8 +9,8 @@
  * real table. Track in Linear (OXA-webhooks, no migration this wave).
  */
 
-import { Webhook, Rss } from "lucide-react";
-import { Card, CardPanel, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Rss } from "lucide-react";
+import { Panel } from "@/components/ui/panel";
 
 const PLANNED_EVENTS = [
   "agent.run.completed",
@@ -26,22 +26,11 @@ export default function DeveloperWebhooksPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* Coming soon card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <Webhook className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>Webhook endpoints</CardTitle>
-              <CardDescription>
-                Receive real-time event payloads at your own HTTPS endpoints.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/40 bg-muted/20 px-6 py-12 text-center">
+      <Panel title="Webhook endpoints">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Receive real-time event payloads at your own HTTPS endpoints.
+        </p>
+        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/40 bg-muted/20 px-6 py-12 text-center">
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
               <Rss className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
             </span>
@@ -54,19 +43,14 @@ export default function DeveloperWebhooksPage() {
               </p>
             </div>
           </div>
-        </CardPanel>
-      </Card>
+      </Panel>
 
       {/* Planned events preview */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Planned event types</CardTitle>
-          <CardDescription>
-            These event types will be subscribable when webhooks launch.
-          </CardDescription>
-        </CardHeader>
-        <CardPanel>
-          <ul className="flex flex-wrap gap-2">
+      <Panel title="Planned event types">
+        <p className="mb-4 text-sm text-muted-foreground">
+          These event types will be subscribable when webhooks launch.
+        </p>
+        <ul className="flex flex-wrap gap-2">
             {PLANNED_EVENTS.map((evt) => (
               <li
                 key={evt}
@@ -81,8 +65,7 @@ export default function DeveloperWebhooksPage() {
             Oxagen API at{" "}
             <code className="font-mono text-xs">GET /api/v1/events</code>.
           </p>
-        </CardPanel>
-      </Card>
+      </Panel>
     </div>
   );
 }

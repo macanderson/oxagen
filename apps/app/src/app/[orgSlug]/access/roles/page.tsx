@@ -18,13 +18,7 @@ import {
   Minus,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import {
-  Card,
-  CardPanel,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 
 // ---------------------------------------------------------------------------
@@ -179,77 +173,65 @@ export default function AccessRolesPage() {
         Preview &middot; not yet wired to live data
       </p>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>Role builder</CardTitle>
-              <CardDescription>
-                System and custom roles for this organization. System roles are
-                seeded on org creation and cannot be deleted.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
+      <Panel title="Role builder">
+        <p className="mb-4 text-sm text-muted-foreground">
+          System and custom roles for this organization. System roles are
+          seeded on org creation and cannot be deleted.
+        </p>
 
-        <CardPanel>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {MOCK_ROLES.map((role) => {
-              const RoleIcon = role.icon;
-              return (
-                <div
-                  key={role.id}
-                  className="flex flex-col rounded-xl border border-border/60 bg-card p-4 gap-3"
-                >
-                  {/* Role header */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-muted/60">
-                        <RoleIcon
-                          className={`h-4 w-4 ${role.iconColor}`}
-                          aria-hidden="true"
-                        />
-                      </span>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground leading-tight">
-                          {role.name}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {role.memberCount}{" "}
-                          {role.memberCount === 1 ? "member" : "members"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      {role.isSystem && (
-                        <Badge variant="muted" className="text-[10px]">
-                          <Lock className="mr-1 h-2.5 w-2.5" aria-hidden="true" />
-                          System
-                        </Badge>
-                      )}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {MOCK_ROLES.map((role) => {
+            const RoleIcon = role.icon;
+            return (
+              <div
+                key={role.id}
+                className="flex flex-col rounded-xl border border-border/60 bg-card p-4 gap-3"
+              >
+                {/* Role header */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-muted/60">
+                      <RoleIcon
+                        className={`h-4 w-4 ${role.iconColor}`}
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground leading-tight">
+                        {role.name}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {role.memberCount}{" "}
+                        {role.memberCount === 1 ? "member" : "members"}
+                      </p>
                     </div>
                   </div>
-
-                  {/* Description */}
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {role.description}
-                  </p>
-
-                  {/* Permissions */}
-                  <div className="border-t border-border/40 pt-3 flex flex-col divide-y divide-border/30">
-                    {role.permissions.map((p) => (
-                      <PermissionRow key={p.label} {...p} />
-                    ))}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {role.isSystem && (
+                      <Badge variant="muted" className="text-[10px]">
+                        <Lock className="mr-1 h-2.5 w-2.5" aria-hidden="true" />
+                        System
+                      </Badge>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </CardPanel>
-      </Card>
+
+                {/* Description */}
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {role.description}
+                </p>
+
+                {/* Permissions */}
+                <div className="border-t border-border/40 pt-3 flex flex-col divide-y divide-border/30">
+                  {role.permissions.map((p) => (
+                    <PermissionRow key={p.label} {...p} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
     </div>
   );
 }

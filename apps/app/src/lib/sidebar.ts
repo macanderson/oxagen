@@ -20,6 +20,7 @@ import {
   MessageSquare,
   Settings,
   ShieldCheck,
+  ShoppingBag,
   SlidersHorizontal,
   Sparkles,
   Terminal,
@@ -65,11 +66,11 @@ export type SidebarConfig = {
 };
 
 // ---------------------------------------------------------------------------
-// Workspace mode config — 6 items
+// Workspace mode config — 8 items
 // /{org}/{ws}/... — daily operational surface
 //
 // Groups:  primary (chat, knowledge, automation, activity)
-//          tools   (studio — visually de-emphasised)
+//          tools   (studio, marketplace, workflows — visually de-emphasised)
 //          footer  (settings — pinned to bottom)
 // ---------------------------------------------------------------------------
 
@@ -129,6 +130,15 @@ const workspaceConfig: SidebarConfig = {
         ctx.workspaceSlug
           ? workspace.studio.root(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
+      group: "tools",
+    },
+    {
+      id: "marketplace",
+      label: "Marketplace",
+      icon: ShoppingBag,
+      // The plugin marketplace lives at the org level (org settings → plugins);
+      // it only needs orgSlug, so it resolves from a workspace context too.
+      href: (ctx) => org.settings.plugins(ctx),
       group: "tools",
     },
     {

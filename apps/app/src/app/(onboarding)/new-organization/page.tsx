@@ -1,4 +1,4 @@
-import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { NewOrgForm } from "@/components/org/new-organization-form";
 import { getSessionOrRedirect } from "@/lib/session";
 import { getLinkedSocialProvider } from "@/lib/linked-provider";
@@ -22,17 +22,12 @@ export default async function NewTenantPage() {
 
   return (
     <div className="flex min-h-dvh items-start justify-center p-4 py-8">
-      <Card className="w-full max-w-3xl">
-        <CardHeader>
-          <CardTitle>Create organization</CardTitle>
-          <CardDescription>
-            Organizations own billing and member access. A default workspace is created for you.
-          </CardDescription>
-        </CardHeader>
-        <CardPanel>
-          <NewOrgForm action={createOrgAction} prefill={prefill} />
-        </CardPanel>
-      </Card>
+      <Panel title="Create organization" className="w-full max-w-3xl">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Organizations own billing and member access. A default workspace is created for you.
+        </p>
+        <NewOrgForm action={createOrgAction} prefill={prefill} />
+      </Panel>
     </div>
   );
 }

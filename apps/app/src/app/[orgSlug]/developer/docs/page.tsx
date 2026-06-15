@@ -7,7 +7,7 @@ import {
   Terminal,
   Zap,
 } from "lucide-react";
-import { Card, CardPanel, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 
 // ---------------------------------------------------------------------------
@@ -104,22 +104,11 @@ export default async function DeveloperDocsPage() {
       </div>
 
       {/* Doc sections grid */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <BookOpen className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>Documentation</CardTitle>
-              <CardDescription>
-                Guides, API reference, and SDK docs for integrating with Oxagen.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <div className="grid gap-3 sm:grid-cols-2">
+      <Panel title="Documentation">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Guides, API reference, and SDK docs for integrating with Oxagen.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
             {SECTIONS.map((section) => {
               const Icon = section.icon;
               return (
@@ -146,29 +135,17 @@ export default async function DeveloperDocsPage() {
               );
             })}
           </div>
-        </CardPanel>
-      </Card>
+      </Panel>
 
       {/* API quick reference */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <Code2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>REST API — v1 endpoints</CardTitle>
-              <CardDescription>
-                Base URL:{" "}
-                <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
-                  https://oxagen-v2-api.vercel.app
-                </code>
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <div className="flex flex-col divide-y divide-border/60">
+      <Panel title="REST API — v1 endpoints">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Base URL:{" "}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
+            https://oxagen-v2-api.vercel.app
+          </code>
+        </p>
+        <div className="flex flex-col divide-y divide-border/60">
             {API_ENDPOINTS.map((ep, i) => (
               <div
                 key={i}
@@ -194,8 +171,7 @@ export default async function DeveloperDocsPage() {
               </div>
             ))}
           </div>
-        </CardPanel>
-      </Card>
+      </Panel>
     </div>
   );
 }

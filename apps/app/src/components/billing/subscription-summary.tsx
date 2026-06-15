@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Card, CardPanel, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -360,20 +360,12 @@ export function SubscriptionSummary({
     // not "nothing". Present it as the current plan so the billing page always
     // reflects an active tier.
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Current plan
-            <Badge variant="muted">Free</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardPanel>
+      <Panel title={<span className="flex items-center gap-2">Current plan<Badge variant="muted">Free</Badge></span>}>
           <p className="text-sm text-muted-foreground">
             You&rsquo;re on the <span className="font-medium text-foreground">Free</span> plan.
             Upgrade below for more credits, seats, and capabilities.
           </p>
-        </CardPanel>
-      </Card>
+      </Panel>
     );
   }
 
@@ -382,17 +374,7 @@ export function SubscriptionSummary({
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          Current subscription
-          <Badge variant={STATUS_VARIANT[subscription.status] ?? "muted"}>{subscription.status}</Badge>
-          {subscription.cancelAtPeriodEnd ? (
-            <Badge variant="warning">Cancels at period end</Badge>
-          ) : null}
-        </CardTitle>
-      </CardHeader>
-      <CardPanel>
+    <Panel title={<span className="flex items-center gap-2">Current subscription<Badge variant={STATUS_VARIANT[subscription.status] ?? "muted"}>{subscription.status}</Badge>{subscription.cancelAtPeriodEnd ? <Badge variant="warning">Cancels at period end</Badge> : null}</span>}>
         {/* Prominent, plain-language renewal statement (exact date always shown). */}
         <p className="mb-4 text-sm" data-testid="renewal-statement">
           Your <span className="font-medium" data-testid="plan-name">{subscription.planName}</span>{" "}
@@ -446,7 +428,6 @@ export function SubscriptionSummary({
             )}
           </div>
         ) : null}
-      </CardPanel>
-    </Card>
+    </Panel>
   );
 }

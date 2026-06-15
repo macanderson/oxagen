@@ -14,6 +14,7 @@ import { getSession } from "@/lib/session";
 import { and, eq, sql } from "drizzle-orm";
 import { formatCents } from "@/lib/utils";
 import { Card, CardHeader, CardTitle, CardDescription, CardPanel } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { logger } from "@oxagen/handlers/logger";
 
 // Sentinel workspaceId for org-only routes. — OXA-1515
@@ -156,12 +157,8 @@ export default async function BillingUsagePage({
       </div>
 
       {/* Token breakdown */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Token usage</CardTitle>
-          <CardDescription>Input / output / cached tokens this period</CardDescription>
-        </CardHeader>
-        <CardPanel>
+      <Panel title="Token usage">
+        <p className="mb-4 text-sm text-muted-foreground">Input / output / cached tokens this period</p>
           {totalTokens === 0 ? (
             <p className="text-sm text-muted-foreground">
               {queryFailed
@@ -221,19 +218,14 @@ export default async function BillingUsagePage({
               ) : null}
             </>
           )}
-        </CardPanel>
-      </Card>
+      </Panel>
 
       {/* Cost summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Cost summary</CardTitle>
-          <CardDescription>
-            Total cost this period (1 credit = $0.01).{" "}
-            {!hasSub ? "No active subscription — showing calendar month." : ""}
-          </CardDescription>
-        </CardHeader>
-        <CardPanel>
+      <Panel title="Cost summary">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Total cost this period (1 credit = $0.01).{" "}
+          {!hasSub ? "No active subscription — showing calendar month." : ""}
+        </p>
           <div className="grid grid-cols-2 gap-6 text-sm sm:grid-cols-3">
             <div>
               <p className="text-muted-foreground text-xs mb-1">Credits spent</p>
@@ -256,8 +248,7 @@ export default async function BillingUsagePage({
             Per-model and per-capability breakdowns will be available once the usage analytics
             pipeline lands in the agent epic (OXA-1585).
           </p>
-        </CardPanel>
-      </Card>
+      </Panel>
     </div>
   );
 }

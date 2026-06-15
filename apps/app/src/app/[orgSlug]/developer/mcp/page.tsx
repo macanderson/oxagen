@@ -7,12 +7,12 @@
  */
 
 import { desc, eq } from "drizzle-orm";
-import { PlugZap, ExternalLink, KeySquare } from "lucide-react";
+import { ExternalLink, KeySquare } from "lucide-react";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
 import { getSession } from "@/lib/session";
-import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { McpInstallTabs } from "./mcp-install-tabs";
 import type { McpTabEntry } from "./mcp-install-tabs";
 
@@ -137,21 +137,11 @@ export default async function DeveloperMcpPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <PlugZap className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>MCP server</CardTitle>
-              <CardDescription>
-                Connect any MCP-compatible agent client to your Oxagen workspace.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel className="flex flex-col gap-6">
+      <Panel title="MCP server">
+        <div className="flex flex-col gap-6">
+        <p className="text-sm text-muted-foreground">
+          Connect any MCP-compatible agent client to your Oxagen workspace.
+        </p>
           {/* Endpoint notice */}
           <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
             <ExternalLink className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -193,8 +183,8 @@ export default async function DeveloperMcpPage({
 
           {/* Install tabs */}
           <McpInstallTabs entries={entries} />
-        </CardPanel>
-      </Card>
+        </div>
+      </Panel>
     </div>
   );
 }

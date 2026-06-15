@@ -7,22 +7,10 @@
  */
 
 import {
-  Shield,
-  Lock,
-  Globe,
-  Database,
-  Clock,
   ExternalLink,
   CheckCircle2,
-  Users,
 } from "lucide-react";
-import {
-  Card,
-  CardPanel,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
@@ -90,79 +78,58 @@ export default async function SecurityTrustPage({
   return (
     <div className="flex flex-col gap-6">
       {/* Header card — summary */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <Shield className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div className="flex-1">
-              <CardTitle>Trust and security</CardTitle>
-              <CardDescription>
-                Data residency, encryption, tenant isolation, sub-processors,
-                and retention policies for this platform.
-              </CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              render={
-                <a
-                  href="https://oxagen-v2-docs.vercel.app/security"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                />
-              }
-            >
-              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-              Security docs
-            </Button>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <div
-            className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+      <Panel
+        title="Trust and security"
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            render={
+              <a
+                href="https://oxagen-v2-docs.vercel.app/security"
+                target="_blank"
+                rel="noreferrer noopener"
+              />
+            }
           >
-            {TRUST_SIGNALS.map((signal) => (
-              <div
-                key={signal.id}
-                className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3"
-              >
-                <CheckCircle2
-                  className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(142_71%_45%)]"
-                  aria-hidden="true"
-                />
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-sm font-medium text-foreground">
-                    {signal.title}
-                  </span>
-                  <span className="text-xs text-muted-foreground leading-snug">
-                    {signal.description}
-                  </span>
-                </div>
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            Security docs
+          </Button>
+        }
+      >
+        <p className="mb-4 text-sm text-muted-foreground">
+          Data residency, encryption, tenant isolation, sub-processors, and retention policies for
+          this platform.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {TRUST_SIGNALS.map((signal) => (
+            <div
+              key={signal.id}
+              className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3"
+            >
+              <CheckCircle2
+                className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(142_71%_45%)]"
+                aria-hidden="true"
+              />
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium text-foreground">
+                  {signal.title}
+                </span>
+                <span className="text-xs text-muted-foreground leading-snug">
+                  {signal.description}
+                </span>
               </div>
-            ))}
-          </div>
-        </CardPanel>
-      </Card>
+            </div>
+          ))}
+        </div>
+      </Panel>
 
       {/* Data region */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <Globe className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>Data region</CardTitle>
-              <CardDescription>
-                All data is stored and processed in the United States.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <div className="flex flex-col gap-3">
+      <Panel title="Data region">
+        <p className="mb-4 text-sm text-muted-foreground">
+          All data is stored and processed in the United States.
+        </p>
+        <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-foreground">
@@ -212,26 +179,14 @@ export default async function SecurityTrustPage({
               </p>
             </div>
           </div>
-        </CardPanel>
-      </Card>
+      </Panel>
 
       {/* Encryption */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <Lock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>Encryption</CardTitle>
-              <CardDescription>
-                All data is encrypted at rest and in transit.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <div className="flex flex-col gap-2">
+      <Panel title="Encryption">
+        <p className="mb-4 text-sm text-muted-foreground">
+          All data is encrypted at rest and in transit.
+        </p>
+        <div className="flex flex-col gap-2">
             {[
               {
                 label: "At rest",
@@ -270,27 +225,15 @@ export default async function SecurityTrustPage({
               </div>
             ))}
           </div>
-        </CardPanel>
-      </Card>
+      </Panel>
 
       {/* Retention */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>Data retention</CardTitle>
-              <CardDescription>
-                How long different categories of data are kept.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <div className="flex flex-col gap-2">
-            {[
+      <Panel title="Data retention">
+        <p className="mb-4 text-sm text-muted-foreground">
+          How long different categories of data are kept.
+        </p>
+        <div className="flex flex-col gap-2">
+          {[
               {
                 category: "Audit log (security_events)",
                 retention: "7 years",
@@ -335,98 +278,72 @@ export default async function SecurityTrustPage({
               </div>
             ))}
           </div>
-        </CardPanel>
-      </Card>
+      </Panel>
 
       {/* Sub-processors */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>Sub-processors</CardTitle>
-              <CardDescription>
-                Third-party vendors that may process your data. All
-                sub-processors are bound by data processing agreements (DPAs).
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <div className="flex flex-col gap-2">
-            {SUB_PROCESSORS.map((sp) => (
-              <SubProcessorRow key={sp.name} sp={sp} />
-            ))}
-          </div>
-        </CardPanel>
-      </Card>
+      <Panel title="Sub-processors">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Third-party vendors that may process your data. All sub-processors are bound by data
+          processing agreements (DPAs).
+        </p>
+        <div className="flex flex-col gap-2">
+          {SUB_PROCESSORS.map((sp) => (
+            <SubProcessorRow key={sp.name} sp={sp} />
+          ))}
+        </div>
+      </Panel>
 
       {/* Database architecture */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <Database className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>Data store architecture</CardTitle>
-              <CardDescription>
-                Purpose-bound storage — each store holds exactly one kind of
-                data.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardPanel>
-          <div className="flex flex-col gap-2">
-            {[
-              {
-                store: "Postgres (AlloyDB)",
-                region: "us-central1",
-                purpose:
-                  "Transactional application state: users, orgs, billing, configs, sessions, security policy, and the security_events audit log.",
-              },
-              {
-                store: "ClickHouse Cloud",
-                region: "us-east-2",
-                purpose:
-                  "Append-only analytics: execution events, token usage, traces, and telemetry. 7-year TTL.",
-              },
-              {
-                store: "Neo4j Aura",
-                region: "us-east-1",
-                purpose:
-                  "Knowledge graph: ontology, entity relationships, workflow lineage, agent memory, and semantic retrieval.",
-              },
-              {
-                store: "Vercel Blob",
-                region: "iad1 (US-east)",
-                purpose:
-                  "Binary assets: user/org avatars, generated images, PDFs, workspace uploads. References stored in Postgres.",
-              },
-            ].map((row) => (
-              <div
-                key={row.store}
-                className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/30 px-4 py-3"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-foreground">
-                    {row.store}
-                  </span>
-                  <Badge variant="muted" className="font-mono text-xs">
-                    {row.region}
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground leading-snug">
-                  {row.purpose}
-                </p>
+      <Panel title="Data store architecture">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Purpose-bound storage — each store holds exactly one kind of data.
+        </p>
+        <div className="flex flex-col gap-2">
+          {[
+            {
+              store: "Postgres (AlloyDB)",
+              region: "us-central1",
+              purpose:
+                "Transactional application state: users, orgs, billing, configs, sessions, security policy, and the security_events audit log.",
+            },
+            {
+              store: "ClickHouse Cloud",
+              region: "us-east-2",
+              purpose:
+                "Append-only analytics: execution events, token usage, traces, and telemetry. 7-year TTL.",
+            },
+            {
+              store: "Neo4j Aura",
+              region: "us-east-1",
+              purpose:
+                "Knowledge graph: ontology, entity relationships, workflow lineage, agent memory, and semantic retrieval.",
+            },
+            {
+              store: "Vercel Blob",
+              region: "iad1 (US-east)",
+              purpose:
+                "Binary assets: user/org avatars, generated images, PDFs, workspace uploads. References stored in Postgres.",
+            },
+          ].map((row) => (
+            <div
+              key={row.store}
+              className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/30 px-4 py-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-medium text-foreground">
+                  {row.store}
+                </span>
+                <Badge variant="muted" className="font-mono text-xs">
+                  {row.region}
+                </Badge>
               </div>
-            ))}
-          </div>
-        </CardPanel>
-      </Card>
+              <p className="text-xs text-muted-foreground leading-snug">
+                {row.purpose}
+              </p>
+            </div>
+          ))}
+        </div>
+      </Panel>
     </div>
   );
 }

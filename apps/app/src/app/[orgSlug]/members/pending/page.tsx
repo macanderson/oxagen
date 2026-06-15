@@ -15,7 +15,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { getSession } from "@/lib/session";
 import { resolveOrg, assertOrgMember, getOrgRole } from "@/lib/resolve-org";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardPanel, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { PendingInvitationsActions } from "./pending-invitations-actions";
 
 // Sentinel workspaceId for org-only routes. — OXA-1515
@@ -84,15 +84,7 @@ export default async function MembersPendingPage({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Mail className="h-4 w-4 text-muted-foreground" />
-          Pending invitations
-          <Badge variant="secondary">{invitations.length}</Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardPanel>
+    <Panel title={<span className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" />Pending invitations<Badge variant="secondary">{invitations.length}</Badge></span>}>
         <ul className="divide-y divide-border/60">
           {invitations.map((inv) => (
             <li
@@ -133,7 +125,6 @@ export default async function MembersPendingPage({
             </li>
           ))}
         </ul>
-      </CardPanel>
-    </Card>
+    </Panel>
   );
 }

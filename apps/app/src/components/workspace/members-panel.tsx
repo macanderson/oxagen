@@ -5,7 +5,7 @@ import type { OrgSeatUsage } from "@oxagen/billing";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardPanel, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import {
   Dialog,
   DialogTrigger,
@@ -164,13 +164,13 @@ function AddMemberDialog({
       <DialogTrigger
         render={
           <Button
-            variant={noSeats ? "outline" : "default"}
+            variant={noSeats ? "outline" : "gradient"}
             size="sm"
+            startIcon={<UserPlus className="h-3.5 w-3.5" />}
             disabled={false}
           />
         }
       >
-        <UserPlus className="mr-1.5 h-3.5 w-3.5" />
         Add member
       </DialogTrigger>
 
@@ -481,15 +481,7 @@ function PendingInvitationsList({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Mail className="h-4 w-4 text-muted-foreground" />
-          Pending invitations
-          <Badge variant="secondary">{invitations.length}</Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardPanel>
+    <Panel title={<span className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" />Pending invitations<Badge variant="secondary">{invitations.length}</Badge></span>}>
         <ul className="divide-y divide-border/60">
           {invitations.map((inv) => (
             <li key={inv.publicId} className="flex items-center justify-between py-3">
@@ -513,8 +505,7 @@ function PendingInvitationsList({
             </li>
           ))}
         </ul>
-      </CardPanel>
-    </Card>
+    </Panel>
   );
 }
 
@@ -543,21 +534,10 @@ export function MembersPanel({
     <div className="flex flex-col gap-6">
       <SeatAlertBanner orgSlug={orgSlug} seatUsage={seatUsage} />
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>
-              Organization members
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                {members.length} / {seatUsage.licenses}
-              </span>
-            </CardTitle>
-            {canManage ? (
-              <AddMemberDialog orgSlug={orgSlug} seatUsage={seatUsage} />
-            ) : null}
-          </div>
-        </CardHeader>
-        <CardPanel>
+      <Panel
+        title={<>Organization members<span className="ml-2 text-sm font-normal text-muted-foreground">{members.length} / {seatUsage.licenses}</span></>}
+        actions={canManage ? <AddMemberDialog orgSlug={orgSlug} seatUsage={seatUsage} /> : undefined}
+      >
           {members.length === 0 ? (
             <p className="text-sm text-muted-foreground">No members yet.</p>
           ) : (
@@ -574,8 +554,7 @@ export function MembersPanel({
               ))}
             </ul>
           )}
-        </CardPanel>
-      </Card>
+      </Panel>
 
       <PendingInvitationsList
         orgSlug={orgSlug}

@@ -6,9 +6,9 @@
 // Enterprise feature and additionally requires an owner/admin role; both gates
 // are re-checked in the export route (the disabled button is cosmetic).
 
-import { ScrollText, ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { Card, CardPanel, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Button } from "@/components/ui/button";
 import { inArray } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
@@ -86,25 +86,14 @@ export default async function SecurityAuditPage({
         <EnterpriseUpsell orgSlug={orgSlug} feature="Audit log export" currentTier={access.tier} />
       )}
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-                <ScrollText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              </span>
-              <div>
-                <CardTitle>Audit log</CardTitle>
-                <CardDescription>
-                  Append-only security event stream. Filter, drill down, and export signed
-                  evidence.
-                </CardDescription>
-              </div>
-            </div>
-            <AuditExportButtons canExport={canExport} disabledReason={disabledReason} />
-          </div>
-        </CardHeader>
-        <CardPanel className="flex flex-col gap-4">
+      <Panel
+        title="Audit log"
+        actions={<AuditExportButtons canExport={canExport} disabledReason={disabledReason} />}
+      >
+        <div className="flex flex-col gap-4">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Append-only security event stream. Filter, drill down, and export signed evidence.
+          </p>
           <AuditFilterBar
             selectedEventTypes={filter.eventTypes}
             selectedOutcome={filter.outcome}
@@ -163,8 +152,8 @@ export default async function SecurityAuditPage({
               )}
             </div>
           )}
-        </CardPanel>
-      </Card>
+        </div>
+      </Panel>
     </div>
   );
 }

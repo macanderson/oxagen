@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
+import { isRenderableImageUrl } from "@/lib/plugin-icon";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import { Plug, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -58,12 +59,15 @@ export default async function ReauthPage({
     >
       {/* Plugin icon */}
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border/60 bg-muted/60">
-        {listing.iconUrl ? (
+        {isRenderableImageUrl(listing.iconUrl) ? (
           <Image
             src={listing.iconUrl}
             alt=""
             width={32}
             height={32}
+            // Catalog icons are arbitrary remote URLs not in next.config
+            // remotePatterns — bypass the optimizer.
+            unoptimized
             className="h-8 w-8 rounded object-contain"
             aria-hidden="true"
           />

@@ -7,7 +7,6 @@
  */
 
 import {
-  Fingerprint,
   Bot,
   User,
   Cpu,
@@ -16,13 +15,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import {
-  Card,
-  CardPanel,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 
 // ---------------------------------------------------------------------------
@@ -195,90 +188,60 @@ export default function AccessPrincipalsPage() {
       </p>
 
       {/* Human principals */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <Fingerprint
-                className="h-4 w-4 text-muted-foreground"
-                aria-hidden="true"
-              />
-            </span>
-            <div>
-              <CardTitle>User identities</CardTitle>
-              <CardDescription>
-                Human principals — org members authenticated via email/password
-                or SSO.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
+      <Panel title="User identities">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Human principals — org members authenticated via email/password
+          or SSO.
+        </p>
 
-        <CardPanel>
-          {/* Header row — desktop only */}
-          <div className="mb-2 hidden grid-cols-[minmax(0,1.5fr)_120px_80px_90px_120px_100px] gap-4 px-4 sm:grid">
-            {["Identity", "Email / IDP", "Role", "Status", "MFA", "Last active"].map(
-              (h) => (
-                <span
-                  key={h}
-                  className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-                >
-                  {h}
-                </span>
-              ),
-            )}
-          </div>
+        {/* Header row — desktop only */}
+        <div className="mb-2 hidden grid-cols-[minmax(0,1.5fr)_120px_80px_90px_120px_100px] gap-4 px-4 sm:grid">
+          {["Identity", "Email / IDP", "Role", "Status", "MFA", "Last active"].map(
+            (h) => (
+              <span
+                key={h}
+                className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                {h}
+              </span>
+            ),
+          )}
+        </div>
 
-          <div className="flex flex-col gap-1.5">
-            {humans.map((p) => (
-              <PrincipalRow key={p.id} principal={p} />
-            ))}
-          </div>
-        </CardPanel>
-      </Card>
+        <div className="flex flex-col gap-1.5">
+          {humans.map((p) => (
+            <PrincipalRow key={p.id} principal={p} />
+          ))}
+        </div>
+      </Panel>
 
       {/* Non-human principals */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-muted/60">
-              <Bot
-                className="h-4 w-4 text-muted-foreground"
-                aria-hidden="true"
-              />
-            </span>
-            <div>
-              <CardTitle>Service &amp; agent identities</CardTitle>
-              <CardDescription>
-                Non-human principals — agents, service accounts, and API-key
-                tokens registered in this organization.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
+      <Panel title="Service & agent identities">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Non-human principals — agents, service accounts, and API-key
+          tokens registered in this organization.
+        </p>
 
-        <CardPanel>
-          {/* Header row — desktop only */}
-          <div className="mb-2 hidden grid-cols-[minmax(0,1.5fr)_120px_80px_90px_120px_100px] gap-4 px-4 sm:grid">
-            {["Identity", "Subject", "Role", "Status", "Kind", "Last active"].map(
-              (h) => (
-                <span
-                  key={h}
-                  className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-                >
-                  {h}
-                </span>
-              ),
-            )}
-          </div>
+        {/* Header row — desktop only */}
+        <div className="mb-2 hidden grid-cols-[minmax(0,1.5fr)_120px_80px_90px_120px_100px] gap-4 px-4 sm:grid">
+          {["Identity", "Subject", "Role", "Status", "Kind", "Last active"].map(
+            (h) => (
+              <span
+                key={h}
+                className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                {h}
+              </span>
+            ),
+          )}
+        </div>
 
-          <div className="flex flex-col gap-1.5">
-            {nonHumans.map((p) => (
-              <PrincipalRow key={p.id} principal={p} />
-            ))}
-          </div>
-        </CardPanel>
-      </Card>
+        <div className="flex flex-col gap-1.5">
+          {nonHumans.map((p) => (
+            <PrincipalRow key={p.id} principal={p} />
+          ))}
+        </div>
+      </Panel>
     </div>
   );
 }

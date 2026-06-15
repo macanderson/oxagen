@@ -6,7 +6,7 @@ import { useStripe, useElements, PaymentElement } from "@stripe/react-stripe-js"
 import type { StripePaymentElementOptions } from "@stripe/stripe-js";
 import { CreditCard, Star } from "lucide-react";
 import type { PaymentMethodView } from "@oxagen/billing";
-import { Card, CardHeader, CardTitle, CardPanel } from "@/components/ui/card";
+import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -319,29 +319,28 @@ export function PaymentMethods({
   }
 
   return (
-    <Card id="payment-methods">
-      <CardHeader className="flex flex-row items-center justify-between gap-4">
-        <CardTitle>Payment methods</CardTitle>
-        {canManage && (
-          <>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setDialogOpen(true)}
-            >
-              {methods.length === 0 ? "Add card" : "Add / change card"}
-            </Button>
-            <AddCardDialog
-              orgSlug={orgSlug}
-              publishableKey={publishableKey}
-              open={dialogOpen}
-              onOpenChange={setDialogOpen}
-              router={router}
-            />
-          </>
-        )}
-      </CardHeader>
-      <CardPanel>
+    <Panel
+      id="payment-methods"
+      title="Payment methods"
+      actions={canManage ? (
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDialogOpen(true)}
+          >
+            {methods.length === 0 ? "Add card" : "Add / change card"}
+          </Button>
+          <AddCardDialog
+            orgSlug={orgSlug}
+            publishableKey={publishableKey}
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+            router={router}
+          />
+        </>
+      ) : undefined}
+    >
         {methods.length === 0 ? (
           <p className="text-sm text-muted-foreground">No payment method on file.</p>
         ) : (
@@ -357,7 +356,6 @@ export function PaymentMethods({
             ))}
           </div>
         )}
-      </CardPanel>
-    </Card>
+    </Panel>
   );
 }
