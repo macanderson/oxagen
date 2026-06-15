@@ -7,7 +7,7 @@ export const userPreferencesWrite = registerCapability({
   description: "Update the calling user's UI and model preferences (partial update — only provided fields are changed)",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit"],
+  layers: ["schema", "api", "docs", "mcp", "unit"],
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "user" },
   sensitivity: "low",

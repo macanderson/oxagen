@@ -7,7 +7,7 @@ export const imageAnalyze = registerCapability({
   description: "Analyze an image by ID — returns description, tags, and analysis",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp"],
+  layers: ["schema", "api", "docs", "mcp"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "image" },
   sensitivity: "low",

@@ -46,6 +46,21 @@
   },
   "model": "claude-fable-5[1m]",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "if": "Bash(git push* main*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ -n \"$PRODUCTION_ANALYTICS_URL\" && -n \"$PRODUCTION_ANALYTICS_USER\" && -n \"$PRODUCTION_ANALYTICS_PASSWORD\" ]]; then cd \"$CLAUDE_PROJECT_DIR\" && npx tsx tools/scripts/backfill-claude-telemetry.ts 2>&1 | grep -E '(✓|Error|error)' | tail -3 || true; else : ; fi",
+            "timeout": 120,
+            "statusMessage": "Backfilling Claude Code telemetry...",
+            "async": false
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|Edit",

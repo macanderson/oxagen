@@ -7,7 +7,7 @@ export const documentRead = registerCapability({
   description: "Read a document by ID — returns title, content, and metadata",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp"],
+  layers: ["schema", "api", "docs", "mcp"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "document" },
   sensitivity: "low",

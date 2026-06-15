@@ -7,7 +7,7 @@ export const documentCreate = registerCapability({
   description: "Create a new document in the workspace",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp"],
+  layers: ["schema", "api", "docs", "mcp"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "document" },
   sensitivity: "low",

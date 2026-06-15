@@ -19,7 +19,7 @@ export const promptSettingsWrite = registerCapability({
     "Update the workspace prompt configuration (partial). `additionalInstructions` and `autoImprovePrompts` are available on all plans; `overrides` (full prompt replacement) is enterprise-only.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit"],
+  layers: ["schema", "api", "docs", "mcp", "unit"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "workspace" },
   sensitivity: "medium",
