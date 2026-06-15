@@ -19,6 +19,9 @@
  */
 
 import "@oxagen/handlers/register";
+// agent.* capabilities live in a separate package; its register module must run
+// to bind them into the kernel before the wand*Action invoke() calls below.
+import "@oxagen/agent/register";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";

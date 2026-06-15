@@ -1,5 +1,10 @@
 "use server";
 import "@oxagen/handlers/register";
+// agent.* capabilities (approval.resolve, plan.approve, task.background.*) are
+// supplied by a separate package; its register module must run to bind them
+// into the kernel before any invoke() here. Without it the kernel throws
+// "No handler registered for capability agent.approval.resolve".
+import "@oxagen/agent/register";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";

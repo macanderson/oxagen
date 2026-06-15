@@ -62,6 +62,7 @@ vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
+vi.mock("@oxagen/agent/register", () => ({}));
 
 // withSystemDb routes — first call resolves org, second resolves workspace.
 // Uses dbState.systemCallIdx (reset in beforeEach) to track global call order.
