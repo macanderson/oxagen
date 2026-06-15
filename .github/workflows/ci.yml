@@ -511,6 +511,9 @@ jobs:
       CLICKHOUSE_USERNAME: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_USERNAME || secrets.PREVIEW_CLICKHOUSE_USERNAME }}
       CLICKHOUSE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_PASSWORD || secrets.PREVIEW_CLICKHOUSE_PASSWORD }}
       CLICKHOUSE_DATABASE: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_DATABASE || secrets.PREVIEW_CLICKHOUSE_DATABASE }}
+      # Override dummy workflow-level Stripe key with the real test secret so
+      # billing:stripe-sync --apply can authenticate when triggered via workflow_dispatch.
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -578,6 +581,10 @@ jobs:
       - name: Seed platform defaults (idempotent)
         if: steps.changes.outputs.changed == 'true'
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
+
+      - name: Sync billing plans → Stripe (test mode) + billing.plans DB (workflow_dispatch only)
+        if: steps.changes.outputs.changed == 'true' && github.event_name == 'workflow_dispatch'
+        run: pnpm billing:stripe-sync --apply
 
   # ──────────────────────────────────────────────────────────────────────
   # deploy — post-merge side-car (main only). The actual app deploys are
