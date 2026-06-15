@@ -497,7 +497,11 @@ jobs:
       # ClickHouse + Neo4j — Postgres is handled by Atlas. Neo4j WAS omitted
       # here, which left prod Neo4j without indexes/constraints (P0 2026-06-12:
       # agent.memory.recall failed on a missing vector index after the rebuild).
-      DB_MIGRATE_STORES: clickhouse,neo4j
+      # On pull_request we migrate ClickHouse only: the preview Neo4j Aura host
+      # is not always reachable from CI (DNS ENOTFOUND), and a dead preview
+      # instance must not block every PR that touches a migration. Postgres
+      # (Atlas) and ClickHouse still gate PRs; push/main stays strict on both.
+      DB_MIGRATE_STORES: ${{ github.event_name != 'pull_request' && 'clickhouse,neo4j' || 'clickhouse' }}
       # Select the target environment's creds by event. The non-DB env defaults
       # (Better Auth / Stripe / Inngest) are inherited from the workflow-level
       # env block above so loadEnv() validates; the DB + ClickHouse + Neo4j
@@ -574,7 +578,7 @@ jobs:
         working-directory: packages/database
         run: atlas migrate apply --env ci
 
-      - name: Migrate ClickHouse + Neo4j (${{ github.event_name != 'pull_request' && 'PRODUCTION' || 'PREVIEW' }})
+      - name: Migrate ClickHouse${{ github.event_name != 'pull_request' && ' + Neo4j' || '' }} (${{ github.event_name != 'pull_request' && 'PRODUCTION' || 'PREVIEW' }})
         if: steps.changes.outputs.changed == 'true'
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
 
