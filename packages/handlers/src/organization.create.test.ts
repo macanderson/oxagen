@@ -218,8 +218,10 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     // The org creation (orgs + orgUsers) must happen inside withSystemDb so the
     // bootstrap writes succeed without an active tenant scope (RLS bypass) and
     // membership is never visible without the org row.
-    // withSystemDb is called twice: once for the slug check, once for the main body.
-    expect(mocks.withSystemDbFn).toHaveBeenCalledTimes(2);
+    // withSystemDb is called three times: the slug check, the main org-creation
+    // body, and a fire-and-forget MCP registry sync trigger so the plugin
+    // catalog is populated within seconds of signup (non-fatal if it fails).
+    expect(mocks.withSystemDbFn).toHaveBeenCalledTimes(3);
     // grantFreeCredits must be called after the org tx commits (billing runs
     // in its own isolated transaction so a billing failure cannot roll back
     // the org creation).
