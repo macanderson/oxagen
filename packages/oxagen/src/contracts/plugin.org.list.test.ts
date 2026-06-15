@@ -43,6 +43,7 @@ describe("plugin.org.list contract", () => {
           deletedAt: null,
           deletedByUserId: null,
           orgId: "org-uuid",
+          workspaceId: null,
           pluginType: "mcp_server",
           catalogServerId: null,
           source: "custom",

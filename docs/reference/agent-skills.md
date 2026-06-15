@@ -19,16 +19,21 @@ Design is **filesystem-first with DB augmentation** (ADR-008,
 `*.skill.md` files under source control; tenant-authored skills live in
 Postgres and shadow built-ins on slug collision.
 
-## Out-of-the-box skills (3)
+## Out-of-the-box skills (5)
 
 Seeded by `pnpm db:seed-skills` (`tools/scripts/seed-skills.ts`, idempotent
-`ON CONFLICT DO NOTHING`) from `packages/skills/skills/`:
+`ON CONFLICT DO NOTHING`) from `packages/skills/skills/`. The shipped skills are
+**generic customer starters** — they teach an agent good general practice, not
+Oxagen's internal monorepo conventions, so a customer can use or adapt them
+immediately:
 
 | Slug | Category | Purpose |
 |---|---|---|
-| `coding` | engineering | Capability-first design, ESM/TS conventions, `@oxagen/ui` Base UI usage, performance defaults, memory write-back |
-| `debugging` | engineering | Investigate failures: run → logs (ClickHouse) → code graph, isolate smallest reproducer, record root cause via `agent.memory.write` |
-| `summarization` | writing | Lead with the decision, evidence as anchored bullets, never truncate next actions, compaction rules |
+| `coding` | engineering | Understand before writing, match the codebase, small reviewable changes, test what you write, security and performance defaults |
+| `debugging` | engineering | Reproduce → read the real error → narrow down → fix the root cause not the symptom → land a regression test |
+| `summarization` | writing | Lead with the conclusion, anchor evidence to sources, never drop a pending action, compaction rules |
+| `skill-builder` | meta | How to author a new skill — frontmatter shape, body structure, when a skill is worth writing, keeping it generic and token-efficient |
+| `agent-builder` | meta | How the in-app agent designs, configures, and deploys agents — instructions, graph access, tools, triggers/event-filters, deploy inactive then activate on request |
 
 Built-ins are stamped with sentinel nil-UUID org/workspace IDs to mark them
 platform-global.

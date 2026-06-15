@@ -59,6 +59,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.background_tasks", policyClass: "standard" },
   { table: "agent.subagent_fanouts", policyClass: "standard" },
   { table: "agent.subagent_runs", policyClass: "standard" },
+  { table: "agent.agent_triggers", policyClass: "standard" },
 
   // ── auth.* — credentials + api_keys use orgScopeMixin ────────────────────
   // Better Auth tables (users/sessions/accounts/verifications/rate_limit/
