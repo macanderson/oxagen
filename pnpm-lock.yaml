@@ -987,6 +987,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/functions':
+        specifier: workspace:*
+        version: link:../functions
       '@oxagen/ingestion':
         specifier: workspace:*
         version: link:../ingestion
