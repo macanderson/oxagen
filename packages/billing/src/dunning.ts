@@ -183,9 +183,16 @@ export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<v
     // Fire-and-forget: billing state update is the critical path, notification is best-effort.
     void (async () => {
       try {
+        // Resolve the human-readable org name from the database.
+        const orgRow = await tx.query.organizations.findFirst({
+          where: eq(schema.organizations.id, orgId),
+          columns: { name: true },
+        });
+        const orgName = orgRow?.name ?? "your organization";
+
         const appUrl = process.env["APP_URL"] ?? "https://oxagen-v2-app.vercel.app";
         const billingUrl = `${appUrl}/settings/billing`;
-        const template = paymentFailedTemplate({ orgName: orgId, graceDays: DUNNING_GRACE_DAYS, billingUrl });
+        const template = paymentFailedTemplate({ orgName, graceDays: DUNNING_GRACE_DAYS, billingUrl });
         await notifyOrgManagers({
           orgId,
           kind: "system",

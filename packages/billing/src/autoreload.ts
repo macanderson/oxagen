@@ -1,4 +1,4 @@
-import { withTenantDb, schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { notifyOrgManagers, lowBalanceAlertTemplate } from "@oxagen/notifications";
 import { billingProvider } from "./client";
@@ -222,10 +222,19 @@ export async function maybeAutoReload(orgId: string): Promise<AutoReloadResult> 
 export async function notifyLowBalance(orgId: string, result: LowBalanceResult): Promise<void> {
   if (!result.low) return;
   try {
+    // Resolve the human-readable org name from the database.
+    const orgRow = await withSystemDb((tx) =>
+      tx.query.organizations.findFirst({
+        where: eq(schema.organizations.id, orgId),
+        columns: { name: true },
+      }),
+    );
+    const orgName = orgRow?.name ?? "your organization";
+
     const appUrl = process.env["APP_URL"] ?? "https://oxagen-v2-app.vercel.app";
     const topUpUrl = `${appUrl}/settings/billing/credits`;
     const template = lowBalanceAlertTemplate({
-      orgName: orgId,
+      orgName,
       balanceCents: result.balanceCents,
       thresholdCents: result.thresholdCents,
       topUpUrl,
