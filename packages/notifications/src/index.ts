@@ -27,6 +27,16 @@ export { notifyOrgManagers } from "./notifications/notify-org-managers";
 export { reauthEmailTemplate } from "./notifications/email-templates";
 export { resetPasswordEmailTemplate } from "./notifications/reset-password-email-template";
 export type { ResetPasswordEmailTemplateInput } from "./notifications/reset-password-email-template";
+export { emailVerificationTemplate } from "./notifications/email-verification-template";
+export type { EmailVerificationTemplateInput } from "./notifications/email-verification-template";
+export { invitationEmailTemplate } from "./notifications/invitation-email-template";
+export type { InvitationEmailTemplateInput } from "./notifications/invitation-email-template";
+export { lowBalanceAlertTemplate } from "./notifications/low-balance-alert-template";
+export type { LowBalanceAlertTemplateInput } from "./notifications/low-balance-alert-template";
+export { paymentFailedTemplate } from "./notifications/payment-failed-template";
+export type { PaymentFailedTemplateInput } from "./notifications/payment-failed-template";
+export { paymentReceiptTemplate } from "./notifications/payment-receipt-template";
+export type { PaymentReceiptTemplateInput } from "./notifications/payment-receipt-template";
 export type {
   NotificationKind,
   NotificationRow,
