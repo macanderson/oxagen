@@ -54,6 +54,9 @@ const config: XmcpConfig = {
       "@vercel/sandbox",
       "neo4j-driver",
       "ai",
+      "drizzle-orm",
+      "postgres",
+      "@clickhouse/client",
     ];
 
     // Function-based external: matches exact package names and sub-path imports
