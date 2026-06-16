@@ -110,6 +110,7 @@ import { graphEdgeDeleteCommand } from "./commands/graph.edge.delete.js";
 import { graphCypherCommand } from "./commands/graph.cypher.js";
 import { ontologyQueryCommand } from "./commands/ontology.query.js";
 import { ontologyNeighborsCommand } from "./commands/ontology.neighbors.js";
+import { auditLogQueryCommand } from "./commands/audit.log.query.js";
 import { webSearchCommand } from "./commands/web.search.js";
 import { webFetchCommand } from "./commands/web.fetch.js";
 import { researchSwarmStartCommand } from "./commands/research.swarm.start.js";
@@ -345,6 +346,11 @@ const ontology = program
   .description("Typed knowledge-graph traversal commands");
 ontology.addCommand(ontologyQueryCommand);
 ontology.addCommand(ontologyNeighborsCommand);
+
+// audit
+const audit = program.command("audit").description("Audit-log commands");
+const auditLog = audit.command("log").description("Query the security & automation audit spines");
+auditLog.addCommand(auditLogQueryCommand);
 
 // web
 const web = program.command("web").description("Web intelligence commands");

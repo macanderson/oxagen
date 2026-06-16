@@ -23,6 +23,13 @@ vi.mock("@oxagen/sandbox", () => ({
   getSandbox: vi.fn((): SandboxDriver => mockDriver),
 }));
 
+const { mockInsertEvents } = vi.hoisted(() => ({
+  mockInsertEvents: vi.fn(async (..._args: unknown[]) => undefined),
+}));
+vi.mock("@oxagen/telemetry", () => ({
+  insertEvents: mockInsertEvents,
+}));
+
 import { agentCodeExecuteHandler } from "./agent.code.execute";
 import { isSandboxAvailable, getSandbox } from "@oxagen/sandbox";
 
@@ -31,6 +38,8 @@ import { TEST_CTX as CTX } from "../test-utils/fixtures";
 describe("agent.code.execute handler", () => {
   beforeEach(() => {
     mockRun.mockClear();
+    mockInsertEvents.mockClear();
+    mockInsertEvents.mockResolvedValue(undefined);
     vi.mocked(isSandboxAvailable).mockReturnValue(true);
     vi.mocked(getSandbox).mockReturnValue(mockDriver);
   });
@@ -129,5 +138,66 @@ describe("agent.code.execute handler", () => {
 
     expect(result.timedOut).toBe(true);
     expect(result.exitCode).toBe(1);
+  });
+
+  it("meters the run to ClickHouse with language and duration", async () => {
+    mockRun.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: "ok",
+      stderr: "",
+      durationMs: 4242,
+      timedOut: false,
+      oomKilled: false,
+    });
+
+    await agentCodeExecuteHandler(
+      { language: "python", code: "print(1)", timeoutMs: 5_000, memoryMb: 128, network: "deny" },
+      CTX,
+    );
+
+    expect(mockInsertEvents).toHaveBeenCalledTimes(1);
+    const rows = mockInsertEvents.mock.calls[0]![0] as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    const row = rows[0]!;
+    expect(row.event_type).toBe("agent.code.execute.ran");
+    expect(row.org_id).toBe("org_1");
+    expect(row.workspace_id).toBe("ws_1");
+    const payload = JSON.parse(row.payload as string) as Record<string, unknown>;
+    expect(payload.language).toBe("python");
+    expect(payload.durationMs).toBe(4242);
+    expect(payload.exitCode).toBe(0);
+  });
+
+  it("never fails the run when telemetry throws", async () => {
+    mockInsertEvents.mockRejectedValueOnce(new Error("clickhouse down"));
+    const result = await agentCodeExecuteHandler(
+      { language: "node", code: "x", timeoutMs: 5_000, memoryMb: 64, network: "deny" },
+      CTX,
+    );
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("strips reserved/host env keys before reaching the sandbox", async () => {
+    await agentCodeExecuteHandler(
+      {
+        language: "shell",
+        code: "echo hi",
+        env: {
+          SAFE_VALUE: "keep",
+          PATH: "/evil/bin",
+          LD_PRELOAD: "/evil.so",
+          MODAL_TOKEN: "stolen",
+          "bad-key": "dropped",
+        },
+        timeoutMs: 5_000,
+        memoryMb: 64,
+        network: "deny",
+      },
+      CTX,
+    );
+
+    expect(mockRun).toHaveBeenCalledWith(
+      expect.objectContaining({ env: { SAFE_VALUE: "keep" } }),
+    );
   });
 });

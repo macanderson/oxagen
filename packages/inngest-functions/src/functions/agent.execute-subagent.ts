@@ -2,7 +2,7 @@ import { inngest } from "../inngest";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { insertToolInvocation } from "@oxagen/telemetry";
+import { insertToolInvocation, insertEvents } from "@oxagen/telemetry";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "../logger";
 import "@oxagen/oxagen";
@@ -186,18 +186,61 @@ export const agentExecuteSubagent = inngest.createFunction(
     }
 
     const finalStatus = deriveFanoutStatus(completed, runs.length, anyFailed);
+    // The subagent_fanouts.status CHECK constraint allows
+    // {pending,running,completed,partial,timed_out} — not 'failed'. An
+    // all-children-failed fanout is terminal-incomplete, so it is stored as
+    // 'partial' at the column. Callers get the true 'failed' from
+    // agent.subagent.aggregate, which recomputes status from per-run counts
+    // (completedCount === 0 && anyFailed → 'failed').
+    const columnStatus = finalStatus === "failed" ? "partial" : finalStatus;
     await step.run("finalize", () =>
       runInTenantScope({ orgId, workspaceId }, () =>
         withTenantDb((tx) =>
           tx
             .update(schema.subagentFanouts)
-            .set({ status: finalStatus, completedChildren: completed })
+            .set({ status: columnStatus, completedChildren: completed })
             .where(
               and(eq(schema.subagentFanouts.id, fanoutId), eq(schema.subagentFanouts.orgId, orgId)),
             ),
         ),
       ),
     );
+
+    // Fanout-completion telemetry → ClickHouse (shared analytics package).
+    // Previously no event was emitted on fanout completion, so fanout cost and
+    // throughput were invisible. Fire-and-forget; never fail the run on a
+    // telemetry write.
+    await step.run("emit-completion-telemetry", async () => {
+      try {
+        await insertEvents([
+          {
+            event_id: crypto.randomUUID(),
+            org_id: orgId,
+            workspace_id: workspaceId,
+            event_type: "agent.subagent.fanout.completed",
+            source_system: "inngest:agent.execute-subagent",
+            stream_offset: null,
+            payload: JSON.stringify({
+              fanoutId,
+              status: finalStatus,
+              totalChildren: runs.length,
+              completedChildren: completed,
+              depth,
+            }),
+            emitted_at: new Date().toISOString(),
+          },
+        ]);
+      } catch (telErr) {
+        logger.warn({ err: telErr, fanoutId }, "insertEvents failed — fanout completion telemetry loss");
+      }
+    });
+
+    // Event-driven completion signal: lets agent.aggregate-fanout (and any
+    // orchestrator) await the fanout via step.waitForEvent instead of polling.
+    await step.sendEvent("fanout-completed", {
+      name: "agent/subagent.fanout.completed",
+      data: { orgId, workspaceId, fanoutId, status: finalStatus, completedChildren: completed, totalChildren: runs.length },
+    });
 
     return { fanoutId, completed, status: finalStatus };
   },

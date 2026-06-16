@@ -46,6 +46,12 @@ contract-first design, IAM enforcement, and instrumentation.
 - [automation.list](automation.list.md) — List automation rules in the caller's active workspace, ordered by creation date descending
 - [automation.trigger](automation.trigger.md) — Manually trigger an automation by ID with an optional payload; creates a run record
 
+## Audit (1)
+
+| Capability         | Notes                                                                       |
+| ------------------ | --------------------------------------------------------------------------- |
+| `audit.log.query`  | Query security + automation audit spines (org-scoped); admin-only, read-only. |
+
 ## Billing (3)
 
 - [billing.credits.purchase](billing.credits.purchase.md) — Initiate a dynamic usage-credit purchase via Stripe Checkout with automatic volume discount

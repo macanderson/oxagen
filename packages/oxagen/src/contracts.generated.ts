@@ -37,6 +37,7 @@ import "./contracts/api.key.create";
 import "./contracts/api.key.revoke";
 import "./contracts/archive.create";
 import "./contracts/asset.upload";
+import "./contracts/audit.log.query";
 import "./contracts/automation.create";
 import "./contracts/automation.disable";
 import "./contracts/automation.enable";
