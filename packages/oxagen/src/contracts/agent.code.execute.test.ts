@@ -139,6 +139,48 @@ describe("agent.code.execute capability", () => {
     expect(parsed.env).toEqual({ FOO: "bar" });
   });
 
+  // ── input: env trust boundary (sanitizeSandboxEnv) ────────────────────────
+
+  it("strips reserved env keys and prefixes, keeps safe ones", () => {
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+      env: {
+        SAFE: "ok",
+        PATH: "/evil",
+        LD_PRELOAD: "/x.so",
+        MODAL_TOKEN: "secret",
+        DATABASE_URL: "postgres://...",
+      },
+    });
+    expect(parsed.env).toEqual({ SAFE: "ok" });
+  });
+
+  it("drops env keys that are not POSIX-shaped names", () => {
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+      env: { "bad-key": "v", "1leading": "v", GOOD_KEY: "v" },
+    });
+    expect(parsed.env).toEqual({ GOOD_KEY: "v" });
+  });
+
+  it("collapses an all-unsafe env to undefined", () => {
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+      env: { PATH: "/x", "bad key": "v" },
+    });
+    expect(parsed.env).toBeUndefined();
+  });
+
+  it("caps the env at 32 keys", () => {
+    const env: Record<string, string> = {};
+    for (let i = 0; i < 40; i++) env[`K${i}`] = "v";
+    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", env });
+    expect(Object.keys(parsed.env ?? {})).toHaveLength(32);
+  });
+
   // ── input: required fields ────────────────────────────────────────────────
 
   it("rejects input missing language", () => {
