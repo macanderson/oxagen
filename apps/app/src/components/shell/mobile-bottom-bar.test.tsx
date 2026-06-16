@@ -61,8 +61,8 @@ describe("MobileBottomBar — primary tabs", () => {
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(within(nav).getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/acme/prod/ask");
     expect(within(nav).getByRole("link", { name: "Knowledge" })).toHaveAttribute("href", "/acme/prod/knowledge");
+    expect(within(nav).getByRole("link", { name: "Agents" })).toHaveAttribute("href", "/acme/prod/agents");
     expect(within(nav).getByRole("link", { name: "Automation" })).toHaveAttribute("href", "/acme/prod/automation");
-    expect(within(nav).getByRole("link", { name: "Activity" })).toHaveAttribute("href", "/acme/prod/activity");
   });
 
   it("marks the current destination with aria-current=page", () => {
@@ -87,6 +87,7 @@ describe("MobileBottomBar — More sheet", () => {
       () => expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument(),
       { timeout: 2000 },
     );
+    expect(screen.getByRole("link", { name: "Activity" })).toHaveAttribute("href", "/acme/prod/activity");
     expect(screen.getByRole("link", { name: "Studio" })).toHaveAttribute("href", "/acme/prod/studio");
     expect(screen.getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/acme/prod/workflows");
   });

@@ -51,13 +51,15 @@ vi.mock("@/components/ui/button", () => ({
     onClick,
     type,
     disabled,
+    "aria-label": ariaLabel,
   }: {
     children: React.ReactNode;
     onClick?: () => void;
     type?: "button" | "submit" | "reset";
     disabled?: boolean;
+    "aria-label"?: string;
   }) => (
-    <button type={type ?? "button"} onClick={onClick} disabled={disabled}>
+    <button type={type ?? "button"} onClick={onClick} disabled={disabled} aria-label={ariaLabel}>
       {children}
     </button>
   ),
@@ -162,6 +164,100 @@ describe("AgentEditorForm (create)", () => {
       screen.getByText(/only workspace owners and admins can manage agents/i),
     ).toBeInTheDocument();
   });
+
+  it("removes a tool row so it is not submitted", async () => {
+    mockCreate.mockResolvedValue({ ok: true, data: { slug: "x" } });
+    render(<AgentEditorForm {...createProps} />);
+    setName("X");
+    fireEvent.click(screen.getByRole("button", { name: /add tool/i }));
+    fireEvent.change(screen.getByLabelText("Reference"), { target: { value: "coding" } });
+    fireEvent.click(screen.getByRole("button", { name: /remove tool 1/i }));
+    fireEvent.submit(screen.getByRole("form", { name: /agent editor/i }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledOnce());
+    const arg = mockCreate.mock.calls[0]![0] as { config: { agentTools: unknown[] } };
+    expect(arg.config.agentTools).toHaveLength(0);
+  });
+
+  it("builds an event trigger with its filter from the trigger editor", async () => {
+    mockCreate.mockResolvedValue({ ok: true, data: { slug: "x" } });
+    render(<AgentEditorForm {...createProps} />);
+    setName("X");
+    fireEvent.click(screen.getByRole("button", { name: /add trigger/i }));
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "event" } });
+    fireEvent.change(screen.getByLabelText("Event source"), { target: { value: "github_repo" } });
+    fireEvent.change(screen.getByLabelText("Event type"), { target: { value: "push" } });
+    fireEvent.change(screen.getByLabelText("Branches (comma-separated)"), {
+      target: { value: "main" },
+    });
+    fireEvent.submit(screen.getByRole("form", { name: /agent editor/i }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledOnce());
+    const arg = mockCreate.mock.calls[0]![0] as {
+      config: { triggers: { type: string; eventSource?: string; filter?: { branches?: string[] } }[] };
+    };
+    expect(arg.config.triggers[0]!.type).toBe("event");
+    expect(arg.config.triggers[0]!.eventSource).toBe("github_repo");
+    expect(arg.config.triggers[0]!.filter?.branches).toEqual(["main"]);
+  });
+
+  it("builds a schedule trigger with its cron", async () => {
+    mockCreate.mockResolvedValue({ ok: true, data: { slug: "x" } });
+    render(<AgentEditorForm {...createProps} />);
+    setName("X");
+    fireEvent.click(screen.getByRole("button", { name: /add trigger/i }));
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "schedule" } });
+    fireEvent.change(screen.getByLabelText("Cron schedule"), { target: { value: "0 9 * * 1" } });
+    fireEvent.submit(screen.getByRole("form", { name: /agent editor/i }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledOnce());
+    const arg = mockCreate.mock.calls[0]![0] as {
+      config: { triggers: { type: string; schedule?: string }[] };
+    };
+    expect(arg.config.triggers[0]!.type).toBe("schedule");
+    expect(arg.config.triggers[0]!.schedule).toBe("0 9 * * 1");
+  });
+
+  it("removes a trigger row before submit", async () => {
+    mockCreate.mockResolvedValue({ ok: true, data: { slug: "x" } });
+    render(<AgentEditorForm {...createProps} />);
+    setName("X");
+    fireEvent.click(screen.getByRole("button", { name: /add trigger/i }));
+    fireEvent.click(screen.getByRole("button", { name: /remove trigger 1/i }));
+    fireEvent.submit(screen.getByRole("form", { name: /agent editor/i }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledOnce());
+    const arg = mockCreate.mock.calls[0]![0] as { config: { triggers: unknown[] } };
+    expect(arg.config.triggers).toHaveLength(0);
+  });
+
+  it("includes edited graph budget values in the submitted config", async () => {
+    mockCreate.mockResolvedValue({ ok: true, data: { slug: "x" } });
+    render(<AgentEditorForm {...createProps} />);
+    setName("X");
+    fireEvent.change(screen.getByLabelText("Max hops"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Max nodes"), { target: { value: "80" } });
+    fireEvent.change(screen.getByLabelText(/min relevance/i), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Mode"), { target: { value: "extend" } });
+    fireEvent.change(screen.getByLabelText("Retrieval strategy"), { target: { value: "semantic" } });
+    fireEvent.submit(screen.getByRole("form", { name: /agent editor/i }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledOnce());
+    const arg = mockCreate.mock.calls[0]![0] as {
+      config: {
+        graph: {
+          mode: string;
+          retrieval: { strategy: string };
+          budget: { maxHops: number; maxNodes: number; minRelevance?: number };
+        };
+      };
+    };
+    expect(arg.config.graph.mode).toBe("extend");
+    expect(arg.config.graph.retrieval.strategy).toBe("semantic");
+    expect(arg.config.graph.budget.maxHops).toBe(5);
+    expect(arg.config.graph.budget.maxNodes).toBe(80);
+    expect(arg.config.graph.budget.minRelevance).toBeUndefined();
+  });
 });
 
 describe("AgentEditorForm (edit)", () => {
@@ -197,5 +293,15 @@ describe("AgentEditorForm (edit)", () => {
     const arg = mockUpdate.mock.calls[0]![0] as { agentId: string };
     expect(arg.agentId).toBe("agt_1");
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/acme/prod/agents/repo-review"));
+  });
+
+  it("surfaces an update failure without navigating", async () => {
+    mockUpdate.mockResolvedValue({ ok: false, error: "version conflict" });
+    render(<AgentEditorForm {...editProps} />);
+    fireEvent.submit(screen.getByRole("form", { name: /agent editor/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/version conflict/i);
+    });
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

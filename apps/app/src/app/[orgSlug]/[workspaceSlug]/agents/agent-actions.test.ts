@@ -54,6 +54,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
+vi.mock("@oxagen/agent/register", () => ({}));
 vi.mock("@/lib/routes", () => ({
   workspace: {
     agents: {

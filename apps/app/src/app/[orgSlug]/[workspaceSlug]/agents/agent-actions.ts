@@ -19,8 +19,11 @@ import { and, eq } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
-// Side-effect import: bind every foundation handler so invoke() can resolve.
+// Side-effect imports: bind foundation + agent.* handlers so invoke() resolves.
+// agent.* capabilities live in @oxagen/agent — without this register the kernel
+// throws "No handler registered for capability agent.…" at runtime.
 import "@oxagen/handlers/register";
+import "@oxagen/agent/register";
 import {
   agentDefinitionConfigSchema,
   agentTriggerSchema,

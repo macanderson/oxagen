@@ -177,4 +177,52 @@ describe("AgentDetail", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /edit/i })).not.toBeInTheDocument();
   });
+
+  it("renders a Deactivate control and Published badge for a deployed, published agent", () => {
+    const deployed: AgentDefinitionGetOutput = {
+      ...agent,
+      status: "active",
+      deploymentStatus: "active",
+      isPublished: true,
+    };
+    render(<AgentDetail {...baseProps} agent={deployed} />);
+    expect(screen.getByRole("button", { name: /deactivate/i })).toBeInTheDocument();
+    expect(screen.getAllByText("Published").length).toBeGreaterThan(0);
+  });
+
+  it("deactivates a deployed agent", async () => {
+    mockDeploy.mockResolvedValue({ ok: true, data: { agentId: "agt_1", deploymentStatus: "inactive" } });
+    render(<AgentDetail {...baseProps} agent={{ ...agent, deploymentStatus: "active" }} />);
+    fireEvent.click(screen.getByRole("button", { name: /deactivate/i }));
+    await waitFor(() => expect(mockDeploy).toHaveBeenCalledOnce());
+    expect((mockDeploy.mock.calls[0]![0] as { deploymentStatus: string }).deploymentStatus).toBe(
+      "inactive",
+    );
+  });
+
+  it("shows fallbacks when there are no tools and no instructions", () => {
+    const bare: AgentDefinitionGetOutput = {
+      ...agent,
+      config: {
+        ...agent.config,
+        agentTools: [],
+        instructions: undefined,
+      },
+    };
+    render(<AgentDetail {...baseProps} agent={bare} />);
+    expect(screen.getByText("No tools.")).toBeInTheDocument();
+    expect(screen.getByText("No instructions.")).toBeInTheDocument();
+  });
+
+  it("surfaces a publish failure as a toast without setting a checksum", async () => {
+    mockPublish.mockResolvedValue({ ok: false, error: "already published" });
+    render(<AgentDetail {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /publish latest version/i }));
+    await waitFor(() =>
+      expect(mockAddToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Failed to publish" }),
+      ),
+    );
+    expect(screen.queryByText(/published checksum/i)).not.toBeInTheDocument();
+  });
 });

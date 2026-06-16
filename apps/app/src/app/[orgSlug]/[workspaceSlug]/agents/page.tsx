@@ -11,6 +11,7 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
+import "@oxagen/agent/register";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { AgentsList } from "./agents-list";
