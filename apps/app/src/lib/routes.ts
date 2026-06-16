@@ -111,6 +111,16 @@ export const workspace = {
     memories: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge/memories`,
   },
 
+  // Agents — workspace-scoped agent management (definitions, versions, triggers, deploy)
+  agents: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/agents`,
+    create: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/agents/new`,
+    detail: (ctx: Required<ScopeContext>, agentSlug: string): string =>
+      `${wsBase(ctx)}/agents/${agentSlug}`,
+    edit: (ctx: Required<ScopeContext>, agentSlug: string): string =>
+      `${wsBase(ctx)}/agents/${agentSlug}/edit`,
+  },
+
   // Automation
   automation: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation`,
@@ -167,7 +177,7 @@ export const workspace = {
 export const defaultTab: Record<string, string> = {
   // Workspace-scope parents
   knowledge: "sources",
-  automation: "agents",
+  automation: "playbooks",
   activity: "runs",
   studio: "compose",
   settings: "general",

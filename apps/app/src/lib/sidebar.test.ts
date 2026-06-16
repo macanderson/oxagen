@@ -76,16 +76,16 @@ describe("resolveSidebarMode", () => {
 // 2. getSidebarConfig — item counts per mode
 //
 // Spec (application-shell spec §4):
-//   workspace: 8 items (Ask, Knowledge, Automation, Activity, Studio, Marketplace, Workflows, Settings)
+//   workspace: 9 items (Ask, Knowledge, Agents, Automation, Activity, Studio, Marketplace, Workflows, Settings)
 //   org:       6 items (Workspaces, Members, Access, Security, Billing, Developer)
 //   account:   4 items (Back to app, Profile, Preferences, Security)
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 8 items", () => {
+  it("workspace config has exactly 9 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    expect(config.items).toHaveLength(8);
+    expect(config.items).toHaveLength(9);
   });
 
   it("org config has exactly 7 items", () => {
@@ -153,6 +153,10 @@ describe("href builders produce correct paths", () => {
 
     it("knowledge -> /{org}/{ws}/knowledge", () => {
       expect(findItem("knowledge").href(wsCtx)).toBe("/acme/production/knowledge");
+    });
+
+    it("agents -> /{org}/{ws}/agents", () => {
+      expect(findItem("agents").href(wsCtx)).toBe("/acme/production/agents");
     });
 
     it("automation -> /{org}/{ws}/automation", () => {

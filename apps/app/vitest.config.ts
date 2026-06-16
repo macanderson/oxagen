@@ -32,11 +32,14 @@ export default defineConfig({
       ],
       // Coverage floor — ratchet upward as test surface grows.
       // Raised from 50/82/69/50 after adding MCP branch-completion tests (measured: 53/84/71/53).
+      // Raised lines/statements to 56 after the agent-management UI suite landed
+      // (measured: 59.14/84.26/73.14/59.14); functions/branches held at their
+      // existing floor (current minus 2.5 rounds below them, never reduce).
       thresholds: {
-        lines: 53,
+        lines: 56,
         functions: 71,
         branches: 84,
-        statements: 53,
+        statements: 56,
       },
     },
   },
