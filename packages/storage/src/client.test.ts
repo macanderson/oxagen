@@ -5,7 +5,8 @@
 // Strategy:
 //  - Mock requireEnv and createVercelBlobAdapter to avoid real network.
 //  - Use vi.resetModules() + dynamic import to reset the singleton between tests.
-//  - Assert: missing token throws, valid token creates adapter, memoized ref.
+//  - Assert: missing token throws, valid token creates adapter, memoized ref,
+//    driver selection via STORAGE_DRIVER env var.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,7 +15,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // ---------------------------------------------------------------------------
 
 const requireEnvMock = vi.hoisted(() =>
-  vi.fn((_keys: readonly string[]): { BLOB_READ_WRITE_TOKEN: string | undefined } => ({
+  vi.fn((_keys: readonly string[]): Record<string, string | undefined> => ({
+    STORAGE_DRIVER: "vercel-blob",
     BLOB_READ_WRITE_TOKEN: undefined,
   })),
 );
@@ -53,31 +55,39 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Missing token → throws with BLOB_READ_WRITE_TOKEN in the message
+// Missing token — throws with BLOB_READ_WRITE_TOKEN in the message
 // ---------------------------------------------------------------------------
 
 describe("storage() — missing token", () => {
   it("throws when BLOB_READ_WRITE_TOKEN is undefined", async () => {
-    requireEnvMock.mockReturnValue({ BLOB_READ_WRITE_TOKEN: undefined });
+    requireEnvMock.mockImplementation((keys: readonly string[]) => {
+      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "vercel-blob" };
+      return { BLOB_READ_WRITE_TOKEN: undefined };
+    });
     const { storage } = await freshStorage();
     expect(() => storage()).toThrow(/BLOB_READ_WRITE_TOKEN/);
   });
 
   it("throws when BLOB_READ_WRITE_TOKEN is an empty string", async () => {
-    // requireEnv returns empty string — the guard `if (!BLOB_READ_WRITE_TOKEN)` is truthy for ""
-    requireEnvMock.mockReturnValue({ BLOB_READ_WRITE_TOKEN: "" });
+    requireEnvMock.mockImplementation((keys: readonly string[]) => {
+      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "vercel-blob" };
+      return { BLOB_READ_WRITE_TOKEN: "" };
+    });
     const { storage } = await freshStorage();
     expect(() => storage()).toThrow(/BLOB_READ_WRITE_TOKEN/);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Valid token → returns adapter with driver: "vercel-blob"
+// Valid token — returns adapter with driver: "vercel-blob"
 // ---------------------------------------------------------------------------
 
 describe("storage() — valid token", () => {
   beforeEach(() => {
-    requireEnvMock.mockReturnValue({ BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_testStore_someSecret" });
+    requireEnvMock.mockImplementation((keys: readonly string[]) => {
+      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "vercel-blob" };
+      return { BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_testStore_someSecret" };
+    });
   });
 
   it("calls createVercelBlobAdapter with the token", async () => {
@@ -99,7 +109,10 @@ describe("storage() — valid token", () => {
 
 describe("storage() — singleton memoization", () => {
   it("two calls return the exact same adapter reference", async () => {
-    requireEnvMock.mockReturnValue({ BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_testStore_secret" });
+    requireEnvMock.mockImplementation((keys: readonly string[]) => {
+      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "vercel-blob" };
+      return { BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_testStore_secret" };
+    });
     const { storage } = await freshStorage();
     const a = storage();
     const b = storage();
@@ -107,11 +120,52 @@ describe("storage() — singleton memoization", () => {
   });
 
   it("createVercelBlobAdapter is called exactly once for multiple storage() calls", async () => {
-    requireEnvMock.mockReturnValue({ BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_testStore_secret" });
+    requireEnvMock.mockImplementation((keys: readonly string[]) => {
+      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "vercel-blob" };
+      return { BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_testStore_secret" };
+    });
     const { storage } = await freshStorage();
     storage();
     storage();
     storage();
     expect(createVercelBlobAdapterMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Driver selection — STORAGE_DRIVER env var
+// ---------------------------------------------------------------------------
+
+describe("storage() — driver selection", () => {
+  it("defaults to vercel-blob when STORAGE_DRIVER is not explicitly set", async () => {
+    requireEnvMock.mockImplementation((keys: readonly string[]) => {
+      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: undefined };
+      return { BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_testStore_secret" };
+    });
+    const { storage } = await freshStorage();
+    const adapter = storage();
+    expect(adapter.driver).toBe("vercel-blob");
+    expect(createVercelBlobAdapterMock).toHaveBeenCalledWith("vercel_blob_rw_testStore_secret");
+  });
+
+  it("resolves to vercel-blob when STORAGE_DRIVER is explicitly 'vercel-blob'", async () => {
+    requireEnvMock.mockImplementation((keys: readonly string[]) => {
+      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "vercel-blob" };
+      return { BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_testStore_explicit" };
+    });
+    const { storage } = await freshStorage();
+    const adapter = storage();
+    expect(adapter.driver).toBe("vercel-blob");
+    expect(createVercelBlobAdapterMock).toHaveBeenCalledWith("vercel_blob_rw_testStore_explicit");
+  });
+
+  it("throws a clear error listing supported drivers for an unknown STORAGE_DRIVER", async () => {
+    requireEnvMock.mockImplementation((keys: readonly string[]) => {
+      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "s3" };
+      return { BLOB_READ_WRITE_TOKEN: "some-token" };
+    });
+    const { storage } = await freshStorage();
+    expect(() => storage()).toThrow(/Unknown STORAGE_DRIVER: "s3"/);
+    expect(() => storage()).toThrow(/vercel-blob/);
   });
 });

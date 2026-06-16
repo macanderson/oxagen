@@ -1,19 +1,11 @@
 import { put as blobPut, del as blobDel, get as blobGet } from "@vercel/blob";
+import { StorageNotFoundError } from "./errors";
 import { logger } from "./logger";
 import type { GetObjectResult, PutObjectInput, PutObjectResult, StorageAdapter, StorageBody } from "./types";
 
-/**
- * Typed error thrown when a storage key does not exist (HTTP 404 from the
- * backend). Route handlers should map this to a 404 response without leaking
- * the internal storage URL.
- */
-export class StorageNotFoundError extends Error {
-  readonly notFound = true as const;
-  constructor(key: string) {
-    super(`Storage object not found: ${key}`);
-    this.name = "StorageNotFoundError";
-  }
-}
+// Re-export for backward compatibility -- consumers that imported from
+// "./vercel-blob" directly continue to work without changes.
+export { StorageNotFoundError } from "./errors";
 
 /**
  * Derive the public base URL for a Vercel Blob store from its read/write

@@ -1,0 +1,30 @@
+{
+  "id": "FEAT-001",
+  "type": "refactor",
+  "description": "Make storage driver selection pluggable via STORAGE_DRIVER env var and refactor client.ts to support multiple providers. Move StorageNotFoundError to types.ts (shared across all drivers). Add STORAGE_DRIVER to the @oxagen/config env schema. Update client.ts to resolve the driver based on env config. The Vercel Blob adapter stays in the same package for now (no separate package needed since @vercel/blob is already isolated to one file and the interface is already clean). All existing consumers continue to work unchanged since the public API surface (@oxagen/storage exports) remains identical.",
+  "status": "completed",
+  "steps": [
+    "Step 1: Move StorageNotFoundError from src/vercel-blob.ts to src/errors.ts (new file). It is a shared error type that all drivers should throw, not specific to Vercel Blob. Update the re-export in src/index.ts to come from src/errors.ts. Update the import in src/vercel-blob.ts to import from ./errors.",
+    "Step 2: Add STORAGE_DRIVER to the env schema in packages/config/src/env.ts as z.enum(['vercel-blob']).default('vercel-blob').optional() -- defaults to vercel-blob so existing deployments are unaffected. Add a comment explaining the driver selection pattern.",
+    "Step 3: Refactor packages/storage/src/client.ts to: (a) read STORAGE_DRIVER from env (default 'vercel-blob'), (b) switch on the driver value to instantiate the correct adapter, (c) keep BLOB_READ_WRITE_TOKEN requirement conditional on vercel-blob driver being selected. Use a resolveAdapter() internal function that contains the switch/map logic.",
+    "Step 4: Update packages/storage/src/client.test.ts to test the new driver-selection logic: (a) default driver resolves to vercel-blob, (b) explicit STORAGE_DRIVER=vercel-blob works, (c) unknown driver throws a clear error message. Keep existing singleton memoization tests passing.",
+    "Step 5: Update packages/storage/src/index.ts to export StorageNotFoundError from the new errors.ts location (backward-compatible -- consumers still import { StorageNotFoundError } from '@oxagen/storage').",
+    "Step 6: Verify: run pnpm --filter @oxagen/storage test:unit and pnpm --filter @oxagen/storage typecheck to confirm all tests pass and types check."
+  ],
+  "acceptance_criteria": [
+    "StorageNotFoundError is in src/errors.ts and re-exported from src/index.ts (consumers unchanged)",
+    "STORAGE_DRIVER env var exists in @oxagen/config schema with default 'vercel-blob'",
+    "client.ts uses a switch/map pattern to resolve adapter based on STORAGE_DRIVER",
+    "An unknown STORAGE_DRIVER value throws a clear error at runtime",
+    "All existing tests in client.test.ts and vercel-blob.test.ts still pass",
+    "New tests cover driver selection logic",
+    "pnpm --filter @oxagen/storage typecheck passes cleanly"
+  ],
+  "verification": [
+    "pnpm --filter @oxagen/storage test:unit",
+    "pnpm --filter @oxagen/storage typecheck",
+    "pnpm --filter @oxagen/storage test:coverage"
+  ],
+  "blocked_reason": null,
+  "findings": "All 79 tests pass. Full monorepo typecheck passes (29 packages). Coverage thresholds met. Pre-commit hooks (lint + typecheck) pass. Environment required node>=24 and pnpm>=10, installed via mise. Also needed libatomic1 for pnpm binary on Amazon Linux 2023."
+}
