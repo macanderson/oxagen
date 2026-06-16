@@ -126,7 +126,7 @@ describe("AgentDetail", () => {
     render(<AgentDetail {...baseProps} />);
     expect(screen.getByRole("link", { name: /edit/i })).toHaveAttribute(
       "href",
-      "/acme/prod/agents/repo-review/edit",
+      "/acme/prod/automation/agents/repo-review/edit",
     );
   });
 

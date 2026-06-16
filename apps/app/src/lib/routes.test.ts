@@ -135,11 +135,14 @@ describe("workspace route builders", () => {
   it("knowledge.root → /{org}/{ws}/knowledge", () => expect(workspace.knowledge.root(wsCtx)).toBe("/acme/prod/knowledge"));
   it("knowledge.sources → /{org}/{ws}/knowledge/sources", () => expect(workspace.knowledge.sources(wsCtx)).toBe("/acme/prod/knowledge/sources"));
   it("automation.agents → /{org}/{ws}/automation/agents", () => expect(workspace.automation.agents(wsCtx)).toBe("/acme/prod/automation/agents"));
-  it("agents.root → /{org}/{ws}/agents", () => expect(workspace.agents.root(wsCtx)).toBe("/acme/prod/agents"));
-  it("agents.create → /{org}/{ws}/agents/new", () => expect(workspace.agents.create(wsCtx)).toBe("/acme/prod/agents/new"));
-  it("agents.detail → /{org}/{ws}/agents/:slug", () => expect(workspace.agents.detail(wsCtx, "repo-review")).toBe("/acme/prod/agents/repo-review"));
-  it("agents.edit → /{org}/{ws}/agents/:slug/edit", () => expect(workspace.agents.edit(wsCtx, "repo-review")).toBe("/acme/prod/agents/repo-review/edit"));
+  // Agents live under Automation (IA spec §4/§5).
+  it("agents.root → /{org}/{ws}/automation/agents", () => expect(workspace.agents.root(wsCtx)).toBe("/acme/prod/automation/agents"));
+  it("agents.create → /{org}/{ws}/automation/agents/new", () => expect(workspace.agents.create(wsCtx)).toBe("/acme/prod/automation/agents/new"));
+  it("agents.detail → /{org}/{ws}/automation/agents/:slug", () => expect(workspace.agents.detail(wsCtx, "repo-review")).toBe("/acme/prod/automation/agents/repo-review"));
+  it("agents.edit → /{org}/{ws}/automation/agents/:slug/edit", () => expect(workspace.agents.edit(wsCtx, "repo-review")).toBe("/acme/prod/automation/agents/repo-review/edit"));
   it("activity.runs → /{org}/{ws}/activity/runs", () => expect(workspace.activity.runs(wsCtx)).toBe("/acme/prod/activity/runs"));
+  // All run kinds (incl. subagent fan-outs) drill down under Activity → Runs.
+  it("activity.run → /{org}/{ws}/activity/runs/:id", () => expect(workspace.activity.run(wsCtx, "fan-123")).toBe("/acme/prod/activity/runs/fan-123"));
   it("studio.root → /{org}/{ws}/studio", () => expect(workspace.studio.root(wsCtx)).toBe("/acme/prod/studio"));
   it("settings.root → /{org}/{ws}/settings", () => expect(workspace.settings.root(wsCtx)).toBe("/acme/prod/settings"));
   it("settings.modelKeys → /{org}/{ws}/settings/model-keys", () => expect(workspace.settings.modelKeys(wsCtx)).toBe("/acme/prod/settings/model-keys"));

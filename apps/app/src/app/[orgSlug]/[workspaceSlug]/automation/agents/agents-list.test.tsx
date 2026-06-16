@@ -72,7 +72,7 @@ describe("AgentsList", () => {
     expect(screen.getByText(/no agents yet/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /create agent/i })).toHaveAttribute(
       "href",
-      "/acme/prod/agents/new",
+      "/acme/prod/automation/agents/new",
     );
   });
 
@@ -85,9 +85,9 @@ describe("AgentsList", () => {
   it("renders a row per agent with name link to detail", () => {
     render(<AgentsList {...baseProps} agents={agents} />);
     const repoLink = screen.getByRole("link", { name: /repo review/i });
-    expect(repoLink).toHaveAttribute("href", "/acme/prod/agents/repo-review");
+    expect(repoLink).toHaveAttribute("href", "/acme/prod/automation/agents/repo-review");
     const draftLink = screen.getByRole("link", { name: /draft bot/i });
-    expect(draftLink).toHaveAttribute("href", "/acme/prod/agents/draft-bot");
+    expect(draftLink).toHaveAttribute("href", "/acme/prod/automation/agents/draft-bot");
   });
 
   it("shows version and trigger count per row", () => {
@@ -105,7 +105,7 @@ describe("AgentsList", () => {
     render(<AgentsList {...baseProps} agents={agents} />);
     expect(screen.getByRole("link", { name: /new agent/i })).toHaveAttribute(
       "href",
-      "/acme/prod/agents/new",
+      "/acme/prod/automation/agents/new",
     );
   });
 });

@@ -111,18 +111,15 @@ export const workspace = {
     memories: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge/memories`,
   },
 
-  // Agents — workspace-scoped agent management (definitions, versions, triggers, deploy)
+  // Agents — IA spec §4/§5: agents are a tab of Automation. Canonical path is
+  // /automation/agents/*. Legacy /agents/* 301-redirects here via proxy.ts.
   agents: {
-    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/agents`,
-    create: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/agents/new`,
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/agents`,
+    create: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/agents/new`,
     detail: (ctx: Required<ScopeContext>, agentSlug: string): string =>
-      `${wsBase(ctx)}/agents/${agentSlug}`,
+      `${wsBase(ctx)}/automation/agents/${agentSlug}`,
     edit: (ctx: Required<ScopeContext>, agentSlug: string): string =>
-      `${wsBase(ctx)}/agents/${agentSlug}/edit`,
-    // Subagent fan-out viewer: list of dispatched fan-outs + per-fan-out detail.
-    runs: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/agents/runs`,
-    run: (ctx: Required<ScopeContext>, fanoutId: string): string =>
-      `${wsBase(ctx)}/agents/runs/${fanoutId}`,
+      `${wsBase(ctx)}/automation/agents/${agentSlug}/edit`,
   },
 
   // Automation
@@ -134,10 +131,13 @@ export const workspace = {
     triggers: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/triggers`,
   },
 
-  // Activity
+  // Activity — IA spec §5: Runs is the single home for ALL run kinds (subagent
+  // fan-outs, parallel tasks, chat/API/MCP runs). `run` is the per-fan-out drill-down.
   activity: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity`,
     runs: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity/runs`,
+    run: (ctx: Required<ScopeContext>, fanoutId: string): string =>
+      `${wsBase(ctx)}/activity/runs/${fanoutId}`,
     approvals: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity/approvals`,
     audit: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity/audit`,
   },
@@ -147,11 +147,6 @@ export const workspace = {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/studio`,
     compose: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/studio/compose`,
     library: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/studio/library`,
-  },
-
-  // Workflows — parallel task supervisor runs
-  workflows: {
-    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/workflows`,
   },
 
   // Settings

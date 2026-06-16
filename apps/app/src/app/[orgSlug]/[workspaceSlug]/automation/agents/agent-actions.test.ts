@@ -127,7 +127,7 @@ describe("createAgentAction", () => {
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
       expect.objectContaining({ surface: "agent" }),
     );
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/agents");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/automation/agents");
   });
 
   it("returns ok:false with the error message when invoke throws", async () => {

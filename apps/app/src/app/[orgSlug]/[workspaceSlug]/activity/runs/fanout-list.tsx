@@ -79,7 +79,7 @@ export function FanoutList({ initialFanouts, orgSlug, workspaceSlug }: FanoutLis
           return (
             <li key={f.fanoutId}>
               <Link
-                href={workspace.agents.run(ctx, f.fanoutId)}
+                href={workspace.activity.run(ctx, f.fanoutId)}
                 className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:bg-accent"
               >
                 <div className="flex min-w-0 flex-col gap-0.5">

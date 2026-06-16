@@ -43,18 +43,18 @@ test.describe("subagent fan-out viewer", () => {
     const ws = "default";
 
     // ── 1. Direct navigation to the viewer ──────────────────────────────────
-    await page.goto(`/${orgSlug}/${ws}/agents/runs`);
+    await page.goto(`/${orgSlug}/${ws}/activity/runs`);
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page.getByText(/no subagent fan-outs yet/i)).toBeVisible({ timeout: 15_000 });
     await shot(page, "01-empty");
 
     // ── 2. Reach it from the sidebar ────────────────────────────────────────
     await page.getByRole("link", { name: /subagent runs/i }).first().click();
-    await expect(page).toHaveURL(new RegExp(`/${orgSlug}/${ws}/agents/runs$`));
+    await expect(page).toHaveURL(new RegExp(`/${orgSlug}/${ws}/activity/runs$`));
     await shot(page, "02-from-sidebar");
 
     // ── 3. A non-existent fan-out renders the notFound page ──────────────────
-    const res = await page.goto(`/${orgSlug}/${ws}/agents/runs/fan_does_not_exist`);
+    const res = await page.goto(`/${orgSlug}/${ws}/activity/runs/fan_does_not_exist`);
     expect(res?.status()).toBe(404);
     await shot(page, "03-not-found");
   });

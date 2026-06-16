@@ -75,17 +75,19 @@ describe("resolveSidebarMode", () => {
 // ---------------------------------------------------------------------------
 // 2. getSidebarConfig — item counts per mode
 //
-// Spec (application-shell spec §4):
-//   workspace: 9 items (Ask, Knowledge, Agents, Automation, Activity, Studio, Marketplace, Workflows, Settings)
+// Spec (IA spec §4):
+//   workspace: 7 items (Ask, Knowledge, Automation, Activity, Studio, Marketplace, Settings)
+//     — Agents is a tab of Automation; all run kinds live under Activity → Runs;
+//       "Workflows" is gone (folded into Activity → Runs; banned term, §19).
 //   org:       6 items (Workspaces, Members, Access, Security, Billing, Developer)
 //   account:   4 items (Back to app, Profile, Preferences, Security)
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 10 items", () => {
+  it("workspace config has exactly 7 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    expect(config.items).toHaveLength(10);
+    expect(config.items).toHaveLength(7);
   });
 
   it("org config has exactly 7 items", () => {
@@ -107,14 +109,30 @@ describe("getSidebarConfig item counts", () => {
     expect(returnItems[0]?.id).toBe("back");
   });
 
-  it("workspace config has exactly three 'tools' group items (Studio, Marketplace, Workflows)", () => {
+  it("workspace config has exactly two 'tools' group items (Studio, Marketplace)", () => {
     const items = getSidebarConfig("workspace").items;
     const toolsItems = items.filter((item) => item.group === "tools");
-    expect(toolsItems).toHaveLength(3);
+    expect(toolsItems).toHaveLength(2);
     const ids = toolsItems.map((i) => i.id);
     expect(ids).toContain("studio");
     expect(ids).toContain("marketplace");
-    expect(ids).toContain("workflows");
+  });
+
+  it("does NOT surface standalone Agents / Subagent Runs / Workflows items (IA spec §4/§19)", () => {
+    const ids = getSidebarConfig("workspace").items.map((i) => i.id);
+    expect(ids).not.toContain("agents");
+    expect(ids).not.toContain("agent-runs");
+    expect(ids).not.toContain("workflows");
+    // The clean spec tree, in order.
+    expect(ids).toEqual([
+      "ask",
+      "knowledge",
+      "automation",
+      "activity",
+      "studio",
+      "marketplace",
+      "settings",
+    ]);
   });
 
   it("workspace config has exactly one 'footer' group item (Settings)", () => {
@@ -155,16 +173,8 @@ describe("href builders produce correct paths", () => {
       expect(findItem("knowledge").href(wsCtx)).toBe("/acme/production/knowledge");
     });
 
-    it("agents -> /{org}/{ws}/agents", () => {
-      expect(findItem("agents").href(wsCtx)).toBe("/acme/production/agents");
-    });
-
     it("automation -> /{org}/{ws}/automation", () => {
       expect(findItem("automation").href(wsCtx)).toBe("/acme/production/automation");
-    });
-
-    it("agent-runs -> /{org}/{ws}/agents/runs", () => {
-      expect(findItem("agent-runs").href(wsCtx)).toBe("/acme/production/agents/runs");
     });
 
     it("activity -> /{org}/{ws}/activity", () => {
@@ -400,43 +410,30 @@ describe("ORG_SCOPE_ROUTES", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. Workflows sidebar item — added in Phase 2
+// 8. IA realignment — Agents under Automation, runs under Activity, no Workflows
 // ---------------------------------------------------------------------------
 
-describe("Workflows sidebar item", () => {
-  it("'workflows' item exists in workspace config tools group", () => {
-    const items = getSidebarConfig("workspace").items;
-    const workflows = items.find((item) => item.id === "workflows");
-    expect(workflows).toBeDefined();
-    expect(workflows?.group).toBe("tools");
-    expect(workflows?.label).toBe("Workflows");
-  });
+describe("IA realignment (spec §4/§5/§19)", () => {
+  const ctx: Required<ScopeContext> = { orgSlug: "acme", workspaceSlug: "prod" };
 
-  it("'workflows' href resolves to /{org}/{ws}/workflows", () => {
-    const ctx: Required<ScopeContext> = { orgSlug: "acme", workspaceSlug: "prod" };
-    const items = getSidebarConfig("workspace").items;
-    const workflows = items.find((item) => item.id === "workflows");
-    expect(workflows?.href(ctx)).toBe("/acme/prod/workflows");
-  });
-
-  it("'workflows' href falls back to org root when workspaceSlug absent", () => {
-    const ctx: ScopeContext = { orgSlug: "acme" };
-    const items = getSidebarConfig("workspace").items;
-    const workflows = items.find((item) => item.id === "workflows");
-    expect(workflows?.href(ctx)).toBe("/acme");
-  });
-
-  it("enumerateNavTargets includes Workflows for workspace context", () => {
-    const ctx: Required<ScopeContext> = { orgSlug: "acme", workspaceSlug: "prod" };
+  it("enumerateNavTargets routes Agents under Automation, not as a top-level page", () => {
     const targets = enumerateNavTargets(ctx);
-    const workflowsTarget = targets.find((t) => t.label === "Workflows");
-    expect(workflowsTarget).toBeDefined();
-    expect(workflowsTarget?.href).toBe("/acme/prod/workflows");
-    expect(workflowsTarget?.parent).toBe("workflows");
+    const hrefs = targets.map((t) => t.href);
+    // Agents list + create live under /automation/agents.
+    expect(hrefs).toContain("/acme/prod/automation/agents");
+    expect(hrefs).toContain("/acme/prod/automation/agents/new");
+    // The old top-level /agents surface is gone from the nav.
+    expect(hrefs).not.toContain("/acme/prod/agents");
+    expect(hrefs).not.toContain("/acme/prod/agents/new");
   });
 
-  it("all workspace hrefs are unique (including Workflows)", () => {
-    const ctx: Required<ScopeContext> = { orgSlug: "acme", workspaceSlug: "prod" };
+  it("enumerateNavTargets has no Workflows destination", () => {
+    const targets = enumerateNavTargets(ctx);
+    expect(targets.find((t) => t.label === "Workflows")).toBeUndefined();
+    expect(targets.map((t) => t.href)).not.toContain("/acme/prod/workflows");
+  });
+
+  it("all workspace hrefs are unique", () => {
     const eff = resolveSidebarCtx("/acme/prod/ask", ctx);
     const hrefs = getSidebarConfig("workspace").items.map((item) => item.href(eff));
     expect(new Set(hrefs).size).toBe(hrefs.length);

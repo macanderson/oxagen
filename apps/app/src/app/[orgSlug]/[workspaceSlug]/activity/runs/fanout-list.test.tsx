@@ -64,7 +64,7 @@ describe("FanoutList", () => {
     expect(screen.getByText("Running")).toBeInTheDocument();
     expect(screen.getByText("Completed")).toBeInTheDocument();
     const link = screen.getByText("fan_1").closest("a");
-    expect(link).toHaveAttribute("href", "/acme/prod/agents/runs/fan_1");
+    expect(link).toHaveAttribute("href", "/acme/prod/activity/runs/fan_1");
   });
 
   it("polls and refreshes while a fan-out is live", async () => {
