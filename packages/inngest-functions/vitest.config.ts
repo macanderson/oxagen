@@ -23,16 +23,17 @@ export default defineConfig({
         "src/functions.ts",
         "src/index.ts",
       ],
-      // lines floor 68 (measured 73.81 pre-plugins-epic); target 75
-      // branches floor 64 (measured 69.51); target 70
-      // functions floor 33 (v8 arrow-attribution on rollup-usage + barrels
-      //   drag it down; this floor matches reality, NOT a regression).
-      // Raise all three via dedicated handler tests once plugins epic stabilises.
+      // Floors ratcheted up after privacy-pipeline handler tests landed
+      // (measured: lines/statements 90.11, branches 86.20, functions 70.00).
+      // Bumped conservatively below the floor(coverage − 2.5) ceiling to keep
+      // generous headroom — v8 arrow-attribution on rollup-usage + barrels can
+      // make the functions metric jittery across Node versions. Raise further
+      // once the plugins epic stabilises.
       thresholds: {
-        lines: 68,
-        branches: 64,
-        functions: 33,
-        statements: 68,
+        lines: 80,
+        branches: 80,
+        functions: 50,
+        statements: 80,
       },
     },
   },

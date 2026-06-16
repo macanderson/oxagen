@@ -1,3 +1,4 @@
+import { NonRetriableError } from "inngest";
 import { inngest } from "../inngest";
 import { schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
@@ -12,14 +13,13 @@ import { logger } from "../logger";
  *
  * Steps:
  *   1. Mark record as `processing`.
- *   2. Assemble the export ZIP (conversations, profile, api-keys metadata, audit
- *      events, generated asset metadata). NOTE: ZIP assembly is a stub — the
- *      signed download URL construction is pending the full data-collection
- *      pipeline. Track in Linear OXA-XXXX.
- *   3. Mark record as `ready` with the signed `exportUrl`.
- *
- * Failure: on any unrecoverable error the row is marked `failed` with the reason
- * in `errorMessage`, then the error is rethrown so Inngest records the failure.
+ *   2. FAIL LOUD: real ZIP assembly (profile, conversations, api-key metadata,
+ *      audit events, generated-asset metadata) + Blob upload + signed URL is NOT
+ *      yet implemented. Until OXA-1722 ships, this function refuses to hand the
+ *      user a placeholder download link marked `ready`. It throws a
+ *      NonRetriableError so the `inngest/function.failed` handler marks the
+ *      request `failed`. Do NOT re-add a `ready` transition with a placeholder
+ *      URL — that would give a data subject a broken/fake export link.
  */
 export const privacyExportProcess = inngest.createFunction(
   {
@@ -46,39 +46,20 @@ export const privacyExportProcess = inngest.createFunction(
       );
     });
 
-    // Step 2: assemble export package
-    // TODO(OXA-privacy): implement full ZIP assembly:
+    // Step 2: FAIL LOUD. Real ZIP assembly is implemented under OXA-1722:
     //   - user-profile.json (users table)
     //   - conversations/*.json (conversations + messages)
     //   - api-keys.json (key metadata, never values)
     //   - audit-log.json (security_events where subject_id = userId)
     //   - generated-assets.json (generated_assets metadata)
-    // For org scope: include all members + all workspaces.
-    // Upload assembled ZIP to Vercel Blob and capture the signed URL.
-    const exportUrl = await step.run("assemble-export", async () => {
-      logger.info({ exportId, userId, orgId, scope }, "privacy.export-process: assembling export (stub)");
-      // Stub: return a placeholder until full assembly pipeline is wired.
-      return `https://placeholder.export.oxagen.ai/${exportId}.zip`;
-    });
-
-    // Step 3: mark ready
-    await step.run("mark-ready", async () => {
-      await withSystemDb((tx) =>
-        tx
-          .update(schema.privacyExportRequests)
-          .set({
-            status: "ready",
-            exportUrl,
-            completedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.privacyExportRequests.id, exportId)),
-      );
-    });
-
-    logger.info({ exportId, userId, orgId, scope }, "privacy.export-process completed");
-
-    return { exportId, status: "ready", exportUrl };
+    //   - org scope: all members + all workspaces
+    //   - upload assembled ZIP to Vercel Blob, capture the signed URL.
+    // Until then we refuse to mark the request `ready` with a placeholder URL.
+    logger.warn({ exportId, userId, orgId, scope }, "privacy.export-process: assembly not implemented (OXA-1722) — failing request");
+    throw new NonRetriableError(
+      "[privacy.export-process] export ZIP assembly not implemented (OXA-1722); " +
+        `refusing to mark export request ${exportId} (scope=${scope}) as ready`,
+    );
   },
 );
 

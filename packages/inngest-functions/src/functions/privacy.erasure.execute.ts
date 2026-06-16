@@ -1,3 +1,4 @@
+import { NonRetriableError } from "inngest";
 import { inngest } from "../inngest";
 import { schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
@@ -16,11 +17,16 @@ import { logger } from "../logger";
  * Steps:
  *   1. Mark record as `processing`.
  *   2. Execute erasure:
- *      - user scope: anonymise PII fields, hard-delete personal data rows.
- *      - org scope: offboard all members, cascade-delete org rows.
- *      NOTE: full hard-delete cascade is a stub pending data-inventory sign-off.
- *      Track in Linear OXA-XXXX.
- *   3. Mark record as `completed`.
+ *      - user scope: anonymise the user PII row (real, immediate mitigation).
+ *      - org scope: no-op (cascade not yet implemented).
+ *   3. FAIL LOUD: the full hard-delete cascade (conversations, messages,
+ *      api_keys, generated_assets, audit rows, and the org-scope cascade) is
+ *      NOT yet implemented. Until OXA-1721 ships, this function refuses to mark
+ *      the request `completed` — it throws a NonRetriableError so the
+ *      `inngest/function.failed` handler marks the request `failed`. This keeps
+ *      us GDPR-honest: we never tell a data subject their data was erased while
+ *      personal data remains. Do NOT re-add a `completed` transition here until
+ *      the verified cascade lands.
  *
  * Sessions were already revoked by the handler at request time (immediate effect).
  * This function handles the deferred hard-delete after the grace period.
@@ -59,22 +65,18 @@ export const privacyErasureExecute = inngest.createFunction(
       );
     });
 
-    // Step 2: execute erasure
-    // TODO(OXA-privacy): implement full hard-delete cascade:
-    //   User scope:
-    //     - Anonymise: users.name = 'Deleted User', users.email = '<uuid>@deleted.invalid'
-    //     - Hard-delete: conversations, messages, api_keys, generated_assets, audit rows
-    //     - Remove org memberships
-    //   Org scope:
-    //     - All of the above for each member
-    //     - Hard-delete: workspaces, plugins, billing records, org row
-    // All deletes must be scoped via withSystemDb (SUPERUSER bypass needed for
-    // cross-tenant cascades in the erasure path). BYPASSRLS is required here.
+    // Step 2: partial erasure — anonymise the user PII row now (real mitigation).
+    // The full hard-delete cascade is implemented under OXA-1721:
+    //   User scope: hard-delete conversations, messages, api_keys,
+    //     generated_assets, audit rows; remove org memberships.
+    //   Org scope: all of the above per member + workspaces, plugins, billing,
+    //     org row.
+    // All deletes must be scoped via withSystemDb (BYPASSRLS needed for the
+    // cross-tenant cascade in the erasure path).
     await step.run("execute-erasure", async () => {
-      logger.info({ requestId, userId, orgId, scope }, "privacy.erasure-execute: executing erasure (stub)");
+      logger.info({ requestId, userId, orgId, scope }, "privacy.erasure-execute: anonymising PII (partial — cascade pending OXA-1721)");
 
       if (scope === "user") {
-        // Stub: anonymise the user record. Full cascade pending data inventory.
         await withSystemDb(async (tx) => {
           await tx
             .update(schema.users)
@@ -86,25 +88,18 @@ export const privacyErasureExecute = inngest.createFunction(
             })
             .where(eq(schema.users.id, userId));
         });
-      } else {
-        // org scope: stub — full org cascade pending sign-off
-        logger.info({ requestId, orgId }, "privacy.erasure-execute: org erasure (stub — pending cascade implementation)");
       }
     });
 
-    // Step 3: mark completed
-    await step.run("mark-completed", async () => {
-      await withSystemDb((tx) =>
-        tx
-          .update(schema.privacyErasureRequests)
-          .set({ status: "completed", completedAt: new Date(), updatedAt: new Date() })
-          .where(eq(schema.privacyErasureRequests.id, requestId)),
-      );
-    });
-
-    logger.info({ requestId, userId, orgId, scope }, "privacy.erasure-execute completed");
-
-    return { requestId, status: "completed" };
+    // Step 3: FAIL LOUD. The cascade is not implemented (OXA-1721). We refuse to
+    // mark the request `completed` while personal data still remains, so a data
+    // subject is never falsely told their data was erased. Throwing a
+    // NonRetriableError routes to the on-failure handler, which marks the
+    // request `failed` with this message for operator follow-up.
+    throw new NonRetriableError(
+      "[privacy.erasure-execute] full hard-delete cascade not implemented (OXA-1721); " +
+        `refusing to mark erasure request ${requestId} (scope=${scope}) as completed`,
+    );
   },
 );
 
