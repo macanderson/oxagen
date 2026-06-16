@@ -35,6 +35,8 @@ import { metadata as agentTaskBackgroundReadMetadata } from "./agent.task.backgr
 import { metadata as agentTaskBackgroundStartMetadata } from "./agent.task.background.start";
 import { metadata as agentSubagentAggregateMetadata } from "./agent.subagent.aggregate";
 import { metadata as agentSubagentDispatchMetadata } from "./agent.subagent.dispatch";
+import { metadata as agentSubagentFanoutGetMetadata } from "./agent.subagent.fanout.get";
+import { metadata as agentSubagentFanoutListMetadata } from "./agent.subagent.fanout.list";
 import { metadata as agentToolListMetadata } from "./agent.tool.list";
 import { metadata as agentDefinitionCreateMetadata } from "./agent.definition.create";
 import { metadata as agentDefinitionUpdateMetadata } from "./agent.definition.update";
@@ -183,6 +185,8 @@ const allToolMetadata = [
   agentTaskBackgroundStartMetadata,
   agentSubagentAggregateMetadata,
   agentSubagentDispatchMetadata,
+  agentSubagentFanoutGetMetadata,
+  agentSubagentFanoutListMetadata,
   agentToolListMetadata,
   agentDefinitionCreateMetadata,
   agentDefinitionUpdateMetadata,

@@ -54,7 +54,15 @@ export function buildEnvRefIndex(repoRoot: string): Map<string, Set<string>> {
   const index = new Map<string, Set<string>>();
   // -o: only matched text; --no-heading + --with-filename: `path:match` per line.
   // The pattern captures the env-var token; we re-extract it from the match text.
-  const pattern = String.raw`(?:process\.env|[^.\w]env)\.([A-Z][A-Z0-9_]{2,})|process\.env\[["']([A-Z][A-Z0-9_]{2,})["']\]`;
+  //
+  // Matches `process.env.FOO`, `process.env["FOO"]` / `process.env['FOO']`, and
+  // `env.FOO`. The accessor is a single `[.\[]` character class (dot or open
+  // bracket) followed by an optional quote, NOT a `\.…|…\[…` alternation: the
+  // Rust regex engine ripgrep uses drops the bracket branch of such an
+  // alternation when it shares the `process.env` prefix with the dot branch
+  // (leftmost-first semantics), so quoted/bracket references silently went
+  // unattributed. The character class sidesteps that entirely.
+  const pattern = String.raw`(?:process\.env|[^.\w]env)[.\[]["']?([A-Z][A-Z0-9_]{2,})`;
   let out = "";
   try {
     out = execFileSync(
