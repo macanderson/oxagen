@@ -1015,8 +1015,44 @@
       }
     },
     {
+      "name": "connection.pause",
+      "file": "connection.pause.ts",
+      "domain": "connection",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "connection.preview",
       "file": "connection.preview.ts",
+      "domain": "connection",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "connection.update",
+      "file": "connection.update.ts",
       "domain": "connection",
       "mode": "sync",
       "surfaces": [

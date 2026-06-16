@@ -69,7 +69,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [chat.message.execution](chat.message.execution.md) — Record an agent execution that originated from a chat message; atomically links execution to message for observability
 - [chat.message.send](chat.message.send.md) — Append a user message to a conversation and stream the assistant's response
 
-## Connection (8)
+## Connection (10)
 
 - [connection.create](connection.create.md) — Create a new data source connection for a workspace; credentials are encrypted before storage
 - [connection.delete](connection.delete.md) — Delete a data source connection with three modes: connection_only, data_only, or full deletion
@@ -78,7 +78,9 @@ contract-first design, IAM enforcement, and instrumentation.
 - [connection.mappings.get](connection.mappings.get.md) — Get the current entity type mappings for a data source connection
 - [connection.mappings.set](connection.mappings.set.md) — Save entity type mappings for a data source connection; activates connection and starts ingestion
 - [connection.mappings.suggest](connection.mappings.suggest.md) — Use an LLM to suggest entity type mappings based on previewed record types
+- [connection.pause](connection.pause.md) — Pause or resume syncing for a connection without tearing down the connection or its data
 - [connection.preview](connection.preview.md) — Preview sample records from a data source connection for the setup wizard
+- [connection.update](connection.update.md) — Rename a connection and/or adjust its delivery configuration (sync schedule/scope)
 
 ## Conversation (6)
 

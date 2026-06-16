@@ -355,6 +355,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () => (await import("./connection.delete")).connectionDeleteHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "connection.update",
+    async () => (await import("./connection.update")).connectionUpdateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "connection.pause",
+    async () => (await import("./connection.pause")).connectionPauseHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "connection.preview",
     async () => (await import("./connection.preview")).connectionPreviewHandler as CapabilityHandlerFn,
   );

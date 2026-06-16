@@ -7,6 +7,8 @@ import { connectionPreview } from "@oxagen/oxagen/contracts/connection.preview";
 import { connectionMappingsSuggest } from "@oxagen/oxagen/contracts/connection.mappings.suggest";
 import { connectionMappingsGet } from "@oxagen/oxagen/contracts/connection.mappings.get";
 import { connectionMappingsSet } from "@oxagen/oxagen/contracts/connection.mappings.set";
+import { connectionUpdate } from "@oxagen/oxagen/contracts/connection.update";
+import { connectionPause } from "@oxagen/oxagen/contracts/connection.pause";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
@@ -141,4 +143,22 @@ connectionRoute.post("/:id/resync", async (c) => {
   });
 
   return c.json({ queued: true });
+});
+
+// PATCH /connections/:id — rename / reconfigure a connection
+connectionRoute.patch("/:id", async (c) => {
+  const json = (await c.req.json()) as Record<string, unknown>;
+  const body = connectionUpdate.input.parse({ connectionId: c.req.param("id"), ...json });
+  const ctx = capabilityContext(c);
+  const out = await invoke(connectionUpdate.name, body, ctx, { surface: "api" });
+  return c.json(out);
+});
+
+// POST /connections/:id/pause — pause or resume syncing ({ paused: boolean })
+connectionRoute.post("/:id/pause", async (c) => {
+  const json = (await c.req.json()) as Record<string, unknown>;
+  const body = connectionPause.input.parse({ connectionId: c.req.param("id"), ...json });
+  const ctx = capabilityContext(c);
+  const out = await invoke(connectionPause.name, body, ctx, { surface: "api" });
+  return c.json(out);
 });
