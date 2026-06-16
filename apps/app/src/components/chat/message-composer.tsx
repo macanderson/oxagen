@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Brain, ImageIcon, Send, Video, X } from "lucide-react";
+import { Brain, ImageIcon, Send, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -23,6 +23,7 @@ import {
 } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import { McpServerPicker } from "./mcp-server-picker";
+import { MessageQueue } from "./message-queue";
 
 export interface ComposerAction {
   (formData: FormData): Promise<{
@@ -41,10 +42,19 @@ export interface ComposerAction {
 
 /** A queued message waiting to be sent once the current stream completes. */
 interface QueuedMessage {
+  /** Stable identity for the React key + edit/remove/reorder/send-now ops. */
+  id: string;
   /** The text content typed by the user while a stream was in flight. */
   content: string;
   /** The model state at the time the user hit submit. */
   modelState: ComposerModelState;
+}
+
+/** Monotonic counter for queued-message ids (stable, collision-free per mount). */
+let queueIdCounter = 0;
+function nextQueueId(): string {
+  queueIdCounter += 1;
+  return `q-${queueIdCounter}`;
 }
 
 export function MessageComposer({
@@ -208,7 +218,7 @@ export function MessageComposer({
         // queue mode: capture the message and model state; clear the textarea.
         const snapshot = model;
         const content = contentRaw;
-        setQueue((prev) => [...prev, { content, modelState: snapshot }]);
+        setQueue((prev) => [...prev, { id: nextQueueId(), content, modelState: snapshot }]);
         (formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null)?.dispatchEvent(new Event("input"));
         // Reset the native textarea value directly so the placeholder reappears.
         const ta = formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null;
@@ -222,21 +232,16 @@ export function MessageComposer({
     dispatch(fd);
   };
 
-  // When streaming ends, drain the FIFO queue one message at a time.
-  const prevIsStreamingRef = React.useRef(isStreaming);
-  React.useEffect(() => {
-    const wasStreaming = prevIsStreamingRef.current;
-    prevIsStreamingRef.current = isStreaming;
-
-    if (wasStreaming && !isStreaming && queue.length > 0) {
-      const [next, ...rest] = queue;
-      setQueue(rest);
-      if (!next) return;
-      // Build a synthetic FormData for the queued message.
-      // Read parentMessageId and conversationId from refs so we get the
-      // current values (updated after the completed stream persisted the
-      // assistant reply and advanced activeLeafMessageId), not the stale
-      // closure captured when isStreaming last changed.
+  /**
+   * Build a synthetic FormData for a queued message and dispatch it.
+   *
+   * Read parentMessageId / conversationId / activeServerIds from refs so we get
+   * the CURRENT values (updated after the completed stream persisted the
+   * assistant reply and advanced activeLeafMessageId), not the stale closure
+   * captured when the message was enqueued.
+   */
+  const dispatchQueued = React.useCallback(
+    (next: QueuedMessage) => {
       const fd = new FormData();
       fd.set("content", next.content);
       const currentConversationId = conversationIdRef.current;
@@ -263,19 +268,86 @@ export function MessageComposer({
           fd.set("mediaTier", ms.mediaTier ?? "basic");
         }
       }
-      // Encode active server IDs using the ref to capture the current value
-      // at drain time — the effect closure captures stale state otherwise.
       const currentActiveServerIds = activeServerIdsRef.current;
       if (currentActiveServerIds.size > 0) {
         fd.set("activeServerIds", JSON.stringify([...currentActiveServerIds]));
       }
-      // Defer the dispatch out of the effect body to satisfy the
-      // react-hooks/set-state-in-effect rule — the queue drain should not
-      // cascade synchronously within the effect.
+      // Defer the dispatch out of the caller (effect / event handler) so the
+      // queue-drain doesn't cascade synchronously within a React effect
+      // (satisfies react-hooks/set-state-in-effect) and so send-now doesn't
+      // start a transition inside an unrelated render.
       setTimeout(() => dispatch(fd), 0);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- *Ref values are stable refs; dispatch/modelConfig are stable enough across renders for the drain semantics
+    [modelConfig],
+  );
+
+  // When streaming ends, drain the queue head. Each drained message restarts
+  // the stream (isStreaming → true), so this effect re-fires when THAT turn
+  // finishes and drains the next item — sequentially emptying the whole queue.
+  const prevIsStreamingRef = React.useRef(isStreaming);
+  React.useEffect(() => {
+    const wasStreaming = prevIsStreamingRef.current;
+    prevIsStreamingRef.current = isStreaming;
+
+    if (wasStreaming && !isStreaming && queue.length > 0) {
+      const [next, ...rest] = queue;
+      setQueue(rest);
+      if (!next) return;
+      dispatchQueued(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStreaming]);
+
+  /** Remove a queued message by id. */
+  const removeQueued = React.useCallback((id: string) => {
+    setQueue((prev) => prev.filter((q) => q.id !== id));
+  }, []);
+
+  /** Replace a queued message's content (inline edit). */
+  const editQueued = React.useCallback((id: string, content: string) => {
+    setQueue((prev) => prev.map((q) => (q.id === id ? { ...q, content } : q)));
+  }, []);
+
+  /** Move a queued message up or down one slot (clamped at the ends). */
+  const reorderQueued = React.useCallback((index: number, direction: "up" | "down") => {
+    setQueue((prev) => {
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(index, 1);
+      if (!moved) return prev;
+      next.splice(target, 0, moved);
+      return next;
+    });
+  }, []);
+
+  /**
+   * Send a queued message now: jump it to the front of the queue. When no
+   * stream is in flight, dispatch it immediately (the user wants it gone now);
+   * otherwise it will drain first when the active turn completes.
+   */
+  const sendQueuedNow = React.useCallback(
+    (id: string) => {
+      if (!isStreaming) {
+        // No stream in flight: drain this item right away and drop it from the
+        // queue. Read the target from current state (not inside the updater) so
+        // the dispatch is independent of when React commits the state change.
+        const target = queue.find((q) => q.id === id);
+        if (!target) return;
+        setQueue((prev) => prev.filter((q) => q.id !== id));
+        dispatchQueued(target);
+        return;
+      }
+      // Stream in flight: promote to the front so it drains first.
+      setQueue((prev) => {
+        const item = prev.find((q) => q.id === id);
+        if (!item) return prev;
+        return [item, ...prev.filter((q) => q.id !== id)];
+      });
+    },
+    [isStreaming, dispatchQueued, queue],
+  );
 
   /**
    * IME-safe keyboard handler.
@@ -332,29 +404,16 @@ export function MessageComposer({
         onKeyDown={onKeyDown}
         className="border-none bg-transparent shadow-none focus-visible:ring-0"
       />
-      {/* Queued message chips (queue mode) */}
-      {queue.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5 px-1">
-          {queue.map((item, idx) => (
-            <span
-              key={idx}
-              className="inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground"
-            >
-              <span className="truncate">{item.content}</span>
-              <button
-                type="button"
-                aria-label="Remove queued message"
-                onClick={() =>
-                  setQueue((prev) => prev.filter((_, i) => i !== idx))
-                }
-                className="ml-0.5 shrink-0 rounded-full p-0.5 hover:bg-muted"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      ) : null}
+      {/* Queued messages (queue mode): ordered list with reorder / edit /
+          remove / send-now controls. */}
+      <MessageQueue
+        items={queue.map((q) => ({ id: q.id, content: q.content }))}
+        isStreaming={isStreaming}
+        onRemove={removeQueued}
+        onReorder={reorderQueued}
+        onEdit={editQueued}
+        onSendNow={sendQueuedNow}
+      />
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
       {disabled && disabledReason ? (
         <p className="text-xs text-muted-foreground">{disabledReason}</p>

@@ -766,7 +766,7 @@ describe("MessageComposer — queue mode", () => {
     await userEvent.type(screen.getByRole("textbox"), "to remove");
     await userEvent.click(screen.getByRole("button", { name: "Queue message" }));
     expect(screen.getByText("to remove")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Remove queued message" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove queued message 1" }));
     expect(screen.queryByText("to remove")).not.toBeInTheDocument();
   });
 });
@@ -1547,5 +1547,170 @@ describe("MessageComposer — queue drain: effort in drained message", () => {
     // Drain path: supportsReasoning=true && ms.effort="high" → fd.set("effort", "high") (lines 254-255)
     expect(fd.get("effort")).toBe("high");
     mockSupportsReasoning.mockReturnValue(false);
+  });
+});
+
+// ── queue management: reorder / edit / send-now / multi-drain ───────────────────
+
+describe("MessageComposer — queue management", () => {
+  async function queueTwo() {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    const utils = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        isStreaming
+        pendingPromptBehavior="queue"
+      />,
+    );
+    const ta = screen.getByRole("textbox");
+    await userEvent.type(ta, "alpha");
+    await userEvent.click(screen.getByRole("button", { name: "Queue message" }));
+    await userEvent.type(ta, "beta");
+    await userEvent.click(screen.getByRole("button", { name: "Queue message" }));
+    return { action, ...utils };
+  }
+
+  it("renders queued messages as an ordered list", async () => {
+    await queueTwo();
+    expect(screen.getByText("alpha")).toBeInTheDocument();
+    expect(screen.getByText("beta")).toBeInTheDocument();
+    expect(screen.getByText("2 messages queued")).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("reorders: moving the second item up swaps the order", async () => {
+    await queueTwo();
+    // Before: [alpha, beta] → item 1 = alpha, item 2 = beta.
+    await userEvent.click(screen.getByRole("button", { name: "Move queued message 2 up" }));
+    // After: [beta, alpha] → item 1 button label now references beta.
+    expect(
+      screen.getByRole("button", { name: /Edit queued message 1: beta/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Edit queued message 2: alpha/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("reorders: moving the first item down swaps the order", async () => {
+    await queueTwo();
+    await userEvent.click(screen.getByRole("button", { name: "Move queued message 1 down" }));
+    expect(
+      screen.getByRole("button", { name: /Edit queued message 1: beta/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("edits a queued message's content inline", async () => {
+    await queueTwo();
+    await userEvent.click(screen.getByRole("button", { name: "Edit queued message 1" }));
+    const editor = screen.getByRole("textbox", { name: "Edit queued message 1" });
+    await userEvent.clear(editor);
+    await userEvent.type(editor, "alpha-edited");
+    fireEvent.keyDown(editor, { key: "Enter" });
+    expect(screen.getByText("alpha-edited")).toBeInTheDocument();
+    expect(screen.queryByText("alpha")).not.toBeInTheDocument();
+  });
+
+  it("send-now while streaming promotes the item to the front of the queue", async () => {
+    await queueTwo();
+    // Send-now on item 2 (beta) → it jumps to position 1.
+    await userEvent.click(screen.getByRole("button", { name: "Send queued message 2 now" }));
+    expect(
+      screen.getByRole("button", { name: /Edit queued message 1: beta/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Edit queued message 2: alpha/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("send-now while NOT streaming dispatches the item immediately", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    const { rerender } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        isStreaming
+        pendingPromptBehavior="queue"
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "alpha");
+    await userEvent.click(screen.getByRole("button", { name: "Queue message" }));
+    await userEvent.type(screen.getByRole("textbox"), "beta");
+    await userEvent.click(screen.getByRole("button", { name: "Queue message" }));
+
+    // Stream ends; the head (alpha) drains automatically. Re-render with the
+    // post-drain streaming=true (drain restarts the stream).
+    rerender(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        isStreaming={false}
+        pendingPromptBehavior="queue"
+      />,
+    );
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    expect((action.mock.calls[0][0] as FormData).get("content")).toBe("alpha");
+
+    // beta remains queued; send it now (not streaming) → dispatches immediately.
+    await userEvent.click(screen.getByRole("button", { name: "Send queued message 1 now" }));
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(2));
+    expect((action.mock.calls[1][0] as FormData).get("content")).toBe("beta");
+  });
+
+  it("drains the FULL queue sequentially across stream toggles", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    const baseProps = {
+      conversationId: null,
+      parentMessageId: null,
+      action,
+      modelConfig: DEFAULT_MODEL_CONFIG,
+      pendingPromptBehavior: "queue" as const,
+    };
+    const { rerender } = render(<MessageComposer {...baseProps} isStreaming />);
+    const ta = screen.getByRole("textbox");
+    await userEvent.type(ta, "one");
+    await userEvent.click(screen.getByRole("button", { name: "Queue message" }));
+    await userEvent.type(ta, "two");
+    await userEvent.click(screen.getByRole("button", { name: "Queue message" }));
+
+    // Turn 1 ends → drains "one".
+    rerender(<MessageComposer {...baseProps} isStreaming={false} />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    expect((action.mock.calls[0][0] as FormData).get("content")).toBe("one");
+
+    // Drain restarted the stream → simulate isStreaming true then false again.
+    rerender(<MessageComposer {...baseProps} isStreaming />);
+    rerender(<MessageComposer {...baseProps} isStreaming={false} />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(2));
+    expect((action.mock.calls[1][0] as FormData).get("content")).toBe("two");
+  });
+
+  it("does not render the queue panel when the queue is empty", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        isStreaming
+        pendingPromptBehavior="queue"
+      />,
+    );
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
+    expect(screen.queryByText(/messages? queued/)).not.toBeInTheDocument();
   });
 });
