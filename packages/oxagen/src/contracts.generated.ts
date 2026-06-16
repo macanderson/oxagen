@@ -101,6 +101,8 @@ import "./contracts/org.member.invite.accept";
 import "./contracts/org.member.invite.decline";
 import "./contracts/org.member.remove";
 import "./contracts/org.member.role.change";
+import "./contracts/org.settings.read";
+import "./contracts/org.settings.write";
 import "./contracts/organization.create";
 import "./contracts/plugin.catalog.browse";
 import "./contracts/plugin.catalog.get";

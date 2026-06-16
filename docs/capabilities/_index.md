@@ -143,13 +143,15 @@ contract-first design, IAM enforcement, and instrumentation.
 - [notifications.list](notifications.list.md) — List in-app notifications for the calling user with unread filtering and pagination
 - [notifications.mark](notifications.mark.md) — Mark a notification as read and/or archived for the calling user
 
-## Org (5)
+## Org (7)
 
 - [org.member.add](org.member.add.md) — Invite a user to join the org by email; enforces seat limits
 - [org.member.invite.accept](org.member.invite.accept.md) — Accept a pending org invitation; creates membership and provisions IAM
 - [org.member.invite.decline](org.member.invite.decline.md) — Decline a pending org invitation; frees the reserved license seat
 - [org.member.remove](org.member.remove.md) — Permanently remove a member from the org; irreversible action with last-owner block
 - [org.member.role.change](org.member.role.change.md) — Change a member's org role; blocks last-owner demotion
+- [org.settings.read](org.settings.read.md) — Read the org's profile settings: name, slug, avatar, website, industry, employee size, type
+- [org.settings.write](org.settings.write.md) — Update the org's profile settings (partial) through the kernel with IAM, metering, and audit
 
 ## Organization (1)
 
