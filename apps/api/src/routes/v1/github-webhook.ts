@@ -25,7 +25,7 @@ import { Hono } from "hono";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "../../event-client";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { requireEnv } from "@oxagen/config/env";
 import type { AppEnv } from "../../app";
@@ -197,7 +197,7 @@ githubAppWebhookRoute.post("/", async (c) => {
     }
   }
 
-  await inngest.send(events);
+  await eventClient.send(events);
 
   return c.json({ received: true, dispatched: events.length }, 200);
 });

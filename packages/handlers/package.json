@@ -23,6 +23,7 @@
     "@oxagen/ingestion": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/functions": "workspace:*",
     "@oxagen/inngest-functions": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",

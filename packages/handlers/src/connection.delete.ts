@@ -2,7 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { connectionDelete } from "@oxagen/oxagen/contracts/connection.delete";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "./event-client";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "./logger";
 
@@ -64,7 +64,7 @@ export const connectionDeleteHandler: CapabilityHandler<typeof connectionDelete>
   if (!job) throw new Error("connection.delete: failed to create deletion job");
 
   // Fire Inngest async deletion job
-  await inngest.send({
+  await eventClient.send({
     name: "ingestion/connection.delete",
     data: {
       connectionId: conn.id,
