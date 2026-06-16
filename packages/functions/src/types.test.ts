@@ -11,6 +11,7 @@ import type {
   DurableFunctionHandler,
   DurableFunction,
   EventClient,
+  CreateFunctionFactory,
 } from "./types";
 import { NonRetriableError } from "./types";
 
@@ -114,6 +115,40 @@ describe("@oxagen/functions type contracts", () => {
       expect(full.retries).toBe(1);
       expect(full.concurrency?.limit).toBe(10);
       expect(full.cancelOn?.[0]?.event).toBe("agent/workflow.cancel");
+    });
+
+    it("supports optional timeouts with finish duration", () => {
+      const config: DurableFunctionConfig = {
+        id: "agent.video-render",
+        timeouts: { finish: "16m" },
+      };
+      expectTypeOf(config.timeouts).toEqualTypeOf<{ finish?: string } | undefined>();
+      expect(config.timeouts?.finish).toBe("16m");
+    });
+
+    it("supports optional onFailure handler", () => {
+      const config: DurableFunctionConfig = {
+        id: "my-function",
+        onFailure: async ({ event, step }) => {
+          await step.run("handle-failure", async () => event.data);
+        },
+      };
+      expectTypeOf(config.onFailure).toEqualTypeOf<DurableFunctionHandler | undefined>();
+      expect(config.onFailure).toBeTypeOf("function");
+    });
+  });
+
+  describe("CreateFunctionFactory", () => {
+    it("is callable with config, trigger, and handler returning DurableFunction[]", () => {
+      const factory: CreateFunctionFactory = (_config, _trigger, _handler) => {
+        return [{ id: _config.id, config: _config, trigger: _trigger }];
+      };
+      expectTypeOf(factory).toBeCallableWith(
+        { id: "test" },
+        { event: "test/event" },
+        async () => undefined,
+      );
+      expectTypeOf(factory).returns.toEqualTypeOf<DurableFunction[]>();
     });
   });
 

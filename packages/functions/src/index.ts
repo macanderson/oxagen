@@ -17,6 +17,7 @@ export type {
   DurableFunctionHandler,
   DurableFunction,
   EventClient,
+  CreateFunctionFactory,
 } from "./types";
 
 export { NonRetriableError } from "./types";

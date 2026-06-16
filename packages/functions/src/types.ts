@@ -105,6 +105,10 @@ export interface DurableFunctionConfig {
   concurrency?: ConcurrencyConfig;
   /** Events that trigger automatic cancellation of in-flight runs. */
   cancelOn?: CancelOnConfig[];
+  /** Timeout configuration for the function run. */
+  timeouts?: { finish?: string };
+  /** Optional failure handler invoked when the function exhausts retries. */
+  onFailure?: DurableFunctionHandler;
 }
 
 // ─── Function Trigger ────────────────────────────────────────────────────────
@@ -164,6 +168,19 @@ export interface EventClient {
    */
   send(event: EventPayload | EventPayload[]): Promise<void>;
 }
+
+// ─── Factory Type ────────────────────────────────────────────────────────────
+
+/**
+ * Factory function signature for creating durable functions from abstract
+ * configuration. Provider adapters implement this to translate abstract
+ * definitions into provider-native function objects.
+ */
+export type CreateFunctionFactory = (
+  config: DurableFunctionConfig,
+  trigger: DurableFunctionTrigger,
+  handler: DurableFunctionHandler,
+) => DurableFunction[];
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
 

@@ -31,4 +31,5 @@ export function createEventClient(): EventClient {
 // ─── Re-exports ──────────────────────────────────────────────────────────────
 
 export { NonRetriableError };
+export { createFunction } from "./create-function";
 export type { EventClient } from "@oxagen/functions";
