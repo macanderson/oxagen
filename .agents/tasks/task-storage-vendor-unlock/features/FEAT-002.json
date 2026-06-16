@@ -1,0 +1,25 @@
+{
+  "id": "FEAT-002",
+  "type": "docs",
+  "description": "Create internal documentation at docs/guides/storage-provider-authoring.md explaining how to add a new blob storage provider. Should cover: the StorageAdapter interface contract, how to implement each method (get/put/delete), error handling (StorageNotFoundError), how to register the new driver in client.ts, how to add env vars for the new driver, and a minimal skeleton example (e.g. S3 or R2 outline). This fulfills the audit finding that STORAGE_DRIVER was documented but unwired.",
+  "status": "in_progress",
+  "steps": [
+    "Step 1: Create docs/guides/storage-provider-authoring.md with the following sections: (1) Overview - what the storage adapter layer does and why it exists, (2) The StorageAdapter interface - full contract with method signatures and semantics, (3) Step-by-step guide to adding a new provider - covering: create a new src/<driver-name>.ts file, implement StorageAdapter, handle errors with StorageNotFoundError, add env vars to @oxagen/config schema, register in client.ts resolveAdapter switch, (4) Provider skeleton - a commented code template showing the minimum viable adapter, (5) Testing - how to write tests following the vercel-blob.test.ts pattern with vi.mock, (6) Checklist before shipping a new provider.",
+    "Step 2: Reference the existing vercel-blob.ts as a concrete example throughout the doc. Link to relevant files.",
+    "Step 3: Verify the doc renders correctly as markdown (no broken links/formatting)."
+  ],
+  "acceptance_criteria": [
+    "docs/guides/storage-provider-authoring.md exists and is well-structured",
+    "Document covers the full StorageAdapter interface contract",
+    "Document includes a step-by-step guide for adding a new provider",
+    "Document includes a code skeleton/template for a new adapter",
+    "Document references the existing vercel-blob.ts as a working example",
+    "Document includes guidance on error handling, env var registration, and testing"
+  ],
+  "verification": [
+    "cat docs/guides/storage-provider-authoring.md | head -5 (confirm it exists)",
+    "pnpm --filter @oxagen/storage typecheck (ensure no regressions from FEAT-001)"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

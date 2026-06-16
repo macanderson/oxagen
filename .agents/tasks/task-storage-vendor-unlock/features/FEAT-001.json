@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "refactor",
   "description": "Make storage driver selection pluggable via STORAGE_DRIVER env var and refactor client.ts to support multiple providers. Move StorageNotFoundError to types.ts (shared across all drivers). Add STORAGE_DRIVER to the @oxagen/config env schema. Update client.ts to resolve the driver based on env config. The Vercel Blob adapter stays in the same package for now (no separate package needed since @vercel/blob is already isolated to one file and the interface is already clean). All existing consumers continue to work unchanged since the public API surface (@oxagen/storage exports) remains identical.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Step 1: Move StorageNotFoundError from src/vercel-blob.ts to src/errors.ts (new file). It is a shared error type that all drivers should throw, not specific to Vercel Blob. Update the re-export in src/index.ts to come from src/errors.ts. Update the import in src/vercel-blob.ts to import from ./errors.",
     "Step 2: Add STORAGE_DRIVER to the env schema in packages/config/src/env.ts as z.enum(['vercel-blob']).default('vercel-blob').optional() -- defaults to vercel-blob so existing deployments are unaffected. Add a comment explaining the driver selection pattern.",
@@ -26,5 +26,5 @@
     "pnpm --filter @oxagen/storage test:coverage"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 79 tests pass. Full monorepo typecheck passes (29 packages). Coverage thresholds met. Pre-commit hooks (lint + typecheck) pass. Environment required node>=24 and pnpm>=10, installed via mise. Also needed libatomic1 for pnpm binary on Amazon Linux 2023."
 }

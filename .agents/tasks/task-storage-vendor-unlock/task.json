@@ -1,0 +1,7 @@
+{
+  "task_id": "task-storage-vendor-unlock",
+  "task_description": "Remove vendor lock on Vercel Blob storage by making the storage driver pluggable via STORAGE_DRIVER env var. Move shared error types to a shared module, refactor client.ts to support multiple drivers, and ship internal docs on how to create a new blob storage provider.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}
