@@ -33,11 +33,9 @@ const MAX_BAR_ITEMS = 4;
 
 export interface MobileBottomBarProps {
   ctx: ScopeContext;
-  /**
-   * The authenticated user. May be undefined during a transient post-signup
-   * render; the account section is omitted in that case (UserSwitcher self-guards).
-   */
   user?: SessionUser;
+  /** Org subscription tier — gates enterprise-only nav items. */
+  planTier?: import("@oxagen/oxagen/types").PlanTier;
 }
 
 /** Shared tab styling for both the <Link> tabs and the "More" trigger. */
@@ -49,12 +47,12 @@ function tabClass(isActive: boolean): string {
   );
 }
 
-export function MobileBottomBar({ ctx, user }: MobileBottomBarProps) {
+export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
   const [moreOpen, setMoreOpen] = React.useState(false);
   const pathname = usePathname();
   const effectiveCtx = resolveSidebarCtx(pathname, ctx);
   const mode = resolveSidebarMode(pathname, ctx);
-  const config = getSidebarConfig(mode);
+  const config = getSidebarConfig(mode, planTier);
 
   const items = config.items;
   // Active detection runs over EVERY item (not just the visible four) so a deep

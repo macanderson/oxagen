@@ -76,22 +76,29 @@ describe("resolveSidebarMode", () => {
 // 2. getSidebarConfig — item counts per mode
 //
 // Spec (IA spec §4):
-//   workspace: 7 items (Ask, Knowledge, Automation, Activity, Studio, Marketplace, Settings)
+//   workspace: 6 items (Ask, Knowledge, Automation, Activity, Marketplace, Settings)
 //     — Agents is a tab of Automation; all run kinds live under Activity → Runs;
 //       "Workflows" is gone (folded into Activity → Runs; banned term, §19).
-//   org:       6 items (Workspaces, Members, Access, Security, Billing, Developer)
-//   account:   4 items (Back to app, Profile, Preferences, Security)
+//       Studio removed. Marketplace moved to footer.
+//   org:       7 items (Workspaces, Members, Access, Security, Billing, Developer, Settings)
+//   account:   5 items (Back to app, Profile, Preferences, Security, Privacy)
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 7 items", () => {
+  it("workspace config has exactly 6 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    expect(config.items).toHaveLength(7);
+    expect(config.items).toHaveLength(6);
   });
 
-  it("org config has exactly 7 items", () => {
+  it("org config has 6 items by default (access filtered for non-enterprise)", () => {
     const config = getSidebarConfig("org");
+    expect(config.mode).toBe("org");
+    expect(config.items).toHaveLength(6);
+  });
+
+  it("org config has 7 items for enterprise", () => {
+    const config = getSidebarConfig("org", "enterprise");
     expect(config.mode).toBe("org");
     expect(config.items).toHaveLength(7);
   });
@@ -109,37 +116,36 @@ describe("getSidebarConfig item counts", () => {
     expect(returnItems[0]?.id).toBe("back");
   });
 
-  it("workspace config has exactly two 'tools' group items (Studio, Marketplace)", () => {
+  it("workspace config has zero 'tools' group items (studio and workflows removed)", () => {
     const items = getSidebarConfig("workspace").items;
     const toolsItems = items.filter((item) => item.group === "tools");
-    expect(toolsItems).toHaveLength(2);
-    const ids = toolsItems.map((i) => i.id);
-    expect(ids).toContain("studio");
-    expect(ids).toContain("marketplace");
+    expect(toolsItems).toHaveLength(0);
   });
 
-  it("does NOT surface standalone Agents / Subagent Runs / Workflows items (IA spec §4/§19)", () => {
+  it("does NOT surface standalone Agents / Subagent Runs / Workflows / Studio items (IA spec §4/§19)", () => {
     const ids = getSidebarConfig("workspace").items.map((i) => i.id);
     expect(ids).not.toContain("agents");
     expect(ids).not.toContain("agent-runs");
     expect(ids).not.toContain("workflows");
+    expect(ids).not.toContain("studio");
     // The clean spec tree, in order.
     expect(ids).toEqual([
       "ask",
       "knowledge",
       "automation",
       "activity",
-      "studio",
       "marketplace",
       "settings",
     ]);
   });
 
-  it("workspace config has exactly one 'footer' group item (Settings)", () => {
+  it("workspace config has exactly two 'footer' group items (Marketplace, Settings)", () => {
     const items = getSidebarConfig("workspace").items;
     const footerItems = items.filter((item) => item.group === "footer");
-    expect(footerItems).toHaveLength(1);
-    expect(footerItems[0]?.id).toBe("settings");
+    expect(footerItems).toHaveLength(2);
+    const ids = footerItems.map((i) => i.id);
+    expect(ids).toContain("marketplace");
+    expect(ids).toContain("settings");
   });
 
   it("org config 'workspaces' item has external: true", () => {
@@ -181,10 +187,6 @@ describe("href builders produce correct paths", () => {
       expect(findItem("activity").href(wsCtx)).toBe("/acme/production/activity");
     });
 
-    it("studio -> /{org}/{ws}/studio", () => {
-      expect(findItem("studio").href(wsCtx)).toBe("/acme/production/studio");
-    });
-
     it("marketplace -> /{org}/settings/plugins (org-level, from ws ctx)", () => {
       expect(findItem("marketplace").href(wsCtx)).toBe("/acme/settings/plugins");
     });
@@ -195,7 +197,7 @@ describe("href builders produce correct paths", () => {
   });
 
   describe("org mode", () => {
-    const config = getSidebarConfig("org");
+    const config = getSidebarConfig("org", "enterprise");
     const findItem = (id: string) => config.items.find((i) => i.id === id)!;
 
     it("workspaces -> /{org}", () => {
@@ -206,7 +208,7 @@ describe("href builders produce correct paths", () => {
       expect(findItem("members").href(orgCtx)).toBe("/acme/members");
     });
 
-    it("access -> /{org}/access", () => {
+    it("access -> /{org}/access (enterprise only)", () => {
       expect(findItem("access").href(orgCtx)).toBe("/acme/access");
     });
 
@@ -259,7 +261,7 @@ describe("enumerateNavTargets", () => {
     expect(hrefs).toContain("/acme/production/ask");
     expect(hrefs).toContain("/acme/production/knowledge/sources");
     expect(hrefs).toContain("/acme/production/automation/triggers");
-    expect(hrefs).toContain("/acme/production/studio");
+    expect(hrefs).toContain("/acme/production/settings");
   });
 
   it("includes org paths regardless of workspaceSlug", () => {
@@ -410,7 +412,7 @@ describe("ORG_SCOPE_ROUTES", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. IA realignment — Agents under Automation, runs under Activity, no Workflows
+// 8. IA realignment — Agents under Automation, runs under Activity, no Workflows/Studio
 // ---------------------------------------------------------------------------
 
 describe("IA realignment (spec §4/§5/§19)", () => {
@@ -427,10 +429,12 @@ describe("IA realignment (spec §4/§5/§19)", () => {
     expect(hrefs).not.toContain("/acme/prod/agents/new");
   });
 
-  it("enumerateNavTargets has no Workflows destination", () => {
+  it("enumerateNavTargets has no Workflows or Studio destination", () => {
     const targets = enumerateNavTargets(ctx);
     expect(targets.find((t) => t.label === "Workflows")).toBeUndefined();
+    expect(targets.find((t) => t.label === "Studio")).toBeUndefined();
     expect(targets.map((t) => t.href)).not.toContain("/acme/prod/workflows");
+    expect(targets.map((t) => t.href)).not.toContain("/acme/prod/studio");
   });
 
   it("all workspace hrefs are unique", () => {

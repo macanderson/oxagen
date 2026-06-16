@@ -23,29 +23,29 @@ import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 export const metadata: Metadata = {
   title: "Oxagen",
   description: "The Oxagen agent platform",
-  manifest: "/manifest.json",
+  manifest: "/pwa/manifest.json",
   icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/icons/icon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/icons/icon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon/favicon.ico", sizes: "any" },
+      { url: "/favicon/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon/favicon-16.png", sizes: "16x16", type: "image/png" },
     ],
     apple: [
-      { url: "/icons/icon-180x180.png", sizes: "180x180", type: "image/png" },
+      { url: "/pwa/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
   },
   openGraph: {
     title: "Oxagen",
     description: "The Oxagen agent platform",
-    images: [{ url: "/og/og-default.png", width: 1200, height: 630, alt: "Oxagen" }],
+    images: [{ url: "/social/og-image-dark-1200x630.png", width: 1200, height: 630, alt: "Oxagen — governed context infrastructure for enterprise agents" }],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: "Oxagen",
     description: "The Oxagen agent platform",
-    images: ["/og/og-default.png"],
+    images: ["/social/og-image-dark-1200x630.png"],
   },
 };
 
@@ -56,8 +56,8 @@ export const viewport: Viewport = {
   // clean white on light. (Manifest theme_color is a single value for the
   // standalone PWA toolbar — kept on the deep-space ink.)
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0b0a11" },
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B0D16" },
+    { media: "(prefers-color-scheme: light)", color: "#FAF7F2" },
   ],
 };
 

@@ -75,20 +75,20 @@ describe("MobileBottomBar — primary tabs", () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "Studio" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Marketplace" })).toBeNull();
   });
 });
 
 describe("MobileBottomBar — More sheet", () => {
-  it("opens the bottom sheet exposing the overflow destinations", async () => {
+  it("opens the bottom sheet exposing the overflow destinations (Marketplace, Settings)", async () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     await userEvent.click(screen.getByRole("button", { name: /more navigation/i }));
     await waitFor(
       () => expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument(),
       { timeout: 2000 },
     );
-    expect(screen.getByRole("link", { name: "Studio" })).toHaveAttribute("href", "/acme/prod/studio");
     expect(screen.getByRole("link", { name: "Marketplace" })).toHaveAttribute("href", "/acme/settings/plugins");
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/acme/prod/settings");
   });
 
   it("surfaces the account control in the More sheet when a user is provided", async () => {

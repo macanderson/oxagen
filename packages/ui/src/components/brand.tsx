@@ -1,39 +1,39 @@
 /**
- * Oxagen brand marks — jewel-tone identity.
+ * Oxagen brand marks — ember brain identity.
  *
- * LOGOMARK: a thick circle ("O") stroked in the nebula gradient
- * (cyan → violet → cosmos). WORDMARK: "Oxagen" in Aeonik Fono — the ONLY place
- * the display face is used (everything else is Aeonik sans per the type rule).
+ * LOGOMARK: the editorial brain mark with the ember gradient (gold → flame →
+ * crimson). The gradient is canonical and holds in both light and dark modes —
+ * never recolor the mark. WORDMARK: "Oxagen" set in Space Grotesk (weight ~540).
+ * The wordmark ink flips between modes (--ox-ink).
  *
- *   <OxagenLogomark className="size-7" />        // the gradient ring
- *   <OxagenWordmark className="text-xl" />       // "Oxagen" in Aeonik Fono
- *   <BrandMark />                                // ring at the app-chrome size
- *   <OxagenLockup />                             // ring + wordmark, side by side
+ *   <OxagenLogomark className="size-7" />        // the ember brain mark
+ *   <OxagenWordmark className="text-xl" />       // "Oxagen" wordmark text
+ *   <BrandMark />                                // brain at the app-chrome size
+ *   <OxagenLockup />                             // brain + wordmark, side by side
  *   <OxagenLogo variant="vertical" size={48} />  // full lockup API
  *   <NodeChip kind="document" id="doc_41be09" /> // typed knowledge-graph node
  *   <ConfidenceBar score={0.82} />               // edge-inference confidence
  *
  * All marks are pure presentational (no hooks) so they render in Server
- * Components. The ring shares a single fixed gradient id — every instance paints
- * the identical nebula gradient, so a shared def is safe and avoids forcing a
- * client boundary with useId().
+ * Components. The brain uses a single fixed gradient id — every instance paints
+ * the identical ember gradient, so a shared def is safe.
  */
 
 import type { CSSProperties } from "react";
 import { cn } from "../lib/utils";
 
-const NEBULA_ID = "oxagenNebula";
+const EMBER_ID = "oxagenEmber";
 
 export type LogoTone = "gradient" | "mono-light" | "mono-dark" | "solid";
 
 function monoColor(tone: LogoTone): string | null {
-  if (tone === "mono-light") return "#f4f6fb";
-  if (tone === "mono-dark") return "#0f0e15";
+  if (tone === "mono-light") return "#F5F4F2";
+  if (tone === "mono-dark") return "#16181D";
   if (tone === "solid") return "currentColor";
   return null; // gradient
 }
 
-/** The Oxagen logomark — a thick circle stroked in the nebula gradient. */
+/** The Oxagen logomark — the ember brain mark. */
 export function OxagenLogomark({
   className,
   tone = "gradient",
@@ -44,11 +44,12 @@ export function OxagenLogomark({
   style?: CSSProperties;
 }) {
   const mono = monoColor(tone);
-  const stroke = mono ?? `url(#${NEBULA_ID})`;
+  const fill = mono ?? `url(#${EMBER_ID})`;
+  const stroke = mono ?? `url(#${EMBER_ID})`;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 100 100"
+      viewBox="0 0 48 48"
       fill="none"
       role="img"
       aria-label="Oxagen logomark"
@@ -57,19 +58,36 @@ export function OxagenLogomark({
     >
       {!mono && (
         <defs>
-          <linearGradient id={NEBULA_ID} x1="10" y1="10" x2="90" y2="90" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#7ce8f4" />
-            <stop offset="0.52" stopColor="#7c5aed" />
-            <stop offset="1" stopColor="#df2a5d" />
+          <linearGradient id={EMBER_ID} x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#F9D423" />
+            <stop offset=".5" stopColor="#FF7E5F" />
+            <stop offset="1" stopColor="#C2185B" />
           </linearGradient>
         </defs>
       )}
-      <circle cx="50" cy="50" r="37" stroke={stroke} strokeWidth="13" />
+      {/* Left lobe fill */}
+      <path d="M24 8c-4 0-7 2-8 5-3 0-5 2-5 5 0 2 1 3 2 4-1 1-2 3-2 5 0 3 3 6 6 6 1 2 3 3 5 3z" fill={fill} opacity=".16" />
+      {/* Right lobe fill */}
+      <path d="M24 8c4 0 7 2 8 5 3 0 5 2 5 5 0 2-1 3-2 4 1 1 2 3 2 5 0 3-3 6-6 6-1 2-3 3-5 3z" fill={fill} opacity=".28" />
+      {/* Brain outline strokes */}
+      <g fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M24 8c-4 0-7 2-8 5-3 0-5 2-5 5 0 2 1 3 2 4-1 1-2 3-2 5 0 3 3 6 6 6 1 2 3 3 5 3" />
+        <path d="M24 8c4 0 7 2 8 5 3 0 5 2 5 5 0 2-1 3-2 4 1 1 2 3 2 5 0 3-3 6-6 6-1 2-3 3-5 3" />
+        <path d="M24 8v32" />
+      </g>
+      {/* Synapse edges */}
+      <g fill="none" stroke={stroke} strokeWidth="1.3" opacity=".7">
+        <path d="M17 18l7-2" /><path d="M31 15l-7 1" /><path d="M33 29l-9-5" /><path d="M16 31l8-7" />
+      </g>
+      {/* Synapse nodes */}
+      <g fill={fill}>
+        <circle cx="17" cy="18" r="2" /><circle cx="31" cy="15" r="2" /><circle cx="33" cy="29" r="2" /><circle cx="16" cy="31" r="2" />
+      </g>
     </svg>
   );
 }
 
-/** The Oxagen wordmark — "Oxagen" set in Aeonik Fono (the only Fono usage). */
+/** The Oxagen wordmark — "Oxagen" text. Ink flips with theme. */
 export function OxagenWordmark({
   className,
   tone = "gradient",
@@ -91,12 +109,12 @@ export function OxagenWordmark({
   );
 }
 
-/** Brand mark — the gradient ring at the app-chrome size. */
+/** Brand mark — the ember brain at the app-chrome size. */
 export function BrandMark({ className }: { className?: string }) {
   return <OxagenLogomark className={cn("size-7 shrink-0", className)} />;
 }
 
-/** Brand lockup: ring + wordmark, side by side. Wordmark hides on mobile. */
+/** Brand lockup: brain + wordmark, side by side. Wordmark hides on mobile. */
 export function OxagenLockup({ className }: { className?: string }) {
   return (
     <span className={cn("flex items-center gap-2", className)}>
@@ -123,7 +141,6 @@ export function OxagenLogo({
   size?: number;
   className?: string;
 }) {
-  // size the ring/wordmark via inline style so callers can pass any px size.
   const ringStyle: CSSProperties = { width: size, height: size };
 
   if (variant === "mark") {
@@ -138,7 +155,6 @@ export function OxagenLogo({
       <OxagenWordmark
         tone={tone}
         className={cn("text-foreground", className)}
-        // wordmark cap-height ~= ring height
       />
     );
   }

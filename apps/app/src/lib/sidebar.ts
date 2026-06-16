@@ -8,6 +8,7 @@
  * IA content from:  docs/architecture/information-architecture/spec.md §4, §7
  */
 
+import type { PlanTier } from "@oxagen/oxagen/types";
 import {
   Activity,
   ArrowLeft,
@@ -22,7 +23,6 @@ import {
   ShieldCheck,
   ShoppingBag,
   SlidersHorizontal,
-  Sparkles,
   Terminal,
   User,
   Users,
@@ -81,7 +81,6 @@ export type SidebarConfig = {
 const workspaceConfig: SidebarConfig = {
   mode: "workspace",
   groupLabel: "Workspace",
-  toolsLabel: "Tools",
   items: [
     {
       id: "ask",
@@ -127,23 +126,13 @@ const workspaceConfig: SidebarConfig = {
       group: "primary",
     },
     {
-      id: "studio",
-      label: "Studio",
-      icon: Sparkles,
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.studio.root(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "tools",
-    },
-    {
       id: "marketplace",
       label: "Marketplace",
       icon: ShoppingBag,
       // The plugin marketplace lives at the org level (org settings → plugins);
       // it only needs orgSlug, so it resolves from a workspace context too.
       href: (ctx) => org.settings.plugins(ctx),
-      group: "tools",
+      group: "footer",
     },
     {
       id: "settings",
@@ -301,14 +290,18 @@ export const ORG_SCOPE_ROUTES = new Set([
 
 /**
  * Returns the sidebar config for the given mode.
- * The AppShell calls this after resolving the mode from the URL.
+ * Filters enterprise-only items (e.g. "access") for non-enterprise orgs.
  */
-export function getSidebarConfig(mode: SidebarMode): SidebarConfig {
+export function getSidebarConfig(mode: SidebarMode, planTier?: PlanTier): SidebarConfig {
+  const isEnterprise = planTier === "enterprise";
   switch (mode) {
     case "workspace":
       return workspaceConfig;
-    case "org":
-      return orgConfig;
+    case "org": {
+      return isEnterprise
+        ? orgConfig
+        : { ...orgConfig, items: orgConfig.items.filter((item) => item.id !== "access") };
+    }
     case "account":
       return accountConfig;
   }
@@ -415,7 +408,6 @@ export function enumerateNavTargets(
     targets.push({ label: "Knowledge", href: workspace.knowledge.root(wsCtx), parent: "knowledge" });
     targets.push({ label: "Automation", href: workspace.automation.root(wsCtx), parent: "automation" });
     targets.push({ label: "Activity", href: workspace.activity.root(wsCtx), parent: "activity" });
-    targets.push({ label: "Studio", href: workspace.studio.root(wsCtx), parent: "studio" });
     targets.push({ label: "Settings", href: workspace.settings.root(wsCtx), parent: "settings" });
 
     // Knowledge tabs
@@ -434,10 +426,6 @@ export function enumerateNavTargets(
     targets.push({ label: "Activity · Runs", href: workspace.activity.runs(wsCtx), parent: "activity" });
     targets.push({ label: "Activity · Approvals", href: workspace.activity.approvals(wsCtx), parent: "activity" });
     targets.push({ label: "Activity · Audit", href: workspace.activity.audit(wsCtx), parent: "activity" });
-
-    // Studio tabs
-    targets.push({ label: "Studio · Compose", href: workspace.studio.compose(wsCtx), parent: "studio" });
-    targets.push({ label: "Studio · Library", href: workspace.studio.library(wsCtx), parent: "studio" });
 
     // Settings tabs
     targets.push({ label: "Settings · General", href: workspace.settings.general(wsCtx), parent: "settings" });

@@ -176,6 +176,14 @@
     --glow-violet: 0 0 0 1px color-mix(in oklch, var(--violet-500) 35%, transparent), 0 1px 2px rgba(60, 31, 137, 0.12);
     --glow-cyan: 0 0 0 1px color-mix(in oklch, var(--cyan-600) 35%, transparent), 0 1px 2px rgba(13, 97, 117, 0.12);
 
+    /* Ember gradient tokens (brand mark — never recolor). */
+    --ox-ember-gold: #F9D423;
+    --ox-ember-flame: #FF7E5F;
+    --ox-ember-crimson: #C2185B;
+    --ox-ember-gradient: linear-gradient(135deg, #F9D423 0%, #FF7E5F 50%, #C2185B 100%);
+    --ox-navy: #0B0D16;
+    --ox-paper: #FAF7F2;
+
     /* Chart ramp — jewel scale (theme-independent). */
     --chart-1: var(--violet-500);
     --chart-2: var(--cyan-500);
@@ -244,6 +252,8 @@
 
     --accent2: var(--cyan-300);
     --accent2-foreground: #08080d;
+
+    --ox-ink: #F5F4F2;
 
     --mesh-opacity: 1;
 
