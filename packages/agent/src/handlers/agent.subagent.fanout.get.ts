@@ -35,9 +35,10 @@ function preview(v: unknown): string | null {
     : serialized;
 }
 
-// Load one fan-out plus its child runs. subagent_runs.fanout_id stores the
-// fan-out's public_id (see agent.subagent.dispatch handler), so we join on
-// publicId — not the internal uuid.
+// Load one fan-out plus its child runs. The caller passes the fan-out's
+// external public_id, so we resolve the fan-out by public_id but join the child
+// runs on the internal uuid — subagent_runs.fanout_id is a uuid FK to
+// subagent_fanouts.id (see agent.subagent.dispatch handler).
 export async function agentSubagentFanoutGetHandler(
   input: AgentSubagentFanoutGetInput,
   ctx: CapabilityContext,
@@ -45,6 +46,7 @@ export async function agentSubagentFanoutGetHandler(
   const fanout = await withTenantDb(async (tx) => {
     const [row] = await tx
       .select({
+        id: schema.subagentFanouts.id,
         publicId: schema.subagentFanouts.publicId,
         parentMessageId: schema.subagentFanouts.parentMessageId,
         status: schema.subagentFanouts.status,
@@ -82,7 +84,7 @@ export async function agentSubagentFanoutGetHandler(
       .from(schema.subagentRuns)
       .where(
         and(
-          eq(schema.subagentRuns.fanoutId, input.fanoutId),
+          eq(schema.subagentRuns.fanoutId, fanout.id),
           eq(schema.subagentRuns.orgId, ctx.orgId),
           eq(schema.subagentRuns.workspaceId, ctx.workspaceId),
         ),

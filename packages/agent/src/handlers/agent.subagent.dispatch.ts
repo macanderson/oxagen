@@ -1,4 +1,5 @@
 import { withTenantDb, schema } from "@oxagen/database";
+import { randomUUID } from "node:crypto";
 import { getInngestClient } from "../dispatch/inngest-client";
 import { getOxagenRegistry } from "../registry-loader";
 import type { CapabilityContext } from "../types";
@@ -53,6 +54,10 @@ export async function agentSubagentDispatchHandler(
       ? undefined
       : Math.min(input.timeoutSeconds, ceiling);
 
+  // Capture BOTH ids: the internal uuid `id` is the foreign key stored on
+  // subagent_runs.fanout_id (a uuid column) and the key the Inngest executor
+  // matches on; the `publicId` is the external handle returned to callers and
+  // accepted by agent.subagent.aggregate / agent.subagent.fanout.get.
   const [fanout] = await withTenantDb((tx) =>
     tx
       .insert(schema.subagentFanouts)
@@ -64,17 +69,24 @@ export async function agentSubagentDispatchHandler(
         totalChildren: tasks.length,
         completedChildren: 0,
       })
-      .returning({ publicId: schema.subagentFanouts.publicId }),
+      .returning({
+        id: schema.subagentFanouts.id,
+        publicId: schema.subagentFanouts.publicId,
+      }),
   );
   if (!fanout) throw new Error("subagent_fanouts insert failed");
 
+  // Single batch insert; never per-child loop (N+1 violation). fanout_id is the
+  // fan-out's uuid (FK to subagent_fanouts.id), and each child gets its OWN
+  // unique childMessageId — reusing parentMessageId across rows is wrong (the
+  // executor uses it as the per-child message/request id).
   await withTenantDb((tx) =>
     tx.insert(schema.subagentRuns).values(
       tasks.map((task) => ({
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
-        fanoutId: fanout.publicId,
-        childMessageId: parentMessageId,
+        fanoutId: fanout.id,
+        childMessageId: randomUUID(),
         capabilityName: task.capabilityName,
         inputPayload: (task.input ?? {}) as object,
         status: "pending" as const,
@@ -82,26 +94,18 @@ export async function agentSubagentDispatchHandler(
     ),
   );
 
-  const runRows = await withTenantDb((tx) =>
-    tx.query.subagentRuns.findMany({
-      where: (t, { eq }) => eq(t.fanoutId, fanout.publicId),
-      columns: { publicId: true, capabilityName: true, inputPayload: true },
-    }),
-  );
-
+  // The executor (agent.execute-subagent) reads `fanoutId` (the uuid) and loads
+  // the child runs from the DB itself, so we do not re-send them here. depth=1:
+  // children execute one level below this root dispatch (OXA-1498 depth guard).
   await getInngestClient().send({
     name: "agent/subagent.dispatch",
     data: {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
-      dispatchId: fanout.publicId,
+      fanoutId: fanout.id,
+      depth: 1,
       maxParallel,
       timeoutSeconds,
-      runs: runRows.map((r) => ({
-        runId: r.publicId,
-        capabilityName: r.capabilityName,
-        input: r.inputPayload,
-      })),
     },
   });
 
