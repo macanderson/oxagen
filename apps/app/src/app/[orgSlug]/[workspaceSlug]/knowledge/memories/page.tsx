@@ -91,10 +91,10 @@ const MOCK_MEMORIES: MockMemory[] = [
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const KIND_CONFIG: Record<MemoryKind, { label: string; className: string }> = {
-  rule: { label: "Rule", className: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" },
-  fact: { label: "Fact", className: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
-  lesson: { label: "Lesson", className: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" },
-  preference: { label: "Preference", className: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" },
+  rule: { label: "Rule", className: "bg-secondary text-secondary-foreground" },
+  fact: { label: "Fact", className: "bg-secondary text-secondary-foreground" },
+  lesson: { label: "Lesson", className: "bg-secondary text-secondary-foreground" },
+  preference: { label: "Preference", className: "bg-secondary text-secondary-foreground" },
 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -178,9 +178,9 @@ export default function KnowledgeMemoriesPage() {
       </div>
 
       {/* Agent-proposed note */}
-      <div className="flex items-start gap-2 rounded-lg border border-blue-200/60 bg-blue-50/60 px-4 py-3 dark:border-blue-900/40 dark:bg-blue-950/20">
-        <Lightbulb className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
-        <p className="text-xs text-blue-700 dark:text-blue-300">
+      <div className="flex items-start gap-2 rounded-lg border border-info/40 bg-info/12 px-4 py-3">
+        <Lightbulb className="mt-0.5 h-4 w-4 flex-shrink-0 text-info" aria-hidden="true" />
+        <p className="text-xs text-info">
           Agents can propose new memories during runs. Proposals appear here for review before
           they are pinned and applied. Unpinned agent lessons are used with a confidence weight.
         </p>

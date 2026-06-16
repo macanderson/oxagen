@@ -27,8 +27,8 @@ const EMBER_ID = "oxagenEmber";
 export type LogoTone = "gradient" | "mono-light" | "mono-dark" | "solid";
 
 function monoColor(tone: LogoTone): string | null {
-  if (tone === "mono-light") return "#F5F4F2";
-  if (tone === "mono-dark") return "#16181D";
+  if (tone === "mono-light") return "var(--ink-light)";
+  if (tone === "mono-dark") return "var(--ink-dark)";
   if (tone === "solid") return "currentColor";
   return null; // gradient
 }

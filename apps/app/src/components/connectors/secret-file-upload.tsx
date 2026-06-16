@@ -103,7 +103,7 @@ export function SecretFileUpload({
       {hasFile ? (
         /* Uploaded state */
         <div className="flex items-center gap-3 rounded-md border border-border/60 bg-muted/30 px-3 py-2.5">
-          <FileJson className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
+          <FileJson className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
           <span className="flex-1 truncate text-sm text-foreground">
             {fileName ?? "Uploaded file"}
           </span>

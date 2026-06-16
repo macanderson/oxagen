@@ -101,7 +101,7 @@ export function CodeExecuteCard({
         <TabsPanel value="stdout">
           <pre
             ref={stdoutRef}
-            className="max-h-64 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-emerald-200"
+            className="max-h-64 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-success"
           >
             {stdout ?? (status === "running" ? "Waiting for output…" : "")}
           </pre>
@@ -109,7 +109,7 @@ export function CodeExecuteCard({
         <TabsPanel value="stderr">
           <pre
             ref={stderrRef}
-            className="max-h-64 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-rose-300"
+            className="max-h-64 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-error"
           >
             {stderr ?? ""}
           </pre>

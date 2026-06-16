@@ -25,7 +25,7 @@ export function ThinkingBubble({ className }: ThinkingBubbleProps) {
       {([0, 1, 2] as const).map((i) => (
         <motion.span
           key={i}
-          className="block h-2 w-2 rounded-full bg-[#9b7bff]"
+          className="block h-2 w-2 rounded-full bg-info"
           animate={
             reducedMotion
               ? { opacity: 0.7 }

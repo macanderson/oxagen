@@ -97,11 +97,11 @@ const MOCK_TRIGGERS: MockTrigger[] = [
 
 const STATUS_CONFIG: Record<TriggerStatus, { badgeClass: string; label: string }> = {
   active: {
-    badgeClass: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+    badgeClass: "bg-success/12 text-success",
     label: "Active",
   },
   paused: {
-    badgeClass: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    badgeClass: "bg-warning/12 text-warning",
     label: "Paused",
   },
   draft: {

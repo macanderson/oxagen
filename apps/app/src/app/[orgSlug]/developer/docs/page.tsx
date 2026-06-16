@@ -38,10 +38,10 @@ const API_ENDPOINTS: ApiEndpointEntry[] = [
 ];
 
 const METHOD_COLORS: Record<ApiEndpointEntry["method"], string> = {
-  GET:    "text-green-600 dark:text-green-400",
-  POST:   "text-blue-600  dark:text-blue-400",
-  DELETE: "text-red-600   dark:text-red-400",
-  PATCH:  "text-amber-600 dark:text-amber-400",
+  GET:    "text-success",
+  POST:   "text-info",
+  DELETE: "text-error",
+  PATCH:  "text-warning",
 };
 
 interface DocSection {

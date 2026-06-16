@@ -13,15 +13,15 @@ import { cn } from "../lib/utils";
  *     eyebrow="Workspace"
  *     title="General settings"
  *     actions={<Button size="sm" variant="outline">Edit</Button>}
- *     footer={<Button variant="gradient">Save</Button>}
+ *     footer={<Button>Save</Button>}
  *   >
  *     …body…
  *   </Panel>
  *
- * Optional brand treatments (default off, mirroring `Card`):
+ * Optional treatments (default off, mirroring `Card`):
  * - `inset`        — removes body padding for flush content (tables).
- * - `glow`         — violet ambient glow (`ox-glow-violet`).
- * - `gradientRing` — hairline nebula ring instead of the neutral border.
+ * - `glow`         — retained for back-compat; flat UI renders no glow.
+ * - `gradientRing` — retained for back-compat; uses the neutral border.
  */
 export interface PanelProps
   extends Omit<React.HTMLAttributes<HTMLElement>, "title"> {
@@ -35,9 +35,9 @@ export interface PanelProps
   footer?: React.ReactNode;
   /** Remove body padding for flush content like tables. */
   inset?: boolean;
-  /** Add a violet ambient glow around the panel. */
+  /** Retained for back-compat; no ambient glow in the flat UI. */
   glow?: boolean;
-  /** Render a hairline nebula gradient ring as the border. */
+  /** Retained for back-compat; keeps the neutral border in the flat UI. */
   gradientRing?: boolean;
 }
 

@@ -43,7 +43,7 @@ const MenuPopup = React.forwardRef<
       <MenuPrimitive.Popup
         ref={ref}
         className={cn(
-          "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-white/[0.1] bg-popover/75 backdrop-blur-2xl p-1 text-popover-foreground shadow-2xl",
+          "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-menu-popup-border bg-menu-popup-bg p-1 text-menu-popup-fg",
           "origin-[var(--transform-origin)] transition-[opacity,transform] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
           className,
         )}
@@ -66,7 +66,7 @@ const MenuItem = React.forwardRef<
   <MenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors data-[highlighted]:bg-white/[0.1] data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+      "relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-menu-item-fg outline-none transition-colors data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[disabled]:pointer-events-none data-[disabled]:text-menu-item-disabled-fg [&_svg]:size-4 [&_svg]:shrink-0",
       inset && "pl-8",
       className,
     )}
@@ -82,7 +82,7 @@ const MenuCheckboxItem = React.forwardRef<
   <MenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm text-menu-item-fg outline-none transition-colors data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[disabled]:pointer-events-none data-[disabled]:text-menu-item-disabled-fg",
       className,
     )}
     {...props}
@@ -104,7 +104,7 @@ const MenuRadioItem = React.forwardRef<
   <MenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm text-menu-item-fg outline-none transition-colors data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[disabled]:pointer-events-none data-[disabled]:text-menu-item-disabled-fg",
       className,
     )}
     {...props}
@@ -135,7 +135,7 @@ const MenuGroupLabel = React.forwardRef<
   <div
     ref={ref}
     role="presentation"
-    className={cn("px-2 py-1.5 text-sm font-semibold", inset && "pl-8", className)}
+    className={cn("px-2 py-1.5 text-sm font-semibold text-menu-group-label-fg", inset && "pl-8", className)}
     {...props}
   />
 ));
@@ -145,7 +145,7 @@ const MenuSeparator = React.forwardRef<
   React.ComponentRef<typeof MenuPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof MenuPrimitive.Separator>
 >(({ className, ...props }, ref) => (
-  <MenuPrimitive.Separator ref={ref} className={cn("-mx-1 my-1 h-px bg-muted", className)} {...props} />
+  <MenuPrimitive.Separator ref={ref} className={cn("-mx-1 my-1 h-px bg-menu-separator", className)} {...props} />
 ));
 MenuSeparator.displayName = "MenuSeparator";
 
@@ -163,7 +163,7 @@ const MenuSubTrigger = React.forwardRef<
   <MenuPrimitive.SubmenuTrigger
     ref={ref}
     className={cn(
-      "flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[popup-open]:bg-accent",
+      "flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm text-menu-item-fg outline-none data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[popup-open]:bg-menu-item-highlighted-bg",
       inset && "pl-8",
       className,
     )}
@@ -184,7 +184,7 @@ const MenuSubPopup = React.forwardRef<
       <MenuPrimitive.Popup
         ref={ref}
         className={cn(
-          "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-white/[0.1] bg-popover/75 backdrop-blur-2xl p-1 text-popover-foreground shadow-2xl",
+          "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-menu-popup-border bg-menu-popup-bg p-1 text-menu-popup-fg",
           "origin-[var(--transform-origin)] transition-[opacity,transform] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
           className,
         )}

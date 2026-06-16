@@ -52,12 +52,12 @@ export function ApprovalCard({
 
   return (
     <div
-      className="rounded-xl border bg-card text-card-foreground shadow my-2 space-y-3 border-l-4 border-l-amber-500/70 p-4 animate-in"
+      className="rounded-xl border bg-card text-card-foreground shadow my-2 space-y-3 border-l-4 border-l-warning/40 p-4 animate-in"
       data-component="approval-card"
       data-approval-status={settled ? optimistic : expired ? "expired" : "pending"}
     >
       <div className="flex items-center gap-2">
-        <ShieldAlert className="h-4 w-4 text-amber-500" />
+        <ShieldAlert className="h-4 w-4 text-warning" />
         <span className="font-semibold">Approval required</span>
         <RiskBadge risk={riskLevel} />
         <Badge variant="outline" className="font-mono">

@@ -350,7 +350,7 @@ function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext }: Step
             <p className="text-xs font-medium text-muted-foreground">
               Select repositories
               {selectedInstallation?.repositorySelection === "all" && (
-                <span className="ml-1 text-[11px] text-blue-500">
+                <span className="ml-1 text-[11px] text-info">
                   (all repositories granted)
                 </span>
               )}
@@ -403,8 +403,8 @@ function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext }: Step
                         <span
                           className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
                             repo.private
-                              ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              ? "bg-warning/12 text-warning"
+                              : "bg-success/12 text-success"
                           }`}
                         >
                           {repo.private ? "Private" : "Public"}
@@ -609,8 +609,8 @@ function Step3Confirm({
 function SuccessState({ onClose }: { onClose: () => void }) {
   return (
     <div className="flex flex-col items-center gap-4 py-4 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-        <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success/12">
+        <CheckCircle2 className="h-6 w-6 text-success" aria-hidden="true" />
       </div>
       <div className="flex flex-col gap-1">
         <p className="text-sm font-semibold text-foreground">Sync started!</p>

@@ -129,7 +129,7 @@ export default function MakeVideoForm({
       >
         <div className="flex items-center gap-3">
           <CheckCircle2
-            className="h-5 w-5 shrink-0 text-emerald-500"
+            className="h-5 w-5 shrink-0 text-success"
             aria-hidden="true"
           />
           <div className="min-w-0">

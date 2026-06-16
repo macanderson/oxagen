@@ -2,7 +2,7 @@
   "name": "oxagen-monorepo",
   "version": "0.4.0",
   "private": true,
-  "packageManager": "pnpm@10.34.1",
+  "packageManager": "pnpm@11.7.0",
   "engines": {
     "node": ">=24",
     "pnpm": ">=10"
@@ -48,15 +48,18 @@
     "db:backfill-iam": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-org-iam.ts"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["lefthook"]
+    "onlyBuiltDependencies": [
+      "lefthook"
+    ]
   },
   "devDependencies": {
     "@changesets/cli": "2.31.0",
-    "lefthook": "latest",
     "@eslint/js": "9.39.4",
     "@types/node": "25.9.1",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.7",
+    "lefthook": "latest",
+    "playwright": "^1.61.0",
     "prettier": "3.8.3",
     "tsx": "4.22.3",
     "turbo": "2.9.18",

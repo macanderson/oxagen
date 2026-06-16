@@ -52,7 +52,7 @@ const MOCK_ROLES: MockRole[] = [
     description:
       "Full control over the organization. Can manage billing, members, security, and all settings.",
     icon: Crown,
-    iconColor: "text-amber-500",
+    iconColor: "text-foreground",
     isSystem: true,
     memberCount: 1,
     permissions: [
@@ -71,7 +71,7 @@ const MOCK_ROLES: MockRole[] = [
     description:
       "Can invite members, manage workspaces, and configure most org settings. Cannot access billing.",
     icon: ShieldCheck,
-    iconColor: "text-blue-500",
+    iconColor: "text-foreground",
     isSystem: true,
     memberCount: 2,
     permissions: [
@@ -90,7 +90,7 @@ const MOCK_ROLES: MockRole[] = [
     description:
       "Read and write access to billing, subscriptions, and usage. Cannot manage members or security.",
     icon: CreditCard,
-    iconColor: "text-green-500",
+    iconColor: "text-foreground",
     isSystem: true,
     memberCount: 1,
     permissions: [
@@ -109,7 +109,7 @@ const MOCK_ROLES: MockRole[] = [
     description:
       "Standard access. Can use agents and contribute to workspaces they belong to.",
     icon: Users,
-    iconColor: "text-violet-500",
+    iconColor: "text-foreground",
     isSystem: true,
     memberCount: 4,
     permissions: [
@@ -151,9 +151,9 @@ function PermissionRow({ label, state }: RolePermission) {
     <div className="flex items-center justify-between gap-3 py-1 text-xs">
       <span className="text-muted-foreground">{label}</span>
       {state === "full" ? (
-        <Check className="h-3.5 w-3.5 shrink-0 text-green-500" aria-label="Full access" />
+        <Check className="h-3.5 w-3.5 shrink-0 text-success" aria-label="Full access" />
       ) : state === "limited" ? (
-        <Minus className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Limited access" />
+        <Minus className="h-3.5 w-3.5 shrink-0 text-warning" aria-label="Limited access" />
       ) : (
         <Minus className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" aria-label="No access" />
       )}

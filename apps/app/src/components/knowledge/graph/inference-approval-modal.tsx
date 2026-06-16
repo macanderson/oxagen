@@ -10,9 +10,9 @@ import type { SemanticEdge } from "@oxagen/oxagen/contracts/semantic.edge.list";
 const API_BASE = "/api";
 
 function confidenceLabel(score: number): { label: string; className: string } {
-  if (score >= 0.8) return { label: "High", className: "text-emerald-600 dark:text-emerald-400" };
-  if (score >= 0.6) return { label: "Medium", className: "text-amber-500 dark:text-amber-400" };
-  return { label: "Low", className: "text-red-500 dark:text-red-400" };
+  if (score >= 0.8) return { label: "High", className: "text-success" };
+  if (score >= 0.6) return { label: "Medium", className: "text-warning" };
+  return { label: "Low", className: "text-error" };
 }
 
 function formatISO(iso: string | null | undefined): string {
@@ -125,7 +125,7 @@ export function InferenceApprovalModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay-scrim p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -188,7 +188,7 @@ export function InferenceApprovalModal({
           </MetaRow>
 
           <MetaRow label="Approval status">
-            <span className={edge.approved ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-muted-foreground"}>
+            <span className={edge.approved ? "text-success font-semibold" : "text-muted-foreground"}>
               {edge.approved ? "Approved" : "Pending review"}
             </span>
           </MetaRow>
@@ -234,7 +234,7 @@ export function InferenceApprovalModal({
         {error && (
           <div
             role="alert"
-            className="mx-5 mb-4 rounded-md border border-red-500/40 bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-400"
+            className="mx-5 mb-4 rounded-md border border-error/40 bg-error/12 px-3 py-2 text-xs text-error"
           >
             {error}
           </div>
@@ -253,7 +253,7 @@ export function InferenceApprovalModal({
             </button>
             <button
               type="button"
-              className="flex items-center gap-1.5 rounded-md border border-red-500/40 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 dark:hover:bg-red-950/60 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-md border border-error/40 bg-error/12 px-3 py-1.5 text-xs font-semibold text-error hover:bg-error/20 transition-colors disabled:opacity-50"
               onClick={() => void handleDecision("reject")}
               disabled={processing}
             >

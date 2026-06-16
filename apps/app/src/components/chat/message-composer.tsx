@@ -507,10 +507,9 @@ export function MessageComposer({
             style={
               !pending && !disabled
                 ? {
-                    background: "var(--grad-sunset)",
-                    boxShadow: "var(--glow-violet)",
+                    background: "var(--primary)",
                     border: "none",
-                    color: "#ffffff",
+                    color: "var(--primary-foreground)",
                   }
                 : undefined
             }

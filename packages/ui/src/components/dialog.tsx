@@ -16,7 +16,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Backdrop
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/80 transition-opacity duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
+      "fixed inset-0 z-50 bg-overlay-scrim transition-opacity duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
       className,
     )}
     {...props}
@@ -42,8 +42,8 @@ const DialogPopup = React.forwardRef<
         // max-h + overflow-y-auto keep the popup within the viewport and let
         // over-tall content (e.g. the Stripe Payment Element) scroll internally
         // instead of clipping off the top and bottom edges.
-        "fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto border bg-background p-6 shadow-lg duration-[var(--motion-overlay)] sm:rounded-lg",
-        "transition-[opacity,transform] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98]",
+        "fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto border border-dialog-border bg-dialog-bg p-6 text-dialog-fg sm:rounded-lg",
+        "transition-[opacity,transform] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98]",
         className,
       )}
       {...props}

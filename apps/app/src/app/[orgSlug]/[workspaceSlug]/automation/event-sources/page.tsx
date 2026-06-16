@@ -91,7 +91,7 @@ const MOCK_EVENTS: MockEvent[] = [
 
 const STATUS_CONFIG: Record<EventStatus, { badgeClass: string; label: string }> = {
   active: {
-    badgeClass: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+    badgeClass: "bg-success/12 text-success",
     label: "Active",
   },
   paused: {

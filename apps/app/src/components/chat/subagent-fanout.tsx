@@ -124,6 +124,6 @@ function FanoutStatus({ status }: { status: SubagentStatus }) {
 
 function ChildStatusIcon({ status }: { status: SubagentStatus }) {
   if (status === "running") return <Loader2 className="h-3 w-3 animate-spin text-foreground" />;
-  if (status === "completed") return <Check className="h-3 w-3 text-emerald-500" />;
+  if (status === "completed") return <Check className="h-3 w-3 text-success" />;
   return <X className="h-3 w-3 text-destructive" />;
 }

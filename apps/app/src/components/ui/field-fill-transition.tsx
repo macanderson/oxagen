@@ -38,15 +38,15 @@ export function FieldFillTransition({
   return (
     <div
       data-fill-active={active ? "true" : undefined}
-      // Resting box-shadow lives in an inline style (raw CSS) so the brand
-      // color-mix() expression isn't run through Tailwind's arbitrary-value
-      // parser. While motion is allowed, the keyframe animation's `forwards`
-      // fill overrides this; for reduced-motion users this is the steady glow.
+      // Resting ring lives in an inline style (raw CSS) so the brand color-mix()
+      // expression isn't run through Tailwind's arbitrary-value parser. Flat
+      // re-skin: a solid brand RING (no blur/glow) — the keyframe below animates
+      // the ring; for reduced-motion users this is the steady ring.
       style={
         active
           ? {
               boxShadow:
-                "0 0 0 2px color-mix(in oklch, var(--brand) 40%, transparent), 0 0 16px 4px color-mix(in oklch, var(--brand) 15%, transparent)",
+                "0 0 0 2px color-mix(in oklch, var(--brand) 45%, transparent)",
             }
           : undefined
       }
@@ -86,9 +86,9 @@ export function FieldFillTransition({
       {active && (
         <style>{`
           @keyframes field-fill-glow {
-            0%   { box-shadow: 0 0 0 2px color-mix(in oklch, var(--brand) 0%, transparent), 0 0 0px 0px color-mix(in oklch, var(--brand) 0%, transparent); }
-            40%  { box-shadow: 0 0 0 3px color-mix(in oklch, var(--brand) 55%, transparent), 0 0 24px 8px color-mix(in oklch, var(--brand) 25%, transparent); }
-            100% { box-shadow: 0 0 0 2px color-mix(in oklch, var(--brand) 40%, transparent), 0 0 16px 4px color-mix(in oklch, var(--brand) 15%, transparent); }
+            0%   { box-shadow: 0 0 0 0px color-mix(in oklch, var(--brand) 0%, transparent); }
+            40%  { box-shadow: 0 0 0 4px color-mix(in oklch, var(--brand) 70%, transparent); }
+            100% { box-shadow: 0 0 0 2px color-mix(in oklch, var(--brand) 45%, transparent); }
           }
         `}</style>
       )}

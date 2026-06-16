@@ -160,18 +160,6 @@ export const baseEnvSchema = z.object({
   // `openssl rand -base64 32`.
   AUTH_TOKEN_ENCRYPTION_KEY: z.string().min(1).optional(),
 
-  // OXA-1498: IAM enforcement gate. Secure by default: enforcement is ON
-  // unless explicitly disabled. The kernel always resolves authz and emits
-  // the ClickHouse + Postgres audit events on every capability call.
-  // When true (default): denied invocations are blocked and a CapabilityError
-  // is thrown — fail-closed behaviour required for SOC2 CC6/CC7.
-  // Set IAM_ENFORCEMENT_ENABLED=false ONLY as a break-glass measure (e.g.
-  // during an incident where IAM tables are unavailable or roles are
-  // mis-seeded). Re-enable immediately after remediation.
-  IAM_ENFORCEMENT_ENABLED: z
-    .union([z.literal("true"), z.literal("false")])
-    .optional()
-    .transform((v) => v !== "false"),
 
   // OXA-1515: Row-Level Security enforcement gate. Default OFF during the
   // seeding window: withTenantDb always sets the scope GUCs, but additionally

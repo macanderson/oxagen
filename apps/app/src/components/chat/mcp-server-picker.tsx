@@ -12,9 +12,9 @@ function HealthDot({ status }: { status: McpServerSummary["healthStatus"] }) {
       aria-label={`Health: ${status}`}
       className={cn(
         "inline-block h-2 w-2 shrink-0 rounded-full",
-        status === "healthy" && "bg-green-500",
-        status === "degraded" && "bg-yellow-400",
-        status === "unreachable" && "bg-red-500",
+        status === "healthy" && "bg-success",
+        status === "degraded" && "bg-warning",
+        status === "unreachable" && "bg-error",
       )}
     />
   );

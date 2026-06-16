@@ -23,6 +23,8 @@ import type { SessionUser } from "./user-switcher";
 import { createWorkspaceAction } from "@/app/[orgSlug]/new-workspace/actions";
 import type { NewWorkspaceAction } from "@/components/workspace/new-workspace-form";
 
+import type { PlanTier } from "@oxagen/oxagen/types";
+
 export interface AppShellProps {
   org: ResolvedOrg;
   workspace?: ResolvedWorkspace;
@@ -32,6 +34,8 @@ export interface AppShellProps {
   user: SessionUser | undefined;
   /** Org credit balance for the always-visible header pill. Null hides it. */
   balance?: { cents: number; low: boolean } | null;
+  /** Org subscription tier — gates enterprise-only nav items (e.g. Access). */
+  planTier?: PlanTier;
   children: ReactNode;
 }
 
@@ -42,6 +46,7 @@ export function AppShell({
   availableWorkspaces,
   user,
   balance,
+  planTier,
   children,
 }: AppShellProps) {
   const ctx = { orgSlug: org.slug, workspaceSlug: workspace?.slug };
@@ -63,13 +68,14 @@ export function AppShell({
         availableWorkspaces={availableWorkspaces}
         user={user}
         balance={balance}
+        planTier={planTier}
         createWorkspaceAction={boundCreateWorkspace}
       >
         {children}
       </ShellFrame>
 
       {/* Mobile bottom tab bar — the sole mobile nav; hidden on desktop. */}
-      <MobileBottomBar ctx={ctx} user={user} />
+      <MobileBottomBar ctx={ctx} user={user} planTier={planTier} />
     </SidebarProvider>
   );
 }

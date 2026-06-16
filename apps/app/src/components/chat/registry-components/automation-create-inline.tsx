@@ -284,7 +284,7 @@ export default function AutomationCreateInline({
         data-testid="automation-created-state"
       >
         <div className="flex items-start gap-3">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500 mt-0.5" aria-hidden="true" />
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-success mt-0.5" aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-foreground">
               Created — disabled
@@ -352,7 +352,7 @@ export default function AutomationCreateInline({
       >
         <div className="flex items-center gap-3">
           <CheckCircle2
-            className="h-5 w-5 shrink-0 text-emerald-500"
+            className="h-5 w-5 shrink-0 text-success"
             aria-hidden="true"
           />
           <div className="min-w-0">

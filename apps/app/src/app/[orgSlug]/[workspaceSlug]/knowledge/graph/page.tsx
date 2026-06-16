@@ -90,7 +90,7 @@ export default async function KnowledgeGraphPage({ params }: PageProps) {
             Pending Inferences
           </h2>
           {pendingTotal > 0 && (
-            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+            <span className="inline-flex items-center rounded-full bg-warning/12 px-2 py-0.5 text-[10px] font-semibold text-warning">
               {pendingTotal}
             </span>
           )}
@@ -118,7 +118,7 @@ export default async function KnowledgeGraphPage({ params }: PageProps) {
             Approved Edges
           </h2>
           {approvedTotal > 0 && (
-            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+            <span className="inline-flex items-center rounded-full bg-success/12 px-2 py-0.5 text-[10px] font-semibold text-success">
               {approvedTotal}
             </span>
           )}

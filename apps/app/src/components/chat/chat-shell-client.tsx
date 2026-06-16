@@ -779,7 +779,7 @@ function StepMarker({
     >
       <span>Step {index + 1}</span>
       {status === "running" ? (
-        <span className="text-[#7182ff]">·  working</span>
+        <span className="text-info">·  working</span>
       ) : null}
     </div>
   );

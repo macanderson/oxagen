@@ -111,7 +111,7 @@ const FILE_ICON_COLORS: Record<string, string> = {
   video: "text-secondary-foreground",
   pdf: "text-destructive",
   document: "text-info",
-  spreadsheet: "text-[#3cff52]", // brand green token
+  spreadsheet: "text-success",
   presentation: "text-warning",
   archive: "text-warning",
 };
@@ -306,7 +306,7 @@ export function ConversationFiles({ conversationPublicId }: ConversationFilesPro
           ) : (
             groups.map((group) => (
               <section key={group.label} className="mb-2">
-                <header className="sticky top-0 bg-background/90 backdrop-blur-sm px-3 py-1.5">
+                <header className="sticky top-0 bg-background px-3 py-1.5">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     {group.label}
                   </p>

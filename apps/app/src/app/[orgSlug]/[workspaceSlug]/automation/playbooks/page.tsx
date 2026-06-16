@@ -99,7 +99,7 @@ const MOCK_PLAYBOOKS: MockPlaybook[] = [
 const STATUS_CONFIG: Record<PlaybookStatus, { icon: React.ElementType; badgeClass: string; label: string }> = {
   published: {
     icon: CheckCircle2,
-    badgeClass: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+    badgeClass: "bg-success/12 text-success",
     label: "Published",
   },
   draft: {
@@ -128,7 +128,7 @@ function PlaybookCard({ pb }: { pb: MockPlaybook }) {
               {status.label}
             </span>
             {pb.requiresApproval && (
-              <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 bg-amber-100 dark:bg-amber-950 dark:text-amber-300">
+              <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold text-warning bg-warning/12">
                 <ShieldCheck className="h-2.5 w-2.5" aria-hidden="true" />
                 Approval required
               </span>

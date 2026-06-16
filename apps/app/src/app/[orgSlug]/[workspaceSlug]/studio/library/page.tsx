@@ -38,9 +38,9 @@ const KIND_ICONS: Record<AssetKind, React.ElementType> = {
 };
 
 const KIND_STYLES: Record<AssetKind, string> = {
-  image:    "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-  video:    "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
-  document: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
+  image:    "bg-secondary text-secondary-foreground",
+  video:    "bg-secondary text-secondary-foreground",
+  document: "bg-secondary text-secondary-foreground",
 };
 
 function AssetCard({ asset }: { asset: MockAsset }) {

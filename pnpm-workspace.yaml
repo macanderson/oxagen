@@ -26,3 +26,16 @@ onlyBuiltDependencies:
 
 ignoredBuiltDependencies:
   - "@swc/core"
+
+allowBuilds:
+  '@swc/core': true
+  cpu-features: true
+  esbuild: true
+  lefthook: true
+  protobufjs: true
+  sharp: true
+  ssh2: true
+  tree-sitter-javascript: true
+  tree-sitter-python: true
+  tree-sitter-typescript: true
+  unrs-resolver: true

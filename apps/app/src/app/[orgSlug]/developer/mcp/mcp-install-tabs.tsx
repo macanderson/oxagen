@@ -49,7 +49,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       className="flex-shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {copied ? (
-        <Check className="size-3.5 text-green-500" aria-hidden="true" />
+        <Check className="size-3.5 text-success" aria-hidden="true" />
       ) : (
         <Copy className="size-3.5" aria-hidden="true" />
       )}

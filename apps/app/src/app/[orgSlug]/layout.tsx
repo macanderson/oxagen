@@ -100,6 +100,8 @@ export default async function OrgLayout({
   // The ctx passed to the shell's Ask system has no workspaceSlug at this
   // layout level. The sidebar is a client component that reads usePathname()
   // and resolveSidebarMode to correctly detect workspace mode from the URL.
+  const currentOrg = orgRows.find((o) => o.slug === orgSlug);
+  const planTier = (currentOrg?.subscriptionTier ?? "free") as import("@oxagen/oxagen/types").PlanTier;
   const ctx = { orgSlug };
 
   return (
@@ -109,6 +111,7 @@ export default async function OrgLayout({
         availableOrgs={availableOrgs}
         availableWorkspaces={workspacesRows}
         user={user}
+        planTier={planTier}
         balance={
           lowBalance
             ? { cents: lowBalance.balanceCents, low: lowBalance.low }

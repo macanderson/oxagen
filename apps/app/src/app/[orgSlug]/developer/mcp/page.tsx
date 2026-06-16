@@ -164,7 +164,7 @@ export default async function DeveloperMcpPage({
               </span>
             </div>
           ) : (
-            <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-50/30 dark:bg-amber-900/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+            <div className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/12 px-4 py-3 text-sm text-warning">
               <KeySquare className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
                 No active API token found. Create one on the{" "}

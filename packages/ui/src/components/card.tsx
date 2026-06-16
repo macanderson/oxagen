@@ -4,28 +4,26 @@ import { cn } from "../lib/utils";
 /**
  * coss ui Card — neutral surface container.
  *
- * Optional brand treatments (all default off, backward compatible):
- * - `glow`         — adds a violet ambient glow (`ox-glow-violet`).
- * - `gradientRing` — replaces the border with a hairline nebula ring (`gradient-ring`).
+ * Optional treatments (all default off, backward compatible):
+ * - `glow`         — retained for back-compat; flat UI renders no glow.
+ * - `gradientRing` — retained for back-compat; uses the neutral border.
  * - `interactive`  — adds hover lift + pointer affordance (`hover-lift cursor-pointer`).
  */
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Add a violet ambient glow around the card. */
+  /** Retained for back-compat; no ambient glow in the flat UI. */
   glow?: boolean;
-  /** Render a hairline nebula gradient ring as the border. */
+  /** Retained for back-compat; keeps the neutral border in the flat UI. */
   gradientRing?: boolean;
   /** Add hover lift + pointer affordance for clickable cards. */
   interactive?: boolean;
 }
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, glow, gradientRing, interactive, ...props }, ref) => (
+  ({ className, glow: _glow, gradientRing: _gradientRing, interactive, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(
         "rounded-xl border bg-card text-card-foreground shadow",
-        glow && "ox-glow-violet",
-        gradientRing && "gradient-ring",
         interactive && "hover-lift cursor-pointer",
         className,
       )}

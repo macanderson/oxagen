@@ -59,8 +59,7 @@ describe("OxagenWordmark — render", () => {
 
   it("applies a mono color when toned", () => {
     const { getByText } = render(<OxagenWordmark tone="mono-dark" />);
-    // JSDOM normalizes the hex (#16181D) to its rgb() form.
-    expect(getByText("Oxagen").style.color).toBe("rgb(22, 24, 29)");
+    expect(getByText("Oxagen").style.color).toBe("var(--ink-dark)");
   });
 });
 

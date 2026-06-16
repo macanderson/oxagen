@@ -8,7 +8,7 @@
  * "done". The user can re-open it at any time; subsequent clicks toggle freely.
  *
  * Design: reasoning is secondary to the answer — card chrome is deliberately
- * quieter than ToolCallCard (muted bg, thin indigo left accent while thinking).
+ * quieter than ToolCallCard (muted bg, thin solid left accent while thinking).
  */
 
 import * as React from "react";
@@ -97,12 +97,12 @@ export function ReasoningCard({
       data-component="reasoning-card"
       data-status={status}
     >
-      {/* Brand gradient left accent (indigo → green) while thinking.
+      {/* Solid left accent bar while thinking.
           Absolute-positioned so it doesn't affect layout. */}
       {status === "thinking" && (
         <div
           aria-hidden="true"
-          className="absolute inset-y-0 left-0 w-0.5 bg-gradient-to-b from-[#7182ff] via-[#9b7bff] to-[#3cff52] z-10"
+          className="absolute inset-y-0 left-0 w-0.5 bg-primary z-10"
         />
       )}
       {/* Header row. Only a toggle when there's reasoning text to reveal;
@@ -117,7 +117,7 @@ export function ReasoningCard({
         aria-expanded={hasText ? open : undefined}
         disabled={!hasText}
       >
-        <Brain className="h-3.5 w-3.5 shrink-0 text-[#9b7bff]" aria-hidden="true" />
+        <Brain className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
 
         {status === "thinking" ? (
           <motion.span

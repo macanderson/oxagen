@@ -63,15 +63,15 @@ export function ApiKeyDisplay({ rawKey, name, createdAt, expiresAt }: ApiKeyDisp
           aria-label={copied ? "Copied" : "Copy API key"}
         >
           {copied ? (
-            <Check className="h-4 w-4 text-emerald-600" />
+            <Check className="h-4 w-4 text-success" />
           ) : (
             <Copy className="h-4 w-4" />
           )}
         </Button>
       </div>
 
-      <div className="rounded-lg border border-amber-200/30 bg-amber-50/50 dark:bg-amber-950/20 p-3">
-        <p className="text-xs text-amber-900 dark:text-amber-200">
+      <div className="rounded-lg border border-warning/40 bg-warning/12 p-3">
+        <p className="text-xs text-warning">
           <strong>Save this key securely.</strong> You won&apos;t be able to see it again after you leave this page.
         </p>
       </div>

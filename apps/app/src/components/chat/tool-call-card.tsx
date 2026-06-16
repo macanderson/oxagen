@@ -97,11 +97,11 @@ export function ToolCallCard(props: ToolCallCardProps) {
             <Section label="Output stream">
               <div
                 ref={streamRef}
-                className="max-h-64 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-emerald-200"
+                className="max-h-64 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-success"
               >
                 {stdout ? <pre className="whitespace-pre-wrap">{stdout}</pre> : null}
                 {stderr ? (
-                  <pre className="whitespace-pre-wrap text-rose-300">{stderr}</pre>
+                  <pre className="whitespace-pre-wrap text-error">{stderr}</pre>
                 ) : null}
                 {status === "running" && !stdout && !stderr ? (
                   <span className="text-muted-foreground">Waiting for output…</span>

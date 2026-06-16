@@ -7,15 +7,15 @@ import type { SemanticEdge } from "@oxagen/oxagen/contracts/semantic.edge.list";
 // ── Display helpers ────────────────────────────────────────────────────────────
 
 function confidenceColor(score: number): string {
-  if (score >= 0.8) return "text-emerald-600 dark:text-emerald-400";
-  if (score >= 0.6) return "text-amber-500 dark:text-amber-400";
-  return "text-red-500 dark:text-red-400";
+  if (score >= 0.8) return "text-success";
+  if (score >= 0.6) return "text-warning";
+  return "text-error";
 }
 
 function confidenceDotColor(score: number): string {
-  if (score >= 0.8) return "#22c55e";
-  if (score >= 0.6) return "#f59e0b";
-  return "#ef4444";
+  if (score >= 0.8) return "var(--success)";
+  if (score >= 0.6) return "var(--warning)";
+  return "var(--error)";
 }
 
 function formatISO(iso: string | null | undefined): string {
@@ -37,7 +37,7 @@ function EdgeCard({ edge }: { edge: SemanticEdge }) {
         <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
           <Circle
             className="h-2 w-2 flex-shrink-0"
-            style={{ color: "#6366f1", fill: "#6366f1" }}
+            style={{ color: "var(--chart-5)", fill: "var(--chart-5)" }}
             aria-hidden="true"
           />
           <span className="truncate font-mono text-[10px] text-muted-foreground">
@@ -50,7 +50,7 @@ function EdgeCard({ edge }: { edge: SemanticEdge }) {
           <ArrowRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
           <Circle
             className="h-2 w-2 flex-shrink-0"
-            style={{ color: "#22c55e", fill: "#22c55e" }}
+            style={{ color: "var(--chart-3)", fill: "var(--chart-3)" }}
             aria-hidden="true"
           />
           <span className="font-medium text-foreground">{edge.targetNodeId}</span>
@@ -66,7 +66,7 @@ function EdgeCard({ edge }: { edge: SemanticEdge }) {
           <span>via {edge.source.connectorId}</span>
           {edge.approvedAt && (
             <span className="flex items-center gap-0.5">
-              <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              <CheckCircle2 className="h-2.5 w-2.5 text-success" aria-hidden="true" />
               Approved {formatISO(edge.approvedAt)}
             </span>
           )}

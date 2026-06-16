@@ -76,7 +76,7 @@ export function UserPrivacyPanel() {
         )}
         {exportState.phase === "ready" && (
           <div className="flex flex-col gap-2">
-            <p className="text-sm text-green-600 dark:text-green-400">Your export is ready.</p>
+            <p className="text-sm text-success">Your export is ready.</p>
             <a
               href={exportState.downloadUrl}
               download

@@ -62,17 +62,17 @@ const STATUS_CONFIG: Record<KeyStatus, { label: string; icon: React.ElementType;
   active: {
     label: "Active",
     icon: Check,
-    className: "text-emerald-600 dark:text-emerald-400",
+    className: "text-success",
   },
   invalid: {
     label: "Invalid",
     icon: AlertTriangle,
-    className: "text-red-500 dark:text-red-400",
+    className: "text-error",
   },
   expired: {
     label: "Expired",
     icon: AlertTriangle,
-    className: "text-amber-500 dark:text-amber-400",
+    className: "text-warning",
   },
 };
 
@@ -142,9 +142,9 @@ export default function SettingsModelKeysPage() {
       </div>
 
       {/* Security callout */}
-      <div className="flex items-start gap-2 rounded-lg border border-amber-200/60 bg-amber-50/60 px-4 py-3 dark:border-amber-900/40 dark:bg-amber-950/20">
-        <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-        <div className="text-xs text-amber-700 dark:text-amber-300">
+      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/12 px-4 py-3">
+        <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-warning" aria-hidden="true" />
+        <div className="text-xs text-warning">
           <p className="font-semibold">Keys are stored encrypted at rest.</p>
           <p className="mt-0.5">
             Only the last four characters of each key are displayed after saving.

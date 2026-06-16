@@ -9,9 +9,9 @@ import type { SemanticEdge } from "@oxagen/oxagen/contracts/semantic.edge.list";
 const API_BASE = "/api";
 
 function confidenceColor(score: number): string {
-  if (score >= 0.8) return "text-emerald-600 dark:text-emerald-400";
-  if (score >= 0.6) return "text-amber-500 dark:text-amber-400";
-  return "text-red-500 dark:text-red-400";
+  if (score >= 0.8) return "text-success";
+  if (score >= 0.6) return "text-warning";
+  return "text-error";
 }
 
 function formatConfidence(score: number): string {
@@ -79,7 +79,7 @@ function InferredEdgeRow({
         </button>
         <button
           type="button"
-          className="flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:hover:bg-emerald-950/60 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1 rounded-md border border-success/40 bg-success/12 px-2 py-1 text-[11px] font-semibold text-success hover:bg-success/20 transition-colors disabled:opacity-50"
           onClick={() => onAction(edge.id, "approve")}
           disabled={isProcessing}
           aria-label={`Approve edge ${edge.id}`}
@@ -93,7 +93,7 @@ function InferredEdgeRow({
         </button>
         <button
           type="button"
-          className="flex items-center gap-1 rounded-md border border-red-500/40 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 dark:hover:bg-red-950/60 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1 rounded-md border border-error/40 bg-error/12 px-2 py-1 text-[11px] font-semibold text-error hover:bg-error/20 transition-colors disabled:opacity-50"
           onClick={() => onAction(edge.id, "reject")}
           disabled={isProcessing}
           aria-label={`Reject edge ${edge.id}`}
@@ -128,7 +128,7 @@ function BulkActionBar({ total, connectorId, onBulkApprove, bulkApproving }: Bul
       </span>
       <button
         type="button"
-        className="flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:hover:bg-emerald-950/60 transition-colors disabled:opacity-50"
+        className="flex items-center gap-1 rounded-md border border-success/40 bg-success/12 px-2.5 py-1 text-[11px] font-semibold text-success hover:bg-success/20 transition-colors disabled:opacity-50"
         onClick={() => onBulkApprove(connectorId)}
         disabled={bulkApproving}
       >
@@ -255,7 +255,7 @@ export function InferencePendingList({
       {error && (
         <div
           role="alert"
-          className="rounded-md border border-red-500/40 bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-400"
+          className="rounded-md border border-error/40 bg-error/12 px-3 py-2 text-xs text-error"
         >
           {error}
         </div>

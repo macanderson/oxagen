@@ -9,8 +9,9 @@
  * cannot trip the `useContext` null crash that breaks `/_global-error` static
  * export when the default (provider-wrapped) error tree is used instead.
  *
- * Styling is fully self-contained (explicit dark palette, no theme `class`
- * dependency) so the fallback renders correctly with zero app context.
+ * Styling is fully self-contained (explicit earthy palette, no theme `class`
+ * dependency) so the fallback renders correctly with zero app context. Flat:
+ * no radius, no shadow — matching the product skin.
  */
 export function GlobalErrorPage({
   error,
@@ -29,8 +30,8 @@ export function GlobalErrorPage({
           alignItems: "center",
           justifyContent: "center",
           padding: "1.5rem",
-          background: "#ffffff",
-          color: "#0a0a0a",
+          background: "#f1ece3",
+          color: "#272422",
           fontFamily:
             "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
         }}
@@ -39,12 +40,11 @@ export function GlobalErrorPage({
           style={{
             width: "100%",
             maxWidth: "28rem",
-            borderRadius: "0.75rem",
-            border: "1px solid #e5e5e5",
-            background: "#ffffff",
+            borderRadius: "0",
+            border: "1px solid #e2d9cb",
+            background: "#faf7f2",
             padding: "2.5rem",
             textAlign: "center",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
           }}
         >
           <h1 style={{ fontSize: "1.25rem", fontWeight: 600, margin: 0 }}>
@@ -79,10 +79,10 @@ export function GlobalErrorPage({
               marginTop: "2rem",
               height: "2.25rem",
               padding: "0 1.25rem",
-              borderRadius: "0.5rem",
+              borderRadius: "0",
               border: "none",
-              background: "#171717",
-              color: "#ffffff",
+              background: "#272422",
+              color: "#f5f1ec",
               fontSize: "0.875rem",
               fontWeight: 500,
               cursor: "pointer",

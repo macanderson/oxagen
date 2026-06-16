@@ -106,7 +106,7 @@ export function SetPasswordForm() {
         )}
 
         {status === "saved" && (
-          <p className="text-sm text-green-600 dark:text-green-400" role="status">
+          <p className="text-sm text-success" role="status">
             Password set. You can now sign in with your email and password.
           </p>
         )}

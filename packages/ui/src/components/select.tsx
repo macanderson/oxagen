@@ -9,8 +9,13 @@ const Select = SelectPrimitive.Root;
 const SelectGroup = SelectPrimitive.Group;
 const SelectValue = SelectPrimitive.Value;
 
+/*
+ * Select — token-driven. The trigger mirrors the input tokens; the popup uses
+ * the --menu-* tokens; items wire highlighted/selected/disabled through Base
+ * UI data-attributes. Flat: no shadow, no enter/exit transition.
+ */
 const selectTriggerVariants = cva(
-  "flex w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+  "flex w-full items-center justify-between whitespace-nowrap rounded-md border border-input-border bg-input-bg px-3 py-2 text-sm text-input-fg placeholder:text-input-placeholder hover:border-input-border-hover focus:outline-none focus:border-input-border-focus focus:ring-1 focus:ring-input-ring data-[popup-open]:border-input-border-focus disabled:cursor-not-allowed disabled:bg-input-disabled-bg disabled:text-input-disabled-fg [&>span]:line-clamp-1",
   {
     // coss ui density scale. `lg` matches the shadcn/ui trigger height (36px).
     variants: {
@@ -70,7 +75,7 @@ const SelectPopup = React.forwardRef<
       <SelectPrimitive.Popup
         ref={ref}
         className={cn(
-          "relative z-50 max-h-[min(var(--available-height),320px)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
+          "relative z-50 max-h-[min(var(--available-height),320px)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border border-menu-popup-border bg-menu-popup-bg text-menu-popup-fg",
           "origin-[var(--transform-origin)] transition-[opacity,transform] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
           className,
         )}
@@ -89,7 +94,7 @@ const SelectLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.GroupLabel
     ref={ref}
-    className={cn("px-2 py-1.5 text-sm font-semibold", className)}
+    className={cn("px-2 py-1.5 text-sm font-semibold text-menu-group-label-fg", className)}
     {...props}
   />
 ));
@@ -102,7 +107,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm text-menu-item-fg outline-none data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[selected]:bg-menu-item-selected-bg data-[selected]:text-menu-item-selected-fg data-[disabled]:pointer-events-none data-[disabled]:text-menu-item-disabled-fg",
       className,
     )}
     {...props}

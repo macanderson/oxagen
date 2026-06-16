@@ -100,17 +100,17 @@ const MOCK_AUDIT: MockAuditEvent[] = [
 const OUTCOME_CONFIG: Record<AuditOutcome, { icon: React.ElementType; className: string; label: string }> = {
   success: {
     icon: CheckCircle2,
-    className: "text-emerald-600 dark:text-emerald-400",
+    className: "text-success",
     label: "Success",
   },
   denied: {
     icon: XCircle,
-    className: "text-amber-500 dark:text-amber-400",
+    className: "text-warning",
     label: "Denied",
   },
   error: {
     icon: XCircle,
-    className: "text-red-500 dark:text-red-400",
+    className: "text-error",
     label: "Error",
   },
 };

@@ -38,7 +38,7 @@ const STATUS_CONFIG: Record<
 > = {
   planning: {
     label: "Planning",
-    badgeClass: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+    badgeClass: "bg-info/12 text-info",
     isDone: false,
   },
   running: {
@@ -48,7 +48,7 @@ const STATUS_CONFIG: Record<
   },
   completed: {
     label: "Completed",
-    badgeClass: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+    badgeClass: "bg-success/12 text-success",
     isDone: true,
   },
   failed: {
@@ -81,8 +81,8 @@ const TASK_STATUS_CONFIG: Record<
   },
   completed: {
     icon: CheckCircle2,
-    iconClass: "text-emerald-500",
-    cellClass: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800/40",
+    iconClass: "text-success",
+    cellClass: "bg-success/12 border-success/40",
     label: "Done",
   },
   failed: {

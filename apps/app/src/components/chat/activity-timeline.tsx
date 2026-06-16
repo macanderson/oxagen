@@ -21,9 +21,9 @@ import { fadeInUp, staggerContainer } from "@oxagen/ui/lib/motion";
 // ---------------------------------------------------------------------------
 
 const dotColorMap: Record<NonNullable<TimelineItemProps["tone"]>, string> = {
-  thinking: "bg-[#7182ff]",
-  running: "bg-[#7182ff]",
-  done: "bg-[#3cff52]",
+  thinking: "bg-info",
+  running: "bg-info",
+  done: "bg-success",
   failed: "bg-destructive",
   idle: "bg-muted-foreground/40",
 };

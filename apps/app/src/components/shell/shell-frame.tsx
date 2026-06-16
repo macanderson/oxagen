@@ -32,6 +32,8 @@ import type { SessionUser } from "./user-switcher";
 import type { ScopeContext } from "@/lib/scope";
 import type { NewWorkspaceAction } from "@/components/workspace/new-workspace-form";
 
+import type { PlanTier } from "@oxagen/oxagen/types";
+
 export interface ShellFrameProps {
   org: ResolvedOrg;
   workspace?: ResolvedWorkspace;
@@ -41,6 +43,8 @@ export interface ShellFrameProps {
   user: SessionUser | undefined;
   /** Org credit balance for the always-visible header pill. Null hides it. */
   balance?: { cents: number; low: boolean } | null;
+  /** Org subscription tier — gates enterprise-only nav items (e.g. Access). */
+  planTier?: PlanTier;
   /** Bound server action for inline workspace creation dialog. */
   createWorkspaceAction?: NewWorkspaceAction;
   children: ReactNode;
@@ -53,6 +57,7 @@ export function ShellFrame({
   availableWorkspaces,
   user,
   balance,
+  planTier,
   createWorkspaceAction,
   children,
 }: ShellFrameProps) {
@@ -77,9 +82,9 @@ export function ShellFrame({
       : availableWorkspaces?.find((w) => w.slug === ctx.workspaceSlug)) ?? null;
 
   return (
-    <div className="ox-mesh flex h-dvh w-full overflow-hidden md:gap-2 md:p-2">
+    <div className="flex h-dvh w-full overflow-hidden bg-background md:gap-2 md:p-2">
       {/* Floating, collapsible sidebar (desktop). Mobile uses MobileBottomBar. */}
-      <Sidebar ctx={ctx} user={user} />
+      <Sidebar ctx={ctx} user={user} planTier={planTier} />
 
       {/* Inset content panel — the majority-width right side. */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-border bg-background md:rounded-xl md:border md:shadow-sm">

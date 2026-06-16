@@ -1,21 +1,8 @@
 // check-iam.ts — combines fetchAuthz + resolve + emitAudit (OXA-1390, Phase 3).
 //
-// This is the single function that defineContract().invoke() calls. It:
-//   1. Fetches authz data from Postgres (principal, grants, roles, policies).
-//   2. Runs the pure resolver.
-//   3. Emits an audit event fire-and-forget.
-//   4. Returns the resolve result (which may include principal for the handler).
-//
-// If pending_approval: the caller (define-contract.ts) also calls
-// createAccessRequest() before returning the DenialResponse.
-//
-// Plan-tier ACL gate (§entitlements):
-//   For Enterprise-only capabilities (those whose defaultEffect is 'deny' and
-//   whose capability name is in the ACL namespace), the gate resolves the org's
-//   plan tier and bypasses ACL resolution to ALLOW for non-enterprise orgs —
-//   there is nothing to enforce when the feature is not available. For
-//   enterprise orgs the normal IAM resolution path runs so the capability can
-//   be granted or denied per explicit policy.
+// Non-enterprise orgs receive an unconditional allow (zero DB queries, zero
+// latency). Enterprise orgs run the full resolver: fetchAuthz → resolve →
+// emitAudit.
 
 import type { CapabilityContext, CapabilityEffect, ResolvedPrincipal } from "@oxagen/oxagen";
 import { resolve, type ResolveResult } from "@oxagen/oxagen/iam";
@@ -23,23 +10,6 @@ import { fetchAuthz } from "./fetch-authz";
 import { emitAudit } from "./emit-audit";
 import { resolveOrgTier, canAccessACL } from "@oxagen/billing";
 import { logger } from "./logger";
-
-/**
- * Capabilities in the `iam.*` namespace manage grants, roles, and access
- * policies — the ACL feature set. Enterprise orgs have these features
- * available and their IAM tables are fully populated; non-Enterprise orgs
- * do not configure explicit ACL policies, so the resolver is bypassed and
- * the request is ALLOWED (role membership is sufficient).
- *
- * Use this to determine whether a capability name is in the ACL namespace.
- */
-function isAclCapability(capability: string): boolean {
-  return (
-    capability.startsWith("iam.") ||
-    capability.startsWith("billing.acl.") ||
-    capability === "iam"
-  );
-}
 
 export interface CheckIAMArgs {
   capability: string;
@@ -71,40 +41,33 @@ export interface CheckIAMResult {
 export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
   const { capability, ctx, defaultEffect, rawInputJson } = args;
 
-  // ── Plan-tier ACL gate ──────────────────────────────────────────────────────
-  // For ACL-namespace capabilities, resolve the org's tier. Non-enterprise
-  // orgs bypass the resolver and are ALLOWED (they have no ACL policies to
-  // enforce — role membership is their access model). Enterprise orgs fall
-  // through to the full resolver below.
-  if (isAclCapability(capability)) {
-    const tier = ctx.planTier ?? (await resolveOrgTier(ctx.orgId));
-    if (!canAccessACL(tier)) {
-      // Non-enterprise org: ACL policies don't apply. Allow and return an
-      // 'allow' trace without running the resolver so non-enterprise role
-      // members can still reach the (simpler) ACL-adjacent features.
-      const bypassStep = {
-        rule: "tier_gate",
-        description: `tier:${tier} — non-enterprise org bypasses ACL resolver → allow`,
-        decided: true,
-        outcome: "allow" as const,
-      };
-      const bypassResult: ResolveResult = {
-        outcome: "allow",
-        trace: { steps: [bypassStep], decidedBy: bypassStep },
-      };
-      emitAudit({
-        capability,
-        ctx,
-        principal: null,
-        result: bypassResult,
-        trace: bypassResult.trace,
-        rawInputJson,
-      }).catch((err: unknown) => {
-        logger.error({ err, capability }, "[iam:audit] CRITICAL — audit event emission failed");
-      });
-      return { result: bypassResult, principal: null };
-    }
-    // Enterprise org: fall through to the full resolver.
+  // ── Non-enterprise fast-path ────────────────────────────────────────────────
+  // Non-enterprise orgs have no IAM policies to enforce. Skip the resolver
+  // entirely and return allow — zero DB queries, zero latency cost.
+  // Enterprise orgs fall through to the full resolver below.
+  const tier = ctx.planTier ?? (await resolveOrgTier(ctx.orgId));
+  if (!canAccessACL(tier)) {
+    const bypassStep = {
+      rule: "tier_gate",
+      description: `tier:${tier} — non-enterprise org bypasses IAM resolver → allow`,
+      decided: true,
+      outcome: "allow" as const,
+    };
+    const bypassResult: ResolveResult = {
+      outcome: "allow",
+      trace: { steps: [bypassStep], decidedBy: bypassStep },
+    };
+    emitAudit({
+      capability,
+      ctx,
+      principal: null,
+      result: bypassResult,
+      trace: bypassResult.trace,
+      rawInputJson,
+    }).catch((err: unknown) => {
+      logger.error({ err, capability }, "[iam:audit] CRITICAL — audit event emission failed");
+    });
+    return { result: bypassResult, principal: null };
   }
 
   // 1. Fetch authz data — falls back to empty if IAM tables are absent.

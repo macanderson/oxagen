@@ -75,7 +75,7 @@ export function OrgPrivacyPanel({ orgSlug }: { orgSlug: string }) {
         )}
         {exportState.phase === "ready" && (
           <div className="flex flex-col gap-2">
-            <p className="text-sm text-green-600 dark:text-green-400">Export ready.</p>
+            <p className="text-sm text-success">Export ready.</p>
             <a href={exportState.downloadUrl} download className="text-sm underline underline-offset-4">
               Download ZIP archive
             </a>

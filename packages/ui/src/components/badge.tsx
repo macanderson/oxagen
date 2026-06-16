@@ -10,22 +10,22 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
+          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
         destructive:
-          "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
-        outline: "text-foreground",
+          "border-transparent bg-error text-error-foreground hover:bg-error/80",
+        // Surface badge — the token-driven neutral chip (badge-bg/fg/border).
+        outline: "border-badge-border bg-badge-bg text-badge-fg",
         muted: "border-transparent bg-muted text-muted-foreground",
-        // Brand jewel tones — violet primary and cyan accent.
+        // Brand surface badges — paper-tan brand and neutral accent.
         brand: "border-transparent bg-brand text-brand-foreground",
-        cyan: "border-transparent bg-brand-2 text-brand-2-foreground",
-        // Semantic colour variants (require the --info/--success/--warning
-        // tokens declared in tokens.css).
+        cyan: "border-transparent bg-secondary text-secondary-foreground",
+        // Semantic status variants (--info/--success/--warning/--error tokens).
         info: "border-transparent bg-info text-info-foreground",
         success: "border-transparent bg-success text-success-foreground",
         warning: "border-transparent bg-warning text-warning-foreground",
-        error: "border-transparent bg-destructive text-destructive-foreground",
+        error: "border-transparent bg-error text-error-foreground",
       },
       // coss ui adds size variants for density control. `lg` matches the fixed
       // shadcn/ui badge size.

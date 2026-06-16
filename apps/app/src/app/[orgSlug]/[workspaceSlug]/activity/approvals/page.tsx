@@ -93,18 +93,18 @@ const MOCK_APPROVALS: MockApproval[] = [
 const STATUS_CONFIG: Record<ApprovalStatus, { label: string; className: string; badgeClass: string }> = {
   pending: {
     label: "Pending",
-    className: "text-amber-600 dark:text-amber-400",
-    badgeClass: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    className: "text-warning",
+    badgeClass: "bg-warning/12 text-warning",
   },
   approved: {
     label: "Approved",
-    className: "text-emerald-600 dark:text-emerald-400",
-    badgeClass: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+    className: "text-success",
+    badgeClass: "bg-success/12 text-success",
   },
   rejected: {
     label: "Rejected",
-    className: "text-red-500 dark:text-red-400",
-    badgeClass: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+    className: "text-error",
+    badgeClass: "bg-error/12 text-error",
   },
   expired: {
     label: "Expired",
@@ -127,7 +127,7 @@ function ApprovalCard({ approval }: { approval: MockApproval }) {
   return (
     <div
       className={`flex flex-col gap-3 rounded-lg border px-4 py-4 ${
-        isPending ? "border-amber-200/60 dark:border-amber-900/40" : "border-border/60"
+        isPending ? "border-warning/40" : "border-border/60"
       } bg-card`}
     >
       {/* Header */}
@@ -151,7 +151,7 @@ function ApprovalCard({ approval }: { approval: MockApproval }) {
           <div className="flex flex-shrink-0 items-center gap-2">
             <button
               type="button"
-              className="flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400"
+              className="flex items-center gap-1 rounded-md border border-error/40 bg-error/12 px-2.5 py-1.5 text-xs font-medium text-error hover:bg-error/20 transition-colors"
             >
               <X className="h-3 w-3" aria-hidden="true" />
               Reject
@@ -177,7 +177,7 @@ function ApprovalCard({ approval }: { approval: MockApproval }) {
         </p>
       )}
       {isPending && approval.expiresAt && (
-        <p className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+        <p className="flex items-center gap-1 text-[11px] text-warning">
           <Clock className="h-3 w-3" aria-hidden="true" />
           Expires {approval.expiresAt} — agent will cancel if not resolved
         </p>
@@ -218,8 +218,8 @@ export default function ActivityApprovalsPage() {
       {pending.length > 0 ? (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+            <AlertCircle className="h-3.5 w-3.5 text-warning" aria-hidden="true" />
+            <span className="text-xs font-semibold text-warning">
               {pending.length} pending {pending.length === 1 ? "approval" : "approvals"}
             </span>
           </div>
@@ -229,7 +229,7 @@ export default function ActivityApprovalsPage() {
         </div>
       ) : (
         <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-4 py-3">
-          <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+          <Check className="h-4 w-4 text-success" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">No pending approvals.</p>
         </div>
       )}

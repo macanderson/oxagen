@@ -41,15 +41,15 @@ interface KindMeta {
 function kindMeta(kind: FileAttachmentKind | string): KindMeta {
   switch (kind) {
     case "document":
-      return { Icon: FileText, label: "Document", iconClass: "text-blue-500" };
+      return { Icon: FileText, label: "Document", iconClass: "text-info" };
     case "spreadsheet":
-      return { Icon: Sheet, label: "Spreadsheet", iconClass: "text-green-500" };
+      return { Icon: Sheet, label: "Spreadsheet", iconClass: "text-success" };
     case "presentation":
-      return { Icon: Presentation, label: "Presentation", iconClass: "text-orange-500" };
+      return { Icon: Presentation, label: "Presentation", iconClass: "text-warning" };
     case "pdf":
-      return { Icon: FileText, label: "PDF", iconClass: "text-red-500" };
+      return { Icon: FileText, label: "PDF", iconClass: "text-error" };
     case "archive":
-      return { Icon: FileArchive, label: "Archive", iconClass: "text-yellow-600" };
+      return { Icon: FileArchive, label: "Archive", iconClass: "text-warning" };
     default:
       return { Icon: File, label: "File", iconClass: "text-muted-foreground" };
   }

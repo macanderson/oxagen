@@ -1,6 +1,10 @@
+import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { PageTabs } from "@/components/ui/page-tabs";
 import { org } from "@/lib/routes";
+import { getSessionOrRedirect } from "@/lib/session";
+import { resolveOrg } from "@/lib/resolve-org";
+import { getEnterpriseAccess } from "@/lib/enterprise";
 
 export default async function AccessLayout({
   children,
@@ -10,6 +14,16 @@ export default async function AccessLayout({
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
+
+  // Enterprise-only section — redirect non-enterprise orgs to org root.
+  const [session, resolvedOrg] = await Promise.all([
+    getSessionOrRedirect(),
+    resolveOrg(orgSlug),
+  ]);
+  void session; // membership already asserted by parent [orgSlug]/layout.tsx
+  const { isEnterprise } = await getEnterpriseAccess(resolvedOrg.id);
+  if (!isEnterprise) redirect(`/${orgSlug}`);
+
   const ctx = { orgSlug };
 
   const tabs = [

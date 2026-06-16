@@ -748,20 +748,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     staticValue: { development: "http://localhost:4100", production: MCP_PROD_URL },
   },
 
-  // ── IAM enforcement ─────────────────────────────────────────────────────────
-  IAM_ENFORCEMENT_ENABLED: {
-    group: "IAM",
-    description:
-      "Master switch for capability-level IAM checks. Default true (secure). " +
-      "Set false only for break-glass; revert before the end of the incident.",
-    secret: false,
-    clientExposed: false,
-    services: ["api", "app", "mcp"],
-    requiredIn: [],
-    valueOrigin: "static",
-    staticValue: { "*": "true" },
-  },
-
   // ── Security / RLS enforcement ───────────────────────────────────────────────
   TENANT_RLS_ENFORCEMENT_ENABLED: {
     group: "Security",

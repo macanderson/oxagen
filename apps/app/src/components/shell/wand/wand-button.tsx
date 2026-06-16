@@ -3,7 +3,7 @@
  * WandButton — the floating magic-wand trigger button.
  *
  * Fixed bottom-right of the viewport with equal margins (1.5rem).
- * Circular, Wand2 icon, indigo→green gradient ring (on-brand).
+ * Circular, Wand2 icon, solid ink ring (on-brand).
  * Accessible: aria-label, focus ring, keyboard-openable.
  * Hidden on narrow mobile when the bottom tab bar is visible (offset above it).
  *
@@ -12,7 +12,7 @@
  *   - aria-label describes the action (toggles the agent panel).
  *   - aria-expanded reflects panel open state.
  *   - focus-visible ring uses ring-ring token.
- *   - prefers-reduced-motion: the gradient ring pulse animation is suppressed.
+ *   - prefers-reduced-motion: the ring pulse animation is suppressed.
  */
 
 import * as React from "react";
@@ -68,11 +68,10 @@ export function WandButton({ className }: WandButtonProps) {
           "relative flex h-12 w-12 items-center justify-center rounded-full",
           // Background: muted dark surface.
           "bg-background shadow-lg",
-          // The gradient ring — a pseudo-element ring using the brand gradient
-          // (indigo→green). We use a wrapper with a gradient background and an
-          // inset mask so the gradient appears as a border ring.
+          // The ring — a pseudo-element ring using a solid ink fill, carved to a
+          // border via the inner circle below.
           "ring-2 ring-offset-1",
-          // Default ring follows brand gradient; open state uses a tighter ring.
+          // Default ring is ink; open state uses a tighter ring.
           isWandOpen
             ? "ring-primary/60"
             : "ring-transparent",
@@ -80,26 +79,22 @@ export function WandButton({ className }: WandButtonProps) {
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           // Hover / press affordance.
           "transition-transform duration-150 hover:scale-105 active:scale-95",
-          // Gradient ring animation when closed — suppressed at prefers-reduced-motion.
+          // Ring animation when closed — suppressed at prefers-reduced-motion.
           !isWandOpen && "wand-ring-gradient",
         )}
       >
-        {/* Gradient ring layer — decorative, aria-hidden. */}
+        {/* Ring layer — solid ink, decorative, aria-hidden. The inner circle
+            below masks the fill so only the ring border shows. */}
         <span
           className={cn(
             "absolute inset-0 rounded-full",
-            // Indigo→green gradient matching the brand identity.
-            "bg-gradient-to-br from-indigo-500 via-violet-500 to-emerald-500",
-            // Inset mask so only the ring border shows, not the fill.
+            // Solid ink fill matching the brand identity.
+            "bg-primary",
             "opacity-80",
-            // Pulsing glow when closed to draw attention; disabled with reduced motion.
+            // Pulsing ring when closed to draw attention; disabled with reduced motion.
             !isWandOpen && "animate-[wand-ring-pulse_3s_ease-in-out_infinite] motion-reduce:animate-none",
           )}
           aria-hidden="true"
-          style={{
-            WebkitMask: "radial-gradient(circle at center, transparent 68%, black 70%)",
-            mask: "radial-gradient(circle at center, transparent 68%, black 70%)",
-          }}
         />
 
         {/* Inner circle — sits above the gradient ring. */}

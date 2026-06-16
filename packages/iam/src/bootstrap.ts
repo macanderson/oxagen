@@ -24,22 +24,16 @@
 
 import { setKernelIAMRuntime, type KernelIAMCheckFn } from "@oxagen/oxagen/kernel";
 import { checkIAM } from "./check-iam";
-import { requireEnv } from "@oxagen/config/env";
 
 /**
  * Wire the real IAM enforcement runtime into kernel.invoke() (OXA-1498).
  *
- * kernel.invoke() reads IAM_ENFORCEMENT_ENABLED to decide whether to BLOCK
- * on deny (true) or only LOG would-deny decisions (false). Both paths ALWAYS
- * resolve authz and emit the ClickHouse audit event.
- *
- * Call once per process at surface bootstrap (apps/api/src/index.ts,
- * apps/mcp/src/middleware.ts) before any capability can be invoked.
- * Safe to call multiple times — idempotent overwrite.
+ * Enforcement is always on — denied invocations are blocked. Non-enterprise
+ * orgs are unconditionally allowed by checkIAM's tier_gate fast-path, so
+ * enforcement never produces false lockouts for the 90% of customers who
+ * don't need ACL management.
  */
 export function bootstrapIAMRuntime(): void {
-  // Wire the kernel IAM path. The adapter flattens checkIAM's ResolveResult
-  // into the { outcome, reason?, principal } shape that KernelIAMCheckFn expects.
   const kernelIAMAdapter: KernelIAMCheckFn = async (args) => {
     const { result, principal } = await checkIAM(args);
     const outcome = result.outcome;
@@ -47,10 +41,5 @@ export function bootstrapIAMRuntime(): void {
     return { outcome, reason, principal };
   };
 
-  // Read the enforcement flag at bootstrap time so we don't re-read env on
-  // every capability invocation. The flag is immutable for the process lifetime.
-  const enforced =
-    requireEnv(["IAM_ENFORCEMENT_ENABLED"] as const).IAM_ENFORCEMENT_ENABLED === true;
-
-  setKernelIAMRuntime(kernelIAMAdapter, enforced);
+  setKernelIAMRuntime(kernelIAMAdapter, /* enforced */ true);
 }

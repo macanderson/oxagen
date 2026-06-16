@@ -6,9 +6,16 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 import { fadeInUp } from "../lib/motion";
 
+/*
+ * Tabs — token-driven via the --tab-* tokens. Motion is retained: the sliding
+ * active-indicator (TabsIndicator) and the per-panel fade-in both animate.
+ *
+ * State is wired through Base UI's data-attributes (data-[selected]); the rest
+ * border stays a constant width so the active underline never shifts layout.
+ */
 const Tabs = TabsPrimitive.Root;
 
-const tabsListVariants = cva("group/list inline-flex items-center text-muted-foreground", {
+const tabsListVariants = cva("group/list inline-flex items-center text-tab-fg", {
   variants: {
     variant: {
       default: "h-9 justify-center rounded-lg bg-muted p-1",
@@ -43,11 +50,11 @@ const TabsTab = React.forwardRef<
   <TabsPrimitive.Tab
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-      // Default (pill) list treatment.
-      "group-data-[variant=default]/list:rounded-md group-data-[variant=default]/list:px-3 group-data-[variant=default]/list:py-1 group-data-[variant=default]/list:data-[selected]:bg-background group-data-[variant=default]/list:data-[selected]:text-foreground group-data-[variant=default]/list:data-[selected]:shadow",
-      // Underline list treatment.
-      "group-data-[variant=underline]/list:-mb-px group-data-[variant=underline]/list:border-b-2 group-data-[variant=underline]/list:border-transparent group-data-[variant=underline]/list:px-1 group-data-[variant=underline]/list:py-2 group-data-[variant=underline]/list:data-[selected]:border-foreground group-data-[variant=underline]/list:data-[selected]:text-foreground",
+      "inline-flex items-center justify-center whitespace-nowrap text-sm font-medium text-tab-fg transition-all hover:text-tab-fg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+      // Default (pill) list treatment — selected pill is a flat card surface.
+      "group-data-[variant=default]/list:rounded-md group-data-[variant=default]/list:px-3 group-data-[variant=default]/list:py-1 group-data-[variant=default]/list:data-[selected]:bg-card group-data-[variant=default]/list:data-[selected]:text-tab-fg-active",
+      // Underline list treatment — constant-width border at rest, color flips on state.
+      "group-data-[variant=underline]/list:-mb-px group-data-[variant=underline]/list:border-b-[length:var(--tab-border-width)] group-data-[variant=underline]/list:border-tab-border group-data-[variant=underline]/list:hover:border-tab-border-hover group-data-[variant=underline]/list:px-1 group-data-[variant=underline]/list:py-2 group-data-[variant=underline]/list:data-[selected]:border-tab-border-active group-data-[variant=underline]/list:data-[selected]:text-tab-fg-active",
       className,
     )}
     {...props}
@@ -55,7 +62,7 @@ const TabsTab = React.forwardRef<
 ));
 TabsTab.displayName = "TabsTab";
 
-/** coss ui tab panel (replaces the shadcn `TabsContent` name). */
+/** coss ui tab panel (replaces the shadcn `TabsContent` name). Fades in. */
 const TabsPanel = React.forwardRef<
   React.ComponentRef<typeof TabsPrimitive.Panel>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Panel>
@@ -63,7 +70,7 @@ const TabsPanel = React.forwardRef<
   <TabsPrimitive.Panel
     ref={ref}
     className={cn(
-      "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      "mt-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
       className,
     )}
     {...props}
@@ -81,13 +88,9 @@ const TabsPanel = React.forwardRef<
 TabsPanel.displayName = "TabsPanel";
 
 /**
- * coss ui sliding tab indicator powered by Base UI's `Tabs.Indicator`.
- * Base UI writes `--active-tab-left`, `--active-tab-right`, `--active-tab-top`,
- * `--active-tab-bottom`, `--active-tab-width`, `--active-tab-height` CSS vars onto
- * the element so it self-positions. Wire it inside `TabsList`, after the last `TabsTab`.
- *
- * Works for both `default` (pill) and `underline` list variants — set styling
- * via the `className` prop to match your variant.
+ * coss ui sliding tab indicator powered by Base UI's `Tabs.Indicator`. Base UI
+ * writes `--active-tab-left`/`--active-tab-width` (etc.) CSS vars onto the
+ * element so it self-positions. This slide is one of the two preserved motions.
  */
 const TabsIndicator = React.forwardRef<
   React.ComponentRef<typeof TabsPrimitive.Indicator>,
@@ -96,11 +99,10 @@ const TabsIndicator = React.forwardRef<
   <TabsPrimitive.Indicator
     ref={ref}
     className={cn(
-      // Base positioning — Base UI CSS vars drive left/width automatically.
-      // Active indicator carries the brand nebula sweep.
-      "absolute bottom-0 left-0 h-0.5 rounded-full brand-gradient",
-      "transition-all duration-[var(--motion-base)] ease-[var(--ease-entry)]",
-      // Override width/left from Base UI CSS vars.
+      // Active indicator is a solid bar in the active tab-border color.
+      "absolute bottom-0 left-0 h-0.5 rounded-full bg-tab-border-active",
+      // PRESERVED MOTION: the indicator slides between tabs.
+      "transition-all duration-[var(--motion-base)] ease-[var(--ease-hover)]",
       "[left:var(--active-tab-left)] [width:var(--active-tab-width)]",
       className,
     )}

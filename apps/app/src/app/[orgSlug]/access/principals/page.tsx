@@ -290,12 +290,12 @@ function PrincipalRow({ principal: p }: { principal: MockPrincipal }) {
       {isHuman ? (
         p.mfaStatus === "none" ? (
           <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
-            <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden="true" />
+            <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />
             No MFA
           </span>
         ) : (
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
-            <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-green-500" aria-hidden="true" />
+            <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
             {MFA_LABEL[p.mfaStatus]}
           </span>
         )

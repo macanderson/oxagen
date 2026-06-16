@@ -4,28 +4,40 @@ import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 
+/*
+ * Button — token-driven cva variants. The ONLY decorative motion kept anywhere
+ * in the system is the button hover-grow: a small, transform-only scale on
+ * hover that returns to rest on leave/press. No color flourish, no shadow, no
+ * lift. All color/state comes from the --button-* tokens (see THEME.md).
+ *
+ * Variant map (public API preserved): `default`/`primary`/`gradient` are the
+ * solid ink primary; `secondary`/`outline`/`ghost` are the neutral default;
+ * `destructive*` use the error token; `link` is text-only.
+ */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-[var(--motion-micro)] ease-[var(--ease-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-transform duration-[var(--motion-micro)] ease-[var(--ease-hover)] hover:scale-[var(--button-hover-scale)] active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 disabled:hover:scale-100 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow hover:bg-primary/90 hover:-translate-y-px active:translate-y-0",
-        destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 hover:-translate-y-px active:translate-y-0",
-        // Outline destructive: red affordance without an alarming solid fill.
-        // Use for secondary destructive triggers; reserve `destructive` for the
-        // primary destructive action.
-        "destructive-outline":
-          "border border-destructive/50 text-destructive bg-background shadow-sm hover:bg-destructive/10 hover:-translate-y-px active:translate-y-0",
-        outline:
-          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground hover:-translate-y-px active:translate-y-0",
+        primary:
+          "bg-button-primary text-button-primary-foreground hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg",
+        default:
+          "bg-button-primary text-button-primary-foreground hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 hover:-translate-y-px active:translate-y-0",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-        // Brand nebula gradient fill with white text and a violet glow on hover.
+          "border border-button-default-border bg-secondary text-secondary-foreground hover:bg-button-default-hover-bg active:bg-button-default-active-bg",
+        outline:
+          "border border-button-default-border bg-button-default text-button-default-foreground hover:bg-button-default-hover-bg active:bg-button-default-active-bg",
+        ghost:
+          "text-button-default-foreground hover:bg-button-default-hover-bg active:bg-button-default-active-bg",
+        destructive:
+          "bg-error text-error-foreground hover:bg-error/90 active:bg-error/80",
+        // Outline destructive: error affordance without an alarming solid fill.
+        "destructive-outline":
+          "border border-error/50 bg-background text-error hover:bg-error/10",
+        link: "text-foreground underline-offset-4 hover:underline hover:scale-100",
+        // Legacy alias — flat solid ink (no gradient, no glow).
         gradient:
-          "brand-gradient text-white shadow-sm hover:-translate-y-px hover:[box-shadow:var(--glow-violet)] active:translate-y-0",
+          "bg-button-primary text-button-primary-foreground hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg",
       },
       // coss ui scale — intentionally more compact than shadcn/ui. To preserve
       // a shadcn `default` height (36px) use `lg`; for a shadcn `lg` use `xl`.
@@ -54,13 +66,7 @@ export interface ButtonProps
    *   <Button render={<Link href="/login" />}>Login</Button>
    */
   render?: React.ReactElement;
-  /**
-   * Leading icon rendered before the label (oxagen-design-system Button spec).
-   * Auto-sized to 1rem via the base `[&_svg]:size-4` rule; the `gap-2` between
-   * icon and label is already part of the variant base.
-   *
-   *   <Button variant="gradient" startIcon={<ArrowUp />}>Run agent</Button>
-   */
+  /** Leading icon rendered before the label. Auto-sized to 1rem. */
   startIcon?: React.ReactNode;
   /** Trailing icon rendered after the label. */
   endIcon?: React.ReactNode;
@@ -77,14 +83,6 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       props: {
         className: cn(buttonVariants({ variant, size }), className),
         ...props,
-        // Forward children into the rendered element. For the default <button>
-        // they are its content; for a `render` element (e.g. a Link/anchor)
-        // Base UI merges them in, so icon/label children still render —
-        // e.g. <Button render={<Link href />}>Login</Button>.
-        //
-        // startIcon/endIcon bracket the label. We only wrap in a fragment when
-        // an icon is present so the common (no-icon) case forwards `children`
-        // untouched — important for `render` targets that expect a single child.
         children:
           startIcon || endIcon ? (
             <>

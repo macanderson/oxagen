@@ -44,40 +44,40 @@ const STATUS_CONFIG: Record<string, StatusConfig> = {
   connected: {
     label: "Connected",
     icon: CheckCircle2,
-    className: "text-emerald-600 dark:text-emerald-400",
+    className: "text-success",
   },
   // "active" kept for backwards-compat in case any older record uses it.
   active: {
     label: "Synced",
     icon: CheckCircle2,
-    className: "text-emerald-600 dark:text-emerald-400",
+    className: "text-success",
   },
   syncing: {
     label: "Syncing…",
     icon: RefreshCw,
-    className: "text-blue-500 dark:text-blue-400",
+    className: "text-info",
     iconClassName: "animate-spin",
   },
   in_progress: {
     label: "Syncing…",
     icon: RefreshCw,
-    className: "text-blue-500 dark:text-blue-400",
+    className: "text-info",
     iconClassName: "animate-pulse",
   },
   error: {
     label: "Error",
     icon: AlertTriangle,
-    className: "text-red-500 dark:text-red-400",
+    className: "text-error",
   },
   has_errors: {
     label: "Has Errors",
     icon: AlertTriangle,
-    className: "text-red-500 dark:text-red-400",
+    className: "text-error",
   },
   needs_reauth: {
     label: "Needs Reconnect",
     icon: AlertTriangle,
-    className: "text-amber-500 dark:text-amber-400",
+    className: "text-warning",
   },
   pending_setup: {
     label: "Pending Setup",
@@ -155,7 +155,7 @@ function ConnectionRow({ connection, orgSlug: _orgSlug, workspaceSlug: _workspac
           </div>
           <div className="flex items-center gap-2 text-[11px]">
             <span
-              className={`flex items-center gap-1 font-medium ${isSyncing ? "text-blue-500 dark:text-blue-400" : statusConfig.className}`}
+              className={`flex items-center gap-1 font-medium ${isSyncing ? "text-info" : statusConfig.className}`}
               data-testid={`connection-status-${connection.publicId}`}
             >
               {isSyncing ? (
