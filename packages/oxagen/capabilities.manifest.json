@@ -51,7 +51,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -70,7 +70,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -89,7 +89,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -108,7 +108,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -127,7 +127,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -146,7 +146,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -358,6 +358,44 @@
       }
     },
     {
+      "name": "agent.subagent.fanout.get",
+      "file": "agent.subagent.fanout.get.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.subagent.fanout.list",
+      "file": "agent.subagent.fanout.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
       "name": "agent.task.background.cancel",
       "file": "agent.task.background.cancel.ts",
       "domain": "agent",
@@ -447,7 +485,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -466,7 +504,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -485,7 +523,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }
@@ -504,7 +542,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "e2e": false,
         "docs": false
       }

@@ -612,3 +612,77 @@ describe("agent.trigger.list handler", () => {
     expect(result.triggers).toEqual([]);
   });
 });
+
+// ── agent.subagent.fanout.list ────────────────────────────────────────────────
+
+import handler_agentSubagentFanoutList, {
+  schema as agentSubagentFanoutListSchema,
+  metadata as agentSubagentFanoutListMetadata,
+} from "./agent.subagent.fanout.list";
+
+describe("agent.subagent.fanout.list handler", () => {
+  it("exports schema and metadata", () => {
+    expect(agentSubagentFanoutListSchema).toBeDefined();
+    expect(agentSubagentFanoutListMetadata.name).toBe("agent.subagent.fanout.list");
+    expect(agentSubagentFanoutListMetadata.annotations?.readOnlyHint).toBe(true);
+  });
+
+  it("forwards to invoke and parses the output", async () => {
+    mocks.invoke.mockResolvedValue({ fanouts: [] });
+    const args = { limit: 50 };
+    const result = await handler_agentSubagentFanoutList(args as never);
+    expect(mocks.buildContext).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "agent.subagent.fanout.list",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+    expect(result.fanouts).toEqual([]);
+  });
+
+  it("propagates invoke errors", async () => {
+    mocks.invoke.mockRejectedValue(new Error("invoke failed"));
+    await expect(
+      handler_agentSubagentFanoutList({ limit: 50 } as never),
+    ).rejects.toThrow("invoke failed");
+  });
+});
+
+// ── agent.subagent.fanout.get ─────────────────────────────────────────────────
+
+import handler_agentSubagentFanoutGet, {
+  schema as agentSubagentFanoutGetSchema,
+  metadata as agentSubagentFanoutGetMetadata,
+} from "./agent.subagent.fanout.get";
+
+describe("agent.subagent.fanout.get handler", () => {
+  const validOutput = {
+    fanoutId: "fan_1",
+    parentMessageId: "msg_1",
+    status: "completed" as const,
+    totalChildren: 1,
+    completedChildren: 1,
+    createdAt: "2026-06-16T00:00:00.000Z",
+    updatedAt: "2026-06-16T00:01:00.000Z",
+    runs: [],
+  };
+
+  it("exports schema and metadata", () => {
+    expect(agentSubagentFanoutGetSchema).toBeDefined();
+    expect(agentSubagentFanoutGetMetadata.name).toBe("agent.subagent.fanout.get");
+  });
+
+  it("forwards fanoutId to invoke and parses the output", async () => {
+    mocks.invoke.mockResolvedValue(validOutput);
+    const args = { fanoutId: "fan_1" };
+    const result = await handler_agentSubagentFanoutGet(args as never);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "agent.subagent.fanout.get",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+    expect(result.fanoutId).toBe("fan_1");
+  });
+});

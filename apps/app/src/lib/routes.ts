@@ -119,6 +119,10 @@ export const workspace = {
       `${wsBase(ctx)}/agents/${agentSlug}`,
     edit: (ctx: Required<ScopeContext>, agentSlug: string): string =>
       `${wsBase(ctx)}/agents/${agentSlug}/edit`,
+    // Subagent fan-out viewer: list of dispatched fan-outs + per-fan-out detail.
+    runs: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/agents/runs`,
+    run: (ctx: Required<ScopeContext>, fanoutId: string): string =>
+      `${wsBase(ctx)}/agents/runs/${fanoutId}`,
   },
 
   // Automation
