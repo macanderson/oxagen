@@ -88,10 +88,13 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": "off",
     },
   },
-  // Plain-JS config files (this file, eslint.next.mjs, …) belong to no
-  // tsconfig project — type-aware parsing fails on them. Lint them untyped.
+  // Plain-JS config files (this file, eslint.next.mjs, …) and TS tooling
+  // configs (vitest.config.ts, *.config.ts) belong to no tsconfig project —
+  // type-aware parsing fails on them (the projectService can't find a project).
+  // Lint them untyped. Without this, staging a vitest.config.ts trips the
+  // lefthook lint hook with a "not found by the project service" parse error.
   {
-    files: ["**/*.mjs"],
+    files: ["**/*.mjs", "**/*.config.ts", "**/*.config.mts", "**/*.config.cts"],
     ...tseslint.configs.disableTypeChecked,
   },
   // The seam-owning packages legitimately use their own raw clients.
