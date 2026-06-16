@@ -57,7 +57,14 @@ export async function agentDefinitionGetHandler(
       versionRow = latest;
     }
 
-    const config = parseAgentDefinitionConfig(versionRow?.config ?? {});
+    if (!versionRow) {
+      // A definition always has at least its v1 (create inserts it). A missing
+      // version means a corrupt row, not an empty config — surface it.
+      throw new Error(
+        `Agent "${input.agentId}" has no version config to return`,
+      );
+    }
+    const config = parseAgentDefinitionConfig(versionRow.config);
 
     return {
       agentId: agent.publicId,
@@ -68,8 +75,8 @@ export async function agentDefinitionGetHandler(
       agentType: agent.agentType,
       status: agent.status,
       deploymentStatus: agent.deploymentStatus,
-      version: versionRow?.version ?? null,
-      isPublished: versionRow?.isPublished ?? false,
+      version: versionRow.version,
+      isPublished: versionRow.isPublished,
       config,
     };
   });

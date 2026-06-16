@@ -1,0 +1,71 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { createFakeTx } from "../test-utils/fake-tx";
+
+const fake = createFakeTx();
+
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fake.tx),
+  };
+});
+
+import { agentDefinitionCreateHandler } from "./agent.definition.create";
+import { TEST_CTX as CTX, makeCTX } from "../test-utils/fixtures";
+
+const CONFIG = {
+  graph: {
+    ontologyId: "ont_1",
+    mode: "read" as const,
+    retrieval: { strategy: "hybrid" as const },
+    budget: { maxHops: 2, maxNodes: 20 },
+  },
+  agentTools: [{ type: "skill" as const, ref: "coding" }],
+  triggers: [{ type: "manual" as const, enabled: true }],
+  instructions: "hi",
+};
+
+const INPUT = {
+  slug: "my-agent",
+  name: "My Agent",
+  agentType: "custom",
+  config: CONFIG,
+};
+
+beforeEach(() => fake.reset());
+
+describe("agent.definition.create handler", () => {
+  it("inserts the agent row and v1 version, returning identity", async () => {
+    fake.enqueue(
+      [{ id: "uuid-1", publicId: "agt_1", slug: "my-agent" }], // agents insert returning
+      [{ version: 1 }], // agent_versions insert returning
+    );
+    const out = await agentDefinitionCreateHandler(INPUT, CTX);
+    expect(out.publicId).toBe("agt_1");
+    expect(out.slug).toBe("my-agent");
+    expect(out.version).toBe(1);
+  });
+
+  it("throws when no authenticated user", async () => {
+    await expect(
+      agentDefinitionCreateHandler(INPUT, makeCTX({ userId: null })),
+    ).rejects.toThrow(/authenticated user/);
+  });
+
+  it("throws when the agents insert returns no row", async () => {
+    fake.enqueue([]); // agents insert returns nothing
+    await expect(agentDefinitionCreateHandler(INPUT, CTX)).rejects.toThrow(
+      /agents insert failed/,
+    );
+  });
+
+  it("rejects a config that violates the schema", async () => {
+    await expect(
+      agentDefinitionCreateHandler(
+        { ...INPUT, config: { ...CONFIG, graph: { ontologyId: "x" } } as never },
+        CTX,
+      ),
+    ).rejects.toThrow();
+  });
+});
