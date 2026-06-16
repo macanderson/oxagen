@@ -490,4 +490,8 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./ontology.neighbors")).ontologyNeighborsHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "audit.log.query",
+    async () => (await import("./audit.log.query")).auditLogQueryHandler as CapabilityHandlerFn,
+  );
 });

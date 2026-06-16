@@ -57,6 +57,12 @@ project ID `31ab7de2-021f-486d-9f6f-718a7976c027`).
 | `automation.disable` | Safe deactivation; no approval needed.                                  |
 | `automation.trigger` | Manually fire an enabled automation; creates a playbook run.            |
 
+## Audit (1)
+
+| Capability         | Notes                                                                       |
+| ------------------ | --------------------------------------------------------------------------- |
+| `audit.log.query`  | Query security + automation audit spines (org-scoped); admin-only, read-only. |
+
 ## Billing (3)
 
 | Capability                           | Notes                                             |

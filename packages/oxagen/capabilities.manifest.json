@@ -402,6 +402,25 @@
       }
     },
     {
+      "name": "audit.log.query",
+      "file": "audit.log.query.ts",
+      "domain": "audit",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "automation.create",
       "file": "automation.create.ts",
       "domain": "automation",
