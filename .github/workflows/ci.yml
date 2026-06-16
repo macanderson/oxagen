@@ -628,12 +628,19 @@ jobs:
           sudo apt-get install -y postgresql-client
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
-      - name: Migrate Postgres (${{ github.event_name != 'pull_request' && 'PRODUCTION' || 'PREVIEW' }} — Atlas)
+      # Static step names: a dynamic name with TWO nested ${{ }} interpolations
+      # (the ClickHouse step below, introduced in #47) is rejected by GitHub's
+      # workflow compiler — the run is recorded as a "BuildFailed"/startup_failure
+      # with zero jobs, even though `actionlint` and YAML parsing accept it. That
+      # silently took the entire CI gate offline from #47 onward. The target
+      # environment (PRODUCTION vs PREVIEW) is already selected by the env block
+      # above, so the name does not need to interpolate it.
+      - name: Migrate Postgres (Atlas — PRODUCTION on push, PREVIEW on PR)
         if: steps.changes.outputs.changed == 'true'
         working-directory: packages/database
         run: atlas migrate apply --env ci
 
-      - name: Migrate ClickHouse${{ github.event_name != 'pull_request' && ' + Neo4j' || '' }} (${{ github.event_name != 'pull_request' && 'PRODUCTION' || 'PREVIEW' }})
+      - name: Migrate ClickHouse + Neo4j (PRODUCTION on push, PREVIEW on PR; PR migrates ClickHouse only)
         if: steps.changes.outputs.changed == 'true'
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
 
