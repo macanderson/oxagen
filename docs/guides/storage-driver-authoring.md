@@ -201,12 +201,11 @@ export interface S3AdapterConfig {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Convert any StorageBody variant to a Buffer for the AWS SDK. */
-function toBuffer(body: StorageBody): Buffer {
+async function toBuffer(body: StorageBody): Promise<Buffer> {
   if (body instanceof Blob) {
-    // Blob.arrayBuffer() is async -- for simplicity, we convert via Uint8Array.
-    // In practice, use streaming upload (Upload from @aws-sdk/lib-storage) for
-    // large objects.
-    throw new Error("Blob bodies require async conversion. Use Uint8Array or ArrayBuffer.");
+    // Blob.arrayBuffer() is async, but put() is already async so we can await.
+    // For large objects consider streaming upload (@aws-sdk/lib-storage Upload).
+    return Buffer.from(await body.arrayBuffer());
   }
   if (body instanceof ArrayBuffer) return Buffer.from(body);
   return Buffer.from(body);
@@ -238,7 +237,7 @@ export function createS3Adapter(config: S3AdapterConfig): StorageAdapter {
 
     async put(input: PutObjectInput): Promise<PutObjectResult> {
       const access = input.access ?? "public";
-      const buf = toBuffer(input.body);
+      const buf = await toBuffer(input.body);
 
       await client.send(
         new PutObjectCommand({
