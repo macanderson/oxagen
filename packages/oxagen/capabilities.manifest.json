@@ -2743,6 +2743,42 @@
         "mcp": true,
         "unit": true
       }
+    },
+    {
+      "name": "workspace.settings.read",
+      "file": "workspace.settings.read.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "workspace.settings.write",
+      "file": "workspace.settings.write.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
     }
   ]
 }

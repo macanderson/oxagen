@@ -242,13 +242,15 @@ contract-first design, IAM enforcement, and instrumentation.
 - [workflow.run](workflow.run.md) — Decompose a goal into N sub-tasks and dispatch them concurrently via Inngest
 - [workflow.status](workflow.status.md) — Read the current status and task-level progress of a workflow run
 
-## Workspace (5)
+## Workspace (7)
 
 - [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant
 - [workspace.invite.send](workspace.invite.send.md) — Send a workspace invitation to an email address with 7-day expiry
 - [workspace.member.list](workspace.member.list.md) — List members of a workspace
 - [workspace.model.settings.read](workspace.model.settings.read.md) — Read the workspace-level model defaults
 - [workspace.model.settings.write](workspace.model.settings.write.md) — Update the workspace-level model defaults (partial update)
+- [workspace.settings.read](workspace.settings.read.md) — Read the workspace's general settings: name, slug, description
+- [workspace.settings.write](workspace.settings.write.md) — Update the workspace's general settings (partial) through the kernel with IAM, metering, and audit
 
 ## Partner connectors
 

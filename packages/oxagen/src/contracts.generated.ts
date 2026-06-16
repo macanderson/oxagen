@@ -155,3 +155,5 @@ import "./contracts/workspace.invite.send";
 import "./contracts/workspace.member.list";
 import "./contracts/workspace.model.settings.read";
 import "./contracts/workspace.model.settings.write";
+import "./contracts/workspace.settings.read";
+import "./contracts/workspace.settings.write";
