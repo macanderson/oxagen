@@ -82,10 +82,10 @@ describe("resolveSidebarMode", () => {
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 9 items", () => {
+  it("workspace config has exactly 10 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    expect(config.items).toHaveLength(9);
+    expect(config.items).toHaveLength(10);
   });
 
   it("org config has exactly 7 items", () => {
@@ -161,6 +161,10 @@ describe("href builders produce correct paths", () => {
 
     it("automation -> /{org}/{ws}/automation", () => {
       expect(findItem("automation").href(wsCtx)).toBe("/acme/production/automation");
+    });
+
+    it("agent-runs -> /{org}/{ws}/agents/runs", () => {
+      expect(findItem("agent-runs").href(wsCtx)).toBe("/acme/production/agents/runs");
     });
 
     it("activity -> /{org}/{ws}/activity", () => {

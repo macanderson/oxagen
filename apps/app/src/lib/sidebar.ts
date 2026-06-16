@@ -19,6 +19,7 @@ import {
   LayoutGrid,
   Lock,
   MessageSquare,
+  Network,
   Settings,
   ShieldCheck,
   ShoppingBag,
@@ -130,6 +131,19 @@ const workspaceConfig: SidebarConfig = {
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.activity.root(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "primary",
+    },
+    {
+      // Subagent fan-out viewer — the in-app "agent monitor". Placed after the
+      // established mobile top-4 (Ask/Knowledge/Agents/Automation) so it lands
+      // in the sidebar + mobile "More" overflow without displacing them.
+      id: "agent-runs",
+      label: "Subagent Runs",
+      icon: Network,
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.agents.runs(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "primary",
     },
