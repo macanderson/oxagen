@@ -213,6 +213,8 @@ describe("classifyRoute", () => {
     ["/acme/prod/ask", "conversation"],
     ["/acme/prod/chat", "conversation"],
     ["/acme/prod/knowledge/sources", "knowledge"],
+    ["/acme/prod/agents", "agents"],
+    ["/acme/prod/agents/repo-review", "agents"],
     ["/acme/prod/automation/agents", "automation"],
     ["/acme/prod/activity/runs", "activity"],
     ["/acme/prod/studio/compose", "studio"],
