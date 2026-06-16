@@ -4,7 +4,7 @@ Reference for all declared capabilities across the Oxagen platform.
 Each capability is implemented across API, MCP, and agent surfaces with
 contract-first design, IAM enforcement, and instrumentation.
 
-## Agent (18)
+## Agent (19)
 
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.code.execute](agent.code.execute.md) — Execute a code snippet in an isolated sandbox and return the exit code, stdout, stderr, and execution time
@@ -18,6 +18,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.skill.list](agent.skill.list.md) — List skills available in the active workspace including built-in filesystem and dynamic marketplace-installed skills
 - [agent.skill.load](agent.skill.load.md) — Load and register a workspace skill at runtime, resolving the requested version and parsing its configuration
 - [agent.subagent.aggregate](agent.subagent.aggregate.md) — Wait for all child runs in a subagent fanout to complete and return merged results, conflict list, and execution timeline
+- [agent.subagent.cancel](agent.subagent.cancel.md) — Cancel an in-progress subagent fan-out; transitions the fanout and all non-terminal child runs to a terminal status
 - [agent.subagent.dispatch](agent.subagent.dispatch.md) — Fan out a set of tasks to multiple subagents running in parallel; returns a dispatchId to poll via agent.subagent.aggregate
 - [agent.task.background.cancel](agent.task.background.cancel.md) — Cancel a running background task; downstream Inngest steps stop on cancellation
 - [agent.task.background.read](agent.task.background.read.md) — Read the current status, progress markers, and final result of a background task

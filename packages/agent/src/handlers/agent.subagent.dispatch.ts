@@ -1,5 +1,6 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { getInngestClient } from "../dispatch/inngest-client";
+import { getOxagenRegistry } from "../registry-loader";
 import type { CapabilityContext } from "../types";
 import type {
   AgentSubagentDispatchInput,
@@ -8,11 +9,49 @@ import type {
 
 export type { AgentSubagentDispatchInput, AgentSubagentDispatchOutput };
 
+// Per-risk-level ceiling (seconds) for a dispatched task. A caller-supplied
+// timeoutSeconds is clamped to the ceiling of the riskiest capability in the
+// batch so a single high-risk task can't be parked on the worker for the full
+// contract max (3600s). Unknown/absent risk defaults to the medium ceiling.
+const TIMEOUT_CEILING_BY_RISK: Record<"low" | "medium" | "high", number> = {
+  low: 900,
+  medium: 600,
+  high: 300,
+};
+
 export async function agentSubagentDispatchHandler(
   input: AgentSubagentDispatchInput,
   ctx: CapabilityContext,
 ): Promise<AgentSubagentDispatchOutput> {
   const { parentMessageId, tasks, maxParallel = 5 } = input;
+
+  // Validate every capabilityName against the registry BEFORE creating any
+  // rows. An unvalidated typo would otherwise persist a subagent_runs row the
+  // worker can never execute (a silent dead run). Reject the whole batch with
+  // a clear error, and compute the strictest timeout ceiling for the batch.
+  const { getCapability } = await getOxagenRegistry();
+  const unknownNames: string[] = [];
+  let ceiling = TIMEOUT_CEILING_BY_RISK.low;
+  for (const task of tasks) {
+    const cap = getCapability(task.capabilityName);
+    if (!cap) {
+      unknownNames.push(task.capabilityName);
+      continue;
+    }
+    const risk = cap.agent?.riskLevel ?? "medium";
+    ceiling = Math.min(ceiling, TIMEOUT_CEILING_BY_RISK[risk]);
+  }
+  if (unknownNames.length > 0) {
+    throw new Error(
+      `Unknown capability name(s) in dispatch: ${[...new Set(unknownNames)].join(", ")}`,
+    );
+  }
+
+  // Clamp the (already 1..3600-bounded) timeout to the batch risk ceiling.
+  const timeoutSeconds =
+    input.timeoutSeconds === undefined
+      ? undefined
+      : Math.min(input.timeoutSeconds, ceiling);
 
   const [fanout] = await withTenantDb((tx) =>
     tx
@@ -57,7 +96,7 @@ export async function agentSubagentDispatchHandler(
       workspaceId: ctx.workspaceId,
       dispatchId: fanout.publicId,
       maxParallel,
-      timeoutSeconds: input.timeoutSeconds,
+      timeoutSeconds,
       runs: runRows.map((r) => ({
         runId: r.publicId,
         capabilityName: r.capabilityName,

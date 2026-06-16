@@ -29,6 +29,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.skill.list": () => import("./agent.skill.list"),
   "agent.skill.load": () => import("./agent.skill.load"),
   "agent.subagent.aggregate": () => import("./agent.subagent.aggregate"),
+  "agent.subagent.cancel": () => import("./agent.subagent.cancel"),
   "agent.subagent.dispatch": () => import("./agent.subagent.dispatch"),
   "agent.subagent.fanout.get": () => import("./agent.subagent.fanout.get"),
   "agent.subagent.fanout.list": () => import("./agent.subagent.fanout.list"),

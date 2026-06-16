@@ -21,6 +21,7 @@ import "./contracts/agent.plan.create";
 import "./contracts/agent.skill.list";
 import "./contracts/agent.skill.load";
 import "./contracts/agent.subagent.aggregate";
+import "./contracts/agent.subagent.cancel";
 import "./contracts/agent.subagent.dispatch";
 import "./contracts/agent.subagent.fanout.get";
 import "./contracts/agent.subagent.fanout.list";
