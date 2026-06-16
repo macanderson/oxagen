@@ -45,6 +45,7 @@ import "./contracts/automation.disable";
 import "./contracts/automation.enable";
 import "./contracts/automation.list";
 import "./contracts/automation.trigger";
+import "./contracts/automation.update";
 import "./contracts/billing.credits.purchase";
 import "./contracts/billing.subscription.read";
 import "./contracts/billing.subscription.upgrade.start";

@@ -778,6 +778,25 @@
       }
     },
     {
+      "name": "automation.update",
+      "file": "automation.update.ts",
+      "domain": "automation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "billing.credits.purchase",
       "file": "billing.credits.purchase.ts",
       "domain": "billing",

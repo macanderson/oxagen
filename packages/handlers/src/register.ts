@@ -309,6 +309,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./automation.create")).automationCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "automation.update",
+    async () =>
+      (await import("./automation.update")).automationUpdateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "automation.enable",
     async () =>
       (await import("./automation.enable")).automationEnableHandler as CapabilityHandlerFn,
