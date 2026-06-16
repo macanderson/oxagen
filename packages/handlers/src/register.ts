@@ -118,6 +118,16 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./workspace.model.settings.write")).workspaceModelSettingsWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "workspace.settings.read",
+    async () =>
+      (await import("./workspace.settings.read")).workspaceSettingsReadHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "workspace.settings.write",
+    async () =>
+      (await import("./workspace.settings.write")).workspaceSettingsWriteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "org.settings.read",
     async () => (await import("./org.settings.read")).orgSettingsReadHandler as CapabilityHandlerFn,
   );
