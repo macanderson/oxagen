@@ -1,4 +1,4 @@
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { agentSubagentAggregate } from "@oxagen/oxagen/contracts/agent.subagent.aggregate";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -20,7 +20,7 @@ import "@oxagen/oxagen";
  * agent.subagent.aggregate capability and emits `agent/subagent.aggregated`
  * for downstream consumers (e.g. the research swarm → graph projection).
  */
-export const agentAggregateFanout = inngest.createFunction(
+export const [agentAggregateFanout] = createFunction(
   { id: "agent.aggregate-fanout", retries: 1, concurrency: { limit: 16, key: "event.data.orgId" } },
   { event: "agent/subagent.aggregate.requested" },
   async ({ event, step }) => {

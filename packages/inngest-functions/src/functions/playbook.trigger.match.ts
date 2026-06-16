@@ -1,3 +1,4 @@
+import { createFunction } from "../create-function";
 import { inngest } from "../inngest";
 import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
@@ -128,7 +129,7 @@ interface PlaybookTriggerRow {
  *
  * Concurrency: capped at 16 per org — triggers are light DB reads and inserts.
  */
-export const playbookTriggerMatch = inngest.createFunction(
+export const [playbookTriggerMatch] = createFunction(
   {
     id: "playbook-trigger-match",
     retries: 3,

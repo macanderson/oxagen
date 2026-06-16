@@ -1,4 +1,4 @@
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
@@ -36,7 +36,7 @@ const MAX_FANOUT_DEPTH = 3;
  *     tool_invocations metering apply to every subagent capability call.
  *   - Depth guard: rejects fanouts that exceed MAX_FANOUT_DEPTH.
  */
-export const agentExecuteSubagent = inngest.createFunction(
+export const [agentExecuteSubagent] = createFunction(
   { id: "agent.execute-subagent", retries: 0, concurrency: { limit: 8, key: "event.data.orgId" } },
   { event: "agent/subagent.dispatch" },
   async ({ event, step }) => {

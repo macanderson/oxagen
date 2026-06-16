@@ -1,4 +1,4 @@
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, count, eq } from "drizzle-orm";
 import { generateObjectFor } from "@oxagen/ai";
@@ -13,7 +13,7 @@ const taskOutputSchema = z.object({
   sources: z.array(z.string()).optional(),
 });
 
-export const agentWorkflowTaskExecute = inngest.createFunction(
+export const [agentWorkflowTaskExecute] = createFunction(
   {
     id: "agent.workflow.task.execute",
     retries: 1,

@@ -1,4 +1,4 @@
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { withSystemDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { createIngestionCryptoAdapter, decrypt, encrypt } from "@oxagen/crypto";
@@ -26,7 +26,7 @@ interface ExpiringAccount extends Record<string, unknown> {
  * Error handling: a failure to refresh one token increments refresh_failure_count
  * and logs a warning, but does NOT throw — the cron job continues to the next token.
  */
-export const ingestionOauthRefresh = inngest.createFunction(
+export const [ingestionOauthRefresh] = createFunction(
   {
     id: "ingestion-oauth-refresh",
     retries: 2,

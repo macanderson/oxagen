@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument -- event.data types are declared in inngest.ts Events; untyped here because InstanceType<typeof Inngest> strips EventSchemas generics from the Proxy */
-import { inngest } from "../inngest";
+ 
+import { createFunction } from "../create-function";
 import { withSystemDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { createIngestionCryptoAdapter, decrypt } from "@oxagen/crypto";
@@ -24,7 +24,7 @@ const SYMBOL_BATCH_SIZE = 20;
  *
  * Concurrency is limited to 20 parallel parses per org (fan-out stage).
  */
-export const ingestionGithubParseFile = inngest.createFunction(
+export const [ingestionGithubParseFile] = createFunction(
   {
     id: "ingestion-github-parse-file",
     retries: 3,
@@ -32,7 +32,15 @@ export const ingestionGithubParseFile = inngest.createFunction(
   },
   { event: "ingestion/github.parse-file" },
   async ({ event, step }) => {
-    const { connectionId, orgId, workspaceId, owner, repo, sha, path } = event.data;
+    const { connectionId, orgId, workspaceId, owner, repo, sha, path } = event.data as {
+      connectionId: string;
+      orgId: string;
+      workspaceId: string;
+      owner: string;
+      repo: string;
+      sha: string;
+      path: string;
+    };
 
     // ── Step 1: Fetch access token ─────────────────────────────────────────────
     const accessToken = await step.run("fetch-token", async () => {

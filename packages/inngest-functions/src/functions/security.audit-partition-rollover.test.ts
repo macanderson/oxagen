@@ -47,18 +47,16 @@ let capturedHandler: ((ctx: StepCtx) => Promise<unknown>) | null = null;
 let capturedOpts: { id: string; retries: number; concurrency: { limit: number } } | null = null;
 let capturedTrigger: { cron: string } | null = null;
 
-vi.mock("../inngest", () => ({
-  inngest: {
-    createFunction: (
-      opts: { id: string; retries: number; concurrency: { limit: number } },
-      trigger: { cron: string },
-      handler: (ctx: StepCtx) => Promise<unknown>,
-    ) => {
-      capturedOpts = opts;
-      capturedTrigger = trigger;
-      capturedHandler = handler;
-      return { id: "security.audit-partition-rollover" };
-    },
+vi.mock("../create-function", () => ({
+  createFunction: (
+    opts: { id: string; retries: number; concurrency: { limit: number } },
+    trigger: { cron: string },
+    handler: (ctx: StepCtx) => Promise<unknown>,
+  ) => {
+    capturedOpts = opts;
+    capturedTrigger = trigger;
+    capturedHandler = handler;
+    return [{ id: "security.audit-partition-rollover" }];
   },
 }));
 

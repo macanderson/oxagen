@@ -1,4 +1,4 @@
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { generateObjectFor } from "@oxagen/ai";
@@ -87,7 +87,7 @@ function computeEventHash(
  * It never enables anything. Steps requiring human approval pause the run
  * instead of self-approving.
  */
-export const playbookRunExecute = inngest.createFunction(
+export const [playbookRunExecute] = createFunction(
   {
     id: "playbook-run-execute",
     retries: 2,

@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment -- event.data types are declared in inngest.ts Events; untyped here because InstanceType<typeof Inngest> strips EventSchemas generics from the Proxy */
-import { inngest } from "../inngest";
+ 
+import { createFunction } from "../create-function";
 import { withTenantDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -24,7 +24,7 @@ import { logger } from "../logger";
  * Step 3: delete-postgres      wipe mappings, credentials, webhook subs; mark deleted
  * Step 4: audit-log            write deletion event to ClickHouse
  */
-export const ingestionDeleteConnection = inngest.createFunction(
+export const [ingestionDeleteConnection] = createFunction(
   {
     id: "ingestion-delete-connection",
     retries: 2,
@@ -32,7 +32,14 @@ export const ingestionDeleteConnection = inngest.createFunction(
   },
   { event: "ingestion/connection.delete" },
   async ({ event, step }) => {
-    const { connectionId, orgId, workspaceId, mode, requestedBy, requestedAt } = event.data;
+    const { connectionId, orgId, workspaceId, mode, requestedBy, requestedAt } = event.data as {
+      connectionId: string;
+      orgId: string;
+      workspaceId: string;
+      mode: string;
+      requestedBy: string;
+      requestedAt: string;
+    };
 
     // ── Step 1: Mark connection as 'deleting' ────────────────────────────────
     await step.run("mark-deleting", () =>

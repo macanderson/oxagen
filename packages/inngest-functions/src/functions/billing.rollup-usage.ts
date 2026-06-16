@@ -1,4 +1,4 @@
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 // tenancy: system bypass via withSystemDb (no tenant on payload) — OXA-1515
 // This is a global cron that iterates ALL active subscriptions across all orgs.
 // There is no orgId/workspaceId on the event.data payload (the event is a
@@ -25,7 +25,7 @@ const ACTIVE_STATUSES = ["trialing", "active", "past_due"];
  * ids 200 at a time and process each batch serially to keep ClickHouse
  * concurrency predictable. Inngest auto-retries on failure with backoff.
  */
-export const billingRollupUsage = inngest.createFunction(
+export const [billingRollupUsage] = createFunction(
   { id: "billing.rollup-usage", retries: 3 },
   { cron: "0 1 * * *" },
   async ({ step }) => {

@@ -1,8 +1,8 @@
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { syncInvoiceFromStripe } from "@oxagen/billing";
 import { logger } from "../logger";
 
-export const stripeSyncInvoice = inngest.createFunction(
+export const [stripeSyncInvoice] = createFunction(
   { id: "stripe.sync-invoice", retries: 5 },
   { event: "stripe/invoice.updated" },
   async ({ event, step }) => {

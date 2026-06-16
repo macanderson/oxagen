@@ -1,4 +1,4 @@
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { syncSubscriptionFromStripe } from "@oxagen/billing";
 import { logger } from "../logger";
 
@@ -6,7 +6,7 @@ import { logger } from "../logger";
 // raw payload, runner re-syncs the canonical record. Decoupling keeps the
 // webhook acknowledgement fast and lets Inngest handle retries on Stripe
 // API hiccups.
-export const stripeSyncSubscription = inngest.createFunction(
+export const [stripeSyncSubscription] = createFunction(
   { id: "stripe.sync-subscription", retries: 5 },
   { event: "stripe/subscription.updated" },
   async ({ event, step }) => {
