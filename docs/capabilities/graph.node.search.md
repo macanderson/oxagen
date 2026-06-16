@@ -1,41 +1,63 @@
 # graph.node.search
 
-**Domain:** graph
-**Mode:** sync
-**Scope:** tenant + workspace
-**Surfaces:** api, mcp, agent, cli
-**Risk level:** low
+Text search over the workspace graph. Matches `displayName` and `description`, with optional label filtering, returning the best-ranked nodes.
 
-## Intent
+## Mode
+**sync**
 
-Fuzzy search KnowledgeNodes by text match on displayName and description,
-optionally filtered by label.
+## Surfaces
+- API: `GET /v1/graph/nodes/search`
+- MCP: `graph.node.search`
+- Agent: callable (no approval required, risk: low)
+- CLI: not available
 
 ## Input
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| query | string | Text to search for in displayName or description (1-500 chars) |
-| labels | array of strings? | Restrict results to nodes with one of these labels (optional) |
-| limit | number | Maximum results to return: 1-50 (default: 10) |
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | yes | Case-insensitive substring matched against `displayName` and `description` |
+| `labels` | string[] | no | Restrict results to these node labels |
+| `limit` | integer | yes | Max results to return |
 
 ## Output
+| Field | Type | Description |
+|-------|------|-------------|
+| `nodes` | object[] | Ranked matches |
+| `nodes[].nodeId` | string | `publicId` of the node |
+| `nodes[].label` | string | Domain label |
+| `nodes[].displayName` | string | Human-readable node name |
+| `nodes[].description` | string \| null | Optional description |
+| `nodes[].score` | number | Relevance score (`displayName` hit ranks above a `description`-only hit) |
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| nodes | array of objects | Matched nodes ranked by relevance |
+## Example
 
-Each node object:
-- nodeId: string (publicId)
-- label: string
-- displayName: string
-- description: string? (nullable)
-- score: number (relevance: 1.0 for displayName match, 0.5 for description)
+**Request:**
+```http
+GET /v1/graph/nodes/search?query=oauth&labels=Issue&limit=5
+```
 
-## Side effects
+**Response:**
+```json
+{
+  "nodes": [
+    {
+      "nodeId": "node_abc",
+      "label": "Issue",
+      "displayName": "Fix OAuth token refresh",
+      "description": "Token refresh fails after 1h",
+      "score": 1.0
+    }
+  ]
+}
+```
 
-Read-only. Neo4j full-text search.
+## Notes
+- **Access:** Owner or Admin at org level; Owner or Member at workspace level.
+- Read-only; no side effects.
+- **Tenant isolation:** results are scoped by **both** `orgId` **and** `workspaceId`.
+- Ranking is deterministic and index-free: a `displayName` match scores `1.0`, a `description`-only match `0.5`, and a match on both `0.75`. Results are ordered by score, then `displayName`.
+- The optional `labels` filter is appended only when supplied — there is no dynamic Cypher.
 
-## Errors
-
-None explicitly defined in the contract.
+## Related
+- `graph.node.list` — paginated browse with filters
+- `graph.node.get` — retrieve a single node by `publicId`
+- `graph.stats` — aggregate node and edge counts

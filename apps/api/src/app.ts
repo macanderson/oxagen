@@ -122,6 +122,8 @@ import { integrationRoute } from "./routes/v1/integration";
 import { pluginSchemaRoute, pluginVersionRoute } from "./routes/v1/plugin-schema";
 import { graphNodeListRoute } from "./routes/v1/graph.node.list";
 import { graphStatsRoute } from "./routes/v1/graph.stats";
+import { ontologyQueryRoute } from "./routes/v1/ontology.query";
+import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
 
 export type AppEnv = {
   Variables: {
@@ -281,6 +283,8 @@ orgScoped.route("/plugin-schema", pluginSchemaRoute);
 orgScoped.route("/plugin-versions", pluginVersionRoute);
 orgScoped.route("/graph/nodes", graphNodeListRoute);
 orgScoped.route("/graph/stats", graphStatsRoute);
+orgScoped.route("/ontology/query", ontologyQueryRoute);
+orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
 
 // Public OAuth callback — HMAC-verified state param is the security boundary.

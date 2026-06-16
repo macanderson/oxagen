@@ -142,6 +142,8 @@ import { integrationMetrics } from "./integration.metrics";
 import { integrationDelete } from "./integration.delete";
 import { graphNodeList } from "./graph.node.list";
 import { graphStats } from "./graph.stats";
+import { ontologyQuery } from "./ontology.query";
+import { ontologyNeighbors } from "./ontology.neighbors";
 
 export {
   apiKeyCreate,
@@ -278,6 +280,8 @@ export {
   integrationDelete,
   graphNodeList,
   graphStats,
+  ontologyQuery,
+  ontologyNeighbors,
 };
 
 /**
@@ -423,4 +427,6 @@ export const contracts = [
   integrationDelete,
   graphNodeList,
   graphStats,
+  ontologyQuery,
+  ontologyNeighbors,
 ] as const;
