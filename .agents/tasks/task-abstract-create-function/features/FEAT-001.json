@@ -30,5 +30,5 @@
     "cd /projects/sandbox/oxagen-monorepo/packages/inngest-functions && pnpm test:unit"
   ],
   "blocked_reason": null,
-  "findings": "All acceptance criteria met. Types extended with timeouts and onFailure. createFunction adapter implemented and exported from both adapter.ts and index.ts. 26 tests pass in packages/functions (3 new). 257 tests pass in packages/inngest-functions (19 new in create-function.test.ts). Full monorepo typecheck (30 packages) passes via pre-commit hook."
+  "findings": "All acceptance criteria met. Types extended with timeouts and onFailure. createFunction adapter implemented and exported from both adapter.ts and index.ts. 26 tests pass in packages/functions (3 new). 259 tests pass in packages/inngest-functions (21 in create-function.test.ts). Full monorepo typecheck (30 packages) passes via pre-commit hook. Review fix applied: on-failure companion now uses minimal { id } config instead of inheriting primary's retries/concurrency/cancelOn/timeouts. Companion DurableFunction.config no longer spreads the primary config (including onFailure handler reference)."
 }
