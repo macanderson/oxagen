@@ -18,7 +18,13 @@ import { agentSubagentAggregateHandler } from "./agent.subagent.aggregate";
 
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
-type FanoutRow = { publicId: string; status: string; totalChildren: number; completedChildren: number };
+type FanoutRow = {
+  publicId: string;
+  status: string;
+  totalChildren: number;
+  completedChildren: number;
+  createdAt: Date | null;
+};
 type RunRow = {
   publicId: string;
   capabilityName: string;
@@ -30,7 +36,14 @@ type RunRow = {
 };
 
 function fanout(overrides: Partial<FanoutRow> = {}): FanoutRow {
-  return { publicId: "fan_1", status: "completed", totalChildren: 2, completedChildren: 2, ...overrides };
+  return {
+    publicId: "fan_1",
+    status: "completed",
+    totalChildren: 2,
+    completedChildren: 2,
+    createdAt: new Date("2024-01-01T00:00:00Z"),
+    ...overrides,
+  };
 }
 
 function run(id: string, output: Record<string, unknown> | null, overrides: Partial<RunRow> = {}): RunRow {
@@ -135,7 +148,7 @@ describe("agent.subagent.aggregate handler", () => {
     expect(result.aggregatedData).toMatchObject({ color: "blue" });
   });
 
-  it("returns failed status and firstError when any child run failed", async () => {
+  it("reports 'partial' (not 'failed') with merged data + firstError when some succeed and some fail", async () => {
     setupMocks(fanout({ status: "partial" }), [
       run("sar_1", { result: "ok" }),
       run("sar_2", null, { status: "failed", errorReason: "OOM error", outputPayload: null }),
@@ -146,10 +159,59 @@ describe("agent.subagent.aggregate handler", () => {
       CTX,
     );
 
-    expect(result.status).toBe("failed");
+    // Distinct from "failed": a mixed outcome surfaces the successful subset.
+    expect(result.status).toBe("partial");
     expect(result.firstError).toBe("OOM error");
+    expect(result.aggregatedData).toMatchObject({ result: "ok" });
+  });
+
+  it("reports 'failed' only when every child failed (zero completed)", async () => {
+    setupMocks(fanout({ status: "partial", completedChildren: 0 }), [
+      run("sar_1", null, { status: "failed", errorReason: "boom", outputPayload: null }),
+      run("sar_2", null, { status: "failed", errorReason: "second", outputPayload: null }),
+    ]);
+
+    const result = await agentSubagentAggregateHandler(
+      { fanoutId: "fan_1", timeoutMs: 1000 },
+      CTX,
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.firstError).toBe("boom");
     expect(result.aggregatedData).toBeNull();
-    expect(result.conflicts).toHaveLength(0);
+  });
+
+  it("returns 'running' immediately for an in-progress fanout (no blocking poll)", async () => {
+    // createdAt is recent, so the snapshot window has not elapsed.
+    setupMocks(
+      fanout({ status: "running", completedChildren: 1, createdAt: new Date() }),
+      [run("sar_1", { a: 1 }), run("sar_2", null, { status: "running", outputPayload: null, completedAt: null })],
+    );
+
+    const started = Date.now();
+    const result = await agentSubagentAggregateHandler(
+      { fanoutId: "fan_1", timeoutMs: 30 * 60 * 1000 },
+      CTX,
+    );
+    // Must return without sleeping for the timeout window.
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(result.status).toBe("running");
+    expect(result.aggregatedData).toBeNull();
+  });
+
+  it("reports 'timed_out' for an in-progress fanout older than the snapshot window", async () => {
+    setupMocks(
+      fanout({ status: "running", completedChildren: 1, createdAt: new Date("2020-01-01T00:00:00Z") }),
+      [run("sar_1", { a: 1 }), run("sar_2", null, { status: "running", outputPayload: null, completedAt: null })],
+    );
+
+    const result = await agentSubagentAggregateHandler(
+      { fanoutId: "fan_1", timeoutMs: 1000 },
+      CTX,
+    );
+
+    expect(result.status).toBe("timed_out");
+    expect(result.aggregatedData).toBeNull();
   });
 
   it("throws when fanout is not found", async () => {

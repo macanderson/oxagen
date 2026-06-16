@@ -5,7 +5,7 @@ export const agentSubagentAggregate = registerCapability({
   name: "agent.subagent.aggregate",
   domain: "agent",
   description:
-    "Wait for all child runs in a subagent fanout to complete and return merged results, conflict list, and execution timeline",
+    "Return the current merged results, conflict list, and execution timeline for a subagent fanout. Non-blocking: reports the live status (running until children finish) — durable waiting is handled by the agent.aggregate-fanout Inngest function.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
@@ -25,11 +25,17 @@ export const agentSubagentAggregate = registerCapability({
       .min(0)
       .max(30 * 60 * 1000)
       .default(5 * 60 * 1000)
-      .describe("Max milliseconds to wait for all children to finish (default 5 min, max 30 min)"),
+      .describe(
+        "Snapshot window in ms: a still-running fanout older than this is reported as 'timed_out' rather than 'running' (default 5 min, max 30 min). Non-blocking — the handler never sleeps.",
+      ),
   }),
   output: z.object({
     fanoutId: z.string(),
-    status: z.enum(["completed", "partial", "failed", "timed_out"]),
+    status: z
+      .enum(["pending", "running", "completed", "partial", "failed", "timed_out"])
+      .describe(
+        "running/pending = children still executing (aggregatedData null); completed = all succeeded; partial = some succeeded, some failed/incomplete (merged data of the successful subset); failed = none succeeded; timed_out = still unfinished past the snapshot window",
+      ),
     totalChildren: z.number().int(),
     completedChildren: z.number().int(),
     aggregatedData: z.record(z.unknown()).nullable().describe("Merged output data from all successful runs"),

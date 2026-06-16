@@ -23,6 +23,7 @@ type FanoutRow = {
   status: string;
   totalChildren: number;
   completedChildren: number;
+  createdAt: Date | null;
 };
 
 // Merge all successful output payloads into one record. Where multiple runs
@@ -101,6 +102,7 @@ async function loadFanout(fanoutId: string, ctx: CapabilityContext): Promise<Fan
         status: schema.subagentFanouts.status,
         totalChildren: schema.subagentFanouts.totalChildren,
         completedChildren: schema.subagentFanouts.completedChildren,
+        createdAt: schema.subagentFanouts.createdAt,
       })
       .from(schema.subagentFanouts)
       .where(
@@ -115,47 +117,53 @@ async function loadFanout(fanoutId: string, ctx: CapabilityContext): Promise<Fan
   return row ?? null;
 }
 
-const POLL_INTERVAL_MS = 2_000;
-const TERMINAL_STATUSES = new Set(["completed", "partial", "timed_out", "failed"]);
+// In-progress (non-terminal) fanout states written by agent.execute-subagent.
+const IN_PROGRESS_STATUSES = new Set(["pending", "running"]);
+
+type AggStatus = AgentSubagentAggregateOutput["status"];
+
+/**
+ * Derive the honest aggregate status from the current snapshot — never a poll.
+ *
+ * OXA: the old handler busy-waited a 2s poll for up to 30 min, which exhausts
+ * the serverless function timeout, and collapsed every failure into "failed"
+ * while reporting still-running fanouts as terminal. This is a non-blocking
+ * snapshot: callers (or the agent.aggregate-fanout Inngest function via
+ * step.waitForEvent) decide when to read; we report exactly what is true now.
+ *
+ *   - pending/running, within the snapshot window → "running"
+ *   - pending/running, older than timeoutMs        → "timed_out"
+ *   - all children completed, none failed          → "completed"
+ *   - zero completed, at least one failed          → "failed"
+ *   - a mix of completed and failed/incomplete     → "partial" (distinct!)
+ */
+function deriveAggregateStatus(
+  fanout: FanoutRow,
+  completedCount: number,
+  failedCount: number,
+  timeoutMs: number,
+  now: number,
+): AggStatus {
+  if (IN_PROGRESS_STATUSES.has(fanout.status)) {
+    const ageMs = fanout.createdAt ? now - fanout.createdAt.getTime() : 0;
+    return ageMs >= timeoutMs ? "timed_out" : "running";
+  }
+  if (fanout.status === "timed_out") return "timed_out";
+  if (completedCount >= fanout.totalChildren && failedCount === 0) return "completed";
+  if (completedCount === 0 && failedCount > 0) return "failed";
+  return "partial";
+}
 
 export async function agentSubagentAggregateHandler(
   input: AgentSubagentAggregateInput,
   ctx: CapabilityContext,
 ): Promise<AgentSubagentAggregateOutput> {
-  const deadline = Date.now() + input.timeoutMs;
-
-  // Poll until all children finish or timeout.
-  let fanout: FanoutRow | null = null;
-  while (true) {
-    fanout = await loadFanout(input.fanoutId, ctx);
-    if (!fanout) throw new Error(`Fanout ${input.fanoutId} not found`);
-
-    if (TERMINAL_STATUSES.has(fanout.status)) break;
-
-    if (Date.now() >= deadline) {
-      const runs = await loadRuns(input.fanoutId, ctx);
-      const timeline = runs.map((r) => ({
-        runId: r.publicId,
-        capabilityName: r.capabilityName,
-        status: r.status,
-        startedAt: r.startedAt ? r.startedAt.toISOString() : null,
-        completedAt: r.completedAt ? r.completedAt.toISOString() : null,
-        errorReason: r.errorReason,
-      }));
-      return {
-        fanoutId: input.fanoutId,
-        status: "timed_out",
-        totalChildren: fanout.totalChildren,
-        completedChildren: fanout.completedChildren,
-        aggregatedData: null,
-        conflicts: [],
-        timeline,
-        firstError: null,
-      };
-    }
-
-    await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-  }
+  // Single, non-blocking read of the current fanout + child snapshot. No poll,
+  // no setTimeout — safe within a serverless function budget. Durable waiting,
+  // when a caller needs to block until completion, lives in the
+  // agent.aggregate-fanout Inngest function (step.waitForEvent).
+  const fanout = await loadFanout(input.fanoutId, ctx);
+  if (!fanout) throw new Error(`Fanout ${input.fanoutId} not found`);
 
   const runs = await loadRuns(input.fanoutId, ctx);
   const timeline = runs.map((r) => ({
@@ -167,38 +175,35 @@ export async function agentSubagentAggregateHandler(
     errorReason: r.errorReason,
   }));
 
-  const firstFailed = runs.find((r) => r.status === "failed");
-  const firstError = firstFailed?.errorReason ?? null;
+  const completedCount = runs.filter((r) => r.status === "completed").length;
+  const failedRuns = runs.filter((r) => r.status === "failed");
+  const firstError = failedRuns[0]?.errorReason ?? null;
 
-  // Any failed child → overall status is "failed" regardless of DB status.
-  const effectiveStatus =
-    firstFailed
-      ? "failed"
-      : (fanout.status as AgentSubagentAggregateOutput["status"]);
+  const status = deriveAggregateStatus(
+    fanout,
+    completedCount,
+    failedRuns.length,
+    input.timeoutMs,
+    Date.now(),
+  );
 
-  if (effectiveStatus === "failed") {
-    return {
-      fanoutId: input.fanoutId,
-      status: "failed",
-      totalChildren: fanout.totalChildren,
-      completedChildren: fanout.completedChildren,
-      aggregatedData: null,
-      conflicts: [],
-      timeline,
-      firstError,
-    };
-  }
-
-  const { aggregatedData, conflicts } = mergeOutputs(runs);
+  // Merge only completed children's output. For an all-failed or still-running
+  // fanout we never surface partial data as if usable — aggregatedData is null.
+  // A "partial" fanout DOES return the merged output of the children that
+  // succeeded, honestly labelled partial so callers never mistake it for done.
+  const canMerge = status === "completed" || status === "partial";
+  const { aggregatedData, conflicts } = canMerge
+    ? mergeOutputs(runs)
+    : { aggregatedData: null, conflicts: [] as AgentSubagentAggregateOutput["conflicts"] };
 
   return {
     fanoutId: input.fanoutId,
-    status: effectiveStatus,
+    status,
     totalChildren: fanout.totalChildren,
     completedChildren: fanout.completedChildren,
     aggregatedData,
     conflicts,
     timeline,
-    firstError: null,
+    firstError,
   };
 }
