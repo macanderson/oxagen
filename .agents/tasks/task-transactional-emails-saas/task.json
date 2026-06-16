@@ -1,0 +1,7 @@
+{
+  "task_id": "task-transactional-emails-saas",
+  "task_description": "Implement comprehensive transactional email coverage for Oxagen as a SaaS platform. Create missing email templates (email verification, invitation, low balance alert, payment failed, payment receipt) and wire them into the application's send points (Better Auth email verification, invitation handler, billing dunning, and auto-reload). Uses the existing @oxagen/notifications package with SMTP transport (Resend via smtp.resend.com).",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}

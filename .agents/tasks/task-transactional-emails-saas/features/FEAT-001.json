@@ -1,0 +1,34 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Create all missing transactional email templates in @oxagen/notifications. This includes: email verification, workspace/org invitation, low balance alert, payment failed (dunning), and payment receipt/success. Each template follows the existing pattern (pure function, {subject, text, html}, esc() escaping, inline single-column HTML, #6366f1 CTA button). Also add comprehensive unit tests for each template following the reset-password-email-template.test.ts pattern.",
+  "status": "completed",
+  "steps": [
+    "Create packages/notifications/src/notifications/email-verification-template.ts - Pure function emailVerificationTemplate({verificationUrl, email}) returning {subject, text, html}. Subject: 'Verify your email address'. CTA button: 'Verify email'. Mention that link expires. Follow exact HTML structure from reset-password-email-template.ts (same esc() helper, same inline styles, same table layout).",
+    "Create packages/notifications/src/notifications/email-verification-template.test.ts - Test subject contains 'verify' and 'Oxagen', text contains URL verbatim and email, html contains href with verificationUrl, html contains email escaped, test esc() escaping with dangerous inputs (& < > \").",
+    "Create packages/notifications/src/notifications/invitation-email-template.ts - Pure function invitationEmailTemplate({inviteUrl, inviterName, orgName, role, email}) returning {subject, text, html}. Subject: 'You have been invited to join {orgName} on Oxagen'. CTA button: 'Accept invitation'. Mention who invited them, what role, and 7-day expiry.",
+    "Create packages/notifications/src/notifications/invitation-email-template.test.ts - Test subject contains org name, text contains all fields verbatim, html contains href with inviteUrl, esc() tests with dangerous org/inviter names.",
+    "Create packages/notifications/src/notifications/low-balance-alert-template.ts - Pure function lowBalanceAlertTemplate({orgName, balanceCents, thresholdCents, topUpUrl}) returning {subject, text, html}. Subject: 'Low balance alert for {orgName}'. Show current balance and threshold formatted as dollars. CTA button: 'Add credits'.",
+    "Create packages/notifications/src/notifications/low-balance-alert-template.test.ts - Test subject contains org name, text contains dollar amounts, html contains topUpUrl href, esc() tests.",
+    "Create packages/notifications/src/notifications/payment-failed-template.ts - Pure function paymentFailedTemplate({orgName, graceDays, billingUrl}) returning {subject, text, html}. Subject: 'Payment failed for {orgName}'. Explain grace period and that service will be suspended after N days. CTA button: 'Update payment method'.",
+    "Create packages/notifications/src/notifications/payment-failed-template.test.ts - Test subject contains org name, text mentions grace period days, html contains billingUrl href, esc() tests.",
+    "Create packages/notifications/src/notifications/payment-receipt-template.ts - Pure function paymentReceiptTemplate({orgName, amountCents, description, receiptUrl}) returning {subject, text, html}. Subject: 'Payment receipt for {orgName}'. Show amount formatted as dollars. CTA button: 'View receipt'. Description field for what was purchased.",
+    "Create packages/notifications/src/notifications/payment-receipt-template.test.ts - Test subject contains org name, text contains dollar amount and description, html contains receiptUrl href, esc() tests.",
+    "Update packages/notifications/src/index.ts - Export all new template functions and their input types from the barrel. Add exports following the existing pattern (named export + type export for each input interface)."
+  ],
+  "acceptance_criteria": [
+    "All 5 new template files exist with proper TypeScript types and HTML-escaped output",
+    "All 5 new test files pass with pnpm --filter @oxagen/notifications test:unit",
+    "Each template's html output contains proper DOCTYPE, meta viewport, table-based layout with max-width:520px",
+    "Each template's CTA button uses background:#6366f1 color:#ffffff inline style",
+    "All templates use a local esc() function for HTML escaping (& < > \" characters)",
+    "All new templates and types are exported from packages/notifications/src/index.ts",
+    "TypeScript compilation passes: pnpm turbo run typecheck --filter=@oxagen/notifications"
+  ],
+  "verification": [
+    "pnpm --filter @oxagen/notifications test:unit",
+    "pnpm turbo run typecheck --filter=@oxagen/notifications"
+  ],
+  "blocked_reason": null,
+  "findings": "All 5 templates and 5 test files created. 147 tests pass (14 test files). TypeCheck passes across all 29 packages in the monorepo. Pre-commit hook (lefthook with lint + typecheck) succeeded. Node 24 was installed via mise (GPG verification disabled due to missing gpg-agent). pnpm 11.7.0 installed globally via npm."
+}

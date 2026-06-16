@@ -1,6 +1,7 @@
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { notifyOrgManagers, paymentFailedTemplate } from "@oxagen/notifications";
 import { logger } from "./logger";
 import type { BillingInvoice } from "./provider";
 
@@ -178,6 +179,25 @@ export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<v
       },
       "billing: dunning — entered grace period after payment failure",
     );
+
+    // Fire-and-forget: billing state update is the critical path, notification is best-effort.
+    void (async () => {
+      try {
+        const appUrl = process.env["APP_URL"] ?? "https://oxagen-v2-app.vercel.app";
+        const billingUrl = `${appUrl}/settings/billing`;
+        const template = paymentFailedTemplate({ orgName: orgId, graceDays: DUNNING_GRACE_DAYS, billingUrl });
+        await notifyOrgManagers({
+          orgId,
+          kind: "system",
+          title: template.subject,
+          body: `Your payment has failed. You have ${DUNNING_GRACE_DAYS} days to update your payment method before service is suspended.`,
+          emailHtml: template.html,
+          deepLink: "/settings/billing",
+        });
+      } catch (err) {
+        logger.warn({ orgId, err }, "billing: dunning — failed to send payment failure notification");
+      }
+    })();
   });
 }
 
