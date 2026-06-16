@@ -128,7 +128,7 @@ describe("AgentEditorForm (create)", () => {
     expect(arg.name).toBe("Repo Review Agent");
     expect(arg.config.graph.ontologyId).toBe("wrk_1");
     await waitFor(() =>
-      expect(mockPush).toHaveBeenCalledWith("/acme/prod/agents/repo-review-agent"),
+      expect(mockPush).toHaveBeenCalledWith("/acme/prod/automation/agents/repo-review-agent"),
     );
   });
 
@@ -292,7 +292,7 @@ describe("AgentEditorForm (edit)", () => {
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledOnce());
     const arg = mockUpdate.mock.calls[0]![0] as { agentId: string };
     expect(arg.agentId).toBe("agt_1");
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/acme/prod/agents/repo-review"));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/acme/prod/automation/agents/repo-review"));
   });
 
   it("surfaces an update failure without navigating", async () => {

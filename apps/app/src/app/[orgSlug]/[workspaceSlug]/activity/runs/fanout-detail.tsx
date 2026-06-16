@@ -57,7 +57,7 @@ export function FanoutDetail({ initialFanout, orgSlug, workspaceSlug }: FanoutDe
   return (
     <div className="flex flex-col gap-5" data-testid="fanout-detail">
       <Link
-        href={workspace.agents.runs(ctx)}
+        href={workspace.activity.runs(ctx)}
         className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />

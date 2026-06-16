@@ -11,7 +11,6 @@
 import {
   Activity,
   ArrowLeft,
-  Bot,
   BookOpen,
   Building2,
   CreditCard,
@@ -19,14 +18,12 @@ import {
   LayoutGrid,
   Lock,
   MessageSquare,
-  Network,
   Settings,
   ShieldCheck,
   ShoppingBag,
   SlidersHorizontal,
   Sparkles,
   Terminal,
-  TrendingUp,
   User,
   Users,
   Workflow,
@@ -68,12 +65,17 @@ export type SidebarConfig = {
 };
 
 // ---------------------------------------------------------------------------
-// Workspace mode config — 8 items
+// Workspace mode config — IA spec §4 tree.
 // /{org}/{ws}/... — daily operational surface
 //
-// Groups:  primary (chat, knowledge, automation, activity)
-//          tools   (studio, marketplace, workflows — visually de-emphasised)
+// Groups:  primary (ask, knowledge, automation, activity)
+//          tools   (studio, marketplace — visually de-emphasised)
 //          footer  (settings — pinned to bottom)
+//
+// Agents live under Automation (a tab), all run kinds live under Activity →
+// Runs, and "Workflows" is gone (folded into Activity → Runs; the word is a
+// banned term per spec §19). No standalone Agents / Subagent Runs / Workflows
+// sidebar entries.
 // ---------------------------------------------------------------------------
 
 const workspaceConfig: SidebarConfig = {
@@ -105,16 +107,6 @@ const workspaceConfig: SidebarConfig = {
       group: "primary",
     },
     {
-      id: "agents",
-      label: "Agents",
-      icon: Bot,
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.agents.root(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "primary",
-    },
-    {
       id: "automation",
       label: "Automation",
       icon: Workflow,
@@ -135,19 +127,6 @@ const workspaceConfig: SidebarConfig = {
       group: "primary",
     },
     {
-      // Subagent fan-out viewer — the in-app "agent monitor". Placed after the
-      // established mobile top-4 (Ask/Knowledge/Agents/Automation) so it lands
-      // in the sidebar + mobile "More" overflow without displacing them.
-      id: "agent-runs",
-      label: "Subagent Runs",
-      icon: Network,
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.agents.runs(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "primary",
-    },
-    {
       id: "studio",
       label: "Studio",
       icon: Sparkles,
@@ -164,16 +143,6 @@ const workspaceConfig: SidebarConfig = {
       // The plugin marketplace lives at the org level (org settings → plugins);
       // it only needs orgSlug, so it resolves from a workspace context too.
       href: (ctx) => org.settings.plugins(ctx),
-      group: "tools",
-    },
-    {
-      id: "workflows",
-      label: "Workflows",
-      icon: TrendingUp,
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.workflows.root(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
       group: "tools",
     },
     {
@@ -444,12 +413,9 @@ export function enumerateNavTargets(
     // Sidebar-level items
     targets.push({ label: "Ask", href: workspace.ask(wsCtx), parent: "ask" });
     targets.push({ label: "Knowledge", href: workspace.knowledge.root(wsCtx), parent: "knowledge" });
-    targets.push({ label: "Agents", href: workspace.agents.root(wsCtx), parent: "agents" });
-    targets.push({ label: "Agents · New", href: workspace.agents.create(wsCtx), parent: "agents" });
     targets.push({ label: "Automation", href: workspace.automation.root(wsCtx), parent: "automation" });
     targets.push({ label: "Activity", href: workspace.activity.root(wsCtx), parent: "activity" });
     targets.push({ label: "Studio", href: workspace.studio.root(wsCtx), parent: "studio" });
-    targets.push({ label: "Workflows", href: workspace.workflows.root(wsCtx), parent: "workflows" });
     targets.push({ label: "Settings", href: workspace.settings.root(wsCtx), parent: "settings" });
 
     // Knowledge tabs
@@ -459,6 +425,7 @@ export function enumerateNavTargets(
 
     // Automation tabs
     targets.push({ label: "Automation · Agents", href: workspace.automation.agents(wsCtx), parent: "automation" });
+    targets.push({ label: "Automation · Agents · New", href: workspace.agents.create(wsCtx), parent: "automation" });
     targets.push({ label: "Automation · Playbooks", href: workspace.automation.playbooks(wsCtx), parent: "automation" });
     targets.push({ label: "Automation · Event Sources", href: workspace.automation.eventSources(wsCtx), parent: "automation" });
     targets.push({ label: "Automation · Triggers", href: workspace.automation.triggers(wsCtx), parent: "automation" });

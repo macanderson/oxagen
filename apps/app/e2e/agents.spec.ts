@@ -38,7 +38,7 @@ test.describe("agents — management lifecycle", () => {
     const ws = "default";
 
     // ── 1. Empty state ──────────────────────────────────────────────────────
-    await page.goto(`/${orgSlug}/${ws}/agents`);
+    await page.goto(`/${orgSlug}/${ws}/automation/agents`);
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page.getByRole("heading", { name: /^Agents$/ })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/no agents yet/i)).toBeVisible();
@@ -46,7 +46,7 @@ test.describe("agents — management lifecycle", () => {
 
     // ── 2. Create an agent ──────────────────────────────────────────────────
     await page.getByRole("link", { name: /create agent/i }).click();
-    await expect(page).toHaveURL(new RegExp(`/${orgSlug}/${ws}/agents/new`));
+    await expect(page).toHaveURL(new RegExp(`/${orgSlug}/${ws}/automation/agents/new`));
     await expect(page.getByRole("form", { name: /agent editor/i })).toBeVisible();
 
     await page.fill("#agent-name", "Repo Review Agent");
@@ -63,7 +63,7 @@ test.describe("agents — management lifecycle", () => {
     await page.getByRole("button", { name: /create agent/i }).click();
 
     // Lands on the detail page for the new agent.
-    await page.waitForURL(new RegExp(`/${orgSlug}/${ws}/agents/repo-review-agent$`), {
+    await page.waitForURL(new RegExp(`/${orgSlug}/${ws}/automation/agents/repo-review-agent$`), {
       timeout: 15_000,
     });
     await expect(page.getByRole("heading", { name: /repo review agent/i })).toBeVisible();
@@ -71,22 +71,22 @@ test.describe("agents — management lifecycle", () => {
     await shot(page, "03-detail-after-create");
 
     // ── 3. See it listed ────────────────────────────────────────────────────
-    await page.goto(`/${orgSlug}/${ws}/agents`);
+    await page.goto(`/${orgSlug}/${ws}/automation/agents`);
     const row = page.getByRole("link", { name: /repo review agent/i });
     await expect(row).toBeVisible();
     await shot(page, "04-list-populated");
 
     // ── 4. Edit → publish ───────────────────────────────────────────────────
     await row.click();
-    await page.waitForURL(new RegExp(`/${orgSlug}/${ws}/agents/repo-review-agent$`));
+    await page.waitForURL(new RegExp(`/${orgSlug}/${ws}/automation/agents/repo-review-agent$`));
     await page.getByRole("link", { name: /^Edit$/ }).click();
-    await page.waitForURL(new RegExp(`/${orgSlug}/${ws}/agents/repo-review-agent/edit$`));
+    await page.waitForURL(new RegExp(`/${orgSlug}/${ws}/automation/agents/repo-review-agent/edit$`));
     await page.fill(
       "#agent-instructions",
       "You review repository changes, summarise risk, and propose follow-ups.",
     );
     await page.getByRole("button", { name: /save new version/i }).click();
-    await page.waitForURL(new RegExp(`/${orgSlug}/${ws}/agents/repo-review-agent$`), {
+    await page.waitForURL(new RegExp(`/${orgSlug}/${ws}/automation/agents/repo-review-agent$`), {
       timeout: 15_000,
     });
 

@@ -82,7 +82,7 @@ describe("FanoutDetail", () => {
     expect(screen.getByText("fan_1")).toBeInTheDocument();
     expect(screen.getByText(/1 \/ 2 children complete/i)).toBeInTheDocument();
     const back = screen.getByText(/back to fan-outs/i).closest("a");
-    expect(back).toHaveAttribute("href", "/acme/prod/agents/runs");
+    expect(back).toHaveAttribute("href", "/acme/prod/activity/runs");
   });
 
   it("renders each child run with capability, duration, and status", () => {
