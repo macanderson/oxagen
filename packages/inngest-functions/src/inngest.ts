@@ -34,6 +34,29 @@ type Events = {
   "agent/subagent.dispatch": {
     data: { orgId: string; workspaceId: string; fanoutId: string; depth?: number };
   };
+  "agent/subagent.fanout.completed": {
+    data: {
+      orgId: string;
+      workspaceId: string;
+      fanoutId: string;
+      status: "completed" | "partial" | "failed";
+      completedChildren: number;
+      totalChildren: number;
+    };
+  };
+  "agent/subagent.aggregate.requested": {
+    data: { orgId: string; workspaceId: string; fanoutId: string; timeoutMs?: number };
+  };
+  "agent/subagent.aggregated": {
+    data: {
+      orgId: string;
+      workspaceId: string;
+      fanoutId: string;
+      status: "pending" | "running" | "completed" | "partial" | "failed" | "timed_out";
+      totalChildren: number;
+      completedChildren: number;
+    };
+  };
   "agent/task.background.start": {
     data: {
       orgId: string;
