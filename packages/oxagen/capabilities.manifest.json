@@ -613,6 +613,22 @@
       }
     },
     {
+      "name": "api.key.rotate",
+      "file": "api.key.rotate.ts",
+      "domain": "api_key",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
       "name": "archive.create",
       "file": "archive.create.ts",
       "domain": "documents",
