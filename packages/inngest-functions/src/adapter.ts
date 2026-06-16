@@ -9,26 +9,6 @@ import type { EventClient, EventPayload } from "@oxagen/functions";
 import { NonRetriableError } from "@oxagen/functions";
 import { inngest } from "./inngest";
 
-// ─── Type-level assertions ───────────────────────────────────────────────────
-// Prove at compile-time that the inngest proxy's send() conforms to EventClient.
-// The Inngest send() returns Promise<{ ids: string[] }> but EventClient only
-// requires Promise<void>, which is structurally compatible (callers ignore the
-// return value).
-
-type InngestSendArg = Parameters<typeof inngest.send>[0];
-
-/**
- * Static assertion: EventPayload is assignable to each element of the
- * Inngest send() argument type. This ensures our abstract event shape is
- * compatible with the concrete SDK.
- */
-type _AssertSingleEventAssignable = EventPayload extends Extract<
-  InngestSendArg,
-  { name: string; data: unknown }
->
-  ? true
-  : true; // structural compatibility verified by createEventClient below
-
 // ─── EventClient adapter ─────────────────────────────────────────────────────
 
 /**

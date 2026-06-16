@@ -59,6 +59,14 @@ describe("adapter", () => {
       // EventClient.send() returns void, not { ids: string[] }
       expect(result).toBeUndefined();
     });
+
+    it("propagates errors from inngest.send()", async () => {
+      mocks.send.mockRejectedValueOnce(new Error("network failure"));
+      const client = createEventClient();
+      await expect(
+        client.send({ name: "test/event", data: {} }),
+      ).rejects.toThrow("network failure");
+    });
   });
 
   describe("NonRetriableError", () => {
