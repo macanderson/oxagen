@@ -7,5 +7,5 @@ export default async function AutomationRoot({
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }) {
   const { orgSlug, workspaceSlug } = await params;
-  redirect(workspace.automation.agents({ orgSlug, workspaceSlug }));
+  redirect(workspace.automation.playbooks({ orgSlug, workspaceSlug }));
 }

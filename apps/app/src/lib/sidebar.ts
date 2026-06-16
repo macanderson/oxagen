@@ -11,6 +11,7 @@
 import {
   Activity,
   ArrowLeft,
+  Bot,
   BookOpen,
   Building2,
   CreditCard,
@@ -99,6 +100,16 @@ const workspaceConfig: SidebarConfig = {
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.knowledge.root(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "primary",
+    },
+    {
+      id: "agents",
+      label: "Agents",
+      icon: Bot,
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.agents.root(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "primary",
     },
@@ -419,6 +430,8 @@ export function enumerateNavTargets(
     // Sidebar-level items
     targets.push({ label: "Ask", href: workspace.ask(wsCtx), parent: "ask" });
     targets.push({ label: "Knowledge", href: workspace.knowledge.root(wsCtx), parent: "knowledge" });
+    targets.push({ label: "Agents", href: workspace.agents.root(wsCtx), parent: "agents" });
+    targets.push({ label: "Agents · New", href: workspace.agents.create(wsCtx), parent: "agents" });
     targets.push({ label: "Automation", href: workspace.automation.root(wsCtx), parent: "automation" });
     targets.push({ label: "Activity", href: workspace.activity.root(wsCtx), parent: "activity" });
     targets.push({ label: "Studio", href: workspace.studio.root(wsCtx), parent: "studio" });
