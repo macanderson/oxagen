@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "feat",
   "description": "Wire up the email verification flow in Better Auth configuration and add invitation email sending to the workspace.invite.send handler. This connects the new templates from FEAT-001 to actual send points in the application. Also wire low-balance alert email into the billing autoreload check and payment-failed email into the dunning onInvoicePaymentFailed handler.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Modify packages/auth/src/auth.ts - Add a top-level `emailVerification` config block to the betterAuth() call with `sendVerificationEmail` callback and `sendOnSignIn: true`. Import the new emailVerificationTemplate from @oxagen/notifications. The callback should use the fire-and-forget pattern (void sendEmail({...})) matching the existing sendResetPassword pattern. Also add `requireEmailVerification: true` to the emailAndPassword config block.",
     "Update packages/auth/src/auth.config.test.ts - Add a new describe block 'email verification config invariants' that tests: (1) requireEmailVerification is true, (2) sendVerificationEmail is a function, (3) callback does not throw when invoked. Follow the same pattern as the existing 'sendResetPassword config invariants' test block.",
@@ -25,5 +25,5 @@
     "pnpm --filter @oxagen/notifications test:unit"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Added @oxagen/notifications as a workspace dependency to both @oxagen/billing and @oxagen/handlers package.json files since they did not previously depend on it. pnpm install was required to update the lockfile. Full monorepo typecheck (29 packages) passes via pre-commit hook. Auth unit tests (137 pass) and notifications unit tests (147 pass) all green. The emailVerification block uses fire-and-forget (void) pattern consistent with sendResetPassword. The invitation email in workspace.invite.send wraps the entire email-send flow in a try-catch IIFE so the critical path (DB insert) is never affected. The dunning and autoreload notifications also follow fire-and-forget with try-catch."
 }
