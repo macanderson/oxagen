@@ -407,3 +407,208 @@ describe("agent.tool.list handler", () => {
     );
   });
 });
+
+// ── agent.definition.create ───────────────────────────────────────────────────
+
+import handler_agentDefinitionCreate, {
+  metadata as agentDefinitionCreateMetadata,
+} from "./agent.definition.create";
+
+describe("agent.definition.create handler", () => {
+  const validOutput = { agentId: "agt_1", publicId: "agt_1", slug: "a", version: 1 };
+
+  it("exports metadata with the contract name", () => {
+    expect(agentDefinitionCreateMetadata.name).toBe("agent.definition.create");
+  });
+
+  it("calls buildContext then invoke and parses output", async () => {
+    mocks.invoke.mockResolvedValue(validOutput);
+    const args = {
+      slug: "a",
+      name: "A",
+      agentType: "custom",
+      config: {
+        graph: { ontologyId: "o", mode: "read", retrieval: { strategy: "hybrid" }, budget: { maxHops: 1, maxNodes: 1 } },
+        agentTools: [],
+        triggers: [],
+      },
+    };
+    const result = await handler_agentDefinitionCreate(args as never);
+    expect(mocks.buildContext).toHaveBeenCalled();
+    expect(mocks.invoke).toHaveBeenCalledWith("agent.definition.create", args, fakeCtx, { surface: "mcp" });
+    expect(result).toMatchObject(validOutput);
+  });
+});
+
+// ── agent.definition.update ───────────────────────────────────────────────────
+
+import handler_agentDefinitionUpdate, {
+  metadata as agentDefinitionUpdateMetadata,
+} from "./agent.definition.update";
+
+describe("agent.definition.update handler", () => {
+  it("exports metadata and forwards to invoke", async () => {
+    expect(agentDefinitionUpdateMetadata.name).toBe("agent.definition.update");
+    mocks.invoke.mockResolvedValue({ agentId: "agt_1", version: 2, isPublished: false });
+    const args = {
+      agentId: "agt_1",
+      config: {
+        graph: { ontologyId: "o", mode: "read", retrieval: { strategy: "hybrid" }, budget: { maxHops: 1, maxNodes: 1 } },
+        agentTools: [],
+        triggers: [],
+      },
+    };
+    const result = await handler_agentDefinitionUpdate(args as never);
+    expect(mocks.invoke).toHaveBeenCalledWith("agent.definition.update", args, fakeCtx, { surface: "mcp" });
+    expect(result.version).toBe(2);
+  });
+});
+
+// ── agent.definition.publish ──────────────────────────────────────────────────
+
+import handler_agentDefinitionPublish, {
+  metadata as agentDefinitionPublishMetadata,
+} from "./agent.definition.publish";
+
+describe("agent.definition.publish handler", () => {
+  it("exports metadata and forwards to invoke", async () => {
+    expect(agentDefinitionPublishMetadata.name).toBe("agent.definition.publish");
+    mocks.invoke.mockResolvedValue({ agentId: "agt_1", version: 1, checksum: "x", activeVersionId: "v" });
+    const args = { agentId: "agt_1" };
+    const result = await handler_agentDefinitionPublish(args as never);
+    expect(mocks.invoke).toHaveBeenCalledWith("agent.definition.publish", args, fakeCtx, { surface: "mcp" });
+    expect(result.checksum).toBe("x");
+  });
+});
+
+// ── agent.definition.get ──────────────────────────────────────────────────────
+
+import handler_agentDefinitionGet, {
+  metadata as agentDefinitionGetMetadata,
+} from "./agent.definition.get";
+
+describe("agent.definition.get handler", () => {
+  it("exports metadata and forwards to invoke", async () => {
+    expect(agentDefinitionGetMetadata.name).toBe("agent.definition.get");
+    mocks.invoke.mockResolvedValue({
+      agentId: "agt_1",
+      publicId: "agt_1",
+      slug: "a",
+      name: "A",
+      description: null,
+      agentType: "custom",
+      status: "active",
+      deploymentStatus: "active",
+      version: 1,
+      isPublished: true,
+      config: {
+        graph: { ontologyId: "o", mode: "read", retrieval: { strategy: "hybrid" }, budget: { maxHops: 1, maxNodes: 1 } },
+        agentTools: [],
+        triggers: [],
+      },
+    });
+    const args = { agentId: "agt_1" };
+    const result = await handler_agentDefinitionGet(args as never);
+    expect(mocks.invoke).toHaveBeenCalledWith("agent.definition.get", args, fakeCtx, { surface: "mcp" });
+    expect(result.slug).toBe("a");
+  });
+});
+
+// ── agent.definition.list ─────────────────────────────────────────────────────
+
+import handler_agentDefinitionList, {
+  metadata as agentDefinitionListMetadata,
+} from "./agent.definition.list";
+
+describe("agent.definition.list handler", () => {
+  it("exports metadata and forwards to invoke", async () => {
+    expect(agentDefinitionListMetadata.name).toBe("agent.definition.list");
+    mocks.invoke.mockResolvedValue({ agents: [] });
+    const result = await handler_agentDefinitionList({} as never);
+    expect(mocks.invoke).toHaveBeenCalledWith("agent.definition.list", {}, fakeCtx, { surface: "mcp" });
+    expect(result.agents).toEqual([]);
+  });
+});
+
+// ── agent.deploy ──────────────────────────────────────────────────────────────
+
+import handler_agentDeploy, { metadata as agentDeployMetadata } from "./agent.deploy";
+
+describe("agent.deploy handler", () => {
+  it("exports metadata and forwards to invoke", async () => {
+    expect(agentDeployMetadata.name).toBe("agent.deploy");
+    mocks.invoke.mockResolvedValue({ agentId: "agt_1", deploymentStatus: "active" });
+    const args = { agentId: "agt_1", deploymentStatus: "active" as const };
+    const result = await handler_agentDeploy(args as never);
+    expect(mocks.invoke).toHaveBeenCalledWith("agent.deploy", args, fakeCtx, { surface: "mcp" });
+    expect(result.deploymentStatus).toBe("active");
+  });
+});
+
+// ── agent.trigger.create ──────────────────────────────────────────────────────
+
+import handler_agentTriggerCreate, {
+  metadata as agentTriggerCreateMetadata,
+} from "./agent.trigger.create";
+
+describe("agent.trigger.create handler", () => {
+  it("exports metadata and forwards to invoke", async () => {
+    expect(agentTriggerCreateMetadata.name).toBe("agent.trigger.create");
+    mocks.invoke.mockResolvedValue({ triggerId: "atr_1", publicId: "atr_1", triggerType: "manual", enabled: true });
+    const args = { agentId: "agt_1", trigger: { type: "manual" as const, enabled: true } };
+    const result = await handler_agentTriggerCreate(args as never);
+    expect(mocks.invoke).toHaveBeenCalledWith("agent.trigger.create", args, fakeCtx, { surface: "mcp" });
+    expect(result.triggerType).toBe("manual");
+  });
+});
+
+// ── agent.trigger.update ──────────────────────────────────────────────────────
+
+import handler_agentTriggerUpdate, {
+  metadata as agentTriggerUpdateMetadata,
+} from "./agent.trigger.update";
+
+describe("agent.trigger.update handler", () => {
+  it("exports metadata and forwards to invoke", async () => {
+    expect(agentTriggerUpdateMetadata.name).toBe("agent.trigger.update");
+    mocks.invoke.mockResolvedValue({ triggerId: "atr_1", triggerType: "manual", enabled: false });
+    const args = { triggerId: "atr_1", trigger: { type: "manual" as const, enabled: false } };
+    const result = await handler_agentTriggerUpdate(args as never);
+    expect(mocks.invoke).toHaveBeenCalledWith("agent.trigger.update", args, fakeCtx, { surface: "mcp" });
+    expect(result.enabled).toBe(false);
+  });
+});
+
+// ── agent.trigger.delete ──────────────────────────────────────────────────────
+
+import handler_agentTriggerDelete, {
+  metadata as agentTriggerDeleteMetadata,
+} from "./agent.trigger.delete";
+
+describe("agent.trigger.delete handler", () => {
+  it("exports metadata and forwards to invoke", async () => {
+    expect(agentTriggerDeleteMetadata.name).toBe("agent.trigger.delete");
+    mocks.invoke.mockResolvedValue({ triggerId: "atr_1", deleted: true });
+    const args = { triggerId: "atr_1" };
+    const result = await handler_agentTriggerDelete(args as never);
+    expect(mocks.invoke).toHaveBeenCalledWith("agent.trigger.delete", args, fakeCtx, { surface: "mcp" });
+    expect(result.deleted).toBe(true);
+  });
+});
+
+// ── agent.trigger.list ────────────────────────────────────────────────────────
+
+import handler_agentTriggerList, {
+  metadata as agentTriggerListMetadata,
+} from "./agent.trigger.list";
+
+describe("agent.trigger.list handler", () => {
+  it("exports metadata and forwards to invoke", async () => {
+    expect(agentTriggerListMetadata.name).toBe("agent.trigger.list");
+    mocks.invoke.mockResolvedValue({ triggers: [] });
+    const args = { agentId: "agt_1" };
+    const result = await handler_agentTriggerList(args as never);
+    expect(mocks.invoke).toHaveBeenCalledWith("agent.trigger.list", args, fakeCtx, { surface: "mcp" });
+    expect(result.triggers).toEqual([]);
+  });
+});

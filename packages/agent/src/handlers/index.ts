@@ -31,6 +31,16 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.subagent.aggregate": () => import("./agent.subagent.aggregate"),
   "agent.subagent.dispatch": () => import("./agent.subagent.dispatch"),
   "agent.ui.render": () => import("./agent.ui.render"),
+  "agent.definition.create": () => import("./agent.definition.create"),
+  "agent.definition.update": () => import("./agent.definition.update"),
+  "agent.definition.publish": () => import("./agent.definition.publish"),
+  "agent.definition.get": () => import("./agent.definition.get"),
+  "agent.definition.list": () => import("./agent.definition.list"),
+  "agent.deploy": () => import("./agent.deploy"),
+  "agent.trigger.create": () => import("./agent.trigger.create"),
+  "agent.trigger.update": () => import("./agent.trigger.update"),
+  "agent.trigger.delete": () => import("./agent.trigger.delete"),
+  "agent.trigger.list": () => import("./agent.trigger.list"),
 };
 
 /** Capability names this package supplies handlers for. Consumed by

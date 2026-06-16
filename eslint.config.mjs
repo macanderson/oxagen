@@ -110,4 +110,13 @@ export default tseslint.config(
     files: ["packages/auth/src/auth.ts"],
     rules: { "no-restricted-imports": "off" },
   },
+  // Operational seed/backfill/migration scripts run as a trusted operator,
+  // not in a request context, and legitimately use the raw db() handle to
+  // enumerate and write across tenants (e.g. backfill-org-iam, seed-skills,
+  // seed-interactive-agent). They print and confirm the target DB before any
+  // write. The request-path RLS seam does not apply here.
+  {
+    files: ["tools/scripts/**"],
+    rules: { "no-restricted-imports": "off" },
+  },
 );

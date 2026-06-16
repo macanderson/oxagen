@@ -14,6 +14,16 @@ import { archiveCreate } from "./archive.create";
 import { assetUpload } from "./asset.upload";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentCodeExecute } from "./agent.code.execute";
+import { agentDefinitionCreate } from "./agent.definition.create";
+import { agentDefinitionUpdate } from "./agent.definition.update";
+import { agentDefinitionPublish } from "./agent.definition.publish";
+import { agentDefinitionGet } from "./agent.definition.get";
+import { agentDefinitionList } from "./agent.definition.list";
+import { agentDeploy } from "./agent.deploy";
+import { agentTriggerCreate } from "./agent.trigger.create";
+import { agentTriggerUpdate } from "./agent.trigger.update";
+import { agentTriggerDelete } from "./agent.trigger.delete";
+import { agentTriggerList } from "./agent.trigger.list";
 import { agentExecutionRecord } from "./agent.execution.record";
 import { agentUiRender } from "./agent.ui.render";
 import { brandkitApply } from "./brandkit.apply";
@@ -152,6 +162,16 @@ export {
   assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
+  agentDefinitionCreate,
+  agentDefinitionUpdate,
+  agentDefinitionPublish,
+  agentDefinitionGet,
+  agentDefinitionList,
+  agentDeploy,
+  agentTriggerCreate,
+  agentTriggerUpdate,
+  agentTriggerDelete,
+  agentTriggerList,
   agentExecutionRecord,
   agentUiRender,
   brandkitApply,
@@ -299,6 +319,16 @@ export const contracts = [
   assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
+  agentDefinitionCreate,
+  agentDefinitionUpdate,
+  agentDefinitionPublish,
+  agentDefinitionGet,
+  agentDefinitionList,
+  agentDeploy,
+  agentTriggerCreate,
+  agentTriggerUpdate,
+  agentTriggerDelete,
+  agentTriggerList,
   agentUiRender,
   brandkitApply,
   documentsGenerate,

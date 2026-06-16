@@ -11,6 +11,7 @@
     "./registry": "./src/registry.ts",
     "./kernel": "./src/kernel.ts",
     "./agent-schema": "./src/agent-schema.ts",
+    "./interactive-agent": "./src/interactive-agent.ts",
     "./types": "./src/types.ts",
     "./iam": "./src/iam/index.ts",
     "./contracts": "./src/contracts/index.ts",

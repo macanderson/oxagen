@@ -1,0 +1,57 @@
+import { z } from "zod";
+import { registerCapability } from "../registry";
+import {
+  graphAccessSchema,
+  agentToolSchema,
+  agentTriggerSchema,
+} from "../agent-schema";
+
+// The versioned body persisted into agent_versions.config. Mirrors
+// agentDefinitionConfigSchema from agent-schema.ts so the contract input and
+// the jsonb column never drift.
+const definitionConfigInput = z.object({
+  graph: graphAccessSchema,
+  agentTools: z.array(agentToolSchema).default([]),
+  triggers: z.array(agentTriggerSchema).default([]),
+  instructions: z.string().optional(),
+});
+
+export const agentDefinitionCreate = registerCapability({
+  name: "agent.definition.create",
+  domain: "agent",
+  description:
+    "Create a new agent definition — inserts the agent identity row (draft, inactive) and an immutable v1 version snapshot with the supplied, schema-validated config (graph access, tools, triggers, instructions)",
+  mode: "sync",
+  surfaces: ["api", "mcp", "agent"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  scoped: true,
+  agent: { requiresApproval: false, riskLevel: "medium", category: "mutation" },
+  sensitivity: "medium",
+  defaultEffect: "deny",
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow" },
+  },
+  input: z.object({
+    slug: z
+      .string()
+      .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "slug must be lowercase kebab-case"),
+    name: z.string().min(1),
+    description: z.string().optional(),
+    agentType: z.string().default("custom"),
+    config: definitionConfigInput,
+  }),
+  output: z.object({
+    agentId: z.string(),
+    publicId: z.string(),
+    slug: z.string(),
+    version: z.number().int().positive(),
+  }),
+});
+
+export type AgentDefinitionCreateInput = z.output<
+  typeof agentDefinitionCreate.input
+>;
+export type AgentDefinitionCreateOutput = z.output<
+  typeof agentDefinitionCreate.output
+>;

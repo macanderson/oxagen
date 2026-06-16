@@ -23,4 +23,22 @@ describe("handler registry", () => {
     const res = await invokeCapability("agent.tool.list", { includeExternal: false }, CTX);
     expect(res).toEqual({ tools: [] });
   });
+
+  // Exercise every agent-lifecycle loader so the lazy import() arrows are
+  // covered and each handler module's expected export name is verified.
+  it.each([
+    "agent.definition.create",
+    "agent.definition.update",
+    "agent.definition.publish",
+    "agent.definition.get",
+    "agent.definition.list",
+    "agent.deploy",
+    "agent.trigger.create",
+    "agent.trigger.update",
+    "agent.trigger.delete",
+    "agent.trigger.list",
+  ])("resolves a handler function for %s", async (cap) => {
+    const fn = await resolveHandler(cap);
+    expect(typeof fn).toBe("function");
+  });
 });

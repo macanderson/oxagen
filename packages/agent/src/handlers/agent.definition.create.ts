@@ -1,0 +1,71 @@
+import { withTenantDb, schema } from "@oxagen/database";
+import { agentDefinitionConfigSchema } from "@oxagen/oxagen/agent-schema";
+import type {
+  AgentDefinitionCreateInput,
+  AgentDefinitionCreateOutput,
+} from "@oxagen/oxagen/contracts/agent.definition.create";
+import type { CapabilityContext } from "../types";
+
+export type { AgentDefinitionCreateInput, AgentDefinitionCreateOutput };
+
+/**
+ * Create a new agent definition: the identity row (status 'draft',
+ * deploymentStatus 'inactive') plus an immutable, unpublished v1 version whose
+ * config is validated against agentDefinitionConfigSchema.
+ */
+export async function agentDefinitionCreateHandler(
+  input: AgentDefinitionCreateInput,
+  ctx: CapabilityContext,
+): Promise<AgentDefinitionCreateOutput> {
+  // Validate the config shape before any write so a malformed definition can
+  // never be persisted (handlers never trust the column shape).
+  const config = agentDefinitionConfigSchema.parse(input.config);
+
+  if (!ctx.userId) {
+    throw new Error("agent.definition.create requires an authenticated user");
+  }
+  const userId = ctx.userId;
+
+  return withTenantDb(async (tx) => {
+    const [agent] = await tx
+      .insert(schema.agents)
+      .values({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        slug: input.slug,
+        name: input.name,
+        description: input.description ?? null,
+        agentType: input.agentType,
+        status: "draft",
+        deploymentStatus: "inactive",
+        createdByUserId: userId,
+        updatedByUserId: userId,
+      })
+      .returning({
+        id: schema.agents.id,
+        publicId: schema.agents.publicId,
+        slug: schema.agents.slug,
+      });
+    if (!agent) throw new Error("agents insert failed");
+
+    const [version] = await tx
+      .insert(schema.agentVersions)
+      .values({
+        agentId: agent.id,
+        version: 1,
+        isPublished: false,
+        checksum: null,
+        config,
+        createdByUserId: userId,
+      })
+      .returning({ version: schema.agentVersions.version });
+    if (!version) throw new Error("agent_versions insert failed");
+
+    return {
+      agentId: agent.publicId,
+      publicId: agent.publicId,
+      slug: agent.slug,
+      version: version.version,
+    };
+  });
+}

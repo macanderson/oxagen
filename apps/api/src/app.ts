@@ -99,6 +99,16 @@ import { automationDisableRoute } from "./routes/v1/automation.disable";
 import { automationTriggerRoute } from "./routes/v1/automation.trigger";
 import { skillWorkspaceListRoute } from "./routes/v1/skill.workspace.list";
 import { agentSubagentDispatchRoute } from "./routes/v1/agent.subagent.dispatch";
+import { agentDefinitionCreateRoute } from "./routes/v1/agent.definition.create";
+import { agentDefinitionUpdateRoute } from "./routes/v1/agent.definition.update";
+import { agentDefinitionPublishRoute } from "./routes/v1/agent.definition.publish";
+import { agentDefinitionGetRoute } from "./routes/v1/agent.definition.get";
+import { agentDefinitionListRoute } from "./routes/v1/agent.definition.list";
+import { agentDeployRoute } from "./routes/v1/agent.deploy";
+import { agentTriggerCreateRoute } from "./routes/v1/agent.trigger.create";
+import { agentTriggerUpdateRoute } from "./routes/v1/agent.trigger.update";
+import { agentTriggerDeleteRoute } from "./routes/v1/agent.trigger.delete";
+import { agentTriggerListRoute } from "./routes/v1/agent.trigger.list";
 import { privacyDataExportRoute } from "./routes/v1/privacy.data.export";
 import { privacyDataEraseRoute } from "./routes/v1/privacy.data.erase";
 import { connectionRoute } from "./routes/v1/connection";
@@ -202,6 +212,19 @@ orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
 orgScoped.route("/agent/subagent/aggregate", agentSubagentAggregateRoute);
 orgScoped.route("/agent/subagent/dispatch", agentSubagentDispatchRoute);
+// Agent lifecycle: definitions, deployment, triggers. The /update and /publish
+// sub-paths are mounted before the get route so they are not swallowed by its
+// GET /:agentId param match.
+orgScoped.route("/agent/definitions/update", agentDefinitionUpdateRoute);
+orgScoped.route("/agent/definitions/publish", agentDefinitionPublishRoute);
+orgScoped.route("/agent/definitions", agentDefinitionCreateRoute);
+orgScoped.route("/agent/definitions", agentDefinitionListRoute);
+orgScoped.route("/agent/definitions", agentDefinitionGetRoute);
+orgScoped.route("/agent/deploy", agentDeployRoute);
+orgScoped.route("/agent/triggers/update", agentTriggerUpdateRoute);
+orgScoped.route("/agent/triggers/delete", agentTriggerDeleteRoute);
+orgScoped.route("/agent/triggers", agentTriggerCreateRoute);
+orgScoped.route("/agent/triggers", agentTriggerListRoute);
 orgScoped.route("/forms/fill", formFillRoute);
 orgScoped.route("/archive/create", archiveCreateRoute);
 orgScoped.route("/documents/generate", documentsGenerateRoute);

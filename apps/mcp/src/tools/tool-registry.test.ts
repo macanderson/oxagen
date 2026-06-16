@@ -36,6 +36,16 @@ import { metadata as agentTaskBackgroundStartMetadata } from "./agent.task.backg
 import { metadata as agentSubagentAggregateMetadata } from "./agent.subagent.aggregate";
 import { metadata as agentSubagentDispatchMetadata } from "./agent.subagent.dispatch";
 import { metadata as agentToolListMetadata } from "./agent.tool.list";
+import { metadata as agentDefinitionCreateMetadata } from "./agent.definition.create";
+import { metadata as agentDefinitionUpdateMetadata } from "./agent.definition.update";
+import { metadata as agentDefinitionPublishMetadata } from "./agent.definition.publish";
+import { metadata as agentDefinitionGetMetadata } from "./agent.definition.get";
+import { metadata as agentDefinitionListMetadata } from "./agent.definition.list";
+import { metadata as agentDeployMetadata } from "./agent.deploy";
+import { metadata as agentTriggerCreateMetadata } from "./agent.trigger.create";
+import { metadata as agentTriggerUpdateMetadata } from "./agent.trigger.update";
+import { metadata as agentTriggerDeleteMetadata } from "./agent.trigger.delete";
+import { metadata as agentTriggerListMetadata } from "./agent.trigger.list";
 import { metadata as assetUploadMetadata } from "./asset.upload";
 import { metadata as billingCreditsPurchaseMetadata } from "./billing.credits.purchase";
 import { metadata as billingSubscriptionReadMetadata } from "./billing.subscription.read";
@@ -149,6 +159,8 @@ import { metadata as integrationInstallMetadata } from "./integration.install";
 import { metadata as integrationListMetadata } from "./integration.list";
 import { metadata as integrationMetricsMetadata } from "./integration.metrics";
 import { metadata as integrationSyncMetadata } from "./integration.sync";
+import { metadata as ontologyQueryMetadata } from "./ontology.query";
+import { metadata as ontologyNeighborsMetadata } from "./ontology.neighbors";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -172,6 +184,16 @@ const allToolMetadata = [
   agentSubagentAggregateMetadata,
   agentSubagentDispatchMetadata,
   agentToolListMetadata,
+  agentDefinitionCreateMetadata,
+  agentDefinitionUpdateMetadata,
+  agentDefinitionPublishMetadata,
+  agentDefinitionGetMetadata,
+  agentDefinitionListMetadata,
+  agentDeployMetadata,
+  agentTriggerCreateMetadata,
+  agentTriggerUpdateMetadata,
+  agentTriggerDeleteMetadata,
+  agentTriggerListMetadata,
   archiveCreateMetadata,
   assetUploadMetadata,
   billingCreditsPurchaseMetadata,
@@ -286,6 +308,8 @@ const allToolMetadata = [
   integrationListMetadata,
   integrationMetricsMetadata,
   integrationSyncMetadata,
+  ontologyQueryMetadata,
+  ontologyNeighborsMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────
