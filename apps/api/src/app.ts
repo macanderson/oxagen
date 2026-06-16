@@ -55,6 +55,8 @@ import { workspaceModelSettingsReadRoute } from "./routes/v1/workspace.model.set
 import { workspaceModelSettingsWriteRoute } from "./routes/v1/workspace.model.settings.write";
 import { promptSettingsReadRoute } from "./routes/v1/prompt.settings.read";
 import { promptSettingsWriteRoute } from "./routes/v1/prompt.settings.write";
+import { orgSettingsReadRoute } from "./routes/v1/org.settings.read";
+import { orgSettingsWriteRoute } from "./routes/v1/org.settings.write";
 import { conversationListRoute } from "./routes/v1/conversation.list";
 import { conversationRenameRoute } from "./routes/v1/conversation.rename";
 import { conversationArchiveRoute } from "./routes/v1/conversation.archive";
@@ -251,6 +253,8 @@ orgScoped.route("/workspace/model-settings", workspaceModelSettingsReadRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsWriteRoute);
 orgScoped.route("/workspace/prompt-settings", promptSettingsReadRoute);
 orgScoped.route("/workspace/prompt-settings", promptSettingsWriteRoute);
+orgScoped.route("/org/settings", orgSettingsReadRoute);
+orgScoped.route("/org/settings", orgSettingsWriteRoute);
 orgScoped.route("/asset/upload", assetUploadRoute);
 orgScoped.route("/plugin/registries", pluginRegistryListRoute);
 orgScoped.route("/plugin/registries/add", pluginRegistryAddRoute);

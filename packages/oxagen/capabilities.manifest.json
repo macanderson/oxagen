@@ -1788,6 +1788,42 @@
       }
     },
     {
+      "name": "org.settings.read",
+      "file": "org.settings.read.ts",
+      "domain": "organization",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "org.settings.write",
+      "file": "org.settings.write.ts",
+      "domain": "organization",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "organization.create",
       "file": "organization.create.ts",
       "domain": "organization",
