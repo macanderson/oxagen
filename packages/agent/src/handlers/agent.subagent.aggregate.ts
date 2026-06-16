@@ -19,6 +19,7 @@ type RunRow = {
 };
 
 type FanoutRow = {
+  id: string;
   publicId: string;
   status: string;
   totalChildren: number;
@@ -71,7 +72,9 @@ function mergeOutputs(runs: RunRow[]): {
   return { aggregatedData: merged, conflicts };
 }
 
-async function loadRuns(fanoutId: string, ctx: CapabilityContext): Promise<RunRow[]> {
+// fanoutUuid is the fan-out's internal uuid (subagent_fanouts.id), which is
+// what subagent_runs.fanout_id stores — NOT the external public_id.
+async function loadRuns(fanoutUuid: string, ctx: CapabilityContext): Promise<RunRow[]> {
   return withTenantDb((tx) =>
     tx
       .select({
@@ -86,7 +89,7 @@ async function loadRuns(fanoutId: string, ctx: CapabilityContext): Promise<RunRo
       .from(schema.subagentRuns)
       .where(
         and(
-          eq(schema.subagentRuns.fanoutId, fanoutId),
+          eq(schema.subagentRuns.fanoutId, fanoutUuid),
           eq(schema.subagentRuns.orgId, ctx.orgId),
           eq(schema.subagentRuns.workspaceId, ctx.workspaceId),
         ),
@@ -94,10 +97,13 @@ async function loadRuns(fanoutId: string, ctx: CapabilityContext): Promise<RunRo
   );
 }
 
+// The fanoutId argument here is the external public_id (the dispatchId callers
+// receive from agent.subagent.dispatch); we look the fan-out up by public_id.
 async function loadFanout(fanoutId: string, ctx: CapabilityContext): Promise<FanoutRow | null> {
   const [row] = await withTenantDb((tx) =>
     tx
       .select({
+        id: schema.subagentFanouts.id,
         publicId: schema.subagentFanouts.publicId,
         status: schema.subagentFanouts.status,
         totalChildren: schema.subagentFanouts.totalChildren,
@@ -165,7 +171,8 @@ export async function agentSubagentAggregateHandler(
   const fanout = await loadFanout(input.fanoutId, ctx);
   if (!fanout) throw new Error(`Fanout ${input.fanoutId} not found`);
 
-  const runs = await loadRuns(input.fanoutId, ctx);
+  // Child runs are keyed by the fan-out's uuid, not its public_id.
+  const runs = await loadRuns(fanout.id, ctx);
   const timeline = runs.map((r) => ({
     runId: r.publicId,
     capabilityName: r.capabilityName,

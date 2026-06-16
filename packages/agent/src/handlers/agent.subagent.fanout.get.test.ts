@@ -10,6 +10,7 @@ import { agentSubagentFanoutGetHandler } from "./agent.subagent.fanout.get";
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 type FanoutRow = {
+  id: string;
   publicId: string;
   parentMessageId: string;
   status: string;
@@ -60,6 +61,7 @@ function setup(fanoutRow: FanoutRow | null, runs: RunRow[]) {
 
 function fanout(overrides: Partial<FanoutRow> = {}): FanoutRow {
   return {
+    id: "fanuuid_1",
     publicId: "fan_1",
     parentMessageId: "msg_1",
     status: "partial",
