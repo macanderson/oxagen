@@ -71,7 +71,10 @@ jobs:
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-      DATABASE_URL: postgres://oxagen:oxagen@localhost:5432/oxagen
+      # sslmode=disable: Atlas (Go lib/pq) defaults to sslmode=require and fails
+      # against the plain-TCP CI service container ("SSL is not enabled").
+      # node-postgres ignores the param, so it is safe for every consumer.
+      DATABASE_URL: postgres://oxagen:oxagen@localhost:5432/oxagen?sslmode=disable
       CLICKHOUSE_URL: http://localhost:8123
       CLICKHOUSE_USERNAME: default
       CLICKHOUSE_PASSWORD: ""
@@ -107,12 +110,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install Atlas CLI
         run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
-      # Apply committed Drizzle migrations on top of the init baseline.
-      # Unconditional (unlike ci.yml's diff-gated step): the service
-      # containers start fresh every run, so the full schema must always
-      # be brought current or test:contract/build legs fail on main.
-      - name: Migrate
-        run: pnpm db:migrate
+      # Bring the fresh service-container schema fully current. Must mirror the
+      # ci.yml migrate path exactly: Postgres is managed by Atlas (the `local`
+      # atlas env points at the developer's localhost:5433 dev DB + a scratch
+      # `atlas_dev` database, so `pnpm db:migrate` cannot work here — it is the
+      # developer-only target). Use `--env ci`, which reads $DATABASE_URL, then
+      # apply ClickHouse + Neo4j via the migrate script and seed defaults.
+      - name: Migrate Postgres (Atlas)
+        working-directory: packages/database
+        run: atlas migrate apply --env ci
+      - name: Migrate ClickHouse + Neo4j
+        run: DB_MIGRATE_STORES=clickhouse,neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
+      - name: Seed platform defaults
+        run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
       - name: Full ${{ matrix.task }} (no affected filter)
         run: pnpm turbo run ${{ matrix.task }}
 
@@ -171,7 +181,9 @@ jobs:
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-      DATABASE_URL: postgres://oxagen:oxagen@localhost:5432/oxagen
+      # sslmode=disable: Atlas (Go lib/pq) defaults to sslmode=require and fails
+      # against the plain-TCP CI service container ("SSL is not enabled").
+      DATABASE_URL: postgres://oxagen:oxagen@localhost:5432/oxagen?sslmode=disable
       CLICKHOUSE_URL: http://localhost:8123
       CLICKHOUSE_USERNAME: default
       CLICKHOUSE_PASSWORD: ""
@@ -188,6 +200,25 @@ jobs:
       NEXT_PUBLIC_API_URL: http://localhost:4000
       INNGEST_EVENT_KEY: ci_inngest_event
       INNGEST_SIGNING_KEY: signkey-test-ci0000000000000000000000000000000000000000000000000000000000
+      # The e2e job serves apps/app as a production build (`next start`), where
+      # the auth startup guard requires the credential-encryption master key
+      # (real 256-bit key from repo secrets — dummies fail the base64 check).
+      AUTH_TOKEN_ENCRYPTION_KEY: ${{ secrets.AUTH_TOKEN_ENCRYPTION_KEY }}
+      # GitHub source-connect e2e builds the authorize URL (no API call); the
+      # state secret feeds the HMAC. Dummy values are sufficient.
+      GITHUB_APP_CLIENT_ID: Iv1.cie2e0000000000
+      GITHUB_APP_CLIENT_SECRET: ci-github-app-secret
+      GITHUB_APP_INSTALL_STATE_SECRET: ci-github-install-state-secret
+      # Social-login OAuth clients change Better Auth provider registration;
+      # dummy CI values keep the auth surface under test consistent.
+      GITHUB_LOGIN_CLIENT_ID: ci-github-login-client-id
+      GITHUB_LOGIN_CLIENT_SECRET: ci-github-login-client-secret
+      GOOGLE_LOGIN_CLIENT_ID: ci-google-login-client-id
+      GOOGLE_LOGIN_CLIENT_SECRET: ci-google-login-client-secret
+      # connection.create encrypts credentials via the ingestion crypto adapter;
+      # the API throws 500 on POST /connections without a valid AES-256 key.
+      INGESTION_CRYPTO_PROVIDER: env
+      INGESTION_ENCRYPTION_KEY: Z+kVBYRa3uc8nyyvgm+Z5tayV3Nawkg/YMzgzJnLh0U=
       E2E_TEST: "1"
 
     steps:
@@ -205,8 +236,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install Atlas CLI
         run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
-      - name: Migrate
-        run: pnpm db:migrate
+      # Mirror the ci.yml migrate path: Atlas for Postgres (--env ci reads
+      # $DATABASE_URL; the `local` atlas env targets the dev-only localhost:5433
+      # box, so `pnpm db:migrate` cannot run here), then ClickHouse + Neo4j.
+      - name: Migrate Postgres (Atlas)
+        working-directory: packages/database
+        run: atlas migrate apply --env ci
+      - name: Migrate ClickHouse + Neo4j
+        run: DB_MIGRATE_STORES=clickhouse,neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
+      - name: Seed platform defaults
+        run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
       - name: Install Playwright browsers
         run: pnpm --filter @oxagen/app exec playwright install --with-deps chromium
       - name: Build app (playwright.config webServer runs `pnpm start` in CI)
