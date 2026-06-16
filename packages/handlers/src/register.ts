@@ -17,6 +17,10 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () => (await import("./api.key.revoke")).apiKeyRevokeHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "api.key.rotate",
+    async () => (await import("./api.key.rotate")).apiKeyRotateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "asset.upload",
     async () => (await import("./asset.upload")).assetUploadHandler as CapabilityHandlerFn,
   );

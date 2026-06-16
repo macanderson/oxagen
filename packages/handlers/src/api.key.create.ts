@@ -11,61 +11,17 @@
 //   5. Emit api_key.created security event (fire-and-forget).
 //   6. Return the rawKey — it will never be recoverable again.
 
-import { createHash, randomBytes } from "node:crypto";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { apiKeyCreate } from "@oxagen/oxagen/contracts/api.key.create";
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { and, eq, isNull } from "drizzle-orm";
+import {
+  API_KEY_AUTHORIZED_ROLES as AUTHORIZED_ROLES,
+  resolveActorOrgRole as resolveActorRole,
+  generateApiKey,
+} from "./lib/api-key-authz";
 import { logger } from "./logger";
-
-const AUTHORIZED_ROLES = new Set(["Owner", "Admin"]);
-
-async function resolveActorRole(orgId: string, userId: string): Promise<string | null> {
-  return withTenantDb(async (tx) => {
-    const [principalRow] = await tx
-      .select({ id: schema.principals.id })
-      .from(schema.principals)
-      .where(
-        and(
-          eq(schema.principals.orgId, orgId),
-          eq(schema.principals.parentUserId, userId),
-          eq(schema.principals.status, "active"),
-        ),
-      )
-      .limit(1);
-
-    if (!principalRow) return null;
-
-    const [praRow] = await tx
-      .select({ roleName: schema.roles.name })
-      .from(schema.principalRoleAssignments)
-      .innerJoin(schema.roles, eq(schema.roles.id, schema.principalRoleAssignments.roleId))
-      .where(
-        and(
-          eq(schema.principalRoleAssignments.principalId, principalRow.id),
-          eq(schema.principalRoleAssignments.orgId, orgId),
-          eq(schema.roles.scopeKind, "org"),
-          isNull(schema.principalRoleAssignments.workspaceId),
-          isNull(schema.principalRoleAssignments.deletedAt),
-        ),
-      )
-      .limit(1);
-
-    return praRow?.roleName ?? null;
-  });
-}
-
-/** Generate a secure API key in the format: ox_<base64url(32 random bytes)> */
-function generateApiKey(): { rawKey: string; keyPrefix: string; keyHash: string } {
-  const rawKey = "ox_" + randomBytes(32).toString("base64url");
-  // Use the first 12 characters as the searchable prefix. This is enough to
-  // disambiguate while still being opaque without the full key.
-  const keyPrefix = rawKey.slice(0, 12);
-  const keyHash = createHash("sha256").update(rawKey).digest("hex");
-  return { rawKey, keyPrefix, keyHash };
-}
 
 export const apiKeyCreateHandler: CapabilityHandler<typeof apiKeyCreate> = async (input, ctx) => {
   // ── Auth + scope guard ─────────────────────────────────────────────────────

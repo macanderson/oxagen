@@ -36,6 +36,7 @@ import "./contracts/agent.trigger.update";
 import "./contracts/agent.ui.render";
 import "./contracts/api.key.create";
 import "./contracts/api.key.revoke";
+import "./contracts/api.key.rotate";
 import "./contracts/archive.create";
 import "./contracts/asset.upload";
 import "./contracts/audit.log.query";
