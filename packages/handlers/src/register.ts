@@ -309,6 +309,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./automation.create")).automationCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "automation.update",
+    async () =>
+      (await import("./automation.update")).automationUpdateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "automation.enable",
     async () =>
       (await import("./automation.enable")).automationEnableHandler as CapabilityHandlerFn,
@@ -353,6 +358,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler(
     "connection.delete",
     async () => (await import("./connection.delete")).connectionDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "connection.update",
+    async () => (await import("./connection.update")).connectionUpdateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "connection.pause",
+    async () => (await import("./connection.pause")).connectionPauseHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "connection.preview",
