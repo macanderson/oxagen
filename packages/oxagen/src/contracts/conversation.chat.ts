@@ -7,7 +7,7 @@ export const conversationChat = registerCapability({
   description: "Post a message to a conversation",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp"],
+  layers: ["schema", "api", "docs", "mcp"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "conversation" },
   sensitivity: "low",

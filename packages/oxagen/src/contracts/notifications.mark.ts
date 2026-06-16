@@ -11,7 +11,7 @@ export const notificationsMark = registerCapability({
   description: "Mark a notification as read and/or archived for the calling user.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
   sensitivity: "low",
   defaultEffect: "deny",

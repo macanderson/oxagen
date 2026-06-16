@@ -7,7 +7,7 @@ export const skillWorkspaceList = registerCapability({
   description: "List skills available in the workspace",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp"],
+  layers: ["schema", "api", "docs", "mcp"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "skill" },
   sensitivity: "low",

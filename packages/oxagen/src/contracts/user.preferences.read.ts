@@ -7,7 +7,7 @@ export const userPreferencesRead = registerCapability({
   description: "Read the calling user's UI and model preferences",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit"],
+  layers: ["schema", "api", "docs", "mcp", "unit"],
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "user" },
   sensitivity: "low",

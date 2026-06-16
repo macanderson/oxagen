@@ -18,7 +18,7 @@ export const promptSettingsRead = registerCapability({
     "Read the workspace prompt configuration: appended instructions, content-prompt overrides, and the auto-improve-prompts toggle.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit"],
+  layers: ["schema", "api", "docs", "mcp", "unit"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   sensitivity: "low",

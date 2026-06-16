@@ -13,7 +13,7 @@ export const notificationsList = registerCapability({
     "List in-app notifications for the calling user. Supports filtering to unread-only and pagination.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
   sensitivity: "low",
   defaultEffect: "deny",

@@ -10,7 +10,7 @@ export const pluginOrgInstall = registerCapability({
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: true, riskLevel: "medium", category: "plugin" },
-  layers: ["api", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit"],
   scoped: false,
   sensitivity: "medium",
   defaultEffect: "deny",

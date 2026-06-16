@@ -7,7 +7,7 @@ export const formSubmit = registerCapability({
   description: "Submit a response to a form",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp"],
+  layers: ["schema", "api", "docs", "mcp"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "form" },
   sensitivity: "low",

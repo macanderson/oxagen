@@ -44,6 +44,7 @@
     "release:major": "tsx --env-file-if-exists=.env.local tools/scripts/release.ts major",
     "billing:stripe-sync": "tsx --env-file-if-exists=.env.local tools/scripts/stripe-sync.ts",
     "db:seed-skills": "tsx --env-file-if-exists=.env.local tools/scripts/seed-skills.ts",
+    "db:seed-interactive-agent": "tsx --env-file-if-exists=.env.local tools/scripts/seed-interactive-agent.ts",
     "db:backfill-iam": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-org-iam.ts"
   },
   "pnpm": {

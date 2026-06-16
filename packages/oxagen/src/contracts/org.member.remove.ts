@@ -18,7 +18,7 @@ export const orgMemberRemove = registerCapability({
     "Remove a member from the org. Revokes their role assignments and deactivates their principal. Blocked if the target is the last org owner. Audited as org.member_removed.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "organization" },
   sensitivity: "high",

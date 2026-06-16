@@ -16,7 +16,7 @@ export const orgMemberRoleChange = registerCapability({
     "Change a member's org role. Replaces the existing org role assignment in the IAM layer and updates the legacy org_users.role column. Blocked if demoting the last org owner. Audited as org.role_changed.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "organization" },
   sensitivity: "high",

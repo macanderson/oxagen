@@ -16,7 +16,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -34,7 +34,121 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.definition.create",
+      "file": "agent.definition.create.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.definition.get",
+      "file": "agent.definition.get.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.definition.list",
+      "file": "agent.definition.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.definition.publish",
+      "file": "agent.definition.publish.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.definition.update",
+      "file": "agent.definition.update.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.deploy",
+      "file": "agent.deploy.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
       }
     },
     {
@@ -71,7 +185,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -89,7 +203,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -108,7 +222,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -127,7 +241,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -146,7 +260,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -183,7 +297,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -202,7 +316,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -259,7 +373,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -278,7 +392,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -297,7 +411,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -316,7 +430,83 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.trigger.create",
+      "file": "agent.trigger.create.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.trigger.delete",
+      "file": "agent.trigger.delete.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.trigger.list",
+      "file": "agent.trigger.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.trigger.update",
+      "file": "agent.trigger.update.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "e2e": false,
+        "docs": false
       }
     },
     {
@@ -345,6 +535,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -360,6 +551,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -379,7 +571,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -398,7 +590,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -436,7 +628,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -455,7 +647,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -474,7 +666,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -491,6 +683,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true
       }
     },
@@ -508,6 +701,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true
       }
     },
@@ -527,7 +721,7 @@
         "mcp": true,
         "unit": true,
         "e2e": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -546,7 +740,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -565,7 +759,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -583,7 +777,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -619,7 +813,7 @@
         "mcp": true,
         "unit": true,
         "e2e": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -781,7 +975,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -796,6 +990,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true
       }
     },
@@ -814,7 +1009,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -833,7 +1028,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -849,6 +1044,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -866,6 +1062,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -882,6 +1079,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true
       }
     },
@@ -897,6 +1095,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true
       }
     },
@@ -912,6 +1111,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true
       }
     },
@@ -930,7 +1130,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -948,7 +1148,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -963,6 +1163,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true
       }
     },
@@ -981,7 +1182,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -996,6 +1197,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true
       }
     },
@@ -1109,7 +1311,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1165,7 +1367,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1180,6 +1382,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true
       }
     },
@@ -1195,6 +1398,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true
       }
     },
@@ -1213,7 +1417,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1228,6 +1432,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true
       }
     },
@@ -1247,7 +1452,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1266,7 +1471,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1285,7 +1490,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1304,7 +1509,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1323,7 +1528,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1341,7 +1546,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1360,7 +1565,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1375,6 +1580,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1391,6 +1597,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1449,7 +1656,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1468,7 +1675,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1487,7 +1694,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1502,6 +1709,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1518,6 +1726,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1538,7 +1747,7 @@
         "mcp": true,
         "unit": true,
         "e2e": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1553,6 +1762,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1569,6 +1779,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1585,6 +1796,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1601,6 +1813,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1617,6 +1830,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1633,6 +1847,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1649,6 +1864,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1665,6 +1881,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1681,6 +1898,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1697,6 +1915,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1713,6 +1932,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1729,6 +1949,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1745,6 +1966,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1761,6 +1983,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1777,6 +2000,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1796,7 +2020,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1814,7 +2038,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1829,6 +2053,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1848,7 +2073,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1863,6 +2088,7 @@
       ],
       "layers": {
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1882,7 +2108,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1900,7 +2126,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1916,6 +2142,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1933,6 +2160,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -1953,7 +2181,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1971,7 +2199,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -1990,7 +2218,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -2009,7 +2237,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -2028,7 +2256,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -2100,7 +2328,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -2118,7 +2346,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -2136,7 +2364,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -2151,6 +2379,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true
       }
     },
@@ -2169,7 +2398,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -2187,7 +2416,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -2203,6 +2432,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -2220,6 +2450,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -2239,7 +2470,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -2295,7 +2526,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -2313,7 +2544,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -2331,7 +2562,7 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -2350,7 +2581,7 @@
         "mcp": true,
         "unit": true,
         "e2e": true,
-        "docs": true
+        "docs": false
       }
     },
     {
@@ -2381,7 +2612,8 @@
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true
+        "mcp": true,
+        "docs": false
       }
     },
     {
@@ -2397,6 +2629,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }
@@ -2414,6 +2647,7 @@
       "layers": {
         "schema": true,
         "api": true,
+        "docs": false,
         "mcp": true,
         "unit": true
       }

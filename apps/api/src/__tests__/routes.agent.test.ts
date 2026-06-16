@@ -493,3 +493,248 @@ describe("agent.tool.list route", () => {
     expect(res.status).toBe(500);
   });
 });
+
+// ── agent.definition.create ─────────────────────────────────────────────────
+
+describe("agent.definition.create route", () => {
+  const PATH = "/agent/definitions";
+  const VALID_BODY = {
+    slug: "my-agent",
+    name: "My Agent",
+    config: {
+      graph: {
+        ontologyId: "ont_1",
+        retrieval: { strategy: "hybrid" },
+        budget: { maxHops: 2, maxNodes: 20 },
+      },
+      agentTools: [{ type: "skill", ref: "coding" }],
+      triggers: [{ type: "manual", enabled: true }],
+    },
+  };
+
+  it("happy path POST: returns 201", async () => {
+    const invokeResult = { agentId: "agt_1", publicId: "agt_1", slug: "my-agent", version: 1 };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await app.fetch(post(PATH, VALID_BODY));
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'agent.definition.create' and surface 'api'", async () => {
+    await app.fetch(post(PATH, VALID_BODY));
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.definition.create");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+  });
+
+  it("invalid slug → 400", async () => {
+    const res = await app.fetch(post(PATH, { ...VALID_BODY, slug: "Bad Slug" }));
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── agent.definition.update ─────────────────────────────────────────────────
+
+describe("agent.definition.update route", () => {
+  const PATH = "/agent/definitions/update";
+  const VALID_BODY = {
+    agentId: "agt_1",
+    config: {
+      graph: {
+        ontologyId: "ont_1",
+        retrieval: { strategy: "semantic" },
+        budget: { maxHops: 1, maxNodes: 10 },
+      },
+      agentTools: [],
+      triggers: [],
+    },
+  };
+
+  it("happy path POST: 200", async () => {
+    mocks.invoke.mockResolvedValue({ agentId: "agt_1", version: 2, isPublished: false });
+    const res = await app.fetch(post(PATH, VALID_BODY));
+    expect(res.status).toBe(200);
+  });
+
+  it("calls invoke with 'agent.definition.update'", async () => {
+    await app.fetch(post(PATH, VALID_BODY));
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.definition.update");
+  });
+
+  it("missing config → 400", async () => {
+    const res = await app.fetch(post(PATH, { agentId: "agt_1" }));
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── agent.definition.publish ────────────────────────────────────────────────
+
+describe("agent.definition.publish route", () => {
+  const PATH = "/agent/definitions/publish";
+
+  it("happy path POST: 200", async () => {
+    mocks.invoke.mockResolvedValue({
+      agentId: "agt_1",
+      version: 1,
+      checksum: "abc",
+      activeVersionId: "ver_1",
+    });
+    const res = await app.fetch(post(PATH, { agentId: "agt_1" }));
+    expect(res.status).toBe(200);
+  });
+
+  it("calls invoke with 'agent.definition.publish'", async () => {
+    await app.fetch(post(PATH, { agentId: "agt_1", version: 2 }));
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.definition.publish");
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.version).toBe(2);
+  });
+
+  it("non-positive version → 400", async () => {
+    const res = await app.fetch(post(PATH, { agentId: "agt_1", version: 0 }));
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── agent.definition.get ────────────────────────────────────────────────────
+
+describe("agent.definition.get route", () => {
+  it("happy path GET /:agentId: 200, passes path param", async () => {
+    mocks.invoke.mockResolvedValue({ agentId: "agt_1" });
+    const res = await app.fetch(get("/agent/definitions/agt_1"));
+    expect(res.status).toBe(200);
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.definition.get");
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.agentId).toBe("agt_1");
+  });
+});
+
+// ── agent.definition.list ───────────────────────────────────────────────────
+
+describe("agent.definition.list route", () => {
+  const PATH = "/agent/definitions";
+
+  it("happy path GET: 200 with empty input", async () => {
+    mocks.invoke.mockResolvedValue({ agents: [] });
+    const res = await app.fetch(get(PATH));
+    expect(res.status).toBe(200);
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.definition.list");
+    expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({});
+  });
+
+  it("?status=active → passes filter", async () => {
+    mocks.invoke.mockResolvedValue({ agents: [] });
+    await app.fetch(
+      makeRequest(`${BASE}/agent/definitions?status=active`, {
+        headers: { authorization: bearerHeader("oxk_key") },
+      }),
+    );
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.status).toBe("active");
+  });
+});
+
+// ── agent.deploy ────────────────────────────────────────────────────────────
+
+describe("agent.deploy route", () => {
+  const PATH = "/agent/deploy";
+
+  it("happy path POST: 200", async () => {
+    mocks.invoke.mockResolvedValue({ agentId: "agt_1", deploymentStatus: "active" });
+    const res = await app.fetch(post(PATH, { agentId: "agt_1", deploymentStatus: "active" }));
+    expect(res.status).toBe(200);
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.deploy");
+  });
+
+  it("invalid deploymentStatus → 400", async () => {
+    const res = await app.fetch(post(PATH, { agentId: "agt_1", deploymentStatus: "paused" }));
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── agent.trigger.create ────────────────────────────────────────────────────
+
+describe("agent.trigger.create route", () => {
+  const PATH = "/agent/triggers";
+  const VALID_BODY = { agentId: "agt_1", trigger: { type: "manual", enabled: true } };
+
+  it("happy path POST: 201", async () => {
+    mocks.invoke.mockResolvedValue({
+      triggerId: "atr_1",
+      publicId: "atr_1",
+      triggerType: "manual",
+      enabled: true,
+    });
+    const res = await app.fetch(post(PATH, VALID_BODY));
+    expect(res.status).toBe(201);
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.trigger.create");
+  });
+
+  it("invalid trigger (event w/o source) → 400", async () => {
+    const res = await app.fetch(
+      post(PATH, { agentId: "agt_1", trigger: { type: "event", enabled: true } }),
+    );
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── agent.trigger.update ────────────────────────────────────────────────────
+
+describe("agent.trigger.update route", () => {
+  const PATH = "/agent/triggers/update";
+  const VALID_BODY = {
+    triggerId: "atr_1",
+    trigger: { type: "schedule", schedule: "0 9 * * *", enabled: false },
+  };
+
+  it("happy path POST: 200", async () => {
+    mocks.invoke.mockResolvedValue({ triggerId: "atr_1", triggerType: "schedule", enabled: false });
+    const res = await app.fetch(post(PATH, VALID_BODY));
+    expect(res.status).toBe(200);
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.trigger.update");
+  });
+
+  it("invalid trigger → 400", async () => {
+    const res = await app.fetch(
+      post(PATH, { triggerId: "atr_1", trigger: { type: "schedule", enabled: true } }),
+    );
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── agent.trigger.delete ────────────────────────────────────────────────────
+
+describe("agent.trigger.delete route", () => {
+  const PATH = "/agent/triggers/delete";
+
+  it("happy path POST: 200", async () => {
+    mocks.invoke.mockResolvedValue({ triggerId: "atr_1", deleted: true });
+    const res = await app.fetch(post(PATH, { triggerId: "atr_1" }));
+    expect(res.status).toBe(200);
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.trigger.delete");
+  });
+
+  it("missing triggerId → 400", async () => {
+    const res = await app.fetch(post(PATH, {}));
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── agent.trigger.list ──────────────────────────────────────────────────────
+
+describe("agent.trigger.list route", () => {
+  it("happy path GET /:agentId: 200, passes path param", async () => {
+    mocks.invoke.mockResolvedValue({ triggers: [] });
+    const res = await app.fetch(get("/agent/triggers/agt_1"));
+    expect(res.status).toBe(200);
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.trigger.list");
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.agentId).toBe("agt_1");
+  });
+});

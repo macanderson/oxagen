@@ -7,7 +7,7 @@ export const automationList = registerCapability({
   description: "List automations in a workspace",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
-  layers: ["schema", "api", "mcp"],
+  layers: ["schema", "api", "docs", "mcp"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "automation" },
   sensitivity: "low",

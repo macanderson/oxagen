@@ -8,7 +8,7 @@ export const pluginCredentialSetSecret = registerCapability({
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: true, riskLevel: "high", category: "plugin" },
-  layers: ["api", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
   sensitivity: "high",
   defaultEffect: "deny",
