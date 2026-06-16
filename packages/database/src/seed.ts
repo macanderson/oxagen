@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db, closeDatabase } from "./client";
 import {
   plans,
@@ -9,6 +9,8 @@ import {
   workspaceUsers,
   agents,
   agentVersions,
+  mcpRegistries,
+  mcpCatalogServers,
 } from "./schema/index";
 
 // Seed runs idempotently. Re-running won't duplicate plans, the dev
@@ -42,9 +44,182 @@ const PLAN_SEEDS = [
   },
 ];
 
+// ── MCP marketplace seed ─────────────────────────────────────────────────────
+// The global "Official MCP Registry" (org_id NULL ⇒ visible to every org) and a
+// curated set of real, well-known MCP servers. Seeding both in seedPlatform()
+// guarantees that EVERY environment (incl. prod via `pnpm db:migrate`) has a
+// populated, browse-only marketplace the moment a customer signs up — no waiting
+// on a live network sync or the 6-hour catalog cron.
+//
+// Browse-only: these are catalog_servers rows only. We deliberately create NO
+// plugin.org_listings — the rows are browsable, not installed.
+
+// Source of truth for the global registry. Must match tools/scripts/seed-mcp-registry.ts.
+export const OFFICIAL_MCP_REGISTRY = {
+  name: "Official MCP Registry",
+  baseUrl: "https://registry.modelcontextprotocol.io/v0.1/servers",
+} as const;
+
+/**
+ * Curated catalog of real, canonical MCP servers from the official
+ * modelcontextprotocol servers list. These are seed rows so the marketplace is
+ * never empty; a live registry sync later upserts richer metadata ON TOP of
+ * these, keyed by (registry_id, name, version) — the same unique index used by
+ * onConflictDoNothing below, so a sync never duplicates a seeded row.
+ *
+ * Classification (see packages/handlers/src/plugin.catalog.browse.ts): a row is
+ * "mcp_server" UNLESS its categories contain 'integration' or 'content_tool'.
+ * Every category below is a functional tag (developer-tools / search /
+ * productivity / database / observability) so all rows classify as mcp_server.
+ *
+ * authKind: "none" for local stdio tools that need no credentials;
+ *           "oauth"  for hosted services behind OAuth (github/google-drive/slack);
+ *           "secret" for services configured with a static secret/DSN (postgres/sentry).
+ */
+const MCP_CATALOG_SEEDS: ReadonlyArray<{
+  name: string;
+  title: string;
+  description: string;
+  authKind: "none" | "oauth" | "secret";
+  transportTypes: string[];
+  categories: string[];
+}> = [
+  {
+    name: "io.github.modelcontextprotocol/filesystem",
+    title: "Filesystem",
+    description: "Secure, configurable file system access for reading, writing, and searching local files.",
+    authKind: "none",
+    transportTypes: ["stdio"],
+    categories: ["developer-tools"],
+  },
+  {
+    name: "io.github.modelcontextprotocol/fetch",
+    title: "Fetch",
+    description: "Fetch and convert web content to markdown for efficient LLM consumption.",
+    authKind: "none",
+    transportTypes: ["stdio"],
+    categories: ["search"],
+  },
+  {
+    name: "io.github.modelcontextprotocol/git",
+    title: "Git",
+    description: "Read, search, and manipulate Git repositories — diff, log, blame, and commit inspection.",
+    authKind: "none",
+    transportTypes: ["stdio"],
+    categories: ["developer-tools"],
+  },
+  {
+    name: "io.github.modelcontextprotocol/memory",
+    title: "Memory",
+    description: "A persistent knowledge-graph memory store for long-running agent context.",
+    authKind: "none",
+    transportTypes: ["stdio"],
+    categories: ["productivity"],
+  },
+  {
+    name: "io.github.modelcontextprotocol/time",
+    title: "Time",
+    description: "Time and timezone conversion utilities for date-aware agents.",
+    authKind: "none",
+    transportTypes: ["stdio"],
+    categories: ["productivity"],
+  },
+  {
+    name: "io.github.modelcontextprotocol/sqlite",
+    title: "SQLite",
+    description: "Query and inspect SQLite databases with read and write tool support.",
+    authKind: "none",
+    transportTypes: ["stdio"],
+    categories: ["database"],
+  },
+  {
+    name: "io.github.modelcontextprotocol/postgres",
+    title: "PostgreSQL",
+    description: "Read-only SQL access and schema inspection for PostgreSQL databases.",
+    authKind: "secret",
+    transportTypes: ["stdio"],
+    categories: ["database"],
+  },
+  {
+    name: "io.github.modelcontextprotocol/github",
+    title: "GitHub",
+    description: "Manage repositories, issues, and pull requests through the GitHub API.",
+    authKind: "oauth",
+    transportTypes: ["stdio", "streamable-http"],
+    categories: ["developer-tools"],
+  },
+  {
+    name: "io.github.modelcontextprotocol/google-drive",
+    title: "Google Drive",
+    description: "Search and read files from Google Drive with scoped access.",
+    authKind: "oauth",
+    transportTypes: ["stdio"],
+    categories: ["productivity"],
+  },
+  {
+    name: "io.github.modelcontextprotocol/slack",
+    title: "Slack",
+    description: "Read channels and post messages to Slack workspaces.",
+    authKind: "oauth",
+    transportTypes: ["stdio"],
+    categories: ["productivity"],
+  },
+  {
+    name: "io.github.modelcontextprotocol/sentry",
+    title: "Sentry",
+    description: "Retrieve and analyze error reports and issues from Sentry projects.",
+    authKind: "secret",
+    transportTypes: ["stdio", "streamable-http"],
+    categories: ["observability"],
+  },
+];
+
+// Exported for tests: the curated catalog seed shape (no DB required).
+export const MCP_CATALOG_SEED_DATA = MCP_CATALOG_SEEDS;
+
+/**
+ * Ensure the global "Official MCP Registry" row exists (org_id NULL,
+ * is_default_seed=true, enabled=true). The unique constraint on (org_id,
+ * base_url) is a COALESCE-on-org_id index that Drizzle's onConflict can't
+ * target, so we guard with a select-then-insert on the default-seed row.
+ * Returns the registry id.
+ */
+async function ensureOfficialMcpRegistry(database: ReturnType<typeof db>): Promise<string> {
+  const existing = (
+    await database
+      .select({ id: mcpRegistries.id })
+      .from(mcpRegistries)
+      .where(
+        and(
+          isNull(mcpRegistries.orgId),
+          eq(mcpRegistries.isDefaultSeed, true),
+          eq(mcpRegistries.baseUrl, OFFICIAL_MCP_REGISTRY.baseUrl),
+        ),
+      )
+      .limit(1)
+  )[0];
+  if (existing) return existing.id;
+
+  const inserted = (
+    await database
+      .insert(mcpRegistries)
+      .values({
+        orgId: null,
+        name: OFFICIAL_MCP_REGISTRY.name,
+        baseUrl: OFFICIAL_MCP_REGISTRY.baseUrl,
+        enabled: true,
+        isDefaultSeed: true,
+      })
+      .returning({ id: mcpRegistries.id })
+  )[0];
+  if (!inserted) throw new Error("Failed to upsert Official MCP Registry");
+  return inserted.id;
+}
+
 /**
  * Platform-global seed: data every environment (incl. production) must have,
- * with no tenant data. Currently the Free plan — paid tiers are created from
+ * with no tenant data. The Free plan, the global Official MCP Registry, and a
+ * curated, browse-only MCP marketplace catalog. Paid tiers are created from
  * pricing.ts by `pnpm billing:stripe-sync --apply`. Wired into `pnpm db:migrate`
  * so a fresh DB / `pnpm db:reset` always re-seeds it idempotently.
  */
@@ -52,6 +227,31 @@ export async function seedPlatform(): Promise<void> {
   const database = db();
   for (const plan of PLAN_SEEDS) {
     await database.insert(plans).values(plan).onConflictDoNothing({ target: plans.slug });
+  }
+
+  // Global MCP registry + curated browse-only marketplace catalog.
+  const registryId = await ensureOfficialMcpRegistry(database);
+  const now = new Date();
+  for (const server of MCP_CATALOG_SEEDS) {
+    await database
+      .insert(mcpCatalogServers)
+      .values({
+        registryId,
+        name: server.name,
+        version: "1.0.0",
+        isLatest: true,
+        title: server.title,
+        description: server.description,
+        authKind: server.authKind,
+        transportTypes: server.transportTypes,
+        categories: server.categories,
+        status: "active",
+        publishedAt: now,
+      })
+      // Idempotent against the (registry_id, name, version) unique index.
+      .onConflictDoNothing({
+        target: [mcpCatalogServers.registryId, mcpCatalogServers.name, mcpCatalogServers.version],
+      });
   }
 }
 

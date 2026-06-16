@@ -3,6 +3,7 @@ import * as React from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/components/ui/toast";
 import { ExternalLink, X, Plug } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -65,6 +66,7 @@ export function PluginDetailPanel({
   onInstalled,
   onClose,
 }: PluginDetailPanelProps) {
+  const toast = useToast();
   const [detail, setDetail] = React.useState<CatalogDetail | null>(
     // For capability entries, bootstrap from pre-populated data to avoid a catalog/get fetch.
     capabilityData
@@ -133,9 +135,23 @@ export function PluginDetailPanel({
       });
       if (!result.ok) {
         setError(result.error ?? "Install failed");
+        toast.add({
+          title: "Install failed",
+          description: result.error ?? `Could not install ${detail.title ?? detail.name}.`,
+          type: "error",
+        });
         return;
       }
+      toast.add({
+        title: `${detail.title ?? detail.name} installed`,
+        description: "You can use it now.",
+        type: "success",
+      });
       onInstalled();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Install failed";
+      setError(message);
+      toast.add({ title: "Install failed", description: message, type: "error" });
     } finally {
       setInstalling(false);
     }

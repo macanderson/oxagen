@@ -5,10 +5,11 @@
  * Authentication required; org context is not required (catalog is global).
  *
  * Query params:
- *   search   — optional text search
- *   authKind — optional filter: oauth | secret | none
- *   limit    — page size (max 100, default 30)
- *   offset   — pagination offset (default 0)
+ *   search    — optional text search
+ *   authKind  — optional filter: oauth | secret | none
+ *   installed — optional filter: "true" (installed only) | "false" (not installed only)
+ *   limit     — page size (max 100, default 30)
+ *   offset    — pagination offset (default 0)
  */
 import { type NextRequest, NextResponse } from "next/server";
 import { invoke } from "@oxagen/oxagen";
@@ -38,6 +39,9 @@ export async function GET(request: NextRequest) {
     rawPluginType === "capability"
       ? rawPluginType
       : undefined;
+  const rawInstalled = searchParams.get("installed");
+  const installed =
+    rawInstalled === "true" ? true : rawInstalled === "false" ? false : undefined;
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "30", 10), 100);
   const offset = Math.max(parseInt(searchParams.get("offset") ?? "0", 10), 0);
   const workspaceId = searchParams.get("workspaceId") ?? undefined;
@@ -58,7 +62,7 @@ export async function GET(request: NextRequest) {
   try {
     const result = await invoke(
       "plugin.catalog.browse",
-      { search, authKind, pluginType, limit, offset, workspaceId },
+      { search, authKind, pluginType, installed, limit, offset, workspaceId },
       ctx,
       { surface: "agent" },
     );
