@@ -738,3 +738,62 @@ describe("agent.trigger.list route", () => {
     expect(body.agentId).toBe("agt_1");
   });
 });
+
+// ── agent.subagent.fanout.list ──────────────────────────────────────────────
+
+describe("agent.subagent.fanout.list route", () => {
+  const PATH = "/agent/subagent/fanouts";
+
+  it("happy path GET: 200 with fanouts", async () => {
+    const invokeResult = { fanouts: [] };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await app.fetch(get(PATH));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'agent.subagent.fanout.list' and default limit, surface api", async () => {
+    await app.fetch(get(PATH));
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.subagent.fanout.list");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.limit).toBe(50);
+    expect(body.parentMessageId).toBeUndefined();
+  });
+
+  it("?parentMessageId & ?limit are forwarded to invoke", async () => {
+    await app.fetch(get(`${PATH}?parentMessageId=msg_1&limit=10`));
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.parentMessageId).toBe("msg_1");
+    expect(body.limit).toBe(10);
+  });
+
+  it("non-numeric ?limit → Zod parse error → 400, invoke not called", async () => {
+    const res = await app.fetch(get(`${PATH}?limit=abc`));
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── agent.subagent.fanout.get ───────────────────────────────────────────────
+
+describe("agent.subagent.fanout.get route", () => {
+  it("happy path GET /:fanoutId: 200, passes path param", async () => {
+    mocks.invoke.mockResolvedValue({
+      fanoutId: "fan_1",
+      parentMessageId: "msg_1",
+      status: "completed",
+      totalChildren: 0,
+      completedChildren: 0,
+      createdAt: "2026-06-16T00:00:00.000Z",
+      updatedAt: "2026-06-16T00:00:00.000Z",
+      runs: [],
+    });
+    const res = await app.fetch(get("/agent/subagent/fanout/fan_1"));
+    expect(res.status).toBe(200);
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.subagent.fanout.get");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.fanoutId).toBe("fan_1");
+  });
+});

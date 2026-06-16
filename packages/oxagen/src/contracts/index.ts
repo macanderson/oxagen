@@ -37,6 +37,8 @@ import { agentPlanApprove } from "./agent.plan.approve";
 import { agentPlanCreate } from "./agent.plan.create";
 import { agentSkillList } from "./agent.skill.list";
 import { agentSkillLoad } from "./agent.skill.load";
+import { agentSubagentFanoutGet } from "./agent.subagent.fanout.get";
+import { agentSubagentFanoutList } from "./agent.subagent.fanout.list";
 import { agentTaskBackgroundCancel } from "./agent.task.background.cancel";
 import { agentTaskBackgroundRead } from "./agent.task.background.read";
 import { agentTaskBackgroundStart } from "./agent.task.background.start";
@@ -185,6 +187,8 @@ export {
   agentPlanCreate,
   agentSkillList,
   agentSkillLoad,
+  agentSubagentFanoutGet,
+  agentSubagentFanoutList,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
@@ -341,6 +345,8 @@ export const contracts = [
   agentPlanCreate,
   agentSkillList,
   agentSkillLoad,
+  agentSubagentFanoutGet,
+  agentSubagentFanoutList,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,

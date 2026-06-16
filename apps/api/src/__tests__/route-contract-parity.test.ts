@@ -128,6 +128,10 @@ function contractNameToPathSegment(name: string): string {
     integration: "integrations",
     // graph.node.list maps to /graph/nodes (browse endpoint)
     "graph.node.list": "graph/nodes",
+    // Subagent fan-out read side: list is mounted at the plural collection,
+    // get at the singular resource with an :fanoutId param.
+    "agent.subagent.fanout.list": "agent/subagent/fanouts",
+    "agent.subagent.fanout.get": "agent/subagent/fanout",
   };
 
   // Try progressively shorter prefixes
