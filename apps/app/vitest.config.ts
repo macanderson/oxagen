@@ -35,11 +35,16 @@ export default defineConfig({
       // Raised lines/statements to 56 after the agent-management UI suite landed
       // (measured: 59.14/84.26/73.14/59.14); functions/branches held at their
       // existing floor (current minus 2.5 rounds below them, never reduce).
+      // Raised lines/statements to 57 after the prompt-queue management suite
+      // (message-queue + composer reorder/edit/send-now tests) landed
+      // (measured: 59.75/84.51/73.97/59.75); floor(59.75 − 2.5) = 57.
+      // functions held at 71 (floor 71.47 = 71, no change); branches held at 84
+      // (floor 82 < existing 84, never reduce).
       thresholds: {
-        lines: 56,
+        lines: 57,
         functions: 71,
         branches: 84,
-        statements: 56,
+        statements: 57,
       },
     },
   },
