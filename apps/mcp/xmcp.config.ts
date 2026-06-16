@@ -57,6 +57,8 @@ const config: XmcpConfig = {
       "drizzle-orm",
       "postgres",
       "@clickhouse/client",
+      "stripe",
+      "better-auth",
     ];
 
     // Function-based external: matches exact package names and sub-path imports
