@@ -452,5 +452,47 @@ describe("createFunction adapter", () => {
       expect(result).toHaveLength(1);
       expect(mocks.inngestCreateFunction).toHaveBeenCalledTimes(1);
     });
+
+    it("companion gets minimal config without inheriting primary retries/concurrency/timeouts", () => {
+      const config: DurableFunctionConfig = {
+        id: "agent.video-render",
+        retries: 0,
+        concurrency: { limit: 4, key: "event.data.orgId" },
+        cancelOn: [{ event: "agent/cancel", if: "event.data.id == async.data.id" }],
+        timeouts: { finish: "16m" },
+        onFailure: async () => undefined,
+      };
+      const trigger: DurableFunctionTrigger = { event: "agent/video.render" };
+      const handler: DurableFunctionHandler = async () => undefined;
+
+      createFunction(config, trigger, handler);
+
+      // The companion (second call) should only have the id
+      const companionConfig = capturedConfigs[1] as Record<string, unknown>;
+      expect(companionConfig).toEqual({ id: "agent.video-render.on-failure" });
+      expect(companionConfig).not.toHaveProperty("retries");
+      expect(companionConfig).not.toHaveProperty("concurrency");
+      expect(companionConfig).not.toHaveProperty("cancelOn");
+      expect(companionConfig).not.toHaveProperty("timeouts");
+    });
+
+    it("companion DurableFunction.config contains only the id", () => {
+      const config: DurableFunctionConfig = {
+        id: "privacy.erasure-execute",
+        retries: 2,
+        concurrency: { limit: 10 },
+        onFailure: async () => undefined,
+      };
+      const trigger: DurableFunctionTrigger = { event: "privacy/erasure.execute" };
+      const handler: DurableFunctionHandler = async () => undefined;
+
+      const result = createFunction(config, trigger, handler);
+
+      // The companion's DurableFunction.config should be minimal
+      expect(result[1]!.config).toEqual({ id: "privacy.erasure-execute.on-failure" });
+      expect(result[1]!.config).not.toHaveProperty("retries");
+      expect(result[1]!.config).not.toHaveProperty("concurrency");
+      expect(result[1]!.config).not.toHaveProperty("onFailure");
+    });
   });
 });

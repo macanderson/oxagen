@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Extend @oxagen/functions types with timeouts and onFailure support, then implement a createFunction adapter in @oxagen/inngest-functions that wraps abstract DurableFunction definitions into Inngest-native functions.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. In packages/functions/src/types.ts, add `timeouts?: { finish?: string }` to the DurableFunctionConfig interface (used by agent.video-render with '16m').",
     "2. In packages/functions/src/types.ts, add an `onFailure?: DurableFunctionHandler` field to DurableFunctionConfig. This allows defining failure handlers inline rather than as separate functions. The adapter will register them as companion Inngest functions.",
@@ -30,5 +30,5 @@
     "cd /projects/sandbox/oxagen-monorepo/packages/inngest-functions && pnpm test:unit"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All acceptance criteria met. Types extended with timeouts and onFailure. createFunction adapter implemented and exported from both adapter.ts and index.ts. 26 tests pass in packages/functions (3 new). 257 tests pass in packages/inngest-functions (19 new in create-function.test.ts). Full monorepo typecheck (30 packages) passes via pre-commit hook."
 }

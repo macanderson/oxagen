@@ -143,7 +143,8 @@ export function createFunction(
 
   // On-failure companion function
   if (config.onFailure) {
-    const failureConfig = buildInngestConfig(config, `${config.id}.on-failure`);
+    const companionId = `${config.id}.on-failure`;
+    const failureConfig = buildInngestConfig({ id: companionId });
     const failureTrigger = {
       event: "inngest/function.failed",
       if: `event.data.function_id == '${config.id}'`,
@@ -161,8 +162,8 @@ export function createFunction(
     };
 
     const failureDurable = Object.assign(failureFn, {
-      id: `${config.id}.on-failure`,
-      config: { ...config, id: `${config.id}.on-failure` },
+      id: companionId,
+      config: { id: companionId },
       trigger: failureTriggerAbstract,
     }) as unknown as DurableFunction;
 
