@@ -32,7 +32,7 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "src/**", "public/**", "next.config.*", "tsconfig.json", "package.json"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**", ".xmcp/**", ".vercel/output/**"],
+      "outputs": ["dist/**", ".xmcp/**", ".vercel/output/**"],
       "passThroughEnv": ["VERCEL", "VERCEL_URL", "NEXT_PHASE"],
       "env": [
         "DATABASE_URL",
