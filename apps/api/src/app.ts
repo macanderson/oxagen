@@ -100,6 +100,7 @@ import { automationEnableRoute } from "./routes/v1/automation.enable";
 import { automationDisableRoute } from "./routes/v1/automation.disable";
 import { automationTriggerRoute } from "./routes/v1/automation.trigger";
 import { skillWorkspaceListRoute } from "./routes/v1/skill.workspace.list";
+import { agentSubagentCancelRoute } from "./routes/v1/agent.subagent.cancel";
 import { agentSubagentDispatchRoute } from "./routes/v1/agent.subagent.dispatch";
 import { agentDefinitionCreateRoute } from "./routes/v1/agent.definition.create";
 import { agentDefinitionUpdateRoute } from "./routes/v1/agent.definition.update";
@@ -214,6 +215,7 @@ orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
 orgScoped.route("/agent/subagent/aggregate", agentSubagentAggregateRoute);
+orgScoped.route("/agent/subagent/cancel", agentSubagentCancelRoute);
 orgScoped.route("/agent/subagent/dispatch", agentSubagentDispatchRoute);
 // Read side of the fan-out feature: list fan-outs, then get one with child runs.
 orgScoped.route("/agent/subagent/fanouts", agentSubagentFanoutListRoute);

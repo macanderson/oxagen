@@ -339,6 +339,24 @@
       }
     },
     {
+      "name": "agent.subagent.cancel",
+      "file": "agent.subagent.cancel.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.subagent.dispatch",
       "file": "agent.subagent.dispatch.ts",
       "domain": "agent",

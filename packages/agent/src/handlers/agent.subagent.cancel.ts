@@ -1,0 +1,152 @@
+import { withTenantDb, schema } from "@oxagen/database";
+import { and, eq, inArray } from "drizzle-orm";
+import { insertEvents } from "@oxagen/telemetry";
+import type { CapabilityContext } from "../types";
+import type {
+  AgentSubagentCancelInput,
+  AgentSubagentCancelOutput,
+} from "@oxagen/oxagen/contracts/agent.subagent.cancel";
+
+export type { AgentSubagentCancelInput, AgentSubagentCancelOutput };
+
+// STATUS-TRANSITION NOTE (HALTED SUB-SLICE):
+//
+// The `subagent_fanouts.status` column has a CHECK constraint permitting only:
+//   ('pending', 'running', 'completed', 'partial', 'timed_out')
+// The `subagent_runs.status` column has a CHECK constraint permitting only:
+//   ('pending', 'running', 'completed', 'failed')
+//
+// Neither table includes 'cancelled'. Adding it requires a schema migration
+// (new CHECK constraint values). Because the Atlas CLI migration flow was not
+// available in this context, the status-transition sub-slice is HALTED for
+// the migration step and we use the closest available terminal statuses:
+//   - fanout  → 'timed_out'  (the only terminal non-success fanout state)
+//   - runs    → 'failed'     (the only terminal non-success run state)
+//
+// Once a migration adds 'cancelled' to both CHECK constraints, replace
+// FANOUT_CANCEL_STATUS and RUN_CANCEL_STATUS below with 'cancelled'.
+const FANOUT_CANCEL_STATUS = "timed_out" as const;
+const RUN_CANCEL_STATUS = "failed" as const;
+
+// Non-terminal run statuses — only these rows are transitioned on cancel.
+const NON_TERMINAL_RUN_STATUSES = ["pending", "running"] as const;
+
+export async function agentSubagentCancelHandler(
+  input: AgentSubagentCancelInput,
+  ctx: CapabilityContext,
+): Promise<AgentSubagentCancelOutput> {
+  const started = Date.now();
+
+  // 1. Verify the fanout exists and belongs to this org + workspace.
+  const fanout = await withTenantDb(async (tx) => {
+    const [row] = await tx
+      .select({
+        publicId: schema.subagentFanouts.publicId,
+        status: schema.subagentFanouts.status,
+      })
+      .from(schema.subagentFanouts)
+      .where(
+        and(
+          eq(schema.subagentFanouts.publicId, input.fanoutId),
+          eq(schema.subagentFanouts.orgId, ctx.orgId),
+          eq(schema.subagentFanouts.workspaceId, ctx.workspaceId),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  });
+
+  if (!fanout) throw new Error(`Fanout ${input.fanoutId} not found`);
+
+  // 2. Transition non-terminal child runs to the terminal cancel status.
+  //    Scope by orgId + workspaceId + fanoutId so no other tenant's runs
+  //    are ever touched, even if fanoutId collides across tenants.
+  const updatedRuns = await withTenantDb(async (tx) => {
+    // Fetch the public IDs of non-terminal runs so we know the exact count.
+    const nonTerminalRows = await tx
+      .select({ publicId: schema.subagentRuns.publicId })
+      .from(schema.subagentRuns)
+      .where(
+        and(
+          eq(schema.subagentRuns.fanoutId, input.fanoutId),
+          eq(schema.subagentRuns.orgId, ctx.orgId),
+          eq(schema.subagentRuns.workspaceId, ctx.workspaceId),
+          inArray(schema.subagentRuns.status, [...NON_TERMINAL_RUN_STATUSES]),
+        ),
+      );
+
+    if (nonTerminalRows.length > 0) {
+      await tx
+        .update(schema.subagentRuns)
+        .set({
+          status: RUN_CANCEL_STATUS,
+          errorReason: "Cancelled by agent.subagent.cancel",
+          completedAt: new Date(),
+        })
+        .where(
+          inArray(
+            schema.subagentRuns.publicId,
+            nonTerminalRows.map((r) => r.publicId),
+          ),
+        );
+    }
+
+    return nonTerminalRows.length;
+  });
+
+  // 3. Transition the fanout itself to the terminal cancel status.
+  //    Only update if it is not already in a terminal state so repeated
+  //    cancel calls are idempotent.
+  await withTenantDb(async (tx) => {
+    await tx
+      .update(schema.subagentFanouts)
+      .set({ status: FANOUT_CANCEL_STATUS })
+      .where(
+        and(
+          eq(schema.subagentFanouts.publicId, input.fanoutId),
+          eq(schema.subagentFanouts.orgId, ctx.orgId),
+          eq(schema.subagentFanouts.workspaceId, ctx.workspaceId),
+          inArray(schema.subagentFanouts.status, ["pending", "running"]),
+        ),
+      );
+  });
+
+  // 4. Meter the cancel event to ClickHouse. Best-effort — telemetry must
+  //    never fail a successful operation.
+  const durationMs = Date.now() - started;
+  await emitCancelTelemetry(ctx, input.fanoutId, updatedRuns, durationMs).catch(
+    () => undefined,
+  );
+
+  return {
+    fanoutId: input.fanoutId,
+    status: FANOUT_CANCEL_STATUS,
+    cancelledChildren: updatedRuns,
+  };
+}
+
+async function emitCancelTelemetry(
+  ctx: CapabilityContext,
+  fanoutId: string,
+  cancelledChildren: number,
+  durationMs: number,
+): Promise<void> {
+  await insertEvents([
+    {
+      event_id: crypto.randomUUID(),
+      org_id: ctx.orgId,
+      workspace_id: ctx.workspaceId,
+      event_type: "agent.subagent.cancel.ran",
+      source_system: `handler:${ctx.surface}`,
+      stream_offset: null,
+      payload: JSON.stringify({
+        capability: "agent.subagent.cancel",
+        fanoutId,
+        cancelledChildren,
+        durationMs,
+        requestId: ctx.requestId,
+      }),
+      emitted_at: new Date().toISOString(),
+    },
+  ]);
+}

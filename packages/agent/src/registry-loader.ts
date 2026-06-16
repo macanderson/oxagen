@@ -29,6 +29,8 @@ export interface RegistryCapability {
 export interface OxagenRegistry {
   listCapabilities: () => RegistryCapability[];
   getSurfaces: (c: RegistryCapability) => readonly string[];
+  /** Look up a single capability by name, or undefined when not registered. */
+  getCapability: (name: string) => RegistryCapability | undefined;
 }
 
 let _registryPromise: Promise<OxagenRegistry> | null = null;
@@ -42,7 +44,11 @@ export async function getOxagenRegistry(): Promise<OxagenRegistry> {
   if (_registryPromise) return _registryPromise;
   _registryPromise = (async () => {
     const mod = (await import("@oxagen/oxagen")) as unknown as OxagenRegistry;
-    return { listCapabilities: mod.listCapabilities, getSurfaces: mod.getSurfaces };
+    return {
+      listCapabilities: mod.listCapabilities,
+      getSurfaces: mod.getSurfaces,
+      getCapability: mod.getCapability,
+    };
   })();
   return _registryPromise;
 }

@@ -32,6 +32,24 @@ vi.mock("../dispatch/inngest-client", () => ({
   getInngestClient: () => ({ send: inngestSendSpy }),
 }));
 
+// Deterministic registry: only these names are "registered". Unknown names are
+// rejected by the dispatch hardening; agent.code.execute is high-risk so its
+// timeout ceiling (300s) drives the clamp test.
+vi.mock("../registry-loader", () => ({
+  getOxagenRegistry: async () => ({
+    listCapabilities: () => [],
+    getSurfaces: () => [],
+    getCapability: (name: string) =>
+      (
+        {
+          "agent.tool.list": { name, agent: { riskLevel: "low" as const } },
+          "agent.memory.recall": { name, agent: { riskLevel: "low" as const } },
+          "agent.code.execute": { name, agent: { riskLevel: "high" as const } },
+        } as Record<string, { name: string; agent: { riskLevel: "low" | "medium" | "high" } }>
+      )[name],
+  }),
+}));
+
 import { agentSubagentDispatchHandler } from "./agent.subagent.dispatch";
 
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
@@ -95,5 +113,34 @@ describe("agent.subagent.dispatch handler", () => {
     );
     const sentEvent = (inngestSendSpy.mock.calls[0] as unknown as [{ name: string; data: { maxParallel: number } }])[0];
     expect(sentEvent.data.maxParallel).toBe(10);
+  });
+
+  it("rejects an unknown capability name before creating any rows", async () => {
+    await expect(
+      agentSubagentDispatchHandler(
+        {
+          parentMessageId: "msg_bad",
+          tasks: [{ capabilityName: "agent.bogus.nope", input: {} }],
+          maxParallel: 2,
+        },
+        CTX,
+      ),
+    ).rejects.toThrow(/Unknown capability name/);
+    expect(insertFanoutSpy).not.toHaveBeenCalled();
+    expect(inngestSendSpy).not.toHaveBeenCalled();
+  });
+
+  it("clamps timeoutSeconds to the per-risk ceiling (high → 300s)", async () => {
+    await agentSubagentDispatchHandler(
+      {
+        parentMessageId: "msg_to",
+        tasks: [{ capabilityName: "agent.code.execute", input: {} }],
+        maxParallel: 1,
+        timeoutSeconds: 3600,
+      },
+      CTX,
+    );
+    const sentEvent = (inngestSendSpy.mock.calls[0] as unknown as [{ data: { timeoutSeconds: number } }])[0];
+    expect(sentEvent.data.timeoutSeconds).toBe(300);
   });
 });
