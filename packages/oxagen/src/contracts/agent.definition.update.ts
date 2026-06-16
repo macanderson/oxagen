@@ -1,0 +1,50 @@
+import { z } from "zod";
+import { registerCapability } from "../registry";
+import {
+  graphAccessSchema,
+  agentToolSchema,
+  agentTriggerSchema,
+} from "../agent-schema";
+
+const definitionConfigInput = z.object({
+  graph: graphAccessSchema,
+  agentTools: z.array(agentToolSchema).default([]),
+  triggers: z.array(agentTriggerSchema).default([]),
+  instructions: z.string().optional(),
+});
+
+export const agentDefinitionUpdate = registerCapability({
+  name: "agent.definition.update",
+  domain: "agent",
+  description:
+    "Update an agent definition by snapshotting a NEW unpublished version with the updated config — published versions are immutable and never edited in place; the version number is bumped",
+  mode: "sync",
+  surfaces: ["api", "mcp", "agent"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  scoped: true,
+  agent: { requiresApproval: false, riskLevel: "medium", category: "mutation" },
+  sensitivity: "medium",
+  defaultEffect: "deny",
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow" },
+  },
+  input: z.object({
+    agentId: z.string().describe("Agent public id (agt_…) or UUID"),
+    name: z.string().min(1).optional(),
+    description: z.string().optional(),
+    config: definitionConfigInput,
+  }),
+  output: z.object({
+    agentId: z.string(),
+    version: z.number().int().positive(),
+    isPublished: z.boolean(),
+  }),
+});
+
+export type AgentDefinitionUpdateInput = z.output<
+  typeof agentDefinitionUpdate.input
+>;
+export type AgentDefinitionUpdateOutput = z.output<
+  typeof agentDefinitionUpdate.output
+>;

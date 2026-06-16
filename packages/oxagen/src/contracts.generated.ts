@@ -5,6 +5,12 @@
 
 import "./contracts/agent.approval.resolve";
 import "./contracts/agent.code.execute";
+import "./contracts/agent.definition.create";
+import "./contracts/agent.definition.get";
+import "./contracts/agent.definition.list";
+import "./contracts/agent.definition.publish";
+import "./contracts/agent.definition.update";
+import "./contracts/agent.deploy";
 import "./contracts/agent.execution.record";
 import "./contracts/agent.mcp.list";
 import "./contracts/agent.mcp.register";
@@ -20,6 +26,10 @@ import "./contracts/agent.task.background.cancel";
 import "./contracts/agent.task.background.read";
 import "./contracts/agent.task.background.start";
 import "./contracts/agent.tool.list";
+import "./contracts/agent.trigger.create";
+import "./contracts/agent.trigger.delete";
+import "./contracts/agent.trigger.list";
+import "./contracts/agent.trigger.update";
 import "./contracts/agent.ui.render";
 import "./contracts/api.key.create";
 import "./contracts/api.key.revoke";

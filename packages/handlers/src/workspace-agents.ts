@@ -1,10 +1,24 @@
-// workspace-agents.ts — idempotent seeding of the built-in agents for a
-// newly created workspace. Called atomically inside the workspace-create
-// transaction and from the dev seed script.
+// workspace-agents.ts — idempotent seeding of the built-in interactive
+// (`qa-chat`) agent for a workspace. Called atomically inside the
+// workspace-create transaction, from the dev seed script, and from the backfill
+// for existing workspaces.
+//
+// The seeded agent is the SINGLE interactive agent backing both the MCP server
+// and the in-app Q&A surface. It is published (v1), active, and deployed so the
+// chat.stream lookup (slug "qa-chat") always resolves to a definition with an
+// activeVersionId — letting executions be recorded for the SOC 2 audit trail.
 
 import { schema, withTenantDb } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
+import {
+  INTERACTIVE_AGENT_SLUG,
+  INTERACTIVE_AGENT_NAME,
+  INTERACTIVE_AGENT_TYPE,
+  INTERACTIVE_AGENT_DESCRIPTION,
+  buildInteractiveAgentConfig,
+  computeConfigChecksum,
+} from "@oxagen/oxagen/interactive-agent";
 import { logger } from "./logger";
 
 // ── Args ──────────────────────────────────────────────────────────────────────
@@ -21,11 +35,14 @@ export interface BootstrapWorkspaceAgentsArgs {
 // ── Implementation ────────────────────────────────────────────────────────────
 
 /**
- * Idempotently insert the `qa-chat` agent and its v1 version for a workspace.
- * Safe to re-run: all writes use onConflictDoNothing.
+ * Idempotently ensure the `qa-chat` interactive agent and its published v1
+ * version exist for a workspace, with a schema-conforming config and the agent
+ * deployed active.
  *
- * If the agent already has an activeVersionId it is left unchanged; only a
- * newly inserted agent gets its activeVersionId wired up.
+ * Safe to re-run: a fresh insert creates the agent + published v1 and wires it;
+ * an agent that already has an activeVersionId is left untouched; a legacy agent
+ * with no activeVersionId (e.g. seeded before configs were populated) is
+ * reconciled — its v1 config is backfilled, published, and wired as active.
  */
 export async function bootstrapWorkspaceAgents(
   args: BootstrapWorkspaceAgentsArgs,
@@ -45,14 +62,22 @@ async function bootstrapWorkspaceAgentsWithTx(
   userId: string,
   d: Tx,
 ): Promise<void> {
+  // The interactive agent reasons over the workspace's ontology; per-workspace
+  // convention the ontology id IS the workspace id.
+  const config = buildInteractiveAgentConfig(workspaceId);
+  const checksum = computeConfigChecksum(config);
+
   // 1. Upsert the qa-chat agent identity row.
   const [existingAgent] = await d
-    .select({ id: schema.agents.id, activeVersionId: schema.agents.activeVersionId })
+    .select({
+      id: schema.agents.id,
+      activeVersionId: schema.agents.activeVersionId,
+    })
     .from(schema.agents)
     .where(
       and(
         eq(schema.agents.workspaceId, workspaceId),
-        eq(schema.agents.slug, "qa-chat"),
+        eq(schema.agents.slug, INTERACTIVE_AGENT_SLUG),
       ),
     )
     .limit(1);
@@ -61,9 +86,17 @@ async function bootstrapWorkspaceAgentsWithTx(
 
   if (existingAgent) {
     agentId = existingAgent.id;
-    logger.debug(
+    if (existingAgent.activeVersionId) {
+      logger.debug(
+        { workspaceId, agentId },
+        "workspace-agents: qa-chat already published — skipping",
+      );
+      return;
+    }
+    // Legacy / partially-seeded agent: fall through to reconcile its v1.
+    logger.info(
       { workspaceId, agentId },
-      "workspace-agents: qa-chat agent already exists — skipping insert",
+      "workspace-agents: reconciling qa-chat with no active version",
     );
   } else {
     const [inserted] = await d
@@ -71,10 +104,12 @@ async function bootstrapWorkspaceAgentsWithTx(
       .values({
         workspaceId,
         orgId,
-        slug: "qa-chat",
-        name: "QA Chat Agent",
-        agentType: "interactive_chat",
+        slug: INTERACTIVE_AGENT_SLUG,
+        name: INTERACTIVE_AGENT_NAME,
+        description: INTERACTIVE_AGENT_DESCRIPTION,
+        agentType: INTERACTIVE_AGENT_TYPE,
         status: "active",
+        deploymentStatus: "active",
         createdByUserId: userId,
         updatedByUserId: userId,
       })
@@ -89,7 +124,7 @@ async function bootstrapWorkspaceAgentsWithTx(
         .where(
           and(
             eq(schema.agents.workspaceId, workspaceId),
-            eq(schema.agents.slug, "qa-chat"),
+            eq(schema.agents.slug, INTERACTIVE_AGENT_SLUG),
           ),
         )
         .limit(1);
@@ -100,81 +135,86 @@ async function bootstrapWorkspaceAgentsWithTx(
         );
       }
       agentId = reselected.id;
-      logger.debug(
-        { workspaceId, agentId },
-        "workspace-agents: qa-chat agent created by concurrent insert",
-      );
     } else {
       agentId = inserted.id;
-      logger.info(
-        { workspaceId, agentId },
-        "workspace-agents: qa-chat agent created",
-      );
-    }
-
-    // 2. Insert version 1 (only needed for newly created agents).
-    const [existingVersion] = await d
-      .select({ id: schema.agentVersions.id })
-      .from(schema.agentVersions)
-      .where(
-        and(
-          eq(schema.agentVersions.agentId, agentId),
-          eq(schema.agentVersions.version, 1),
-        ),
-      )
-      .limit(1);
-
-    let versionId: string;
-
-    if (existingVersion) {
-      versionId = existingVersion.id;
-    } else {
-      const [insertedVersion] = await d
-        .insert(schema.agentVersions)
-        .values({
-          agentId,
-          version: 1,
-          isPublished: true,
-          checksum: null,
-          config: {},
-          createdByUserId: userId,
-        })
-        .onConflictDoNothing()
-        .returning({ id: schema.agentVersions.id });
-
-      if (!insertedVersion) {
-        // Lost race — re-select.
-        const [reselectedVersion] = await d
-          .select({ id: schema.agentVersions.id })
-          .from(schema.agentVersions)
-          .where(
-            and(
-              eq(schema.agentVersions.agentId, agentId),
-              eq(schema.agentVersions.version, 1),
-            ),
-          )
-          .limit(1);
-
-        if (!reselectedVersion) {
-          throw new Error(
-            `[workspace-agents] Failed to upsert qa-chat v1 for agent ${agentId}`,
-          );
-        }
-        versionId = reselectedVersion.id;
-      } else {
-        versionId = insertedVersion.id;
-      }
-
-      // 3. Wire activeVersionId on the agent row (only for newly created agents).
-      await d
-        .update(schema.agents)
-        .set({ activeVersionId: versionId, updatedByUserId: userId })
-        .where(eq(schema.agents.id, agentId));
-
-      logger.info(
-        { workspaceId, agentId, versionId },
-        "workspace-agents: qa-chat v1 created and wired as active version",
-      );
+      logger.info({ workspaceId, agentId }, "workspace-agents: qa-chat created");
     }
   }
+
+  // 2. Upsert published version 1 with the schema-conforming config.
+  const [existingVersion] = await d
+    .select({
+      id: schema.agentVersions.id,
+      isPublished: schema.agentVersions.isPublished,
+    })
+    .from(schema.agentVersions)
+    .where(
+      and(
+        eq(schema.agentVersions.agentId, agentId),
+        eq(schema.agentVersions.version, 1),
+      ),
+    )
+    .limit(1);
+
+  let versionId: string;
+
+  if (existingVersion) {
+    versionId = existingVersion.id;
+    // Reconcile a legacy empty-config / unpublished v1 in place. Safe because
+    // it was never a published immutable version (no activeVersionId existed).
+    await d
+      .update(schema.agentVersions)
+      .set({ config, isPublished: true, checksum })
+      .where(eq(schema.agentVersions.id, versionId));
+  } else {
+    const [insertedVersion] = await d
+      .insert(schema.agentVersions)
+      .values({
+        agentId,
+        version: 1,
+        isPublished: true,
+        checksum,
+        config,
+        createdByUserId: userId,
+      })
+      .onConflictDoNothing()
+      .returning({ id: schema.agentVersions.id });
+
+    if (!insertedVersion) {
+      const [reselectedVersion] = await d
+        .select({ id: schema.agentVersions.id })
+        .from(schema.agentVersions)
+        .where(
+          and(
+            eq(schema.agentVersions.agentId, agentId),
+            eq(schema.agentVersions.version, 1),
+          ),
+        )
+        .limit(1);
+      if (!reselectedVersion) {
+        throw new Error(
+          `[workspace-agents] Failed to upsert qa-chat v1 for agent ${agentId}`,
+        );
+      }
+      versionId = reselectedVersion.id;
+    } else {
+      versionId = insertedVersion.id;
+    }
+  }
+
+  // 3. Wire activeVersionId + deploy posture on the agent row.
+  await d
+    .update(schema.agents)
+    .set({
+      activeVersionId: versionId,
+      status: "active",
+      deploymentStatus: "active",
+      updatedByUserId: userId,
+    })
+    .where(eq(schema.agents.id, agentId));
+
+  logger.info(
+    { workspaceId, agentId, versionId },
+    "workspace-agents: qa-chat v1 published and wired as active version",
+  );
 }
