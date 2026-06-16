@@ -11,17 +11,24 @@ on:
 
 # Cancel superseded PR runs so a rapid push sequence doesn't queue redundant
 # gates. Main pushes key on the SHA so a post-merge run is never cancelled by a
-# follow-up commit (each merge gets its own advisory signal + deploy side-car).
+# follow-up commit (each merge gets its own full gate + deploy side-car).
 concurrency:
   group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # ────────────────────────────────────────────────────────────────────────
+# Full gate — runs the WHOLE test tree (no affected filter) on every PR and
+# every push to main, split into ~14 jobs for parallelism + granular signal.
+# `ci-success` is the single aggregate check to mark as the required status
+# check in branch protection — it stays red until every gate job is green.
+# ────────────────────────────────────────────────────────────────────────
+
+# ────────────────────────────────────────────────────────────────────────
 # Shared env for every job. These are non-secret CI defaults (dummy creds /
 # localhost URLs) the env schema requires when loadEnv() runs during package
-# builds. Only the `test` job spins up the matching service containers; the
-# `checks` job never connects, so the localhost URLs are inert strings there.
-# Real secrets come from `secrets.*` (Turbo remote cache token).
+# builds. DB-backed jobs spin up the matching service containers; the no-DB
+# jobs (lint/typecheck/invariants) never connect, so the localhost URLs are
+# inert strings there. Real secrets come from `secrets.*`.
 # ────────────────────────────────────────────────────────────────────────
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -99,58 +106,61 @@ jobs:
         run: atlas migrate validate --dir "file://atlas/migrations"
 
   # ──────────────────────────────────────────────────────────────────────
-  # checks — lint + typecheck (affected only) + repo-wide invariants.
-  # No DB service containers: these tasks never touch a live store, so this
-  # job starts instantly and runs IN PARALLEL with `test`. Runs on every PR
-  # AND on merge to main (advisory post-merge signal; does NOT gate deploys).
+  # lint — full ESLint across the whole monorepo (no affected filter). No DB
+  # service containers: lint never touches a live store, so this starts
+  # instantly and runs in parallel with every other gate job.
   # ──────────────────────────────────────────────────────────────────────
-  checks:
-    # workflow_dispatch is the manual prod-migrate path — only the migrate job
-    # acts on it; skip the full validation suite.
+  lint:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      # fetch-depth: 0 so the affected-diff base is reachable (shallow breaks it).
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      # Event context is passed via env (never interpolated into the shell body)
-      # so a crafted ref/SHA can't inject shell. EVENT_BEFORE is a commit SHA.
-      - name: Compute affected base
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          EVENT_BEFORE: ${{ github.event.before }}
-        run: |
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            git fetch origin main --no-tags
-            echo "TURBO_BASE=origin/main" >> "$GITHUB_ENV"
-          else
-            BEFORE="$EVENT_BEFORE"
-            # First push to a branch (or a force-push) can report an all-zero or
-            # unreachable "before" SHA — fall back to the previous commit.
-            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-              BEFORE="$(git rev-parse HEAD~1)"
-            fi
-            echo "TURBO_BASE=$BEFORE" >> "$GITHUB_ENV"
-          fi
-
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: pnpm
-
       - run: pnpm install --frozen-lockfile
+      - name: Lint (full tree)
+        run: pnpm turbo run lint
 
-      # Affected lint + typecheck. Empty affected set → turbo runs nothing and
-      # exits 0, so docs-only / config-only changes pass in seconds.
-      - name: Lint + typecheck (affected)
-        run: pnpm turbo run lint typecheck --filter="...[${TURBO_BASE}]"
+  # ──────────────────────────────────────────────────────────────────────
+  # typecheck — full `tsc --noEmit` across every package (no affected filter).
+  # No DB needed; runs in parallel with lint.
+  # ──────────────────────────────────────────────────────────────────────
+  typecheck:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck (full tree)
+        run: pnpm turbo run typecheck
 
-      # Repo-wide invariants — static file checks (no DB, sub-second), always run.
-      # check:manifest is warn-only (incomplete capabilities annotate, don't fail).
+  # ──────────────────────────────────────────────────────────────────────
+  # invariants — repo-wide static checks (no DB, sub-second each): manifest
+  # parity, contract definitions, env-schema validity, migration-file naming.
+  # check:manifest is warn-only (incomplete capabilities annotate, don't fail).
+  # ──────────────────────────────────────────────────────────────────────
+  invariants:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: Manifest / contracts / env invariants
         run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations
 
@@ -168,15 +178,15 @@ jobs:
         run: pnpm check:manifest:tickets
 
   # ──────────────────────────────────────────────────────────────────────
-  # test — build + unit tests (affected only), against real service
-  # containers. The long pole; runs in parallel with `checks`. Runs on every
-  # PR AND on merge to main (advisory; does NOT gate deploys).
+  # build — full production build of every app/package (no affected filter).
+  # `next build` runs loadEnv() and collects page data for routes that touch
+  # the env schema, so the job needs the shared env block + the service
+  # containers a fresh schema is applied to. Runs in parallel with `unit`.
   # ──────────────────────────────────────────────────────────────────────
-  test:
+  build:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     services:
       postgres:
         image: postgres:16-alpine
@@ -191,15 +201,10 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-
       clickhouse:
         image: clickhouse/clickhouse-server:24.8-alpine
         env:
           CLICKHOUSE_DB: oxagen
-          # Do NOT set CLICKHOUSE_USER/PASSWORD: overriding the built-in
-          # `default` user writes a users.d password config that makes the
-          # HTTP interface (8123) reject the empty-password login the
-          # migrator uses, even though the native-protocol healthcheck passes.
           CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
         ports:
           - 8123:8123
@@ -209,7 +214,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-
       neo4j:
         image: neo4j:5.24-community
         env:
@@ -222,90 +226,117 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
-
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Compute affected base
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          EVENT_BEFORE: ${{ github.event.before }}
-        run: |
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            git fetch origin main --no-tags
-            echo "TURBO_BASE=origin/main" >> "$GITHUB_ENV"
-          else
-            BEFORE="$EVENT_BEFORE"
-            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-              BEFORE="$(git rev-parse HEAD~1)"
-            fi
-            echo "TURBO_BASE=$BEFORE" >> "$GITHUB_ENV"
-          fi
-
       - name: Bootstrap Postgres extensions
         run: |
           sudo apt-get install -y postgresql-client
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
-
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: pnpm
-
       - run: pnpm install --frozen-lockfile
-
       - name: Install Atlas CLI
         run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
-
-      # Run migrations only when Atlas or telemetry migration files changed.
-      - name: Detect migration changes
-        id: migration_changes
-        run: |
-          if git diff --name-only "${TURBO_BASE}"...HEAD | grep -qE '^packages/database/atlas/migrations/|^packages/telemetry/'; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Migrate Postgres (Atlas)
-        if: steps.migration_changes.outputs.changed == 'true'
         working-directory: packages/database
         run: atlas migrate apply --env ci
-
       - name: Migrate ClickHouse + Neo4j
-        if: steps.migration_changes.outputs.changed == 'true'
         run: DB_MIGRATE_STORES=clickhouse,neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
-
       - name: Seed platform defaults
-        if: steps.migration_changes.outputs.changed == 'true'
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
-
-      # Affected build + unit tests. test:unit dependsOn ^build, so turbo builds
-      # the affected dependency graph then runs the affected tests — all in one
-      # turbo invocation with full intra-DAG parallelism + remote cache.
-      - name: Build + unit tests (affected)
-        run: pnpm turbo run build test:unit --filter="...[${TURBO_BASE}]"
-
-      # Coverage thresholds gate (affected only). Runs vitest --coverage for every
-      # affected package and fails if any package's measured coverage falls below
-      # its ratchet floor (thresholds block in each vitest.config.ts).
-      # test:coverage dependsOn ^build so the build graph is already warm from the
-      # previous step and this just runs the coverage pass.
-      - name: Coverage thresholds (affected)
-        run: pnpm turbo run test:coverage --filter="...[${TURBO_BASE}]"
+      - name: Build (full tree)
+        run: pnpm turbo run build
 
   # ──────────────────────────────────────────────────────────────────────
-  # e2e — end-to-end tests (affected only), sharded across 4 workers.
-  # Runs on every PR and after merge to main (advisory, does NOT gate deploys).
+  # unit — full unit suite + coverage thresholds across every package (no
+  # affected filter), against real service containers. test:unit / test:coverage
+  # dependsOn ^build, so turbo builds the dependency graph then runs the tests;
+  # `test:coverage` fails the job if any package falls below its ratchet floor.
+  # ──────────────────────────────────────────────────────────────────────
+  unit:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: oxagen
+          POSTGRES_PASSWORD: oxagen
+          POSTGRES_DB: oxagen
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oxagen -d oxagen"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8-alpine
+        env:
+          CLICKHOUSE_DB: oxagen
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+        ports:
+          - 8123:8123
+          - 9000:9000
+        options: >-
+          --health-cmd "clickhouse-client -q 'SELECT 1' || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      neo4j:
+        image: neo4j:5.24-community
+        env:
+          NEO4J_AUTH: neo4j/oxagen-dev
+        ports:
+          - 7474:7474
+          - 7687:7687
+        options: >-
+          --health-cmd "wget -q -O - http://localhost:7474 >/dev/null 2>&1 || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Bootstrap Postgres extensions
+        run: |
+          sudo apt-get install -y postgresql-client
+          psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Atlas CLI
+        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
+      - name: Migrate Postgres (Atlas)
+        working-directory: packages/database
+        run: atlas migrate apply --env ci
+      - name: Migrate ClickHouse + Neo4j
+        run: DB_MIGRATE_STORES=clickhouse,neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
+      - name: Seed platform defaults
+        run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
+      # Build + unit tests, then the coverage pass (build graph is warm).
+      # --continue so a failure in one package still runs the rest and the log
+      # surfaces every failing package at once instead of just the first.
+      - name: Build + unit tests (full tree)
+        run: pnpm turbo run build test:unit --continue
+      - name: Coverage thresholds (full tree)
+        run: pnpm turbo run test:coverage --continue
+
+  # ──────────────────────────────────────────────────────────────────────
+  # e2e — full end-to-end suite (no affected filter), sharded across 4 workers.
   # ──────────────────────────────────────────────────────────────────────
   e2e:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
+      fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
     services:
@@ -349,23 +380,6 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - name: Compute affected base
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          EVENT_BEFORE: ${{ github.event.before }}
-        run: |
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            git fetch origin main --no-tags
-            echo "TURBO_BASE=origin/main" >> "$GITHUB_ENV"
-          else
-            BEFORE="$EVENT_BEFORE"
-            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-              BEFORE="$(git rev-parse HEAD~1)"
-            fi
-            echo "TURBO_BASE=$BEFORE" >> "$GITHUB_ENV"
-          fi
       - name: Bootstrap Postgres extensions
         run: |
           sudo apt-get install -y postgresql-client
@@ -378,22 +392,22 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install Atlas CLI
         run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
-      - name: Migrate Postgres (Atlas — always for fresh e2e database)
+      - name: Migrate Postgres (Atlas — fresh e2e database)
         working-directory: packages/database
         run: atlas migrate apply --env ci
       - name: Migrate ClickHouse + Neo4j
         run: DB_MIGRATE_STORES=clickhouse,neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
       - name: Seed platform defaults
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
-      - name: Build (affected)
-        run: pnpm turbo run build --filter="...[${TURBO_BASE}]"
+      - name: Build (full tree)
+        run: pnpm turbo run build
       # Install the Playwright browser + OS deps. Without this the runner has no
       # chromium-headless-shell matching the pinned @playwright/test version and
       # every e2e shard fails with "Executable doesn't exist". Idempotent + fast.
       - name: Install Playwright browser
         run: pnpm --filter @oxagen/app exec playwright install --with-deps chromium
-      - name: E2E tests (affected, shard ${{ matrix.shard }}/4)
-        run: pnpm turbo run test:e2e --filter="...[${TURBO_BASE}]" -- --shard=${{ matrix.shard }}/4
+      - name: E2E tests (full suite, shard ${{ matrix.shard }}/4)
+        run: pnpm turbo run test:e2e -- --shard=${{ matrix.shard }}/4
       # Failures without traces are undebuggable from logs alone — Playwright
       # writes traces/screenshots to test-results/ only for failed tests, so
       # this uploads nothing (and is skipped) on green runs.
@@ -418,7 +432,7 @@ jobs:
   # actually evaluated even though the CI postgres connects as a superuser.
   # ──────────────────────────────────────────────────────────────────────
   rls-integration:
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -469,6 +483,46 @@ jobs:
         run: pnpm --filter @oxagen/database test:integration
 
   # ──────────────────────────────────────────────────────────────────────
+  # ci-success — aggregate gate. Stays red until every gate job above is
+  # green. This is the SINGLE check to mark as a required status check in
+  # branch protection for `main`: it transitively requires lint, typecheck,
+  # invariants, build, unit, all e2e shards, rls-integration, and the Atlas
+  # validation. `migrate` and `deploy` are deliberately excluded — they target
+  # external/managed databases and must not gate the code review on a PR.
+  # `if: always()` so it runs even when a dependency fails, then asserts on the
+  # collected results (a skipped/failed/cancelled dependency fails the gate).
+  # ──────────────────────────────────────────────────────────────────────
+  ci-success:
+    if: ${{ always() && github.event_name != 'workflow_dispatch' }}
+    needs:
+      - atlas-validate
+      - lint
+      - typecheck
+      - invariants
+      - build
+      - unit
+      - e2e
+      - rls-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Verify all gate jobs succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ',') }}
+        run: |
+          echo "Gate job results: $RESULTS"
+          # Pass only if every needed job reports "success". Any other state
+          # (failure, cancelled, skipped) fails the aggregate gate.
+          IFS=',' read -ra R <<< "$RESULTS"
+          for r in "${R[@]}"; do
+            if [ "$r" != "success" ]; then
+              echo "::error::A required CI gate job did not succeed (got '$r'). Failing the aggregate gate."
+              exit 1
+            fi
+          done
+          echo "All required CI gate jobs succeeded."
+
+  # ──────────────────────────────────────────────────────────────────────
   # migrate — apply DB migrations to a PERSISTENT environment database.
   #   pull_request  → PREVIEW  database (PREVIEW_* secrets) so the per-PR Vercel
   #                   preview deployment runs against the new schema, and the
@@ -482,7 +536,8 @@ jobs:
   # same database. Gated on migration-file changes to avoid needless runs.
   # NOTE: this runs in parallel with Vercel's deploy (chosen "simple" ordering);
   # additive, expand-then-contract migrations (engineering policy §5) keep the
-  # previously-deployed code working during the brief overlap.
+  # previously-deployed code working during the brief overlap. Excluded from the
+  # `ci-success` gate — it targets managed DBs, not the code under review.
   # ──────────────────────────────────────────────────────────────────────
   migrate:
     runs-on: ubuntu-latest
@@ -591,14 +646,14 @@ jobs:
         run: pnpm billing:stripe-sync --apply
 
   # ──────────────────────────────────────────────────────────────────────
-  # deploy — post-merge side-car (main only). The actual app deploys are
-  # triggered by Vercel's own GitHub integration, which now skips any app
-  # whose affected set is unchanged (vercel.json `ignoreCommand: turbo-ignore`).
-  # Per the chosen model this is UNGATED — it runs alongside checks/test, not
-  # after them (main is already gated by the required PR check before merge).
+  # deploy — post-merge side-car (main only), runs only after the aggregate
+  # gate is green. The actual app deploys are triggered by Vercel's own GitHub
+  # integration, which skips any app whose affected set is unchanged
+  # (vercel.json `ignoreCommand: turbo-ignore`).
   # ──────────────────────────────────────────────────────────────────────
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [ci-success]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -606,4 +661,4 @@ jobs:
         # The Linear *release* now fires on GitHub Release publish, not on every
         # main push — see .github/workflows/linear-release.yml. (Per-push release
         # creation would mint a Linear release for every checkpoint commit.)
-        run: echo "Merge to main detected. Vercel deploys changed apps via its GitHub integration (turbo-ignore skips unchanged apps)."
+        run: echo "Merge to main detected and CI gate green. Vercel deploys changed apps via its GitHub integration (turbo-ignore skips unchanged apps)."
