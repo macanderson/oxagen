@@ -4,8 +4,6 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".vercel/output/**", ".xmcp/**", "dist/**"],
-      // MCP server (xmcp). Surfaces the same shared packages as the API minus
-      // Inngest (not a dependency). Reads its env through @oxagen/config.
       "env": [
         "DATABASE_URL",
         "CLICKHOUSE_URL",
@@ -52,26 +50,7 @@
         "NEXT_PUBLIC_API_URL",
         "VERCEL"
       ],
-      "passThroughEnv": [
-        "VERCEL_URL",
-        "INNGEST_EVENT_KEY",
-        "INNGEST_SIGNING_KEY",
-        "OXAGEN_LLM_OCR",
-        "OXAGEN_EMBEDDING_MODEL",
-        "OXAGEN_EMBEDDING_DIMENSIONS",
-        "OXAGEN_EMBEDDING_MULTIMODAL",
-        "BLOB_STORE_ID",
-        "BLOB_WEBHOOK_PUBLIC_KEY",
-        "AURA_INSTANCENAME",
-        "SMTP_HOST",
-        "SMTP_PORT",
-        "SMTP_USERNAME",
-        "SMTP_FROM_EMAIL",
-        "SMTP_FROM_NAME",
-        "SMTP_PASSWORD",
-        "OXAGEN_APP_DB_PASSWORD",
-        "TAVILY_API_KEY"
-      ]
+      "passThroughEnv": ["VERCEL_URL"]
     }
   }
 }
