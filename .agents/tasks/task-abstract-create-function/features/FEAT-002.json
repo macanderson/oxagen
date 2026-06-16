@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "refactor",
   "description": "Migrate all 29 function definition files in packages/inngest-functions/src/functions/ to use the new createFunction adapter from @oxagen/inngest-functions instead of directly calling inngest.createFunction(). Each file replaces its import of inngest with an import of the adapter, rewrites the definition to use the abstract interface, and the business logic in handlers remains unchanged.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. Migrate the simplest event-triggered functions first as a pattern: chat.persist-stream.ts, stripe.sync-subscription.ts, stripe.sync-invoice.ts. Replace `import { inngest } from '../inngest'` with `import { createFunction } from '../create-function'`. Convert inngest.createFunction(config, trigger, handler) to createFunction(config, trigger, handler). The handler keeps its body unchanged but now receives the abstract {event, step} context.",
     "2. Migrate cron-triggered functions: billing.rollup-usage.ts, billing.dunning-sweep.ts, plugin.catalog-sync-cron.ts, security.audit-partition-rollover.ts. These use { cron: '...' } triggers. Note: billing.rollup-usage.ts handler only destructures {step} (no event) - the adapter context always provides both, so this is safe.",
@@ -33,5 +33,5 @@
     "cd /projects/sandbox/oxagen-monorepo/apps/api && pnpm typecheck"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Migration successful. Key findings: (1) Tests that mock ../inngest to capture the handler needed to be updated to mock ../create-function instead, because the adapter wraps the handler and expects ctx.event to be an object. (2) Three files (agent.workflow.supervisor, ingestion.sync-requested, playbook.trigger.match) still import inngest from ../inngest because they call inngest.send() directly inside step.run blocks. (3) The functions registry needed a .filter(fn => fn != null) to handle the undefined from array destructuring of createFunction results (on-failure companion being the 2nd element). (4) The functions array type was changed to any[] to satisfy the inngestServe type constraint (DurableFunction interface does not have Symbol.toStringTag that Inngest's Like type requires, even though the runtime objects are valid Inngest functions)."
 }
