@@ -5,7 +5,7 @@
   "packageManager": "pnpm@11.7.0",
   "engines": {
     "node": ">=24",
-    "pnpm": ">=10"
+    "pnpm": ">=11"
   },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
@@ -47,11 +47,7 @@
     "db:seed-interactive-agent": "tsx --env-file-if-exists=.env.local tools/scripts/seed-interactive-agent.ts",
     "db:backfill-iam": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-org-iam.ts"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "lefthook"
-    ]
-  },
+
   "devDependencies": {
     "@changesets/cli": "2.31.0",
     "@eslint/js": "9.39.4",
