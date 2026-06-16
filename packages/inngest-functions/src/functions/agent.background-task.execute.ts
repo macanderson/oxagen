@@ -1,4 +1,4 @@
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
@@ -19,7 +19,7 @@ interface BgPayload {
   [k: string]: unknown;
 }
 
-export const agentBackgroundTaskExecute = inngest.createFunction(
+export const [agentBackgroundTaskExecute] = createFunction(
   {
     id: "agent.background-task.execute",
     retries: 0,

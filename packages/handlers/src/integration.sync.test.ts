@@ -23,8 +23,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...real, withTenantDb: mocks.withTenantDb };
 });
 
-vi.mock("@oxagen/inngest-functions/client", () => ({
-  inngest: { send: mocks.inngestSend },
+vi.mock("./event-client", () => ({
+  eventClient: { send: mocks.inngestSend },
 }));
 
 import { integrationSyncHandler } from "./integration.sync";

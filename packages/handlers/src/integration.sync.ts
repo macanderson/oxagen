@@ -2,7 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { integrationSync } from "@oxagen/oxagen/contracts/integration.sync";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "./event-client";
 import type { DeliveryConfig } from "@oxagen/ingestion/filters";
 import { logger } from "./logger";
 
@@ -64,7 +64,7 @@ export const integrationSyncHandler: CapabilityHandler<typeof integrationSync> =
 
   // Queue the sync job via Inngest. The event carries sync-method context so
   // the receiving function can apply the correct cadence and backoff strategy.
-  await inngest.send({
+  await eventClient.send({
     name: "ingestion/sync.requested",
     data: {
       jobId,

@@ -49,8 +49,8 @@ vi.mock("../logger", () => ({
   },
 }));
 
-vi.mock("../inngest", () => ({
-  inngest: { createFunction: mocks.inngestCreateFunction },
+vi.mock("../create-function", () => ({
+  createFunction: mocks.inngestCreateFunction,
 }));
 
 // Capture the Inngest handler
@@ -63,7 +63,7 @@ let capturedHandler: ((ctx: {
 mocks.inngestCreateFunction.mockImplementation(
   (_opts: unknown, _trigger: unknown, handler: typeof capturedHandler) => {
     capturedHandler = handler;
-    return {};
+    return [{}];
   },
 );
 

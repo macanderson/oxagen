@@ -4,7 +4,7 @@ import { schema, withSystemDb, isUniqueViolation } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { and, eq, isNull } from "drizzle-orm";
 import { grantFreeCredits } from "@oxagen/billing";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "./event-client";
 import { logger } from "./logger";
 import { bootstrapOrgIAM } from "./iam-provision";
 
@@ -175,7 +175,7 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
   )
     .then((registry) => {
       if (!registry) return;
-      return inngest.send({
+      return eventClient.send({
         name: "plugin/registry.sync",
         data: { registryId: registry.id, mode: "full" },
       });

@@ -25,7 +25,7 @@
 // durationMs so the Inngest dashboard + any log sink can track partition health.
 
 import { sql } from "drizzle-orm";
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { withSystemDb } from "@oxagen/database";
 import { logger } from "../logger";
 
@@ -52,7 +52,7 @@ function partitionSpec(year: number, month: number): {
   };
 }
 
-export const securityAuditPartitionRollover = inngest.createFunction(
+export const [securityAuditPartitionRollover] = createFunction(
   {
     id: "security.audit-partition-rollover",
     retries: 3,

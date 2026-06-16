@@ -1,5 +1,5 @@
 import { requireEnv } from "@oxagen/config/env";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "./event-client";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { videoGenerate } from "@oxagen/oxagen/contracts/video.generate";
 import { videoTierModelId } from "@oxagen/ai";
@@ -72,7 +72,7 @@ export const videoGenerateHandler: CapabilityHandler<typeof videoGenerate> = asy
 
   // Dispatch the async render job. The worker generates, uploads to blob, and
   // flips the row to `ready`.
-  await inngest.send({
+  await eventClient.send({
     name: "agent/video.render",
     data: {
       assetId: pending.id,

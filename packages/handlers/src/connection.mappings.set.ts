@@ -3,7 +3,7 @@ import { connectionMappingsSet } from "@oxagen/oxagen/contracts/connection.mappi
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "./event-client";
 import { logger } from "./logger";
 
 export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMappingsSet> = async (
@@ -108,7 +108,7 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
       const defaultBranch =
         typeof dc?.["defaultBranch"] === "string" ? dc["defaultBranch"] : "main";
 
-      await inngest.send({
+      await eventClient.send({
         name: "ingestion/github.initial-sync",
         data: {
           connectionId: conn.id,

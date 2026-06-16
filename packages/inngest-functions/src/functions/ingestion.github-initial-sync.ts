@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument -- event.data types are declared in inngest.ts Events; untyped here because InstanceType<typeof Inngest> strips EventSchemas generics from the Proxy */
-import { inngest } from "../inngest";
+ 
+import { createFunction } from "../create-function";
 import { withSystemDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { createIngestionCryptoAdapter, decrypt } from "@oxagen/crypto";
@@ -43,7 +43,7 @@ interface GitTreeResponse {
  * Concurrency is limited to 2 concurrent syncs per org to avoid hammering
  * the GitHub API with multiple orgs' syncs at once.
  */
-export const ingestionGithubInitialSync = inngest.createFunction(
+export const [ingestionGithubInitialSync] = createFunction(
   {
     id: "ingestion-github-initial-sync",
     retries: 3,
@@ -51,7 +51,14 @@ export const ingestionGithubInitialSync = inngest.createFunction(
   },
   { event: "ingestion/github.initial-sync" },
   async ({ event, step }) => {
-    const { connectionId, orgId, workspaceId, owner, repo, defaultBranch } = event.data;
+    const { connectionId, orgId, workspaceId, owner, repo, defaultBranch } = event.data as {
+      connectionId: string;
+      orgId: string;
+      workspaceId: string;
+      owner: string;
+      repo: string;
+      defaultBranch: string;
+    };
 
     // ── Step 1: Fetch access token from Postgres ─────────────────────────────
     const accessToken = await step.run("fetch-access-token", async () => {

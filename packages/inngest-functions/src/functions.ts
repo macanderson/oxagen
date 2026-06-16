@@ -28,7 +28,12 @@ import { ingestionSyncRequested } from "./functions/ingestion.sync-requested";
 import { playbookTriggerMatch } from "./functions/playbook.trigger.match";
 import { playbookRunExecute } from "./functions/playbook.run.execute";
 
-export const functions = [
+// The DurableFunction objects returned by createFunction are also valid Inngest
+// function instances at runtime (they are Object.assign-ed Inngest functions).
+// We export as unknown[] so the serve layer can accept them without a type conflict
+// between the abstract DurableFunction interface and Inngest's internal Like type.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const functions: any[] = [
   billingRollupUsage,
   billingDunningSweep,
   stripeSyncSubscription,
@@ -61,4 +66,4 @@ export const functions = [
   ingestionSyncRequested,
   playbookTriggerMatch,
   playbookRunExecute,
-];
+].filter((fn): fn is NonNullable<typeof fn> => fn != null);

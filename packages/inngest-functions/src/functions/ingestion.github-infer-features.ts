@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- event.data types are declared in inngest.ts Events; untyped here because InstanceType<typeof Inngest> strips EventSchemas generics from the Proxy */
+ 
 import { z } from "zod";
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { generateObjectFor } from "@oxagen/ai";
@@ -33,7 +33,7 @@ const featureSchema = z.object({
  *
  * Concurrency is limited to 10 parallel inferences per org.
  */
-export const ingestionGithubInferFeatures = inngest.createFunction(
+export const [ingestionGithubInferFeatures] = createFunction(
   {
     id: "ingestion-github-infer-features",
     retries: 2,
@@ -41,7 +41,13 @@ export const ingestionGithubInferFeatures = inngest.createFunction(
   },
   { event: "ingestion/github.infer-features" },
   async ({ event, step }) => {
-    const { fileNaturalKey, symbols, orgId, workspaceId, connectionId } = event.data;
+    const { fileNaturalKey, symbols, orgId, workspaceId, connectionId } = event.data as {
+      fileNaturalKey: string;
+      symbols: Array<{ kind: string; name: string; startLine: number; endLine: number }>;
+      orgId: string;
+      workspaceId: string;
+      connectionId: string;
+    };
 
     // Derive the language from the natural key extension for the prompt.
     const pathPart = fileNaturalKey.split(":").at(-1) ?? fileNaturalKey;

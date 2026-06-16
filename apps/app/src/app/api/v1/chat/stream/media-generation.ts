@@ -6,7 +6,7 @@ import {
   generateImageFor,
 } from "@oxagen/ai";
 import { persistGeneratedAsset, createPendingGeneratedAsset } from "@oxagen/handlers";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "@/event-client";
 import type { StreamEvent } from "@/components/chat/stream-event-types";
 
 /**
@@ -121,7 +121,7 @@ export function streamMediaGeneration(args: {
             conversationId: args.conversationId,
             messageId: args.messageId,
           });
-          await inngest.send({
+          await eventClient.send({
             name: "agent/video.render",
             data: {
               assetId: pending.id,

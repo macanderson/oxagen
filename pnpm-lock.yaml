@@ -77,6 +77,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@oxagen/functions':
+        specifier: workspace:*
+        version: link:../../packages/functions
       '@oxagen/handlers':
         specifier: workspace:*
         version: link:../../packages/handlers
@@ -177,6 +180,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@oxagen/functions':
+        specifier: workspace:*
+        version: link:../../packages/functions
       '@oxagen/handlers':
         specifier: workspace:*
         version: link:../../packages/handlers
@@ -783,6 +789,15 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
 
+  packages/functions:
+    devDependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
+
   packages/handlers:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -803,6 +818,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/functions':
+        specifier: workspace:*
+        version: link:../functions
       '@oxagen/ingestion':
         specifier: workspace:*
         version: link:../ingestion
@@ -977,6 +995,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/functions':
+        specifier: workspace:*
+        version: link:../functions
       '@oxagen/ingestion':
         specifier: workspace:*
         version: link:../ingestion

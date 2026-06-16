@@ -16,10 +16,10 @@ import { and, eq, lt, sql } from "drizzle-orm";
 import { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
 import { schema, withSystemDb } from "@oxagen/database";
 import { DbOAuthClientProvider, markCredentialNeedsReauth } from "@oxagen/plugins";
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { logger } from "../logger";
 
-export const pluginOauthRefreshWatcher = inngest.createFunction(
+export const [pluginOauthRefreshWatcher] = createFunction(
   { id: "plugin.oauth-refresh-watcher", retries: 0 },
   { cron: "*/30 * * * *" },
   async ({ step }) => {

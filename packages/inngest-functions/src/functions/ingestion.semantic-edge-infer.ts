@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- event.data types are declared in inngest.ts Events; untyped here because InstanceType<typeof Inngest> strips EventSchemas generics from the Proxy */
+ 
 import { z } from "zod";
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { generateObjectFor } from "@oxagen/ai";
@@ -56,7 +56,7 @@ const edgeInferenceSchema = z.object({
  * Concurrency is limited to 8 parallel inferences per org to avoid thundering
  * herd against the AI Gateway after a large batch sync.
  */
-export const ingestionSemanticEdgeInfer = inngest.createFunction(
+export const [ingestionSemanticEdgeInfer] = createFunction(
   {
     id: "ingestion-semantic-edge-infer",
     retries: 2,
@@ -64,7 +64,13 @@ export const ingestionSemanticEdgeInfer = inngest.createFunction(
   },
   { event: "ingestion/entity.infer" },
   async ({ event, step }) => {
-    const { nodeId, entityType, propertiesSnapshot, workspaceId, orgId } = event.data;
+    const { nodeId, entityType, propertiesSnapshot, workspaceId, orgId } = event.data as {
+      nodeId: string;
+      entityType: string;
+      propertiesSnapshot: Record<string, unknown>;
+      workspaceId: string;
+      orgId: string;
+    };
 
     // ── Step 1: Infer edges via LLM ──────────────────────────────────────────
     const inferResult = await step.run("infer-edges", () =>

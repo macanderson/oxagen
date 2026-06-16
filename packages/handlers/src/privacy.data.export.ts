@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
 import { withSystemDb, schema } from "@oxagen/database";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "./event-client";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { logger } from "./logger";
 
@@ -57,7 +57,7 @@ export const privacyDataExportHandler: CapabilityHandler<
   });
 
   // Dispatch async Inngest job for ZIP assembly + upload
-  await inngest.send({
+  await eventClient.send({
     name: "privacy/export.process",
     data: { exportId: row.id, userId: ctx.userId!, orgId, scope: input.scope },
   });

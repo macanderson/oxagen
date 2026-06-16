@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument -- event.data types are declared in inngest.ts Events; untyped here because InstanceType<typeof Inngest> strips EventSchemas generics from the Proxy */
-import { inngest } from "../inngest";
+ 
+import { createFunction } from "../create-function";
 import { withTenantDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -26,7 +26,7 @@ import { logger } from "../logger";
  * Step 6: schedule-events     fire ingestion/entity.created (trigger matcher) and
  *                              ingestion/entity.infer (semantic inference) asynchronously
  */
-export const ingestionPipeline = inngest.createFunction(
+export const [ingestionPipeline] = createFunction(
   {
     id: "ingestion-pipeline",
     retries: 3,
@@ -34,7 +34,14 @@ export const ingestionPipeline = inngest.createFunction(
   },
   { event: "ingestion/entity.received" },
   async ({ event, step }) => {
-    const { connectionId, workspaceId, orgId, connectorType, sourceRecordType, payload } = event.data;
+    const { connectionId, workspaceId, orgId, connectorType, sourceRecordType, payload } = event.data as {
+      connectionId: string;
+      workspaceId: string;
+      orgId: string;
+      connectorType: string;
+      sourceRecordType: string;
+      payload: unknown;
+    };
 
     // ── Step 1: Normalize raw payload and look up entity type mapping ────────
     const mutation = await step.run("normalize-and-map", async () => {

@@ -1,4 +1,4 @@
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { insertTokenUsage, type Surface } from "@oxagen/telemetry";
@@ -14,7 +14,7 @@ import { logger } from "../logger";
  * Why split Postgres/ClickHouse here: spec §3 mandates the boundary —
  * messages are durable transactional state, token telemetry is append-only.
  */
-export const chatPersistStream = inngest.createFunction(
+export const [chatPersistStream] = createFunction(
   { id: "chat.persist-stream", retries: 3 },
   { event: "chat/message.streamed" },
   async ({ event, step }) => {

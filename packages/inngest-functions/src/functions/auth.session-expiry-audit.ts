@@ -17,7 +17,7 @@
 //     consistent with OXA-1515 tenancy analysis in packages/telemetry/src/security.ts).
 
 import { and, gt, inArray, isNull, lt, sql } from "drizzle-orm";
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { schema, withSystemDb } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { logger } from "../logger";
@@ -26,7 +26,7 @@ const NO_ORG_SENTINEL = "00000000-0000-0000-0000-000000000000";
 const BATCH_SIZE = 500;
 const WINDOW_HOURS = 25;
 
-export const authSessionExpiryAudit = inngest.createFunction(
+export const [authSessionExpiryAudit] = createFunction(
   {
     id: "auth/session-expiry-audit",
     retries: 3,

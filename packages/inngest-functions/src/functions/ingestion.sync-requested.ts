@@ -1,4 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment -- event.data types are declared in inngest.ts Events; untyped here because InstanceType<typeof Inngest> strips EventSchemas generics from the Proxy */
+ 
+import { createFunction } from "../create-function";
 import { inngest } from "../inngest";
 import { withSystemDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
@@ -32,7 +33,7 @@ interface SourceConnectionRow {
  * initial-sync function marks the connection `active` at the end, so a
  * duplicate dispatch will simply re-run the full tree fetch and overwrite.
  */
-export const ingestionSyncRequested = inngest.createFunction(
+export const [ingestionSyncRequested] = createFunction(
   {
     id: "ingestion-sync-requested",
     retries: 3,
@@ -40,7 +41,15 @@ export const ingestionSyncRequested = inngest.createFunction(
   },
   { event: "ingestion/sync.requested" },
   async ({ event, step }) => {
-    const { connectionId, orgId, workspaceId, integrationId, mode, syncMethod, jobId } = event.data;
+    const { connectionId, orgId, workspaceId, integrationId, mode, syncMethod, jobId } = event.data as {
+      connectionId: string;
+      orgId: string;
+      workspaceId: string;
+      integrationId: string;
+      mode: string;
+      syncMethod: string;
+      jobId: string;
+    };
 
     // ── Step 1: Resolve the source connection ────────────────────────────────
     const conn = await step.run("resolve-connection", async (): Promise<SourceConnectionRow | null> => {

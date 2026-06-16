@@ -1,4 +1,4 @@
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { generateVideoFor, selectVideoModel } from "@oxagen/ai";
@@ -32,7 +32,7 @@ import { logger } from "../logger";
  *   `retries: 0` because video generation is expensive; callers re-dispatch if
  *   needed.
  */
-export const agentVideoRender = inngest.createFunction(
+export const [agentVideoRender, agentVideoRenderOnFailure] = createFunction(
   {
     id: "agent.video-render",
     retries: 0,
@@ -41,6 +41,63 @@ export const agentVideoRender = inngest.createFunction(
     // can take 2-5+ minutes; `generateVideoFor` enforces a 15-minute
     // AbortController timeout, giving 1 minute of Inngest headroom.
     timeouts: { finish: "16m" },
+    onFailure: async ({ event, step }) => {
+      const failureData = event.data as {
+        event?: { data?: { assetId?: string; orgId?: string; workspaceId?: string } };
+        error?: unknown;
+      };
+      const originalData = failureData.event?.data;
+      const assetId = originalData?.assetId;
+      if (!assetId) return;
+      const orgId = originalData?.orgId;
+      const workspaceId = originalData?.workspaceId;
+
+      const errorMessage =
+        typeof failureData.error === "object" &&
+        failureData.error !== null &&
+        "message" in failureData.error
+          ? String((failureData.error as { message: unknown }).message)
+          : String(failureData.error ?? "unknown error");
+
+      await step.run("mark-failed", async () => {
+        // Scope tightly around the DB update only (no LLM/IO here).
+        // orgId/workspaceId are non-null in agent/video.render events but may be
+        // absent in legacy/malformed data -- fall back to a system bypass so the
+        // failure record still lands.
+        if (orgId && workspaceId) {
+          await runInTenantScope({ orgId, workspaceId }, () =>
+            withTenantDb((tx) =>
+              tx
+                .update(schema.generatedAssets)
+                .set({
+                  status: "failed",
+                  metadata: { failureReason: errorMessage },
+                  updatedAt: new Date(),
+                })
+                .where(eq(schema.generatedAssets.id, assetId)),
+            ),
+          );
+        } else {
+          // tenancy: system bypass via withSystemDb (legacy/malformed event with
+          // no orgId/workspaceId -- the failure record must still land) -- OXA-1515
+          await withSystemDb((tx) =>
+            tx
+              .update(schema.generatedAssets)
+              .set({
+                status: "failed",
+                metadata: { failureReason: errorMessage },
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.generatedAssets.id, assetId)),
+          );
+        }
+      });
+
+      logger.error(
+        { assetId, error: errorMessage },
+        "agent.video-render failed -- asset marked failed",
+      );
+    },
   },
   { event: "agent/video.render" },
   async ({ event, step }) => {
@@ -142,71 +199,5 @@ export const agentVideoRender = inngest.createFunction(
     );
 
     return { assetId, status: "ready", storageKey, storageUrl };
-  },
-);
-
-// ── Failure handler ────────────────────────────────────────────────────────────
-// Inngest v3 uses `onFailure` as a separate function triggered by Inngest when
-// the main function exhausts its retries (or retries: 0 means any failure).
-// We register it as a companion function to update the DB row on failure.
-export const agentVideoRenderOnFailure = inngest.createFunction(
-  { id: "agent.video-render.on-failure" },
-  { event: "inngest/function.failed", if: "event.data.function_id == 'agent.video-render'" },
-  async ({ event, step }) => {
-    const failureData = event.data as {
-      event?: { data?: { assetId?: string; orgId?: string; workspaceId?: string } };
-      error?: unknown;
-    };
-    const originalData = failureData.event?.data;
-    const assetId = originalData?.assetId;
-    if (!assetId) return;
-    const orgId = originalData?.orgId;
-    const workspaceId = originalData?.workspaceId;
-
-    const errorMessage =
-      typeof failureData.error === "object" &&
-      failureData.error !== null &&
-      "message" in failureData.error
-        ? String((failureData.error as { message: unknown }).message)
-        : String(failureData.error ?? "unknown error");
-
-    await step.run("mark-failed", async () => {
-      // Scope tightly around the DB update only (no LLM/IO here).
-      // orgId/workspaceId are non-null in agent/video.render events but may be
-      // absent in legacy/malformed data — fall back to a system bypass so the
-      // failure record still lands.
-      if (orgId && workspaceId) {
-        await runInTenantScope({ orgId, workspaceId }, () =>
-          withTenantDb((tx) =>
-            tx
-              .update(schema.generatedAssets)
-              .set({
-                status: "failed",
-                metadata: { failureReason: errorMessage },
-                updatedAt: new Date(),
-              })
-              .where(eq(schema.generatedAssets.id, assetId)),
-          ),
-        );
-      } else {
-        // tenancy: system bypass via withSystemDb (legacy/malformed event with
-        // no orgId/workspaceId — the failure record must still land) — OXA-1515
-        await withSystemDb((tx) =>
-          tx
-            .update(schema.generatedAssets)
-            .set({
-              status: "failed",
-              metadata: { failureReason: errorMessage },
-              updatedAt: new Date(),
-            })
-            .where(eq(schema.generatedAssets.id, assetId)),
-        );
-      }
-    });
-
-    logger.error(
-      { assetId, error: errorMessage },
-      "agent.video-render failed — asset marked failed",
-    );
   },
 );

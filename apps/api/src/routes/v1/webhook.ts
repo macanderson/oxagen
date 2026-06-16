@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { schema, withSystemDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "../../event-client";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
 import type { AppEnv } from "../../app";
@@ -121,7 +121,7 @@ webhookRoute.post("/:connectorId/:connectionId", async (c) => {
       : "event");
 
   // Fire Inngest pipeline event
-  await inngest.send({
+  await eventClient.send({
     name: "ingestion/entity.received",
     data: {
       connectionId: conn.connectionId,
