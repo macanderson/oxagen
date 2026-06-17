@@ -14,7 +14,7 @@ import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "../../event-client";
 
 export const connectionRoute = new Hono<AppEnv>();
 
@@ -130,7 +130,7 @@ connectionRoute.post("/:id/resync", async (c) => {
 
   // Fire initial sync event — the Inngest function handles retry/dedup.
   const deliveryConfig = conn.deliveryConfig as Record<string, unknown> | null;
-  await inngest.send({
+  await eventClient.send({
     name: "ingestion/github.initial-sync",
     data: {
       connectionId: conn.id,

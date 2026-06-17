@@ -1,3 +1,4 @@
+import { createFunction } from "../create-function";
 import { inngest } from "../inngest";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
@@ -21,7 +22,7 @@ const taskPlanSchema = z.object({
     .max(MAX_TASKS_PER_WORKFLOW),
 });
 
-export const agentWorkflowSupervisor = inngest.createFunction(
+export const [agentWorkflowSupervisor] = createFunction(
   {
     id: "agent.workflow.supervisor",
     retries: 1,

@@ -2,6 +2,7 @@ import { inngest } from "../inngest";
 import { sweepDunning, isLowBalance, notifyLowBalance } from "@oxagen/billing";
 import { withSystemDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
+import { createFunction } from "../create-function";
 import { logger } from "../logger";
 
 /**
@@ -12,7 +13,7 @@ import { logger } from "../logger";
  * sweepDunning() is idempotent — safe to retry on Inngest failure. Returns
  * a count of orgs suspended in this run.
  */
-export const billingDunningSweep = inngest.createFunction(
+export const [billingDunningSweep] = createFunction(
   { id: "billing.dunning-sweep", retries: 3 },
   { cron: "0 2 * * *" },
   async ({ step }) => {

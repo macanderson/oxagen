@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workflowRun } from "@oxagen/oxagen/contracts/workflow.run";
 import { schema, withTenantDb } from "@oxagen/database";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "./event-client";
 import { logger } from "./logger";
 
 const MAX_TASKS_PER_WORKFLOW = 500;
@@ -42,7 +42,7 @@ export const workflowRunHandler: CapabilityHandler<typeof workflowRun> = async (
 
   if (!row) throw new Error("workflow.run: insert returned no row");
 
-  await inngest.send({
+  await eventClient.send({
     name: "agent/workflow.supervisor.start",
     data: {
       orgId: ctx.orgId,

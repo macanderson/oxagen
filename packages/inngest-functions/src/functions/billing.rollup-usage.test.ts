@@ -43,8 +43,8 @@ vi.mock("../logger", () => ({
   logger: { info: mocks.loggerInfo, error: vi.fn() },
 }));
 
-vi.mock("../inngest", () => ({
-  inngest: { createFunction: mocks.inngestCreateFunction },
+vi.mock("../create-function", () => ({
+  createFunction: mocks.inngestCreateFunction,
 }));
 
 vi.mock("@oxagen/config/env", () => ({
@@ -58,7 +58,7 @@ let capturedHandler: ((ctx: { step: { run: (name: string, fn: () => Promise<unkn
 mocks.inngestCreateFunction.mockImplementation(
   (_opts: unknown, _trigger: unknown, handler: typeof capturedHandler) => {
     capturedHandler = handler;
-    return {};
+    return [{}];
   },
 );
 

@@ -2,7 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workflowCancel } from "@oxagen/oxagen/contracts/workflow.cancel";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, or } from "drizzle-orm";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "./event-client";
 import { logger } from "./logger";
 
 export const workflowCancelHandler: CapabilityHandler<typeof workflowCancel> = async (
@@ -39,7 +39,7 @@ export const workflowCancelHandler: CapabilityHandler<typeof workflowCancel> = a
       .where(eq(schema.agentExecutions.id, execution.id)),
   );
 
-  await inngest.send({
+  await eventClient.send({
     name: "agent/workflow.cancel",
     data: { orgId: ctx.orgId, executionId: execution.id },
   });

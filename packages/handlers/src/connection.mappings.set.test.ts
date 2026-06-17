@@ -23,8 +23,8 @@ const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
 }));
 
-vi.mock("@oxagen/inngest-functions/client", () => ({
-  inngest: { send: mocks.inngestSend },
+vi.mock("./event-client", () => ({
+  eventClient: { send: mocks.inngestSend },
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {

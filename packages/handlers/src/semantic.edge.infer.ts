@@ -2,7 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { semanticEdgeInfer } from "@oxagen/oxagen/contracts/semantic.edge.infer";
 import { withTenantDb, schema } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "./event-client";
 import { logger } from "./logger";
 
 /**
@@ -73,7 +73,7 @@ export const semanticEdgeInferHandler: CapabilityHandler<typeof semanticEdgeInfe
   // Build one queued event per connection, carrying the shared job context.
   // The Inngest pipeline will dispatch per-entity sub-events once it reads the
   // connection's EntityNodes from Neo4j.
-  await inngest.send({
+  await eventClient.send({
     name: "ingestion/semantic.edge.infer.requested" as never,
     data: {
       jobId,

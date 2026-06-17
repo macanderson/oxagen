@@ -65,6 +65,13 @@ export const baseEnvSchema = z.object({
   // time. Swapping to S3/R2 is a driver+env change — keep it isolated to config.
   BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
 
+  // Storage driver selection for @oxagen/storage. Determines which blob-storage
+  // backend is instantiated by storage(). Defaults to "vercel-blob" so existing
+  // deployments are unaffected. Adding a new driver requires: (1) implementing
+  // the StorageAdapter interface, (2) extending this enum, (3) adding a case
+  // in client.ts resolveAdapter(). See docs/guides/storage-driver-authoring.md.
+  STORAGE_DRIVER: z.enum(["vercel-blob"]).default("vercel-blob").optional(),
+
   // Vercel AI Gateway — the platform's single AI auth boundary. AI_GATEWAY_API_KEY
   // authenticates every model call (text, image, embeddings, video); @oxagen/ai
   // routes 100% through the gateway with no direct-provider fallback. The

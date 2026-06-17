@@ -15,7 +15,8 @@
  * [[storage-vercel-blob-adapter]].
  */
 export { storage } from "./client";
-export { createVercelBlobAdapter, publicBaseUrlFromToken, StorageNotFoundError } from "./vercel-blob";
+export { createVercelBlobAdapter, publicBaseUrlFromToken } from "./vercel-blob";
+export { StorageNotFoundError } from "./errors";
 export type {
   StorageAdapter,
   StorageBody,

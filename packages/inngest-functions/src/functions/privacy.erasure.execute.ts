@@ -1,5 +1,5 @@
-import { NonRetriableError } from "inngest";
-import { inngest } from "../inngest";
+import { NonRetriableError } from "@oxagen/functions";
+import { createFunction } from "../create-function";
 import { schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "../logger";
@@ -31,11 +31,37 @@ import { logger } from "../logger";
  * Sessions were already revoked by the handler at request time (immediate effect).
  * This function handles the deferred hard-delete after the grace period.
  */
-export const privacyErasureExecute = inngest.createFunction(
+export const [privacyErasureExecute, privacyErasureExecuteOnFailure] = createFunction(
   {
     id: "privacy.erasure-execute",
     retries: 3,
     concurrency: { limit: 2, key: "event.data.requestId" },
+    onFailure: async ({ event, step }) => {
+      const failureData = event.data as {
+        event?: { data?: { requestId?: string } };
+        error?: unknown;
+      };
+      const requestId = failureData.event?.data?.requestId;
+      if (!requestId) return;
+
+      const errorMessage =
+        typeof failureData.error === "object" &&
+        failureData.error !== null &&
+        "message" in failureData.error
+          ? String((failureData.error as { message: unknown }).message)
+          : String(failureData.error ?? "unknown error");
+
+      await step.run("mark-failed", async () => {
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.privacyErasureRequests)
+            .set({ status: "failed", errorMessage, updatedAt: new Date() })
+            .where(eq(schema.privacyErasureRequests.id, requestId)),
+        );
+      });
+
+      logger.error({ requestId, error: errorMessage }, "privacy.erasure-execute failed");
+    },
   },
   { event: "privacy/erasure.execute" },
   async ({ event, step }) => {
@@ -100,40 +126,5 @@ export const privacyErasureExecute = inngest.createFunction(
       "[privacy.erasure-execute] full hard-delete cascade not implemented (OXA-1721); " +
         `refusing to mark erasure request ${requestId} (scope=${scope}) as completed`,
     );
-  },
-);
-
-// Failure handler — marks erasure record failed so operators can investigate.
-export const privacyErasureExecuteOnFailure = inngest.createFunction(
-  { id: "privacy.erasure-execute.on-failure" },
-  {
-    event: "inngest/function.failed",
-    if: "event.data.function_id == 'privacy.erasure-execute'",
-  },
-  async ({ event, step }) => {
-    const failureData = event.data as {
-      event?: { data?: { requestId?: string } };
-      error?: unknown;
-    };
-    const requestId = failureData.event?.data?.requestId;
-    if (!requestId) return;
-
-    const errorMessage =
-      typeof failureData.error === "object" &&
-      failureData.error !== null &&
-      "message" in failureData.error
-        ? String((failureData.error as { message: unknown }).message)
-        : String(failureData.error ?? "unknown error");
-
-    await step.run("mark-failed", async () => {
-      await withSystemDb((tx) =>
-        tx
-          .update(schema.privacyErasureRequests)
-          .set({ status: "failed", errorMessage, updatedAt: new Date() })
-          .where(eq(schema.privacyErasureRequests.id, requestId)),
-      );
-    });
-
-    logger.error({ requestId, error: errorMessage }, "privacy.erasure-execute failed");
   },
 );

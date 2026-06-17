@@ -37,19 +37,53 @@ const config: XmcpConfig = {
       ".cjs": [".cts", ".cjs"],
     };
 
-    // Keep `dockerode` (→ docker-modem → ssh2, which ships native .node files
-    // rspack can't parse) out of the bundle. It reaches here via @oxagen/sandbox
-    // (imported by the agent handlers), but the docker sandbox driver never runs
-    // in the deployed MCP server — SANDBOX_DRIVER is vercel/modal in prod — and
-    // createDockerSandbox loads dockerode lazily, so this external is never
-    // resolved at runtime. Merge with any externals xmcp already configured.
-    const dockerExternal = { dockerode: "commonjs dockerode" };
+    // Keep heavy packages out of the bundle to stay under the Vercel 250MB
+    // serverless function size limit. These are either:
+    //   - native-addon packages rspack cannot parse (dockerode -> ssh2)
+    //   - large document/media libs loaded lazily via `await import()` in handlers
+    //   - SDKs used only at runtime (inngest, ai, neo4j-driver)
+    // They resolve from node_modules at runtime because the xmcp Vercel preset
+    // runs `pnpm install` at the monorepo root alongside the function bundle.
+    const heavyPackages = [
+      "dockerode",
+      "exceljs",
+      "pptxgenjs",
+      "docx",
+      "pdf-lib",
+      "inngest",
+      "@vercel/sandbox",
+      "neo4j-driver",
+      "ai",
+      "drizzle-orm",
+      "postgres",
+      "@clickhouse/client",
+      "stripe",
+      "better-auth",
+    ];
+
+    // Function-based external: matches exact package names and sub-path imports
+    // (e.g. `inngest/components/...`, `ai/rsc`). Careful with `ai` to avoid
+    // false positives on unrelated packages that happen to start with "ai".
+    const heavyExternalFn = (
+      data: { request?: string },
+      callback: (err?: Error, result?: string) => void,
+    ) => {
+      const request = data.request ?? "";
+      const isHeavy = heavyPackages.some(
+        (pkg) => request === pkg || request.startsWith(pkg + "/"),
+      );
+      if (isHeavy) {
+        return callback(undefined, "commonjs " + request);
+      }
+      callback();
+    };
+
     const existing = config.externals;
     config.externals = Array.isArray(existing)
-      ? [...existing, dockerExternal]
+      ? [...existing, heavyExternalFn]
       : existing
-        ? [existing, dockerExternal]
-        : [dockerExternal];
+        ? [existing, heavyExternalFn]
+        : [heavyExternalFn];
 
     return config;
   },

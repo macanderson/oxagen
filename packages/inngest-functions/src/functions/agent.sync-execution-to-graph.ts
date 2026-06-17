@@ -1,4 +1,4 @@
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 import { withTenantDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { recordExecutionInGraph } from "@oxagen/ontology";
@@ -17,7 +17,7 @@ import { logger } from "../logger";
  * exponential backoff). After exhaustion the function fails permanently and
  * the `synced_to_graph_at` stays NULL — a nightly cron can sweep for those.
  */
-export const agentSyncExecutionToGraph = inngest.createFunction(
+export const [agentSyncExecutionToGraph] = createFunction(
   {
     id: "agent.sync-execution-to-graph",
     retries: 17,

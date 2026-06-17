@@ -1,11 +1,11 @@
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "./event-client";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input) => {
   const { registryId, mode } = input as { registryId: string; mode: "full" | "incremental" };
   try {
-    await inngest.send({ name: "plugin/registry.sync", data: { registryId, mode } });
+    await eventClient.send({ name: "plugin/registry.sync", data: { registryId, mode } });
   } catch (err) {
     logger.error({ err, registryId, mode }, "plugin.registry.sync: inngest send failed");
     throw err;

@@ -30,8 +30,8 @@ vi.mock("./generated-asset.persist", () => ({
   createPendingGeneratedAsset: mocks.createPendingGeneratedAsset,
 }));
 
-vi.mock("@oxagen/inngest-functions/client", () => ({
-  inngest: {
+vi.mock("./event-client", () => ({
+  eventClient: {
     send: mocks.inngestSend,
   },
 }));

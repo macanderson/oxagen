@@ -5,9 +5,9 @@
 import { eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import { syncRegistry, createSystemSyncPersistence } from "@oxagen/plugins";
-import { inngest } from "../inngest";
+import { createFunction } from "../create-function";
 
-export const pluginCatalogSyncCron = inngest.createFunction(
+export const [pluginCatalogSyncCron] = createFunction(
   { id: "plugin.catalog-sync-cron", retries: 2 },
   { cron: "0 */6 * * *" },
   async ({ step }) => {

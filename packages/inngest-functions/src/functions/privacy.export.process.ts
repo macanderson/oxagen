@@ -1,5 +1,5 @@
-import { NonRetriableError } from "inngest";
-import { inngest } from "../inngest";
+import { NonRetriableError } from "@oxagen/functions";
+import { createFunction } from "../create-function";
 import { schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "../logger";
@@ -21,11 +21,37 @@ import { logger } from "../logger";
  *      request `failed`. Do NOT re-add a `ready` transition with a placeholder
  *      URL — that would give a data subject a broken/fake export link.
  */
-export const privacyExportProcess = inngest.createFunction(
+export const [privacyExportProcess, privacyExportProcessOnFailure] = createFunction(
   {
     id: "privacy.export-process",
     retries: 2,
     concurrency: { limit: 5, key: "event.data.userId" },
+    onFailure: async ({ event, step }) => {
+      const failureData = event.data as {
+        event?: { data?: { exportId?: string } };
+        error?: unknown;
+      };
+      const exportId = failureData.event?.data?.exportId;
+      if (!exportId) return;
+
+      const errorMessage =
+        typeof failureData.error === "object" &&
+        failureData.error !== null &&
+        "message" in failureData.error
+          ? String((failureData.error as { message: unknown }).message)
+          : String(failureData.error ?? "unknown error");
+
+      await step.run("mark-failed", async () => {
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.privacyExportRequests)
+            .set({ status: "failed", errorMessage, updatedAt: new Date() })
+            .where(eq(schema.privacyExportRequests.id, exportId)),
+        );
+      });
+
+      logger.error({ exportId, error: errorMessage }, "privacy.export-process failed");
+    },
   },
   { event: "privacy/export.process" },
   async ({ event, step }) => {
@@ -60,40 +86,5 @@ export const privacyExportProcess = inngest.createFunction(
       "[privacy.export-process] export ZIP assembly not implemented (OXA-1722); " +
         `refusing to mark export request ${exportId} (scope=${scope}) as ready`,
     );
-  },
-);
-
-// Failure handler — marks the export record failed so the UI can surface the error.
-export const privacyExportProcessOnFailure = inngest.createFunction(
-  { id: "privacy.export-process.on-failure" },
-  {
-    event: "inngest/function.failed",
-    if: "event.data.function_id == 'privacy.export-process'",
-  },
-  async ({ event, step }) => {
-    const failureData = event.data as {
-      event?: { data?: { exportId?: string } };
-      error?: unknown;
-    };
-    const exportId = failureData.event?.data?.exportId;
-    if (!exportId) return;
-
-    const errorMessage =
-      typeof failureData.error === "object" &&
-      failureData.error !== null &&
-      "message" in failureData.error
-        ? String((failureData.error as { message: unknown }).message)
-        : String(failureData.error ?? "unknown error");
-
-    await step.run("mark-failed", async () => {
-      await withSystemDb((tx) =>
-        tx
-          .update(schema.privacyExportRequests)
-          .set({ status: "failed", errorMessage, updatedAt: new Date() })
-          .where(eq(schema.privacyExportRequests.id, exportId)),
-      );
-    });
-
-    logger.error({ exportId, error: errorMessage }, "privacy.export-process failed");
   },
 );

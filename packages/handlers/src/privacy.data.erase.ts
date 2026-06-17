@@ -2,7 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { privacyDataErase } from "@oxagen/oxagen/contracts/privacy.data.erase";
 import { withSystemDb, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
-import { inngest } from "@oxagen/inngest-functions/client";
+import { eventClient } from "./event-client";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { logger } from "./logger";
 
@@ -97,7 +97,7 @@ export const privacyDataEraseHandler: CapabilityHandler<
   });
 
   // Dispatch async Inngest job for actual data deletion on scheduledAt
-  await inngest.send({
+  await eventClient.send({
     name: "privacy/erasure.execute",
     data: {
       requestId: row.id,

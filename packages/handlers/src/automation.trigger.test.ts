@@ -47,8 +47,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-vi.mock("@oxagen/inngest-functions/client", () => ({
-  inngest: { send: mocks.inngestSend },
+vi.mock("./event-client", () => ({
+  eventClient: { send: mocks.inngestSend },
 }));
 
 import { automationTriggerHandler } from "./automation.trigger";
