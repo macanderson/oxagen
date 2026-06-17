@@ -15,8 +15,8 @@
 > **Building the future, so we'll be ready to meet you when you get there.**
 
 <p align="center">
-  <a href="https://github.com/oxagenai/oxagen-monorepo/actions/workflows/ci.yml">
-    <img alt="CI Status" src="https://github.com/oxagenai/oxagen-monorepo/actions/workflows/ci.yml/badge.svg?branch=main" />
+  <a href="https://github.com/oxagenai/oxagen-monorepo/actions/workflows/pipeline.yml">
+    <img alt="CI Status" src="https://github.com/oxagenai/oxagen-monorepo/actions/workflows/pipeline.yml/badge.svg?branch=main" />
   </a>
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6.0.3-3178C6?logo=typescript" />
   <img alt="Node.js" src="https://img.shields.io/badge/Node.js-24%20LTS-339933?logo=node.js" />

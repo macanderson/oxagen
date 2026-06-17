@@ -4,38 +4,16 @@ on:
   pull_request:
   push:
     branches: [main]
-  # Manual trigger to apply migrations to PRODUCTION on demand — e.g. a one-time
-  # catch-up when migrations were committed before this job existed. Only the
-  # `migrate` job acts on this event (other jobs are gated to push/PR).
   workflow_dispatch:
 
-# Cancel superseded PR runs so a rapid push sequence doesn't queue redundant
-# gates. Main pushes key on the SHA so a post-merge run is never cancelled by a
-# follow-up commit (each merge gets its own advisory signal + deploy side-car).
 concurrency:
   group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# ────────────────────────────────────────────────────────────────────────
-# Shared env for every job. These are non-secret CI defaults (dummy creds /
-# localhost URLs) the env schema requires when loadEnv() runs during package
-# builds. Only the `test` job spins up the matching service containers; the
-# `checks` job never connects, so the localhost URLs are inert strings there.
-# Real secrets come from `secrets.*` (Turbo remote cache token).
-# ────────────────────────────────────────────────────────────────────────
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-  # Pin Atlas CLI version across all jobs — prevents silent breakage if Atlas
-  # ships a major change. Update intentionally when upgrading Atlas.
-  # Atlas distributes its CLI binaries under CalVer (v0.x.y) on
-  # release.ariga.io — NOT the v1.x marketing/canary version `atlas version`
-  # prints. Pinning a non-existent download path (v1.2.3) 404s every install
-  # step. v0.38.0 is the latest published distributed binary.
   ATLAS_VERSION: "v0.38.0"
-  # sslmode=disable: Atlas (Go lib/pq) defaults to sslmode=require and fails
-  # against the plain-TCP CI service container ("SSL is not enabled").
-  # node-postgres ignores the param locally, so it is safe for every consumer.
   DATABASE_URL: postgres://oxagen:oxagen@localhost:5432/oxagen?sslmode=disable
   CLICKHOUSE_URL: http://localhost:8123
   CLICKHOUSE_USERNAME: default
@@ -51,41 +29,20 @@ env:
   STRIPE_WEBHOOK_SECRET: whsec_test_ci
   NEXT_PUBLIC_APP_URL: http://localhost:3000
   NEXT_PUBLIC_API_URL: http://localhost:4000
-  # Required by the env schema when NODE_ENV=production (set by `next build`).
   INNGEST_EVENT_KEY: ci_inngest_event
   INNGEST_SIGNING_KEY: signkey-test-ci0000000000000000000000000000000000000000000000000000000000
-  # OXA-1504: the e2e job serves apps/app as a production build (`next start`),
-  # where the auth startup guard requires the credential-encryption master key.
-  # Real 256-bit key from repo secrets — dummies fail the base64-length check.
   AUTH_TOKEN_ENCRYPTION_KEY: ${{ secrets.AUTH_TOKEN_ENCRYPTION_KEY }}
-  # GitHub source-connect e2e: /connections/github/auth-url only BUILDS the
-  # authorize URL (no GitHub API call) and the spec stubs the redirect, so
-  # dummy values are sufficient — the state secret just feeds the HMAC.
   GITHUB_APP_CLIENT_ID: Iv1.cie2e0000000000
   GITHUB_APP_CLIENT_SECRET: ci-github-app-secret
   GITHUB_APP_INSTALL_STATE_SECRET: ci-github-install-state-secret
-  # Social-login OAuth clients conditionally change Better Auth provider
-  # registration (packages/auth/src/auth.ts registers Google/GitHub only when
-  # these are set). Dummy CI values keep provider registration — and therefore
-  # the auth surface under test — consistent across runs; no real OAuth flow is
-  # exercised in CI. Listed in turbo.json test:e2e env[] so they reach the task.
   GITHUB_LOGIN_CLIENT_ID: ci-github-login-client-id
   GITHUB_LOGIN_CLIENT_SECRET: ci-github-login-client-secret
   GOOGLE_LOGIN_CLIENT_ID: ci-google-login-client-id
   GOOGLE_LOGIN_CLIENT_SECRET: ci-google-login-client-secret
-  # connection.create encrypts credentials via the ingestion crypto adapter —
-  # the API webServer in the e2e job throws 500 on POST /connections without a
-  # valid AES-256 key. CI-only throwaway key (never decrypts real data).
   INGESTION_CRYPTO_PROVIDER: env
   INGESTION_ENCRYPTION_KEY: Z+kVBYRa3uc8nyyvgm+Z5tayV3Nawkg/YMzgzJnLh0U=
 
 jobs:
-  # ──────────────────────────────────────────────────────────────────────
-  # atlas-validate — fast (~15s) pre-flight: verifies atlas.sum matches all
-  # migration files before any DB-backed job spins up a Postgres container.
-  # A stale checksum fails here immediately instead of burning 3–5 minutes
-  # waiting for service containers before getting the same error. No DB needed.
-  # ──────────────────────────────────────────────────────────────────────
   atlas-validate:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -98,26 +55,15 @@ jobs:
         working-directory: packages/database
         run: atlas migrate validate --dir "file://atlas/migrations"
 
-  # ──────────────────────────────────────────────────────────────────────
-  # checks — lint + typecheck (affected only) + repo-wide invariants.
-  # No DB service containers: these tasks never touch a live store, so this
-  # job starts instantly and runs IN PARALLEL with `test`. Runs on every PR
-  # AND on merge to main (advisory post-merge signal; does NOT gate deploys).
-  # ──────────────────────────────────────────────────────────────────────
   checks:
-    # workflow_dispatch is the manual prod-migrate path — only the migrate job
-    # acts on it; skip the full validation suite.
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      # fetch-depth: 0 so the affected-diff base is reachable (shallow breaks it).
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      # Event context is passed via env (never interpolated into the shell body)
-      # so a crafted ref/SHA can't inject shell. EVENT_BEFORE is a commit SHA.
       - name: Compute affected base
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -128,8 +74,6 @@ jobs:
             echo "TURBO_BASE=origin/main" >> "$GITHUB_ENV"
           else
             BEFORE="$EVENT_BEFORE"
-            # First push to a branch (or a force-push) can report an all-zero or
-            # unreachable "before" SHA — fall back to the previous commit.
             if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
               BEFORE="$(git rev-parse HEAD~1)"
             fi
@@ -144,21 +88,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Affected lint + typecheck. Empty affected set → turbo runs nothing and
-      # exits 0, so docs-only / config-only changes pass in seconds.
-      - name: Lint + typecheck (affected)
+      - name: Lint and typecheck (affected)
         run: pnpm turbo run lint typecheck --filter="...[${TURBO_BASE}]"
 
-      # Repo-wide invariants — static file checks (no DB, sub-second), always run.
-      # check:manifest is warn-only (incomplete capabilities annotate, don't fail).
-      - name: Manifest / contracts / env invariants
+      - name: Manifest, contracts, env invariants
         run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations
 
-      # On merge to main, file/refresh a Linear ticket for any manifest gap not
-      # already covered by an existing issue (idempotent — one umbrella tracker +
-      # per-capability sub-issues, deduped by a hidden marker). Main-only to avoid
-      # PR noise; soft-fail so a Linear outage never breaks CI; no-ops when the
-      # LINEAR_API_KEY secret is unset.
       - name: File Linear tickets for manifest gaps
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         continue-on-error: true
@@ -167,16 +102,10 @@ jobs:
           LINEAR_PROJECT_ID: ${{ vars.LINEAR_PROJECT_ID || 'oxagen-v2-355ea6b2a3f7' }}
         run: pnpm check:manifest:tickets
 
-  # ──────────────────────────────────────────────────────────────────────
-  # test — build + unit tests (affected only), against real service
-  # containers. The long pole; runs in parallel with `checks`. Runs on every
-  # PR AND on merge to main (advisory; does NOT gate deploys).
-  # ──────────────────────────────────────────────────────────────────────
   test:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     services:
       postgres:
         image: postgres:16-alpine
@@ -191,15 +120,10 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-
       clickhouse:
         image: clickhouse/clickhouse-server:24.8-alpine
         env:
           CLICKHOUSE_DB: oxagen
-          # Do NOT set CLICKHOUSE_USER/PASSWORD: overriding the built-in
-          # `default` user writes a users.d password config that makes the
-          # HTTP interface (8123) reject the empty-password login the
-          # migrator uses, even though the native-protocol healthcheck passes.
           CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
         ports:
           - 8123:8123
@@ -209,7 +133,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-
       neo4j:
         image: neo4j:5.24-community
         env:
@@ -222,7 +145,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
-
     steps:
       - uses: actions/checkout@v5
         with:
@@ -260,7 +182,6 @@ jobs:
       - name: Install Atlas CLI
         run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
 
-      # Run migrations only when Atlas or telemetry migration files changed.
       - name: Detect migration changes
         id: migration_changes
         run: |
@@ -275,7 +196,7 @@ jobs:
         working-directory: packages/database
         run: atlas migrate apply --env ci
 
-      - name: Migrate ClickHouse + Neo4j
+      - name: Migrate ClickHouse and Neo4j
         if: steps.migration_changes.outputs.changed == 'true'
         run: DB_MIGRATE_STORES=clickhouse,neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
 
@@ -283,24 +204,12 @@ jobs:
         if: steps.migration_changes.outputs.changed == 'true'
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
-      # Affected build + unit tests. test:unit dependsOn ^build, so turbo builds
-      # the affected dependency graph then runs the affected tests — all in one
-      # turbo invocation with full intra-DAG parallelism + remote cache.
-      - name: Build + unit tests (affected)
+      - name: Build and unit tests (affected)
         run: pnpm turbo run build test:unit --filter="...[${TURBO_BASE}]"
 
-      # Coverage thresholds gate (affected only). Runs vitest --coverage for every
-      # affected package and fails if any package's measured coverage falls below
-      # its ratchet floor (thresholds block in each vitest.config.ts).
-      # test:coverage dependsOn ^build so the build graph is already warm from the
-      # previous step and this just runs the coverage pass.
       - name: Coverage thresholds (affected)
         run: pnpm turbo run test:coverage --filter="...[${TURBO_BASE}]"
 
-  # ──────────────────────────────────────────────────────────────────────
-  # e2e — end-to-end tests (affected only), sharded across 4 workers.
-  # Runs on every PR and after merge to main (advisory, does NOT gate deploys).
-  # ──────────────────────────────────────────────────────────────────────
   e2e:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -351,6 +260,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
       - name: Compute affected base
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -366,37 +276,42 @@ jobs:
             fi
             echo "TURBO_BASE=$BEFORE" >> "$GITHUB_ENV"
           fi
+
       - name: Bootstrap Postgres extensions
         run: |
           sudo apt-get install -y postgresql-client
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
+
       - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: pnpm
+
       - run: pnpm install --frozen-lockfile
+
       - name: Install Atlas CLI
         run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
-      - name: Migrate Postgres (Atlas — always for fresh e2e database)
+
+      - name: Migrate Postgres (Atlas)
         working-directory: packages/database
         run: atlas migrate apply --env ci
-      - name: Migrate ClickHouse + Neo4j
+
+      - name: Migrate ClickHouse and Neo4j
         run: DB_MIGRATE_STORES=clickhouse,neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
+
       - name: Seed platform defaults
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
+
       - name: Build (affected)
         run: pnpm turbo run build --filter="...[${TURBO_BASE}]"
-      # Install the Playwright browser + OS deps. Without this the runner has no
-      # chromium-headless-shell matching the pinned @playwright/test version and
-      # every e2e shard fails with "Executable doesn't exist". Idempotent + fast.
+
       - name: Install Playwright browser
         run: pnpm --filter @oxagen/app exec playwright install --with-deps chromium
-      - name: E2E tests (affected, shard ${{ matrix.shard }}/4)
+
+      - name: E2E tests (affected, shard)
         run: pnpm turbo run test:e2e --filter="...[${TURBO_BASE}]" -- --shard=${{ matrix.shard }}/4
-      # Failures without traces are undebuggable from logs alone — Playwright
-      # writes traces/screenshots to test-results/ only for failed tests, so
-      # this uploads nothing (and is skipped) on green runs.
+
       - name: Upload Playwright traces (on failure)
         if: failure()
         uses: actions/upload-artifact@v4
@@ -406,17 +321,6 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # ──────────────────────────────────────────────────────────────────────
-  # rls-integration — the single proof that tenant Row-Level Security actually
-  # isolates (OXA-1515). Spins up a real Postgres, applies the schema + the
-  # generated RLS policy migration, and runs the integration suite with
-  # enforcement ON. Runs on PRs AND on pushes to main (OXA-1700): the job was
-  # PR-only, so the 2026-06-11 Atlas re-baseline — committed directly to main —
-  # shipped with zero RLS policies and nothing went red. Direct-to-main is the
-  # normal pre-launch workflow here, so the proof must run there too.
-  # The suite drops to a non-superuser role via SET LOCAL ROLE so policies are
-  # actually evaluated even though the CI postgres connects as a superuser.
-  # ──────────────────────────────────────────────────────────────────────
   rls-integration:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
@@ -436,7 +340,6 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      # Enforcement ON so the RLS policies are load-bearing for the proof.
       TENANT_RLS_ENFORCEMENT_ENABLED: "true"
     steps:
       - uses: actions/checkout@v5
@@ -457,7 +360,6 @@ jobs:
       - name: Install Atlas CLI
         run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
 
-      # Apply full Atlas migration set (includes future RLS policy migrations).
       - name: Migrate Postgres (Atlas)
         working-directory: packages/database
         run: atlas migrate apply --env ci
@@ -465,43 +367,17 @@ jobs:
       - name: Seed platform defaults
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
-      - name: RLS isolation proof + manifest coverage
+      - name: RLS isolation proof and manifest coverage
         run: pnpm --filter @oxagen/database test:integration
 
-  # ──────────────────────────────────────────────────────────────────────
-  # migrate — apply DB migrations to a PERSISTENT environment database.
-  #   pull_request  → PREVIEW  database (PREVIEW_* secrets) so the per-PR Vercel
-  #                   preview deployment runs against the new schema, and the
-  #                   migration is validated on a real managed DB.
-  #   push to main  → PRODUCTION database (PRODUCTION_* secrets) so a merge ships
-  #                   schema + code together — no manual migration step.
-  # Postgres (Atlas) + ClickHouse + Neo4j (managed Aura creds via *_NEO4J_* secrets).
-  # Idempotent: the runner records applied files in public._migrations with a
-  # checksum and skips them on re-run, so running on every qualifying event is
-  # safe. Serialized per-environment so two merges (or two PRs) can't race the
-  # same database. Gated on migration-file changes to avoid needless runs.
-  # NOTE: this runs in parallel with Vercel's deploy (chosen "simple" ordering);
-  # additive, expand-then-contract migrations (engineering policy §5) keep the
-  # previously-deployed code working during the brief overlap.
-  # ──────────────────────────────────────────────────────────────────────
   migrate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Serialize per target environment; never cancel a half-applied migration.
-    # Target = PRODUCTION for everything except pull_request (push-to-main and
-    # the manual workflow_dispatch both target prod); pull_request → PREVIEW.
     concurrency:
       group: db-migrate-${{ github.event_name != 'pull_request' && 'production' || 'preview' }}
       cancel-in-progress: false
     env:
-      # ClickHouse + Neo4j — Postgres is handled by Atlas. Neo4j WAS omitted
-      # here, which left prod Neo4j without indexes/constraints (P0 2026-06-12:
-      # agent.memory.recall failed on a missing vector index after the rebuild).
       DB_MIGRATE_STORES: clickhouse,neo4j
-      # Select the target environment's creds by event. The non-DB env defaults
-      # (Better Auth / Stripe / Inngest) are inherited from the workflow-level
-      # env block above so loadEnv() validates; the DB + ClickHouse + Neo4j
-      # connection values are overridden here with real secrets.
       DATABASE_URL: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_DATABASE_URL || secrets.PREVIEW_DATABASE_URL }}
       NEO4J_URI: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_NEO4J_URI || secrets.PREVIEW_NEO4J_URI }}
       NEO4J_USERNAME: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_NEO4J_USERNAME || secrets.PREVIEW_NEO4J_USERNAME }}
@@ -511,23 +387,18 @@ jobs:
       CLICKHOUSE_USERNAME: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_USERNAME || secrets.PREVIEW_CLICKHOUSE_USERNAME }}
       CLICKHOUSE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_PASSWORD || secrets.PREVIEW_CLICKHOUSE_PASSWORD }}
       CLICKHOUSE_DATABASE: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_DATABASE || secrets.PREVIEW_CLICKHOUSE_DATABASE }}
-      # Override dummy workflow-level Stripe key with the real test secret so
-      # billing:stripe-sync --apply can authenticate when triggered via workflow_dispatch.
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      # Only migrate when migration files changed in this push/PR range.
       - name: Detect migration changes
         id: changes
         env:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_BEFORE: ${{ github.event.before }}
         run: |
-          # Manual run is an explicit catch-up — always apply (it reconciles any
-          # migrations committed before this job existed; the runner is idempotent).
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -562,19 +433,18 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
 
-      # Bootstrap extensions on the target DB (idempotent; no-op if already done).
       - name: Bootstrap Postgres extensions (idempotent)
         if: steps.changes.outputs.changed == 'true'
         run: |
           sudo apt-get install -y postgresql-client
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
-      - name: Migrate Postgres (${{ github.event_name != 'pull_request' && 'PRODUCTION' || 'PREVIEW' }} — Atlas)
+      - name: Migrate Postgres (Atlas)
         if: steps.changes.outputs.changed == 'true'
         working-directory: packages/database
         run: atlas migrate apply --env ci
 
-      - name: Migrate ClickHouse + Neo4j (${{ github.event_name != 'pull_request' && 'PRODUCTION' || 'PREVIEW' }})
+      - name: Migrate ClickHouse and Neo4j
         if: steps.changes.outputs.changed == 'true'
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
 
@@ -582,24 +452,14 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
-      - name: Sync billing plans → Stripe (test mode) + billing.plans DB (workflow_dispatch only)
+      - name: Sync billing plans to Stripe (workflow_dispatch only)
         if: steps.changes.outputs.changed == 'true' && github.event_name == 'workflow_dispatch'
         run: pnpm billing:stripe-sync --apply
 
-  # ──────────────────────────────────────────────────────────────────────
-  # deploy — post-merge side-car (main only). The actual app deploys are
-  # triggered by Vercel's own GitHub integration, which now skips any app
-  # whose affected set is unchanged (vercel.json `ignoreCommand: turbo-ignore`).
-  # Per the chosen model this is UNGATED — it runs alongside checks/test, not
-  # after them (main is already gated by the required PR check before merge).
-  # ──────────────────────────────────────────────────────────────────────
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Deploy confirmation
-        # The Linear *release* now fires on GitHub Release publish, not on every
-        # main push — see .github/workflows/linear-release.yml. (Per-push release
-        # creation would mint a Linear release for every checkpoint commit.)
         run: echo "Merge to main detected. Vercel deploys changed apps via its GitHub integration (turbo-ignore skips unchanged apps)."

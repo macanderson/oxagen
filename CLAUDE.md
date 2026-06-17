@@ -258,7 +258,7 @@ git fetch origin && git rebase origin/main  # sync before pushing
 - **`bootstrapEntitlementRuntime()` required at startup** — any new runtime (server, worker, script) that invokes capability-gated handlers must call `bootstrapEntitlementRuntime()` from `@oxagen/plugins` at startup; forgetting silently skips the entitlement gate.
 - **Turbo halts on first failing coverage package** — multi-package coverage failures are masked. Use `turbo run test:coverage --continue` to see all failures at once.
 - **Shell-exported env shadows `.env.local`** — a corrupted shell-exported `DATABASE_URL` / `MODAL_RUNNER_URL` / `ANALYTICS_URL` silently overrides `.env.local`. Prefix scripts with `env -u DATABASE_URL …` until the terminal is restarted.
-- **GitHub Actions env vars don't reach turbo tasks** — workflow `env:` values are stripped unless the var is listed in the task's `env[]` in `turbo.json`. Always update `ci.yml` AND `turbo.json` together.
+- **GitHub Actions env vars don't reach turbo tasks** — workflow `env:` values are stripped unless the var is listed in the task's `env[]` in `turbo.json`. Always update `pipeline.yml` AND `turbo.json` together.
 
 ## All LLM calls must go through `@oxagen/ai`
 

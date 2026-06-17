@@ -88,7 +88,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 
 ## CI Config
 
-`.github/workflows/ci.yml` runs: lint → typecheck → unit tests → build → `check:manifest` → `check:contracts` → `db:lint-migrations`. Gate mirrors this exactly.
+`.github/workflows/pipeline.yml` runs: lint → typecheck → unit tests → build → `check:manifest` → `check:contracts` → `db:lint-migrations`. Gate mirrors this exactly.
 
 ## Documentation
 
