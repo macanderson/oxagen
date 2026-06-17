@@ -6,10 +6,10 @@ component references a raw Tailwind palette color (`bg-blue-500`) or an arbitrar
 hex. **Reskinning the entire app — light and dark — is done by editing one file:
 `packages/ui/src/styles/globals.css`.**
 
-The current skin is **enterprise · earth · neutral**: a monochrome-ink system on
-a warm paper/stone ramp. Flat surfaces — no gradients, no jewel tones, no
-glassmorphism, no drop shadows, no rounded corners. The one warm note is the
-brand color, **paper** (`#E6C8A6`). Motion is fully retained.
+The current skin is **Nocturne Violet**: a cool violet/indigo system on a warm
+paper background that complements the warm ember mark (gold → flame → crimson).
+Violet drives accents, links, focus rings, and primary CTAs. Surfaces use
+moderate rounding (`0.5rem`) and subtle violet-tinted shadows.
 
 ---
 
@@ -47,11 +47,8 @@ worked example in §8.
 
 | Token | Default | Effect |
 |---|---|---|
-| `--ui-radius` | `0px` | Master corner radius. The whole `--radius-*` scale derives from it; `0px` = hard square corners. Set `0.5rem` to round everything. |
-| `--ui-shadow` | `0 0 #0000` | Master elevation. Every Tailwind `shadow-*` step reads it; the transparent default keeps the UI flat. Set a real shadow to re-enable elevation globally. |
-
-These are why ~480 `rounded-*` and ~55 `shadow-*` class sites needed **no edits**:
-they all resolve through these two knobs.
+| `--ui-radius` | `0.5rem` | Master corner radius. The whole `--radius-*` scale derives from it. Set `0px` for hard square corners. |
+| `--ui-shadow` | `0 1px 2px oklch(0.24 0.1 275 / 0.06)` | Master elevation. Every Tailwind `shadow-*` step reads it. Set `0 0 #0000` for a flat UI. |
 
 ---
 
@@ -59,58 +56,97 @@ they all resolve through these two knobs.
 
 The only literal colors in the system. Swap these to reskin.
 
-| Token | oklch | hex |
-|---|---|---|
-| `--_paper` | `oklch(0.85 0.057 70.4)` | `#E6C8A6` |
-| `--_ink` | `oklch(0.263 0.006 56.1)` | `#272422` |
-| `--_ink-white` | `oklch(0.96 0.008 73.7)` | `#F5F1EC` |
-| `--_stone-50 … 950` | warm-neutral ramp | `#FAF7F2` … `#1B1916` |
-| `--_paper-200 … 800` | tan accent ramp | `#F3E6D3` … `#997449` |
-| `--_clay` / `--_clay-light` | `oklch(0.52 0.159 30.7)` / `…0.593…` | `#B23A2A` / `#C9543F` (error) |
-| `--_moss` / `--_moss-light` | `oklch(0.528 0.079 132)` / `…0.648…` | `#5A7544` / `#7C9A5E` (success) |
-| `--_ochre` / `--_ochre-light` | `oklch(0.667 0.124 73)` / `…0.747…` | `#C2872E` / `#D9A23F` (warning) |
-| `--_slate` / `--_slate-light` | `oklch(0.508 0.042 234)` / `…0.618…` | `#4E6A7A` / `#6E8A9A` (info) |
-| `--_terracotta` / `-light` | `oklch(0.583 0.121 44.5)` / `…0.659…` | `#B5613A` / `#CC7A50` |
+### Brand anchors
 
-Semantic anchors: `--brand` = `--_paper`, `--brand-foreground` = `--_ink`,
-`--ink-light` = `--_ink-white`, `--ink-dark` = `--_ink`.
+| Token | oklch | hex | Purpose |
+|---|---|---|---|
+| `--_paper` | `oklch(0.971 0.009 82.7)` | `#FAF7F2` | Light mode background (warm paper) |
+| `--_ink` | `oklch(0.178 0.014 280)` | `#16181D` | Primary text + wordmark ink (light) |
+| `--_ink-white` | `oklch(0.965 0.005 78.3)` | `#F5F4F2` | Primary text + wordmark ink (dark) |
+
+### Violet-tinted neutral ramp (stone)
+
+| Token | approx hex | Purpose |
+|---|---|---|
+| `--_stone-50` | `#FAFAFD` | Near-white |
+| `--_stone-100` | `#F5F3FA` | Muted background |
+| `--_stone-150` | `#F2EEF7` | Surface-alt (light) |
+| `--_stone-200` | `#E8E2F3` | Secondary surfaces |
+| `--_stone-300` | `#D4CAE9` | Input borders (light) |
+| `--_stone-400` | `#AEA0CC` | — |
+| `--_stone-500` | `#837C92` | Tertiary text / muted-foreground (dark) |
+| `--_stone-600` | `#4A4458` | Secondary text (light) |
+| `--_stone-700` | `#3A3050` | — |
+| `--_stone-800` | `#2A2040` | Accent surface (dark) |
+| `--_stone-850` | `#1E1A2E` | Popover / muted (dark) |
+| `--_stone-900` | `#15131F` | Card / sidebar (dark) |
+| `--_stone-950` | `#0B0D16` | Background (dark) |
+
+### Violet accent ramp
+
+| Token | oklch | approx hex | Purpose |
+|---|---|---|---|
+| `--_violet-50` | `oklch(0.955 0.025 295)` | `#F1ECFB` | Accent subtle (light) |
+| `--_violet-100` | `oklch(0.89 0.06 295)` | `#DDD2F4` | — |
+| `--_violet-200` | `oklch(0.81 0.1 295)` | `#C2AFEC` | Accent-foreground (dark) |
+| `--_violet-300` | `oklch(0.72 0.14 290)` | `#A78BFA` | **Primary accent (dark)** |
+| `--_violet-400` | `oklch(0.62 0.17 290)` | `#8B6BDD` | Brand-2 (dark) |
+| `--_violet-500` | `oklch(0.53 0.2 290)` | `#6E48CE` | **Primary accent (light)** — links, focus, CTAs |
+| `--_violet-600` | `oklch(0.46 0.18 285)` | `#5733B0` | Brand-2 (light) |
+| `--_violet-700` | `oklch(0.39 0.16 285)` | `#452894` | Accent-foreground (light) |
+| `--_violet-800` | `oklch(0.32 0.13 280)` | `#361E73` | — |
+| `--_violet-900` | `oklch(0.24 0.1 275)` | `#241149` | — |
+
+### Ember mark (fixed — never recolor)
+
+| Token | hex | Note |
+|---|---|---|
+| `--_ember-gold` | `#F9D423` | Gradient start |
+| `--_ember-flame` | `#FF7E5F` | Gradient midpoint |
+| `--_ember-crimson` | `#C2185B` | Gradient end (also used as `--error` in light) |
+
+### Status hues
+
+| Token | hex | Meaning |
+|---|---|---|
+| `--_moss` / `--_moss-light` | `#1D9E75` adj. | Success |
+| `--_ochre` / `--_ochre-light` | `#BA7517` adj. | Warning |
+| `--_clay` / `--_clay-light` | `#B23A2A` adj. | Error (light uses ember-crimson instead) |
+| `--_slate` / `--_slate-light` | `#4E6A7A` adj. | Info |
 
 ---
 
 ## 4. Core semantic tokens (light / dark)
 
 These ~30 tokens (mapped to `--color-*` → utilities `bg-background`,
-`text-foreground`, `border-border`, …) are the reskin surface. Light value is on
-`:root`; dark on `.dark`.
+`text-foreground`, `border-border`, …) are the reskin surface.
 
 | Token | Light | Dark |
 |---|---|---|
-| `--background` | stone-150 | `#1C1A18` |
-| `--foreground` | ink | ink-white |
-| `--card` / `--popover` | stone-50 | ink / `#2F2B27` |
-| `--primary` | ink | ink-white |
-| `--primary-foreground` | ink-white | ink |
-| `--secondary` | stone-200 | `#332E29` |
-| `--muted` / `--muted-foreground` | stone-150 / stone-600 | `#2A2622` / `#A89A86` |
-| `--accent` / `--accent-foreground` | paper-300 / deep tan | `#3A3329` / paper |
-| `--border` | `#E2D9CB` | `#38332C` |
-| `--input` | stone-300 | `#3D372F` |
-| `--ring` | ink | paper |
-| `--success/-foreground` | moss / ink-white | moss-light / dark |
+| `--background` | `--_paper` (#FAF7F2) | `--_stone-950` (#0B0D16) |
+| `--foreground` | `--_ink` (#16181D) | `--_ink-white` (#F5F4F2) |
+| `--card` / `--popover` | white / white | stone-900 / stone-850 |
+| `--primary` | **violet-500** (#6E48CE) | **violet-300** (#A78BFA) |
+| `--primary-foreground` | white | stone-950 |
+| `--secondary` | stone-150 | stone-850 |
+| `--muted` / `--muted-foreground` | stone-100 / stone-600 | stone-850 / stone-500 |
+| `--accent` / `--accent-foreground` | violet-50 / violet-700 | stone-800 / violet-200 |
+| `--border` | violet-tinted 50% | violet-tinted 50% (darker) |
+| `--input` | stone-300 | violet-tinted |
+| `--ring` | **violet-500** | **violet-300** |
+| `--success/-foreground` | moss / white | moss-light / dark |
 | `--warning/-foreground` | ochre / dark | ochre-light / dark |
-| `--error/-foreground` | clay / white | clay-light / white |
+| `--error/-foreground` | ember-crimson / white | clay-light / white |
 | `--info/-foreground` | slate / white | slate-light / dark |
-| `--chart-1 … 5` | ink · paper-700 · moss · terracotta · slate | lifted equivalents |
-| `--sidebar*` | warm paper-white surface | deep ink surface |
-
-`--destructive` is kept as an alias of `--error` for back-compat.
+| `--chart-1 … 5` | violet-500 · ember-flame · moss · ochre · slate | violet-300 equivalents |
+| `--sidebar*` | white, violet accent | stone-900, violet accent |
 
 ---
 
 ## 5. Component tokens
 
-Declared once on `:root`, referencing core tokens (so they flip automatically).
-Each is mapped to a `--color-*` utility of the same name.
+Unchanged from the architecture — declared once on `:root`, referencing core
+tokens (so they flip automatically). Each is mapped to a `--color-*` utility.
 
 **Sidebar:** `--sidebar-bg/-fg`, `--sidebar-nav-label-fg`,
 `--sidebar-nav-link-fg`, `--sidebar-nav-link-hover-bg/-fg`,
@@ -121,14 +157,11 @@ Each is mapped to a `--color-*` utility of the same name.
 `--app-link-fg`, `--app-link-hover-fg`, `--app-link-active-fg`.
 
 **Tabs:** `--tab-fg` / `-hover` / `-active`, `--tab-border` / `-hover` /
-`-active`, `--tab-border-width` (`2px`). Rest border is constant width so the
-active underline never shifts layout. Border width is applied with the arbitrary
-syntax `border-b-[length:var(--tab-border-width)]`.
+`-active`, `--tab-border-width` (`2px`).
 
 **Buttons** (`primary` + `default`): `--button-primary-bg/-fg/-border/-hover-bg/
 -active-bg/-ring` and `--button-default-bg/-fg/-border/-hover-bg/-active-bg/
--ring`, plus `--button-disabled-bg/-fg`. Hover/active adapt via `color-mix(... ,
-var(--background))` so they flip correctly in dark with no re-declaration.
+-ring`, plus `--button-disabled-bg/-fg`.
 
 **Inputs / textareas:** `--input-bg`, `--input-fg`, `--input-placeholder`,
 `--input-border`, `--input-border-hover`, `--input-border-focus`, `--input-ring`,
@@ -136,24 +169,21 @@ var(--background))` so they flip correctly in dark with no re-declaration.
 
 **Select / Menu:** `--menu-popup-bg/-fg/-border`, `--menu-item-fg`,
 `--menu-item-highlighted-bg/-fg`, `--menu-item-disabled-fg`,
-`--menu-item-selected-bg/-fg`, `--menu-separator`, `--menu-group-label-fg`. The
-select trigger mirrors the `--input-*` tokens.
+`--menu-item-selected-bg/-fg`, `--menu-separator`, `--menu-group-label-fg`.
 
 **Checkbox / Radio / Switch:** `--control-track-bg`,
-`--control-track-bg-checked`, `--control-indicator` (checkmark on a checked
-fill), `--control-thumb` (switch knob), `--control-border`, `--control-ring`.
-The radio dot reuses `--control-track-bg-checked`.
+`--control-track-bg-checked`, `--control-indicator`, `--control-thumb`,
+`--control-border`, `--control-ring`.
 
-**Tooltip / Dialog / Badge / Overlay:** `--tooltip-bg/-fg/-border` (inverted —
-ink surface on light), `--dialog-bg/-fg/-border`, `--overlay-scrim` (the modal
-scrim), `--badge-bg/-fg/-border`.
+**Tooltip / Dialog / Badge / Overlay:** `--tooltip-bg/-fg/-border`,
+`--dialog-bg/-fg/-border`, `--overlay-scrim`, `--badge-bg/-fg/-border`.
 
 ---
 
 ## 6. Base UI state-wiring rules
 
 The components use **Base UI** (`@base-ui/react`), not Radix. State is styled via
-Base UI data-attributes, not conditional class strings:
+Base UI data-attributes:
 
 | Primitive | Attribute | Token utility |
 |---|---|---|
@@ -165,75 +195,56 @@ Base UI data-attributes, not conditional class strings:
 | Field / input | `data-[invalid]` + `aria-[invalid=true]` | `border-input-invalid-border` |
 | Any | `data-[disabled]` | disabled treatment |
 
-- Border **width** tokens use `border-[length:var(--token)]` (Tailwind won't
-  generate a width utility from a color token).
-- Elements whose border *appears* on a state (tabs, focused inputs) keep a
-  constant-width border at rest so the highlight never shifts layout.
-
 ---
 
 ## 7. Motion policy — **motion is retained**
 
-Motion is **not** a gradient/shadow/radius treatment, so it stays. Tune feel via
-the `--motion-*` / `--ease-*` tokens (`--ease-entry`, `--ease-hover`,
-`--ease-exit`, `--motion-micro/base/overlay/entry`, `--button-hover-scale`).
+Tune feel via `--motion-*` / `--ease-*` tokens. The Nocturne Violet skin keeps
+all motion from the system: button hover-grow, tab slide, overlay enter/exit,
+control transitions, `.hover-lift`, `.hover-glow` (violet ring), `.animate-in`,
+`.stream-caret`, wand pulse.
 
-- **Buttons** — transform-only hover-grow (`hover:scale-[var(--button-hover-scale)]`).
-- **Tabs** — sliding active-indicator (`TabsIndicator`) + per-panel fade-in.
-- **Overlays** (menu, select, dialog) — enter/exit opacity+transform transitions
-  via Base UI `data-[starting-style]` / `data-[ending-style]`.
-- **Controls** — switch track/thumb and radio ring transitions.
-- **Utilities** — `.hover-lift` (transform), `.hover-glow` (flat ring),
-  `.animate-in` (`fade-in` keyframe), `.stream-caret` (typewriter blink), the
-  wand pulse, and the field-fill ring pulse.
-- The global `prefers-reduced-motion` kill-switch zeroes animation/transition
-  durations for users who ask for it.
-
-What changed vs. the old skin: motions that were **glows** now animate a **flat
-ring** (no blur); nothing was removed.
+Global `prefers-reduced-motion` kill-switch zeroes animation/transition durations.
 
 ---
 
-## 8. Worked reskin example — swap the brand hue
+## 8. Worked reskin example — swap the violet accent hue
 
-Goal: change the warm-paper brand to a muted sage, light + dark, in one edit.
+Goal: change the violet accent to a teal, light + dark, in one edit.
+
+### Before
 
 ```css
 /* packages/ui/src/styles/globals.css — :root, PRIMITIVES block */
-
-/* before */
---_paper: oklch(0.85 0.057 70.4);   /* #E6C8A6 warm tan */
-
-/* after */
---_paper: oklch(0.84 0.045 145);    /* muted sage */
+--_violet-500: oklch(0.53 0.2 290);   /* #6E48CE — violet */
+--_violet-300: oklch(0.72 0.14 290);  /* #A78BFA — violet (dark primary) */
 ```
 
-That's it. `--brand`, `--accent` (light), the dark `--accent-foreground`/
-`--ring`/`--sidebar-accent-foreground`, every `bg-brand`/`text-brand-foreground`
-surface, the brand-2 accent, and the field-fill ring all re-point to the new hue
-in both themes — because they all resolve through `--_paper` → `--brand`. No
-component file changes.
+### After
 
-To re-introduce rounded corners or shadows globally, edit the two control knobs
-(§2): `--ui-radius: 0.5rem;` and `--ui-shadow: 0 1px 2px oklch(0 0 0 / .12);`.
+```css
+--_violet-500: oklch(0.53 0.15 185);  /* teal */
+--_violet-300: oklch(0.72 0.12 185);  /* teal (dark primary) */
+```
+
+That's it. `--brand`, `--primary`, `--ring`, `--accent`, sidebar accent, button
+backgrounds, focus rings, chart-1 — all re-point to the new hue in both themes
+because they resolve through `--_violet-500` / `--_violet-300`. No component file
+changes.
+
+To flatten corners or remove shadows, edit the two control knobs (§2):
+`--ui-radius: 0px;` and `--ui-shadow: 0 0 #0000;`.
 
 ---
 
 ## 9. Documented exceptions
 
-- **`.ox-grid-dots`** — the knowledge-graph canvas backdrop is a token-driven
-  dotted texture (a `radial-gradient` of `var(--foreground)` at low alpha). It is
-  a functional grid, not a decorative brand gradient, so it is kept.
-- **`.tabs-edge-fade`** — a `linear-gradient` *mask* (not a painted gradient) that
-  fades the horizontal tab strip edges. Structural, kept.
-- **`global-error.tsx`** — the top-level crash page renders entirely outside the
-  app (no theme context, possibly no CSS), so it uses hardcoded earthy hexes
-  rather than tokens by necessity.
-- **`field-fill-transition.tsx` / wand button** — self-contained feature keyframes
-  (`field-fill-glow`, `wand-ring-pulse`) live inline / in the app globals; both
-  are flat (ring/scale, no blur) and motion-only.
-- **Not-yet-built primitives** — `checkbox`, `tooltip`, and a Base UI `field`
-  wrapper don't exist in `@oxagen/ui` yet (the app uses its own field system).
-  Their tokens (`--control-*`, `--tooltip-*`, `--input-invalid-*`) are already
-  defined here, so building them later is a pure component task with no token work.
-```
+- **`.ox-grid-dots`** — a token-driven dotted texture (functional grid, kept).
+- **`.tabs-edge-fade`** — a `linear-gradient` *mask* (structural, kept).
+- **`global-error.tsx`** — top-level crash page uses hardcoded hexes (no theme
+  context available).
+- **`field-fill-transition.tsx` / wand button** — self-contained keyframes
+  (motion-only, flat).
+- **Ember mark** — the `--brand-gradient` and `--_ember-*` tokens are
+  theme-independent and must **never** be recolored; only the ink (wordmark
+  strokes) flips via `--_ink` / `--_ink-white`.
