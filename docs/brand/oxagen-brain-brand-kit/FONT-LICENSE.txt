@@ -1,3 +1,0 @@
-Space Grotesk is licensed under the SIL Open Font License 1.1.
-https://fonts.google.com/specimen/Space+Grotesk/about
-Bundled SpaceGrotesk.ttf is included for regenerating assets only.
