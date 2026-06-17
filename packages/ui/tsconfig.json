@@ -3,10 +3,9 @@
   "compilerOptions": {
     // No build step: this package is consumed as raw TS source via the apps'
     // `transpilePackages`. `typecheck` runs `tsc --noEmit`, so there is no emit
-    // and no `dist/` — do not reintroduce `outDir`.
-    "rootDir": "src",
+    // and no `dist/` — do not reintroduce `outDir` or `rootDir`.
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx"
   },
-  "include": ["src"]
+  "include": ["src", "vitest.setup.ts", "vitest.config.ts"]
 }
