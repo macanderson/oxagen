@@ -21,8 +21,11 @@ describe("badgeVariants — class map", () => {
   it("destructive variant includes bg-destructive", () => {
     expect(badgeVariants({ variant: "destructive" })).toContain("bg-destructive");
   });
-  it("outline variant includes text-foreground", () => {
-    expect(badgeVariants({ variant: "outline" })).toContain("text-foreground");
+  it("outline variant is the token-driven surface chip (badge-bg/fg/border)", () => {
+    const cls = badgeVariants({ variant: "outline" });
+    expect(cls).toContain("bg-badge-bg");
+    expect(cls).toContain("text-badge-fg");
+    expect(cls).toContain("border-badge-border");
   });
   it("muted variant includes bg-muted", () => {
     expect(badgeVariants({ variant: "muted" })).toContain("bg-muted");
@@ -36,8 +39,8 @@ describe("badgeVariants — class map", () => {
   it("warning variant includes bg-warning", () => {
     expect(badgeVariants({ variant: "warning" })).toContain("bg-warning");
   });
-  it("error variant maps to bg-destructive", () => {
-    expect(badgeVariants({ variant: "error" })).toContain("bg-destructive");
+  it("error variant maps to the bg-error status token", () => {
+    expect(badgeVariants({ variant: "error" })).toContain("bg-error");
   });
 
   it("sm size includes text-[10px]", () => {

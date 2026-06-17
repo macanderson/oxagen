@@ -16,6 +16,7 @@ import {
   FileText,
   Boxes,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
 import { isRenderableImageUrl } from "@/lib/plugin-icon";
 import type { schema } from "@oxagen/database";
@@ -909,11 +910,9 @@ function AuthAlertsSection({
         <div className="flex gap-3">
           {AVAILABLE_ROLES.map((role) => (
             <label key={role} className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={roles.includes(role)}
-                onChange={() => toggleRole(role)}
-                className="h-4 w-4 rounded border-border accent-primary"
+                onCheckedChange={() => toggleRole(role)}
               />
               {role}
             </label>

@@ -266,7 +266,7 @@ function CreditBurnChart() {
             series={
               <AreaSeries
                 interpolation="smooth"
-                colorScheme={["#334155"]}
+                colorScheme={["var(--chart-1)"]}
                 animated
               />
             }

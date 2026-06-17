@@ -25,7 +25,7 @@ import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org
 import type { PromptSettingsWriteOutput } from "@oxagen/oxagen/contracts/prompt.settings.write";
 
 // Re-export for page.tsx
-export type { PromptSettingsWriteOutput };
+export type { PromptSettingsWriteOutput } from "@oxagen/oxagen/contracts/prompt.settings.write";
 export type { PromptSettingsReadOutput } from "@oxagen/oxagen/contracts/prompt.settings.read";
 
 // ── Input schema ─────────────────────────────────────────────────────────────

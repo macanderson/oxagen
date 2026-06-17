@@ -19,7 +19,8 @@ import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org
 import type { AgentSubagentFanoutListOutput } from "@oxagen/oxagen/contracts/agent.subagent.fanout.list";
 import type { AgentSubagentFanoutGetOutput } from "@oxagen/oxagen/contracts/agent.subagent.fanout.get";
 
-export type { AgentSubagentFanoutListOutput, AgentSubagentFanoutGetOutput };
+export type { AgentSubagentFanoutListOutput } from "@oxagen/oxagen/contracts/agent.subagent.fanout.list";
+export type { AgentSubagentFanoutGetOutput } from "@oxagen/oxagen/contracts/agent.subagent.fanout.get";
 
 interface ScopeArgs {
   orgSlug: string;

@@ -35,9 +35,9 @@ describe("Switch — render", () => {
     expect(getByRole("switch")).toHaveAttribute("data-disabled");
   });
 
-  it("includes bg-input class in unchecked state", () => {
+  it("uses the --control-track-bg token in the unchecked state", () => {
     const { getByRole } = render(<Switch />);
-    expect(getByRole("switch").className).toContain("bg-input");
+    expect(getByRole("switch").className).toContain("bg-control-track-bg");
   });
 
   it("calls onCheckedChange when toggled (checked true)", async () => {

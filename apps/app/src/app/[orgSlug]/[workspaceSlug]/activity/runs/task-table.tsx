@@ -27,8 +27,8 @@ const STATUS_CONFIG: Record<
 > = {
   planning: {
     icon: Clock,
-    iconClass: "text-blue-500",
-    badgeClass: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+    iconClass: "text-info",
+    badgeClass: "bg-info/10 text-info",
     label: "Planning",
   },
   running: {
@@ -39,8 +39,8 @@ const STATUS_CONFIG: Record<
   },
   completed: {
     icon: CheckCircle2,
-    iconClass: "text-emerald-500",
-    badgeClass: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+    iconClass: "text-success",
+    badgeClass: "bg-success/10 text-success",
     label: "Completed",
   },
   failed: {

@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
@@ -132,10 +133,9 @@ function TriggerEditor({
           </select>
         </div>
         <label className="flex items-center gap-2 pb-1.5 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={draft.enabled}
-            onChange={(e) => setDraft({ enabled: e.target.checked })}
+            onCheckedChange={(checked) => setDraft({ enabled: checked })}
             disabled={saving}
             aria-label="Trigger enabled"
           />

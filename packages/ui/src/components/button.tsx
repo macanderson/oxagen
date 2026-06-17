@@ -8,36 +8,41 @@ import { cn } from "../lib/utils";
  * Button — token-driven cva variants. The ONLY decorative motion kept anywhere
  * in the system is the button hover-grow: a small, transform-only scale on
  * hover that returns to rest on leave/press. No color flourish, no shadow, no
- * lift. All color/state comes from the --button-* tokens (see THEME.md).
+ * lift. Every color/border/ring/disabled state resolves through a --button-*
+ * token (see THEME.md §5) — never a raw palette color, and never the core
+ * --primary/--accent directly, so a reskin can retune buttons in isolation.
  *
  * Variant map (public API preserved): `default`/`primary`/`gradient` are the
- * solid ink primary; `secondary`/`outline`/`ghost` are the neutral default;
+ * solid brand primary; `secondary`/`outline`/`ghost` are the neutral default;
  * `destructive*` use the error token; `link` is text-only.
  */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-transform duration-[var(--motion-micro)] ease-[var(--ease-hover)] hover:scale-[var(--button-hover-scale)] active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 disabled:hover:scale-100 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-transform duration-[var(--motion-micro)] ease-[var(--ease-hover)] hover:scale-[var(--button-hover-scale)] active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 disabled:pointer-events-none disabled:hover:scale-100 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
+        // Solid brand primary — full --button-primary-* token set.
         primary:
-          "bg-button-primary text-button-primary-foreground hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg",
+          "border border-button-primary-border bg-button-primary-bg text-button-primary-fg hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg focus-visible:ring-button-primary-ring disabled:border-transparent disabled:bg-button-disabled-bg disabled:text-button-disabled-fg",
         default:
-          "bg-button-primary text-button-primary-foreground hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg",
+          "border border-button-primary-border bg-button-primary-bg text-button-primary-fg hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg focus-visible:ring-button-primary-ring disabled:border-transparent disabled:bg-button-disabled-bg disabled:text-button-disabled-fg",
+        // Neutral filled — secondary surface, default-variant border/hover/ring.
         secondary:
-          "border border-button-default-border bg-secondary text-secondary-foreground hover:bg-button-default-hover-bg active:bg-button-default-active-bg",
+          "border border-button-default-border bg-secondary text-secondary-foreground hover:bg-button-default-hover-bg active:bg-button-default-active-bg focus-visible:ring-button-default-ring disabled:bg-button-disabled-bg disabled:text-button-disabled-fg",
+        // Neutral outline — transparent fill via --button-default-bg.
         outline:
-          "border border-button-default-border bg-button-default text-button-default-foreground hover:bg-button-default-hover-bg active:bg-button-default-active-bg",
+          "border border-button-default-border bg-button-default-bg text-button-default-fg hover:bg-button-default-hover-bg active:bg-button-default-active-bg focus-visible:ring-button-default-ring disabled:text-button-disabled-fg",
         ghost:
-          "text-button-default-foreground hover:bg-button-default-hover-bg active:bg-button-default-active-bg",
+          "text-button-default-fg hover:bg-button-default-hover-bg active:bg-button-default-active-bg focus-visible:ring-button-default-ring disabled:text-button-disabled-fg",
         destructive:
-          "bg-error text-error-foreground hover:bg-error/90 active:bg-error/80",
+          "bg-error text-error-foreground hover:bg-error/90 active:bg-error/80 focus-visible:ring-error disabled:bg-button-disabled-bg disabled:text-button-disabled-fg",
         // Outline destructive: error affordance without an alarming solid fill.
         "destructive-outline":
-          "border border-error/50 bg-background text-error hover:bg-error/10",
-        link: "text-foreground underline-offset-4 hover:underline hover:scale-100",
-        // Legacy alias — flat solid ink (no gradient, no glow).
+          "border border-error/50 bg-background text-error hover:bg-error/10 focus-visible:ring-error disabled:text-button-disabled-fg",
+        link: "text-foreground underline-offset-4 hover:underline hover:scale-100 focus-visible:ring-button-default-ring disabled:text-button-disabled-fg",
+        // Legacy alias — flat solid primary (no gradient/glow; FLAT policy).
         gradient:
-          "bg-button-primary text-button-primary-foreground hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg",
+          "border border-button-primary-border bg-button-primary-bg text-button-primary-fg hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg focus-visible:ring-button-primary-ring disabled:border-transparent disabled:bg-button-disabled-bg disabled:text-button-disabled-fg",
       },
       // coss ui scale — intentionally more compact than shadcn/ui. To preserve
       // a shadcn `default` height (36px) use `lg`; for a shadcn `lg` use `xl`.

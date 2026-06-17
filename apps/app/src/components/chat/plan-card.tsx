@@ -43,6 +43,7 @@ import {
   MenuGroupLabel,
   MenuTrigger,
 } from "@/components/ui/menu";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { PlanDecision, PlanStep, RiskLevel } from "./stream-event-types";
 
@@ -480,11 +481,14 @@ function SortableStepRow({
                           onClick={() => toggleDependsOn(sib.id)}
                           className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs outline-none hover:bg-muted"
                         >
-                          <input
-                            type="checkbox"
+                          {/* Display-only: the wrapping button owns the toggle.
+                              pointer-events-none lets the click fall through to
+                              it (no onCheckedChange, so it can't double-fire). */}
+                          <Checkbox
                             checked={checked}
-                            readOnly
-                            className="h-3 w-3"
+                            tabIndex={-1}
+                            aria-hidden="true"
+                            className="pointer-events-none"
                           />
                           <span className="font-mono">{sib.id}</span>
                           <span className="truncate text-muted-foreground">{sib.summary}</span>

@@ -75,6 +75,9 @@
     --ox-gold: oklch(0.923 0.104 94.1);   /* #fce594 */
     --ox-wheat: oklch(0.895 0.09 78.8);   /* #fdd698 */
 
+    --ox-indigo: oklch(0.449 0.09 278.2);   /* #4A4F86 — link accent (light) */
+    --ox-indigo-bright: oklch(0.736 0.1 279.2);   /* #9CA3E8 — link accent (dark) */
+
     /* Warm-neutral ramp (sand/taupe drawn from the ember mark temperature). */
     --_stone-50: oklch(0.989 0.003 67.8);   /* #FDFBF9 */
     --_stone-100: oklch(0.978 0.007 67.7);   /* #FBF7F3 */
@@ -159,6 +162,8 @@
     --border: oklch(0.88 0.015 75 / 0.6);
     --input: var(--_stone-300);
     --ring: var(--ox-rust);
+    --link: var(--ox-indigo);
+    --link-hover: oklch(0.388 0.083 277.4);
 
     /* Status — semantic names (error == destructive). */
     --success: var(--_moss);
@@ -169,14 +174,6 @@
     --error-foreground: oklch(1 0 0);
     --info: var(--_slate);
     --info-foreground: oklch(1 0 0);
-
-    /* Brand family aliases — ember-driven. */
-    --brand-2: var(--_violet-600);
-    --brand-2-foreground: oklch(1 0 0);
-    --brand-3: var(--_violet-400);
-    --brand-3-foreground: oklch(1 0 0);
-    --accent2: var(--_violet-600);
-    --accent2-foreground: oklch(1 0 0);
 
     /* Ember mark gradient (theme-independent — never recolor the mark). */
     --brand-gradient: linear-gradient(135deg, var(--_ember-gold) 0%, var(--_ember-flame) 50%, var(--_ember-crimson) 100%);
@@ -341,6 +338,8 @@
     --border: oklch(0.42 0.02 70 / 0.5);
     --input: oklch(0.45 0.02 70 / 0.5);
     --ring: var(--ox-rust);
+    --link: var(--ox-indigo-bright);
+    --link-hover: oklch(0.809 0.076 279.6);
 
     --success: var(--_moss-light);
     --success-foreground: oklch(0.18 0.03 160);
@@ -350,13 +349,6 @@
     --error-foreground: oklch(1 0 0);
     --info: var(--_slate-light);
     --info-foreground: oklch(0.18 0.01 230);
-
-    --brand-2: var(--_violet-400);
-    --brand-2-foreground: var(--_stone-950);
-    --brand-3: var(--_violet-200);
-    --brand-3-foreground: var(--_stone-950);
-    --accent2: var(--_violet-400);
-    --accent2-foreground: var(--_stone-950);
 
     --chart-1: var(--ox-rust);
     --chart-2: var(--_ember-flame);
@@ -400,6 +392,8 @@
       --border: oklch(0.42 0.02 70 / 0.5);
       --input: oklch(0.45 0.02 70 / 0.5);
       --ring: var(--ox-rust);
+      --link: var(--ox-indigo-bright);
+      --link-hover: oklch(0.809 0.076 279.6);
 
       --success: var(--_moss-light);
       --success-foreground: oklch(0.18 0.03 160);
@@ -409,13 +403,6 @@
       --error-foreground: oklch(1 0 0);
       --info: var(--_slate-light);
       --info-foreground: oklch(0.18 0.01 230);
-
-      --brand-2: var(--_violet-400);
-      --brand-2-foreground: var(--_stone-950);
-      --brand-3: var(--_violet-200);
-      --brand-3-foreground: var(--_stone-950);
-      --accent2: var(--_violet-400);
-      --accent2-foreground: var(--_stone-950);
 
       --chart-1: var(--ox-rust);
       --chart-2: var(--_ember-flame);
@@ -464,6 +451,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-link: var(--link);
+  --color-link-hover: var(--link-hover);
 
   /* Status */
   --color-success: var(--success);
@@ -478,12 +467,6 @@
   /* Brand / ink */
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
-  --color-brand-2: var(--brand-2);
-  --color-brand-2-foreground: var(--brand-2-foreground);
-  --color-brand-3: var(--brand-3);
-  --color-brand-3-foreground: var(--brand-3-foreground);
-  --color-accent2: var(--accent2);
-  --color-accent2-foreground: var(--accent2-foreground);
   --color-ink-light: var(--ink-light);
   --color-ink-dark: var(--ink-dark);
 

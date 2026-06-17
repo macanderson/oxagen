@@ -16,6 +16,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Save, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -558,10 +559,9 @@ export function AgentEditorForm({
                     </select>
                   </div>
                   <label className="flex items-center gap-2 pb-1.5 text-xs text-muted-foreground">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={trigger.enabled}
-                      onChange={(e) => updateTrigger(i, { enabled: e.target.checked })}
+                      onCheckedChange={(checked) => updateTrigger(i, { enabled: checked })}
                       disabled={disabled}
                       aria-label={`Trigger ${i + 1} enabled`}
                     />

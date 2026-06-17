@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTab, TabsPanel, TabsIndicator } from "@/components/
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PluginDetailPanel } from "./plugin-detail-panel";
 import { useToast } from "@/components/ui/toast";
 import { Search, Package, Plug, FileText, ShoppingBag, Boxes } from "lucide-react";
@@ -381,22 +382,18 @@ export function MarketplaceModal({
                               data-testid={`marketplace-server-card-${srv.id}`}
                               data-denied={denied ? "true" : undefined}
                             >
-                              {/* Multi-select checkbox — native input, styled with Tailwind */}
+                              {/* Multi-select checkbox */}
                               {!denied && (
                                 <span
                                   className="absolute top-3 right-3"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    toggleSelect(srv.id);
                                   }}
                                   aria-label={isSelected ? "Deselect" : "Select"}
                                 >
-                                  <input
-                                    type="checkbox"
+                                  <Checkbox
                                     checked={isSelected}
-                                    onChange={() => toggleSelect(srv.id)}
-                                    className="h-4 w-4 rounded border-border accent-primary"
-                                    onClick={(e) => e.stopPropagation()}
+                                    onCheckedChange={() => toggleSelect(srv.id)}
                                     data-testid={`marketplace-select-${srv.id}`}
                                   />
                                 </span>

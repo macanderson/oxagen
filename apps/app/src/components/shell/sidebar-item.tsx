@@ -1,3 +1,4 @@
+"use client";
 /**
  * SidebarItem — a single navigation row in the application shell sidebar.
  *
@@ -23,6 +24,7 @@
 import Link from "next/link";
 import { ArrowUpRight, ArrowLeft, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
 import { sidebarItemAffordance } from "@/lib/sidebar-item-affordance";
 
 // Re-export types so callers can import from one place
@@ -83,6 +85,15 @@ export function SidebarItem({
 
   const children = (
     <>
+      {/* Active indicator — a brand-accent bar on the left edge, the natural home
+          of the --sidebar-primary token (rail keeps it; it stays inside px-0). */}
+      {active && (
+        <span
+          aria-hidden="true"
+          className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-sidebar-primary"
+        />
+      )}
+
       {/* Return arrow (←) — appears before the icon when isReturn (full mode only) */}
       {!collapsed && affordance === "return" && (
         <ArrowLeft
@@ -117,7 +128,10 @@ export function SidebarItem({
           className={cn(
             "inline-flex h-4.5 min-w-[1.125rem] items-center justify-center rounded-full px-1",
             "text-[10px] font-semibold leading-none",
-            "bg-muted text-muted-foreground",
+            // Active rows accent the badge with the sidebar brand token pair.
+            active
+              ? "bg-sidebar-primary text-sidebar-primary-foreground"
+              : "bg-muted text-muted-foreground",
           )}
           aria-label={`${badge} items`}
         >
@@ -136,12 +150,29 @@ export function SidebarItem({
   );
 
   if (onClick) {
+    if (collapsed) {
+      return (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                onClick={onClick}
+                aria-label={label}
+                className={sharedClasses}
+              />
+            }
+          >
+            {children}
+          </TooltipTrigger>
+          <TooltipPopup side="right">{label}</TooltipPopup>
+        </Tooltip>
+      );
+    }
     return (
       <button
         type="button"
         onClick={onClick}
-        aria-label={collapsed ? label : undefined}
-        title={collapsed ? label : undefined}
         className={sharedClasses}
       >
         {children}
@@ -149,12 +180,30 @@ export function SidebarItem({
     );
   }
 
+  if (collapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Link
+              href={href}
+              aria-current={active ? "page" : undefined}
+              aria-label={label}
+              className={sharedClasses}
+            />
+          }
+        >
+          {children}
+        </TooltipTrigger>
+        <TooltipPopup side="right">{label}</TooltipPopup>
+      </Tooltip>
+    );
+  }
+
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      aria-label={collapsed ? label : undefined}
-      title={collapsed ? label : undefined}
       className={sharedClasses}
     >
       {children}

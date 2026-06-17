@@ -195,12 +195,16 @@ export function OxagenLogo({
 
 export type NodeKind = "user" | "document" | "service" | "policy" | "resource" | "default";
 
+// Categorical node palette — the knowledge-graph entity classes read the
+// theme's data-viz ramp (--chart-1..5) so they re-skin with the rest of the
+// system and never drift to a dead palette. These are VALUE tokens (resolvable
+// in inline styles); @theme inline does not emit the --color-* forms to :root.
 const NODE_KIND_COLOR: Record<NodeKind, string> = {
-  user: "var(--cyan-400)",
-  document: "var(--violet-400)",
-  service: "#67d182",
-  policy: "var(--cosmos-400)",
-  resource: "var(--warning)",
+  user: "var(--chart-1)",
+  document: "var(--chart-2)",
+  service: "var(--chart-3)",
+  policy: "var(--chart-4)",
+  resource: "var(--chart-5)",
   default: "var(--muted-foreground)",
 };
 
@@ -238,10 +242,12 @@ export function NodeChip({
   );
 }
 
+// Confidence thresholds map to the semantic status tokens (theme-driven, no
+// hardcoded hexes): ≥0.8 success · ≥0.6 warning · else destructive.
 function confidenceBand(score: number): [track: string, text: string] {
-  if (score >= 0.8) return ["#37a04d", "#67d182"];
-  if (score >= 0.6) return ["var(--warning)", "#ffbe63"];
-  return ["var(--destructive)", "#ff8a6b"];
+  if (score >= 0.8) return ["var(--success)", "var(--success)"];
+  if (score >= 0.6) return ["var(--warning)", "var(--warning)"];
+  return ["var(--destructive)", "var(--destructive)"];
 }
 
 /**

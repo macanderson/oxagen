@@ -19,6 +19,7 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { ThemeProvider, THEME_COOKIE_NAME, parseTheme, themeClass, MotionProvider } from "@oxagen/ui";
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export const metadata: Metadata = {
   title: "Oxagen",
@@ -109,10 +110,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
            * prefers-reduced-motion kill-switch in @oxagen/ui globals.
            */}
           <MotionProvider>
-            <ToastProvider>
-              {children}
-              <ToastViewport />
-            </ToastProvider>
+            <TooltipProvider>
+              <ToastProvider>
+                {children}
+                <ToastViewport />
+              </ToastProvider>
+            </TooltipProvider>
           </MotionProvider>
         </ThemeProvider>
       </body>

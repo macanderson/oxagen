@@ -12,6 +12,7 @@
  */
 
 import * as React from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Use relative /api/v1 so requests stay same-origin and the Better Auth session
 // cookie is forwarded automatically. next.config.mjs rewrites these to the Hono API.
@@ -389,11 +390,9 @@ function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext }: Step
                 return (
                   <li key={repo.id}>
                     <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-muted/50 transition-colors">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={isChecked}
-                        onChange={() => toggleRepo(repo.fullName)}
-                        className="h-3.5 w-3.5 rounded border-border accent-primary"
+                        onCheckedChange={() => toggleRepo(repo.fullName)}
                         data-testid={`repo-checkbox-${repo.name}`}
                       />
                       <div className="flex flex-1 items-center gap-2 min-w-0">

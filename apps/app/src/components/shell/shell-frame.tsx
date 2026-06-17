@@ -26,6 +26,7 @@ import { BalancePill } from "./balance-pill";
 import { OrgSwitcher, type OrgOption } from "@/components/org/org-switcher";
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
 import { useSidebar } from "./sidebar-context";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
 import type { SessionUser } from "./user-switcher";
@@ -91,15 +92,22 @@ export function ShellFrame({
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-app-topbar-border bg-app-topbar-bg px-3 text-app-topbar-fg">
           {/* Desktop: sidebar collapse toggle. Mobile nav lives in the
               bottom bar (MobileBottomBar), so no header trigger here. */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hidden md:inline-flex"
-            aria-label="Toggle sidebar"
-            onClick={toggle}
-          >
-            <PanelLeft className="size-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden md:inline-flex"
+                  aria-label="Toggle sidebar"
+                  onClick={toggle}
+                />
+              }
+            >
+              <PanelLeft className="size-4" />
+            </TooltipTrigger>
+            <TooltipPopup>Toggle sidebar</TooltipPopup>
+          </Tooltip>
 
           {/* Top-left: org / workspace pickers (org ▾ / workspace ▾). */}
           <div className="flex min-w-0 shrink items-center gap-2">

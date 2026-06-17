@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
 import { listNotificationsAction, markNotificationAction } from "@/lib/actions/notifications";
 import { useParams } from "next/navigation";
 
@@ -93,31 +94,38 @@ export function NotificationsBell() {
 
   return (
     <>
-      <button
-        type="button"
-        aria-label={unreadCount > 0 ? `Open notifications (${unreadCount} unread)` : "Open notifications"}
-        aria-haspopup="dialog"
-        onClick={() => setOpen(true)}
-        className={cn(
-          "relative flex h-9 w-9 items-center justify-center rounded-md",
-          "text-app-link-fg transition-colors",
-          "hover:bg-accent hover:text-app-link-hover-fg",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        )}
-      >
-        <Bell className="h-4 w-4" aria-hidden="true" />
-        {unreadCount > 0 && (
-          <span
-            aria-hidden="true"
-            className={cn(
-              "absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center",
-              "rounded-full bg-primary text-[10px] font-semibold text-primary-foreground",
-            )}
-          >
-            {unreadCount > 99 ? "99+" : unreadCount}
-          </span>
-        )}
-      </button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              aria-label={unreadCount > 0 ? `Open notifications (${unreadCount} unread)` : "Open notifications"}
+              aria-haspopup="dialog"
+              onClick={() => setOpen(true)}
+              className={cn(
+                "relative flex h-9 w-9 items-center justify-center rounded-md",
+                "text-app-link-fg transition-colors",
+                "hover:bg-accent hover:text-app-link-hover-fg",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              )}
+            />
+          }
+        >
+          <Bell className="h-4 w-4" aria-hidden="true" />
+          {unreadCount > 0 && (
+            <span
+              aria-hidden="true"
+              className={cn(
+                "absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center",
+                "rounded-full bg-primary text-[10px] font-semibold text-primary-foreground",
+              )}
+            >
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
+        </TooltipTrigger>
+        <TooltipPopup>Notifications</TooltipPopup>
+      </Tooltip>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetPopup side="right" className="flex w-80 flex-col p-0 sm:w-80">

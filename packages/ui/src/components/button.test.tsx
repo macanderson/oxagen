@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 /**
- * button.test.tsx — unit tests for Button variant map and buttonVariants(),
+ * button.test.tsx — unit tests for the Button variant map and buttonVariants(),
  * SSR icon composition tests, and jsdom render tests.
+ *
+ * Color/state assertions target the --button-* token utilities (THEME.md §5):
+ * the variants must NOT reference the core --primary/--accent directly, and must
+ * NOT use the phantom `bg-button-primary` / `text-button-primary-foreground`
+ * names (which generate no CSS — the tokens are `--button-primary-bg` / `-fg`).
  */
 
 import { renderToStaticMarkup } from "react-dom/server";
@@ -20,32 +25,49 @@ describe("buttonVariants", () => {
     expect(cls).toContain("rounded-md");
   });
 
-  it("applies the default (primary) variant classes when no variant is specified", () => {
+  it("applies the default (primary) variant token classes when no variant is specified", () => {
     const cls = buttonVariants({});
-    expect(cls).toContain("bg-primary");
-    expect(cls).toContain("text-primary-foreground");
+    expect(cls).toContain("bg-button-primary-bg");
+    expect(cls).toContain("text-button-primary-fg");
+    // Must use the real token utilities, never the phantom names.
+    expect(cls).not.toContain("bg-button-primary ");
+    expect(cls).not.toContain("text-button-primary-foreground");
   });
 
-  it("applies outline variant classes", () => {
+  it("wires the primary border, focus ring, and disabled tokens", () => {
+    const cls = buttonVariants({ variant: "primary" });
+    expect(cls).toContain("border-button-primary-border");
+    expect(cls).toContain("focus-visible:ring-button-primary-ring");
+    expect(cls).toContain("disabled:bg-button-disabled-bg");
+    expect(cls).toContain("disabled:text-button-disabled-fg");
+  });
+
+  it("applies outline variant default-token classes", () => {
     const cls = buttonVariants({ variant: "outline" });
     expect(cls).toContain("border");
-    expect(cls).toContain("border-input");
+    expect(cls).toContain("border-button-default-border");
+    expect(cls).toContain("bg-button-default-bg");
+    expect(cls).toContain("text-button-default-fg");
+    expect(cls).toContain("focus-visible:ring-button-default-ring");
   });
 
   it("applies secondary variant classes", () => {
     const cls = buttonVariants({ variant: "secondary" });
     expect(cls).toContain("bg-secondary");
     expect(cls).toContain("text-secondary-foreground");
+    expect(cls).toContain("hover:bg-button-default-hover-bg");
   });
 
-  it("applies ghost variant classes", () => {
+  it("applies ghost variant default-hover token", () => {
     const cls = buttonVariants({ variant: "ghost" });
-    expect(cls).toContain("hover:bg-accent");
+    expect(cls).toContain("hover:bg-button-default-hover-bg");
+    expect(cls).toContain("text-button-default-fg");
   });
 
   it("applies destructive variant classes", () => {
     const cls = buttonVariants({ variant: "destructive" });
-    expect(cls).toContain("bg-destructive");
+    expect(cls).toContain("bg-error");
+    expect(cls).toContain("focus-visible:ring-error");
   });
 
   it("applies link variant classes", () => {
@@ -55,20 +77,22 @@ describe("buttonVariants", () => {
 
   it("applies destructive-outline variant classes", () => {
     const cls = buttonVariants({ variant: "destructive-outline" });
-    expect(cls).toContain("text-destructive");
-    expect(cls).toContain("border-destructive/50");
+    expect(cls).toContain("text-error");
+    expect(cls).toContain("border-error/50");
   });
 
-  it("applies gradient variant classes (brand nebula fill + violet glow)", () => {
+  it("treats gradient as a flat primary alias (FLAT policy — no gradient/glow fill)", () => {
     const cls = buttonVariants({ variant: "gradient" });
-    expect(cls).toContain("brand-gradient");
-    expect(cls).toContain("text-white");
-    expect(cls).toContain("hover:[box-shadow:var(--glow-violet)]");
+    expect(cls).toContain("bg-button-primary-bg");
+    expect(cls).toContain("text-button-primary-fg");
+    // The flat reskin removed the decorative gradient + violet glow.
+    expect(cls).not.toContain("brand-gradient");
+    expect(cls).not.toContain("glow-violet");
   });
 
   it("composes the gradient variant with sizes", () => {
     const cls = buttonVariants({ variant: "gradient", size: "lg" });
-    expect(cls).toContain("brand-gradient");
+    expect(cls).toContain("bg-button-primary-bg");
     expect(cls).toContain("h-9");
     expect(cls).toContain("px-6");
   });
@@ -115,7 +139,7 @@ describe("buttonVariants", () => {
   it("merges a custom className without losing variant classes", () => {
     const cls = buttonVariants({ className: "my-custom-class" });
     expect(cls).toContain("my-custom-class");
-    expect(cls).toContain("bg-primary");
+    expect(cls).toContain("bg-button-primary-bg");
   });
 });
 
@@ -179,7 +203,7 @@ describe("Button startIcon / endIcon", () => {
     expect(html).toContain("<a");
     expect(html).toContain('href="/run"');
     expect(html).toContain('data-icon="start"');
-    expect(html).toContain("brand-gradient");
+    expect(html).toContain("bg-button-primary-bg");
   });
 });
 
@@ -198,7 +222,9 @@ describe("Button — render", () => {
 
   it("applies variant class to the rendered button", () => {
     const { getByRole } = render(<Button variant="outline">Outline</Button>);
-    expect(getByRole("button", { name: "Outline" }).className).toContain("border-input");
+    expect(getByRole("button", { name: "Outline" }).className).toContain(
+      "border-button-default-border",
+    );
   });
 
   it("applies size class to the rendered button", () => {
@@ -231,7 +257,7 @@ describe("Button — render", () => {
     expect(anchor).toBeInTheDocument();
     expect(anchor).toHaveAttribute("href", "/test");
     expect(anchor).toHaveTextContent("Link Button");
-    expect(anchor.className).toContain("bg-primary");
+    expect(anchor.className).toContain("bg-button-primary-bg");
   });
 
   it("type defaults to button (not submit) to prevent accidental form submission", () => {
