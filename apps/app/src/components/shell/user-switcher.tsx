@@ -123,7 +123,7 @@ export function UserSwitcher({ user, variant = "full", className }: UserSwitcher
                 : // Wide trigger (sidebar): avatar + name + email + chevron.
                   cn(
                     "flex w-full items-center gap-2 rounded-md p-2 text-left text-sm transition-colors",
-                    "hover:bg-accent hover:text-accent-foreground",
+                    "hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg",
                   ),
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               "disabled:cursor-wait disabled:opacity-60",

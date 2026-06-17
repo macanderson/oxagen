@@ -7,9 +7,8 @@
  * the CSS-transition components (Base UI popups, hover-lift) and the
  * framer-motion components animate identically.
  *
- * Design intent (see the oxagen-design-system skill): motion is restrained and
- * monochrome — a gentle *rise + settle* on entry, a soft ease-out on hover, no
- * scale-heavy or bouncy springs. "Alive, not over done."
+ * Design intent: motion is restrained — a gentle *rise + settle* on entry, a soft
+ * ease-out on hover, no scale-heavy or bouncy springs. "Alive, not over done."
  *
  * Pure module: no React, no "use client". Importable from server components,
  * client components, and the framer-motion layer alike. The reduced-motion

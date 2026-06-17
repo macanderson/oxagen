@@ -8,6 +8,26 @@ import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
 import { tenancySeamRestrictedImports } from "./eslint.tenancy-seams.mjs";
 
+/**
+ * Restrict direct imports from @oxagen/ui/components/* inside Next.js apps.
+ * All UI component imports must flow through the app's local re-export layer
+ * (e.g. `@/components/ui/button`) so the indirection can be swapped for a
+ * local wrapper without touching every consumer.
+ *
+ * Allowed: `@oxagen/ui` (barrel), `@oxagen/ui/styles/*`, `@oxagen/ui/lib/*`.
+ * Forbidden: `@oxagen/ui/components/*` (must use local re-export).
+ */
+const uiIndirectionRestriction = {
+  paths: [],
+  patterns: [
+    {
+      group: ["@oxagen/ui/components/*"],
+      message:
+        "Import UI components from '@/components/ui/<name>' (the local re-export), not directly from '@oxagen/ui/components/*'. This preserves the override escape hatch.",
+    },
+  ],
+};
+
 /** @type {import("eslint").Linter.Config[]} */
 const config = [
   { ignores: [".next/**", "node_modules/**", "dist/**", ".turbo/**", "coverage/**"] },
@@ -32,10 +52,24 @@ const config = [
       ],
       // OXA-1515: Next apps must route DB access through withTenantDb /
       // withSystemDb — never the raw db() seam.
-      "no-restricted-imports": ["error", tenancySeamRestrictedImports],
+      "no-restricted-imports": ["error", {
+        ...tenancySeamRestrictedImports,
+        patterns: [
+          ...(tenancySeamRestrictedImports.patterns ?? []),
+          ...uiIndirectionRestriction.patterns,
+        ],
+      }],
       // Standard loading-state pattern in useEffect (setLoading(true) at start of
       // async effect) is idiomatic and not a real performance problem in practice.
       "react-hooks/set-state-in-effect": "off",
+    },
+  },
+  // The re-export files in src/components/ui/*.tsx ARE the indirection layer —
+  // they legitimately import directly from @oxagen/ui/components/*.
+  {
+    files: ["**/src/components/ui/*.tsx", "**/src/components/ui/*.ts"],
+    rules: {
+      "no-restricted-imports": ["error", tenancySeamRestrictedImports],
     },
   },
   // Test files: relax rules that legitimately don't apply in test contexts.

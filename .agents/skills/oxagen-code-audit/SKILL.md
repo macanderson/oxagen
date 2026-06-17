@@ -1,6 +1,6 @@
 ---
 name: oxagen-code-audit
-description: Run a full-repo engineering-law audit of the Oxagen monorepo and produce an interactive HTML dashboard of the results. Fans out one auditor per package/app, adversarially verifies every finding to kill false positives, auto-applies the safe fixes in an isolated worktree, files Linear tickets for anything needing approval, and renders a self-contained report. Use when the user asks to "audit my code", "give me an audit report", "check the codebase against my standards / .agents/skills", "what scale or architecture problems will bite me later", "flag over-engineering", or "score the health of each package". Pairs with oxagen-engineering-policy (the law being audited against), oxagen-design-system, and frontend-patterns.
+description: Run a full-repo engineering-law audit of the Oxagen monorepo and produce an interactive HTML dashboard of the results. Fans out one auditor per package/app, adversarially verifies every finding to kill false positives, auto-applies the safe fixes in an isolated worktree, files Linear tickets for anything needing approval, and renders a self-contained report. Use when the user asks to "audit my code", "give me an audit report", "check the codebase against my standards / .agents/skills", "what scale or architecture problems will bite me later", "flag over-engineering", or "score the health of each package". Pairs with oxagen-engineering-policy (the law being audited against) and frontend-patterns.
 ---
 
 # Oxagen code audit
@@ -17,8 +17,7 @@ run), then a render step:
 
 1. **Audit** — one Sonnet auditor per unit (each package + each app slice +
    one cross-cutting root pass), each reading `oxagen-engineering-policy`
-   (and `oxagen-design-system` + `frontend-patterns` for UI units) and scoring
-   the unit 0–100. Auditors report **both** policy violations **and**
+   and `frontend-patterns` for guidance, and scoring the unit 0–100. Auditors report **both** policy violations **and**
    over-engineering / speculative abstraction, plus future-scale landmines
    (N+1, unbounded buffering, missing pagination, single-tenant assumptions).
 2. **Verify** — an adversarial verifier re-opens every finding at its
@@ -51,7 +50,7 @@ run), then a render step:
    Re-`git reset --hard origin/main` the worktree if main advanced during setup,
    and pin the audit to that exact SHA.
 3. **Read the law first** so the prompt is grounded: `oxagen-engineering-policy/SKILL.md`
-   + `policies/*.md`, plus `oxagen-design-system` and `frontend-patterns` for UI.
+   + `policies/*.md`, plus `frontend-patterns` for web techniques.
 4. **Run the workflow.** Invoke `Workflow` with
    [`scripts/audit-workflow.js`](scripts/audit-workflow.js) (adjust the `WT`
    constant to the worktree path and the unit list if the package layout

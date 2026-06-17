@@ -1,13 +1,16 @@
-// button.test.tsx — unit tests for Button variant map and buttonVariants().
-//
-// These tests exercise the cva() variant map directly via buttonVariants() so
-// they run without a DOM renderer. Full render tests (Base UI `render`
-// forwarding, event handlers) require @testing-library/react to be added as a
-// devDependency — tracked separately.
+// @vitest-environment jsdom
+/**
+ * button.test.tsx — unit tests for Button variant map and buttonVariants(),
+ * SSR icon composition tests, and jsdom render tests.
+ */
 
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { render, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, afterEach, vi } from "vitest";
 import { Button, buttonVariants } from "./button";
+
+afterEach(cleanup);
 
 describe("buttonVariants", () => {
   it("includes the base classes for the default variant", () => {
@@ -177,5 +180,62 @@ describe("Button startIcon / endIcon", () => {
     expect(html).toContain('href="/run"');
     expect(html).toContain('data-icon="start"');
     expect(html).toContain("brand-gradient");
+  });
+});
+
+// ── jsdom render tests (merged from apps/app) ────────────────────────────────
+
+describe("Button — render", () => {
+  it("renders a button element by default", () => {
+    const { getByRole } = render(<Button>Click me</Button>);
+    expect(getByRole("button", { name: "Click me" })).toBeInTheDocument();
+  });
+
+  it("forwards children", () => {
+    const { getByText } = render(<Button>Submit</Button>);
+    expect(getByText("Submit")).toBeInTheDocument();
+  });
+
+  it("applies variant class to the rendered button", () => {
+    const { getByRole } = render(<Button variant="outline">Outline</Button>);
+    expect(getByRole("button", { name: "Outline" }).className).toContain("border-input");
+  });
+
+  it("applies size class to the rendered button", () => {
+    const { getByRole } = render(<Button size="lg">Large</Button>);
+    expect(getByRole("button", { name: "Large" }).className).toContain("h-9");
+  });
+
+  it("merges extra className", () => {
+    const { getByRole } = render(<Button className="extra-cls">Btn</Button>);
+    expect(getByRole("button", { name: "Btn" }).className).toContain("extra-cls");
+  });
+
+  it("fires onClick when clicked", async () => {
+    const onClick = vi.fn();
+    const { getByRole } = render(<Button onClick={onClick}>Click</Button>);
+    await userEvent.click(getByRole("button", { name: "Click" }));
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it("is disabled when disabled prop is set", () => {
+    const { getByRole } = render(<Button disabled>Disabled</Button>);
+    expect(getByRole("button", { name: "Disabled" })).toBeDisabled();
+  });
+
+  it("render-prop forwards children through an anchor element", () => {
+    const { getByRole } = render(
+      <Button render={<a href="/test" />}>Link Button</Button>
+    );
+    const anchor = getByRole("link", { name: "Link Button" });
+    expect(anchor).toBeInTheDocument();
+    expect(anchor).toHaveAttribute("href", "/test");
+    expect(anchor).toHaveTextContent("Link Button");
+    expect(anchor.className).toContain("bg-primary");
+  });
+
+  it("type defaults to button (not submit) to prevent accidental form submission", () => {
+    const { getByRole } = render(<Button>Safe</Button>);
+    expect(getByRole("button", { name: "Safe" })).toHaveAttribute("type", "button");
   });
 });

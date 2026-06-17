@@ -30,7 +30,7 @@ export function BalancePill({ orgSlug, balanceCents, low }: BalancePillProps) {
         "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm font-medium tabular-nums transition-colors",
         low
           ? "border-warning/40 bg-warning/10 text-warning hover:bg-warning/20"
-          : "border-border bg-muted/50 text-foreground hover:bg-muted",
+          : "border-border bg-muted/50 text-app-topbar-fg hover:bg-muted",
       )}
     >
       <Wallet className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />

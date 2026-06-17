@@ -43,7 +43,7 @@ function tabClass(isActive: boolean): string {
   return cn(
     "flex h-[var(--bottom-bar-h)] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 transition-colors active:scale-95",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-    isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+    isActive ? "text-app-link-active-fg" : "text-app-link-fg hover:text-app-link-hover-fg",
   );
 }
 
@@ -79,7 +79,7 @@ export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
         aria-label="Mobile navigation"
         className={cn(
           "fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around md:hidden",
-          "border-t border-border bg-background pb-[env(safe-area-inset-bottom)]",
+          "border-t border-app-topbar-border bg-app-topbar-bg pb-[env(safe-area-inset-bottom)]",
         )}
       >
         {barItems.map((item) => {
@@ -146,14 +146,14 @@ export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
                         "flex min-h-[2.75rem] items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
                         isActive
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                          ? "bg-sidebar-nav-link-active-bg text-sidebar-nav-link-active-fg"
+                          : "text-sidebar-nav-link-fg hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg",
                       )}
                     >
                       <Icon
                         className={cn(
                           "h-4 w-4 shrink-0",
-                          isActive ? "text-sidebar-accent-foreground" : "text-muted-foreground",
+                          isActive ? "text-sidebar-nav-link-active-fg" : "text-muted-foreground",
                         )}
                         aria-hidden="true"
                       />

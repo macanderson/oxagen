@@ -445,7 +445,7 @@ plugins exactly like Claude Code uses MCP tools.
   the deep-link target from the notification/email.
 - **Notifications bell** — wire to `notifications.list`; unread badge; in-app re-auth prompt
   card with the deep link.
-- Follows `oxagen-design-system` + `coss-ui` (stock coss on Base UI, `render` not `asChild`).
+- Follows `coss-ui` (stock coss on Base UI, `render` not `asChild`).
 
 ---
 

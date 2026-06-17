@@ -10,9 +10,9 @@
  * it is being *written* — with a blinking caret trailing the cursor — even when
  * the underlying deltas arrive in bursts.
  *
- * Design intent (oxagen-design-system motion): restrained, not gimmicky. The
- * reveal speed scales with how far behind the cursor is, so a fast model never
- * leaves the reader waiting, while a steady trickle still types deliberately.
+ * Design intent: restrained, not gimmicky motion. The reveal speed scales with
+ * how far behind the cursor is, so a fast model never leaves the reader waiting,
+ * while a steady trickle still types deliberately.
  *
  * Lifecycle: callers key one instance per assistant message
  * (`key={msg.messageId}`), so a new turn mounts a fresh component — the cursor

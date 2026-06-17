@@ -1,6 +1,6 @@
 ---
 name: frontend-patterns
-description: Library of 136 action-oriented web-platform technique guides — HTML semantics, modern CSS & layout, accessibility, performance & Core Web Vitals (LCP/INP/CLS), forms & autofill, passkeys/WebAuthn, view transitions, scroll-driven animation, privacy, security, built-in browser AI, and WebMCP. Use when building or reviewing UI in apps/app or apps/website — find the specific technique in the index below and read that file before implementing. For Oxagen's brand/visual identity (colors, type, motion, iconography) use the oxagen-design-system skill instead.
+description: Library of 136 action-oriented web-platform technique guides — HTML semantics, modern CSS & layout, accessibility, performance & Core Web Vitals (LCP/INP/CLS), forms & autofill, passkeys/WebAuthn, view transitions, scroll-driven animation, privacy, security, built-in browser AI, and WebMCP. Use when building or reviewing UI in apps/app or apps/website — find the specific technique in the index below and read that file before implementing.
 ---
 
 # Frontend patterns
@@ -10,7 +10,7 @@ guide that lives in `techniques/<id>.md`. **Workflow:** scan the index, open the
 one or two files that match the task, implement from them. Don't read the whole
 library — progressive disclosure is the point.
 
-Pairs with **oxagen-design-system** (brand identity) and **oxagen-engineering-policy**
+Pairs with **oxagen-engineering-policy**
 (the binding rules, including mobile-first and accessibility non-negotiables).
 
 ## Index

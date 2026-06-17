@@ -53,7 +53,7 @@ export function SupportMenu({ orgSlug, workspaceSlug }: SupportMenuProps) {
     <Menu>
       <MenuTrigger
         render={
-          <Button variant="ghost" size="icon" aria-label="Help and support" />
+          <Button variant="ghost" size="icon" aria-label="Help and support" className="text-app-link-fg hover:text-app-link-hover-fg" />
         }
       >
         <LifeBuoy className="size-4" />

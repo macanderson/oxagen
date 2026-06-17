@@ -1,0 +1,805 @@
+/**
+ * @oxagen/ui — shared Tailwind v4 entrypoint + design-token source of truth.
+ *
+ * Apps consume styles by importing this file at the top of their own globals:
+ *   @import "@oxagen/ui/styles/globals.css";
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THREE-LAYER, TOKEN-DRIVEN ARCHITECTURE (see THEME.md for the full reference).
+ *
+ *   1. VALUE LAYER      :root (light) + .dark (dark) below. Raw oklch() values.
+ *                       THE ONLY PLACE A RESKIN TOUCHES. Edit the primitives at
+ *                       the top of :root (and their .dark counterparts) and the
+ *                       whole product — every surface, control, and state —
+ *                       re-skins. No component file changes to alter color,
+ *                       border, radius, or state styling.
+ *   2. MAPPING LAYER    the single `@theme inline { }` block maps every
+ *                       --<token> to a Tailwind --color-* / --radius-* name,
+ *                       generating the semantic utilities.
+ *   3. COMPONENT LAYER  components reference ONLY generated semantic utilities
+ *                       (bg-card, border-input-border-focus, text-tab-fg-active…).
+ *                       No raw palette colors, no arbitrary hexes.
+ *
+ * NAMING: --<area>-<element>-<part>-<state> (e.g. --input-border-focus,
+ * --menu-item-highlighted-bg). The mapped utility name is parallel
+ * (--color-input-border-focus → border-input-border-focus).
+ *
+ * THEME MODEL (self-hosted, no-flash, no-script):
+ *   :root          → LIGHT. .dark → DARK (ThemeProvider toggles the class).
+ *   @media (prefers-color-scheme: dark) on :root:not(.light):not(.dark)
+ *                  → "system" users get DARK with zero JS (keep in sync w/ .dark).
+ *
+ * Component-level tokens are declared ONCE on :root as references to the core
+ * semantic tokens, so they inherit the theme flip automatically (var() resolves
+ * lazily in the element's cascade context). .dark therefore only re-declares the
+ * core tokens — never the whole component-token surface.
+ *
+ * CURRENT SKIN: "Nocturne Violet" — cool violet/indigo surfaces that complement
+ * the warm ember mark. Violet drives accents, links, focus rings, primary CTAs.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+@import "tailwindcss";
+@import "./fonts/aeonik.css";
+@import "./fonts/space-grotesk.css";
+
+/*
+ * Scan the @oxagen/ui component source for utility classes. Tailwind v4 skips
+ * node_modules, but @oxagen/ui is consumed through a symlink, so popup/overlay
+ * classes that appear ONLY here would never be generated without this.
+ */
+@source "../components";
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* ════════════════════════════════════════════════════════════════════════
+     * PRIMITIVES — raw oklch palette. The reskin knobs. "Nocturne Violet":
+     * cool violet/indigo surfaces, warm ember mark (unchanged).
+     * ════════════════════════════════════════════════════════════════════════ */
+
+    /* Brand anchors (paper #FAF7F2 · ink #16181D · ink-white #F5F4F2). */
+    --_paper: #FAF7F2;
+    --_ink: #16181D;          /* #16181D — cool-leaning ink */
+    --_ink-white: #F5F4F2;
+
+    /* Violet-tinted neutral ramp (replaces warm stone with cool violet-gray). */
+    --_stone-50: oklch(0.98 0.006 290);       /* #FAFAFD */
+    --_stone-100: oklch(0.965 0.01 290);      /* #F5F3FA */
+    --_stone-150: oklch(0.953 0.014 290);     /* #F2EEF7 — surface-alt */
+    --_stone-200: oklch(0.925 0.02 290);      /* #E8E2F3 */
+    --_stone-300: oklch(0.875 0.03 290);      /* #D4CAE9 */
+    --_stone-400: oklch(0.78 0.04 290);       /* #AEA0CC */
+    --_stone-500: oklch(0.65 0.04 280);       /* #837C92 — tertiary text */
+    --_stone-600: oklch(0.545 0.035 280);     /* #4A4458 — secondary text */
+    --_stone-700: oklch(0.44 0.03 280);       /* #3A3050 */
+    --_stone-800: oklch(0.34 0.025 280);      /* #2A2040 */
+    --_stone-850: oklch(0.28 0.025 280);      /* #1E1A2E */
+    --_stone-900: oklch(0.22 0.02 275);       /* #15131F */
+    --_stone-950: oklch(0.155 0.015 270);     /* #0B0D16 — dark bg */
+
+    /* Violet accent ramp (the theme accent — drives links, focus, CTAs). */
+    --_violet-50: oklch(0.955 0.025 295);     /* #F1ECFB */
+    --_violet-100: oklch(0.89 0.06 295);      /* #DDD2F4 */
+    --_violet-200: oklch(0.81 0.1 295);       /* #C2AFEC */
+    --_violet-300: oklch(0.72 0.14 290);      /* #A78BFA */
+    --_violet-400: oklch(0.62 0.17 290);      /* #8B6BDD */
+    --_violet-500: oklch(0.53 0.2 290);       /* #6E48CE — primary accent */
+    --_violet-600: oklch(0.46 0.18 285);      /* #5733B0 */
+    --_violet-700: oklch(0.39 0.16 285);      /* #452894 */
+    --_violet-800: oklch(0.32 0.13 280);      /* #361E73 */
+    --_violet-900: oklch(0.24 0.1 275);       /* #241149 */
+
+    /* Ember mark primitives (brand gradient — canonical, never recolor). */
+    --_ember-gold: oklch(0.879 0.179 91.9);    /* #F9D423 */
+    --_ember-flame: oklch(0.682 0.162 30.2);   /* #FF7E5F */
+    --_ember-crimson: oklch(0.456 0.191 356);  /* #C2185B */
+    --_ember-navy: oklch(0.133 0.015 266.5);   /* #0B0D16 */
+
+    /* Status hues (desaturated to fit the cool palette). */
+    --_clay: oklch(0.52 0.159 30.7);           /* error — ember crimson-adjacent */
+    --_clay-light: oklch(0.593 0.154 32.1);
+    --_moss: oklch(0.60 0.12 160);             /* success — #1D9E75 adjacent */
+    --_moss-light: oklch(0.72 0.12 160);
+    --_ochre: oklch(0.667 0.124 73.1);         /* warning */
+    --_ochre-light: oklch(0.747 0.13 78.8);
+    --_slate: oklch(0.508 0.042 233.7);        /* info */
+    --_slate-light: oklch(0.618 0.04 233.3);
+    --_terracotta: oklch(0.583 0.121 44.5);
+    --_terracotta-light: oklch(0.659 0.117 47.1);
+
+    /* ════════════════════════════════════════════════════════════════════════
+     * CONTROLS — single global knobs (rounding + elevation). Flip in one place.
+     * ════════════════════════════════════════════════════════════════════════ */
+    --ui-radius: 0.5rem; /* moderate rounding — Nocturne Violet is confident, not brutal. */
+    --ui-shadow: 0 1px 2px oklch(0.24 0.1 275 / 0.06); /* subtle violet-tinted shadow. */
+    --radius: var(--ui-radius);
+
+    /* Absolute ink semantics (theme-independent). */
+    --ink-light: var(--_ink-white);
+    --ink-dark: var(--_ink);
+
+    /* The brand hue — violet accent drives links, focus, CTAs. */
+    --brand: var(--_violet-500);
+    --brand-foreground: oklch(1 0 0);
+
+    /* ════════════════════════════════════════════════════════════════════════
+     * CORE SEMANTIC — LIGHT. Nocturne Violet: warm paper bg, white surfaces,
+     * violet accent. The ember mark stays warm; surfaces are cool.
+     * ════════════════════════════════════════════════════════════════════════ */
+    --background: var(--_paper);
+    --foreground: var(--_ink);
+    --card: oklch(1 0 0);
+    --card-foreground: var(--_ink);
+    --popover: oklch(1 0 0);
+    --popover-foreground: var(--_ink);
+    --primary: var(--_violet-500);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: var(--_stone-150);
+    --secondary-foreground: var(--_stone-700);
+    --muted: var(--_stone-100);
+    --muted-foreground: var(--_stone-600);
+    --accent: var(--_violet-50);
+    --accent-foreground: var(--_violet-700);
+    --destructive: var(--_ember-crimson);
+    --destructive-foreground: oklch(1 0 0);
+    --border: oklch(0.88 0.02 290 / 0.5);
+    --input: var(--_stone-300);
+    --ring: var(--_violet-500);
+
+    /* Status — semantic names (error == destructive). */
+    --success: var(--_moss);
+    --success-foreground: oklch(1 0 0);
+    --warning: var(--_ochre);
+    --warning-foreground: oklch(0.2 0.03 60);
+    --error: var(--_ember-crimson);
+    --error-foreground: oklch(1 0 0);
+    --info: var(--_slate);
+    --info-foreground: oklch(1 0 0);
+
+    /* Brand family aliases — violet-driven. */
+    --brand-2: var(--_violet-600);
+    --brand-2-foreground: oklch(1 0 0);
+    --brand-3: var(--_violet-400);
+    --brand-3-foreground: oklch(1 0 0);
+    --accent2: var(--_violet-600);
+    --accent2-foreground: oklch(1 0 0);
+
+    /* Ember mark gradient (theme-independent — never recolor the mark). */
+    --brand-gradient: linear-gradient(135deg, var(--_ember-gold) 0%, var(--_ember-flame) 50%, var(--_ember-crimson) 100%);
+
+    /* Charts — violet-led categorical ramp. */
+    --chart-1: var(--_violet-500);
+    --chart-2: var(--_ember-flame);
+    --chart-3: var(--_moss);
+    --chart-4: var(--_ochre);
+    --chart-5: var(--_slate);
+
+    /* Core sidebar surface — white with violet tint. */
+    --sidebar: var(--card);
+    --sidebar-foreground: var(--card-foreground);
+    --sidebar-primary: var(--_violet-500);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-accent: var(--_violet-50);
+    --sidebar-accent-foreground: var(--_violet-700);
+    --sidebar-border: oklch(0.88 0.02 290 / 0.4);
+    --sidebar-ring: var(--_violet-500);
+
+    /* ════════════════════════════════════════════════════════════════════════
+     * COMPONENT TOKENS — declared once, reference the core tokens above, so they
+     * flip with the theme automatically. Naming: area-element-part-state.
+     * ════════════════════════════════════════════════════════════════════════ */
+
+    /* ── Sidebar ──────────────────────────────────────────────────────────── */
+    --sidebar-bg: var(--sidebar);
+    --sidebar-fg: var(--sidebar-foreground);
+    --sidebar-nav-label-fg: var(--muted-foreground);
+    --sidebar-nav-link-fg: var(--sidebar-foreground);
+    --sidebar-nav-link-hover-bg: var(--sidebar-accent);
+    --sidebar-nav-link-hover-fg: var(--sidebar-accent-foreground);
+    --sidebar-nav-link-active-bg: var(--sidebar-accent);
+    --sidebar-nav-link-active-fg: var(--sidebar-accent-foreground);
+    --sidebar-border-width: 1px;
+    --sidebar-width: 16rem;
+    --sidebar-icon-width: 3.5rem;
+
+    /* ── App chrome ───────────────────────────────────────────────────────── */
+    --app-panel-bg: var(--sidebar);
+    --app-panel-fg: var(--sidebar-foreground);
+    --app-topbar-bg: var(--sidebar);
+    --app-topbar-fg: var(--sidebar-foreground);
+    --app-topbar-border: var(--border);
+    --app-link-fg: var(--muted-foreground);
+    --app-link-hover-fg: var(--foreground);
+    --app-link-active-fg: var(--foreground);
+
+    /* ── Tabs (keep a constant rest border so the active underline never shifts
+     *    layout — only the COLOR changes between states). ──────────────────── */
+    --tab-fg: var(--muted-foreground);
+    --tab-fg-hover: var(--foreground);
+    --tab-fg-active: var(--foreground);
+    --tab-border: transparent;
+    --tab-border-hover: var(--border);
+    --tab-border-active: var(--primary);
+    --tab-border-width: 2px;
+
+    /* ── Buttons (two variants). Hover/active adapt via color-mix toward the
+     *    background, so they flip correctly in dark with no re-declaration. ── */
+    --button-primary-bg: var(--primary);
+    --button-primary-fg: var(--primary-foreground);
+    --button-primary-border: transparent;
+    --button-primary-hover-bg: color-mix(in oklch, var(--primary) 88%, var(--background));
+    --button-primary-active-bg: color-mix(in oklch, var(--primary) 78%, var(--background));
+    --button-primary-ring: var(--ring);
+    --button-default-bg: transparent;
+    --button-default-fg: var(--foreground);
+    --button-default-border: var(--border);
+    --button-default-hover-bg: var(--accent);
+    --button-default-active-bg: color-mix(in oklch, var(--accent) 84%, var(--foreground));
+    --button-default-ring: var(--ring);
+    --button-disabled-bg: var(--muted);
+    --button-disabled-fg: var(--muted-foreground);
+
+    /* ── Inputs / textareas ───────────────────────────────────────────────── */
+    --input-bg: var(--background);
+    --input-fg: var(--foreground);
+    --input-placeholder: var(--muted-foreground);
+    --input-border: var(--border);
+    --input-border-hover: color-mix(in oklch, var(--border) 60%, var(--foreground));
+    --input-border-focus: var(--ring);
+    --input-ring: var(--ring);
+    --input-disabled-bg: var(--muted);
+    --input-disabled-fg: var(--muted-foreground);
+    --input-invalid-border: var(--error);
+    --input-invalid-ring: var(--error);
+
+    /* ── Select / Menu (Base UI). Trigger mirrors inputs. ─────────────────── */
+    --menu-popup-bg: var(--popover);
+    --menu-popup-fg: var(--popover-foreground);
+    --menu-popup-border: var(--border);
+    --menu-item-fg: var(--popover-foreground);
+    --menu-item-highlighted-bg: var(--accent);
+    --menu-item-highlighted-fg: var(--accent-foreground);
+    --menu-item-disabled-fg: var(--muted-foreground);
+    --menu-item-selected-bg: var(--accent);
+    --menu-item-selected-fg: var(--accent-foreground);
+    --menu-separator: var(--border);
+    --menu-group-label-fg: var(--muted-foreground);
+
+    /* ── Checkbox / Radio / Switch (shared control parts) ─────────────────── */
+    --control-track-bg: var(--input);
+    --control-track-bg-checked: var(--primary);
+    --control-indicator: var(--primary-foreground);
+    --control-thumb: var(--card);
+    --control-border: var(--border);
+    --control-ring: var(--ring);
+
+    /* ── Tooltip / Dialog / Badge / Overlay ───────────────────────────────── */
+    --tooltip-bg: var(--foreground);
+    --tooltip-fg: var(--background);
+    --tooltip-border: transparent;
+    --dialog-bg: var(--popover);
+    --dialog-fg: var(--popover-foreground);
+    --dialog-border: var(--border);
+    --overlay-scrim: oklch(0.2 0.004 60 / 0.5);
+    --badge-bg: var(--secondary);
+    --badge-fg: var(--secondary-foreground);
+    --badge-border: var(--border);
+
+    /*
+     * Motion tokens — easing curves + durations. Motion is fully retained
+     * across the system (it is not a gradient/shadow/radius treatment). The
+     * CSS-transition components consume the var() forms; lib/motion.ts mirrors
+     * the numbers for the framer-motion layer.
+     */
+    --ease-entry: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-hover: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+    --motion-micro: 160ms;
+    --motion-base: 220ms;
+    --motion-overlay: 200ms;
+    --motion-entry: 320ms;
+    --button-hover-scale: 1.02;
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+   * DARK — Nocturne Violet. Deep violet-black navy, brighter violet accent.
+   * Only re-declares core tokens; component tokens inherit the flip.
+   * ════════════════════════════════════════════════════════════════════════ */
+  .dark {
+    color-scheme: dark;
+
+    --background: var(--_stone-950);
+    --foreground: var(--_ink-white);
+    --card: var(--_stone-900);
+    --card-foreground: var(--_ink-white);
+    --popover: var(--_stone-850);
+    --popover-foreground: var(--_ink-white);
+    --primary: var(--_violet-300);
+    --primary-foreground: var(--_stone-950);
+    --secondary: var(--_stone-850);
+    --secondary-foreground: var(--_stone-200);
+    --muted: var(--_stone-850);
+    --muted-foreground: var(--_stone-500);
+    --accent: var(--_stone-800);
+    --accent-foreground: var(--_violet-200);
+    --destructive: var(--_clay-light);
+    --destructive-foreground: oklch(1 0 0);
+    --border: oklch(0.35 0.04 280 / 0.5);
+    --input: oklch(0.38 0.04 280 / 0.5);
+    --ring: var(--_violet-300);
+
+    --success: var(--_moss-light);
+    --success-foreground: oklch(0.18 0.03 160);
+    --warning: var(--_ochre-light);
+    --warning-foreground: oklch(0.2 0.03 60);
+    --error: var(--_clay-light);
+    --error-foreground: oklch(1 0 0);
+    --info: var(--_slate-light);
+    --info-foreground: oklch(0.18 0.01 230);
+
+    --brand-2: var(--_violet-400);
+    --brand-2-foreground: var(--_stone-950);
+    --brand-3: var(--_violet-200);
+    --brand-3-foreground: var(--_stone-950);
+    --accent2: var(--_violet-400);
+    --accent2-foreground: var(--_stone-950);
+
+    --chart-1: var(--_violet-300);
+    --chart-2: var(--_ember-flame);
+    --chart-3: var(--_moss-light);
+    --chart-4: var(--_ochre-light);
+    --chart-5: var(--_slate-light);
+
+    --sidebar: var(--_stone-900);
+    --sidebar-foreground: var(--_ink-white);
+    --sidebar-primary: var(--_violet-300);
+    --sidebar-primary-foreground: var(--_stone-950);
+    --sidebar-accent: var(--_stone-800);
+    --sidebar-accent-foreground: var(--_violet-200);
+    --sidebar-border: oklch(0.35 0.04 280 / 0.4);
+    --sidebar-ring: var(--_violet-300);
+
+    --overlay-scrim: oklch(0 0 0 / 0.6);
+  }
+
+  /* "System" = DARK with zero JS. KEEP IN SYNC with .dark above. */
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light):not(.dark) {
+      color-scheme: dark;
+
+      --background: var(--_stone-950);
+      --foreground: var(--_ink-white);
+      --card: var(--_stone-900);
+      --card-foreground: var(--_ink-white);
+      --popover: var(--_stone-850);
+      --popover-foreground: var(--_ink-white);
+      --primary: var(--_violet-300);
+      --primary-foreground: var(--_stone-950);
+      --secondary: var(--_stone-850);
+      --secondary-foreground: var(--_stone-200);
+      --muted: var(--_stone-850);
+      --muted-foreground: var(--_stone-500);
+      --accent: var(--_stone-800);
+      --accent-foreground: var(--_violet-200);
+      --destructive: var(--_clay-light);
+      --destructive-foreground: oklch(1 0 0);
+      --border: oklch(0.35 0.04 280 / 0.5);
+      --input: oklch(0.38 0.04 280 / 0.5);
+      --ring: var(--_violet-300);
+
+      --success: var(--_moss-light);
+      --success-foreground: oklch(0.18 0.03 160);
+      --warning: var(--_ochre-light);
+      --warning-foreground: oklch(0.2 0.03 60);
+      --error: var(--_clay-light);
+      --error-foreground: oklch(1 0 0);
+      --info: var(--_slate-light);
+      --info-foreground: oklch(0.18 0.01 230);
+
+      --brand-2: var(--_violet-400);
+      --brand-2-foreground: var(--_stone-950);
+      --brand-3: var(--_violet-200);
+      --brand-3-foreground: var(--_stone-950);
+      --accent2: var(--_violet-400);
+      --accent2-foreground: var(--_stone-950);
+
+      --chart-1: var(--_violet-300);
+      --chart-2: var(--_ember-flame);
+      --chart-3: var(--_moss-light);
+      --chart-4: var(--_ochre-light);
+      --chart-5: var(--_slate-light);
+
+      --sidebar: var(--_stone-900);
+      --sidebar-foreground: var(--_ink-white);
+      --sidebar-primary: var(--_violet-300);
+      --sidebar-primary-foreground: var(--_stone-950);
+      --sidebar-accent: var(--_stone-800);
+      --sidebar-accent-foreground: var(--_violet-200);
+      --sidebar-border: oklch(0.35 0.04 280 / 0.4);
+      --sidebar-ring: var(--_violet-300);
+
+      --overlay-scrim: oklch(0 0 0 / 0.6);
+    }
+  }
+}
+
+/*
+ * MAPPING LAYER — map every value-layer token to a Tailwind --color-* / --radius-*
+ * name so the semantic utilities exist (bg-card, text-tab-fg-active,
+ * border-input-border-focus, bg-menu-item-highlighted-bg, …). `inline` resolves
+ * utilities to the var() refs and does NOT re-emit these to :root.
+ */
+@theme inline {
+  /* Core surfaces */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Status */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-error: var(--error);
+  --color-error-foreground: var(--error-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  /* Brand / ink */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-2: var(--brand-2);
+  --color-brand-2-foreground: var(--brand-2-foreground);
+  --color-brand-3: var(--brand-3);
+  --color-brand-3-foreground: var(--brand-3-foreground);
+  --color-accent2: var(--accent2);
+  --color-accent2-foreground: var(--accent2-foreground);
+  --color-ink-light: var(--ink-light);
+  --color-ink-dark: var(--ink-dark);
+
+  /* Ember gradient stops (mark-specific, rarely used directly in utilities). */
+  --color-ember-gold: var(--_ember-gold);
+  --color-ember-flame: var(--_ember-flame);
+  --color-ember-crimson: var(--_ember-crimson);
+
+  /* Violet accent ramp — exposed for rare direct-access (hero gradients, etc.) */
+  --color-violet-50: var(--_violet-50);
+  --color-violet-100: var(--_violet-100);
+  --color-violet-200: var(--_violet-200);
+  --color-violet-300: var(--_violet-300);
+  --color-violet-400: var(--_violet-400);
+  --color-violet-500: var(--_violet-500);
+  --color-violet-600: var(--_violet-600);
+  --color-violet-700: var(--_violet-700);
+  --color-violet-800: var(--_violet-800);
+  --color-violet-900: var(--_violet-900);
+
+  /* Charts */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Sidebar (core + component parts) */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-fg: var(--sidebar-fg);
+  --color-sidebar-nav-label-fg: var(--sidebar-nav-label-fg);
+  --color-sidebar-nav-link-fg: var(--sidebar-nav-link-fg);
+  --color-sidebar-nav-link-hover-bg: var(--sidebar-nav-link-hover-bg);
+  --color-sidebar-nav-link-hover-fg: var(--sidebar-nav-link-hover-fg);
+  --color-sidebar-nav-link-active-bg: var(--sidebar-nav-link-active-bg);
+  --color-sidebar-nav-link-active-fg: var(--sidebar-nav-link-active-fg);
+
+  /* App chrome */
+  --color-app-panel-bg: var(--app-panel-bg);
+  --color-app-panel-fg: var(--app-panel-fg);
+  --color-app-topbar-bg: var(--app-topbar-bg);
+  --color-app-topbar-fg: var(--app-topbar-fg);
+  --color-app-topbar-border: var(--app-topbar-border);
+  --color-app-link-fg: var(--app-link-fg);
+  --color-app-link-hover-fg: var(--app-link-hover-fg);
+  --color-app-link-active-fg: var(--app-link-active-fg);
+
+  /* Tabs */
+  --color-tab-fg: var(--tab-fg);
+  --color-tab-fg-hover: var(--tab-fg-hover);
+  --color-tab-fg-active: var(--tab-fg-active);
+  --color-tab-border: var(--tab-border);
+  --color-tab-border-hover: var(--tab-border-hover);
+  --color-tab-border-active: var(--tab-border-active);
+
+  /* Buttons */
+  --color-button-primary-bg: var(--button-primary-bg);
+  --color-button-primary-fg: var(--button-primary-fg);
+  --color-button-primary-border: var(--button-primary-border);
+  --color-button-primary-hover-bg: var(--button-primary-hover-bg);
+  --color-button-primary-active-bg: var(--button-primary-active-bg);
+  --color-button-primary-ring: var(--button-primary-ring);
+  --color-button-default-bg: var(--button-default-bg);
+  --color-button-default-fg: var(--button-default-fg);
+  --color-button-default-border: var(--button-default-border);
+  --color-button-default-hover-bg: var(--button-default-hover-bg);
+  --color-button-default-active-bg: var(--button-default-active-bg);
+  --color-button-default-ring: var(--button-default-ring);
+  --color-button-disabled-bg: var(--button-disabled-bg);
+  --color-button-disabled-fg: var(--button-disabled-fg);
+
+  /* Inputs */
+  --color-input-bg: var(--input-bg);
+  --color-input-fg: var(--input-fg);
+  --color-input-placeholder: var(--input-placeholder);
+  --color-input-border: var(--input-border);
+  --color-input-border-hover: var(--input-border-hover);
+  --color-input-border-focus: var(--input-border-focus);
+  --color-input-ring: var(--input-ring);
+  --color-input-disabled-bg: var(--input-disabled-bg);
+  --color-input-disabled-fg: var(--input-disabled-fg);
+  --color-input-invalid-border: var(--input-invalid-border);
+  --color-input-invalid-ring: var(--input-invalid-ring);
+
+  /* Menu / Select */
+  --color-menu-popup-bg: var(--menu-popup-bg);
+  --color-menu-popup-fg: var(--menu-popup-fg);
+  --color-menu-popup-border: var(--menu-popup-border);
+  --color-menu-item-fg: var(--menu-item-fg);
+  --color-menu-item-highlighted-bg: var(--menu-item-highlighted-bg);
+  --color-menu-item-highlighted-fg: var(--menu-item-highlighted-fg);
+  --color-menu-item-disabled-fg: var(--menu-item-disabled-fg);
+  --color-menu-item-selected-bg: var(--menu-item-selected-bg);
+  --color-menu-item-selected-fg: var(--menu-item-selected-fg);
+  --color-menu-separator: var(--menu-separator);
+  --color-menu-group-label-fg: var(--menu-group-label-fg);
+
+  /* Controls */
+  --color-control-track-bg: var(--control-track-bg);
+  --color-control-track-bg-checked: var(--control-track-bg-checked);
+  --color-control-indicator: var(--control-indicator);
+  --color-control-thumb: var(--control-thumb);
+  --color-control-border: var(--control-border);
+  --color-control-ring: var(--control-ring);
+
+  /* Tooltip / Dialog / Badge / Overlay */
+  --color-tooltip-bg: var(--tooltip-bg);
+  --color-tooltip-fg: var(--tooltip-fg);
+  --color-tooltip-border: var(--tooltip-border);
+  --color-dialog-bg: var(--dialog-bg);
+  --color-dialog-fg: var(--dialog-fg);
+  --color-dialog-border: var(--dialog-border);
+  --color-overlay-scrim: var(--overlay-scrim);
+  --color-badge-bg: var(--badge-bg);
+  --color-badge-fg: var(--badge-fg);
+  --color-badge-border: var(--badge-border);
+
+  /*
+   * Radius scale — derives entirely from the --ui-radius master knob. At
+   * --ui-radius:0 every step clamps to 0 (square). This is why ~480 rounded-*
+   * sites needed no edits.
+   */
+  --radius-xs: max(0px, calc(var(--radius) - 4px));
+  --radius-sm: max(0px, calc(var(--radius) - 3px));
+  --radius-md: max(0px, calc(var(--radius) - 2px));
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 16px);
+
+  /*
+   * Shadow scale — every step reads the --ui-shadow master knob. At
+   * --ui-shadow:0 0 #0000 the UI is flat (no decorative drop shadows).
+   */
+  --shadow-2xs: var(--ui-shadow);
+  --shadow-xs: var(--ui-shadow);
+  --shadow-sm: var(--ui-shadow);
+  --shadow: var(--ui-shadow);
+  --shadow-md: var(--ui-shadow);
+  --shadow-lg: var(--ui-shadow);
+  --shadow-xl: var(--ui-shadow);
+  --shadow-2xl: var(--ui-shadow);
+  --inset-shadow-2xs: var(--ui-shadow);
+  --inset-shadow-xs: var(--ui-shadow);
+  --inset-shadow-sm: var(--ui-shadow);
+}
+
+/*
+ * Brand type tokens — Aeonik. NON-inline @theme so --font-* are emitted to :root
+ * for both the Tailwind font-* utilities AND the raw var(--font-*) refs below.
+ */
+@theme {
+  --font-sans:
+    "Aeonik", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-display:
+    "Space Grotesk", "Aeonik Fono", "Aeonik", ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    "Aeonik Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo,
+    Consolas, "DejaVu Sans Mono", monospace;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * TYPE RULE: Aeonik SANS is the system face for everything — headings, UI,
+   * body. Space Grotesk (--font-display) is the "Oxagen" wordmark face
+   * (.ox-wordmark), matching the logomark. Aeonik Mono only for code/identifiers.
+   */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.12;
+    text-wrap: balance;
+  }
+
+  code, kbd, samp, pre {
+    font-family: var(--font-mono);
+  }
+
+  /* Pointer cursor on every clickable, non-form-input element. */
+  button:not(:disabled):not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([data-disabled]),
+  [role="menuitemradio"]:not([data-disabled]),
+  [role="menuitemcheckbox"]:not([data-disabled]),
+  [role="option"]:not([data-disabled]),
+  [role="tab"]:not([data-disabled]),
+  [role="switch"]:not([data-disabled]),
+  a[href],
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+}
+
+/*
+ * Utilities — FLAT surfaces, but MOTION RETAINED. No gradients, glows, mesh, or
+ * glassmorphism; depth is a 1px border, never a shadow. Motion, however, is
+ * kept everywhere it existed: the helpers below (hover-lift, hover-glow ring,
+ * animate-in, stream caret) plus the per-component transitions. The a11y
+ * reduced-motion kill-switch still honors the OS setting. Restyle via the value
+ * layer; tune feel via the motion and ease tokens.
+ */
+@layer utilities {
+  /* Motion helpers — driven by the shared --ease-… and --motion-… tokens.
+   * .hover-lift keeps a subtle rise (transform only — flat, no shadow). */
+  .hover-lift {
+    transition: transform var(--motion-base) var(--ease-hover);
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+  }
+  /* .hover-glow — a subtle violet ring on hover (flat, no blur), with
+   * the transition retained. */
+  .hover-glow {
+    transition: box-shadow 0.2s ease;
+  }
+  .hover-glow:hover {
+    box-shadow: 0 0 0 2px oklch(0.53 0.2 290 / 0.2);
+  }
+
+  /* Keyframed entrance used across surfaces. */
+  .animate-in {
+    animation: fade-in var(--motion-base) var(--ease-entry);
+  }
+
+  /*
+   * Typewriter caret — trails streamed AI text while a response is written.
+   * `steps(1)` gives a hard on/off blink (terminal cursor). Suppressed under
+   * prefers-reduced-motion by the global rule below.
+   */
+  .stream-caret {
+    display: inline-block;
+    width: 0.5ch;
+    height: 1em;
+    transform: translateY(0.12em);
+    background-color: currentColor;
+    border-radius: 1px;
+    animation: caret-blink 1s steps(1) infinite;
+  }
+
+  /* The Oxagen wordmark — the only place Aeonik Fono is used. */
+  .ox-wordmark {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+
+  /* Wide-tracked uppercase eyebrow label (sans). */
+  .ox-eyebrow {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  /* Horizontal tab strip edge-fade mask (a mask, not motion). */
+  .tabs-edge-fade {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+    mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /*
+   * Dotted graph grid — knowledge-graph canvas backdrop. Token-driven texture
+   * (foreground at low alpha), not a decorative gradient overlay. Documented
+   * exception in THEME.md.
+   */
+  .ox-grid-dots {
+    background-image: radial-gradient(
+      color-mix(in oklch, var(--foreground) 12%, transparent) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
+  }
+}
+
+/*
+ * Base UI exposes data-starting-style / data-ending-style on popups for
+ * enter/exit transitions, and data-open / data-closed for steady state.
+ * Components opt in with transition-* utilities; these keyframes back the few
+ * places that prefer a keyframed animation.
+ */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes caret-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* a11y: honor the OS reduce-motion setting globally (kill-switch). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

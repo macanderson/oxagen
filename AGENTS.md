@@ -109,3 +109,42 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 <!-- This section is for human and agent-maintained operational knowledge.
      Add repo-specific conventions, gotchas, and workflow rules here.
      This section is preserved exactly as-is when re-running codebase-summary. -->
+
+### UI Component Import Convention
+
+**Never import `@oxagen/ui/components/*` directly in app code.** All frontend apps (`apps/app`, `apps/admin`, `apps/website`, `apps/docs`) must import UI components through their local re-export layer at `src/components/ui/<name>.tsx`.
+
+```ts
+// ✅ Correct — uses the app's re-export layer
+import { Button } from "@/components/ui/button";
+
+// ❌ Forbidden — bypasses the indirection
+import { Button } from "@oxagen/ui/components/button";
+```
+
+**Why:** The re-export layer is a cheap override escape hatch. If a shared component ever needs an app-specific wrapper (e.g. injecting Next.js `Link`, adding a context provider), you swap the one-liner in `src/components/ui/button.tsx` for a local wrapper — zero consumers change. Direct imports bypass this.
+
+**Exceptions:** The re-export files themselves (`src/components/ui/*.tsx`) legitimately import from `@oxagen/ui/components/*`. Importing `@oxagen/ui` (barrel), `@oxagen/ui/styles/*`, and `@oxagen/ui/lib/*` is allowed everywhere.
+
+**Enforcement:** `no-restricted-imports` rule in `eslint.next.mjs` — errors on any `@oxagen/ui/components/*` import outside the `src/components/ui/` layer.
+
+### UI Component Test Placement
+
+Tests for shared components (`@oxagen/ui`) live in `packages/ui/src/components/<name>.test.tsx`. Tests for app-specific UI components (e.g. `breadcrumb`, `page-header`, `page-tabs`, `field-fill-transition`) stay in `apps/app/src/components/ui/`.
+
+**Rule of thumb:** if the component's source is a re-export (`export * from "@oxagen/ui/components/..."`) → the test belongs in `packages/ui`. If the component is an original implementation that lives only in the app → the test stays in the app.
+
+### Design Token Usage in Shell Components
+
+Shell chrome components (`shell-frame`, `sidebar`, `sidebar-item`, `mobile-bottom-bar`, `notifications-bell`, `balance-pill`, `support-menu`, `user-switcher`) must use the component-level design tokens from `packages/ui/src/styles/globals.css`, not the generic base tokens.
+
+| Area | Use these tokens | Not these |
+|---|---|---|
+| Content panel | `bg-app-panel-bg`, `text-app-panel-fg` | `bg-background`, `text-foreground` |
+| Topbar / header | `bg-app-topbar-bg`, `text-app-topbar-fg`, `border-app-topbar-border` | `bg-background`, `border-border` |
+| App chrome links | `text-app-link-fg`, `hover:text-app-link-hover-fg`, `text-app-link-active-fg` | `text-muted-foreground`, `text-foreground` |
+| Sidebar surface | `bg-sidebar-bg`, `text-sidebar-fg` | `bg-sidebar`, `text-sidebar-foreground` |
+| Sidebar nav items | `text-sidebar-nav-link-fg`, `hover:bg-sidebar-nav-link-hover-bg`, etc. | `text-sidebar-foreground`, `hover:bg-sidebar-accent` |
+| Sidebar group labels | `text-sidebar-nav-label-fg` | `text-muted-foreground` |
+
+**Why:** Component tokens are the reskin knobs. A designer changes `--app-topbar-bg` once in `globals.css` and every header in every shell file re-skins. Using generic tokens (`bg-background`) defeats this — you'd have to touch every component file.

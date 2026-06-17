@@ -74,10 +74,10 @@ export function SidebarItem({
     "[transition:background-color_var(--motion-micro)_var(--ease-hover),color_var(--motion-micro)_var(--ease-hover)]",
     // Focus ring
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-    // Inactive — neutral hover
-    !active && "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-    // Active — neutral accent fill
-    active && "bg-sidebar-accent text-sidebar-accent-foreground",
+    // Inactive — neutral hover (nav-link component tokens)
+    !active && "text-sidebar-nav-link-fg hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg",
+    // Active — nav-link active fill
+    active && "bg-sidebar-nav-link-active-bg text-sidebar-nav-link-active-fg",
     className,
   );
 
@@ -101,8 +101,8 @@ export function SidebarItem({
           className={cn(
             "h-4 w-4 shrink-0 [transition:color_var(--motion-micro)_var(--ease-hover)]",
             active
-              ? "text-sidebar-accent-foreground"
-              : "text-muted-foreground group-hover:text-sidebar-accent-foreground",
+              ? "text-sidebar-nav-link-active-fg"
+              : "text-muted-foreground group-hover:text-sidebar-nav-link-hover-fg",
           )}
           aria-hidden="true"
         />

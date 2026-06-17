@@ -100,8 +100,8 @@ export function NotificationsBell() {
         onClick={() => setOpen(true)}
         className={cn(
           "relative flex h-9 w-9 items-center justify-center rounded-md",
-          "text-muted-foreground transition-colors",
-          "hover:bg-accent hover:text-accent-foreground",
+          "text-app-link-fg transition-colors",
+          "hover:bg-accent hover:text-app-link-hover-fg",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         )}
       >

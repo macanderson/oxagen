@@ -2,7 +2,7 @@ import * as React from "react";
 import { cn } from "../lib/utils";
 
 /**
- * coss ui Panel — a titled surface container (oxagen-design-system spec).
+ * coss ui Panel — a titled surface container.
  *
  * The workhorse layout block for settings, detail views and dashboards: an
  * optional header (eyebrow + title + actions slot), a padded body, and an

@@ -1,6 +1,6 @@
 ---
 name: coss-ui
-description: Knowledge of coss ui — the Base UI–based component system used by @oxagen/ui (apps/app, apps/website, apps/admin). Covers the component registry and import paths, composition rules (the `render` prop, not `asChild`), the `*Popup`/`*Panel`/`Menu*`/`TabsTab`/`TabsPanel` naming, the Select items pattern, semantic color tokens and size scales, and the shadcn/Radix → coss migration mapping. Use when building, restyling, or reviewing UI that imports from `@oxagen/ui` (or `@/components/ui/*`), when migrating shadcn/Radix components to coss/Base UI, or when an overlay/menu/form control "renders empty" or drops children. For Oxagen brand identity (palette, type, motion) use oxagen-design-system; for generic web-platform technique use frontend-patterns.
+description: Knowledge of coss ui — the Base UI–based component system used by @oxagen/ui (apps/app, apps/website, apps/admin). Covers the component registry and import paths, composition rules (the `render` prop, not `asChild`), the `*Popup`/`*Panel`/`Menu*`/`TabsTab`/`TabsPanel` naming, the Select items pattern, semantic color tokens and size scales, and the shadcn/Radix → coss migration mapping. Use when building, restyling, or reviewing UI that imports from `@oxagen/ui` (or `@/components/ui/*`), when migrating shadcn/Radix components to coss/Base UI, or when an overlay/menu/form control "renders empty" or drops children. For generic web-platform technique use frontend-patterns.
 ---
 
 # coss ui
@@ -78,8 +78,7 @@ Import from `@oxagen/ui` (barrel) or `@/components/ui/<file>` (app proxy).
   variants — add the token pair before using a new semantic color.
 - **Size scales are compact by design.** Button/Select/Input/Textarea default
   heights are one step smaller than shadcn; opt into `lg` for shadcn parity.
-- **Icons:** Lucide, sized via the component (`[&_svg]:size-4`). Never emoji
-  (see oxagen-design-system).
+- **Icons:** Lucide, sized via the component (`[&_svg]:size-4`). Never emoji.
 
 ## shadcn/Radix → coss migration mapping
 

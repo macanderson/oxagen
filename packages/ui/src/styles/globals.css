@@ -34,8 +34,9 @@
  * lazily in the element's cascade context). .dark therefore only re-declares the
  * core tokens — never the whole component-token surface.
  *
- * CURRENT SKIN: "Nocturne Violet" — cool violet/indigo surfaces that complement
- * the warm ember mark. Violet drives accents, links, focus rings, primary CTAs.
+ * CURRENT SKIN: "Oxagen Ember" — warm-neutral surfaces drawn from the named brand
+ * with the ember flame as the accent. The UI and the mark share one temperature:
+ * ember drives accents, links, focus rings, and primary CTAs.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 @import "tailwindcss";
@@ -53,41 +54,54 @@
     color-scheme: light;
 
     /* ════════════════════════════════════════════════════════════════════════
-     * PRIMITIVES — raw oklch palette. The reskin knobs. "Nocturne Violet":
-     * cool violet/indigo surfaces, warm ember mark (unchanged).
+     * PRIMITIVES — raw oklch palette. The reskin knobs. "Ember":
+     * warm-neutral surfaces + ember accent, ember mark (unchanged).
      * ════════════════════════════════════════════════════════════════════════ */
 
     /* Brand anchors (paper #FAF7F2 · ink #16181D · ink-white #F5F4F2). */
-    --_paper: oklch(0.971 0.009 82.7);
-    --_ink: oklch(0.178 0.014 280);           /* #16181D — cool-leaning ink */
-    --_ink-white: oklch(0.965 0.005 78.3);    /* #F5F4F2 */
+    --_paper: oklch(0.989 0.003 67.8);   /* #FDFBF9 */
+    --_ink: oklch(0.177 0.016 284.6);   /* #101018 */
+    --_ink-white: oklch(1 0 0);    /* #F5F4F2 */
 
-    /* Violet-tinted neutral ramp (replaces warm stone with cool violet-gray). */
-    --_stone-50: oklch(0.98 0.006 290);       /* #FAFAFD */
-    --_stone-100: oklch(0.965 0.01 290);      /* #F5F3FA */
-    --_stone-150: oklch(0.953 0.014 290);     /* #F2EEF7 — surface-alt */
-    --_stone-200: oklch(0.925 0.02 290);      /* #E8E2F3 */
-    --_stone-300: oklch(0.875 0.03 290);      /* #D4CAE9 */
-    --_stone-400: oklch(0.78 0.04 290);       /* #AEA0CC */
-    --_stone-500: oklch(0.65 0.04 280);       /* #837C92 — tertiary text */
-    --_stone-600: oklch(0.545 0.035 280);     /* #4A4458 — secondary text */
-    --_stone-700: oklch(0.44 0.03 280);       /* #3A3050 */
-    --_stone-800: oklch(0.34 0.025 280);      /* #2A2040 */
-    --_stone-850: oklch(0.28 0.025 280);      /* #1E1A2E */
-    --_stone-900: oklch(0.22 0.02 275);       /* #15131F */
-    --_stone-950: oklch(0.155 0.015 270);     /* #0B0D16 — dark bg */
 
-    /* Violet accent ramp (the theme accent — drives links, focus, CTAs). */
-    --_violet-50: oklch(0.955 0.025 295);     /* #F1ECFB */
-    --_violet-100: oklch(0.89 0.06 295);      /* #DDD2F4 */
-    --_violet-200: oklch(0.81 0.1 295);       /* #C2AFEC */
-    --_violet-300: oklch(0.72 0.14 290);      /* #A78BFA */
-    --_violet-400: oklch(0.62 0.17 290);      /* #8B6BDD */
-    --_violet-500: oklch(0.53 0.2 290);       /* #6E48CE — primary accent */
-    --_violet-600: oklch(0.46 0.18 285);      /* #5733B0 */
-    --_violet-700: oklch(0.39 0.16 285);      /* #452894 */
-    --_violet-800: oklch(0.32 0.13 280);      /* #361E73 */
-    --_violet-900: oklch(0.24 0.1 275);       /* #241149 */
+    /* Named brand swatches — "Oxagen Ember" palette (exact, canonical). These are
+       the human-named source colors; the ramps above/below are derived from them. */
+    --ox-paper: oklch(0.989 0.003 67.8);   /* #fdfbf9 */
+    --ox-surface: oklch(0.978 0.007 67.7);   /* #fbf7f3 */
+    --ox-ink: oklch(0.177 0.016 284.6);   /* #101018 */
+    --ox-bronze: oklch(0.452 0.03 78.6);   /* #5f5443 */
+    --ox-sunset-red: oklch(0.627 0.186 17.6);   /* #e24b5d */
+    --ox-rust: oklch(0.727 0.164 34.0);   /* #fc7b5e */
+    --ox-gold: oklch(0.923 0.104 94.1);   /* #fce594 */
+    --ox-wheat: oklch(0.895 0.09 78.8);   /* #fdd698 */
+
+    /* Warm-neutral ramp (sand/taupe drawn from the ember mark temperature). */
+    --_stone-50: oklch(0.989 0.003 67.8);   /* #FDFBF9 */
+    --_stone-100: oklch(0.978 0.007 67.7);   /* #FBF7F3 */
+    --_stone-150: oklch(0.958 0.012 75.4);   /* #F6F0E8 */
+    --_stone-200: oklch(0.923 0.022 76.5);   /* #EEE4D6 */
+    --_stone-300: oklch(0.859 0.034 74.8);   /* #DECEB9 */
+    --_stone-400: oklch(0.744 0.043 76.6);   /* #BCA98E */
+    --_stone-500: oklch(0.554 0.037 74.4);   /* #80705B */
+    --_stone-600: oklch(0.452 0.03 78.6);   /* #5F5443 */
+    --_stone-700: oklch(0.366 0.025 74.1);   /* #473D30 */
+    --_stone-800: oklch(0.291 0.021 73.0);   /* #322A20 */
+    --_stone-850: oklch(0.232 0.017 66.8);   /* #231C15 */
+    --_stone-900: oklch(0.191 0.013 66.9);   /* #18130E */
+    --_stone-950: oklch(0.158 0.011 67.8);   /* #100C08 */
+
+    /* Ember accent ramp (the theme accent — drives links, focus, CTAs).
+       Keeps the --_violet-* NAMES for zero-churn; the VALUES are ember flame. */
+    --_violet-50: oklch(0.97 0.018 64.9);   /* #FEF3E9 */
+    --_violet-100: oklch(0.928 0.045 65.1);   /* #FDE2C9 */
+    --_violet-200: oklch(0.895 0.09 78.8);   /* #FDD698 */
+    --_violet-300: oklch(0.727 0.164 34.0);   /* #FC7B5E */
+    --_violet-400: oklch(0.666 0.18 38.1);   /* #EC6336 */
+    --_violet-500: oklch(0.563 0.163 33.6);   /* #C2472D */
+    --_violet-600: oklch(0.497 0.155 34.7);   /* #A8361A */
+    --_violet-700: oklch(0.43 0.131 34.8);   /* #892C15 */
+    --_violet-800: oklch(0.356 0.106 34.6);   /* #682110 */
+    --_violet-900: oklch(0.275 0.077 34.3);   /* #46160B */
 
     /* Ember mark primitives (brand gradient — canonical, never recolor). */
     --_ember-gold: oklch(0.879 0.179 91.9);    /* #F9D423 */
@@ -110,30 +124,30 @@
     /* ════════════════════════════════════════════════════════════════════════
      * CONTROLS — single global knobs (rounding + elevation). Flip in one place.
      * ════════════════════════════════════════════════════════════════════════ */
-    --ui-radius: 0.5rem; /* moderate rounding — Nocturne Violet is confident, not brutal. */
-    --ui-shadow: 0 1px 2px oklch(0.24 0.1 275 / 0.06); /* subtle violet-tinted shadow. */
+    --ui-radius: 0.5rem; /* moderate rounding — Ember is confident, not brutal. */
+    --ui-shadow: 0 1px 2px oklch(0.2 0.03 60 / 0.06); /* subtle warm-tinted shadow. */
     --radius: var(--ui-radius);
 
     /* Absolute ink semantics (theme-independent). */
     --ink-light: var(--_ink-white);
     --ink-dark: var(--_ink);
 
-    /* The brand hue — violet accent drives links, focus, CTAs. */
-    --brand: var(--_violet-500);
-    --brand-foreground: oklch(1 0 0);
+    /* The brand hue — ember accent drives links, focus, CTAs. */
+    --brand: var(--ox-rust);
+    --brand-foreground: var(--ox-ink);
 
     /* ════════════════════════════════════════════════════════════════════════
-     * CORE SEMANTIC — LIGHT. Nocturne Violet: warm paper bg, white surfaces,
-     * violet accent. The ember mark stays warm; surfaces are cool.
+     * CORE SEMANTIC — LIGHT. Ember: warm paper bg, white surfaces, ember accent.
+     * The mark and the UI share one warm temperature.
      * ════════════════════════════════════════════════════════════════════════ */
     --background: var(--_paper);
     --foreground: var(--_ink);
-    --card: oklch(1 0 0);
+    --card: var(--ox-surface);
     --card-foreground: var(--_ink);
-    --popover: oklch(1 0 0);
+    --popover: var(--ox-surface);
     --popover-foreground: var(--_ink);
-    --primary: var(--_violet-500);
-    --primary-foreground: oklch(1 0 0);
+    --primary: var(--ox-rust);
+    --primary-foreground: var(--ox-ink);
     --secondary: var(--_stone-150);
     --secondary-foreground: var(--_stone-700);
     --muted: var(--_stone-100);
@@ -142,9 +156,9 @@
     --accent-foreground: var(--_violet-700);
     --destructive: var(--_ember-crimson);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.88 0.02 290 / 0.5);
+    --border: oklch(0.88 0.015 75 / 0.6);
     --input: var(--_stone-300);
-    --ring: var(--_violet-500);
+    --ring: var(--ox-rust);
 
     /* Status — semantic names (error == destructive). */
     --success: var(--_moss);
@@ -156,7 +170,7 @@
     --info: var(--_slate);
     --info-foreground: oklch(1 0 0);
 
-    /* Brand family aliases — violet-driven. */
+    /* Brand family aliases — ember-driven. */
     --brand-2: var(--_violet-600);
     --brand-2-foreground: oklch(1 0 0);
     --brand-3: var(--_violet-400);
@@ -167,21 +181,21 @@
     /* Ember mark gradient (theme-independent — never recolor the mark). */
     --brand-gradient: linear-gradient(135deg, var(--_ember-gold) 0%, var(--_ember-flame) 50%, var(--_ember-crimson) 100%);
 
-    /* Charts — violet-led categorical ramp. */
-    --chart-1: var(--_violet-500);
+    /* Charts — ember-led categorical ramp. */
+    --chart-1: var(--ox-rust);
     --chart-2: var(--_ember-flame);
     --chart-3: var(--_moss);
     --chart-4: var(--_ochre);
     --chart-5: var(--_slate);
 
-    /* Core sidebar surface — white with violet tint. */
+    /* Core sidebar surface — white with warm tint. */
     --sidebar: oklch(1 0 0);
     --sidebar-foreground: var(--_ink);
-    --sidebar-primary: var(--_violet-500);
-    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-primary: var(--ox-rust);
+    --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_violet-50);
     --sidebar-accent-foreground: var(--_violet-700);
-    --sidebar-border: oklch(0.88 0.02 290 / 0.4);
+    --sidebar-border: oklch(0.88 0.015 75 / 0.5);
     --sidebar-ring: var(--_violet-500);
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -219,13 +233,13 @@
     --tab-fg-active: var(--foreground);
     --tab-border: transparent;
     --tab-border-hover: var(--border);
-    --tab-border-active: var(--primary);
+    --tab-border-active: var(--ox-rust);
     --tab-border-width: 2px;
 
     /* ── Buttons (two variants). Hover/active adapt via color-mix toward the
      *    background, so they flip correctly in dark with no re-declaration. ── */
     --button-primary-bg: var(--primary);
-    --button-primary-fg: var(--primary-foreground);
+    --button-primary-fg: var(--ox-ink);
     --button-primary-border: transparent;
     --button-primary-hover-bg: color-mix(in oklch, var(--primary) 88%, var(--background));
     --button-primary-active-bg: color-mix(in oklch, var(--primary) 78%, var(--background));
@@ -280,7 +294,7 @@
     --dialog-bg: var(--popover);
     --dialog-fg: var(--popover-foreground);
     --dialog-border: var(--border);
-    --overlay-scrim: oklch(0.2 0.004 60 / 0.5);
+    --overlay-scrim: oklch(0.18 0.02 50 / 0.5);
     --badge-bg: var(--secondary);
     --badge-fg: var(--secondary-foreground);
     --badge-border: var(--border);
@@ -302,7 +316,7 @@
   }
 
   /* ════════════════════════════════════════════════════════════════════════
-   * DARK — Nocturne Violet. Deep violet-black navy, brighter violet accent.
+   * DARK — Ember. Warm near-black surfaces, brighter ember accent.
    * Only re-declares core tokens; component tokens inherit the flip.
    * ════════════════════════════════════════════════════════════════════════ */
   .dark {
@@ -314,8 +328,8 @@
     --card-foreground: var(--_ink-white);
     --popover: var(--_stone-850);
     --popover-foreground: var(--_ink-white);
-    --primary: var(--_violet-300);
-    --primary-foreground: var(--_stone-950);
+    --primary: var(--ox-rust);
+    --primary-foreground: var(--ox-ink);
     --secondary: var(--_stone-850);
     --secondary-foreground: var(--_stone-200);
     --muted: var(--_stone-850);
@@ -324,9 +338,9 @@
     --accent-foreground: var(--_violet-200);
     --destructive: var(--_clay-light);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.35 0.04 280 / 0.5);
-    --input: oklch(0.38 0.04 280 / 0.5);
-    --ring: var(--_violet-300);
+    --border: oklch(0.42 0.02 70 / 0.5);
+    --input: oklch(0.45 0.02 70 / 0.5);
+    --ring: var(--ox-rust);
 
     --success: var(--_moss-light);
     --success-foreground: oklch(0.18 0.03 160);
@@ -344,7 +358,7 @@
     --accent2: var(--_violet-400);
     --accent2-foreground: var(--_stone-950);
 
-    --chart-1: var(--_violet-300);
+    --chart-1: var(--ox-rust);
     --chart-2: var(--_ember-flame);
     --chart-3: var(--_moss-light);
     --chart-4: var(--_ochre-light);
@@ -352,11 +366,11 @@
 
     --sidebar: var(--_stone-900);
     --sidebar-foreground: var(--_ink-white);
-    --sidebar-primary: var(--_violet-300);
-    --sidebar-primary-foreground: var(--_stone-950);
+    --sidebar-primary: var(--ox-rust);
+    --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_stone-800);
     --sidebar-accent-foreground: var(--_violet-200);
-    --sidebar-border: oklch(0.35 0.04 280 / 0.4);
+    --sidebar-border: oklch(0.42 0.02 70 / 0.4);
     --sidebar-ring: var(--_violet-300);
 
     --overlay-scrim: oklch(0 0 0 / 0.6);
@@ -373,8 +387,8 @@
       --card-foreground: var(--_ink-white);
       --popover: var(--_stone-850);
       --popover-foreground: var(--_ink-white);
-      --primary: var(--_violet-300);
-      --primary-foreground: var(--_stone-950);
+      --primary: var(--ox-rust);
+      --primary-foreground: var(--ox-ink);
       --secondary: var(--_stone-850);
       --secondary-foreground: var(--_stone-200);
       --muted: var(--_stone-850);
@@ -383,9 +397,9 @@
       --accent-foreground: var(--_violet-200);
       --destructive: var(--_clay-light);
       --destructive-foreground: oklch(1 0 0);
-      --border: oklch(0.35 0.04 280 / 0.5);
-      --input: oklch(0.38 0.04 280 / 0.5);
-      --ring: var(--_violet-300);
+      --border: oklch(0.42 0.02 70 / 0.5);
+      --input: oklch(0.45 0.02 70 / 0.5);
+      --ring: var(--ox-rust);
 
       --success: var(--_moss-light);
       --success-foreground: oklch(0.18 0.03 160);
@@ -403,7 +417,7 @@
       --accent2: var(--_violet-400);
       --accent2-foreground: var(--_stone-950);
 
-      --chart-1: var(--_violet-300);
+      --chart-1: var(--ox-rust);
       --chart-2: var(--_ember-flame);
       --chart-3: var(--_moss-light);
       --chart-4: var(--_ochre-light);
@@ -411,11 +425,11 @@
 
       --sidebar: var(--_stone-900);
       --sidebar-foreground: var(--_ink-white);
-      --sidebar-primary: var(--_violet-300);
-      --sidebar-primary-foreground: var(--_stone-950);
+      --sidebar-primary: var(--ox-rust);
+      --sidebar-primary-foreground: var(--ox-ink);
       --sidebar-accent: var(--_stone-800);
       --sidebar-accent-foreground: var(--_violet-200);
-      --sidebar-border: oklch(0.35 0.04 280 / 0.4);
+      --sidebar-border: oklch(0.42 0.02 70 / 0.4);
       --sidebar-ring: var(--_violet-300);
 
       --overlay-scrim: oklch(0 0 0 / 0.6);
@@ -478,7 +492,8 @@
   --color-ember-flame: var(--_ember-flame);
   --color-ember-crimson: var(--_ember-crimson);
 
-  /* Violet accent ramp — exposed for rare direct-access (hero gradients, etc.) */
+  /* Accent ramp — exposed for rare direct-access. NOTE: the --*-violet-* NAMES
+     are retained for API stability; the VALUES are ember flame, not violet. */
   --color-violet-50: var(--_violet-50);
   --color-violet-100: var(--_violet-100);
   --color-violet-200: var(--_violet-200);
@@ -711,7 +726,7 @@
     transition: box-shadow 0.2s ease;
   }
   .hover-glow:hover {
-    box-shadow: 0 0 0 2px oklch(0.53 0.2 290 / 0.2);
+    box-shadow: 0 0 0 2px oklch(0.626 0.184 36.4 / 0.25);
   }
 
   /* Keyframed entrance used across surfaces. */
@@ -734,7 +749,7 @@
     animation: caret-blink 1s steps(1) infinite;
   }
 
-  /* The Oxagen wordmark — the only place Aeonik Fono is used. */
+  /* The Oxagen wordmark — uses --font-display (Space Grotesk). */
   .ox-wordmark {
     font-family: var(--font-display);
     font-weight: 500;

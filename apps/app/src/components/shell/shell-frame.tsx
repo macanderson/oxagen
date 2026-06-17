@@ -87,8 +87,8 @@ export function ShellFrame({
       <Sidebar ctx={ctx} user={user} planTier={planTier} />
 
       {/* Inset content panel — the majority-width right side. */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-border bg-background md:rounded-xl md:border md:shadow-sm">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-app-topbar-border bg-app-panel-bg text-app-panel-fg md:rounded-xl md:border md:shadow-sm">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-app-topbar-border bg-app-topbar-bg px-3 text-app-topbar-fg">
           {/* Desktop: sidebar collapse toggle. Mobile nav lives in the
               bottom bar (MobileBottomBar), so no header trigger here. */}
           <Button

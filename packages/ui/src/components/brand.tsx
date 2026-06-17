@@ -1,28 +1,30 @@
 /**
- * Oxagen brand marks — ember brain identity.
+ * Oxagen brand marks — ember hex-cluster identity.
  *
- * LOGOMARK: the editorial brain mark with the ember gradient (gold → flame →
- * crimson). The gradient is canonical and holds in both light and dark modes —
- * never recolor the mark. WORDMARK: "Oxagen" set in Space Grotesk (weight ~540).
- * The wordmark ink flips between modes (--ox-ink).
+ * LOGOMARK: six interlocking hexagon cells. Four are ink outlines that flip with
+ * the theme (they inherit the current text colour); two are lit with the ember
+ * gradient (gold → flame → crimson). The gradient is canonical and holds in both
+ * light and dark modes — never recolour it. WORDMARK: "Oxagen" set in Space
+ * Grotesk (weight ~540); the ink flips between modes via `text-foreground`.
  *
- *   <OxagenLogomark className="size-7" />        // the ember brain mark
+ *   <OxagenLogomark className="size-7" />        // the hex-cluster mark
  *   <OxagenWordmark className="text-xl" />       // "Oxagen" wordmark text
- *   <BrandMark />                                // brain at the app-chrome size
- *   <OxagenLockup />                             // brain + wordmark, side by side
+ *   <BrandMark />                                // mark at the app-chrome size
+ *   <OxagenLockup />                             // mark + wordmark, side by side
  *   <OxagenLogo variant="vertical" size={48} />  // full lockup API
  *   <NodeChip kind="document" id="doc_41be09" /> // typed knowledge-graph node
  *   <ConfidenceBar score={0.82} />               // edge-inference confidence
  *
  * All marks are pure presentational (no hooks) so they render in Server
- * Components. The brain uses a single fixed gradient id — every instance paints
- * the identical ember gradient, so a shared def is safe.
+ * Components. The two ember gradients use fixed ids — every instance paints the
+ * identical gradient, so shared defs are safe.
  */
 
 import type { CSSProperties } from "react";
 import { cn } from "../lib/utils";
 
 const EMBER_ID = "oxagenEmber";
+const EMBER_ID_2 = "oxagenEmber2";
 
 export type LogoTone = "gradient" | "mono-light" | "mono-dark" | "solid";
 
@@ -33,7 +35,7 @@ function monoColor(tone: LogoTone): string | null {
   return null; // gradient
 }
 
-/** The Oxagen logomark — the ember brain mark. */
+/** The Oxagen logomark — the ember hex-cluster mark. */
 export function OxagenLogomark({
   className,
   tone = "gradient",
@@ -44,45 +46,59 @@ export function OxagenLogomark({
   style?: CSSProperties;
 }) {
   const mono = monoColor(tone);
-  const fill = mono ?? `url(#${EMBER_ID})`;
-  const stroke = mono ?? `url(#${EMBER_ID})`;
+  const ink = mono ?? "currentColor";
+  const ember1 = mono ?? `url(#${EMBER_ID})`;
+  const ember2 = mono ?? `url(#${EMBER_ID_2})`;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 48 48"
+      viewBox="7.775 4.325 36.343 37.216"
       fill="none"
       role="img"
       aria-label="Oxagen logomark"
-      className={className}
+      className={cn("text-foreground", className)}
       style={style}
     >
       {!mono && (
         <defs>
-          <linearGradient id={EMBER_ID} x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+          <linearGradient
+            id={EMBER_ID}
+            gradientUnits="userSpaceOnUse"
+            gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)"
+            x1="0"
+            y1="0"
+            x2="1"
+            y2="0"
+          >
+            <stop offset="0" stopColor="#F9D423" />
+            <stop offset=".5" stopColor="#FF7E5F" />
+            <stop offset="1" stopColor="#C2185B" />
+          </linearGradient>
+          <linearGradient
+            id={EMBER_ID_2}
+            gradientUnits="userSpaceOnUse"
+            gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)"
+            x1="0"
+            y1="0"
+            x2="1"
+            y2="0"
+          >
             <stop offset="0" stopColor="#F9D423" />
             <stop offset=".5" stopColor="#FF7E5F" />
             <stop offset="1" stopColor="#C2185B" />
           </linearGradient>
         </defs>
       )}
-      {/* Left lobe fill */}
-      <path d="M24 8c-4 0-7 2-8 5-3 0-5 2-5 5 0 2 1 3 2 4-1 1-2 3-2 5 0 3 3 6 6 6 1 2 3 3 5 3z" fill={fill} opacity=".16" />
-      {/* Right lobe fill */}
-      <path d="M24 8c4 0 7 2 8 5 3 0 5 2 5 5 0 2-1 3-2 4 1 1 2 3 2 5 0 3-3 6-6 6-1 2-3 3-5 3z" fill={fill} opacity=".28" />
-      {/* Brain outline strokes */}
-      <g fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M24 8c-4 0-7 2-8 5-3 0-5 2-5 5 0 2 1 3 2 4-1 1-2 3-2 5 0 3 3 6 6 6 1 2 3 3 5 3" />
-        <path d="M24 8c4 0 7 2 8 5 3 0 5 2 5 5 0 2-1 3-2 4 1 1 2 3 2 5 0 3-3 6-6 6-1 2-3 3-5 3" />
-        <path d="M24 8v32" />
+      {/* Outline cells — ink that flips with the theme (inherits text colour) */}
+      <g fill="none" stroke={ink} strokeWidth="1" strokeLinejoin="miter">
+        <path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" />
+        <path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" />
+        <path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" />
+        <path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" />
       </g>
-      {/* Synapse edges */}
-      <g fill="none" stroke={stroke} strokeWidth="1.3" opacity=".7">
-        <path d="M17 18l7-2" /><path d="M31 15l-7 1" /><path d="M33 29l-9-5" /><path d="M16 31l8-7" />
-      </g>
-      {/* Synapse nodes */}
-      <g fill={fill}>
-        <circle cx="17" cy="18" r="2" /><circle cx="31" cy="15" r="2" /><circle cx="33" cy="29" r="2" /><circle cx="16" cy="31" r="2" />
-      </g>
+      {/* Ember cells — the gradient accent, canonical in both modes */}
+      <path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill={ember1} />
+      <path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill={ember2} opacity=".55" />
     </svg>
   );
 }
@@ -109,12 +125,12 @@ export function OxagenWordmark({
   );
 }
 
-/** Brand mark — the ember brain at the app-chrome size. */
+/** Brand mark — the ember hex-cluster mark at the app-chrome size. */
 export function BrandMark({ className }: { className?: string }) {
   return <OxagenLogomark className={cn("size-7 shrink-0", className)} />;
 }
 
-/** Brand lockup: brain + wordmark, side by side. Wordmark hides on mobile. */
+/** Brand lockup: mark + wordmark, side by side. Wordmark hides on mobile. */
 export function OxagenLockup({ className }: { className?: string }) {
   return (
     <span className={cn("flex items-center gap-2", className)}>

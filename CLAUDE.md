@@ -112,7 +112,6 @@ Decomposition:
 `.agents/skills/` auto-registered via `.claude/skills/`. Consult before writing code.
 
 - **`oxagen-engineering-policy`** — binding law. Non-negotiables, four-store data model, SQL conventions, bloat/vendor/naming, observability, PR discipline. Consult BEFORE writing/changing code, picking a dep, designing a schema, writing tests, opening a PR, or touching CI. Halt and surface conflicts — do not weaken the rule.
-- **`oxagen-design-system`** — brand & visual identity (palette, indigo→green gradient ring, Aeonik, motion tokens, glass/card, voice). Use for any user-facing UI in `apps/app`.
 - **`coss-ui`** — `@oxagen/ui` component system: registry, `render`-not-`asChild`, naming conventions, size scales, shadcn/Radix → coss migration. Use when building UI importing `@oxagen/ui`.
 - **`frontend-patterns`** — 136-entry technique library (CSS, a11y, CWV, forms, passkeys, view transitions, privacy, security). Open matching technique files; don't read the whole library.
 - **`reablocks`** — tables, timelines, block layouts in `apps/app`.
@@ -125,7 +124,7 @@ Decomposition:
 - **`ci-green`** — full local CI gate, env file sync, push, watch GitHub Actions until green.
 
 Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first, then `ci-green` before pushing.
-UI → `coss-ui` + `oxagen-design-system` + `frontend-patterns` + component libs as needed.
+UI → `coss-ui` + `frontend-patterns` + component libs as needed.
 Auth → `vendor-better-auth` + Better Auth `*-best-practices`. New features → `oxagen-feature`.
 
 ## Production URLs (interim)
@@ -263,6 +262,17 @@ git fetch origin && git rebase origin/main  # sync before pushing
 ## All LLM calls must go through `@oxagen/ai`
 
 Never import `generateText` / `streamText` / `generateObject` directly from `ai` inside a handler or route. Always use `@oxagen/ai` re-exports — they emit metering, duration tracking, surface tagging, and prompt hashing to ClickHouse.
+
+## UI component import convention
+
+**Never import `@oxagen/ui/components/*` directly in app code.** All Next.js apps must import UI components from their local re-export layer (`@/components/ui/<name>`), not directly from `@oxagen/ui/components/*`. The re-export layer (`src/components/ui/*.tsx`) is the sole place that touches `@oxagen/ui/components/*` — it's a cheap override escape hatch.
+
+```ts
+// ✅ import { Button } from "@/components/ui/button"
+// ❌ import { Button } from "@oxagen/ui/components/button"
+```
+
+Enforcement: `no-restricted-imports` in `eslint.next.mjs`. Exceptions: the re-export files themselves, plus `@oxagen/ui` barrel, `@oxagen/ui/styles/*`, `@oxagen/ui/lib/*`.
 
 ## Infrastructure boundaries
 

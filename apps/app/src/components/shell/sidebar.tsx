@@ -39,7 +39,7 @@ export interface SidebarProps {
 function GroupLabel({ children, collapsed }: { children: React.ReactNode; collapsed: boolean }) {
   if (collapsed) return <div className="h-2" aria-hidden="true" />;
   return (
-    <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-nav-label-fg">
       {children}
     </p>
   );
@@ -88,7 +88,7 @@ export function Sidebar({ ctx, user, planTier }: SidebarProps) {
       aria-label="Primary navigation"
       data-collapsed={collapsed}
       className={cn(
-        "relative hidden h-full shrink-0 flex-col overflow-hidden border-border bg-sidebar text-sidebar-foreground md:flex",
+        "relative hidden h-full shrink-0 flex-col overflow-hidden border-sidebar-border bg-sidebar-bg text-sidebar-fg md:flex",
         "md:rounded-xl md:border-t md:border-r md:border-b md:shadow-sm",
         "transition-[width] [transition-duration:var(--motion-base)] [transition-timing-function:var(--ease-entry)]",
         collapsed ? "w-[3.75rem]" : "w-64",

@@ -67,5 +67,4 @@ Read all of them; they are one body of law split for navigation, not priority.
 - [`12-ci-cd.md`](policies/12-ci-cd.md) — CI gating, branch protection
 - [`13-performance-policy.md`](policies/13-performance-policy.md) — performance budgets & patterns
 
-Related skills: **oxagen-design-system** (brand/visual identity) and
-**frontend-patterns** (web-platform technique library).
+Related skills: **frontend-patterns** (web-platform technique library).
