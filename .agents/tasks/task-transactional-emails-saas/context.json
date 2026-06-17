@@ -1,0 +1,31 @@
+{
+  "project_type": "TypeScript monorepo (pnpm workspaces + Turbo) with Next.js frontend, Hono API, and background job processing via Inngest",
+  "language": "TypeScript",
+  "build_system": "pnpm workspaces + Turbo. No explicit build step needed for library packages (they export .ts directly via main/exports fields). Tests run per-package via vitest.",
+  "test_framework": "vitest with clearMocks:true, environment:node, globals:false. Tests use vi.mock() for dependency isolation. Coverage thresholds enforced (90% lines, 87% branches).",
+  "build_command": "pnpm turbo run typecheck --filter=@oxagen/notifications --filter=@oxagen/auth --filter=@oxagen/billing",
+  "test_command": "pnpm --filter @oxagen/notifications test:unit && pnpm --filter @oxagen/auth test:unit",
+  "verification_instructions": "1. Run pnpm --filter @oxagen/notifications test:unit to verify new templates and exports compile/pass. 2. Run pnpm --filter @oxagen/auth test:unit to verify auth config changes. 3. Run pnpm turbo run typecheck --filter=@oxagen/notifications --filter=@oxagen/auth --filter=@oxagen/billing --filter=@oxagen/handlers to ensure no type errors across dependent packages.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "pnpm install (already done in monorepo). No additional setup needed for library packages.",
+  "environment_constraints": "Open internet available. No Docker daemon needed for this task (library-only changes). Packages export raw .ts, no compilation step. The notifications package has 90% coverage thresholds, so new code needs adequate test coverage.",
+  "contribution_requirements": "Template functions are pure (return {subject, text, html}), use inline HTML with esc() for user input, minimal single-column layout, CTA button with #6366f1 background. Tests follow existing vitest patterns (describe/it/expect, no globals). Package exports must be updated in src/index.ts.",
+  "key_patterns": "1. Email templates: pure functions returning {subject, text, html}, esc() for HTML escaping, no external deps. 2. sendEmail() is the single entry point for all email dispatch. 3. Better Auth uses top-level emailVerification config for verification email, and emailAndPassword.requireEmailVerification to gate sign-in. 4. notifyOrgManagers() pattern for org-level billing notifications (resolves recipients by role, creates in-app + email). 5. App URL resolved via process.env.APP_URL or NEXT_PUBLIC_APP_URL with fallback to Vercel domain.",
+  "relevant_files": [
+    "packages/notifications/src/index.ts",
+    "packages/notifications/src/send-email.ts",
+    "packages/notifications/src/notifications/email-templates.ts",
+    "packages/notifications/src/notifications/reset-password-email-template.ts",
+    "packages/notifications/src/notifications/reset-password-email-template.test.ts",
+    "packages/notifications/src/notifications/email-templates.test.ts",
+    "packages/notifications/src/notifications/notify-org-managers.ts",
+    "packages/notifications/src/notifications/types.ts",
+    "packages/auth/src/auth.ts",
+    "packages/auth/src/auth.config.test.ts",
+    "packages/billing/src/autoreload.ts",
+    "packages/billing/src/dunning.ts",
+    "packages/handlers/src/workspace.invite.send.ts",
+    "packages/inngest-functions/src/functions/billing.dunning-sweep.ts"
+  ],
+  "directory_structure": "packages/notifications/src/ - email transport, templates, and notification service. packages/auth/src/ - Better Auth configuration. packages/billing/src/ - credit billing, dunning, auto-reload. packages/handlers/src/ - capability handlers (invitations, etc). packages/inngest-functions/src/functions/ - scheduled/triggered background jobs."
+}

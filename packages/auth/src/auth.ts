@@ -7,7 +7,7 @@ import { emitSecurityEvent } from "@oxagen/database/security";
 import { requireEnv } from "@oxagen/config/env";
 import { createLocalKmsAdapter, loadMasterKey } from "@oxagen/crypto/kms";
 import { buildAccountTokenHooks, buildStripOnlyAccountHooks } from "./token-encryption";
-import { sendEmail, resetPasswordEmailTemplate } from "@oxagen/notifications";
+import { sendEmail, resetPasswordEmailTemplate, emailVerificationTemplate } from "@oxagen/notifications";
 
 // Better Auth binds to the canonical auth.users row, not a parallel table.
 // The Drizzle adapter looks up columns via JS property lookup
@@ -218,6 +218,7 @@ export const auth = betterAuth({
     enabled: true,
     autoSignIn: true,
     minPasswordLength: 8,
+    requireEmailVerification: true,
     // Tokens expire after 1 hour (Better Auth default). Single-use — deleted
     // on first successful reset. revokeSessionsOnPasswordReset invalidates all
     // existing sessions so a hijacked account is secured immediately.
@@ -234,6 +235,21 @@ export const auth = betterAuth({
         ...resetPasswordEmailTemplate({ resetUrl: url, email: user.email }),
       });
     },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Email verification — send a one-time token to the user's email address
+  // upon sign-up and on each sign-in when the email is still unverified.
+  // Uses fire-and-forget (void) so the auth flow returns immediately.
+  // ---------------------------------------------------------------------------
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }) => {
+      void sendEmail({
+        to: user.email,
+        ...emailVerificationTemplate({ verificationUrl: url, email: user.email }),
+      });
+    },
+    sendOnSignIn: true,
   },
 
   // ---------------------------------------------------------------------------

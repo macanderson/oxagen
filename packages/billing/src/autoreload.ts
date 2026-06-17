@@ -1,5 +1,6 @@
-import { withTenantDb, schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
+import { notifyOrgManagers, lowBalanceAlertTemplate } from "@oxagen/notifications";
 import { billingProvider } from "./client";
 import { effectiveBalance, createCreditLot } from "./credits";
 import { CREDIT_REASONS } from "./constants";
@@ -206,4 +207,47 @@ export async function maybeAutoReload(orgId: string): Promise<AutoReloadResult> 
   );
 
   return { reloaded: true, amountCents };
+}
+
+// ---------------------------------------------------------------------------
+// Low-balance notification
+// ---------------------------------------------------------------------------
+
+/**
+ * Send a low-balance alert to org managers (owners/admins) via in-app
+ * notification + email. This is a best-effort operation: failures are logged
+ * but never propagated (billing operations must not fail due to notification
+ * issues).
+ */
+export async function notifyLowBalance(orgId: string, result: LowBalanceResult): Promise<void> {
+  if (!result.low) return;
+  try {
+    // Resolve the human-readable org name from the database.
+    const orgRow = await withSystemDb((tx) =>
+      tx.query.organizations.findFirst({
+        where: eq(schema.organizations.id, orgId),
+        columns: { name: true },
+      }),
+    );
+    const orgName = orgRow?.name ?? "your organization";
+
+    const appUrl = process.env["APP_URL"] ?? "https://oxagen-v2-app.vercel.app";
+    const topUpUrl = `${appUrl}/settings/billing/credits`;
+    const template = lowBalanceAlertTemplate({
+      orgName,
+      balanceCents: result.balanceCents,
+      thresholdCents: result.thresholdCents,
+      topUpUrl,
+    });
+    await notifyOrgManagers({
+      orgId,
+      kind: "system",
+      title: template.subject,
+      body: template.text,
+      emailHtml: template.html,
+      deepLink: "/settings/billing/credits",
+    });
+  } catch (err) {
+    logger.warn({ orgId, err }, "billing: low-balance notification failed (non-fatal)");
+  }
 }

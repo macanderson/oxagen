@@ -1,7 +1,8 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceInviteSend } from "@oxagen/oxagen/contracts/workspace.invite.send";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
+import { sendEmail, invitationEmailTemplate } from "@oxagen/notifications";
 import { logger, maskEmail } from "./logger";
 
 /** Map workspace-level invite role to title-cased org-level role. */
@@ -74,6 +75,49 @@ export const workspaceInviteSendHandler: CapabilityHandler<typeof workspaceInvit
     { orgId: ctx.orgId, email: maskEmail(input.email), role: orgRole },
     "workspace.invite.send: invitation created or returned existing",
   );
+
+  // Best-effort: send invitation email. Failure here must never break the
+  // invitation creation (critical path). Wrapped in try-catch + fire-and-forget.
+  void (async () => {
+    try {
+      // Resolve inviter display name from the system-scoped users table.
+      const inviterRow = await withSystemDb((tx) =>
+        tx.query.users.findFirst({
+          where: eq(schema.users.id, ctx.userId!),
+          columns: { displayName: true },
+        }),
+      );
+      const inviterName = inviterRow?.displayName ?? "A team member";
+
+      // Resolve org name from the tenant-scoped organizations table.
+      const orgRow = await withTenantDb((tx) =>
+        tx.query.organizations.findFirst({
+          where: eq(schema.organizations.id, ctx.orgId),
+          columns: { name: true },
+        }),
+      );
+      const orgName = orgRow?.name ?? ctx.orgId;
+
+      const appUrl = process.env["APP_URL"] ?? "https://oxagen-v2-app.vercel.app";
+      const inviteUrl = `${appUrl}/invitations/${row.publicId}`;
+
+      await sendEmail({
+        to: input.email,
+        ...invitationEmailTemplate({
+          inviteUrl,
+          inviterName,
+          orgName,
+          role: orgRole,
+          email: input.email,
+        }),
+      });
+    } catch (err) {
+      logger.warn(
+        { orgId: ctx.orgId, email: maskEmail(input.email), err },
+        "workspace.invite.send: failed to send invitation email (non-fatal)",
+      );
+    }
+  })();
 
   return {
     id: row.publicId,
