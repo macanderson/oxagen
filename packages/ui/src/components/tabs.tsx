@@ -10,7 +10,7 @@ import { fadeInUp } from "../lib/motion";
  * Tabs — token-driven via the --tab-* tokens. Motion is retained: the sliding
  * active-indicator (TabsIndicator) and the per-panel fade-in both animate.
  *
- * State is wired through Base UI's data-attributes (data-[selected]); the rest
+ * State is wired through Base UI's data-attributes (data-[active]); the rest
  * border stays a constant width so the active underline never shifts layout.
  */
 const Tabs = TabsPrimitive.Root;
@@ -51,10 +51,10 @@ const TabsTab = React.forwardRef<
     ref={ref}
     className={cn(
       "inline-flex items-center justify-center whitespace-nowrap text-sm font-medium text-tab-fg transition-all hover:text-tab-fg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
-      // Default (pill) list treatment — selected pill is a flat card surface.
-      "group-data-[variant=default]/list:rounded-md group-data-[variant=default]/list:px-3 group-data-[variant=default]/list:py-1 group-data-[variant=default]/list:data-[selected]:bg-card group-data-[variant=default]/list:data-[selected]:text-tab-fg-active",
+      // Default (pill) list treatment — active pill is a flat card surface.
+      "group-data-[variant=default]/list:rounded-md group-data-[variant=default]/list:px-3 group-data-[variant=default]/list:py-1 group-data-[variant=default]/list:data-[active]:bg-card group-data-[variant=default]/list:data-[active]:text-tab-fg-active",
       // Underline list treatment — constant-width border at rest, color flips on state.
-      "group-data-[variant=underline]/list:-mb-px group-data-[variant=underline]/list:border-b-[length:var(--tab-border-width)] group-data-[variant=underline]/list:border-tab-border group-data-[variant=underline]/list:hover:border-tab-border-hover group-data-[variant=underline]/list:px-1 group-data-[variant=underline]/list:py-2 group-data-[variant=underline]/list:data-[selected]:border-tab-border-active group-data-[variant=underline]/list:data-[selected]:text-tab-fg-active",
+      "group-data-[variant=underline]/list:-mb-px group-data-[variant=underline]/list:border-b-[length:var(--tab-border-width)] group-data-[variant=underline]/list:border-tab-border group-data-[variant=underline]/list:hover:border-tab-border-hover group-data-[variant=underline]/list:px-1 group-data-[variant=underline]/list:py-2 group-data-[variant=underline]/list:data-[active]:border-tab-border-active group-data-[variant=underline]/list:data-[active]:text-tab-fg-active",
       className,
     )}
     {...props}

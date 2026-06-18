@@ -48,6 +48,45 @@ describe("Tabs — render", () => {
     expect(getByText("Panel B content")).toBeInTheDocument();
   });
 
+  it("active tab receives data-active attribute after clicking", async () => {
+    const { getByRole } = render(<SimpleTabs />);
+    const tabB = getByRole("tab", { name: "Tab B" });
+    const tabA = getByRole("tab", { name: "Tab A" });
+    await userEvent.click(tabB);
+    // Base UI emits data-active (not data-selected) on the active tab.
+    expect(tabB).toHaveAttribute("data-active");
+    expect(tabA).not.toHaveAttribute("data-active");
+  });
+
+  it("initial tab has data-active attribute without interaction", () => {
+    const { getByRole } = render(<SimpleTabs />);
+    const tabA = getByRole("tab", { name: "Tab A" });
+    const tabB = getByRole("tab", { name: "Tab B" });
+    expect(tabA).toHaveAttribute("data-active");
+    expect(tabB).not.toHaveAttribute("data-active");
+  });
+
+  it("inactive panel has data-hidden attribute after tab switch (keepMounted)", async () => {
+    // keepMounted keeps both panels in the DOM so we can assert data-hidden.
+    const { getByRole, container } = render(
+      <Tabs defaultValue="a">
+        <TabsList>
+          <TabsTab value="a">Tab A</TabsTab>
+          <TabsTab value="b">Tab B</TabsTab>
+        </TabsList>
+        <TabsPanel value="a" keepMounted>Panel A content</TabsPanel>
+        <TabsPanel value="b" keepMounted>Panel B content</TabsPanel>
+      </Tabs>
+    );
+    await userEvent.click(getByRole("tab", { name: "Tab B" }));
+    // Base UI sets data-hidden on the inactive panel element.
+    const panels = container.querySelectorAll('[role="tabpanel"]');
+    const panelA = Array.from(panels).find((p) => p.textContent?.includes("Panel A content"));
+    const panelB = Array.from(panels).find((p) => p.textContent?.includes("Panel B content"));
+    expect(panelA).toHaveAttribute("data-hidden");
+    expect(panelB).not.toHaveAttribute("data-hidden");
+  });
+
   it("TabsList default variant sets data-variant=default", () => {
     const { getByRole } = render(<SimpleTabs variant="default" />);
     expect(getByRole("tablist")).toHaveAttribute("data-variant", "default");
