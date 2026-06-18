@@ -1,33 +1,98 @@
-import { and, desc, eq, exists, ilike, arrayOverlaps, isNull, notExists, or, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { listOxagenPlugins } from "@oxagen/oxagen/plugins";
-import { syncRegistry, createSystemSyncPersistence } from "@oxagen/plugins/registry";
+import {
+  listServers,
+  mapServerDetailToCatalogRow,
+  deriveTransportTypes,
+  deriveAuthKind,
+} from "@oxagen/plugins/registry";
+import type { ServerResponse } from "@oxagen/plugins/registry";
 import { logger } from "./logger";
 
+// ── TTL cache for live registry fetches ──────────────────────────────────────
+// Module-scope; survives across requests in the same Node.js process. Keyed by
+// `${registryId}:${search ?? ""}` so different search queries are cached
+// independently. ~60 s TTL keeps the marketplace snappy without stale data risk.
+
+const CACHE_TTL_MS = 60_000;
+
+interface CacheEntry {
+  servers: ServerResponse[];
+  expiresAt: number;
+}
+
+const registryCache = new Map<string, CacheEntry>();
+
+/** Clear the in-process registry cache. Exported for test isolation. */
+export function clearRegistryCacheForTests(): void {
+  registryCache.clear();
+}
+
+async function fetchRegistryServers(
+  registryId: string,
+  baseUrl: string,
+  search: string | undefined,
+): Promise<ServerResponse[]> {
+  const key = `${registryId}:${search ?? ""}`;
+  const hit = registryCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.servers;
+
+  // Fetch up to 200 results per registry in one page; sufficient for an in-memory
+  // sort+paginate. If the registry supports cursor pagination, one page is enough
+  // for marketplace browsing — deep paging happens when search narrows results.
+  const result = await listServers(baseUrl, { limit: 200, search });
+  const entry: CacheEntry = { servers: result.servers, expiresAt: Date.now() + CACHE_TTL_MS };
+  registryCache.set(key, entry);
+  return result.servers;
+}
+
+// ── Static-plugin types (sourced from the Oxagen plugin registry) ─────────────
+// agent_capability, agent_skill, knowledge_source, and integration entries all
+// come from listOxagenPlugins(); only mcp_server is fetched live from registries.
+const STATIC_PLUGIN_TYPES = new Set([
+  "agent_capability",
+  "agent_skill",
+  "knowledge_source",
+  "integration",
+]);
+
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
-  const { search, pluginType, categories, transportTypes, authKind, installed, limit, offset, workspaceId } = input as {
+  const {
+    search,
+    pluginType,
+    authKind,
+    installed,
+    limit,
+    offset,
+  } = input as {
     search?: string;
-    pluginType?: "mcp_server" | "integration" | "content_tool" | "capability";
+    pluginType?: "mcp_server" | "agent_capability" | "agent_skill" | "knowledge_source" | "integration";
     categories?: string[];
     transportTypes?: string[];
     authKind?: string;
     installed?: boolean;
     limit: number;
     offset: number;
-    workspaceId?: string;
   };
 
-  // ── Capability path ──────────────────────────────────────────────────────────
-  // Capability entries come from the static Oxagen plugin registry, NOT from
-  // mcp.catalog_servers. They only appear when pluginType is explicitly "capability".
-  // An omitted pluginType browses only catalog_servers (existing behaviour preserved).
-  if (pluginType === "capability") {
+  // ── Static plugin path (agent_capability / agent_skill / knowledge_source / integration) ───
+  if (!pluginType || STATIC_PLUGIN_TYPES.has(pluginType)) {
     let manifests = listOxagenPlugins().filter(
       (m) => m.visibility !== "hidden" && m.visibility !== "preview",
     );
 
-    // Apply text search against id, name, and description.
+    // When a specific pluginType is requested, we use the manifest category as a
+    // proxy until manifests carry an explicit pluginType field. For now all static
+    // manifests are agent_capability entries — skills, knowledge sources, and
+    // integrations will be added as separate manifest categories in a later pass.
+    // The filter below is a no-op for "agent_capability" but future-proofs the path.
+    if (pluginType && pluginType !== "agent_capability") {
+      // No static manifests for other types yet — return empty.
+      manifests = [];
+    }
+
     if (search) {
       const lower = search.toLowerCase();
       manifests = manifests.filter(
@@ -38,47 +103,33 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       );
     }
 
-    // Resolve which plugins are already installed for this org. Catalog
-    // browse is also served without org context (apps/app global catalog
-    // route passes orgId "") — comparing a uuid column to "" throws, so an
-    // org-less browse simply reports nothing as installed.
-    // When workspaceId is provided, include both workspace-scoped and org-level (NULL workspace_id) rows.
-    // Computed BEFORE pagination so the `installed` filter can be applied across all manifests.
+    // Resolve install state from plugin.installed_plugins for (orgId, workspaceId).
     const installedNames = await withSystemDb(async (tx) => {
       if (!ctx.orgId) return new Set<string>();
-      const wsCond = workspaceId
-        ? or(
-            eq(schema.pluginOrgListings.workspaceId, workspaceId),
-            isNull(schema.pluginOrgListings.workspaceId),
-          )
-        : isNull(schema.pluginOrgListings.workspaceId);
       const rows = await tx
-        .select({ name: schema.pluginOrgListings.name })
-        .from(schema.pluginOrgListings)
+        .select({ name: schema.pluginInstalledPlugins.name })
+        .from(schema.pluginInstalledPlugins)
         .where(
           and(
-            eq(schema.pluginOrgListings.orgId, ctx.orgId),
-            eq(schema.pluginOrgListings.pluginType, "capability"),
-            isNull(schema.pluginOrgListings.deletedAt),
-            wsCond,
+            eq(schema.pluginInstalledPlugins.orgId, ctx.orgId),
+            eq(schema.pluginInstalledPlugins.workspaceId, ctx.workspaceId),
+            eq(schema.pluginInstalledPlugins.pluginType, "agent_capability"),
+            isNull(schema.pluginInstalledPlugins.deletedAt),
           ),
         );
       return new Set(rows.map((r) => r.name));
     });
 
-    // Apply the installed filter (if requested) before pagination so totals and
-    // pagination reflect the filtered set.
     if (installed === true) manifests = manifests.filter((m) => installedNames.has(m.id));
     else if (installed === false) manifests = manifests.filter((m) => !installedNames.has(m.id));
 
     const total = manifests.length;
     const page = manifests.slice(offset, offset + limit);
 
-    logger.info({ limit, offset, total, orgId: ctx.orgId }, "plugin.catalog.browse capability: ok");
+    logger.info({ limit, offset, total, orgId: ctx.orgId, pluginType }, "plugin.catalog.browse static: ok");
 
     return {
       servers: page.map((m) => ({
-        // name = stable install key (matches org_listings.name = plugin id)
         id: m.id,
         name: m.id,
         title: m.name,
@@ -88,7 +139,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         authKind: "none",
         categories: [m.category],
         version: m.version,
-        pluginType: "capability" as const,
+        pluginType: "agent_capability" as const,
         tier: m.tier,
         installed: installedNames.has(m.id),
       })),
@@ -97,151 +148,116 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     };
   }
 
-  // ── MCP server / integration / content_tool path (unchanged) ────────────────
-  const conds = [
-    eq(schema.mcpCatalogServers.isLatest, true),
-    eq(schema.mcpCatalogServers.status, "active"),
-  ];
-  if (search) conds.push(ilike(schema.mcpCatalogServers.name, `%${search}%`));
-  if (authKind) conds.push(eq(schema.mcpCatalogServers.authKind, authKind));
-  // pluginType is a TYPE discriminator overlaid on the `categories` array, where
-  // mcp_server is the DEFAULT classification: a catalog row is an mcp_server
-  // unless it is explicitly tagged "integration" or "content_tool". This MUST
-  // mirror the output derivation below (serverPluginType) — otherwise a server
-  // with empty/content-only categories (the common case: real registry syncs
-  // never write the literal "mcp_server" tag) is classified mcp_server on output
-  // yet filtered OUT of the mcp_server tab, leaving the marketplace empty.
-  if (pluginType === "mcp_server") {
-    conds.push(
-      sql`NOT (${schema.mcpCatalogServers.categories} && ARRAY['integration','content_tool']::text[])`,
-    );
-  } else if (pluginType) {
-    conds.push(arrayOverlaps(schema.mcpCatalogServers.categories, [pluginType]));
-  }
-  if (categories?.length) conds.push(arrayOverlaps(schema.mcpCatalogServers.categories, categories));
-  if (transportTypes?.length) conds.push(arrayOverlaps(schema.mcpCatalogServers.transportTypes, transportTypes));
+  // ── MCP server path — live registry fetch ────────────────────────────────────
+  // Load the workspace's enabled registries, fetch live from each, merge results,
+  // then apply search/authKind/pagination in memory.
+
+  let liveRows: Array<{
+    id: string;
+    name: string;
+    title: string | null;
+    description: string;
+    icons: Array<{ src: string }>;
+    transportTypes: string[];
+    authKind: string;
+    categories: string[];
+    version: string;
+    pluginType: "mcp_server";
+    installed: boolean;
+  }> = [];
 
   try {
-    return await withSystemDb(async (tx) => {
-      // Apply the installed filter as a correlated EXISTS/NOT EXISTS subquery so
-      // pagination and the total count stay correct (install status can't be a
-      // post-hoc filter on the page without breaking offset/total).
-      const allConds = [...conds];
-      if (installed !== undefined) {
-        if (!ctx.orgId) {
-          // No org context ⇒ nothing is installed: installed-only is empty,
-          // not-installed is everything (no extra condition needed).
-          if (installed) allConds.push(sql`false`);
-        } else {
-          const resolvedPluginType = pluginType ?? "mcp_server";
-          const wsCond = workspaceId
-            ? or(
-                eq(schema.pluginOrgListings.workspaceId, workspaceId),
-                isNull(schema.pluginOrgListings.workspaceId),
-              )
-            : isNull(schema.pluginOrgListings.workspaceId);
-          const installedSub = tx
-            .select({ one: sql`1` })
-            .from(schema.pluginOrgListings)
-            .where(
-              and(
-                eq(schema.pluginOrgListings.orgId, ctx.orgId),
-                eq(schema.pluginOrgListings.pluginType, resolvedPluginType),
-                isNull(schema.pluginOrgListings.deletedAt),
-                eq(schema.pluginOrgListings.name, schema.mcpCatalogServers.name),
-                wsCond,
-              ),
-            );
-          allConds.push(installed ? exists(installedSub) : notExists(installedSub));
-        }
+    // Fetch enabled registries for this org+workspace.
+    const registries = await withSystemDb((tx) =>
+      tx
+        .select({
+          id: schema.mcpRegistries.id,
+          baseUrl: schema.mcpRegistries.baseUrl,
+        })
+        .from(schema.mcpRegistries)
+        .where(
+          and(
+            eq(schema.mcpRegistries.orgId, ctx.orgId),
+            eq(schema.mcpRegistries.workspaceId, ctx.workspaceId),
+            eq(schema.mcpRegistries.enabled, true),
+          ),
+        ),
+    );
+
+    // Fetch from each registry (with TTL cache) and map to browse row shape.
+    const seen = new Set<string>();
+    for (const reg of registries) {
+      let servers: ServerResponse[];
+      try {
+        servers = await fetchRegistryServers(reg.id, reg.baseUrl, search);
+      } catch (err) {
+        logger.warn({ err, registryId: reg.id }, "plugin.catalog.browse: registry fetch failed, skipping");
+        continue;
       }
-      const where = and(...allConds);
 
-      const rows = await tx
-        .select()
-        .from(schema.mcpCatalogServers)
-        .where(where)
-        .orderBy(desc(schema.mcpCatalogServers.publishedAt))
-        .limit(limit)
-        .offset(offset);
-      const countRows = await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.mcpCatalogServers)
-        .where(where);
-      const countRow = countRows[0];
-      const count = countRow?.count ?? 0;
+      for (const s of servers) {
+        if (seen.has(s.server.name)) continue; // deduplicate across registries
+        seen.add(s.server.name);
 
-      // Fire-and-forget background sync when the catalog appears empty.
-      // Returns immediately; the sync runs asynchronously.
-      if (count < 5 && !search && !pluginType) {
-        withSystemDb(async (syncTx) => {
-          const [regRow] = await syncTx
-            .select({ id: schema.mcpRegistries.id })
-            .from(schema.mcpRegistries)
-            .where(and(eq(schema.mcpRegistries.enabled, true), isNull(schema.mcpRegistries.orgId)))
-            .limit(1);
-          if (regRow) {
-            syncRegistry(regRow.id, { mode: "full" }, createSystemSyncPersistence()).catch((err) => {
-              logger.warn({ err }, "plugin.catalog.browse: background sync failed");
-            });
-          }
-        }).catch((err) => {
-          logger.warn({ err }, "plugin.catalog.browse: background sync setup failed");
+        const mapped = mapServerDetailToCatalogRow(s.server, s._meta, reg.id);
+
+        // Apply authKind filter in-memory.
+        if (authKind && mapped.authKind !== authKind) continue;
+
+        liveRows.push({
+          id: `${reg.id}:${s.server.name}:${s.server.version}`,
+          name: s.server.name,
+          title: mapped.title,
+          description: mapped.description,
+          icons: (mapped.icons as Array<{ src: string }>),
+          transportTypes: deriveTransportTypes(s.server),
+          authKind: deriveAuthKind(s.server),
+          categories: [],
+          version: mapped.version,
+          pluginType: "mcp_server" as const,
+          installed: false, // overlaid below
         });
       }
+    }
 
-      // Resolve installed server names for this org (by listing name field).
-      // Compares against the `name` column — registry servers use their registry name as the
-      // install key. When workspaceId is provided, include workspace-scoped and org-level rows.
-      const installedNames = await (async () => {
-        if (!ctx.orgId) return new Set<string>();
-        const wsCond = workspaceId
-          ? or(
-              eq(schema.pluginOrgListings.workspaceId, workspaceId),
-              isNull(schema.pluginOrgListings.workspaceId),
-            )
-          : isNull(schema.pluginOrgListings.workspaceId);
-        const resolvedPluginType = pluginType ?? "mcp_server";
-        const listingRows = await tx
-          .select({ name: schema.pluginOrgListings.name })
-          .from(schema.pluginOrgListings)
+    // Overlay install state from plugin.installed_plugins.
+    if (ctx.orgId && liveRows.length > 0) {
+      const installedRows = await withSystemDb((tx) =>
+        tx
+          .select({ name: schema.pluginInstalledPlugins.name })
+          .from(schema.pluginInstalledPlugins)
           .where(
             and(
-              eq(schema.pluginOrgListings.orgId, ctx.orgId),
-              eq(schema.pluginOrgListings.pluginType, resolvedPluginType),
-              isNull(schema.pluginOrgListings.deletedAt),
-              wsCond,
+              eq(schema.pluginInstalledPlugins.orgId, ctx.orgId),
+              eq(schema.pluginInstalledPlugins.workspaceId, ctx.workspaceId),
+              eq(schema.pluginInstalledPlugins.pluginType, "mcp_server"),
+              isNull(schema.pluginInstalledPlugins.deletedAt),
             ),
-          );
-        return new Set(listingRows.map((r) => r.name));
-      })();
+          ),
+      );
+      const installedNames = new Set(installedRows.map((r) => r.name));
+      for (const row of liveRows) {
+        row.installed = installedNames.has(row.name);
+      }
 
-      logger.info({ limit, offset, total: count }, "plugin.catalog.browse: ok");
-      return {
-        servers: rows.map((r) => {
-          // Determine pluginType from categories array
-          let serverPluginType: string = "mcp_server";
-          if (r.categories?.includes("integration")) serverPluginType = "integration";
-          else if (r.categories?.includes("content_tool")) serverPluginType = "content_tool";
+      // Apply installed filter after overlaying state.
+      if (installed === true) liveRows = liveRows.filter((r) => r.installed);
+      else if (installed === false) liveRows = liveRows.filter((r) => !r.installed);
+    } else if (installed === true) {
+      // No org context — nothing is installed.
+      liveRows = [];
+    }
 
-          return {
-            id: r.id,
-            name: r.name,
-            title: r.title ?? null,
-            description: r.description,
-            icons: (r.icons as Array<{ src: string }>) ?? [],
-            transportTypes: r.transportTypes,
-            authKind: r.authKind,
-            categories: r.categories,
-            version: r.version,
-            pluginType: serverPluginType,
-            installed: installedNames.has(r.name),
-          };
-        }),
-        nextOffset: offset + rows.length < count ? offset + limit : null,
-        total: count,
-      };
-    });
+    const total = liveRows.length;
+    const page = liveRows.slice(offset, offset + limit);
+
+    logger.info({ limit, offset, total, registryCount: registries.length }, "plugin.catalog.browse mcp_server: ok");
+
+    return {
+      servers: page,
+      nextOffset: offset + page.length < total ? offset + limit : null,
+      total,
+    };
   } catch (err) {
     logger.error({ err, limit, offset }, "plugin.catalog.browse: failed");
     throw err;

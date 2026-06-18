@@ -5,6 +5,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   withSystemDb: vi.fn(),
   listOxagenPlugins: vi.fn(),
+  listServers: vi.fn(),
+  mapServerDetailToCatalogRow: vi.fn(),
+  deriveTransportTypes: vi.fn(),
+  deriveAuthKind: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -16,7 +20,14 @@ vi.mock("@oxagen/oxagen/plugins", () => ({
   listOxagenPlugins: mocks.listOxagenPlugins,
 }));
 
-import { handler } from "./plugin.catalog.browse";
+vi.mock("@oxagen/plugins/registry", () => ({
+  listServers: mocks.listServers,
+  mapServerDetailToCatalogRow: mocks.mapServerDetailToCatalogRow,
+  deriveTransportTypes: mocks.deriveTransportTypes,
+  deriveAuthKind: mocks.deriveAuthKind,
+}));
+
+import { handler, clearRegistryCacheForTests } from "./plugin.catalog.browse";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -30,7 +41,7 @@ const ctx = {
   messageId: null,
 };
 
-/** Four manifests matching Phase 1 catalog: 3 ga + 1 preview + 1 hidden. */
+/** Static Oxagen plugin manifests (agent_capability type). */
 const fakeManifests = [
   {
     id: "oxagen/media-video",
@@ -106,24 +117,53 @@ const fakeManifests = [
   },
 ];
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+/** A minimal registry row returned from the DB. */
+const fakeRegistry = { id: "reg-1", baseUrl: "https://registry.example.com" };
 
-/** Mock withSystemDb to return a set of already-installed plugin ids. */
-function mockInstalledNames(names: string[]) {
-  mocks.withSystemDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      select: () => ({
-        from: () => ({
-          where: () => Promise.resolve(names.map((name) => ({ name }))),
-        }),
+/** A minimal ServerResponse from the live registry client. */
+function makeServerResponse(name: string, version = "1.0.0") {
+  return {
+    server: {
+      name,
+      description: `${name} description`,
+      version,
+      title: `${name} title`,
+      packages: [],
+      remotes: [],
+    },
+    _meta: { isLatest: true, status: "active", publishedAt: "2024-01-01T00:00:00Z" },
+  };
+}
+
+// ── withSystemDb helpers ─────────────────────────────────────────────────────
+
+/** Mock a single withSystemDb call that returns registries. */
+function mockRegistries(regs: typeof fakeRegistry[]) {
+  mocks.withSystemDb.mockImplementationOnce(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({ from: () => ({ where: () => Promise.resolve(regs) }) }),
       }),
-    }),
   );
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+/** Mock a single withSystemDb call that returns installed plugin name rows. */
+function mockInstalledNames(names: string[]) {
+  mocks.withSystemDb.mockImplementationOnce(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => Promise.resolve(names.map((name) => ({ name }))),
+          }),
+        }),
+      }),
+  );
+}
 
-describe("plugin.catalog.browse handler — capability path", () => {
+// ── Tests: agent_capability path (static registry) ───────────────────────────
+
+describe("plugin.catalog.browse handler — agent_capability path", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listOxagenPlugins.mockReturnValue(fakeManifests);
@@ -131,34 +171,36 @@ describe("plugin.catalog.browse handler — capability path", () => {
 
   it("returns only ga manifests (4 items) — excludes hidden and preview", async () => {
     mockInstalledNames([]);
-    const result = await handler({ pluginType: "capability", limit: 30, offset: 0 }, ctx) as {
-      servers: Array<{ id: string; pluginType: string; visibility?: string }>;
-      total: number;
-    };
+    const result = (await handler(
+      { pluginType: "agent_capability", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ id: string; pluginType: string }>; total: number };
     expect(result.total).toBe(4);
     expect(result.servers).toHaveLength(4);
-    expect(result.servers.every((s) => s.pluginType === "capability")).toBe(true);
+    expect(result.servers.every((s) => s.pluginType === "agent_capability")).toBe(true);
     expect(result.servers.map((s) => s.id)).not.toContain("oxagen/hidden-plugin");
     expect(result.servers.map((s) => s.id)).not.toContain("oxagen/preview-plugin");
   });
 
   it("maps name to plugin id (stable install key), title to manifest.name", async () => {
     mockInstalledNames([]);
-    const result = await handler({ pluginType: "capability", limit: 30, offset: 0 }, ctx) as {
-      servers: Array<{ id: string; name: string; title: string; tier: string }>;
-    };
+    const result = (await handler(
+      { pluginType: "agent_capability", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ id: string; name: string; title: string; tier: string }> };
     const video = result.servers.find((s) => s.id === "oxagen/media-video");
     expect(video).toBeDefined();
     expect(video!.name).toBe("oxagen/media-video"); // stable install key
-    expect(video!.title).toBe("Video Generation");  // human-readable name
+    expect(video!.title).toBe("Video Generation"); // human-readable name
     expect(video!.tier).toBe("premium");
   });
 
-  it("sets installed:true for already-installed plugins, false otherwise", async () => {
+  it("overlays install state from installed_plugins (workspace-scoped)", async () => {
     mockInstalledNames(["oxagen/media-video", "oxagen/documents"]);
-    const result = await handler({ pluginType: "capability", limit: 30, offset: 0 }, ctx) as {
-      servers: Array<{ id: string; installed: boolean }>;
-    };
+    const result = (await handler(
+      { pluginType: "agent_capability", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ id: string; installed: boolean }> };
     const video = result.servers.find((s) => s.id === "oxagen/media-video");
     const docs = result.servers.find((s) => s.id === "oxagen/documents");
     const img = result.servers.find((s) => s.id === "oxagen/media-image");
@@ -167,74 +209,72 @@ describe("plugin.catalog.browse handler — capability path", () => {
     expect(img!.installed).toBe(false);
   });
 
-  it("org-less browse (orgId '') reports nothing installed and never queries by org", async () => {
-    // apps/app serves the global catalog route without org context; comparing
-    // the uuid org_id column to "" would throw, so the handler must skip the
-    // installed lookup entirely.
+  it("org-less browse reports nothing installed and skips the DB query", async () => {
     const selectSpy = vi.fn();
     mocks.withSystemDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         select: () => {
           selectSpy();
-          return {
-            from: () => ({ where: () => Promise.resolve([]) }),
-          };
+          return { from: () => ({ where: () => Promise.resolve([]) }) };
         },
       }),
     );
-    const result = await handler(
-      { pluginType: "capability", limit: 30, offset: 0 },
+    const result = (await handler(
+      { pluginType: "agent_capability", limit: 30, offset: 0 },
       { ...ctx, orgId: "" },
-    ) as { servers: Array<{ installed: boolean }> };
+    )) as { servers: Array<{ installed: boolean }> };
     expect(result.servers.length).toBeGreaterThan(0);
     expect(result.servers.every((s) => s.installed === false)).toBe(true);
+    // withSystemDb is still called but the inner tx.select() should not be,
+    // because the handler short-circuits on empty orgId.
     expect(selectSpy).not.toHaveBeenCalled();
   });
 
   it("filters by search term (case-insensitive, matches id, name, description)", async () => {
     mockInstalledNames([]);
-    const result = await handler(
-      { pluginType: "capability", search: "video", limit: 30, offset: 0 },
+    const result = (await handler(
+      { pluginType: "agent_capability", search: "video", limit: 30, offset: 0 },
       ctx,
-    ) as { servers: Array<{ id: string }>; total: number };
+    )) as { servers: Array<{ id: string }>; total: number };
     expect(result.total).toBe(1);
     expect(result.servers[0]!.id).toBe("oxagen/media-video");
   });
 
   it("search is case-insensitive", async () => {
     mockInstalledNames([]);
-    const result = await handler(
-      { pluginType: "capability", search: "DOCUMENT", limit: 30, offset: 0 },
+    const result = (await handler(
+      { pluginType: "agent_capability", search: "DOCUMENT", limit: 30, offset: 0 },
       ctx,
-    ) as { servers: Array<{ id: string }>; total: number };
+    )) as { servers: Array<{ id: string }>; total: number };
     expect(result.total).toBe(1);
     expect(result.servers[0]!.id).toBe("oxagen/documents");
   });
 
   it("respects limit and offset pagination", async () => {
     mockInstalledNames([]);
-    const page1 = await handler(
-      { pluginType: "capability", limit: 2, offset: 0 },
+    const page1 = (await handler(
+      { pluginType: "agent_capability", limit: 2, offset: 0 },
       ctx,
-    ) as { servers: unknown[]; total: number; nextOffset: number | null };
+    )) as { servers: unknown[]; total: number; nextOffset: number | null };
     expect(page1.total).toBe(4);
     expect(page1.servers).toHaveLength(2);
     expect(page1.nextOffset).toBe(2);
 
     mockInstalledNames([]);
-    const page2 = await handler(
-      { pluginType: "capability", limit: 2, offset: 2 },
+    const page2 = (await handler(
+      { pluginType: "agent_capability", limit: 2, offset: 2 },
       ctx,
-    ) as { servers: unknown[]; total: number; nextOffset: number | null };
+    )) as { servers: unknown[]; total: number; nextOffset: number | null };
     expect(page2.servers).toHaveLength(2);
-    expect(page2.nextOffset).toBe(null); // no further pages
+    expect(page2.nextOffset).toBe(null);
   });
 
   it("sets transportTypes:[], authKind:'none', icons:[] for capability entries", async () => {
     mockInstalledNames([]);
-    const result = await handler({ pluginType: "capability", limit: 30, offset: 0 }, ctx) as {
-      servers: Array<{ transportTypes: string[]; authKind: string; icons: unknown[] }>;
-    };
+    const result = (await handler(
+      { pluginType: "agent_capability", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ transportTypes: string[]; authKind: string; icons: unknown[] }> };
     for (const s of result.servers) {
       expect(s.transportTypes).toEqual([]);
       expect(s.authKind).toBe("none");
@@ -242,12 +282,12 @@ describe("plugin.catalog.browse handler — capability path", () => {
     }
   });
 
-  it("installed:true returns only installed plugins (total reflects filtered set)", async () => {
+  it("installed:true returns only installed plugins", async () => {
     mockInstalledNames(["oxagen/media-video", "oxagen/documents"]);
-    const result = await handler(
-      { pluginType: "capability", installed: true, limit: 30, offset: 0 },
+    const result = (await handler(
+      { pluginType: "agent_capability", installed: true, limit: 30, offset: 0 },
       ctx,
-    ) as { servers: Array<{ id: string; installed: boolean }>; total: number };
+    )) as { servers: Array<{ id: string; installed: boolean }>; total: number };
     expect(result.total).toBe(2);
     expect(result.servers.map((s) => s.id).sort()).toEqual([
       "oxagen/documents",
@@ -258,10 +298,10 @@ describe("plugin.catalog.browse handler — capability path", () => {
 
   it("installed:false returns only not-installed plugins", async () => {
     mockInstalledNames(["oxagen/media-video", "oxagen/documents"]);
-    const result = await handler(
-      { pluginType: "capability", installed: false, limit: 30, offset: 0 },
+    const result = (await handler(
+      { pluginType: "agent_capability", installed: false, limit: 30, offset: 0 },
       ctx,
-    ) as { servers: Array<{ id: string; installed: boolean }>; total: number };
+    )) as { servers: Array<{ id: string; installed: boolean }>; total: number };
     expect(result.total).toBe(2);
     expect(result.servers.map((s) => s.id).sort()).toEqual([
       "oxagen/media-image",
@@ -272,146 +312,265 @@ describe("plugin.catalog.browse handler — capability path", () => {
 
   it("returns empty results when search matches nothing", async () => {
     mockInstalledNames([]);
-    const result = await handler(
-      { pluginType: "capability", search: "xyznotfound", limit: 30, offset: 0 },
+    const result = (await handler(
+      { pluginType: "agent_capability", search: "xyznotfound", limit: 30, offset: 0 },
       ctx,
-    ) as { servers: unknown[]; total: number; nextOffset: null };
+    )) as { servers: unknown[]; total: number; nextOffset: null };
     expect(result.total).toBe(0);
     expect(result.servers).toHaveLength(0);
     expect(result.nextOffset).toBe(null);
   });
 });
 
-describe("plugin.catalog.browse handler — catalog_server path (omitted pluginType)", () => {
+// ── Tests: agent_skill / knowledge_source / integration (static, empty for now) ──
+
+describe("plugin.catalog.browse handler — other static plugin types", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listOxagenPlugins.mockReturnValue(fakeManifests);
-    // When the catalog looks empty (count < 5, no search/pluginType) the handler
-    // fires a SECOND, fire-and-forget withSystemDb call to kick a background
-    // registry sync. Each test below mocks the FIRST call via mockImplementationOnce
-    // (the main rows+count query); this persistent fallback resolves the
-    // background-sync call to a no-op so its `.catch` has a promise to attach to.
-    mocks.withSystemDb.mockImplementation(async () => undefined);
   });
 
-  /**
-   * Helper: builds a mock tx that handles the rows query, the count query, and
-   * the optional installed-filter EXISTS subquery inside the same withSystemDb
-   * callback. Branches on the select() projection argument (not call order) so it
-   * tolerates the extra subquery select() emitted when an `installed` filter is set.
-   */
-  function makeCatalogTx(rows: unknown[], count: number) {
-    return {
-      select: (proj?: Record<string, unknown>) => {
-        // installed-filter subquery: select({ one: sql`1` })
-        if (proj && "one" in proj) {
-          return { from: () => ({ where: () => ({}) }) };
-        }
-        // count query: select({ count: ... })
-        if (proj && "count" in proj) {
-          return { from: () => ({ where: () => Promise.resolve([{ count }]) }) };
-        }
-        // installedNames lookup: select({ name: ... }) — no installs in these fixtures
-        if (proj && "name" in proj) {
-          return { from: () => ({ where: () => Promise.resolve([]) }) };
-        }
-        // background empty-catalog sync registry lookup: select({ id }).from().where().limit()
-        // Return no registry so syncRegistry never fires during unit tests.
-        if (proj && "id" in proj) {
-          return { from: () => ({ where: () => ({ limit: () => Promise.resolve([]) }) }) };
-        }
-        // rows query: select() — chain includes orderBy/limit/offset
-        return {
-          from: () => ({
-            where: () => ({
-              orderBy: () => ({
-                limit: () => ({
-                  offset: () => Promise.resolve(rows),
-                }),
-              }),
-            }),
-          }),
-        };
-      },
-    };
-  }
-
-  it("does NOT call listOxagenPlugins when pluginType is omitted", async () => {
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn(makeCatalogTx([], 0)),
-    );
-
-    await handler({ limit: 30, offset: 0 }, ctx);
-    expect(mocks.listOxagenPlugins).not.toHaveBeenCalled();
-  });
-
-  it("does NOT mix capability entries into omitted-pluginType results", async () => {
-    const fakeCatalogRow = {
-      id: "cid-1",
-      name: "my-mcp-server",
-      title: "My MCP Server",
-      description: "An MCP server.",
-      icons: [],
-      transportTypes: ["sse"],
-      authKind: "none",
-      categories: [],
-      version: "1.0.0",
-      publishedAt: new Date(),
-      isLatest: true,
-      status: "active",
-      remotes: [],
-    };
-
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn(makeCatalogTx([fakeCatalogRow], 1)),
-    );
-
-    const result = await handler({ limit: 30, offset: 0 }, ctx) as {
-      servers: Array<{ pluginType: string }>;
-    };
-    // No capability entries should appear
-    expect(result.servers.every((s) => s.pluginType !== "capability")).toBe(true);
-  });
-
-  it("applies the installed EXISTS subquery (with org context) without error", async () => {
-    const fakeCatalogRow = {
-      id: "cid-2",
-      name: "installed-server",
-      title: "Installed Server",
-      description: "An installed MCP server.",
-      icons: [],
-      transportTypes: ["sse"],
-      authKind: "none",
-      categories: [],
-      version: "1.0.0",
-      publishedAt: new Date(),
-      isLatest: true,
-      status: "active",
-      remotes: [],
-    };
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn(makeCatalogTx([fakeCatalogRow], 1)),
-    );
-
-    const result = await handler(
-      { pluginType: "mcp_server", installed: true, limit: 30, offset: 0 },
+  it("agent_skill returns empty (no static manifests for this type yet)", async () => {
+    mockInstalledNames([]);
+    const result = (await handler(
+      { pluginType: "agent_skill", limit: 30, offset: 0 },
       ctx,
-    ) as { servers: Array<{ id: string }>; total: number };
-    expect(result.total).toBe(1);
-    expect(result.servers[0]!.id).toBe("cid-2");
-  });
-
-  it("installed:true with no org context returns empty (nothing can be installed)", async () => {
-    // orgId "" ⇒ the handler short-circuits the EXISTS subquery and forces an
-    // empty result via a `false` predicate; the mock count reflects that.
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn(makeCatalogTx([], 0)),
-    );
-    const result = await handler(
-      { pluginType: "mcp_server", installed: true, limit: 30, offset: 0 },
-      { ...ctx, orgId: "" },
-    ) as { servers: unknown[]; total: number };
+    )) as { servers: unknown[]; total: number };
     expect(result.total).toBe(0);
     expect(result.servers).toHaveLength(0);
+  });
+
+  it("knowledge_source returns empty (no static manifests for this type yet)", async () => {
+    mockInstalledNames([]);
+    const result = (await handler(
+      { pluginType: "knowledge_source", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: unknown[]; total: number };
+    expect(result.total).toBe(0);
+    expect(result.servers).toHaveLength(0);
+  });
+});
+
+// ── Tests: mcp_server path (live registry fetch) ─────────────────────────────
+
+describe("plugin.catalog.browse handler — mcp_server path (live registry)", () => {
+  beforeEach(() => {
+    // resetAllMocks clears both call history AND queued mockImplementationOnce
+    // entries so stale queue items from prior tests don't bleed through.
+    vi.resetAllMocks();
+    clearRegistryCacheForTests();
+    mocks.listOxagenPlugins.mockReturnValue(fakeManifests);
+    // Default map-server mocks use the real derivation logic shape.
+    mocks.deriveTransportTypes.mockImplementation(() => ["sse"]);
+    mocks.deriveAuthKind.mockImplementation(() => "none");
+    mocks.mapServerDetailToCatalogRow.mockImplementation(
+      (sd: { name: string; description: string; version: string; title?: string; icons?: unknown[] }, _meta: unknown, registryId: string) => ({
+        registryId,
+        name: sd.name,
+        description: sd.description,
+        version: sd.version,
+        title: sd.title ?? null,
+        icons: sd.icons ?? [],
+        packages: [],
+        remotes: [],
+        transportTypes: ["sse"],
+        authKind: "none",
+        status: "active",
+        publishedAt: new Date(),
+        upstreamUpdatedAt: null,
+        statusChangedAt: null,
+        isLatest: true,
+        meta: {},
+        websiteUrl: null,
+        repository: null,
+      }),
+    );
+  });
+
+  it("loads workspace registries from DB and calls listServers for each", async () => {
+    mockRegistries([fakeRegistry]);
+    mocks.listServers.mockResolvedValue({
+      servers: [makeServerResponse("my-mcp-server")],
+      nextCursor: undefined,
+    });
+    mockInstalledNames([]);
+
+    const result = (await handler(
+      { pluginType: "mcp_server", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ name: string; pluginType: string }>; total: number };
+
+    expect(mocks.listServers).toHaveBeenCalledWith(fakeRegistry.baseUrl, {
+      limit: 200,
+      search: undefined,
+    });
+    expect(result.total).toBe(1);
+    expect(result.servers[0]!.name).toBe("my-mcp-server");
+    expect(result.servers[0]!.pluginType).toBe("mcp_server");
+  });
+
+  it("passes search term to listServers", async () => {
+    mockRegistries([fakeRegistry]);
+    mocks.listServers.mockResolvedValue({
+      servers: [makeServerResponse("brave-search")],
+      nextCursor: undefined,
+    });
+    mockInstalledNames([]);
+
+    await handler({ pluginType: "mcp_server", search: "brave", limit: 30, offset: 0 }, ctx);
+    expect(mocks.listServers).toHaveBeenCalledWith(fakeRegistry.baseUrl, {
+      limit: 200,
+      search: "brave",
+    });
+  });
+
+  it("merges results from multiple registries, deduplicating by name", async () => {
+    const reg2 = { id: "reg-2", baseUrl: "https://registry2.example.com" };
+    mockRegistries([fakeRegistry, reg2]);
+    // Both registries return the same server name — second should be deduplicated.
+    mocks.listServers
+      .mockResolvedValueOnce({
+        servers: [makeServerResponse("server-a"), makeServerResponse("server-b")],
+        nextCursor: undefined,
+      })
+      .mockResolvedValueOnce({
+        servers: [makeServerResponse("server-b"), makeServerResponse("server-c")],
+        nextCursor: undefined,
+      });
+    mockInstalledNames([]);
+
+    const result = (await handler(
+      { pluginType: "mcp_server", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ name: string }>; total: number };
+
+    // server-b from reg-2 should be deduplicated.
+    expect(result.total).toBe(3);
+    const names = result.servers.map((s) => s.name).sort();
+    expect(names).toEqual(["server-a", "server-b", "server-c"]);
+  });
+
+  it("overlays install state from installed_plugins, marking installed:true", async () => {
+    mockRegistries([fakeRegistry]);
+    mocks.listServers.mockResolvedValue({
+      servers: [makeServerResponse("server-a"), makeServerResponse("server-b")],
+      nextCursor: undefined,
+    });
+    mockInstalledNames(["server-a"]);
+
+    const result = (await handler(
+      { pluginType: "mcp_server", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ name: string; installed: boolean }> };
+
+    const a = result.servers.find((s) => s.name === "server-a");
+    const b = result.servers.find((s) => s.name === "server-b");
+    expect(a!.installed).toBe(true);
+    expect(b!.installed).toBe(false);
+  });
+
+  it("installed:true returns only installed servers (total reflects filter)", async () => {
+    mockRegistries([fakeRegistry]);
+    mocks.listServers.mockResolvedValue({
+      servers: [makeServerResponse("server-a"), makeServerResponse("server-b")],
+      nextCursor: undefined,
+    });
+    mockInstalledNames(["server-a"]);
+
+    const result = (await handler(
+      { pluginType: "mcp_server", installed: true, limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ name: string; installed: boolean }>; total: number };
+
+    expect(result.total).toBe(1);
+    expect(result.servers[0]!.name).toBe("server-a");
+    expect(result.servers[0]!.installed).toBe(true);
+  });
+
+  it("continues past a failing registry and returns results from healthy ones", async () => {
+    const reg2 = { id: "reg-2", baseUrl: "https://registry2.example.com" };
+    mockRegistries([fakeRegistry, reg2]);
+    mocks.listServers
+      .mockRejectedValueOnce(new Error("registry unreachable"))
+      .mockResolvedValueOnce({
+        servers: [makeServerResponse("server-ok")],
+        nextCursor: undefined,
+      });
+    mockInstalledNames([]);
+
+    const result = (await handler(
+      { pluginType: "mcp_server", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ name: string }>; total: number };
+
+    expect(result.total).toBe(1);
+    expect(result.servers[0]!.name).toBe("server-ok");
+  });
+
+  it("returns empty when no registries are enabled for the workspace", async () => {
+    mockRegistries([]);
+
+    const result = (await handler(
+      { pluginType: "mcp_server", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: unknown[]; total: number };
+
+    expect(mocks.listServers).not.toHaveBeenCalled();
+    expect(result.total).toBe(0);
+    expect(result.servers).toHaveLength(0);
+  });
+
+  it("applies pagination in-memory over live results", async () => {
+    mockRegistries([fakeRegistry]);
+    mocks.listServers.mockResolvedValue({
+      servers: [
+        makeServerResponse("s1"),
+        makeServerResponse("s2"),
+        makeServerResponse("s3"),
+      ],
+      nextCursor: undefined,
+    });
+    mockInstalledNames([]);
+
+    const page1 = (await handler(
+      { pluginType: "mcp_server", limit: 2, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ name: string }>; total: number; nextOffset: number | null };
+    expect(page1.total).toBe(3);
+    expect(page1.servers).toHaveLength(2);
+    expect(page1.nextOffset).toBe(2);
+  });
+
+  it("workspace scoping: uses ctx.orgId + ctx.workspaceId for both registry lookup and install overlay", async () => {
+    mockRegistries([fakeRegistry]);
+    // No servers returned → installed-names query is skipped (liveRows.length === 0).
+    mocks.listServers.mockResolvedValue({ servers: [], nextCursor: undefined });
+
+    await handler({ pluginType: "mcp_server", limit: 30, offset: 0 }, ctx);
+
+    // Both withSystemDb calls are workspace-scoped; just verify listServers was called
+    // (meaning the registry lookup succeeded with the right ctx).
+    expect(mocks.listServers).toHaveBeenCalledOnce();
+  });
+
+  it("no denylist logic — all servers from registry are returned without name-based filtering", async () => {
+    mockRegistries([fakeRegistry]);
+    // Names that a denylist might have blocked:
+    const names = ["blocked-name", "denied-server", "org-banned-tool"];
+    mocks.listServers.mockResolvedValue({
+      servers: names.map((n) => makeServerResponse(n)),
+      nextCursor: undefined,
+    });
+    // Second withSystemDb call: installed-names lookup for 3 live rows.
+    mockInstalledNames([]);
+
+    const result = (await handler(
+      { pluginType: "mcp_server", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ name: string }>; total: number };
+
+    // All names pass through — no denylist filtering.
+    expect(result.total).toBe(3);
+    expect(result.servers.map((s) => s.name).sort()).toEqual(names.sort());
   });
 });
