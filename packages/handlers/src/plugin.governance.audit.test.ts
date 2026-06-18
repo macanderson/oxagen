@@ -7,7 +7,7 @@
  * registry helper emitSecurityEvent — and that failures do NOT emit.
  *
  * Covered here: plugin.org.uninstall, plugin.org.set_enabled,
- * plugin.denylist.add, plugin.denylist.remove, plugin.org.install_bulk.
+ * plugin.org.install_bulk.
  * (plugin.org.install and plugin.workspace.set_enabled are covered in their
  * own *.capability.test.ts files.)
  */
@@ -39,8 +39,6 @@ vi.mock("@oxagen/oxagen/plugins", () => ({
 
 import { handler as uninstallHandler } from "./plugin.org.uninstall";
 import { handler as setEnabledHandler } from "./plugin.org.set_enabled";
-import { handler as denylistAddHandler } from "./plugin.denylist.add";
-import { handler as denylistRemoveHandler } from "./plugin.denylist.remove";
 import { handler as installBulkHandler } from "./plugin.org.install_bulk";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -161,70 +159,6 @@ describe("plugin.org.set_enabled — audit event", () => {
     mockDbFail();
     await expect(
       setEnabledHandler({ orgListingId: "porg-1", enabled: true }, ctx),
-    ).rejects.toThrow("db down");
-    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
-  });
-});
-
-// ── plugin.denylist.add ──────────────────────────────────────────────────────
-
-describe("plugin.denylist.add — audit event", () => {
-  it("emits plugin.denylist_added on success", async () => {
-    mockDbOk();
-    const out = (await denylistAddHandler(
-      { pluginType: "mcp_server", serverName: "bad-server", reason: "policy" },
-      ctx,
-    )) as { ok: boolean };
-    expect(out.ok).toBe(true);
-    expect(mocks.emitSecurityEvent).toHaveBeenCalledTimes(1);
-    expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        eventType: "plugin.denylist_added",
-        actorUserId: "user-1",
-        orgId: "org-1",
-        workspaceId: null,
-        capability: "plugin.denylist.add",
-        outcome: "success",
-      }),
-    );
-  });
-
-  it("does NOT emit when the insert fails", async () => {
-    mockDbFail();
-    await expect(
-      denylistAddHandler({ pluginType: "mcp_server", serverName: "bad-server" }, ctx),
-    ).rejects.toThrow("db down");
-    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
-  });
-});
-
-// ── plugin.denylist.remove ───────────────────────────────────────────────────
-
-describe("plugin.denylist.remove — audit event", () => {
-  it("emits plugin.denylist_removed on success", async () => {
-    mockDbOk();
-    const out = (await denylistRemoveHandler(
-      { pluginType: "mcp_server", serverName: "bad-server" },
-      ctx,
-    )) as { ok: boolean };
-    expect(out.ok).toBe(true);
-    expect(mocks.emitSecurityEvent).toHaveBeenCalledTimes(1);
-    expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        eventType: "plugin.denylist_removed",
-        actorUserId: "user-1",
-        orgId: "org-1",
-        workspaceId: null,
-        capability: "plugin.denylist.remove",
-        outcome: "success",
-      }),
-    );
-  });
-
-  it("does NOT emit when the delete fails", async () => {
-    mockDbFail();
-    await expect(
-      denylistRemoveHandler({ pluginType: "mcp_server", serverName: "bad-server" }, ctx),
     ).rejects.toThrow("db down");
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
   });

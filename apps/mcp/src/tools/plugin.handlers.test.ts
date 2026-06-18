@@ -180,68 +180,6 @@ describe("plugin.credential.set_secret handler", () => {
   });
 });
 
-// ── plugin.denylist.add ───────────────────────────────────────────────────────
-
-import handler_pluginDenylistAdd, {
-  schema as pluginDenylistAddSchema,
-  metadata as pluginDenylistAddMetadata,
-} from "./plugin.denylist.add";
-
-describe("plugin.denylist.add handler", () => {
-  it("exports schema and metadata", () => {
-    expect(pluginDenylistAddSchema).toBeDefined();
-    expect(pluginDenylistAddMetadata.name).toBe("plugin.denylist.add");
-  });
-
-  it("calls invoke with denylist add args", async () => {
-    const fakeOutput = { ok: true };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
-    const args = {
-      pluginType: "mcp_server" as const,
-      serverName: "dangerous-mcp",
-      reason: "Security risk",
-    };
-    await handler_pluginDenylistAdd(args);
-
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.denylist.add",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
-  });
-});
-
-// ── plugin.denylist.remove ────────────────────────────────────────────────────
-
-import handler_pluginDenylistRemove, {
-  schema as pluginDenylistRemoveSchema,
-  metadata as pluginDenylistRemoveMetadata,
-} from "./plugin.denylist.remove";
-
-describe("plugin.denylist.remove handler", () => {
-  it("exports schema and metadata", () => {
-    expect(pluginDenylistRemoveSchema).toBeDefined();
-    expect(pluginDenylistRemoveMetadata.name).toBe("plugin.denylist.remove");
-  });
-
-  it("calls invoke with denylist remove args", async () => {
-    const fakeOutput = { ok: true };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
-    const args = { serverName: "safe-mcp", pluginType: "mcp_server" as const };
-    await handler_pluginDenylistRemove(args);
-
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.denylist.remove",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
-  });
-});
-
 // ── plugin.org.install ────────────────────────────────────────────────────────
 
 import handler_pluginOrgInstall, {

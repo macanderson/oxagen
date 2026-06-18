@@ -109,7 +109,6 @@ function contractNameToPathSegment(name: string): string {
     notifications: "notifications",
     "plugin.catalog": "plugin/catalog",
     "plugin.credential": "plugin/credential",
-    "plugin.denylist": "plugin/denylist",
     "plugin.org": "plugin/org",
     "plugin.registry": "plugin/registries",
     "plugin.settings": "plugin/settings",

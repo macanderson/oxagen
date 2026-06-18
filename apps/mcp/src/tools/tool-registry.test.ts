@@ -73,8 +73,6 @@ import { metadata as pluginCatalogBrowseMetadata } from "./plugin.catalog.browse
 import { metadata as pluginCatalogGetMetadata } from "./plugin.catalog.get";
 import { metadata as pluginCredentialReauthMetadata } from "./plugin.credential.reauth";
 import { metadata as pluginCredentialSetSecretMetadata } from "./plugin.credential.set_secret";
-import { metadata as pluginDenylistAddMetadata } from "./plugin.denylist.add";
-import { metadata as pluginDenylistRemoveMetadata } from "./plugin.denylist.remove";
 import { metadata as pluginOrgInstallMetadata } from "./plugin.org.install";
 import { metadata as pluginOrgInstallBulkMetadata } from "./plugin.org.install_bulk";
 import { metadata as pluginOrgListMetadata } from "./plugin.org.list";
@@ -228,8 +226,6 @@ const allToolMetadata = [
   pluginCatalogGetMetadata,
   pluginCredentialReauthMetadata,
   pluginCredentialSetSecretMetadata,
-  pluginDenylistAddMetadata,
-  pluginDenylistRemoveMetadata,
   pluginOrgInstallMetadata,
   pluginOrgInstallBulkMetadata,
   pluginOrgListMetadata,

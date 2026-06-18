@@ -77,8 +77,6 @@ import { pluginCatalogBrowse } from "./plugin.catalog.browse";
 import { pluginCatalogGet } from "./plugin.catalog.get";
 import { pluginCredentialReauth } from "./plugin.credential.reauth";
 import { pluginCredentialSetSecret } from "./plugin.credential.set_secret";
-import { pluginDenylistAdd } from "./plugin.denylist.add";
-import { pluginDenylistRemove } from "./plugin.denylist.remove";
 import { pluginOrgInstall } from "./plugin.org.install";
 import { pluginOrgInstallBulk } from "./plugin.org.install_bulk";
 import { pluginOrgList } from "./plugin.org.list";
@@ -226,8 +224,6 @@ export {
   pluginCatalogGet,
   pluginCredentialReauth,
   pluginCredentialSetSecret,
-  pluginDenylistAdd,
-  pluginDenylistRemove,
   pluginOrgInstall,
   pluginOrgInstallBulk,
   pluginOrgList,
@@ -383,8 +379,6 @@ export const contracts = [
   pluginCatalogGet,
   pluginCredentialReauth,
   pluginCredentialSetSecret,
-  pluginDenylistAdd,
-  pluginDenylistRemove,
   pluginOrgInstall,
   pluginOrgInstallBulk,
   pluginOrgList,

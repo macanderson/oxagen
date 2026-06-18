@@ -205,14 +205,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () => (await import("./plugin.org.set_enabled")).handler as CapabilityHandlerFn,
   );
   registerHandler(
-    "plugin.denylist.add",
-    async () => (await import("./plugin.denylist.add")).handler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "plugin.denylist.remove",
-    async () => (await import("./plugin.denylist.remove")).handler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "plugin.workspace.set_enabled",
     async () => (await import("./plugin.workspace.set_enabled")).handler as CapabilityHandlerFn,
   );

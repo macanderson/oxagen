@@ -2,7 +2,6 @@
  * Unit tests for plugin route handlers:
  *   plugin.catalog.browse, plugin.catalog.get,
  *   plugin.credential.reauth, plugin.credential.set_secret,
- *   plugin.denylist.add, plugin.denylist.remove,
  *   plugin.org.install, plugin.org.install_bulk, plugin.org.list,
  *   plugin.org.set_enabled, plugin.org.uninstall,
  *   plugin.registry.add, plugin.registry.list, plugin.registry.remove,
@@ -191,51 +190,6 @@ describe("plugin.credential.set_secret route", () => {
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("plugin.credential.set_secret");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.authKind).toBe("oauth");
-  });
-});
-
-// ── plugin.denylist.add ───────────────────────────────────────────────────
-
-describe("plugin.denylist.add route", () => {
-  const PATH = "/plugin/denylist/add";
-
-  it("happy path: 200", async () => {
-    mocks.invoke.mockResolvedValue({ ok: true });
-    const res = await app.fetch(
-      post(PATH, { serverName: "evil-server" }),
-    );
-    expect(res.status).toBe(200);
-  });
-
-  it("calls invoke with 'plugin.denylist.add'", async () => {
-    await app.fetch(
-      post(PATH, { serverName: "evil-server", reason: "phishing" }),
-    );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("plugin.denylist.add");
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.serverName).toBe("evil-server");
-    expect(body.reason).toBe("phishing");
-  });
-});
-
-// ── plugin.denylist.remove ────────────────────────────────────────────────
-
-describe("plugin.denylist.remove route", () => {
-  const PATH = "/plugin/denylist/remove";
-
-  it("happy path: 200", async () => {
-    mocks.invoke.mockResolvedValue({ ok: true });
-    const res = await app.fetch(
-      post(PATH, { serverName: "cleared-server" }),
-    );
-    expect(res.status).toBe(200);
-  });
-
-  it("calls invoke with 'plugin.denylist.remove'", async () => {
-    await app.fetch(post(PATH, { serverName: "cleared-server" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("plugin.denylist.remove");
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.serverName).toBe("cleared-server");
   });
 });
 

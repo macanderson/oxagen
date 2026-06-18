@@ -104,8 +104,6 @@ import { formFillCommand } from "./commands/form.fill.js";
 import { orgMemberInviteDeclineCommand } from "./commands/org.member.invite.decline.js";
 import { organizationCreateCommand } from "./commands/organization.create.js";
 import { pluginCredentialSetSecretCommand } from "./commands/plugin.credential.set_secret.js";
-import { pluginDenylistAddCommand } from "./commands/plugin.denylist.add.js";
-import { pluginDenylistRemoveCommand } from "./commands/plugin.denylist.remove.js";
 import { pluginOrgInstallBulkCommand } from "./commands/plugin.org.install_bulk.js";
 import { pluginOrgListCommand } from "./commands/plugin.org.list.js";
 import { pluginOrgSetEnabledCommand } from "./commands/plugin.org.set_enabled.js";
@@ -2005,49 +2003,6 @@ describe("plugin credential set_secret", () => {
     const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
     mockApiRequest.mockRejectedValueOnce(new Error("Listing not found"));
     await expect(pluginCredentialSetSecretCommand.parseAsync(["node", "cli", "-l", "l1", "-a", "secret"])).rejects.toThrow();
-    consoleSpy.mockRestore();
-    exitSpy.mockRestore();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// plugin denylist
-// ---------------------------------------------------------------------------
-describe("plugin denylist add", () => {
-  it("adds a server to the denylist", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockApiRequest.mockResolvedValueOnce({ ok: true });
-    await pluginDenylistAddCommand.parseAsync(["node", "cli", "-s", "bad-server"]);
-    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/denylist/add", expect.objectContaining({ method: "POST" }));
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("bad-server"));
-    consoleSpy.mockRestore();
-  });
-
-  it("handles denylist add failure", async () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
-    mockApiRequest.mockRejectedValueOnce(new Error("Server not found"));
-    await expect(pluginDenylistAddCommand.parseAsync(["node", "cli", "-s", "srv"])).rejects.toThrow();
-    consoleSpy.mockRestore();
-    exitSpy.mockRestore();
-  });
-});
-
-describe("plugin denylist remove", () => {
-  it("removes a server from the denylist", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockApiRequest.mockResolvedValueOnce({ ok: true });
-    await pluginDenylistRemoveCommand.parseAsync(["node", "cli", "-s", "bad-server"]);
-    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/denylist/remove", expect.objectContaining({ method: "POST" }));
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("bad-server"));
-    consoleSpy.mockRestore();
-  });
-
-  it("handles denylist remove failure", async () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => { throw new Error("process.exit"); });
-    mockApiRequest.mockRejectedValueOnce(new Error("Entry not found"));
-    await expect(pluginDenylistRemoveCommand.parseAsync(["node", "cli", "-s", "srv"])).rejects.toThrow();
     consoleSpy.mockRestore();
     exitSpy.mockRestore();
   });

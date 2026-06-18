@@ -74,8 +74,6 @@ export default defineConfig({
         "src/tools/plugin.catalog.get.ts",
         "src/tools/plugin.credential.reauth.ts",
         "src/tools/plugin.credential.set_secret.ts",
-        "src/tools/plugin.denylist.add.ts",
-        "src/tools/plugin.denylist.remove.ts",
         "src/tools/plugin.org.install.ts",
         "src/tools/plugin.org.install_bulk.ts",
         "src/tools/plugin.org.list.ts",
