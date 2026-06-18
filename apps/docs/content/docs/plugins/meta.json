@@ -2,6 +2,7 @@
   "title": "Plugins",
   "pages": [
     "marketplace",
+    "registries",
     "workspace-plugins",
     "oxagen-plugins"
   ]
