@@ -32,12 +32,12 @@ export const [pluginOauthRefreshWatcher] = createFunction(
             workspaceId: schema.mcpCredentials.workspaceId,
             orgListingId: schema.mcpCredentials.orgListingId,
             orgId: schema.mcpCredentials.orgId,
-            endpointUrl: schema.pluginOrgListings.endpointUrl,
+            endpointUrl: schema.pluginInstalledPlugins.endpointUrl,
           })
           .from(schema.mcpCredentials)
           .innerJoin(
-            schema.pluginOrgListings,
-            eq(schema.mcpCredentials.orgListingId, schema.pluginOrgListings.id),
+            schema.pluginInstalledPlugins,
+            eq(schema.mcpCredentials.orgListingId, schema.pluginInstalledPlugins.id),
           )
           .where(
             and(

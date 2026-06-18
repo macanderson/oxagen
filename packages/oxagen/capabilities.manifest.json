@@ -1982,40 +1982,6 @@
       }
     },
     {
-      "name": "plugin.denylist.add",
-      "file": "plugin.denylist.add.ts",
-      "domain": "plugin",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
-      }
-    },
-    {
-      "name": "plugin.denylist.remove",
-      "file": "plugin.denylist.remove.ts",
-      "domain": "plugin",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
-      }
-    },
-    {
       "name": "plugin.org.install",
       "file": "plugin.org.install.ts",
       "domain": "plugin",

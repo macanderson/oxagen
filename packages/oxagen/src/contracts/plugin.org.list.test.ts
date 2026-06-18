@@ -11,6 +11,14 @@ describe("plugin.org.list contract", () => {
     expect(pluginOrgList.defaultRoles.org.Admin).toBe("allow");
   });
 
+  it("is workspace-scoped", () => {
+    expect(pluginOrgList.scoped).toBe(true);
+  });
+
+  it("grants workspace Members read access", () => {
+    expect(pluginOrgList.defaultRoles.workspace.Member).toBe("allow");
+  });
+
   it("is read-only: riskLevel low, requiresApproval false", () => {
     expect(pluginOrgList.agent.riskLevel).toBe("low");
     expect(pluginOrgList.agent.requiresApproval).toBe(false);
@@ -26,11 +34,27 @@ describe("plugin.org.list contract", () => {
     expect(parsed.pluginType).toBe("mcp_server");
   });
 
+  it("accepts agent_capability pluginType filter", () => {
+    const parsed = pluginOrgList.input.parse({ pluginType: "agent_capability" });
+    expect(parsed.pluginType).toBe("agent_capability");
+  });
+
   it("rejects an invalid pluginType", () => {
     expect(() => pluginOrgList.input.parse({ pluginType: "bogus" })).toThrow();
   });
 
-  it("output schema validates a minimal listings + denylist payload", () => {
+  it("rejects legacy 'content_tool' pluginType (removed in workspace-scoping rebuild)", () => {
+    expect(() => pluginOrgList.input.parse({ pluginType: "content_tool" })).toThrow();
+  });
+
+  it("rejects a spoofed workspaceId in input (scope comes from ctx)", () => {
+    // Input schema no longer accepts a workspaceId — scope is enforced via ctx.
+    const parsed = pluginOrgList.input.parse({ workspaceId: "ws-spoofed" } as Record<string, unknown>);
+    // Unknown keys are stripped by zod; the spoofed field must not appear.
+    expect((parsed as Record<string, unknown>).workspaceId).toBeUndefined();
+  });
+
+  it("output schema validates a minimal listings payload (no denylist)", () => {
     const out = pluginOrgList.output.parse({
       listings: [
         {
@@ -43,9 +67,8 @@ describe("plugin.org.list contract", () => {
           deletedAt: null,
           deletedByUserId: null,
           orgId: "org-uuid",
-          workspaceId: null,
+          workspaceId: "ws-uuid",
           pluginType: "mcp_server",
-          catalogServerId: null,
           source: "custom",
           name: "my-server",
           title: null,
@@ -59,22 +82,18 @@ describe("plugin.org.list contract", () => {
           config: {},
         },
       ],
-      denylist: [
-        {
-          id: "uuid-2",
-          publicId: "pden_xyz",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          createdByUserId: null,
-          updatedByUserId: null,
-          orgId: "org-uuid",
-          pluginType: "mcp_server",
-          serverName: "bad-server",
-          reason: null,
-        },
-      ],
     });
     expect(out.listings).toHaveLength(1);
-    expect(out.denylist).toHaveLength(1);
+    expect(out.listings[0].workspaceId).toBe("ws-uuid");
+  });
+
+  it("output schema rejects a payload that includes a denylist field", () => {
+    // denylist was dropped — it should be stripped (not cause a validation error,
+    // but must not appear in the parsed output either).
+    const out = pluginOrgList.output.parse({
+      listings: [],
+      denylist: [{ id: "x" }],
+    } as Record<string, unknown>);
+    expect((out as Record<string, unknown>).denylist).toBeUndefined();
   });
 });

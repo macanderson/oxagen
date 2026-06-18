@@ -1,5 +1,5 @@
-import { and, eq, sql } from "drizzle-orm";
-import { schema, withSystemDb } from "@oxagen/database";
+import { sql } from "drizzle-orm";
+import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import type { CapabilityContext } from "@oxagen/oxagen/types";
@@ -7,10 +7,9 @@ import { getOxagenPlugin } from "@oxagen/oxagen/plugins";
 import { logger } from "./logger";
 
 export interface InstallOneInput {
-  pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
-  // Required when pluginType === "capability". Ignored for other types.
+  pluginType: "mcp_server" | "integration" | "agent_skill" | "agent_capability" | "knowledge_source";
+  // Required when pluginType === "agent_capability". Ignored for other types.
   pluginId?: string;
-  catalogServerId?: string;
   custom?: {
     name: string;
     title?: string;
@@ -19,25 +18,28 @@ export interface InstallOneInput {
     transport: string;
     authKind: "oauth" | "secret" | "none";
   };
-  /** When provided, the install is scoped to this workspace. NULL = org-level (legacy). */
-  workspaceId?: string;
 }
 
 /**
  * Shared install logic — called by both plugin.org.install and plugin.org.install_bulk.
- * Returns the orgListingId on success. Throws a descriptive Error on failure.
+ * Workspace scope comes from ctx, never the request body (IDOR-safe).
+ * Returns the installed plugin row id on success. Throws a descriptive Error on failure.
  */
 export async function installOne(
   ctx: CapabilityContext,
   input: InstallOneInput,
 ): Promise<string> {
-  const { pluginType, pluginId, catalogServerId, custom, workspaceId } = input;
+  if (!ctx.workspaceId) {
+    throw new Error("[plugin.org.install] workspaceId is required (scoped capability)");
+  }
 
-  // ── Capability (Oxagen Plugin) path ─────────────────────────────────────────
-  if (pluginType === "capability") {
+  const { pluginType, pluginId, custom } = input;
+
+  // ── Oxagen capability pack path ─────────────────────────────────────────────
+  if (pluginType === "agent_capability") {
     if (!pluginId) {
       throw new Error(
-        "[plugin.org.install] pluginId is required when pluginType is 'capability'.",
+        "[plugin.org.install] pluginId is required when pluginType is 'agent_capability'.",
       );
     }
     const manifest = getOxagenPlugin(pluginId);
@@ -52,48 +54,22 @@ export async function installOne(
       );
     }
 
-    // Reject if the name is on the denylist for this org + capability type.
-    const denied = await withSystemDb(async (tx) => {
+    // Upsert the listing. Capability listings have no endpoint/transport.
+    // authKind is "none" since capability packs are invoked internally.
+    // source="oxagen" distinguishes first-party capability packs.
+    const inserted = await withTenantDb(async (tx) => {
       const [row] = await tx
-        .select({ id: schema.pluginOrgDenylist.id })
-        .from(schema.pluginOrgDenylist)
-        .where(
-          and(
-            eq(schema.pluginOrgDenylist.orgId, ctx.orgId),
-            eq(schema.pluginOrgDenylist.pluginType, "capability"),
-            eq(schema.pluginOrgDenylist.serverName, pluginId),
-          ),
-        )
-        .limit(1);
-      return row ?? null;
-    });
-    if (denied) {
-      throw new Error(
-        `[plugin.org.install] Plugin "${pluginId}" is on the org denylist for type "capability".`,
-      );
-    }
-
-    // Upsert the listing. Capability listings have no endpoint/transport — both
-    // columns are nullable in plugin.org_listings (no notNull constraint in schema).
-    // authKind is "none" since capability packs are invoked internally, not over
-    // a network transport. source="oxagen" distinguishes first-party capability packs.
-    const inserted = await withSystemDb(async (tx) => {
-      const [row] = await tx
-        .insert(schema.pluginOrgListings)
+        .insert(schema.pluginInstalledPlugins)
         .values({
           orgId: ctx.orgId,
-          workspaceId: workspaceId ?? null,
-          pluginType: "capability",
-          catalogServerId: null,
+          workspaceId: ctx.workspaceId!,
+          pluginType: "agent_capability",
           source: "oxagen",
           name: pluginId,
           title: manifest.name,
           description: manifest.description,
-          // iconUrl is a URL column (rendered via next/image for MCP/integration
-          // catalog servers). Capability-pack manifests expose `icon` as a *Lucide
-          // icon name* (e.g. "image"), NOT a URL — writing it here produced an
-          // invalid next/image src and crashed the org plugins panel. Capability
-          // packs render the plugin-type icon in the UI, so leave this null.
+          // iconUrl is a Lucide icon name on capability packs, not a URL — leave null
+          // to avoid a broken next/image src in the org plugins panel.
           iconUrl: null,
           endpointUrl: null,
           transport: null,
@@ -102,14 +78,14 @@ export async function installOne(
         })
         .onConflictDoUpdate({
           target: [
-            schema.pluginOrgListings.orgId,
-            schema.pluginOrgListings.workspaceId,
-            schema.pluginOrgListings.pluginType,
-            schema.pluginOrgListings.name,
+            schema.pluginInstalledPlugins.orgId,
+            schema.pluginInstalledPlugins.workspaceId,
+            schema.pluginInstalledPlugins.pluginType,
+            schema.pluginInstalledPlugins.name,
           ],
           set: { updatedAt: sql`now()` },
         })
-        .returning({ id: schema.pluginOrgListings.id });
+        .returning({ id: schema.pluginInstalledPlugins.id });
       return row ?? null;
     });
 
@@ -119,104 +95,32 @@ export async function installOne(
     return inserted.id;
   }
 
-  // ── MCP server / integration / content_tool path ────────────────────────────
+  // ── MCP server / integration / agent_skill / knowledge_source path ──────────
 
-  // Exactly one of catalogServerId / custom must be provided.
-  const hasCatalog = catalogServerId !== undefined && catalogServerId !== null;
-  const hasCustom = custom !== undefined && custom !== null;
-  if (hasCatalog === hasCustom) {
+  // custom config is required for non-capability types.
+  if (!custom) {
     throw new Error(
-      "[plugin.org.install] Provide exactly one of catalogServerId or custom, not both (or neither).",
+      "[plugin.org.install] custom is required for non-agent_capability plugin types.",
     );
   }
 
-  let name: string;
-  let title: string | null = null;
-  let description: string | null = null;
-  let iconUrl: string | null = null;
-  let endpointUrl: string | null = null;
-  let transport: string | null = null;
-  let authKind: string;
-  let source: "registry" | "custom";
-
-  if (hasCatalog) {
-    // Load catalog row.
-    const catalogRow = await withSystemDb(async (tx) => {
-      const [row] = await tx
-        .select()
-        .from(schema.mcpCatalogServers)
-        .where(eq(schema.mcpCatalogServers.id, catalogServerId!))
-        .limit(1);
-      return row ?? null;
-    });
-    if (!catalogRow) {
-      throw new Error(`[plugin.org.install] Catalog server not found: ${catalogServerId}`);
-    }
-    // Derive the remote endpoint — the first remote's url/type.
-    const remotes = (catalogRow.remotes as Array<{ url?: string; type?: string }>) ?? [];
-    const firstRemote = remotes[0];
-    if (!firstRemote?.url) {
-      throw new Error(
-        `[plugin.org.install] Catalog server "${catalogRow.name}" has no remote endpoint. Local-only servers cannot be installed via the org allow-list.`,
-      );
-    }
-    name = catalogRow.name;
-    title = catalogRow.title ?? null;
-    description = catalogRow.description;
-    iconUrl =
-      ((catalogRow.icons as Array<{ src?: string }>)?.[0]?.src) ?? null;
-    endpointUrl = firstRemote.url;
-    transport = firstRemote.type ?? catalogRow.transportTypes[0] ?? "sse";
-    authKind = catalogRow.authKind;
-    source = "registry";
-  } else {
-    // Custom server.
-    name = custom!.name;
-    title = custom!.title ?? null;
-    description = custom!.description ?? null;
-    endpointUrl = custom!.endpointUrl;
-    transport = custom!.transport;
-    authKind = custom!.authKind;
-    source = "custom";
-  }
-
-  // Reject if the name is on the denylist for this org + type.
-  const denied = await withSystemDb(async (tx) => {
-    const [row] = await tx
-      .select({ id: schema.pluginOrgDenylist.id })
-      .from(schema.pluginOrgDenylist)
-      .where(
-        and(
-          eq(schema.pluginOrgDenylist.orgId, ctx.orgId),
-          eq(schema.pluginOrgDenylist.pluginType, pluginType),
-          eq(schema.pluginOrgDenylist.serverName, name),
-        ),
-      )
-      .limit(1);
-    return row ?? null;
-  });
-  if (denied) {
-    throw new Error(
-      `[plugin.org.install] Server "${name}" is on the org denylist for type "${pluginType}".`,
-    );
-  }
+  const { name, title, description, endpointUrl, transport, authKind } = custom;
 
   // Upsert the listing (enabled: true — all plugins are free, enable on install).
-  // ON CONFLICT on the (org_id, workspace_id, plugin_type, name) unique index returns the
-  // existing row's id — making install idempotent when the listing already exists.
-  const inserted = await withSystemDb(async (tx) => {
+  // ON CONFLICT on the (org_id, workspace_id, plugin_type, name) unique index returns
+  // the existing row's id — making install idempotent when the listing already exists.
+  const inserted = await withTenantDb(async (tx) => {
     const [row] = await tx
-      .insert(schema.pluginOrgListings)
+      .insert(schema.pluginInstalledPlugins)
       .values({
         orgId: ctx.orgId,
-        workspaceId: workspaceId ?? null,
+        workspaceId: ctx.workspaceId!,
         pluginType,
-        catalogServerId: catalogServerId ?? null,
-        source,
+        source: "custom",
         name,
-        title,
-        description,
-        iconUrl,
+        title: title ?? null,
+        description: description ?? null,
+        iconUrl: null,
         endpointUrl,
         transport,
         authKind,
@@ -224,14 +128,14 @@ export async function installOne(
       })
       .onConflictDoUpdate({
         target: [
-          schema.pluginOrgListings.orgId,
-          schema.pluginOrgListings.workspaceId,
-          schema.pluginOrgListings.pluginType,
-          schema.pluginOrgListings.name,
+          schema.pluginInstalledPlugins.orgId,
+          schema.pluginInstalledPlugins.workspaceId,
+          schema.pluginInstalledPlugins.pluginType,
+          schema.pluginInstalledPlugins.name,
         ],
         set: { updatedAt: sql`now()` },
       })
-      .returning({ id: schema.pluginOrgListings.id });
+      .returning({ id: schema.pluginInstalledPlugins.id });
     return row ?? null;
   });
 
@@ -247,7 +151,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   try {
     orgListingId = await installOne(ctx, typed);
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, pluginType: typed.pluginType }, "plugin.org.install: failed");
+    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, pluginType: typed.pluginType }, "plugin.org.install: failed");
     throw err;
   }
 
@@ -256,7 +160,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     eventType: "plugin.installed",
     actorUserId: ctx.userId ?? null,
     orgId: ctx.orgId,
-    workspaceId: null,
+    workspaceId: ctx.workspaceId ?? null,
     capability: "plugin.org.install",
     outcome: "success",
     ip: null,
@@ -264,6 +168,6 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     requestId: ctx.requestId ?? null,
   });
 
-  logger.info({ orgListingId, orgId: ctx.orgId, pluginType: typed.pluginType }, "plugin.org.install: ok");
+  logger.info({ orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId, pluginType: typed.pluginType }, "plugin.org.install: ok");
   return { orgListingId };
 };

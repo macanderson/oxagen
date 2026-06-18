@@ -4,15 +4,18 @@ import { registerCapability } from "../registry";
 export const pluginOrgSetEnabled = registerCapability({
   name: "plugin.org.set_enabled",
   domain: "plugin",
-  description: "Toggle the enabled flag on an org-level plugin listing.",
+  description: "Toggle the enabled flag on a workspace plugin listing.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: true, riskLevel: "medium", category: "plugin" },
   layers: ["api", "docs", "mcp", "unit"],
-  scoped: false,
+  scoped: true,
   sensitivity: "medium",
   defaultEffect: "deny",
-  defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Admin: "allow" },
+  },
   input: z.object({
     orgListingId: z.string(),
     enabled: z.boolean(),

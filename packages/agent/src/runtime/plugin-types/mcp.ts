@@ -1,7 +1,7 @@
 /**
  * MCP plugin-type contributor: yields raw tools for every enabled + healthy
- * workspace-installed MCP server whose org allow-list listing is enabled and not
- * denylisted. The decrypted per-workspace credential is injected into connectMcp.
+ * workspace-installed MCP server whose installed_plugins row is enabled and not
+ * soft-deleted. The decrypted per-workspace credential is injected into connectMcp.
  *
  * For OAuth listings (authKind === "oauth"), a DbOAuthClientProvider is built so
  * the transport auto-refreshes via the provider's tokens()/saveTokens() interface.
@@ -22,19 +22,9 @@ const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agen
 async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContributeOptions): Promise<ContributedRawTool[]> {
   if (!ctx.workspaceId) return [];
 
-  // Denylisted server names for this org (fetched first; drizzle 0.45.2 doesn't
-  // support a correlated subquery inside notInArray for this shape).
-  const deniedNames = await withTenantDb(async (tx) => {
-    const rows = await tx
-      .select({ name: schema.pluginOrgDenylist.serverName })
-      .from(schema.pluginOrgDenylist)
-      .where(eq(schema.pluginOrgDenylist.orgId, ctx.orgId));
-    return rows.map((r) => r.name);
-  });
-
-  // Enabled + healthy installs joined to an enabled, non-deleted org listing.
-  // Also selects authKind from the listing so we can branch on OAuth vs static.
-  const workspaceId = ctx.workspaceId!;
+  // Enabled + healthy installs joined to the installed_plugins row (workspace-scoped).
+  // Also selects authKind from the installed plugin so we can branch on OAuth vs static.
+  const workspaceId = ctx.workspaceId;
   const servers = await withTenantDb(async (tx) => {
     // Base conditions — always applied.
     const baseConds = [
@@ -42,8 +32,8 @@ async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContri
       eq(schema.mcpServers.workspaceId, workspaceId),
       eq(schema.mcpServers.enabled, true),
       eq(schema.mcpServers.healthStatus, "healthy"),
-      eq(schema.pluginOrgListings.enabled, true),
-      isNull(schema.pluginOrgListings.deletedAt),
+      eq(schema.pluginInstalledPlugins.enabled, true),
+      isNull(schema.pluginInstalledPlugins.deletedAt),
     ] as const;
     // Per-turn server allowlist: when the user has toggled specific servers
     // active in the chat composer, only load those servers' tools.
@@ -60,17 +50,17 @@ async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContri
         authStrategy: schema.mcpServers.authStrategy,
         authConfig: schema.mcpServers.authConfig,
         orgListingId: schema.mcpServers.orgListingId,
-        authKind: schema.pluginOrgListings.authKind,
+        authKind: schema.pluginInstalledPlugins.authKind,
       })
       .from(schema.mcpServers)
       .innerJoin(
-        schema.pluginOrgListings,
-        eq(schema.mcpServers.orgListingId, schema.pluginOrgListings.id),
+        schema.pluginInstalledPlugins,
+        eq(schema.mcpServers.orgListingId, schema.pluginInstalledPlugins.id),
       )
       .where(and(...baseConds, allowlistCond));
   });
 
-  const visible = servers.filter((s) => !deniedNames.includes(s.name));
+  const visible = servers;
 
   const out: ContributedRawTool[] = [];
   for (const server of visible) {

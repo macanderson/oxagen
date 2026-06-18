@@ -112,8 +112,6 @@ import "./contracts/plugin.catalog.browse";
 import "./contracts/plugin.catalog.get";
 import "./contracts/plugin.credential.reauth";
 import "./contracts/plugin.credential.set_secret";
-import "./contracts/plugin.denylist.add";
-import "./contracts/plugin.denylist.remove";
 import "./contracts/plugin.org.install";
 import "./contracts/plugin.org.install_bulk";
 import "./contracts/plugin.org.list";

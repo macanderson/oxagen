@@ -1,10 +1,10 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
 
-/** Map authKind from the org listing to the authStrategy expected by connectMcp. */
+/** Map authKind from the installed plugin to the authStrategy expected by connectMcp. */
 function mapAuthStrategy(
   authKind: string,
 ): "none" | "bearer" | "header" {
@@ -21,18 +21,17 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     throw new Error("[plugin.workspace.set_enabled] workspaceId is required (scoped capability)");
   }
 
-  // Load the org listing upfront so both enable and disable paths can guard on
-  // plugin_type. This is needed because capability packs are org-level only in
-  // Phase 1 — workspace-level enable/disable arrives in Phase 2.
-  const listing = await withSystemDb(async (tx) => {
+  // Load the installed plugin row — must belong to this org + workspace.
+  const listing = await withTenantDb(async (tx) => {
     const [row] = await tx
       .select()
-      .from(schema.pluginOrgListings)
+      .from(schema.pluginInstalledPlugins)
       .where(
         and(
-          eq(schema.pluginOrgListings.id, orgListingId),
-          eq(schema.pluginOrgListings.orgId, ctx.orgId),
-          isNull(schema.pluginOrgListings.deletedAt),
+          eq(schema.pluginInstalledPlugins.id, orgListingId),
+          eq(schema.pluginInstalledPlugins.orgId, ctx.orgId),
+          eq(schema.pluginInstalledPlugins.workspaceId, ctx.workspaceId!),
+          isNull(schema.pluginInstalledPlugins.deletedAt),
         ),
       )
       .limit(1);
@@ -41,12 +40,13 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
 
   if (!listing) {
     throw new Error(
-      `[plugin.workspace.set_enabled] Org listing not found or deleted: ${orgListingId}`,
+      `[plugin.workspace.set_enabled] Installed plugin not found or deleted: ${orgListingId}`,
     );
   }
 
-  // Guard: capability packs cannot be workspace-toggled in Phase 1.
-  if (listing.pluginType === "capability") {
+  // Guard: capability packs cannot be workspace-toggled via mcp_servers — they
+  // are invoked internally, not over a network transport.
+  if (listing.pluginType === "agent_capability") {
     throw new Error(
       "[plugin.workspace.set_enabled] Workspace-level enable/disable for Oxagen Plugins arrives in Phase 2. " +
         "Capability packs are org-level — use plugin.org.set_enabled instead.",
@@ -56,37 +56,16 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   if (enabled) {
     if (!listing.enabled) {
       throw new Error(
-        `[plugin.workspace.set_enabled] Org listing "${listing.name}" is disabled at the org level.`,
+        `[plugin.workspace.set_enabled] Installed plugin "${listing.name}" is disabled.`,
       );
     }
     if (!listing.endpointUrl) {
       throw new Error(
-        `[plugin.workspace.set_enabled] Org listing "${listing.name}" has no endpoint URL.`,
+        `[plugin.workspace.set_enabled] Installed plugin "${listing.name}" has no endpoint URL.`,
       );
     }
 
-    // Check the denylist.
-    const denied = await withSystemDb(async (tx) => {
-      const [row] = await tx
-        .select({ id: schema.pluginOrgDenylist.id })
-        .from(schema.pluginOrgDenylist)
-        .where(
-          and(
-            eq(schema.pluginOrgDenylist.orgId, ctx.orgId),
-            eq(schema.pluginOrgDenylist.pluginType, listing.pluginType),
-            eq(schema.pluginOrgDenylist.serverName, listing.name),
-          ),
-        )
-        .limit(1);
-      return row ?? null;
-    });
-    if (denied) {
-      throw new Error(
-        `[plugin.workspace.set_enabled] Server "${listing.name}" is on the org denylist.`,
-      );
-    }
-
-    // Upsert the workspace install row.
+    // Upsert the workspace MCP server row.
     const authStrategy = mapAuthStrategy(listing.authKind);
 
     const row = await withTenantDb(async (tx) => {
@@ -94,7 +73,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         .insert(schema.mcpServers)
         .values({
           orgId: ctx.orgId,
-          workspaceId: ctx.workspaceId,
+          workspaceId: ctx.workspaceId!,
           orgListingId,
           name: listing.name,
           transportType: listing.transport ?? "sse",
@@ -127,7 +106,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       eventType: "plugin.enabled_changed",
       actorUserId: ctx.userId ?? null,
       orgId: ctx.orgId,
-      workspaceId: ctx.workspaceId,
+      workspaceId: ctx.workspaceId!,
       capability: "plugin.workspace.set_enabled",
       outcome: "success",
       ip: null,
@@ -141,7 +120,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     );
     return { workspaceServerId: row?.publicId ?? null };
   } else {
-    // Disable: set enabled=false on the workspace install row.
+    // Disable: set enabled=false on the workspace MCP server row.
     try {
       await withTenantDb(async (tx) => {
         await tx
@@ -149,7 +128,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
           .set({ enabled: false })
           .where(
             and(
-              eq(schema.mcpServers.workspaceId, ctx.workspaceId),
+              eq(schema.mcpServers.workspaceId, ctx.workspaceId!),
               eq(schema.mcpServers.orgListingId, orgListingId),
             ),
           );
@@ -167,7 +146,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       eventType: "plugin.enabled_changed",
       actorUserId: ctx.userId ?? null,
       orgId: ctx.orgId,
-      workspaceId: ctx.workspaceId,
+      workspaceId: ctx.workspaceId!,
       capability: "plugin.workspace.set_enabled",
       outcome: "success",
       ip: null,

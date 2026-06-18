@@ -3,14 +3,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── Mocks (hoisted) ──────────────────────────────────────────────────────────
 
 const mocks = vi.hoisted(() => ({
-  withSystemDb: vi.fn(),
   withTenantDb: vi.fn(),
   emitSecurityEvent: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withSystemDb: mocks.withSystemDb, withTenantDb: mocks.withTenantDb };
+  return { ...real, withTenantDb: mocks.withTenantDb };
 });
 
 vi.mock("@oxagen/database/security", () => ({
@@ -38,7 +37,7 @@ const ctx = {
 const ctxNoWorkspace = { ...ctx, workspaceId: null } as unknown as typeof ctx;
 
 function mockListingLookup(listing: Record<string, unknown> | null) {
-  mocks.withSystemDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+  mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       select: () => ({
         from: () => ({
@@ -58,12 +57,13 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
     vi.clearAllMocks();
   });
 
-  it("throws Phase 2 error when listing.pluginType is 'capability' (enabled=true)", async () => {
+  it("throws Phase 2 error when listing.pluginType is 'agent_capability' (enabled=true)", async () => {
     mockListingLookup({
       id: "porg-cap-1",
       orgId: "org-1",
+      workspaceId: "ws-1",
       name: "oxagen/media-video",
-      pluginType: "capability",
+      pluginType: "agent_capability",
       enabled: true,
       endpointUrl: null,
       transport: null,
@@ -76,12 +76,13 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
     ).rejects.toThrow("Workspace-level enable/disable for Oxagen Plugins arrives in Phase 2");
   });
 
-  it("throws Phase 2 error when listing.pluginType is 'capability' (enabled=false)", async () => {
+  it("throws Phase 2 error when listing.pluginType is 'agent_capability' (enabled=false)", async () => {
     mockListingLookup({
       id: "porg-cap-1",
       orgId: "org-1",
+      workspaceId: "ws-1",
       name: "oxagen/media-video",
-      pluginType: "capability",
+      pluginType: "agent_capability",
       enabled: false,
       endpointUrl: null,
       transport: null,
@@ -98,8 +99,9 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
     mockListingLookup({
       id: "porg-cap-1",
       orgId: "org-1",
+      workspaceId: "ws-1",
       name: "oxagen/media-video",
-      pluginType: "capability",
+      pluginType: "agent_capability",
       enabled: true,
       endpointUrl: null,
       transport: null,
@@ -112,10 +114,13 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
     ).rejects.toThrow("plugin.org.set_enabled");
   });
 
-  it("does NOT throw Phase 2 error for mcp_server listings (normal enable path continues)", async () => {
+  it("does NOT hit a denylist check before enabling (denylist removed)", async () => {
+    // The listing lookup + the tenant upsert = exactly 2 withTenantDb calls.
+    // No extra call for a denylist query should occur.
     mockListingLookup({
       id: "porg-mcp-1",
       orgId: "org-1",
+      workspaceId: "ws-1",
       name: "my-mcp-server",
       pluginType: "mcp_server",
       enabled: true,
@@ -125,18 +130,38 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
       deletedAt: null,
     });
 
-    // Denylist check — no entry
-    mocks.withSystemDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+    // withTenantDb for upsert
+    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: () => Promise.resolve([]),
+        insert: () => ({
+          values: () => ({
+            onConflictDoUpdate: () => ({
+              returning: () => Promise.resolve([{ publicId: "mcp-pub-1" }]),
             }),
           }),
         }),
       }),
     );
+
+    await handler({ orgListingId: "porg-mcp-1", enabled: true }, ctx);
+
+    // Exactly 2 calls: listing lookup + upsert. No denylist call.
+    expect(mocks.withTenantDb).toHaveBeenCalledTimes(2);
+  });
+
+  it("does NOT throw Phase 2 error for mcp_server listings (normal enable path continues)", async () => {
+    mockListingLookup({
+      id: "porg-mcp-1",
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      name: "my-mcp-server",
+      pluginType: "mcp_server",
+      enabled: true,
+      endpointUrl: "https://example.com/mcp",
+      transport: "sse",
+      authKind: "none",
+      deletedAt: null,
+    });
 
     // withTenantDb for upsert
     mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -156,7 +181,7 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
     };
     expect(result.workspaceServerId).toBe("mcp-pub-1");
 
-    // SOC2: successful enable emits a plugin.enabled_changed audit event.
+    // SOC2: successful enable emits a plugin.enabled_changed audit event with workspace scope.
     expect(mocks.emitSecurityEvent).toHaveBeenCalledTimes(1);
     expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -174,6 +199,7 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
     mockListingLookup({
       id: "porg-mcp-1",
       orgId: "org-1",
+      workspaceId: "ws-1",
       name: "my-mcp-server",
       pluginType: "mcp_server",
       enabled: true,
@@ -213,8 +239,9 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
     mockListingLookup({
       id: "porg-cap-1",
       orgId: "org-1",
+      workspaceId: "ws-1",
       name: "oxagen/media-video",
-      pluginType: "capability",
+      pluginType: "agent_capability",
       enabled: true,
       endpointUrl: null,
       transport: null,
@@ -234,7 +261,7 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
     ).rejects.toThrow("workspaceId is required");
   });
 
-  it("throws when org listing not found", async () => {
+  it("throws when installed plugin not found", async () => {
     mockListingLookup(null);
     await expect(
       handler({ orgListingId: "porg-nonexistent", enabled: true }, ctx),

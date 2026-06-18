@@ -1,32 +1,36 @@
 import { and, eq } from "drizzle-orm";
-import { schema, withSystemDb } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
+  if (!ctx.workspaceId) {
+    throw new Error("[plugin.org.uninstall] workspaceId is required (scoped capability)");
+  }
   const { orgListingId } = input as { orgListingId: string };
 
   try {
-    await withSystemDb(async (tx) => {
-      // Soft-delete the listing (scoped to this org).
+    await withTenantDb(async (tx) => {
+      // Soft-delete the listing scoped to this org + workspace.
       await tx
-        .update(schema.pluginOrgListings)
+        .update(schema.pluginInstalledPlugins)
         .set({ deletedAt: new Date() })
         .where(
           and(
-            eq(schema.pluginOrgListings.id, orgListingId),
-            eq(schema.pluginOrgListings.orgId, ctx.orgId),
+            eq(schema.pluginInstalledPlugins.id, orgListingId),
+            eq(schema.pluginInstalledPlugins.orgId, ctx.orgId),
+            eq(schema.pluginInstalledPlugins.workspaceId, ctx.workspaceId!),
           ),
         );
 
-      // Hard-delete dependent workspace installs so the runtime drops them.
+      // Hard-delete dependent MCP server rows so the runtime drops them.
       await tx
         .delete(schema.mcpServers)
         .where(eq(schema.mcpServers.orgListingId, orgListingId));
     });
   } catch (err) {
-    logger.error({ err, orgListingId, orgId: ctx.orgId }, "plugin.org.uninstall: failed");
+    logger.error({ err, orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "plugin.org.uninstall: failed");
     throw err;
   }
 
@@ -35,7 +39,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     eventType: "plugin.uninstalled",
     actorUserId: ctx.userId ?? null,
     orgId: ctx.orgId,
-    workspaceId: null,
+    workspaceId: ctx.workspaceId ?? null,
     capability: "plugin.org.uninstall",
     outcome: "success",
     ip: null,
@@ -43,6 +47,6 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     requestId: ctx.requestId ?? null,
   });
 
-  logger.info({ orgListingId, orgId: ctx.orgId }, "plugin.org.uninstall: ok");
+  logger.info({ orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "plugin.org.uninstall: ok");
   return { ok: true };
 };

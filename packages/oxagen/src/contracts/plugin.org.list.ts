@@ -4,18 +4,22 @@ import { registerCapability } from "../registry";
 export const pluginOrgList = registerCapability({
   name: "plugin.org.list",
   domain: "plugin",
-  description: "List installed plugins (org_listings) and denylisted servers for the org.",
+  description: "List installed plugins for this workspace.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
   layers: ["api", "docs", "mcp", "unit"],
-  scoped: false,
+  scoped: true,
   sensitivity: "low",
   defaultEffect: "deny",
-  defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Admin: "allow", Member: "allow" },
+  },
   input: z.object({
-    pluginType: z.enum(["mcp_server", "integration", "content_tool"]).optional(),
-    workspaceId: z.string().optional(),
+    pluginType: z
+      .enum(["mcp_server", "integration", "agent_skill", "agent_capability", "knowledge_source"])
+      .optional(),
   }),
   output: z.object({
     listings: z.array(
@@ -29,9 +33,8 @@ export const pluginOrgList = registerCapability({
         deletedAt: z.string().nullable(),
         deletedByUserId: z.string().nullable(),
         orgId: z.string(),
-        workspaceId: z.string().nullable(),
+        workspaceId: z.string(),
         pluginType: z.string(),
-        catalogServerId: z.string().nullable(),
         source: z.string(),
         name: z.string(),
         title: z.string().nullable(),
@@ -43,20 +46,6 @@ export const pluginOrgList = registerCapability({
         authConfig: z.record(z.unknown()),
         enabled: z.boolean(),
         config: z.record(z.unknown()),
-      }),
-    ),
-    denylist: z.array(
-      z.object({
-        id: z.string(),
-        publicId: z.string(),
-        createdAt: z.string(),
-        updatedAt: z.string(),
-        createdByUserId: z.string().nullable(),
-        updatedByUserId: z.string().nullable(),
-        orgId: z.string(),
-        pluginType: z.string(),
-        serverName: z.string(),
-        reason: z.string().nullable(),
       }),
     ),
   }),

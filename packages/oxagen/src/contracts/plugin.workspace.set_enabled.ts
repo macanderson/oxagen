@@ -12,7 +12,10 @@ export const pluginWorkspaceSetEnabled = registerCapability({
   scoped: true,
   sensitivity: "medium",
   defaultEffect: "deny",
-  defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Admin: "allow" },
+  },
   input: z.object({
     orgListingId: z.string(),
     enabled: z.boolean(),
