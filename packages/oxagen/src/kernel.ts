@@ -54,6 +54,7 @@ export function clearBillingAdmissionGate(): void {
 export type CapabilityEntitlementGateFn = (
   capabilityName: string,
   orgId: string,
+  workspaceId: string,
 ) => Promise<void>;
 
 let _entitlementGate: CapabilityEntitlementGateFn | null = null;
@@ -533,8 +534,15 @@ export async function invoke(
       // The gate throws CapabilityError(code="capability_not_installed") to
       // refuse. Use capabilityNotInstalledError() for the canonical shape.
       const claimingPlugin = pluginForContract(name);
-      if (claimingPlugin !== undefined && _entitlementGate !== null && ctx.orgId) {
-        await _entitlementGate(name, ctx.orgId);
+      if (
+        claimingPlugin !== undefined &&
+        _entitlementGate !== null &&
+        ctx.orgId &&
+        ctx.workspaceId
+      ) {
+        // Entitlement is workspace-scoped: a capability pack installed in one
+        // workspace does not entitle sibling workspaces in the same org.
+        await _entitlementGate(name, ctx.orgId, ctx.workspaceId);
       }
       // ── End capability entitlement gate ─────────────────────────────────────
 

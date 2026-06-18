@@ -23,16 +23,13 @@ export default defineConfig({
         "src/**/index.ts", // re-export barrels: no executable logic
         "src/registry/types.ts", // pure type declarations
       ],
-      // Ratchet floors set just below current measured coverage — measured with
-      // the include above (lines 83.38 / branches 87.41 / functions 92.10) — so
-      // the gate lives in the build, not in review. Raise as coverage grows —
-      // never lower. (registry/sync-service.ts is the remaining low-coverage
-      // file; raising its tests will let these floors climb further.)
+      // Ratchet floors set just below current measured coverage so the gate
+      // lives in the build, not in review. Raise as coverage grows — never lower.
       thresholds: {
-        lines: 80,
-        branches: 85,
+        lines: 90,
+        branches: 86,
         functions: 90,
-        statements: 80,
+        statements: 90,
       },
     },
   },

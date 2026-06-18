@@ -41,7 +41,7 @@ vi.mock("@oxagen/database", () => {
     withSystemDb: async (cb: (t: typeof tx) => Promise<unknown>) => cb(tx),
     schema: {
       mcpCredentials: { workspaceId: "workspaceId", orgListingId: "orgListingId" },
-      pluginOrgListings: { id: "id", orgId: "orgId", name: "name", title: "title" },
+      pluginInstalledPlugins: { id: "id", orgId: "orgId", name: "name", title: "title" },
     },
   };
 });

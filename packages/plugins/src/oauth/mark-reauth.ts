@@ -30,12 +30,12 @@ export async function markCredentialNeedsReauth(
   const listing = await withSystemDb(async (tx) => {
     const [row] = await tx
       .select({
-        orgId: schema.pluginOrgListings.orgId,
-        name: schema.pluginOrgListings.name,
-        title: schema.pluginOrgListings.title,
+        orgId: schema.pluginInstalledPlugins.orgId,
+        name: schema.pluginInstalledPlugins.name,
+        title: schema.pluginInstalledPlugins.title,
       })
-      .from(schema.pluginOrgListings)
-      .where(eq(schema.pluginOrgListings.id, orgListingId))
+      .from(schema.pluginInstalledPlugins)
+      .where(eq(schema.pluginInstalledPlugins.id, orgListingId))
       .limit(1);
     return row ?? null;
   });

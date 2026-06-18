@@ -1,13 +1,17 @@
 /**
  * entitlement-service.ts — capability-plugin entitlement queries + kernel gate.
  *
- * Queries `plugin.org_listings` (plugin_type='capability', enabled=true, not
- * soft-deleted) minus any names present in `plugin.org_denylist` for the same
- * org and type. Returns the set of listing `name` values — which hold the
- * Oxagen plugin id (e.g. "oxagen/media-svg").
+ * Queries `plugin.installed_plugins` (plugin_type='agent_capability',
+ * enabled=true, not soft-deleted) for a specific (orgId, workspaceId). Returns
+ * the set of `name` values — which hold the capability plugin id
+ * (e.g. "oxagen/media-svg").
  *
- * Includes a 30-second in-memory TTL cache keyed by orgId to avoid a DB round-
- * trip on every capability invocation.
+ * Entitlement is WORKSPACE-SCOPED: a capability pack installed in one workspace
+ * does not entitle sibling workspaces in the same org. There is no org-level
+ * pre-approval / denylist — workspaces install whatever they want.
+ *
+ * Includes a 30-second in-memory TTL cache keyed by `${orgId}:${workspaceId}`
+ * to avoid a DB round-trip on every capability invocation.
  */
 
 import { and, eq, isNull } from "drizzle-orm";
@@ -26,6 +30,10 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 
+function cacheKey(orgId: string, workspaceId: string): string {
+  return `${orgId}:${workspaceId}`;
+}
+
 /** Remove all cache entries. Call in test teardown / beforeEach. */
 export function clearEntitlementCacheForTests(): void {
   cache.clear();
@@ -35,55 +43,43 @@ export function clearEntitlementCacheForTests(): void {
 
 /**
  * Return the set of capability plugin ids (e.g. "oxagen/media-svg") that are
- * installed AND enabled for the given org, excluding any that appear in the
- * org's denylist.
+ * installed AND enabled for the given (orgId, workspaceId).
  *
- * Results are cached for 30 seconds per orgId.
+ * Results are cached for 30 seconds per (orgId, workspaceId).
  */
 export async function listEntitledCapabilityPluginIds(
   orgId: string,
+  workspaceId: string,
 ): Promise<Set<string>> {
   const now = Date.now();
-  const cached = cache.get(orgId);
+  const key = cacheKey(orgId, workspaceId);
+  const cached = cache.get(key);
   if (cached && cached.expires > now) {
     return cached.set;
   }
 
   const entitled = await withSystemDb(async (tx) => {
-    const [listingRows, denylistRows] = await Promise.all([
-      tx
-        .select({ name: schema.pluginOrgListings.name })
-        .from(schema.pluginOrgListings)
-        .where(
-          and(
-            eq(schema.pluginOrgListings.orgId, orgId),
-            eq(schema.pluginOrgListings.pluginType, "capability"),
-            eq(schema.pluginOrgListings.enabled, true),
-            isNull(schema.pluginOrgListings.deletedAt),
-          ),
+    const listingRows = await tx
+      .select({ name: schema.pluginInstalledPlugins.name })
+      .from(schema.pluginInstalledPlugins)
+      .where(
+        and(
+          eq(schema.pluginInstalledPlugins.orgId, orgId),
+          eq(schema.pluginInstalledPlugins.workspaceId, workspaceId),
+          eq(schema.pluginInstalledPlugins.pluginType, "agent_capability"),
+          eq(schema.pluginInstalledPlugins.enabled, true),
+          isNull(schema.pluginInstalledPlugins.deletedAt),
         ),
-      tx
-        .select({ serverName: schema.pluginOrgDenylist.serverName })
-        .from(schema.pluginOrgDenylist)
-        .where(
-          and(
-            eq(schema.pluginOrgDenylist.orgId, orgId),
-            eq(schema.pluginOrgDenylist.pluginType, "capability"),
-          ),
-        ),
-    ]);
+      );
 
-    const deniedNames = new Set(denylistRows.map((r) => r.serverName));
     const result = new Set<string>();
     for (const row of listingRows) {
-      if (!deniedNames.has(row.name)) {
-        result.add(row.name);
-      }
+      result.add(row.name);
     }
     return result;
   });
 
-  cache.set(orgId, { expires: now + CACHE_TTL_MS, set: entitled });
+  cache.set(key, { expires: now + CACHE_TTL_MS, set: entitled });
   return entitled;
 }
 
@@ -95,19 +91,20 @@ export async function listEntitledCapabilityPluginIds(
  *
  * Logic:
  * - If the capability is unclaimed by any plugin → return (builtin, always available).
- * - If claimed but the plugin id is NOT in the org's entitled set → throw
+ * - If claimed but the plugin id is NOT in the workspace's entitled set → throw
  *   `capabilityNotInstalledError` (code: "capability_not_installed").
  * - If claimed and the plugin id IS in the entitled set → return (allow).
  */
 export async function capabilityEntitlementGate(
   capabilityName: string,
   orgId: string,
+  workspaceId: string,
 ): Promise<void> {
   const plugin = pluginForContract(capabilityName);
   // Unclaimed → builtin; the kernel skips these, but be defensive.
   if (!plugin) return;
 
-  const entitled = await listEntitledCapabilityPluginIds(orgId);
+  const entitled = await listEntitledCapabilityPluginIds(orgId, workspaceId);
   if (!entitled.has(plugin.id)) {
     throw capabilityNotInstalledError(capabilityName, plugin.id, plugin.name);
   }
