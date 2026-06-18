@@ -185,9 +185,12 @@
     --chart-4: var(--_ochre);
     --chart-5: var(--_slate);
 
+    --surface: oklch(1 0 0);
+    --surface-foreground: var(--_ink);
+
     /* Core sidebar surface — white with warm tint. */
-    --sidebar: oklch(1 0 0);
-    --sidebar-foreground: var(--_ink);
+    --sidebar: var(--surface);
+    --sidebar-foreground: var(--surface-foreground);
     --sidebar-primary: var(--ox-rust);
     --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_violet-50);
@@ -214,14 +217,14 @@
     --sidebar-icon-width: 3.5rem;
 
     /* ── App chrome ───────────────────────────────────────────────────────── */
-    --app-panel-bg: var(--background);
-    --app-panel-fg: var(--foreground);
+    --app-panel-bg: var(--surface);
+    --app-panel-fg: var(--surface-foreground);
     --app-topbar-bg: var(--background);
     --app-topbar-fg: var(--foreground);
     --app-topbar-border: var(--border);
-    --app-link-fg: var(--muted-foreground);
-    --app-link-hover-fg: var(--foreground);
-    --app-link-active-fg: var(--foreground);
+    --app-link-fg: var(--ox-indigo-bright);
+    --app-link-hover-fg: var(--ox-indigo);
+    --app-link-active-fg: var(--ox-indigo);
 
     /* ── Tabs (keep a constant rest border so the active underline never shifts
      *    layout — only the COLOR changes between states). ──────────────────── */
@@ -356,6 +359,9 @@
     --chart-4: var(--_ochre-light);
     --chart-5: var(--_slate-light);
 
+    --surface: var(--_stone-900);
+    --surface-foreground: var(--_ink-white);
+
     --sidebar: var(--_stone-900);
     --sidebar-foreground: var(--_ink-white);
     --sidebar-primary: var(--ox-rust);
@@ -409,6 +415,9 @@
       --chart-3: var(--_moss-light);
       --chart-4: var(--_ochre-light);
       --chart-5: var(--_slate-light);
+
+      --surface: var(--_stone-900);
+      --surface-foreground: var(--_ink-white);
 
       --sidebar: var(--_stone-900);
       --sidebar-foreground: var(--_ink-white);
