@@ -6,6 +6,7 @@ export const documentsManifest: OxagenPluginManifest = {
   description:
     "Generate rich documents and PDFs from structured content, templates, and AI-composed output.",
   version: "1.0.0",
+  pluginType: "agent_capability",
   tier: "free",
   visibility: "ga",
   category: "documents",

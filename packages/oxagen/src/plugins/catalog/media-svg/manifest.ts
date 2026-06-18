@@ -5,6 +5,7 @@ export const mediaSvgManifest: OxagenPluginManifest = {
   name: "SVG Generation",
   description: "Generate scalable vector graphics from natural language descriptions.",
   version: "1.0.0",
+  pluginType: "agent_capability",
   tier: "free",
   visibility: "ga",
   category: "media",

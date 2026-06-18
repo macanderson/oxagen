@@ -6,6 +6,7 @@ export const mediaImageManifest: OxagenPluginManifest = {
   description:
     "Generate, create, analyze, and manage AI images within your workspace.",
   version: "1.0.0",
+  pluginType: "agent_capability",
   tier: "free",
   visibility: "ga",
   category: "media",
