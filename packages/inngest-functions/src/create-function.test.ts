@@ -53,9 +53,24 @@ describe("createFunction adapter", () => {
       const result = createFunction(config, trigger, handler);
 
       expect(result).toHaveLength(1);
-      expect(result[0]!.id).toBe("my-function");
+      // id lives on config (no top-level `id` — it would shadow Inngest's id() method).
+      expect(result[0]!.config.id).toBe("my-function");
       expect(result[0]!.config).toEqual(config);
       expect(result[0]!.trigger).toEqual(trigger);
+    });
+
+    it("does NOT assign an own `id` property (would shadow Inngest's id() method)", () => {
+      // Regression guard (serve crash "this.id is not a function"): Inngest's
+      // InngestFunction exposes `id` as a METHOD that serve()/getConfig() calls.
+      // The adapter must never Object.assign a string `id` onto it, or the
+      // /api/inngest sync throws the moment the dev server connects.
+      const config: DurableFunctionConfig = { id: "my-function" };
+      const trigger: DurableFunctionTrigger = { event: "test/event" };
+      const handler: DurableFunctionHandler = async () => "result";
+
+      const result = createFunction(config, trigger, handler);
+
+      expect(Object.prototype.hasOwnProperty.call(result[0], "id")).toBe(false);
     });
 
     it("calls inngest.createFunction once for simple config", () => {
@@ -389,7 +404,7 @@ describe("createFunction adapter", () => {
 
       const result = createFunction(config, trigger, handler);
 
-      expect(result[1]!.id).toBe("privacy.erasure-execute.on-failure");
+      expect(result[1]!.config.id).toBe("privacy.erasure-execute.on-failure");
     });
 
     it("companion is triggered by inngest/function.failed with correct if-filter", () => {

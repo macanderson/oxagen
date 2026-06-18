@@ -132,9 +132,14 @@ export function createFunction(
     wrappedHandler as Parameters<typeof inngest.createFunction>[2],
   );
 
-  // Augment the Inngest function with DurableFunction properties
+  // Augment the Inngest function with DurableFunction introspection
+  // properties. CRITICAL: do NOT assign `id` here — Inngest's InngestFunction
+  // exposes `id` as a METHOD (serve()/getConfig() call `this.id(appPrefix)`),
+  // and assigning an own `id` string shadows that method, so the moment the
+  // dev server syncs (`PUT /api/inngest`) serve throws "this.id is not a
+  // function". The abstract id is read from `config.id` instead. `config` and
+  // `trigger` are inert to Inngest (getConfig reads `this.opts`, never these).
   const primaryDurable = Object.assign(primaryFn, {
-    id: config.id,
     config,
     trigger,
   }) as unknown as DurableFunction;
@@ -161,8 +166,9 @@ export function createFunction(
       event: "inngest/function.failed",
     };
 
+    // Same rule as the primary fn: never assign `id` (it shadows Inngest's
+    // id() method and breaks serve). Abstract id is read from config.id.
     const failureDurable = Object.assign(failureFn, {
-      id: companionId,
       config: { id: companionId },
       trigger: failureTriggerAbstract,
     }) as unknown as DurableFunction;

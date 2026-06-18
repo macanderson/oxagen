@@ -147,9 +147,13 @@ export type DurableFunctionHandler<TReturn = unknown> = (
  * pass these to the serve layer; internals are provider-specific.
  */
 export interface DurableFunction {
-  /** The function's unique identifier (from config). */
-  readonly id: string;
-  /** The function's configuration (for introspection). */
+  /**
+   * The function's configuration (for introspection). The unique id is
+   * `config.id` — there is deliberately NO top-level `id` field: provider
+   * adapters (e.g. Inngest) return objects whose `id` is a callable method,
+   * and a string `id` here would shadow it and break the provider's serve
+   * handler. Read the id via `config.id`.
+   */
   readonly config: DurableFunctionConfig;
   /** The trigger that activates this function. */
   readonly trigger: DurableFunctionTrigger;

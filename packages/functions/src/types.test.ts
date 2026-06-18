@@ -141,7 +141,7 @@ describe("@oxagen/functions type contracts", () => {
   describe("CreateFunctionFactory", () => {
     it("is callable with config, trigger, and handler returning DurableFunction[]", () => {
       const factory: CreateFunctionFactory = (_config, _trigger, _handler) => {
-        return [{ id: _config.id, config: _config, trigger: _trigger }];
+        return [{ config: _config, trigger: _trigger }];
       };
       expectTypeOf(factory).toBeCallableWith(
         { id: "test" },
@@ -192,10 +192,11 @@ describe("@oxagen/functions type contracts", () => {
   });
 
   describe("DurableFunction", () => {
-    it("exposes id, config, and trigger as readonly", () => {
+    it("exposes config and trigger as readonly (id is config.id — no top-level id)", () => {
       const fn = {} as DurableFunction;
-      expectTypeOf(fn.id).toBeString();
       expectTypeOf(fn.config).toEqualTypeOf<DurableFunctionConfig>();
+      // id is exposed via config.id (type-level — no runtime access on the empty cast).
+      expectTypeOf<DurableFunction["config"]["id"]>().toBeString();
       expectTypeOf(fn.trigger).toEqualTypeOf<DurableFunctionTrigger>();
     });
   });
