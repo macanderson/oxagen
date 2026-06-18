@@ -208,8 +208,8 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
               })
               .from(schema.mcpServers)
               .innerJoin(
-                schema.pluginOrgListings,
-                eq(schema.mcpServers.orgListingId, schema.pluginOrgListings.id),
+                schema.pluginInstalledPlugins,
+                eq(schema.mcpServers.orgListingId, schema.pluginInstalledPlugins.id),
               )
               .where(
                 and(
@@ -217,8 +217,8 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
                   eq(schema.mcpServers.workspaceId, workspace.id),
                   eq(schema.mcpServers.enabled, true),
                   eq(schema.mcpServers.healthStatus, "healthy"),
-                  eq(schema.pluginOrgListings.enabled, true),
-                  isNull(schema.pluginOrgListings.deletedAt),
+                  eq(schema.pluginInstalledPlugins.enabled, true),
+                  isNull(schema.pluginInstalledPlugins.deletedAt),
                 ),
               ),
           ),

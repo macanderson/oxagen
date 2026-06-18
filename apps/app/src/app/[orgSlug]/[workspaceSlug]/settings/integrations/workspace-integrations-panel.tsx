@@ -13,7 +13,7 @@ import type { schema } from "@oxagen/database";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type OrgListing = typeof schema.pluginOrgListings.$inferSelect;
+type OrgListing = typeof schema.pluginInstalledPlugins.$inferSelect;
 type McpServer = typeof schema.mcpServers.$inferSelect;
 
 interface WorkspaceIntegrationsPanelProps {

@@ -50,7 +50,7 @@ describe("plugin.catalog.browse handler", () => {
     const fakeOutput = { servers: [], nextOffset: null, total: 0 };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { limit: 30, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined, installed: undefined, pluginType: undefined, workspaceId: undefined };
+    const args = { limit: 30, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined, installed: undefined, pluginType: undefined };
     const result = await handler_pluginCatalogBrowse(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
@@ -66,7 +66,7 @@ describe("plugin.catalog.browse handler", () => {
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("catalog unavailable"));
     await expect(
-      handler_pluginCatalogBrowse({ limit: 10, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined, installed: undefined, pluginType: undefined, workspaceId: undefined }),
+      handler_pluginCatalogBrowse({ limit: 10, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined, installed: undefined, pluginType: undefined }),
     ).rejects.toThrow("catalog unavailable");
   });
 });
@@ -86,8 +86,7 @@ describe("plugin.catalog.get handler", () => {
 
   it("calls invoke with catalog get args", async () => {
     const fakeOutput = {
-      id: "cat_1",
-      name: "test",
+      name: "@test/my-plugin",
       title: null,
       description: "Test plugin",
       version: "1.0.0",
@@ -99,12 +98,10 @@ describe("plugin.catalog.get handler", () => {
       transportTypes: ["streamable-http"],
       authKind: "none",
       categories: [],
-      readmeHtml: null,
-      status: "active",
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { catalogId: "cat_1" };
+    const args = { name: "@test/my-plugin", version: "latest" };
     await handler_pluginCatalogGet(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -263,7 +260,7 @@ describe("plugin.org.list handler", () => {
     const fakeOutput = { listings: [], denylist: [] };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { pluginType: "mcp_server" as const, workspaceId: undefined };
+    const args = { pluginType: "mcp_server" as const };
     await handler_pluginOrgList(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -276,7 +273,7 @@ describe("plugin.org.list handler", () => {
 
   it("works with empty args", async () => {
     mocks.invoke.mockResolvedValue({ listings: [], denylist: [] });
-    await handler_pluginOrgList({ pluginType: undefined, workspaceId: undefined });
+    await handler_pluginOrgList({ pluginType: undefined });
     expect(mocks.invoke).toHaveBeenCalledOnce();
   });
 });

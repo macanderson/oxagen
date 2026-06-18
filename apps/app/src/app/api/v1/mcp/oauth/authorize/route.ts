@@ -79,8 +79,8 @@ export async function GET(req: NextRequest) {
   const listing = await withSystemDb(async (tx) => {
     const [l] = await tx
       .select()
-      .from(schema.pluginOrgListings)
-      .where(eq(schema.pluginOrgListings.id, orgListingId))
+      .from(schema.pluginInstalledPlugins)
+      .where(eq(schema.pluginInstalledPlugins.id, orgListingId))
       .limit(1);
     return l ?? null;
   });

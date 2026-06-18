@@ -6,9 +6,6 @@ import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org
 import { WorkspaceIntegrationsPanel } from "./workspace-integrations-panel";
 import { setWorkspacePluginEnabledAction, setSecretAction } from "./integration-actions";
 
-// Sentinel workspaceId for org-only DB queries. — OXA-1515
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
-
 export const dynamic = "force-dynamic";
 
 export default async function SettingsIntegrationsPage({
@@ -43,18 +40,24 @@ export default async function SettingsIntegrationsPage({
   const wsRole = wsRoleRow?.role ?? "viewer";
   const canManage = ["owner", "admin"].includes(wsRole.toLowerCase());
 
-  // Fetch the org allow-list (plugins available to this workspace)
+  // Fetch the workspace-scoped installed integration plugins.
   const orgListings = await runInTenantScope(
-    { orgId: org.id, workspaceId: ORG_ONLY_WS },
+    { orgId: org.id, workspaceId: ws.id },
     () =>
       withTenantDb((tx) =>
         tx
           .select()
-          .from(schema.pluginOrgListings)
-          .where(eq(schema.pluginOrgListings.orgId, org.id))
-          .orderBy(schema.pluginOrgListings.name),
+          .from(schema.pluginInstalledPlugins)
+          .where(
+            and(
+              eq(schema.pluginInstalledPlugins.orgId, org.id),
+              eq(schema.pluginInstalledPlugins.workspaceId, ws.id),
+              eq(schema.pluginInstalledPlugins.pluginType, "integration"),
+            ),
+          )
+          .orderBy(schema.pluginInstalledPlugins.name),
       ),
-  ).catch(() => [] as (typeof schema.pluginOrgListings.$inferSelect)[]);
+  ).catch(() => [] as (typeof schema.pluginInstalledPlugins.$inferSelect)[]);
 
   // Fetch workspace-level install rows to get per-listing enabled state + health
   const wsInstalls = await runInTenantScope(

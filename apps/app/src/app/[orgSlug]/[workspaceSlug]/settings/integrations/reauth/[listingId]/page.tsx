@@ -10,8 +10,6 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import Image from "next/image";
 
-// Sentinel workspaceId for org-only DB queries. — OXA-1515
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 export const dynamic = "force-dynamic";
 
@@ -23,28 +21,28 @@ export default async function ReauthPage({
   const { orgSlug, workspaceSlug, listingId } = await params;
   const session = await getSessionOrRedirect();
   const org = await resolveOrg(orgSlug);
-  // Validates the workspace exists under this org (404s otherwise).
-  await resolveWorkspace(org.id, workspaceSlug);
+  const ws = await resolveWorkspace(org.id, workspaceSlug);
   await assertOrgMember(org.id, session.user.id);
 
   // Resolve the listing by publicId (the listingId param from the URL).
-  // pluginOrgListings uses idMixin which emits `public_id` (camelCase: publicId).
+  // pluginInstalledPlugins uses idMixin which emits `public_id` (camelCase: publicId).
   const [listing] = await runInTenantScope(
-    { orgId: org.id, workspaceId: ORG_ONLY_WS },
+    { orgId: org.id, workspaceId: ws.id },
     () =>
       withTenantDb((tx) =>
         tx
           .select()
-          .from(schema.pluginOrgListings)
+          .from(schema.pluginInstalledPlugins)
           .where(
             and(
-              eq(schema.pluginOrgListings.publicId, listingId),
-              eq(schema.pluginOrgListings.orgId, org.id),
+              eq(schema.pluginInstalledPlugins.publicId, listingId),
+              eq(schema.pluginInstalledPlugins.orgId, org.id),
+              eq(schema.pluginInstalledPlugins.workspaceId, ws.id),
             ),
           )
           .limit(1),
       ),
-  ).catch(() => [] as (typeof schema.pluginOrgListings.$inferSelect)[]);
+  ).catch(() => [] as (typeof schema.pluginInstalledPlugins.$inferSelect)[]);
 
   if (!listing) notFound();
 
