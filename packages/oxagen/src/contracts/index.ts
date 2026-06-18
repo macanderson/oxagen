@@ -87,7 +87,6 @@ import { pluginOrgUninstall } from "./plugin.org.uninstall";
 import { pluginRegistryAdd } from "./plugin.registry.add";
 import { pluginRegistryList } from "./plugin.registry.list";
 import { pluginRegistryRemove } from "./plugin.registry.remove";
-import { pluginRegistrySync } from "./plugin.registry.sync";
 import { pluginSettingsSetAuthAlerts } from "./plugin.settings.set_auth_alerts";
 import { pluginWorkspaceSetEnabled } from "./plugin.workspace.set_enabled";
 import { workflowRun } from "./workflow.run";
@@ -237,7 +236,6 @@ export {
   pluginRegistryAdd,
   pluginRegistryList,
   pluginRegistryRemove,
-  pluginRegistrySync,
   pluginSettingsSetAuthAlerts,
   pluginWorkspaceSetEnabled,
   workflowRun,
@@ -395,7 +393,6 @@ export const contracts = [
   pluginRegistryAdd,
   pluginRegistryList,
   pluginRegistryRemove,
-  pluginRegistrySync,
   pluginSettingsSetAuthAlerts,
   pluginWorkspaceSetEnabled,
   workflowRun,

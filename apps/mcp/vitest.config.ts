@@ -84,7 +84,6 @@ export default defineConfig({
         "src/tools/plugin.registry.add.ts",
         "src/tools/plugin.registry.list.ts",
         "src/tools/plugin.registry.remove.ts",
-        "src/tools/plugin.registry.sync.ts",
         "src/tools/plugin.settings.set_auth_alerts.ts",
         "src/tools/plugin.workspace.set_enabled.ts",
       ],

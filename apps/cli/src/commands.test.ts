@@ -110,7 +110,6 @@ import { pluginOrgInstallBulkCommand } from "./commands/plugin.org.install_bulk.
 import { pluginOrgListCommand } from "./commands/plugin.org.list.js";
 import { pluginOrgSetEnabledCommand } from "./commands/plugin.org.set_enabled.js";
 import { pluginRegistryRemoveCommand } from "./commands/plugin.registry.remove.js";
-import { pluginRegistrySyncCommand } from "./commands/plugin.registry.sync.js";
 import { pluginSettingsSetAuthAlertsCommand } from "./commands/plugin.settings.set_auth_alerts.js";
 import { pluginWorkspaceSetEnabledCommand } from "./commands/plugin.workspace.set_enabled.js";
 import { systemInstallInstructionsCommand } from "./commands/system.install.instructions.js";
@@ -2176,37 +2175,6 @@ describe("plugin registry remove", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// plugin registry sync
-// ---------------------------------------------------------------------------
-describe("plugin registry sync", () => {
-  it("triggers a registry sync", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockApiRequest.mockResolvedValueOnce({ accepted: true });
-    await pluginRegistrySyncCommand.parseAsync(["node", "cli", "-r", "reg1"]);
-    expect(mockApiRequest).toHaveBeenCalledWith("/plugin/registry/sync", expect.objectContaining({ method: "POST" }));
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Sync accepted"));
-    consoleSpy.mockRestore();
-  });
-
-  it("reports sync not accepted", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockApiRequest.mockResolvedValueOnce({ accepted: false });
-    await pluginRegistrySyncCommand.parseAsync(["node", "cli", "-r", "reg1"]);
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("not accepted"));
-    consoleSpy.mockRestore();
-  });
-
-  it("handles sync failure", async () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null | undefined) => { throw new Error("process.exit"); });
-    mockApiRequest.mockRejectedValueOnce(new Error("Registry not found"));
-    await expect(pluginRegistrySyncCommand.parseAsync(["node", "cli", "-r", "reg1"])).rejects.toThrow();
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Error:"));
-    consoleSpy.mockRestore();
-    exitSpy.mockRestore();
-  });
-});
 
 // ---------------------------------------------------------------------------
 // plugin settings set_auth_alerts

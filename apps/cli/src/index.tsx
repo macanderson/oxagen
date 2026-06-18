@@ -92,7 +92,6 @@ import { pluginOrgInstallBulkCommand } from "./commands/plugin.org.install_bulk.
 import { pluginOrgListCommand } from "./commands/plugin.org.list.js";
 import { pluginOrgSetEnabledCommand } from "./commands/plugin.org.set_enabled.js";
 import { pluginRegistryRemoveCommand } from "./commands/plugin.registry.remove.js";
-import { pluginRegistrySyncCommand } from "./commands/plugin.registry.sync.js";
 import { pluginSettingsSetAuthAlertsCommand } from "./commands/plugin.settings.set_auth_alerts.js";
 import { pluginWorkspaceSetEnabledCommand } from "./commands/plugin.workspace.set_enabled.js";
 import { systemInstallInstructionsCommand } from "./commands/system.install.instructions.js";
@@ -192,7 +191,6 @@ const pluginRegistry = plugin.command("registry").description("Plugin registry m
 pluginRegistry.addCommand(pluginRegistryListCommand);
 pluginRegistry.addCommand(pluginRegistryAddCommand);
 pluginRegistry.addCommand(pluginRegistryRemoveCommand);
-pluginRegistry.addCommand(pluginRegistrySyncCommand);
 const pluginCredential = plugin.command("credential").description("Plugin credential management");
 pluginCredential.addCommand(pluginCredentialReauthCommand);
 pluginCredential.addCommand(pluginCredentialSetSecretCommand);

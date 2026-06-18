@@ -8,8 +8,6 @@ import { agentAggregateFanout } from "./functions/agent.aggregate-fanout";
 import { agentBackgroundTaskExecute } from "./functions/agent.background-task.execute";
 import { agentVideoRender, agentVideoRenderOnFailure } from "./functions/agent.video-render";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
-import { pluginCatalogSyncCron } from "./functions/plugin.catalog-sync-cron";
-import { pluginRegistrySync } from "./functions/plugin.registry-sync";
 import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
 import { agentWorkflowSupervisor } from "./functions/agent.workflow.supervisor";
 import { agentWorkflowTaskExecute } from "./functions/agent.workflow.task.execute";
@@ -45,8 +43,6 @@ export const functions: any[] = [
   agentVideoRender,
   agentVideoRenderOnFailure,
   securityAuditPartitionRollover,
-  pluginCatalogSyncCron,
-  pluginRegistrySync,
   pluginOauthRefreshWatcher,
   agentWorkflowSupervisor,
   agentWorkflowTaskExecute,

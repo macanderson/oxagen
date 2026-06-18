@@ -2152,23 +2152,6 @@
       }
     },
     {
-      "name": "plugin.registry.sync",
-      "file": "plugin.registry.sync.ts",
-      "domain": "plugin",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
-      }
-    },
-    {
       "name": "plugin.schema.get",
       "file": "plugin.schema.get.ts",
       "domain": "plugin",

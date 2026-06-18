@@ -6,7 +6,7 @@
  *   plugin.org.install, plugin.org.install_bulk, plugin.org.list,
  *   plugin.org.set_enabled, plugin.org.uninstall,
  *   plugin.registry.add, plugin.registry.list, plugin.registry.remove,
- *   plugin.registry.sync, plugin.settings.set_auth_alerts,
+ *   plugin.settings.set_auth_alerts,
  *   plugin.workspace.set_enabled
  */
 
@@ -416,27 +416,6 @@ describe("plugin.registry.remove route", () => {
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("plugin.registry.remove");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.registryId).toBe("reg-2");
-  });
-});
-
-// ── plugin.registry.sync ─────────────────────────────────────────────────
-
-describe("plugin.registry.sync route", () => {
-  const PATH = "/plugin/registries/sync";
-
-  it("happy path: 200", async () => {
-    mocks.invoke.mockResolvedValue({ accepted: true });
-    const res = await app.fetch(
-      post(PATH, { registryId: "reg-1", mode: "full" }),
-    );
-    expect(res.status).toBe(200);
-  });
-
-  it("calls invoke with 'plugin.registry.sync'", async () => {
-    await app.fetch(post(PATH, { registryId: "reg-1", mode: "incremental" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("plugin.registry.sync");
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.mode).toBe("incremental");
   });
 });
 

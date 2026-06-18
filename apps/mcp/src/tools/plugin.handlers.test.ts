@@ -487,35 +487,6 @@ describe("plugin.registry.remove handler", () => {
   });
 });
 
-// ── plugin.registry.sync ─────────────────────────────────────────────────────
-
-import handler_pluginRegistrySync, {
-  schema as pluginRegistrySyncSchema,
-  metadata as pluginRegistrySyncMetadata,
-} from "./plugin.registry.sync";
-
-describe("plugin.registry.sync handler", () => {
-  it("exports schema and metadata", () => {
-    expect(pluginRegistrySyncSchema).toBeDefined();
-    expect(pluginRegistrySyncMetadata.name).toBe("plugin.registry.sync");
-  });
-
-  it("calls invoke with sync args", async () => {
-    const fakeOutput = { accepted: true };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
-    const args = { registryId: "reg_1", mode: "incremental" as const };
-    await handler_pluginRegistrySync(args);
-
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.registry.sync",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
-  });
-});
-
 // ── plugin.settings.set_auth_alerts ──────────────────────────────────────────
 
 import handler_pluginSettingsSetAuthAlerts, {

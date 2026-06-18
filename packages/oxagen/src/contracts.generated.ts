@@ -122,7 +122,6 @@ import "./contracts/plugin.org.uninstall";
 import "./contracts/plugin.registry.add";
 import "./contracts/plugin.registry.list";
 import "./contracts/plugin.registry.remove";
-import "./contracts/plugin.registry.sync";
 import "./contracts/plugin.schema.get";
 import "./contracts/plugin.schema.validate";
 import "./contracts/plugin.settings.set_auth_alerts";

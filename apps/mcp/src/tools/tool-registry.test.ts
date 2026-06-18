@@ -83,7 +83,6 @@ import { metadata as pluginOrgUninstallMetadata } from "./plugin.org.uninstall";
 import { metadata as pluginRegistryAddMetadata } from "./plugin.registry.add";
 import { metadata as pluginRegistryListMetadata } from "./plugin.registry.list";
 import { metadata as pluginRegistryRemoveMetadata } from "./plugin.registry.remove";
-import { metadata as pluginRegistrySyncMetadata } from "./plugin.registry.sync";
 import { metadata as pluginSettingsSetAuthAlertsMetadata } from "./plugin.settings.set_auth_alerts";
 import { metadata as pluginWorkspaceSetEnabledMetadata } from "./plugin.workspace.set_enabled";
 import { metadata as orgMemberAddMetadata } from "./org.member.add";
@@ -239,7 +238,6 @@ const allToolMetadata = [
   pluginRegistryAddMetadata,
   pluginRegistryListMetadata,
   pluginRegistryRemoveMetadata,
-  pluginRegistrySyncMetadata,
   pluginSettingsSetAuthAlertsMetadata,
   pluginWorkspaceSetEnabledMetadata,
   promptSettingsReadMetadata,

@@ -180,10 +180,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () => (await import("./plugin.registry.remove")).handler as CapabilityHandlerFn,
   );
   registerHandler(
-    "plugin.registry.sync",
-    async () => (await import("./plugin.registry.sync")).handler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "plugin.catalog.browse",
     async () => (await import("./plugin.catalog.browse")).handler as CapabilityHandlerFn,
   );

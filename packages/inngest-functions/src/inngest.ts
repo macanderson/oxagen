@@ -90,9 +90,6 @@ type Events = {
       aspectRatio?: string;
     };
   };
-  "plugin/registry.sync": {
-    data: { registryId: string; mode: "full" | "incremental" };
-  };
   "agent/workflow.supervisor.start": {
     data: {
       orgId: string;
