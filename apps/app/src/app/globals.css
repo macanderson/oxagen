@@ -32,6 +32,9 @@
 @source "../../../../node_modules/@streamdown/code/dist/*.js";
 @source "../../../../node_modules/@streamdown/mermaid/dist/*.js";
 
+/* Scan the components folder located one directory up */
+@source "../components";
+
 /**
  * Appearance preferences — flash-free via data-* attributes on <html>.
  *

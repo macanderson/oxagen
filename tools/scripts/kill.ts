@@ -3,6 +3,7 @@ import { execa } from "execa";
 import kleur from "kleur";
 import { resolve } from "node:path";
 import { stopStripeTunnel } from "./stripe-tunnel";
+import { stopInngestDevServer } from "./inngest-dev";
 
 const COMPOSE_FILE = "docker-compose.dev.yml";
 const withVolumes = process.argv.includes("--volumes");
@@ -29,9 +30,11 @@ async function main(): Promise<void> {
   console.log(kleur.cyan(`[kill] stopping dev processes scoped to ${REPO_ROOT}`));
   await bestEffort("pkill", ["-f", pattern]);
 
-  // The Stripe CLI is a standalone Go binary the repo-scoped pkill above won't
-  // match — stop it via the pidfile written by `pnpm dev`.
+  // The Stripe CLI and Inngest dev server are standalone Go binaries the
+  // repo-scoped pkill above won't match — stop them via the pidfiles written by
+  // `pnpm dev`.
   await stopStripeTunnel();
+  await stopInngestDevServer();
 
   const downArgs = ["compose", "-f", COMPOSE_FILE, "down", "--remove-orphans"];
   if (withVolumes) downArgs.push("--volumes");

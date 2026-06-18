@@ -261,14 +261,26 @@ export const creditLedger = billingSchema.table(
       "credit_ledger_delta_non_zero",
       sql`${t.deltaCents} <> 0`,
     ),
-    // Atomic grant idempotency (OXA-1509). grants.ts inserts with
+    // Atomic GRANT idempotency (OXA-1509). grants.ts inserts with
     // INSERT … ON CONFLICT DO NOTHING; this partial unique index is the
-    // arbiter. Partial because only grant rows carry (reference_type,
-    // reference_id) — spend/usage rows leave them NULL and must stay
-    // unconstrained (multiple NULLs would otherwise collide).
+    // arbiter — it is the ONLY ledger writer that relies on it (refunds use a
+    // SELECT pre-check in disputes.ts; spends do a plain INSERT in credits.ts).
+    //
+    // Scoped to grant_* reasons ONLY. A grant is "exactly once per reference";
+    // spend/usage rows are append-only and legitimately repeat a reference:
+    // the metering path debits with (reason=consume_token_overage,
+    // reference_type=token_usage, reference_id=messageId), and a single turn
+    // makes MULTIPLE billable LLM calls (e.g. a tool that itself calls the AI
+    // layer + the main chat stream) that all share one messageId. Without the
+    // reason scope the second debit collides on this index → the charge throws
+    // and the call goes unbilled (silent revenue leak). Keeping reference_id on
+    // spend rows preserves message→debit traceability; the reason predicate is
+    // what stops them from being uniquely constrained.
     grantIdempotencyIdx: uniqueIndex("credit_ledger_grant_idempotency_idx")
       .on(t.orgId, t.reason, t.referenceType, t.referenceId)
-      .where(sql`${t.referenceType} IS NOT NULL AND ${t.referenceId} IS NOT NULL`),
+      .where(
+        sql`${t.referenceType} IS NOT NULL AND ${t.referenceId} IS NOT NULL AND ${t.reason} LIKE 'grant_%'`,
+      ),
   }),
 );
 

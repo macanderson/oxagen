@@ -16,6 +16,7 @@ onlyBuiltDependencies:
   - "@swc/core"
   - cpu-features
   - esbuild
+  - inngest-cli
   - lefthook
   - protobufjs
   - sharp
@@ -32,6 +33,7 @@ allowBuilds:
   '@swc/core': true
   cpu-features: true
   esbuild: true
+  inngest-cli: true
   lefthook: true
   protobufjs: true
   sharp: true
@@ -40,3 +42,6 @@ allowBuilds:
   tree-sitter-python: true
   tree-sitter-typescript: true
   unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - inngest-cli@1.30.0

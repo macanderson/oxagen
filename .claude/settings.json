@@ -49,7 +49,6 @@
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "if": "Bash(git push* main*)",
         "hooks": [
           {
             "type": "command",
@@ -141,7 +140,9 @@
     "claude-api@anthropic-agent-skills": false,
     "document-skills@anthropic-agent-skills": false,
     "modern-web-guidance@googlechrome": true,
-    "superpowers@claude-plugins-official": true
+    "superpowers@claude-plugins-official": true,
+    "chrome-devtools-mcp@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "googlechrome": {

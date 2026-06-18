@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { computeEnvPins } from "./lib/pin-env";
 import { startStripeTunnel } from "./stripe-tunnel";
+import { startInngestDevServer } from "./inngest-dev";
 import { formatError } from "./lib/format-error";
 
 const ROOT = resolve(process.cwd());
@@ -140,6 +141,10 @@ async function main(): Promise<void> {
   // Open the Stripe test-mode webhook tunnel and export its signing secret
   // BEFORE turbo spawns the API, so local webhook signature verification works.
   await startStripeTunnel();
+  // Start the Inngest dev server and force INNGEST_DEV=1 BEFORE turbo spawns the
+  // API/app, so the runner's events (subagent fanouts, ingestion, video, …) are
+  // consumed locally instead of vanishing toward Inngest Cloud.
+  await startInngestDevServer();
   await turbo();
 }
 

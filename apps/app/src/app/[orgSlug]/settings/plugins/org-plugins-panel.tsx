@@ -1003,7 +1003,6 @@ export function OrgPluginsPanel({
         workspaceId={workspaceId}
         open={marketplaceOpen}
         onOpenChange={setMarketplaceOpen}
-        deniedNames={denylisted.map((d) => d.serverName)}
         installAction={installCatalogAction}
         installBulkAction={installBulkAction}
       />

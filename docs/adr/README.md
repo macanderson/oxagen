@@ -21,3 +21,9 @@ with a new ADR if the call changes.
 - [ADR-009](./ADR-009-unified-capability-tool-model.md) — Unified capability/tool model via `surfaces`
 - [ADR-010](./ADR-010-subagent-fanout-via-inngest.md) — Subagent fanout via Inngest invoke
 - [ADR-011](./ADR-011-vercel-sandbox-driver.md) — Vercel Sandbox driver for Vercel Functions
+
+## Marketplace epic
+
+- [ADR-012](./ADR-012-connector-dual-write-pattern.md) — Connector dual-write to Postgres + Neo4j
+- [ADR-013](./ADR-013-oxagen-plugins-capability-packs.md) — Oxagen Plugins: first-party capability packs as a fourth plugin type
+- [ADR-014](./ADR-014-workspace-scoped-mcp-registry-single-default.md) — Workspace-scoped MCP registries with a single-default state machine

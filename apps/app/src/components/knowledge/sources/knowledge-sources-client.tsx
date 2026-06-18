@@ -355,8 +355,9 @@ export function KnowledgeSourcesClient({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Connected sources are synced on a schedule. Manual sync is available per-source.
-        Records ingested from sources are searchable by all agents in this workspace.
+        Connected sources are synced either a set schedule or via inbound webhooks. 
+        Manual sync is available per-source. Information ingested from sources is
+        searchable by all agents in this workspace.
       </p>
 
       <GitHubConnectionWizard
