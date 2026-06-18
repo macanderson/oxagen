@@ -100,7 +100,10 @@ const TabsIndicator = React.forwardRef<
     ref={ref}
     className={cn(
       // Active indicator is a solid bar in the active tab-border color.
-      "absolute bottom-0 left-0 h-0.5 rounded-full bg-tab-border-active",
+      // NOTE: do NOT add a `left-0` here — it conflicts with the
+      // `[left:var(--active-tab-left)]` arbitrary value below and pins the
+      // bar under the first tab (width still tracks, so it "grows" wrongly).
+      "absolute bottom-0 h-0.5 rounded-full bg-tab-border-active",
       // PRESERVED MOTION: the indicator slides between tabs.
       "transition-all duration-[var(--motion-base)] ease-[var(--ease-hover)]",
       "[left:var(--active-tab-left)] [width:var(--active-tab-width)]",
