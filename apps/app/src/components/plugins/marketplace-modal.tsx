@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PluginDetailPanel } from "./plugin-detail-panel";
 import { useToast } from "@/components/ui/toast";
-import { Search, Package, Plug, FileText, ShoppingBag, Boxes } from "lucide-react";
+import { Search, Package, Plug, ShoppingBag, BrainCircuit, Sparkles, BookOpen } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,11 +30,13 @@ interface CatalogServer {
   authKind: string;
   categories: string[];
   version: string;
-  pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
+  pluginType: "mcp_server" | "integration" | "agent_capability" | "agent_skill" | "knowledge_source";
   /** Returned by the API but not rendered in the UI */
   tier?: "free" | "premium";
   installed?: boolean;
 }
+
+type PluginTypeValue = "mcp_server" | "integration" | "agent_capability" | "agent_skill" | "knowledge_source";
 
 interface MarketplaceModalProps {
   orgSlug: string;
@@ -43,14 +45,12 @@ interface MarketplaceModalProps {
   workspaceId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Deny-listed server names (for greying out) */
-  deniedNames?: string[];
   /** Server action: install single plugin */
   installAction: (input: {
     orgSlug: string;
     workspaceId: string;
     catalogServerId: string;
-    pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
+    pluginType: PluginTypeValue;
     pluginId?: string;
   }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
   /** Server action: bulk install */
@@ -59,7 +59,7 @@ interface MarketplaceModalProps {
     workspaceId: string;
     items: Array<{
       catalogServerId?: string;
-      pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
+      pluginType: PluginTypeValue;
       pluginId?: string;
     }>;
   }) => Promise<{ ok: boolean; error?: string }>;
@@ -68,22 +68,20 @@ interface MarketplaceModalProps {
 const PLUGIN_TABS = [
   { value: "mcp_server", label: "MCP Servers", icon: Plug },
   { value: "integration", label: "Integrations", icon: Package },
-  { value: "content_tool", label: "Content Tools", icon: FileText },
-  { value: "capability", label: "Oxagen Plugins", icon: Boxes },
-] as const;
-
-type PluginTypeValue = "mcp_server" | "integration" | "content_tool" | "capability";
+  { value: "agent_capability", label: "Agent Capabilities", icon: BrainCircuit },
+  { value: "agent_skill", label: "Agent Skills", icon: Sparkles },
+  { value: "knowledge_source", label: "Knowledge Sources", icon: BookOpen },
+] as const satisfies ReadonlyArray<{ value: PluginTypeValue; label: string; icon: React.ComponentType<{ className?: string; "aria-hidden"?: "true" }> }>;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function MarketplaceModal({
   orgSlug,
-  orgId,
+  orgId: _orgId,
   workspaceSlug: _workspaceSlug,
   workspaceId,
   open,
   onOpenChange,
-  deniedNames = [],
   installAction,
   installBulkAction,
 }: MarketplaceModalProps) {
@@ -117,7 +115,6 @@ export function MarketplaceModal({
         if (authFilter) params.set("authKind", authFilter);
         if (installedFilter === "yes") params.set("installed", "true");
         else if (installedFilter === "no") params.set("installed", "false");
-        if (orgId) params.set("orgId", orgId);
         if (workspaceId) params.set("workspaceId", workspaceId);
         const res = await fetch(`/api/v1/plugin/catalog/browse?${params.toString()}`);
         if (!res.ok) throw new Error(await res.text());
@@ -135,7 +132,7 @@ export function MarketplaceModal({
         setLoading(false);
       }
     },
-    [activeTab, search, authFilter, installedFilter, orgId, workspaceId],
+    [activeTab, search, authFilter, installedFilter, workspaceId],
   );
 
   // Re-fetch when the modal opens or filters change.
@@ -175,12 +172,7 @@ export function MarketplaceModal({
       const result = await installBulkAction({
         orgSlug,
         workspaceId,
-        items: Array.from(selected).map((id) => {
-          if (activeTab === "capability") {
-            return { pluginType: "capability" as const, pluginId: id };
-          }
-          return { catalogServerId: id, pluginType: activeTab };
-        }),
+        items: Array.from(selected).map((id) => ({ catalogServerId: id, pluginType: activeTab })),
       });
       if (!result.ok) {
         setError(result.error ?? "Bulk install failed");
@@ -220,7 +212,7 @@ export function MarketplaceModal({
             Plugin Marketplace
           </DialogTitle>
           <DialogDescription>
-            Browse and install MCP servers, integrations, content tools, and Oxagen capability plugins for your organization.
+            Browse and install MCP servers, integrations, agent capabilities, agent skills, and knowledge sources for your workspace.
           </DialogDescription>
         </DialogHeader>
 
@@ -229,6 +221,8 @@ export function MarketplaceModal({
           onValueChange={(v) => {
             setActiveTab(v as PluginTypeValue);
             setSelected(new Set());
+            // Clear server list immediately so the previous type's results never flash.
+            setServers([]);
           }}
           className="flex flex-col flex-1 min-h-0"
         >
@@ -255,8 +249,8 @@ export function MarketplaceModal({
 
             {/* Row 2: auth filter chips + search */}
             <div className="flex items-center gap-2 py-2.5">
-              {/* Auth filter chips — not applicable for capability plugins */}
-              {activeTab !== "capability" && (["", "oauth", "secret", "none"] as const).map((k) => (
+              {/* Auth filter chips — not applicable for agent/knowledge types */}
+              {(activeTab === "mcp_server" || activeTab === "integration") && (["", "oauth", "secret", "none"] as const).map((k) => (
                 <button
                   key={k || "all"}
                   type="button"
@@ -272,8 +266,8 @@ export function MarketplaceModal({
                 </button>
               ))}
 
-              {/* Installed filter chips — applies to every tab */}
-              {activeTab !== "capability" && (
+              {/* Installed filter chips — applies to every tab; separator shown after auth chips */}
+              {(activeTab === "mcp_server" || activeTab === "integration") && (
                 <span className="mx-1 h-4 w-px bg-border/60" aria-hidden="true" />
               )}
               {(
@@ -342,7 +336,7 @@ export function MarketplaceModal({
                   ) : (
                     <>
                       <p className="mb-3 text-xs text-muted-foreground">
-                        {total} {value === "capability" ? "plugins" : "servers"}
+                        {total} {value === "agent_capability" || value === "agent_skill" || value === "knowledge_source" ? "plugins" : "servers"}
                       </p>
                       <div
                         className="grid grid-cols-2 gap-3"
@@ -357,47 +351,34 @@ export function MarketplaceModal({
                           </p>
                         )}
                         {servers.map((srv) => {
-                          const denied = deniedNames.includes(srv.name);
                           const isSelected = selected.has(srv.id);
                           return (
                             <button
                               key={srv.id}
                               type="button"
-                              onClick={() => {
-                                if (!denied) setDetailId(srv.id);
-                              }}
-                              disabled={denied}
+                              onClick={() => setDetailId(srv.id)}
                               className={`relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${
-                                denied
-                                  ? "border-border/30 bg-muted/20 opacity-50 cursor-not-allowed"
-                                  : isSelected
-                                    ? "border-primary/60 bg-primary/5"
-                                    : "border-border/60 bg-card hover:border-foreground/30 hover:bg-muted/30"
+                                isSelected
+                                  ? "border-primary/60 bg-primary/5"
+                                  : "border-border/60 bg-card hover:border-foreground/30 hover:bg-muted/30"
                               }`}
-                              aria-label={
-                                denied
-                                  ? `${srv.title ?? srv.name} — blocked by your organization's admins`
-                                  : (srv.title ?? srv.name)
-                              }
+                              aria-label={srv.title ?? srv.name}
                               data-testid={`marketplace-server-card-${srv.id}`}
-                              data-denied={denied ? "true" : undefined}
                             >
                               {/* Multi-select checkbox */}
-                              {!denied && (
-                                <span
-                                  className="absolute top-3 right-3"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                  }}
-                                  aria-label={isSelected ? "Deselect" : "Select"}
-                                >
-                                  <Checkbox
-                                    checked={isSelected}
-                                    onCheckedChange={() => toggleSelect(srv.id)}
-                                    data-testid={`marketplace-select-${srv.id}`}
-                                  />
-                                </span>
-                              )}
+                              <span
+                                className="absolute top-3 right-3"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                }}
+                                aria-label={isSelected ? "Deselect" : "Select"}
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => toggleSelect(srv.id)}
+                                  data-testid={`marketplace-select-${srv.id}`}
+                                />
+                              </span>
 
                               <div className="flex items-start gap-2 pr-6">
                                 {srv.icons[0] ? (
@@ -438,15 +419,7 @@ export function MarketplaceModal({
                                     Installed
                                   </Badge>
                                 )}
-                                {srv.pluginType === "capability" ? (
-                                  <>
-                                    {srv.categories.slice(0, 2).map((c) => (
-                                      <Badge key={c} variant="outline" size="sm">
-                                        {c}
-                                      </Badge>
-                                    ))}
-                                  </>
-                                ) : (
+                                {srv.pluginType === "mcp_server" || srv.pluginType === "integration" ? (
                                   <>
                                     {srv.transportTypes.slice(0, 2).map((t) => (
                                       <Badge key={t} variant="outline" size="sm">
@@ -466,17 +439,16 @@ export function MarketplaceModal({
                                       {srv.authKind}
                                     </Badge>
                                   </>
+                                ) : (
+                                  <>
+                                    {srv.categories.slice(0, 2).map((c) => (
+                                      <Badge key={c} variant="outline" size="sm">
+                                        {c}
+                                      </Badge>
+                                    ))}
+                                  </>
                                 )}
                               </div>
-
-                              {denied && (
-                                <p
-                                  className="text-xs text-muted-foreground italic"
-                                  data-testid={`marketplace-denied-badge-${srv.id}`}
-                                >
-                                  Blocked by your organization&apos;s admins
-                                </p>
-                              )}
                             </button>
                           );
                         })}
@@ -506,28 +478,9 @@ export function MarketplaceModal({
                       const detailServer = servers.find((s) => s.id === detailId);
                       return (
                         <PluginDetailPanel
-                          catalogId={detailId}
+                          serverName={detailServer?.name ?? detailId}
                           orgSlug={orgSlug}
                           pluginType={value as PluginTypeValue}
-                          isDenied={
-                            detailServer
-                              ? deniedNames.includes(detailServer.name)
-                              : false
-                          }
-                          capabilityData={
-                            value === "capability" && detailServer
-                              ? {
-                                  id: detailServer.id,
-                                  name: detailServer.name,
-                                  title: detailServer.title,
-                                  description: detailServer.description,
-                                  version: detailServer.version,
-                                  categories: detailServer.categories,
-                                  tier: detailServer.tier ?? "free",
-                                  installed: detailServer.installed ?? false,
-                                }
-                              : undefined
-                          }
                           installAction={(input) =>
                             installAction({ ...input, workspaceId })
                           }

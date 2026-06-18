@@ -2,14 +2,19 @@
  * GET /api/v1/plugin/catalog/browse
  *
  * Returns a paginated list of catalog servers for the marketplace modal.
- * Authentication required; org context is not required (catalog is global).
+ * Authentication required; workspace context is resolved from the workspaceId
+ * query param (which the server validates against session membership).
+ * orgId is NOT accepted as a query param — it is resolved server-side from
+ * the session to prevent cross-org data leakage.
  *
  * Query params:
- *   search    — optional text search
- *   authKind  — optional filter: oauth | secret | none
- *   installed — optional filter: "true" (installed only) | "false" (not installed only)
- *   limit     — page size (max 100, default 30)
- *   offset    — pagination offset (default 0)
+ *   pluginType — optional filter: mcp_server | integration | agent_capability | agent_skill | knowledge_source
+ *   search     — optional text search
+ *   authKind   — optional filter: oauth | secret | none
+ *   installed  — optional filter: "true" (installed only) | "false" (not installed only)
+ *   workspaceId — optional workspace scope (resolved + validated server-side)
+ *   limit      — page size (max 100, default 30)
+ *   offset     — pagination offset (default 0)
  */
 import { type NextRequest, NextResponse } from "next/server";
 import { invoke } from "@oxagen/oxagen";
@@ -35,8 +40,9 @@ export async function GET(request: NextRequest) {
   const pluginType =
     rawPluginType === "mcp_server" ||
     rawPluginType === "integration" ||
-    rawPluginType === "content_tool" ||
-    rawPluginType === "capability"
+    rawPluginType === "agent_capability" ||
+    rawPluginType === "agent_skill" ||
+    rawPluginType === "knowledge_source"
       ? rawPluginType
       : undefined;
   const rawInstalled = searchParams.get("installed");
@@ -44,14 +50,14 @@ export async function GET(request: NextRequest) {
     rawInstalled === "true" ? true : rawInstalled === "false" ? false : undefined;
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "30", 10), 100);
   const offset = Math.max(parseInt(searchParams.get("offset") ?? "0", 10), 0);
-  const workspaceId = searchParams.get("workspaceId") ?? undefined;
-  // orgId: passed from query param when available so installed state is resolved per-org.
-  // Falls back to empty string (catalog is global; installed=false for anonymous browse).
-  const orgId = searchParams.get("orgId") ?? "";
+  // workspaceId is accepted from the client for scoping, but orgId is always
+  // resolved from the session to prevent cross-org spoofing.
+  const workspaceId = searchParams.get("workspaceId") ?? "";
 
   const ctx = {
-    orgId,
-    workspaceId: workspaceId ?? "",
+    // orgId intentionally omitted from query params; handlers resolve via workspaceId scope.
+    orgId: "",
+    workspaceId,
     userId: session.user.id,
     apiKeyId: null as string | null,
     requestId: crypto.randomUUID(),
@@ -62,7 +68,7 @@ export async function GET(request: NextRequest) {
   try {
     const result = await invoke(
       "plugin.catalog.browse",
-      { search, authKind, pluginType, installed, limit, offset, workspaceId },
+      { search, authKind, pluginType, installed, limit, offset },
       ctx,
       { surface: "agent" },
     );

@@ -8,8 +8,9 @@ import { ExternalLink, X, Plug } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+type PluginTypeValue = "mcp_server" | "integration" | "agent_capability" | "agent_skill" | "knowledge_source";
+
 interface CatalogDetail {
-  id: string;
   name: string;
   title: string | null;
   description: string;
@@ -21,34 +22,20 @@ interface CatalogDetail {
   transportTypes: string[];
   authKind: string;
   categories: string[];
-  readmeHtml: string | null;
-  status: string;
-  /** Only present for capability entries (from browse response, no catalog/get endpoint) */
-  tier?: "free" | "premium";
+  readmeHtml?: string | null;
+  status?: string;
   installed?: boolean;
 }
 
 interface PluginDetailPanelProps {
-  catalogId: string;
+  /** Registry server name used to fetch detail via catalog/get?name=&version=latest */
+  serverName: string;
   orgSlug: string;
-  pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
-  isDenied: boolean;
-  /** Pre-populated data for capability entries (avoids a catalog/get fetch) */
-  capabilityData?: {
-    id: string;
-    name: string;
-    title: string | null;
-    description: string;
-    version: string;
-    categories: string[];
-    tier: "free" | "premium";
-    installed: boolean;
-  };
+  pluginType: PluginTypeValue;
   installAction: (input: {
     orgSlug: string;
     catalogServerId: string;
-    pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
-    pluginId?: string;
+    pluginType: PluginTypeValue;
   }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
   onInstalled: () => void;
   onClose: () => void;
@@ -57,56 +44,28 @@ interface PluginDetailPanelProps {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function PluginDetailPanel({
-  catalogId,
+  serverName,
   orgSlug,
   pluginType,
-  isDenied,
-  capabilityData,
   installAction,
   onInstalled,
   onClose,
 }: PluginDetailPanelProps) {
   const toast = useToast();
-  const [detail, setDetail] = React.useState<CatalogDetail | null>(
-    // For capability entries, bootstrap from pre-populated data to avoid a catalog/get fetch.
-    capabilityData
-      ? {
-          id: capabilityData.id,
-          name: capabilityData.name,
-          title: capabilityData.title,
-          description: capabilityData.description,
-          version: capabilityData.version,
-          websiteUrl: null,
-          icons: [],
-          packages: [],
-          remotes: [],
-          transportTypes: [],
-          authKind: "none",
-          categories: capabilityData.categories,
-          readmeHtml: null,
-          status: "active",
-          tier: capabilityData.tier,
-          installed: capabilityData.installed,
-        }
-      : null,
-  );
-  const [loading, setLoading] = React.useState(!capabilityData);
+  const [detail, setDetail] = React.useState<CatalogDetail | null>(null);
+  const [loading, setLoading] = React.useState(true);
   const [installing, setInstalling] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    // Capability entries are pre-populated; skip the catalog/get fetch.
-    if (pluginType === "capability") return;
-
     const controller = new AbortController();
-    // Reset state synchronously so loading is true before the fetch resolves,
-    // preventing a race where a fast fetch resolves before deferred state resets fire.
     setLoading(true);
     setDetail(null);
     setError(null);
-    fetch(`/api/v1/plugin/catalog/get?catalogId=${encodeURIComponent(catalogId)}`, {
-      signal: controller.signal,
-    })
+    fetch(
+      `/api/v1/plugin/catalog/get?name=${encodeURIComponent(serverName)}&version=latest`,
+      { signal: controller.signal },
+    )
       .then((r) => r.json() as Promise<CatalogDetail>)
       .then((d) => {
         setDetail(d);
@@ -120,7 +79,7 @@ export function PluginDetailPanel({
     return () => {
       controller.abort();
     };
-  }, [catalogId, pluginType]);
+  }, [serverName]);
 
   const handleInstall = async () => {
     if (!detail) return;
@@ -129,9 +88,8 @@ export function PluginDetailPanel({
     try {
       const result = await installAction({
         orgSlug,
-        catalogServerId: detail.id,
+        catalogServerId: detail.name,
         pluginType,
-        pluginId: pluginType === "capability" ? detail.id : undefined,
       });
       if (!result.ok) {
         setError(result.error ?? "Install failed");
@@ -176,6 +134,11 @@ export function PluginDetailPanel({
     );
   }
 
+  const isAgentOrKnowledge =
+    pluginType === "agent_capability" ||
+    pluginType === "agent_skill" ||
+    pluginType === "knowledge_source";
+
   return (
     <div className="flex h-full flex-col" data-testid="plugin-detail-panel">
       {/* Header */}
@@ -186,6 +149,7 @@ export function PluginDetailPanel({
             alt=""
             width={48}
             height={48}
+            unoptimized
             className="h-12 w-12 rounded-xl object-contain flex-shrink-0"
             aria-hidden="true"
           />
@@ -230,22 +194,13 @@ export function PluginDetailPanel({
         className="flex flex-wrap gap-1.5 border-b border-border/40 px-6 py-3"
         data-testid="plugin-detail-badges"
       >
-        {pluginType === "capability" ? (
+        {detail.installed && (
+          <Badge variant="success" size="sm" data-testid="plugin-detail-installed-badge">
+            Installed
+          </Badge>
+        )}
+        {isAgentOrKnowledge ? (
           <>
-            {detail.tier && (
-              <Badge
-                variant={detail.tier === "premium" ? "info" : "secondary"}
-                size="sm"
-                data-testid="plugin-detail-tier-badge"
-              >
-                {detail.tier === "premium" ? "Premium" : "Free"}
-              </Badge>
-            )}
-            {detail.installed && (
-              <Badge variant="success" size="sm" data-testid="plugin-detail-installed-badge">
-                Installed
-              </Badge>
-            )}
             {detail.categories.slice(0, 3).map((c) => (
               <Badge key={c} variant="secondary" size="sm">
                 {c}
@@ -276,7 +231,7 @@ export function PluginDetailPanel({
                 {c}
               </Badge>
             ))}
-            {detail.status !== "active" && (
+            {detail.status && detail.status !== "active" && (
               <Badge variant="destructive" size="sm">
                 {detail.status}
               </Badge>
@@ -285,10 +240,10 @@ export function PluginDetailPanel({
         )}
       </div>
 
-      {/* Body — description + README (README omitted for capability entries) */}
+      {/* Body — description + README */}
       <div className="flex-1 overflow-auto px-6 py-4">
         <p className="mb-3 text-sm text-muted-foreground">{detail.description}</p>
-        {pluginType !== "capability" && (
+        {!isAgentOrKnowledge && (
           detail.readmeHtml ? (
             // readmeHtml is sanitized by rehype-sanitize server-side in Plan 2 (catalog sync).
             // dangerouslySetInnerHTML is safe here — no user-supplied content, only registry README.
@@ -308,14 +263,7 @@ export function PluginDetailPanel({
       {/* Install footer */}
       <div className="flex-shrink-0 border-t border-border/40 px-6 py-4">
         {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
-        {isDenied ? (
-          <p
-            className="text-sm text-muted-foreground italic"
-            data-testid="plugin-detail-denied"
-          >
-            Blocked by your organization&apos;s admins — cannot install.
-          </p>
-        ) : detail.installed ? (
+        {detail.installed ? (
           <Button
             className="w-full"
             variant="outline"
@@ -328,10 +276,10 @@ export function PluginDetailPanel({
           <Button
             className="w-full"
             onClick={handleInstall}
-            disabled={installing || (pluginType !== "capability" && detail.status !== "active")}
+            disabled={installing || (!isAgentOrKnowledge && detail.status !== "active" && detail.status !== undefined)}
             data-testid="plugin-detail-install-btn"
           >
-            {installing ? "Installing…" : "Install to organization"}
+            {installing ? "Installing…" : "Install to workspace"}
           </Button>
         )}
       </div>

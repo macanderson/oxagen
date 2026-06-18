@@ -5,7 +5,8 @@
  * Authentication required.
  *
  * Query params:
- *   catalogId — required, the catalog server UUID
+ *   name    — required, the registry server name (e.g. "@anthropic-ai/mcp-server-brave-search")
+ *   version — optional, semver string or "latest" (default: "latest")
  */
 import { type NextRequest, NextResponse } from "next/server";
 import { invoke } from "@oxagen/oxagen";
@@ -20,10 +21,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const catalogId = request.nextUrl.searchParams.get("catalogId");
-  if (!catalogId) {
-    return NextResponse.json({ error: "catalogId is required" }, { status: 400 });
+  const name = request.nextUrl.searchParams.get("name");
+  if (!name) {
+    return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
+  const version = request.nextUrl.searchParams.get("version") ?? "latest";
 
   const ctx = {
     orgId: "",
@@ -38,7 +40,7 @@ export async function GET(request: NextRequest) {
   try {
     const result = await invoke(
       "plugin.catalog.get",
-      { catalogId },
+      { name, version },
       ctx,
       { surface: "agent" },
     );

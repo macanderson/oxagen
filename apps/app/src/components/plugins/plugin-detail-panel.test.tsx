@@ -4,14 +4,17 @@
  *
  * Covers:
  *   - Shows loading skeleton initially
+ *   - Fetches using name+version (not catalogId)
  *   - Shows plugin title after fetch resolves
  *   - Shows plugin description
  *   - Shows website link when websiteUrl is set
  *   - Close button calls onClose
- *   - Badges for transport types and auth kind
+ *   - Badges for transport types and auth kind (mcp_server)
+ *   - Categories rendered for agent_capability type
  *   - Install button calls installAction
- *   - Denied state shows blocked message instead of install button
  *   - No-README fallback message
+ *   - Fetch error shows error element
+ *   - Already installed state shows disabled button
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -28,7 +31,6 @@ vi.mock("@/components/ui/toast", () => ({
 afterEach(cleanup);
 
 const mockDetail = {
-  id: "srv-1",
   name: "github",
   title: "GitHub MCP",
   description: "Connect to GitHub repos",
@@ -45,10 +47,9 @@ const mockDetail = {
 };
 
 const defaultProps = {
-  catalogId: "srv-1",
+  serverName: "github",
   orgSlug: "acme",
   pluginType: "mcp_server" as const,
-  isDenied: false,
   installAction: vi.fn().mockResolvedValue({ ok: true, orgListingId: "listing-1" }),
   onInstalled: vi.fn(),
   onClose: vi.fn(),
@@ -56,9 +57,7 @@ const defaultProps = {
 
 const mockFetch = vi.fn();
 
-// The component uses setTimeout(0) inside useEffect to defer state resets.
-// The fetch mock uses a 50ms delay so the deferred setTimeout(0) fires first
-// and the component goes loading=true before the data arrives.
+// The component's fetch is async; add a small delay so loading state is visible first.
 function fetchAfterTimer(data: unknown) {
   return Promise.resolve({
     json: () => new Promise<unknown>((resolve) => setTimeout(() => resolve(data), 50)),
@@ -79,6 +78,17 @@ describe("PluginDetailPanel — loading state", () => {
   it("shows loading skeleton initially", () => {
     render(<PluginDetailPanel {...defaultProps} />);
     expect(screen.getByTestId("plugin-detail-loading")).toBeInTheDocument();
+  });
+});
+
+describe("PluginDetailPanel — fetch URL", () => {
+  it("fetches using name+version query params (not catalogId)", async () => {
+    render(<PluginDetailPanel {...defaultProps} serverName="@acme/my-server" />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    const url = mockFetch.mock.calls[0]?.[0] as string;
+    expect(url).toContain("name=%40acme%2Fmy-server");
+    expect(url).toContain("version=latest");
+    expect(url).not.toContain("catalogId");
   });
 });
 
@@ -116,7 +126,7 @@ describe("PluginDetailPanel — loaded state", () => {
     );
   });
 
-  it("renders transport type badges", async () => {
+  it("renders transport type badges for mcp_server type", async () => {
     render(<PluginDetailPanel {...defaultProps} />);
     await waitFor(
       () => expect(screen.getByTestId("plugin-detail-badges")).toBeInTheDocument(),
@@ -126,12 +136,82 @@ describe("PluginDetailPanel — loaded state", () => {
     expect(screen.getByText("sse")).toBeInTheDocument();
   });
 
-  it("renders category badges", async () => {
+  it("renders category badges for mcp_server type", async () => {
     render(<PluginDetailPanel {...defaultProps} />);
     await waitFor(
       () => expect(screen.getByText("dev-tools")).toBeInTheDocument(),
       { timeout: 3000 },
     );
+  });
+
+  it("renders category badges for agent_capability type (no transport/auth)", async () => {
+    const agentDetail = {
+      name: "oxagen/media-svg",
+      title: "SVG Generation",
+      description: "Generate SVG images",
+      version: "1.0.0",
+      websiteUrl: null,
+      icons: [],
+      packages: [],
+      remotes: [],
+      transportTypes: [],
+      authKind: "none",
+      categories: ["media", "generation"],
+      readmeHtml: null,
+      status: "active",
+      installed: false,
+    };
+    mockFetch.mockImplementation(() => fetchAfterTimer(agentDetail));
+
+    render(
+      <PluginDetailPanel
+        {...defaultProps}
+        serverName="oxagen/media-svg"
+        pluginType="agent_capability"
+      />,
+    );
+    await waitFor(
+      () => expect(screen.getByText("media")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    expect(screen.getByText("generation")).toBeInTheDocument();
+    // No auth badge for agent types
+    expect(screen.queryByText("oauth")).not.toBeInTheDocument();
+    expect(screen.queryByText("none")).not.toBeInTheDocument();
+  });
+
+  it("does not render README section for agent_capability type", async () => {
+    const agentDetail = {
+      name: "oxagen/media-svg",
+      title: "SVG Generation",
+      description: "Generate SVG images",
+      version: "1.0.0",
+      websiteUrl: null,
+      icons: [],
+      packages: [],
+      remotes: [],
+      transportTypes: [],
+      authKind: "none",
+      categories: ["media"],
+      readmeHtml: "<p>Some readme</p>",
+      status: "active",
+    };
+    mockFetch.mockImplementation(() => fetchAfterTimer(agentDetail));
+
+    render(
+      <PluginDetailPanel
+        {...defaultProps}
+        serverName="oxagen/media-svg"
+        pluginType="agent_capability"
+      />,
+    );
+    await waitFor(
+      () => expect(screen.getByTestId("plugin-detail-panel")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    // README section intentionally suppressed for agent types
+    expect(screen.queryByTestId("plugin-detail-readme")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("plugin-detail-no-readme")).not.toBeInTheDocument();
   });
 });
 
@@ -147,10 +227,16 @@ describe("PluginDetailPanel — actions", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("Install button triggers installAction", async () => {
+  it("Install button triggers installAction and calls onInstalled", async () => {
     const installAction = vi.fn().mockResolvedValue({ ok: true, orgListingId: "listing-1" });
     const onInstalled = vi.fn();
-    render(<PluginDetailPanel {...defaultProps} installAction={installAction} onInstalled={onInstalled} />);
+    render(
+      <PluginDetailPanel
+        {...defaultProps}
+        installAction={installAction}
+        onInstalled={onInstalled}
+      />,
+    );
     await waitFor(
       () => expect(screen.getByTestId("plugin-detail-install-btn")).toBeInTheDocument(),
       { timeout: 3000 },
@@ -159,23 +245,29 @@ describe("PluginDetailPanel — actions", () => {
     await waitFor(() => expect(installAction).toHaveBeenCalled());
     await waitFor(() => expect(onInstalled).toHaveBeenCalled());
   });
-});
 
-describe("PluginDetailPanel — denied state", () => {
-  it("shows blocked message when isDenied=true", async () => {
-    render(<PluginDetailPanel {...defaultProps} isDenied />);
+  it("shows 'Already installed' disabled button when installed=true", async () => {
+    const installedDetail = { ...mockDetail, installed: true };
+    mockFetch.mockImplementation(() => fetchAfterTimer(installedDetail));
+
+    render(<PluginDetailPanel {...defaultProps} />);
     await waitFor(
-      () => expect(screen.getByTestId("plugin-detail-denied")).toBeInTheDocument(),
+      () => expect(screen.getByTestId("plugin-detail-install-btn")).toBeInTheDocument(),
       { timeout: 3000 },
     );
-    expect(screen.getByText(/blocked by your organization's admins/i)).toBeInTheDocument();
+    const btn = screen.getByTestId("plugin-detail-install-btn");
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveTextContent(/already installed/i);
   });
 
-  it("does not show install button when isDenied=true", async () => {
-    render(<PluginDetailPanel {...defaultProps} isDenied />);
+  it("shows install button text as 'Install to workspace'", async () => {
+    render(<PluginDetailPanel {...defaultProps} />);
     await waitFor(
-      () => expect(screen.queryByTestId("plugin-detail-install-btn")).not.toBeInTheDocument(),
+      () => expect(screen.getByTestId("plugin-detail-install-btn")).toBeInTheDocument(),
       { timeout: 3000 },
+    );
+    expect(screen.getByTestId("plugin-detail-install-btn")).toHaveTextContent(
+      "Install to workspace",
     );
   });
 });
@@ -188,59 +280,5 @@ describe("PluginDetailPanel — fetch error", () => {
       () => expect(screen.getByTestId("plugin-detail-error")).toBeInTheDocument(),
       { timeout: 3000 },
     );
-  });
-});
-
-describe("PluginDetailPanel — capability type", () => {
-  const capabilityData = {
-    id: "oxagen/media-svg",
-    name: "oxagen/media-svg",
-    title: "SVG Generation",
-    description: "Generate SVG images from text prompts",
-    version: "1.0.0",
-    categories: ["media"],
-    tier: "free" as const,
-    installed: false,
-  };
-
-  const capabilityProps = {
-    catalogId: "oxagen/media-svg",
-    orgSlug: "acme",
-    pluginType: "capability" as const,
-    isDenied: false,
-    capabilityData,
-    installAction: vi.fn().mockResolvedValue({ ok: true, orgListingId: "ol-cap-1" }),
-    onInstalled: vi.fn(),
-    onClose: vi.fn(),
-  };
-
-  it("does not fetch /api/v1/plugin/catalog/get when capabilityData is provided", () => {
-    render(<PluginDetailPanel {...capabilityProps} />);
-    expect(mockFetch).not.toHaveBeenCalled();
-  });
-
-  it("renders the Free tier badge", () => {
-    render(<PluginDetailPanel {...capabilityProps} />);
-    expect(screen.getByTestId("plugin-detail-tier-badge")).toBeInTheDocument();
-    expect(screen.getByTestId("plugin-detail-tier-badge")).toHaveTextContent("Free");
-  });
-
-  it("does not render the README section", () => {
-    render(<PluginDetailPanel {...capabilityProps} />);
-    expect(screen.queryByTestId("plugin-detail-readme")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("plugin-detail-no-readme")).not.toBeInTheDocument();
-  });
-
-  it("shows disabled 'Already installed' button when installed:true", () => {
-    render(
-      <PluginDetailPanel
-        {...capabilityProps}
-        capabilityData={{ ...capabilityData, installed: true }}
-      />,
-    );
-    const btn = screen.getByTestId("plugin-detail-install-btn");
-    expect(btn).toBeInTheDocument();
-    expect(btn).toBeDisabled();
-    expect(btn).toHaveTextContent(/already installed/i);
   });
 });
