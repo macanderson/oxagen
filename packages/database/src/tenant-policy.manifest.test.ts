@@ -104,11 +104,11 @@ describe("tenant policy manifest", () => {
     expect(builtinReadable).toEqual(["agent.skills", "agent.skill_versions"]);
   });
 
-  it("mcp.registries is the only org_or_global table", () => {
+  it("there are no org_or_global tables (mcp.registries reclassified to standard in 2026-06-17 rebuild)", () => {
     const orgOrGlobal = POLICY_MANIFEST.filter(
       (e) => e.policyClass === "org_or_global",
     ).map((e) => e.table);
-    expect(orgOrGlobal).toEqual(["mcp.registries"]);
+    expect(orgOrGlobal).toEqual([]);
   });
 
   it("excludes tables that carry neither org_id nor a scoping workspace_id", () => {
@@ -116,7 +116,8 @@ describe("tenant policy manifest", () => {
     // stripe_event_processing has no org_id and no workspace_id (shared catalog)
     expect(tables).not.toContain("billing.stripe_event_processing");
     expect(tables).not.toContain("billing.plans");
-    expect(tables).not.toContain("mcp.catalog_servers");
+    expect(tables).not.toContain("mcp.catalog_servers"); // removed 2026-06-17
+    expect(tables).not.toContain("plugin.org_denylist"); // removed 2026-06-17
     expect(tables).not.toContain("ingestion.connector_schemas");
     expect(tables).not.toContain("graph.projection_checkpoints");
   });
@@ -127,10 +128,10 @@ describe("tenant policy manifest", () => {
     expect(unique.size).toBe(tables.length);
   });
 
-  it("covers exactly the 63 policied tables of the v0.4.x schema", () => {
+  it("covers exactly the 62 policied tables of the v0.4.x schema", () => {
     // Intentional ratchet: adding a tenant-owned table means updating BOTH the
     // manifest and this count (and regenerating the Atlas RLS migration).
-    // 63 = 62 baseline + agent.agent_triggers (typed agent model).
-    expect(POLICY_MANIFEST.length).toBe(63);
+    // 62 = 63 baseline − plugin.org_denylist (removed 2026-06-17 workspace-scoping rebuild).
+    expect(POLICY_MANIFEST.length).toBe(62);
   });
 });

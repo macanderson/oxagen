@@ -116,12 +116,13 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "ingestion.deletion_jobs", policyClass: "standard" },
   { table: "ingestion.oauth_accounts", policyClass: "org_only" },
 
-  // ── mcp.* — credentials/mcp_servers are tenant-owned; registries is the
-  //   one org_or_global table (NULL org_id = platform default seed registry).
-  //   catalog_servers excluded: shared catalog, no org_id.
+  // ── mcp.* — all three tables are now tenant-owned (workspace-scoped).
+  //   catalog_servers was removed in the 2026-06-17 workspace-scoping rebuild.
+  //   registries changed from org_or_global (nullable org_id) to standard
+  //   (org_id + workspace_id both NOT NULL).
   { table: "mcp.credentials", policyClass: "standard" },
   { table: "mcp.mcp_servers", policyClass: "standard" },
-  { table: "mcp.registries", policyClass: "org_or_global" },
+  { table: "mcp.registries", policyClass: "standard" },
 
   // ── notification.* (org_id NOT NULL, workspace_id nullable) ──────────────
   { table: "notification.notifications", policyClass: "workspace_nullable" },
@@ -131,9 +132,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "org.org_users", policyClass: "org_only" },
   { table: "org.invitations", policyClass: "org_only" },
 
-  // ── plugin.* ──────────────────────────────────────────────────────────────
-  { table: "plugin.org_listings", policyClass: "org_only" },
-  { table: "plugin.org_denylist", policyClass: "org_only" },
+  // ── plugin.* (workspace-scoped; org_denylist was removed 2026-06-17) ────────
+  { table: "plugin.installed_plugins", policyClass: "standard" },
 
   // ── privacy.* — GDPR Art.17/20 request queues (org_id NN, no workspace) ──
   { table: "privacy.privacy_export_requests", policyClass: "org_only" },
