@@ -129,9 +129,13 @@ const workspaceConfig: SidebarConfig = {
       id: "marketplace",
       label: "Marketplace",
       icon: ShoppingBag,
-      // The plugin marketplace lives at the org level (org settings → plugins);
-      // it only needs orgSlug, so it resolves from a workspace context too.
-      href: (ctx) => org.settings.plugins(ctx),
+      // The plugin marketplace now lives at the workspace settings → plugins route.
+      // When workspaceSlug is available we link to the workspace-scoped page;
+      // otherwise fall back to the org root (shouldn't happen in ws-mode).
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.settings.plugins(ctx as Required<ScopeContext>)
+          : org.settings.plugins(ctx),
       group: "footer",
     },
     {

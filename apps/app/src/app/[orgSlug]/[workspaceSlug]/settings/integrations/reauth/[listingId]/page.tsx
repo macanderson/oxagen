@@ -99,10 +99,10 @@ export default async function ReauthPage({
         <p className="text-sm text-muted-foreground" data-testid="reauth-secret-fallback">
           Contact your org admin to update the API key for this plugin in{" "}
           <Link
-            href={`/${orgSlug}/settings/plugins`}
+            href={`/${orgSlug}/${workspaceSlug}/settings/plugins`}
             className="text-primary underline"
           >
-            Org Settings → Plugins
+            Workspace Settings → Plugins
           </Link>
           .
         </p>

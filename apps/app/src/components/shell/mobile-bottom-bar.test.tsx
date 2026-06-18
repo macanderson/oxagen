@@ -87,7 +87,7 @@ describe("MobileBottomBar — More sheet", () => {
       () => expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument(),
       { timeout: 2000 },
     );
-    expect(screen.getByRole("link", { name: "Marketplace" })).toHaveAttribute("href", "/acme/settings/plugins");
+    expect(screen.getByRole("link", { name: "Marketplace" })).toHaveAttribute("href", "/acme/prod/settings/plugins");
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/acme/prod/settings");
   });
 

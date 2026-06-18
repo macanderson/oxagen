@@ -1,104 +1,64 @@
 import { describe, it, expect } from "vitest";
-import {
-  shapeInstalledPlugins,
-  isCapabilityListing,
-  type OrgListingRow,
-} from "./plugin-shape";
+import { shapeInstalledPlugins, type InstalledPluginRow } from "./plugin-shape";
 
-function listing(over: Partial<OrgListingRow> = {}): OrgListingRow {
+function row(over: Partial<InstalledPluginRow> = {}): InstalledPluginRow {
   return {
-    id: "lst_1",
-    name: "image-generation",
+    id: "plug_1",
+    name: "image-gen",
     title: "Image Generation",
     description: "Generate images",
     iconUrl: null,
-    pluginType: "capability",
+    pluginType: "agent_capability",
     authKind: "none",
     enabled: true,
     ...over,
   };
 }
 
-describe("isCapabilityListing", () => {
-  it("is true only for the capability plugin type", () => {
-    expect(isCapabilityListing("capability")).toBe(true);
-    expect(isCapabilityListing("mcp_server")).toBe(false);
-    expect(isCapabilityListing("integration")).toBe(false);
-    expect(isCapabilityListing("content_tool")).toBe(false);
-  });
-});
-
 describe("shapeInstalledPlugins", () => {
-  it("shows capability packs with NO workspace install row (the reported bug)", () => {
-    // Capability packs are org-level and never create an mcp.mcp_servers row.
-    // They must still appear on the workspace tab.
-    const out = shapeInstalledPlugins(
-      [
-        listing({ id: "cap_video", name: "video-generation", pluginType: "capability" }),
-        listing({ id: "cap_image", name: "image-generation", pluginType: "capability" }),
-      ],
-      [], // no workspace install rows at all
-    );
-    expect(out.map((p) => p.id)).toEqual(["cap_video", "cap_image"]);
+  it("returns an InstalledPlugin for each row", () => {
+    const out = shapeInstalledPlugins([row({ id: "a" }), row({ id: "b" })]);
+    expect(out.map((p) => p.id)).toEqual(["a", "b"]);
   });
 
-  it("derives capability wsEnabled from the org-level enabled flag", () => {
-    const out = shapeInstalledPlugins(
-      [
-        listing({ id: "cap_on", enabled: true }),
-        listing({ id: "cap_off", enabled: false }),
-      ],
-      [],
-    );
-    expect(out.find((p) => p.id === "cap_on")?.wsEnabled).toBe(true);
-    expect(out.find((p) => p.id === "cap_off")?.wsEnabled).toBe(false);
-    // A disabled capability still SHOWS (so the toggle can re-enable it).
-    expect(out.map((p) => p.id)).toEqual(["cap_on", "cap_off"]);
+  it("maps row.enabled to both enabled and wsEnabled", () => {
+    const out = shapeInstalledPlugins([
+      row({ id: "on", enabled: true }),
+      row({ id: "off", enabled: false }),
+    ]);
+    expect(out.find((p) => p.id === "on")?.wsEnabled).toBe(true);
+    expect(out.find((p) => p.id === "on")?.enabled).toBe(true);
+    expect(out.find((p) => p.id === "off")?.wsEnabled).toBe(false);
+    expect(out.find((p) => p.id === "off")?.enabled).toBe(false);
   });
 
-  it("hides a workspace-level plugin that has no install row", () => {
-    const out = shapeInstalledPlugins(
-      [listing({ id: "mcp_1", pluginType: "mcp_server", enabled: true })],
-      [],
-    );
-    expect(out).toEqual([]);
+  it("returns an empty array for no rows", () => {
+    expect(shapeInstalledPlugins([])).toEqual([]);
   });
 
-  it("shows a workspace-level plugin only when it has an install row, using the row's enabled state", () => {
-    const out = shapeInstalledPlugins(
-      [listing({ id: "mcp_1", pluginType: "mcp_server", enabled: true })],
-      [{ orgListingId: "mcp_1", enabled: false }],
-    );
-    expect(out).toHaveLength(1);
-    expect(out[0]?.id).toBe("mcp_1");
-    // ws install state drives the toggle for non-capability plugins.
-    expect(out[0]?.wsEnabled).toBe(false);
+  it("preserves title, description, iconUrl, pluginType, authKind", () => {
+    const out = shapeInstalledPlugins([
+      row({
+        id: "p1",
+        title: "My Plugin",
+        description: "Does things",
+        iconUrl: "https://example.com/icon.png",
+        pluginType: "mcp_server",
+        authKind: "oauth",
+      }),
+    ]);
+    expect(out[0]).toMatchObject({
+      id: "p1",
+      title: "My Plugin",
+      description: "Does things",
+      iconUrl: "https://example.com/icon.png",
+      pluginType: "mcp_server",
+      authKind: "oauth",
+    });
   });
 
-  it("hides an org-disabled workspace-level plugin even with an install row", () => {
-    const out = shapeInstalledPlugins(
-      [listing({ id: "mcp_1", pluginType: "mcp_server", enabled: false })],
-      [{ orgListingId: "mcp_1", enabled: true }],
-    );
-    expect(out).toEqual([]);
-  });
-
-  it("does not let a capability's visibility depend on a ws row, but other types still need one", () => {
-    const out = shapeInstalledPlugins(
-      [
-        listing({ id: "cap_1", pluginType: "capability", enabled: true }),
-        listing({ id: "int_1", pluginType: "integration", enabled: true }),
-      ],
-      [{ orgListingId: "int_1", enabled: true }],
-    );
-    expect(out.map((p) => p.id).sort()).toEqual(["cap_1", "int_1"]);
-  });
-
-  it("ignores ws install rows with a null orgListingId", () => {
-    const out = shapeInstalledPlugins(
-      [listing({ id: "mcp_1", pluginType: "mcp_server", enabled: true })],
-      [{ orgListingId: null, enabled: true }],
-    );
-    expect(out).toEqual([]);
+  it("uses name as the identifier key", () => {
+    const out = shapeInstalledPlugins([row({ id: "x", name: "my-server" })]);
+    expect(out[0]?.name).toBe("my-server");
   });
 });

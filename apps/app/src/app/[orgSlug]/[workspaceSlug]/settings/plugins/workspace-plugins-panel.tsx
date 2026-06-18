@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
 import { isRenderableImageUrl } from "@/lib/plugin-icon";
+import { RegistryManager, type RegistryRow } from "./registry-manager";
 import { ShoppingBag, Trash2, Plug, Package, FileText, Boxes } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -19,7 +20,6 @@ export interface InstalledPlugin {
   pluginType: string;
   authKind: string;
   enabled: boolean;
-  /** Whether the plugin is enabled at workspace scope (from mcpServers row) */
   wsEnabled: boolean;
 }
 
@@ -29,12 +29,14 @@ interface WorkspacePluginsPanelProps {
   orgId: string;
   workspaceId: string;
   initialPlugins: InstalledPlugin[];
+  initialRegistries: RegistryRow[];
+  docsBaseUrl: string;
   installAction: (input: {
     orgSlug: string;
     workspaceSlug: string;
     workspaceId: string;
     catalogServerId: string;
-    pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
+    pluginType: "mcp_server" | "integration" | "content_tool" | "capability" | "agent_skill" | "agent_capability" | "knowledge_source";
     pluginId?: string;
   }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
   installBulkAction: (input: {
@@ -43,7 +45,7 @@ interface WorkspacePluginsPanelProps {
     workspaceId: string;
     items: Array<{
       catalogServerId?: string;
-      pluginType: "mcp_server" | "integration" | "content_tool" | "capability";
+      pluginType: "mcp_server" | "integration" | "content_tool" | "capability" | "agent_skill" | "agent_capability" | "knowledge_source";
       pluginId?: string;
     }>;
   }) => Promise<{ ok: boolean; error?: string }>;
@@ -58,6 +60,17 @@ interface WorkspacePluginsPanelProps {
     workspaceSlug: string;
     orgListingId: string;
   }) => Promise<{ ok: boolean; error?: string }>;
+  addRegistryAction: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    name: string;
+    baseUrl: string;
+  }) => Promise<{ ok: boolean; registryId?: string; isDefault?: boolean; error?: string }>;
+  removeRegistryAction: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    registryId: string;
+  }) => Promise<{ ok: boolean; promotedId?: string | null; error?: string }>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -65,14 +78,14 @@ interface WorkspacePluginsPanelProps {
 function pluginTypeIcon(type: string) {
   if (type === "integration") return <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
   if (type === "content_tool") return <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
-  if (type === "capability") return <Boxes className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
+  if (type === "capability" || type === "agent_capability") return <Boxes className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
   return <Plug className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
 }
 
 function pluginTypeBadgeVariant(type: string): "outline" | "muted" | "secondary" | "info" {
   if (type === "integration") return "muted";
   if (type === "content_tool") return "secondary";
-  if (type === "capability") return "info";
+  if (type === "capability" || type === "agent_capability") return "info";
   return "outline";
 }
 
@@ -84,10 +97,14 @@ export function WorkspacePluginsPanel({
   orgId,
   workspaceId,
   initialPlugins,
+  initialRegistries,
+  docsBaseUrl,
   installAction,
   installBulkAction,
   toggleAction,
   uninstallAction,
+  addRegistryAction,
+  removeRegistryAction,
 }: WorkspacePluginsPanelProps) {
   const [plugins, setPlugins] = React.useState(initialPlugins);
   const [marketplaceOpen, setMarketplaceOpen] = React.useState(false);
@@ -107,7 +124,7 @@ export function WorkspacePluginsPanel({
     setError(plugin.id, null);
     // Optimistic update
     setPlugins((prev) =>
-      prev.map((p) => (p.id === plugin.id ? { ...p, wsEnabled: enabled } : p)),
+      prev.map((p) => (p.id === plugin.id ? { ...p, wsEnabled: enabled, enabled } : p)),
     );
     const result = await toggleAction({
       orgSlug,
@@ -123,7 +140,9 @@ export function WorkspacePluginsPanel({
     if (!result.ok) {
       // Revert
       setPlugins((prev) =>
-        prev.map((p) => (p.id === plugin.id ? { ...p, wsEnabled: !enabled } : p)),
+        prev.map((p) =>
+          p.id === plugin.id ? { ...p, wsEnabled: !enabled, enabled: !enabled } : p,
+        ),
       );
       setError(plugin.id, result.error ?? "Update failed");
     }
@@ -151,20 +170,29 @@ export function WorkspacePluginsPanel({
     if (!result.ok) {
       setError(plugin.id, result.error ?? "Uninstall failed");
     } else {
-      // Remove from local list
       setPlugins((prev) => prev.filter((p) => p.id !== plugin.id));
     }
   };
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Installed Plugins section */}
+      {/* Registry manager */}
+      <RegistryManager
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+        initialRegistries={initialRegistries}
+        docsBaseUrl={docsBaseUrl}
+        addRegistryAction={addRegistryAction}
+        removeRegistryAction={removeRegistryAction}
+      />
+
+      {/* Installed plugins section */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-foreground">Installed Plugins</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Plugins enabled for this workspace from your organization&apos;s allow-list.
+              Plugins enabled for this workspace.
             </p>
           </div>
           <Button

@@ -3,12 +3,11 @@
  * plugin-actions.ts — server actions for Workspace → Settings → Plugins.
  *
  * Workspace-scoped plugin management: install from marketplace, toggle enabled
- * state, and uninstall. Delegates to org-level contracts since workspace plugins
- * are a view over the org allow-list with per-workspace enable/disable state.
+ * state, uninstall, and manage registries. All operations delegate to workspace-
+ * scoped contracts (plugin.registry.*, plugin.workspace.*).
  */
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
@@ -17,11 +16,11 @@ import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import { eq, and } from "drizzle-orm";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const NOT_AUTHORIZED = "Only workspace owners and admins can manage plugins.";
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 function buildCtx(opts: { orgId: string; workspaceId: string; userId: string }) {
   return {
@@ -64,47 +63,20 @@ async function resolveAndAuthWorkspace(orgSlug: string, workspaceSlug: string) {
   return { session, org, ws, canManage };
 }
 
-/**
- * Resolve a listing's plugin_type so toggle/uninstall can route to the correct
- * contract. Capability packs are org-scoped (Phase 1): they have no per-workspace
- * mcp_servers row and `plugin.workspace.set_enabled` THROWS for them — they must
- * go through the org-level `plugin.org.*` contracts instead.
- */
-async function getListingPluginType(
-  orgId: string,
-  orgListingId: string,
-): Promise<string | null> {
-  const rows = await runInTenantScope({ orgId, workspaceId: ORG_ONLY_WS }, () =>
-    withTenantDb((tx) =>
-      tx
-        .select({ pluginType: schema.pluginOrgListings.pluginType })
-        .from(schema.pluginOrgListings)
-        .where(
-          and(
-            eq(schema.pluginOrgListings.id, orgListingId),
-            eq(schema.pluginOrgListings.orgId, orgId),
-          ),
-        )
-        .limit(1),
-    ),
-  ).catch(() => [] as { pluginType: string }[]);
-  return rows[0]?.pluginType ?? null;
+function pluginsPath(ctx: Required<ScopeContext>): string {
+  return workspace.settings.plugins(ctx);
 }
 
 // ── installPlugin ─────────────────────────────────────────────────────────────
-//
-// Matches the shape MarketplaceModal expects for installAction.
-// workspaceId is forwarded by the modal but we resolve it server-side for security.
 
 const InstallSchema = z.object({
   orgSlug: z.string().min(1),
   workspaceSlug: z.string().optional(),
-  /** workspaceId forwarded by MarketplaceModal — resolved server-side for security */
   workspaceId: z.string().optional(),
   catalogServerId: z.string().optional(),
   pluginId: z.string().optional(),
   pluginType: z
-    .enum(["mcp_server", "integration", "content_tool", "capability"])
+    .enum(["mcp_server", "integration", "content_tool", "capability", "agent_skill", "agent_capability", "knowledge_source"])
     .default("mcp_server"),
 });
 
@@ -122,12 +94,11 @@ export async function installPlugin(
   const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
   if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
 
-  // Install at org level (plugins are org-scoped; workspaces opt in/out)
-  const ctx = buildCtx({ orgId: org.id, workspaceId: ORG_ONLY_WS, userId: session.user.id });
+  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
 
   try {
     const out = await invoke(
-      "plugin.org.install",
+      "plugin.workspace.install",
       {
         pluginType: parsed.data.pluginType,
         catalogServerId: parsed.data.catalogServerId,
@@ -137,23 +108,9 @@ export async function installPlugin(
       { surface: "agent" },
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(workspace.settings.plugins(routeCtx));
+    revalidatePath(pluginsPath(routeCtx));
 
-    // Enable at workspace scope if we got a listing id
     const typed = out as { orgListingId: string };
-    if (typed.orgListingId) {
-      const wsCtx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
-      await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-        invoke(
-          "plugin.workspace.set_enabled",
-          { orgListingId: typed.orgListingId, enabled: true },
-          wsCtx,
-          { surface: "agent" },
-        ),
-      ).catch(() => {
-        // Non-fatal: listing installed at org level but ws-enable failed
-      });
-    }
     return { ok: true, orgListingId: typed.orgListingId };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Install failed" };
@@ -161,8 +118,6 @@ export async function installPlugin(
 }
 
 // ── installBulkPlugin ─────────────────────────────────────────────────────────
-//
-// Matches the shape MarketplaceModal expects for installBulkAction.
 
 const InstallBulkSchema = z.object({
   orgSlug: z.string().min(1),
@@ -173,7 +128,7 @@ const InstallBulkSchema = z.object({
       z.object({
         catalogServerId: z.string().optional(),
         pluginType: z
-          .enum(["mcp_server", "integration", "content_tool", "capability"])
+          .enum(["mcp_server", "integration", "content_tool", "capability", "agent_skill", "agent_capability", "knowledge_source"])
           .default("mcp_server"),
         pluginId: z.string().optional(),
       }),
@@ -196,43 +151,18 @@ export async function installBulkPlugin(
   const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
   if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
 
-  const ctx = buildCtx({ orgId: org.id, workspaceId: ORG_ONLY_WS, userId: session.user.id });
+  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
 
   try {
-    const out = await invoke(
-      "plugin.org.install_bulk",
+    await invoke(
+      "plugin.workspace.install_bulk",
       { items: parsed.data.items },
       ctx,
       { surface: "agent" },
     );
 
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(workspace.settings.plugins(routeCtx));
-
-    // Enable each newly-installed listing at workspace scope
-    const typed = out as {
-      installed: Array<{
-        catalogServerId: string | null;
-        orgListingId: string | null;
-        error: string | null;
-      }>;
-    };
-    const wsCtx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
-    await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-      await Promise.all(
-        typed.installed
-          .filter((r) => r.orgListingId && !r.error)
-          .map((r) =>
-            invoke(
-              "plugin.workspace.set_enabled",
-              { orgListingId: r.orgListingId!, enabled: true },
-              wsCtx,
-              { surface: "agent" },
-            ).catch(() => undefined),
-          ),
-      );
-    }).catch(() => undefined);
-
+    revalidatePath(pluginsPath(routeCtx));
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Bulk install failed" };
@@ -258,27 +188,16 @@ export async function togglePlugin(
   const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
   if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
 
-  const pluginType = await getListingPluginType(org.id, orgListingId);
+  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
 
   try {
-    if (pluginType === "capability") {
-      // Capability packs are org-scoped (Phase 1) — toggle the org listing.
-      // plugin.workspace.set_enabled throws for capability type.
-      const orgCtx = buildCtx({ orgId: org.id, workspaceId: ORG_ONLY_WS, userId: session.user.id });
-      await invoke("plugin.org.set_enabled", { orgListingId, enabled }, orgCtx, {
+    await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+      invoke("plugin.workspace.set_enabled", { orgListingId, enabled }, ctx, {
         surface: "agent",
-      });
-    } else {
-      // Workspace-level plugins — toggle the per-workspace install row.
-      const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
-      await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-        invoke("plugin.workspace.set_enabled", { orgListingId, enabled }, ctx, {
-          surface: "agent",
-        }),
-      );
-    }
+      }),
+    );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(workspace.settings.plugins(routeCtx));
+    revalidatePath(pluginsPath(routeCtx));
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Update failed" };
@@ -286,12 +205,6 @@ export async function togglePlugin(
 }
 
 // ── uninstallPlugin ───────────────────────────────────────────────────────────
-//
-// Workspace-level uninstall = disable the listing for this workspace only.
-// Org-level uninstall (remove from the org entirely) is available from the org
-// settings/plugins page. Here we disable at workspace scope.
-// TODO(OXA-???): add a plugin.workspace.uninstall contract for a true
-// workspace-scoped remove.
 
 const UninstallSchema = z.object({
   orgSlug: z.string().min(1),
@@ -309,28 +222,89 @@ export async function uninstallPlugin(
   const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
   if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
 
-  const pluginType = await getListingPluginType(org.id, orgListingId);
+  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
 
   try {
-    if (pluginType === "capability") {
-      // Capability packs are org-scoped — remove from the org allow-list
-      // (soft-delete + drop dependent workspace installs). There is no
-      // workspace-only disable path for capabilities in Phase 1.
-      const orgCtx = buildCtx({ orgId: org.id, workspaceId: ORG_ONLY_WS, userId: session.user.id });
-      await invoke("plugin.org.uninstall", { orgListingId }, orgCtx, { surface: "agent" });
-    } else {
-      // Workspace-level uninstall = disable the listing for this workspace only.
-      const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
-      await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-        invoke("plugin.workspace.set_enabled", { orgListingId, enabled: false }, ctx, {
-          surface: "agent",
-        }),
-      );
-    }
+    await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+      invoke("plugin.workspace.uninstall", { orgListingId }, ctx, { surface: "agent" }),
+    );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(workspace.settings.plugins(routeCtx));
+    revalidatePath(pluginsPath(routeCtx));
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Uninstall failed" };
+  }
+}
+
+// ── addRegistry ───────────────────────────────────────────────────────────────
+
+const AddRegistrySchema = z.object({
+  orgSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
+  name: z.string().min(1).max(120),
+  baseUrl: z.string().url(),
+});
+
+export async function addRegistry(
+  input: z.infer<typeof AddRegistrySchema>,
+): Promise<{ ok: boolean; registryId?: string; isDefault?: boolean; error?: string }> {
+  const parsed = AddRegistrySchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input" };
+
+  const { orgSlug, workspaceSlug } = parsed.data;
+  const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
+  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
+
+  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
+
+  try {
+    const out = await invoke(
+      "plugin.registry.add",
+      { name: parsed.data.name, baseUrl: parsed.data.baseUrl },
+      ctx,
+      { surface: "agent" },
+    );
+    const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+    revalidatePath(pluginsPath(routeCtx));
+    const typed = out as { registryId: string; isDefault: boolean };
+    return { ok: true, registryId: typed.registryId, isDefault: typed.isDefault };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Registry add failed" };
+  }
+}
+
+// ── removeRegistry ────────────────────────────────────────────────────────────
+
+const RemoveRegistrySchema = z.object({
+  orgSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
+  registryId: z.string().min(1),
+});
+
+export async function removeRegistry(
+  input: z.infer<typeof RemoveRegistrySchema>,
+): Promise<{ ok: boolean; promotedId?: string | null; error?: string }> {
+  const parsed = RemoveRegistrySchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input" };
+
+  const { orgSlug, workspaceSlug } = parsed.data;
+  const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
+  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
+
+  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
+
+  try {
+    const out = await invoke(
+      "plugin.registry.remove",
+      { registryId: parsed.data.registryId },
+      ctx,
+      { surface: "agent" },
+    );
+    const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+    revalidatePath(pluginsPath(routeCtx));
+    const typed = out as { ok: boolean; promotedId: string | null };
+    return { ok: true, promotedId: typed.promotedId };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Registry remove failed" };
   }
 }

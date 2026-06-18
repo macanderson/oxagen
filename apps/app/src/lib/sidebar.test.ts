@@ -187,8 +187,8 @@ describe("href builders produce correct paths", () => {
       expect(findItem("activity").href(wsCtx)).toBe("/acme/production/activity");
     });
 
-    it("marketplace -> /{org}/settings/plugins (org-level, from ws ctx)", () => {
-      expect(findItem("marketplace").href(wsCtx)).toBe("/acme/settings/plugins");
+    it("marketplace -> /{org}/{ws}/settings/plugins (workspace-scoped, from ws ctx)", () => {
+      expect(findItem("marketplace").href(wsCtx)).toBe("/acme/production/settings/plugins");
     });
 
     it("settings -> /{org}/{ws}/settings", () => {

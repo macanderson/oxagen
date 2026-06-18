@@ -16,6 +16,7 @@ export * from "./components/menu";
 export * from "./components/motion-provider";
 export * from "./components/not-found";
 export * from "./components/panel";
+export * from "./components/popover";
 export * from "./components/radio-group";
 export * from "./components/segmented-control";
 export * from "./components/select";
