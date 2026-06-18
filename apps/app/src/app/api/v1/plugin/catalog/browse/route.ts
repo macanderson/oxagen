@@ -20,6 +20,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { getSession } from "@/lib/session";
+import { resolveWorkspaceScope } from "@/lib/resolve-org";
 
 export const dynamic = "force-dynamic";
 
@@ -50,14 +51,21 @@ export async function GET(request: NextRequest) {
     rawInstalled === "true" ? true : rawInstalled === "false" ? false : undefined;
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "30", 10), 100);
   const offset = Math.max(parseInt(searchParams.get("offset") ?? "0", 10), 0);
-  // workspaceId is accepted from the client for scoping, but orgId is always
-  // resolved from the session to prevent cross-org spoofing.
+  // The client sends only workspaceId; orgId is resolved server-side from it
+  // (and membership is validated) via the canonical tenant seam — never trust a
+  // client-supplied orgId, and never pass an empty placeholder into invoke().
   const workspaceId = searchParams.get("workspaceId") ?? "";
+  const scope = await resolveWorkspaceScope(workspaceId, session.user.id);
+  if (!scope) {
+    return NextResponse.json(
+      { error: "Workspace not found or access denied" },
+      { status: 404 },
+    );
+  }
 
   const ctx = {
-    // orgId intentionally omitted from query params; handlers resolve via workspaceId scope.
-    orgId: "",
-    workspaceId,
+    orgId: scope.orgId,
+    workspaceId: scope.workspaceId,
     userId: session.user.id,
     apiKeyId: null as string | null,
     requestId: crypto.randomUUID(),

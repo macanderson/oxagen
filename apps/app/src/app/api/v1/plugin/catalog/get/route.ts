@@ -5,13 +5,15 @@
  * Authentication required.
  *
  * Query params:
- *   name    — required, the registry server name (e.g. "@anthropic-ai/mcp-server-brave-search")
- *   version — optional, semver string or "latest" (default: "latest")
+ *   name        — required, the registry server name (e.g. "@anthropic-ai/mcp-server-brave-search")
+ *   version     — optional, semver string or "latest" (default: "latest")
+ *   workspaceId — required; orgId + membership are resolved server-side from it
  */
 import { type NextRequest, NextResponse } from "next/server";
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { getSession } from "@/lib/session";
+import { resolveWorkspaceScope } from "@/lib/resolve-org";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +29,18 @@ export async function GET(request: NextRequest) {
   }
   const version = request.nextUrl.searchParams.get("version") ?? "latest";
 
+  const workspaceId = request.nextUrl.searchParams.get("workspaceId") ?? "";
+  const scope = await resolveWorkspaceScope(workspaceId, session.user.id);
+  if (!scope) {
+    return NextResponse.json(
+      { error: "Workspace not found or access denied" },
+      { status: 404 },
+    );
+  }
+
   const ctx = {
-    orgId: "",
-    workspaceId: "",
+    orgId: scope.orgId,
+    workspaceId: scope.workspaceId,
     userId: session.user.id,
     apiKeyId: null as string | null,
     requestId: crypto.randomUUID(),

@@ -202,6 +202,53 @@ export const assertWorkspaceMember = cache(
   },
 );
 
+export interface WorkspaceScope {
+  orgId: string;
+  workspaceId: string;
+}
+
+/**
+ * Canonical tenant-scope seam for API routes / server actions that receive a
+ * `workspaceId` from the client but NOT the org/workspace slugs.
+ *
+ * Resolves the workspace's owning org AND asserts membership in a single query,
+ * returning BOTH ids. Returns `null` when the workspace is unknown OR the user
+ * is not a member (the two are intentionally indistinguishable — no existence
+ * leak, mirroring resolveOrg/assertWorkspaceMember's notFound() behaviour).
+ *
+ * Use this instead of hand-rolling `orgId` resolution in a route handler. Never
+ * pass an empty/placeholder `orgId` into `invoke()` — a workspace-scoped
+ * capability needs a real org id (the RLS GUCs and handler filters depend on
+ * it), and an empty id silently matches zero rows ("active tenant not found").
+ *
+ * Per-request memoized.
+ */
+export const resolveWorkspaceScope = cache(
+  async (
+    workspaceId: string,
+    userId: string,
+  ): Promise<WorkspaceScope | null> => {
+    if (!workspaceId) return null;
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({ orgId: schema.workspaces.orgId })
+        .from(schema.workspaces)
+        .innerJoin(
+          schema.workspaceUsers,
+          and(
+            eq(schema.workspaceUsers.workspaceId, schema.workspaces.id),
+            eq(schema.workspaceUsers.userId, userId),
+          ),
+        )
+        .where(eq(schema.workspaces.id, workspaceId))
+        .limit(1),
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return { orgId: row.orgId, workspaceId };
+  },
+);
+
 /**
  * Return the caller's role in the org, or null when they are not a member.
  * Read-only (does NOT 404) — use for UI gating (e.g. enabling/disabling the

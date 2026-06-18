@@ -1,5 +1,6 @@
 import { resolveOrg, resolveWorkspace, assertWorkspaceMember } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
+import { TenantProvider } from "@/lib/tenant/tenant-context";
 
 export default async function WorkspaceLayout({
   children,
@@ -18,5 +19,20 @@ export default async function WorkspaceLayout({
   // same org by guessing the workspace slug (IDOR). Non-members get a 404 via
   // notFound() — consistent with assertOrgMember above. — OXA-1515
   await assertWorkspaceMember(workspace.id, session.user.id);
-  return <>{children}</>;
+  // Seed the active tenant once so every client component under this route can
+  // read it via useTenant() — no prop-drilling of orgId/workspaceId.
+  return (
+    <TenantProvider
+      value={{
+        orgId: tenant.id,
+        orgSlug: tenant.slug,
+        orgName: tenant.name,
+        workspaceId: workspace.id,
+        workspaceSlug: workspace.slug,
+        workspaceName: workspace.name,
+      }}
+    >
+      {children}
+    </TenantProvider>
+  );
 }
