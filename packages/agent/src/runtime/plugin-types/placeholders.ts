@@ -9,4 +9,4 @@
 import { registerPluginType } from "../plugin-type";
 
 registerPluginType({ type: "integration", contributeTools: async () => [] });
-registerPluginType({ type: "content_tool", contributeTools: async () => [] });
+registerPluginType({ type: "knowledge_source", contributeTools: async () => [] });

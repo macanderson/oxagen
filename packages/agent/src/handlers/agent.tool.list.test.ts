@@ -39,7 +39,7 @@ vi.mock("@oxagen/oxagen/plugins", () => ({
 }));
 
 vi.mock("@oxagen/plugins", () => ({
-  listEntitledCapabilityPluginIds: vi.fn(async (_orgId: string) => new Set<string>()),
+  listEntitledCapabilityPluginIds: vi.fn(async (_orgId: string, _workspaceId: string) => new Set<string>()),
 }));
 
 import { agentToolListHandler } from "./agent.tool.list";
@@ -128,6 +128,7 @@ describe("agent.tool.list handler — entitlement filter (WP4)", () => {
     name: "SVG Generation",
     description: "Generate SVGs",
     version: "1.0.0",
+    pluginType: "agent_capability" as const,
     tier: "free" as const,
     visibility: "ga" as const,
     category: "media",
@@ -228,6 +229,6 @@ describe("agent.tool.list handler — entitlement filter (WP4)", () => {
     // service is called exactly once per handler invocation.
     expect(result.tools).toHaveLength(2);
     expect(listEntitledCapabilityPluginIds).toHaveBeenCalledTimes(1);
-    expect(listEntitledCapabilityPluginIds).toHaveBeenCalledWith(CTX.orgId);
+    expect(listEntitledCapabilityPluginIds).toHaveBeenCalledWith(CTX.orgId, CTX.workspaceId);
   });
 });

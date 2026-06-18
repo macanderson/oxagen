@@ -32,9 +32,9 @@ export async function agentToolListHandler(
     if (plugin) {
       if (!entitlementFetchFailed && entitledPluginIds === null) {
         try {
-          entitledPluginIds = await listEntitledCapabilityPluginIds(ctx.orgId);
+          entitledPluginIds = await listEntitledCapabilityPluginIds(ctx.orgId, ctx.workspaceId);
         } catch (err) {
-          logger.warn({ err, orgId: ctx.orgId }, "entitlement fetch failed — excluding all plugin-claimed capabilities (fail-closed)");
+          logger.warn({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "entitlement fetch failed — excluding all plugin-claimed capabilities (fail-closed)");
           entitlementFetchFailed = true;
         }
       }

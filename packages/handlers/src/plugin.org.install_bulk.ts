@@ -23,21 +23,21 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
           requestId: ctx.requestId ?? null,
         });
         logger.info(
-          { orgListingId, orgId: ctx.orgId, pluginType: item.pluginType, catalogServerId: item.catalogServerId ?? null },
+          { orgListingId, orgId: ctx.orgId, pluginType: item.pluginType, pluginId: item.pluginId ?? null },
           "plugin.org.install_bulk: item installed",
         );
         return {
-          catalogServerId: item.catalogServerId ?? null,
+          pluginId: item.pluginId ?? null,
           orgListingId,
           error: null,
         };
       } catch (err) {
         logger.error(
-          { err, orgId: ctx.orgId, pluginType: item.pluginType, catalogServerId: item.catalogServerId ?? null },
+          { err, orgId: ctx.orgId, pluginType: item.pluginType, pluginId: item.pluginId ?? null },
           "plugin.org.install_bulk: item failed",
         );
         return {
-          catalogServerId: item.catalogServerId ?? null,
+          pluginId: item.pluginId ?? null,
           orgListingId: null,
           error: err instanceof Error ? err.message : String(err),
         };

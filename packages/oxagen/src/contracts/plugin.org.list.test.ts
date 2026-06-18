@@ -84,7 +84,7 @@ describe("plugin.org.list contract", () => {
       ],
     });
     expect(out.listings).toHaveLength(1);
-    expect(out.listings[0].workspaceId).toBe("ws-uuid");
+    expect(out.listings[0]!.workspaceId).toBe("ws-uuid");
   });
 
   it("output schema rejects a payload that includes a denylist field", () => {

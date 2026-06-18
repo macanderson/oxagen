@@ -10,11 +10,16 @@ describe("plugin.catalog.get contract", () => {
     expect(pluginCatalogGet.surfaces).toContain("mcp");
     expect(pluginCatalogGet.defaultRoles.org.Owner).toBe("allow");
   });
-  it("rejects input missing catalogId", () => {
+  it("rejects input missing name", () => {
     expect(() => pluginCatalogGet.input.parse({})).toThrow();
   });
-  it("accepts a valid catalogId", () => {
-    const parsed = pluginCatalogGet.input.parse({ catalogId: "mcat-abc-123" });
-    expect(parsed.catalogId).toBe("mcat-abc-123");
+  it("accepts a valid name+version", () => {
+    const parsed = pluginCatalogGet.input.parse({ name: "@anthropic-ai/model-context-protocol-servers-brave-search", version: "1.0.0" });
+    expect(parsed.name).toBe("@anthropic-ai/model-context-protocol-servers-brave-search");
+    expect(parsed.version).toBe("1.0.0");
+  });
+  it("defaults version to 'latest' when omitted", () => {
+    const parsed = pluginCatalogGet.input.parse({ name: "some-server" });
+    expect(parsed.version).toBe("latest");
   });
 });
