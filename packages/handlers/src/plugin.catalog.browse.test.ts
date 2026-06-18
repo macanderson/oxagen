@@ -322,22 +322,174 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
   });
 });
 
-// ── Tests: agent_skill / knowledge_source / integration (static, empty for now) ──
+// ── Tests: agent_skill path (from agent.skills table) ────────────────────────
 
-describe("plugin.catalog.browse handler — other static plugin types", () => {
+/** Seed skill rows returned from the DB mock for agent_skill browse tests. */
+const fakeSkills = [
+  {
+    id: "skl-uuid-1",
+    slug: "web-research",
+    name: "Web Research",
+    description: "Search the web and extract structured information.",
+    source: "builtin",
+  },
+  {
+    id: "skl-uuid-2",
+    slug: "code-review",
+    name: "Code Review",
+    description: "Review code for correctness, style, and security issues.",
+    source: "builtin",
+  },
+];
+
+/** Mock a single withSystemDb call that returns skill rows from agent.skills. */
+function mockSkillRows(skills: typeof fakeSkills) {
+  mocks.withSystemDb.mockImplementationOnce(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => Promise.resolve(skills),
+          }),
+        }),
+      }),
+  );
+}
+
+describe("plugin.catalog.browse handler — agent_skill path", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listOxagenPlugins.mockReturnValue(fakeManifests);
   });
 
-  it("agent_skill returns empty (no static manifests for this type yet)", async () => {
-    mockInstalledNames([]);
+  it("returns seeded skills mapped to browse row shape, each installed:true", async () => {
+    mockSkillRows(fakeSkills);
     const result = (await handler(
       { pluginType: "agent_skill", limit: 30, offset: 0 },
+      ctx,
+    )) as {
+      servers: Array<{
+        id: string;
+        name: string;
+        title: string;
+        description: string;
+        pluginType: string;
+        installed: boolean;
+        transportTypes: string[];
+        authKind: string;
+        icons: unknown[];
+      }>;
+      total: number;
+      nextOffset: number | null;
+    };
+
+    expect(result.total).toBe(2);
+    expect(result.servers).toHaveLength(2);
+    expect(result.nextOffset).toBe(null);
+
+    const webResearch = result.servers.find((s) => s.name === "web-research");
+    expect(webResearch).toBeDefined();
+    expect(webResearch!.id).toBe("skl-uuid-1");
+    expect(webResearch!.title).toBe("Web Research");
+    expect(webResearch!.description).toBe("Search the web and extract structured information.");
+    expect(webResearch!.pluginType).toBe("agent_skill");
+    expect(webResearch!.installed).toBe(true);
+    expect(webResearch!.transportTypes).toEqual([]);
+    expect(webResearch!.authKind).toBe("none");
+    expect(webResearch!.icons).toEqual([]);
+  });
+
+  it("all returned skills have installed:true (skills are installed-by-default)", async () => {
+    mockSkillRows(fakeSkills);
+    const result = (await handler(
+      { pluginType: "agent_skill", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ installed: boolean }> };
+    expect(result.servers.every((s) => s.installed === true)).toBe(true);
+  });
+
+  it("applies search filter case-insensitively against slug, name, and description", async () => {
+    mockSkillRows(fakeSkills);
+    const result = (await handler(
+      { pluginType: "agent_skill", search: "WEB", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ name: string }>; total: number };
+    expect(result.total).toBe(1);
+    expect(result.servers[0]!.name).toBe("web-research");
+  });
+
+  it("search matches on description text", async () => {
+    mockSkillRows(fakeSkills);
+    const result = (await handler(
+      { pluginType: "agent_skill", search: "security", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ name: string }>; total: number };
+    expect(result.total).toBe(1);
+    expect(result.servers[0]!.name).toBe("code-review");
+  });
+
+  it("returns empty when no org context (org-less browse)", async () => {
+    // withSystemDb returns [] for missing orgId (handler short-circuits).
+    mocks.withSystemDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }) }),
+    );
+    const result = (await handler(
+      { pluginType: "agent_skill", limit: 30, offset: 0 },
+      { ...ctx, orgId: "" },
+    )) as { servers: unknown[]; total: number };
+    expect(result.total).toBe(0);
+    expect(result.servers).toHaveLength(0);
+  });
+
+  it("installed:false returns empty (skills are always installed)", async () => {
+    mockSkillRows(fakeSkills);
+    const result = (await handler(
+      { pluginType: "agent_skill", installed: false, limit: 30, offset: 0 },
       ctx,
     )) as { servers: unknown[]; total: number };
     expect(result.total).toBe(0);
     expect(result.servers).toHaveLength(0);
+  });
+
+  it("installed:true returns all skills (all are installed)", async () => {
+    mockSkillRows(fakeSkills);
+    const result = (await handler(
+      { pluginType: "agent_skill", installed: true, limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ installed: boolean }>; total: number };
+    expect(result.total).toBe(2);
+    expect(result.servers.every((s) => s.installed === true)).toBe(true);
+  });
+
+  it("applies pagination — returns correct page and nextOffset", async () => {
+    mockSkillRows(fakeSkills);
+    const page1 = (await handler(
+      { pluginType: "agent_skill", limit: 1, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ name: string }>; total: number; nextOffset: number | null };
+    expect(page1.total).toBe(2);
+    expect(page1.servers).toHaveLength(1);
+    expect(page1.servers[0]!.name).toBe("web-research");
+    expect(page1.nextOffset).toBe(1);
+
+    mockSkillRows(fakeSkills);
+    const page2 = (await handler(
+      { pluginType: "agent_skill", limit: 1, offset: 1 },
+      ctx,
+    )) as { servers: Array<{ name: string }>; total: number; nextOffset: number | null };
+    expect(page2.servers).toHaveLength(1);
+    expect(page2.servers[0]!.name).toBe("code-review");
+    expect(page2.nextOffset).toBe(null);
+  });
+});
+
+// ── Tests: knowledge_source / integration (static, empty for now) ─────────────
+
+describe("plugin.catalog.browse handler — other static plugin types", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.listOxagenPlugins.mockReturnValue(fakeManifests);
   });
 
   it("knowledge_source returns empty (no static manifests for this type yet)", async () => {

@@ -77,7 +77,74 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     offset: number;
   };
 
-  // ── Static plugin path (agent_capability / agent_skill / knowledge_source / integration) ───
+  // ── agent_skill path — seeded skills from agent.skills table ────────────────
+  // Skills are seeded workspace-wide by db:seed-skills and are always considered
+  // installed (they are not tracked in plugin.installed_plugins). Skills are
+  // surfaced read-only here; no dual-write to installed_plugins occurs.
+  if (pluginType === "agent_skill") {
+    let rows = await withSystemDb(async (tx) => {
+      if (!ctx.orgId) return [];
+      return tx
+        .select({
+          id: schema.skills.id,
+          slug: schema.skills.slug,
+          name: schema.skills.name,
+          description: schema.skills.description,
+          source: schema.skills.source,
+        })
+        .from(schema.skills)
+        .where(
+          and(
+            eq(schema.skills.orgId, ctx.orgId),
+            eq(schema.skills.workspaceId, ctx.workspaceId),
+            eq(schema.skills.enabled, true),
+            isNull(schema.skills.deletedAt),
+          ),
+        );
+    });
+
+    if (search) {
+      const lower = search.toLowerCase();
+      rows = rows.filter(
+        (r) =>
+          r.slug.toLowerCase().includes(lower) ||
+          r.name.toLowerCase().includes(lower) ||
+          (r.description ?? "").toLowerCase().includes(lower),
+      );
+    }
+
+    // Skills are installed-by-default; the installed filter is a no-op for
+    // installed:false (there are no un-installed skills in this set).
+    if (installed === false) {
+      rows = [];
+    }
+
+    const total = rows.length;
+    const page = rows.slice(offset, offset + limit);
+
+    logger.info({ limit, offset, total, orgId: ctx.orgId }, "plugin.catalog.browse agent_skill: ok");
+
+    return {
+      servers: page.map((r) => ({
+        id: r.id,
+        name: r.slug,
+        title: r.name,
+        description: r.description ?? "",
+        icons: [],
+        transportTypes: [],
+        authKind: "none",
+        categories: ["agent_skill"],
+        version: "1.0.0",
+        pluginType: "agent_skill" as const,
+        tier: "free",
+        installed: true,
+      })),
+      nextOffset: offset + page.length < total ? offset + limit : null,
+      total,
+    };
+  }
+
+  // ── Static plugin path (agent_capability / knowledge_source / integration) ───
   if (!pluginType || STATIC_PLUGIN_TYPES.has(pluginType)) {
     let manifests = listOxagenPlugins().filter(
       (m) => m.visibility !== "hidden" && m.visibility !== "preview",
@@ -85,8 +152,8 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
 
     // When a specific pluginType is requested, we use the manifest category as a
     // proxy until manifests carry an explicit pluginType field. For now all static
-    // manifests are agent_capability entries — skills, knowledge sources, and
-    // integrations will be added as separate manifest categories in a later pass.
+    // manifests are agent_capability entries — knowledge sources and integrations
+    // will be added as separate manifest categories in a later pass.
     // The filter below is a no-op for "agent_capability" but future-proofs the path.
     if (pluginType && pluginType !== "agent_capability") {
       // No static manifests for other types yet — return empty.
