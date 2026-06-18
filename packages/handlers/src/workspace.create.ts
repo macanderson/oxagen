@@ -5,6 +5,7 @@ import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { bootstrapWorkspaceAgents } from "./workspace-agents";
+import { seedWorkspaceDefaultRegistry } from "./workspace-registry-seed";
 
 export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> = async (
   input,
@@ -94,6 +95,9 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
       workspaceId = ws.id;
       return result;
     });
+
+    // Seed the default MCP registry for the new workspace (idempotent).
+    await seedWorkspaceDefaultRegistry({ orgId: ctx.orgId, workspaceId });
 
     // Record security event for workspace creation (privileged mutation).
     emitSecurityEventAsync({

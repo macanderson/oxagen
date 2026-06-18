@@ -45,6 +45,12 @@ vi.mock("./workspace-agents", () => ({
   bootstrapWorkspaceAgents: vi.fn(async () => undefined),
 }));
 
+// Stub seedWorkspaceDefaultRegistry to isolate workspace.create tests from
+// registry-seeding behaviour — that is covered by workspace-registry-seed tests.
+vi.mock("./workspace-registry-seed", () => ({
+  seedWorkspaceDefaultRegistry: vi.fn(async () => "mreg_stub"),
+}));
+
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
