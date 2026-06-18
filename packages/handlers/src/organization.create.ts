@@ -2,9 +2,8 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
 import { schema, withSystemDb, isUniqueViolation } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { grantFreeCredits } from "@oxagen/billing";
-import { eventClient } from "./event-client";
 import { logger } from "./logger";
 import { bootstrapOrgIAM } from "./iam-provision";
 
@@ -164,25 +163,9 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
     );
   });
 
-  // Trigger a one-shot sync of the global MCP registry so the plugin catalog
-  // is populated within seconds of signup (no waiting for the 6-hour cron).
-  // Fire-and-forget — a sync failure must never fail org creation.
-  withSystemDb((tx) =>
-    tx.query.mcpRegistries.findFirst({
-      where: and(isNull(schema.mcpRegistries.orgId), eq(schema.mcpRegistries.isDefaultSeed, true)),
-      columns: { id: true },
-    }),
-  )
-    .then((registry) => {
-      if (!registry) return;
-      return eventClient.send({
-        name: "plugin/registry.sync",
-        data: { registryId: registry.id, mode: "full" },
-      });
-    })
-    .catch((err: unknown) => {
-      logger.warn({ err, orgId }, "organization.create: MCP registry sync trigger failed (non-fatal)");
-    });
+  // Note: global-seed registry sync removed in workspace-scoping rebuild (2026-06-17).
+  // Registries are now per-(org, workspace); the default registry is seeded by
+  // seedWorkspaceDefaultRegistry when the first workspace is created.
 
   return result;
 };

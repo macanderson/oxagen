@@ -1,31 +1,43 @@
-import { or, eq, isNull } from "drizzle-orm";
-import { schema, withSystemDb } from "@oxagen/database";
+import { and, eq } from "drizzle-orm";
+import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (_input, ctx) => {
-  const orgId = ctx.orgId;
-  let rows: (typeof schema.mcpRegistries.$inferSelect)[];
+  const { orgId, workspaceId } = ctx;
+
+  let rows: { id: string; name: string; baseUrl: string; enabled: boolean; isDefault: boolean }[];
   try {
-    rows = await withSystemDb((tx) =>
+    rows = await withTenantDb((tx) =>
       tx
-        .select()
+        .select({
+          id: schema.mcpRegistries.id,
+          name: schema.mcpRegistries.name,
+          baseUrl: schema.mcpRegistries.baseUrl,
+          enabled: schema.mcpRegistries.enabled,
+          isDefault: schema.mcpRegistries.isDefault,
+        })
         .from(schema.mcpRegistries)
-        .where(or(isNull(schema.mcpRegistries.orgId), eq(schema.mcpRegistries.orgId, orgId))),
+        .where(
+          and(
+            eq(schema.mcpRegistries.orgId, orgId),
+            eq(schema.mcpRegistries.workspaceId, workspaceId),
+          ),
+        ),
     );
   } catch (err) {
-    logger.error({ err, orgId }, "plugin.registry.list: failed");
+    logger.error({ err, orgId, workspaceId }, "plugin.registry.list: failed");
     throw err;
   }
-  logger.info({ orgId, count: rows.length }, "plugin.registry.list: ok");
+
+  logger.info({ orgId, workspaceId, count: rows.length }, "plugin.registry.list: ok");
   return {
     registries: rows.map((r) => ({
       id: r.id,
       name: r.name,
       baseUrl: r.baseUrl,
       enabled: r.enabled,
-      isDefaultSeed: r.isDefaultSeed,
-      lastSyncedAt: r.lastSyncedAt?.toISOString() ?? null,
+      isDefault: r.isDefault,
     })),
   };
 };

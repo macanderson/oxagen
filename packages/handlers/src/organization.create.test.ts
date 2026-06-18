@@ -218,10 +218,11 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     // The org creation (orgs + orgUsers) must happen inside withSystemDb so the
     // bootstrap writes succeed without an active tenant scope (RLS bypass) and
     // membership is never visible without the org row.
-    // withSystemDb is called three times: (1) the slug pre-check, (2) the main
-    // body (org + orgUsers + IAM), and (3) the fire-and-forget MCP registry
-    // lookup that triggers the one-shot catalog sync after signup.
-    expect(mocks.withSystemDbFn).toHaveBeenCalledTimes(3);
+    // withSystemDb is called twice: (1) the slug pre-check, (2) the main
+    // body (org + orgUsers + IAM). The old MCP registry sync call (previously
+    // the 3rd call) was removed in the workspace-scoping rebuild (2026-06-17)
+    // — registries are now per-(org, workspace), seeded at workspace creation.
+    expect(mocks.withSystemDbFn).toHaveBeenCalledTimes(2);
     // grantFreeCredits must be called after the org tx commits (billing runs
     // in its own isolated transaction so a billing failure cannot roll back
     // the org creation).

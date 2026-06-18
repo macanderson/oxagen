@@ -1,29 +1,25 @@
-import { and, eq } from "drizzle-orm";
-import { schema, withSystemDb } from "@oxagen/database";
+import { withTenantDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { removeRegistry } from "./registry-default";
 import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const { registryId } = input as { registryId: string };
-  let deleted: { id: string }[];
+  const { orgId, workspaceId } = ctx;
+
+  let result: { removed: boolean; promotedId: string | null };
   try {
-    deleted = await withSystemDb((tx) =>
-      tx
-        .delete(schema.mcpRegistries)
-        .where(
-          and(
-            eq(schema.mcpRegistries.id, registryId),
-            eq(schema.mcpRegistries.orgId, ctx.orgId),
-            eq(schema.mcpRegistries.isDefaultSeed, false),
-          ),
-        )
-        .returning({ id: schema.mcpRegistries.id }),
+    result = await withTenantDb((tx) =>
+      removeRegistry(tx, { orgId, workspaceId, registryId }),
     );
   } catch (err) {
-    logger.error({ err, registryId, orgId: ctx.orgId }, "plugin.registry.remove: failed");
+    logger.error({ err, registryId, orgId, workspaceId }, "plugin.registry.remove: failed");
     throw err;
   }
-  const ok = deleted.length > 0;
-  logger.info({ registryId, orgId: ctx.orgId, ok }, "plugin.registry.remove: ok");
-  return { ok };
+
+  logger.info(
+    { registryId, orgId, workspaceId, removed: result.removed, promotedId: result.promotedId },
+    "plugin.registry.remove: ok",
+  );
+  return { ok: result.removed, promotedId: result.promotedId };
 };

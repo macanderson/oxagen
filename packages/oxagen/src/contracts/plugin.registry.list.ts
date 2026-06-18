@@ -4,15 +4,18 @@ import { registerCapability } from "../registry";
 export const pluginRegistryList = registerCapability({
   name: "plugin.registry.list",
   domain: "plugin",
-  description: "List MCP registries available to the org (global default seed + org-added).",
+  description: "List MCP registries for the workspace.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
   layers: ["api", "docs", "mcp", "unit"],
-  scoped: false,
+  scoped: true,
   sensitivity: "low",
   defaultEffect: "deny",
-  defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
+  },
   input: z.object({}),
   output: z.object({
     registries: z.array(
@@ -21,8 +24,7 @@ export const pluginRegistryList = registerCapability({
         name: z.string(),
         baseUrl: z.string(),
         enabled: z.boolean(),
-        isDefaultSeed: z.boolean(),
-        lastSyncedAt: z.string().nullable(),
+        isDefault: z.boolean(),
       }),
     ),
   }),
