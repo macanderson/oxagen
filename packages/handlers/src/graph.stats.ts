@@ -103,7 +103,7 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (in
     "graph.stats: computed graph statistics",
   );
 
-  return {
+  const output = {
     nodeCount,
     edgeCount,
     inferredEdgeCount,
@@ -112,6 +112,18 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (in
     edgesByType,
     lastModifiedAt,
   };
+
+  // On the app (chat) surface, attach a render directive so the in-app agent
+  // displays the stat boxes inline via the "graph-stats" chat component. API and
+  // MCP consumers get the plain JSON (the optional field is simply absent).
+  if (ctx.surface === "app") {
+    return {
+      ...output,
+      render: { componentId: "graph-stats", props: { ...output } },
+    };
+  }
+
+  return output;
 };
 
 /**

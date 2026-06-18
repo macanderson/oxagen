@@ -173,12 +173,19 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
   const modelId = modelIdOf(model);
   const provider = providerFromModelId(modelId);
   const startedAt = Date.now();
-  // Capture the ALS tenant scope NOW, while we are still inside the request
-  // handler's scope. The AI SDK's onFinish callback fires asynchronously after
-  // the stream completes — by then the AsyncLocalStorage context has ended, so
-  // withTenantDb / requireScope throw TenantScopeError. We restore the scope
-  // inside onFinish using runInTenantScope with the captured context.
-  const capturedScope: TenantScope | null = getScope();
+  // Capture the tenant scope NOW, before the stream starts. The AI SDK's
+  // onFinish callback fires asynchronously after the stream completes — by then
+  // the AsyncLocalStorage context has ended, so withTenantDb / requireScope
+  // throw TenantScopeError. We re-establish the scope inside onFinish via
+  // runInTenantScope. Prefer the active ALS scope, but FALL BACK to the
+  // telemetry org/workspace (always provided) when streamAgentReply was invoked
+  // outside an ALS scope (e.g. the chat route handler isn't itself wrapped in
+  // runInTenantScope) — otherwise the credit charge runs scopeless and the
+  // org is never billed for the turn (a silent revenue leak).
+  const capturedScope: TenantScope = getScope() ?? {
+    orgId: args.telemetry.orgId,
+    workspaceId: args.telemetry.workspaceId,
+  };
   // Render the user-message content into a stable hash key. The prompt
   // text itself stays in Postgres `chat.messages.content` — we ship only
   // the cohort key to ClickHouse per memory.
@@ -279,21 +286,16 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
       // the original request ALS context. We re-establish the scope using the
       // context captured synchronously before the stream was started.
       try {
-        const charge = async () => {
+        // capturedScope is always set (active ALS scope, or rebuilt from the
+        // telemetry org/workspace above), so chargeUsageCredits → withTenantDb →
+        // requireScope always runs inside a valid tenant scope.
+        await runInTenantScope(capturedScope, async () => {
           await chargeUsageCredits({
             orgId: args.telemetry.orgId,
             referenceId: args.telemetry.messageId,
             ...usage,
           });
-        };
-        if (capturedScope) {
-          await runInTenantScope(capturedScope, charge);
-        } else {
-          // No scope was active when the stream started (e.g. background job
-          // that passes orgId directly). Fall back to the direct call; the
-          // caller is responsible for any scope requirements.
-          await charge();
-        }
+        });
       } catch (err) {
         // Swallow — credit metering must never fail the chat turn.
         logger.error({ err }, "stream credit charge failed");

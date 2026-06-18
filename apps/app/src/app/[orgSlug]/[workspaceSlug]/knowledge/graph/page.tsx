@@ -19,6 +19,7 @@ import type { SemanticEdgeSuggestOutput } from "@oxagen/oxagen/contracts/semanti
 import type { SemanticEdgeListOutput } from "@oxagen/oxagen/contracts/semantic.edge.list";
 import { InferencePendingList } from "@/components/knowledge/graph/inference-pending-list";
 import { SemanticEdgeViewer } from "@/components/knowledge/graph/semantic-edge-viewer";
+import { GraphStatsBoxes, type GraphStatsData } from "@/components/knowledge/graph/graph-stats";
 
 export const dynamic = "force-dynamic";
 
@@ -77,8 +78,26 @@ export default async function KnowledgeGraphPage({ params }: PageProps) {
     console.error("semantic.edge.list failed:", e);
   }
 
+  // Fetch at-a-glance graph counts (nodes / edges / inferred / sources).
+  let graphStats: GraphStatsData | null = null;
+  try {
+    graphStats = (await runInTenantScope(
+      { orgId: org.id, workspaceId: ws.id },
+      () => invoke("graph.stats", { includeByType: false }, ctx, { surface: "agent" }),
+    )) as GraphStatsData;
+  } catch (e) {
+    console.error("graph.stats failed:", e);
+  }
+
   return (
     <div className="flex flex-col gap-8 max-w-2xl">
+      {/* Graph statistics — node / edge counts at a glance. */}
+      {graphStats ? (
+        <section aria-label="Graph statistics">
+          <GraphStatsBoxes stats={graphStats} />
+        </section>
+      ) : null}
+
       {/* Pending inferences section */}
       <section aria-labelledby="pending-inferences-heading">
         <div className="mb-4 flex items-center gap-2">

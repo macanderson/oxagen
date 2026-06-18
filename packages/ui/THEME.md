@@ -6,10 +6,17 @@ component references a raw Tailwind palette color (`bg-blue-500`) or an arbitrar
 hex. **Reskinning the entire app — light and dark — is done by editing one file:
 `packages/ui/src/styles/globals.css`.**
 
-The current skin is **Nocturne Violet**: a cool violet/indigo system on a warm
-paper background that complements the warm ember mark (gold → flame → crimson).
-Violet drives accents, links, focus rings, and primary CTAs. Surfaces use
-moderate rounding (`0.5rem`) and subtle violet-tinted shadows.
+The current skin is **Oxagen Graphite**: neutral graphite surfaces (a barely-warm
+hue at near-zero chroma, so they read as gray/charcoal — never brown) tuned for
+DRAMATIC light/dark contrast. Light = off-white page + crisp white panels; dark =
+near-black page + stepped charcoal panels. **Card and table headers are dark bars
+in both modes.** Warmth is concentrated in the **ember accent** (`--ox-rust`,
+`#F87854`) — primary CTAs, focus rings, the active-tab underline, and the ember
+mark — and never smeared across every surface. The topbar matches the page
+background. Links/charts use a cool **indigo** accent for categorical contrast;
+app-chrome icons (support, notifications, mobile nav) are neutral, not blue. The
+wordmark is lowercase **`oxagen`** in Space Grotesk (`--font-wordmark`). Surfaces
+use moderate rounding (`0.5rem`) and a subtle neutral shadow.
 
 ---
 

@@ -13,6 +13,7 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 import { schema, withTenantDb } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { eq, and, isNull } from "drizzle-orm";
 import { eventClient } from "../../event-client";
 
@@ -102,26 +103,34 @@ connectionRoute.post("/:id/resync", async (c) => {
   const ctx = capabilityContext(c);
 
   // Verify connection belongs to this org/workspace and is not deleted.
-  const [conn] = await withTenantDb((tx) =>
-    tx
-      .select({
-        id: schema.sourceConnections.id,
-        orgId: schema.sourceConnections.orgId,
-        workspaceId: schema.sourceConnections.workspaceId,
-        connectorId: schema.sourceConnections.connectorId,
-        status: schema.sourceConnections.status,
-        deliveryConfig: schema.sourceConnections.deliveryConfig,
-      })
-      .from(schema.sourceConnections)
-      .where(
-        and(
-          eq(schema.sourceConnections.publicId, publicId),
-          eq(schema.sourceConnections.orgId, ctx.orgId),
-          eq(schema.sourceConnections.workspaceId, ctx.workspaceId),
-          isNull(schema.sourceConnections.deletedAt),
-        ),
-      )
-      .limit(1),
+  // This route calls withTenantDb DIRECTLY (it doesn't go through invoke(),
+  // which is what establishes the ALS tenant scope), so we must enter the scope
+  // here — exactly like chat.stream.ts / github-oauth.ts do — or withTenantDb's
+  // requireScope() throws TenantScopeError and the resync 500s.
+  const [conn] = await runInTenantScope(
+    { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+    () =>
+      withTenantDb((tx) =>
+        tx
+          .select({
+            id: schema.sourceConnections.id,
+            orgId: schema.sourceConnections.orgId,
+            workspaceId: schema.sourceConnections.workspaceId,
+            connectorId: schema.sourceConnections.connectorId,
+            status: schema.sourceConnections.status,
+            deliveryConfig: schema.sourceConnections.deliveryConfig,
+          })
+          .from(schema.sourceConnections)
+          .where(
+            and(
+              eq(schema.sourceConnections.publicId, publicId),
+              eq(schema.sourceConnections.orgId, ctx.orgId),
+              eq(schema.sourceConnections.workspaceId, ctx.workspaceId),
+              isNull(schema.sourceConnections.deletedAt),
+            ),
+          )
+          .limit(1),
+      ),
   );
 
   if (!conn) {

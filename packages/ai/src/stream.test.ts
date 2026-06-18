@@ -67,8 +67,8 @@ type StreamResult = ReturnType<typeof streamAgentReply> & {
 };
 
 const TELEMETRY = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
+  orgId: "00000000-0000-4000-8000-000000000001",
+  workspaceId: "00000000-0000-4000-8000-000000000002",
   surface: "api" as const,
   messageId: "msg_abc",
 };
@@ -172,8 +172,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     const rows = (mocks.insertTokenUsage.mock.calls[0] as [unknown[]])[0];
     expect(rows).toHaveLength(1);
     const row = rows[0] as Record<string, unknown>;
-    expect(row.org_id).toBe("org_1");
-    expect(row.workspace_id).toBe("ws_1");
+    expect(row.org_id).toBe("00000000-0000-4000-8000-000000000001");
+    expect(row.workspace_id).toBe("00000000-0000-4000-8000-000000000002");
     expect(row.surface).toBe("api");
     expect(row.execution_step_id).toBe("msg_abc");
     expect(row.input_tokens).toBe(10);
@@ -189,7 +189,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
 
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith({
-      orgId: "org_1",
+      orgId: "00000000-0000-4000-8000-000000000001",
       referenceId: "msg_abc",
       model: "claude-sonnet-4-6",
       inputTokens: 10,

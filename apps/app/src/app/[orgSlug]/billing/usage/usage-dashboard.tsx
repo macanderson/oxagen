@@ -330,7 +330,7 @@ function ModelBreakdownTable() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-xs text-muted-foreground uppercase tracking-wide">
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wide">
                 <th className="pb-2 pr-4 font-medium">Model</th>
                 <th className="pb-2 pr-4 font-medium text-right">Calls</th>
                 <th className="pb-2 pr-4 font-medium text-right">Input tokens</th>
@@ -391,7 +391,7 @@ function CapabilityTable() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-xs text-muted-foreground uppercase tracking-wide">
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wide">
                 <th className="pb-2 pr-4 font-medium">Capability</th>
                 <th className="pb-2 pr-4 font-medium">Category</th>
                 <th className="pb-2 pr-4 font-medium text-right">Calls</th>
@@ -428,7 +428,7 @@ function WorkspaceTable() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-xs text-muted-foreground uppercase tracking-wide">
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wide">
                 <th className="pb-2 pr-4 font-medium">Workspace</th>
                 <th className="pb-2 pr-4 font-medium text-right">Calls</th>
                 <th className="pb-2 pr-4 font-medium text-right">Tokens</th>

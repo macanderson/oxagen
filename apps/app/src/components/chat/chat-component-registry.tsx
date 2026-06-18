@@ -126,4 +126,7 @@ export const CHAT_COMPONENTS = {
   "connection-create-inline": lazy(
     () => import("@/components/chat/registry-components/connection-create-inline"),
   ),
+  "graph-stats": lazy(
+    () => import("@/components/chat/registry-components/graph-stats"),
+  ),
 } as unknown as Record<string, AnyLazy>;

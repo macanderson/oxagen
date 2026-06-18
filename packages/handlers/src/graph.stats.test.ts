@@ -131,4 +131,40 @@ describe("graphStatsHandler", () => {
     await expect(graphStatsHandler({ includeByType: false }, CTX)).rejects.toThrow("Neo4j down");
     expect(mocks.close).toHaveBeenCalled();
   });
+
+  it("attaches a graph-stats render directive on the app (chat) surface", async () => {
+    mocks.run
+      .mockResolvedValueOnce(record({ nodeCount: 5, sourceCount: 1 }))
+      .mockResolvedValueOnce(record({ edgeCount: 7, inferredEdgeCount: 2 }))
+      .mockResolvedValueOnce(record({ lastModifiedAt: "2026-06-10T14:05:00Z" }));
+
+    const result = await graphStatsHandler(
+      { includeByType: false },
+      { ...CTX, surface: "app" },
+    );
+
+    expect(result.render).toEqual({
+      componentId: "graph-stats",
+      props: expect.objectContaining({
+        nodeCount: 5,
+        edgeCount: 7,
+        inferredEdgeCount: 2,
+        sourceCount: 1,
+      }),
+    });
+  });
+
+  it("omits the render directive on non-app surfaces (api/mcp get plain JSON)", async () => {
+    mocks.run
+      .mockResolvedValueOnce(record({ nodeCount: 0, sourceCount: 0 }))
+      .mockResolvedValueOnce(record({ edgeCount: 0, inferredEdgeCount: 0 }))
+      .mockResolvedValueOnce(record({ lastModifiedAt: null }));
+
+    const result = await graphStatsHandler(
+      { includeByType: false },
+      { ...CTX, surface: "api" },
+    );
+
+    expect(result.render).toBeUndefined();
+  });
 });

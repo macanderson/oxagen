@@ -210,7 +210,7 @@ function RegistriesSection({
       <div className="overflow-hidden rounded-lg border border-border/40">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border/40 bg-muted/30 text-xs text-muted-foreground">
+            <tr className="border-b border-border/40 text-xs">
               <th className="px-4 py-2 text-left font-medium">Name</th>
               <th className="px-4 py-2 text-left font-medium">URL</th>
               <th className="px-4 py-2 text-left font-medium">Status</th>
@@ -407,7 +407,7 @@ function AllowListSection({
         <div className="overflow-hidden rounded-lg border border-border/40">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border/40 bg-muted/30 text-xs text-muted-foreground">
+              <tr className="border-b border-border/40 text-xs">
                 <th className="px-4 py-2 text-left font-medium">Plugin</th>
                 <th className="px-4 py-2 text-left font-medium">Type</th>
                 <th className="px-4 py-2 text-left font-medium">Auth</th>
@@ -723,7 +723,7 @@ function DenylistSection({
         <div className="mb-4 overflow-hidden rounded-lg border border-border/40">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border/40 bg-muted/30 text-xs text-muted-foreground">
+              <tr className="border-b border-border/40 text-xs">
                 <th className="px-4 py-2 text-left font-medium">Server name</th>
                 <th className="px-4 py-2 text-left font-medium">Type</th>
                 <th className="px-4 py-2 text-left font-medium">Reason</th>

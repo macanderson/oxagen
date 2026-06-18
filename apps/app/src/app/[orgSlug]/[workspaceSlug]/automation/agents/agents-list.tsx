@@ -76,7 +76,7 @@ export function AgentsList({ agents, canEdit, orgSlug, workspaceSlug }: AgentsLi
         <div className="overflow-hidden rounded-lg border border-border/60">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border/40 bg-muted/30 text-xs text-muted-foreground">
+              <tr className="border-b border-border/40 text-xs">
                 <th className="px-4 py-2 text-left font-medium">Agent</th>
                 <th className="px-4 py-2 text-left font-medium">Status</th>
                 <th className="px-4 py-2 text-left font-medium">Deployment</th>

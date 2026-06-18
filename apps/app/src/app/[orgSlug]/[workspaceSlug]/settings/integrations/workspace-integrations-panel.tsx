@@ -250,7 +250,7 @@ export function WorkspaceIntegrationsPanel({
       >
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border/40 bg-muted/30 text-xs text-muted-foreground">
+            <tr className="border-b border-border/40 text-xs">
               <th className="px-4 py-2 text-left font-medium">Plugin</th>
               <th className="px-4 py-2 text-left font-medium">Type</th>
               <th className="px-4 py-2 text-left font-medium">Auth</th>

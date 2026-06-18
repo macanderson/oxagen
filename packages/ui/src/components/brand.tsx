@@ -4,8 +4,9 @@
  * LOGOMARK: six interlocking hexagon cells. Four are ink outlines that flip with
  * the theme (they inherit the current text colour); two are lit with the ember
  * gradient (gold → flame → crimson). The gradient is canonical and holds in both
- * light and dark modes — never recolour it. WORDMARK: "Oxagen" set in Space
- * Grotesk (weight ~540); the ink flips between modes via `text-foreground`.
+ * light and dark modes — never recolour it. WORDMARK: "oxagen" — always
+ * lowercase — set in Space Grotesk (weight 600); the ink flips between modes via
+ * `text-foreground`. The lowercase is enforced in CSS (.ox-wordmark) too.
  *
  *   <OxagenLogomark className="size-7" />        // the hex-cluster mark
  *   <OxagenWordmark className="text-xl" />       // "Oxagen" wordmark text
@@ -103,7 +104,7 @@ export function OxagenLogomark({
   );
 }
 
-/** The Oxagen wordmark — "Oxagen" text. Ink flips with theme. */
+/** The Oxagen wordmark — lowercase "oxagen" text. Ink flips with theme. */
 export function OxagenWordmark({
   className,
   tone = "gradient",
@@ -120,7 +121,7 @@ export function OxagenWordmark({
       className={cn("ox-wordmark inline-block", className)}
       style={color ? { color, ...style } : style}
     >
-      Oxagen
+      oxagen
     </span>
   );
 }

@@ -96,17 +96,17 @@ export function TaskTable({ tasks }: { tasks: RunTask[] }) {
     <div className="overflow-hidden rounded-lg border border-border/60" data-testid="task-table">
       <table className="w-full text-sm" aria-label="Parallel task runs">
         <thead>
-          <tr className="border-b border-border/60 bg-muted/30">
-            <th className="py-2.5 pl-4 pr-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <tr className="border-b border-border/60">
+            <th className="py-2.5 pl-4 pr-3 text-left text-[11px] font-semibold uppercase tracking-wide">
               Task
             </th>
-            <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide">
               Status
             </th>
-            <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide">
               Duration
             </th>
-            <th className="py-2.5 pl-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <th className="py-2.5 pl-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-wide">
               Created
             </th>
           </tr>

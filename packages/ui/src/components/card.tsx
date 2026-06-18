@@ -33,9 +33,22 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
 );
 Card.displayName = "Card";
 
+/**
+ * CardHeader — a DARK header bar (Graphite skin): charcoal in light mode, an
+ * elevated charcoal in dark mode, with light text. `rounded-t-xl` matches the
+ * Card radius so it sits flush; the descendant `[&_p]` rule dims CardDescription
+ * to 70% of the light header ink so it stays legible on the dark bar.
+ */
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("flex flex-col space-y-1.5 p-6", className)} {...props} />
+    <div
+      ref={ref}
+      className={cn(
+        "flex flex-col space-y-1.5 rounded-t-xl border-b border-border bg-card-header-bg px-6 py-4 text-card-header-fg [&_p]:text-card-header-fg/70",
+        className,
+      )}
+      {...props}
+    />
   ),
 );
 CardHeader.displayName = "CardHeader";

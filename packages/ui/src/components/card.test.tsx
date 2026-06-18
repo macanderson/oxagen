@@ -5,7 +5,7 @@
  * Covers: Card, CardHeader, CardTitle, CardDescription, CardPanel, CardFooter.
  */
 
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, cleanup } from "@testing-library/react";
 import { describe, expect, it, afterEach } from "vitest";
 import {
   Card,
@@ -43,11 +43,14 @@ describe("CardHeader — render", () => {
     expect(getByText("Header")).toBeInTheDocument();
   });
 
-  it("includes flex-col and p-6 classes", () => {
+  it("renders a dark header bar (flex-col + header tokens)", () => {
     const { container } = render(<CardHeader>H</CardHeader>);
     const el = container.firstChild as HTMLElement;
     expect(el.className).toContain("flex-col");
-    expect(el.className).toContain("p-6");
+    // Graphite: CardHeader is a dark charcoal bar (px-6 py-4) with light text.
+    expect(el.className).toContain("bg-card-header-bg");
+    expect(el.className).toContain("text-card-header-fg");
+    expect(el.className).toContain("px-6");
   });
 });
 

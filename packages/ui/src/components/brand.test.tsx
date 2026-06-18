@@ -3,7 +3,7 @@
  * brand.test.tsx — render tests for the ember hex-cluster mark components.
  *
  * The logomark is the hex-cluster SVG (role=img) with the ember gradient; the
- * wordmark is "Oxagen" as real text. BrandMark renders the mark directly. Note:
+ * wordmark is lowercase "oxagen" as real text. BrandMark renders the mark directly. Note:
  * SVG elements in JSDOM expose className as SVGAnimatedString, not a plain
  * string — use getAttribute("class").
  */
@@ -47,19 +47,19 @@ describe("OxagenLogomark — render", () => {
 describe("OxagenWordmark — render", () => {
   it("renders the Oxagen wordmark as text", () => {
     const { getByText } = render(<OxagenWordmark />);
-    expect(getByText("Oxagen")).toBeInTheDocument();
+    expect(getByText("oxagen")).toBeInTheDocument();
   });
 
   it("uses the wordmark class", () => {
     const { getByText } = render(<OxagenWordmark className="text-xl" />);
-    const el = getByText("Oxagen");
+    const el = getByText("oxagen");
     expect(el.className).toContain("ox-wordmark");
     expect(el.className).toContain("text-xl");
   });
 
   it("applies a mono color when toned", () => {
     const { getByText } = render(<OxagenWordmark tone="mono-dark" />);
-    expect(getByText("Oxagen").style.color).toBe("var(--ink-dark)");
+    expect(getByText("oxagen").style.color).toBe("var(--ink-dark)");
   });
 });
 
@@ -79,7 +79,7 @@ describe("OxagenLockup — render", () => {
   it("renders both the mark SVG and the wordmark text", () => {
     const { container, getByText } = render(<OxagenLockup />);
     expect(container.querySelector("svg")).toBeInTheDocument();
-    expect(getByText("Oxagen")).toBeInTheDocument();
+    expect(getByText("oxagen")).toBeInTheDocument();
   });
 
   it("merges custom className on lockup span", () => {
@@ -92,19 +92,19 @@ describe("OxagenLogo — variants", () => {
   it("mark variant renders only the mark", () => {
     const { container, queryByText } = render(<OxagenLogo variant="mark" />);
     expect(container.querySelector("svg")).toBeInTheDocument();
-    expect(queryByText("Oxagen")).not.toBeInTheDocument();
+    expect(queryByText("oxagen")).not.toBeInTheDocument();
   });
 
   it("horizontal variant renders brain + wordmark", () => {
     const { container, getByText } = render(<OxagenLogo variant="horizontal" size={40} />);
     expect(container.querySelector("svg")).toBeInTheDocument();
-    expect(getByText("Oxagen")).toBeInTheDocument();
+    expect(getByText("oxagen")).toBeInTheDocument();
   });
 
   it("vertical variant renders ring + wordmark", () => {
     const { container, getByText } = render(<OxagenLogo variant="vertical" />);
     expect(container.querySelector("svg")).toBeInTheDocument();
-    expect(getByText("Oxagen")).toBeInTheDocument();
+    expect(getByText("oxagen")).toBeInTheDocument();
   });
 });
 

@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
+// Render directive schema (mirrors RenderDirective in stream-event-types) — lets
+// the agent surface render the GraphStats boxes inline in chat.
+const renderDirectiveSchema = z.object({
+  componentId: z.string(),
+  props: z.record(z.unknown()),
+});
+
 export const graphStats = registerCapability({
   name: "graph.stats",
   domain: "graph",
@@ -36,6 +43,9 @@ export const graphStats = registerCapability({
       .optional()
       .describe("Edge count breakdown by type (if includeByType=true)"),
     lastModifiedAt: z.string().describe("ISO timestamp of last graph modification"),
+    render: renderDirectiveSchema
+      .optional()
+      .describe("Render directive for displaying the stat boxes in the chat UI (app surface only)"),
   }),
 });
 
