@@ -758,6 +758,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { development: "http://localhost:4100", production: MCP_PROD_URL },
   },
+  NEXT_PUBLIC_DOCS_URL: {
+    group: "Public URLs",
+    description:
+      "Optional override for the docs site origin (browser-exposed). When unset, " +
+      "apps/app resolves the correct URL per environment automatically (dev → " +
+      "http://localhost:3300; prod → https://docs.oxagen.ai). Set only to test a " +
+      "custom docs deployment. NOTE: read via raw process.env — not yet in " +
+      "baseEnvSchema (optional, no boot validation needed).",
+    secret: false,
+    clientExposed: true,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
 
   // ── Security / RLS enforcement ───────────────────────────────────────────────
   TENANT_RLS_ENFORCEMENT_ENABLED: {
@@ -912,6 +927,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     secret: false,
     clientExposed: false,
     services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_LOCAL_DEV: {
+    group: "Testing / e2e",
+    description:
+      'Set to "1" by tools/scripts/dev.ts for the local dev stack. Consumed by packages/auth ' +
+      "to make local-env detection deterministic instead of racing NODE_ENV at module-load time " +
+      "(OXA-1752). Ignored on real Vercel deployments (VERCEL=1 guards it). NOTE: read via raw " +
+      "process.env — not in baseEnvSchema (dev-tooling only).",
+    secret: false,
+    clientExposed: false,
+    services: [],
     requiredIn: [],
     valueOrigin: "manual",
   },
