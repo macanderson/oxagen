@@ -40,7 +40,7 @@ test.describe("agents — management lifecycle", () => {
     // ── 1. Empty state ──────────────────────────────────────────────────────
     await page.goto(`/${orgSlug}/${ws}/automation/agents`);
     await expect(page).not.toHaveURL(/\/login/);
-    await expect(page.getByRole("heading", { name: /^Agents$/ })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: /^Automation$/ })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/no agents yet/i)).toBeVisible();
     await shot(page, "01-empty");
 

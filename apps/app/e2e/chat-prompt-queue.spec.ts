@@ -54,6 +54,7 @@ test.describe("chat.prompt-queue — queue management", () => {
     await interceptAgentStream(page, {
       events: slowTextEvents("e2e-queue-msg-01"),
       delayMs: 4_000,
+      holdRefresh: false,
     });
 
     // Fire the first message — starts the (slow) stream.
