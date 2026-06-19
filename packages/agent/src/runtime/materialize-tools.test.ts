@@ -62,7 +62,7 @@ const dbMocks = vi.hoisted(() => {
       authStrategy: "mcp.authStrategy",
       authConfig: "mcp.authConfig",
     },
-    pluginOrgListings: { id: "listing.id", enabled: "listing.enabled", deletedAt: "listing.deletedAt", authKind: "listing.authKind" },
+    pluginInstalledPlugins: { id: "listing.id", enabled: "listing.enabled", deletedAt: "listing.deletedAt", authKind: "listing.authKind" },
     pluginOrgDenylist: { orgId: "deny.orgId", serverName: "deny.serverName" },
   };
   const rowsByTable = new Map<unknown, unknown[]>();

@@ -30,7 +30,7 @@ const dbMocks = vi.hoisted(() => {
       authStrategy: "mcp.authStrategy",
       authConfig: "mcp.authConfig",
     },
-    pluginOrgListings: {
+    pluginInstalledPlugins: {
       id: "listing.id",
       enabled: "listing.enabled",
       deletedAt: "listing.deletedAt",
