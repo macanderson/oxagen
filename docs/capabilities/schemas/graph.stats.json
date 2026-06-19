@@ -1,0 +1,97 @@
+{
+  "name": "graph.stats",
+  "domain": "graph",
+  "description": "Workspace graph statistics: node count, edge count, inferred edge count, breakdown by type.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "includeByType": {
+        "type": "boolean",
+        "default": false
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "nodeCount": {
+        "type": "number",
+        "description": "Total number of nodes in the graph"
+      },
+      "edgeCount": {
+        "type": "number",
+        "description": "Total number of edges (all types)"
+      },
+      "inferredEdgeCount": {
+        "type": "number",
+        "description": "Number of edges created by inference"
+      },
+      "sourceCount": {
+        "type": "number",
+        "description": "Number of unique source connectors"
+      },
+      "nodesByLabel": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        }
+      },
+      "edgesByType": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        }
+      },
+      "lastModifiedAt": {
+        "type": "string",
+        "description": "ISO timestamp of last graph modification"
+      },
+      "render": {
+        "type": "object",
+        "properties": {
+          "componentId": {
+            "type": "string"
+          },
+          "props": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "componentId",
+          "props"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "nodeCount",
+      "edgeCount",
+      "inferredEdgeCount",
+      "sourceCount",
+      "lastModifiedAt"
+    ],
+    "additionalProperties": false
+  }
+}

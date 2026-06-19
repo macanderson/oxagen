@@ -1,0 +1,1956 @@
+{
+  "generatedCount": 157,
+  "capabilities": [
+    {
+      "name": "agent.approval.resolve",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.code.execute",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.compose",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": "capability-chain-card",
+      "produces": [
+        "document.text"
+      ],
+      "consumes": []
+    },
+    {
+      "name": "agent.definition.create",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.definition.get",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.definition.list",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.definition.publish",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.definition.update",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.deploy",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.execution.record",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.mcp.list",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.mcp.register",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.memory.recall",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.memory.write",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.plan.approve",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.plan.create",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.skill.list",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.skill.load",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.subagent.aggregate",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.subagent.cancel",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.subagent.dispatch",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.subagent.fanout.get",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.subagent.fanout.list",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.task.background.cancel",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.task.background.read",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.task.background.start",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.tool.list",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.trigger.create",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.trigger.delete",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.trigger.list",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.trigger.update",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "agent.ui.render",
+      "domain": "agent",
+      "surfaces": [
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "api.key.create",
+      "domain": "api_key",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "api.key.revoke",
+      "domain": "api_key",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "api.key.rotate",
+      "domain": "api_key",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "archive.create",
+      "domain": "documents",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [
+        "asset.id"
+      ],
+      "consumes": [
+        "asset.id",
+        "document.text"
+      ]
+    },
+    {
+      "name": "asset.upload",
+      "domain": "asset",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "audit.log.query",
+      "domain": "audit",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "automation.create",
+      "domain": "automation",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "automation.disable",
+      "domain": "automation",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "automation.enable",
+      "domain": "automation",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "automation.list",
+      "domain": "automation",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "automation.trigger",
+      "domain": "automation",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "automation.update",
+      "domain": "automation",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "billing.credits.purchase",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "billing.subscription.read",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "billing.subscription.upgrade.start",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "brandkit.apply",
+      "domain": "brandkit",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "chat.message.execution",
+      "domain": "chat",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "chat.message.send",
+      "domain": "chat",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "connection.create",
+      "domain": "connection",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "connection.delete",
+      "domain": "connection",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "connection.get",
+      "domain": "connection",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "connection.list",
+      "domain": "connection",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "connection.mappings.get",
+      "domain": "connection",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "connection.mappings.set",
+      "domain": "connection",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "connection.mappings.suggest",
+      "domain": "connection",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "connection.pause",
+      "domain": "connection",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "connection.preview",
+      "domain": "connection",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "connection.update",
+      "domain": "connection",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "conversation.archive",
+      "domain": "conversation",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "conversation.chat",
+      "domain": "conversation",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "conversation.delete",
+      "domain": "conversation",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "conversation.list",
+      "domain": "conversation",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": "conversation-list-card",
+      "produces": [
+        "conversation.id"
+      ],
+      "consumes": []
+    },
+    {
+      "name": "conversation.purge",
+      "domain": "conversation",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "conversation.rename",
+      "domain": "conversation",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "document.create",
+      "domain": "document",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "document.list",
+      "domain": "document",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "document.read",
+      "domain": "document",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "documents.generate",
+      "domain": "documents",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [
+        "asset.id"
+      ],
+      "consumes": [
+        "document.text"
+      ]
+    },
+    {
+      "name": "documents.pdf.create",
+      "domain": "documents",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [
+        "asset.id"
+      ],
+      "consumes": [
+        "document.text"
+      ]
+    },
+    {
+      "name": "form.create",
+      "domain": "form",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "form.fill",
+      "domain": "form",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "form.submit",
+      "domain": "form",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "graph.cypher",
+      "domain": "graph",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "graph.edge.delete",
+      "domain": "graph",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "graph.edge.upsert",
+      "domain": "graph",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": "graph-edge-card",
+      "produces": [
+        "graph.edgeId"
+      ],
+      "consumes": [
+        "graph.nodeId",
+        "relationship"
+      ]
+    },
+    {
+      "name": "graph.ingest",
+      "domain": "graph",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": "graph-ingest-card",
+      "produces": [
+        "graph.nodeId",
+        "graph.edgeId"
+      ],
+      "consumes": [
+        "document.text",
+        "search.results"
+      ]
+    },
+    {
+      "name": "graph.node.delete",
+      "domain": "graph",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "graph.node.get",
+      "domain": "graph",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": "graph-node-card",
+      "produces": [
+        "graph.node"
+      ],
+      "consumes": [
+        "graph.nodeId"
+      ]
+    },
+    {
+      "name": "graph.node.list",
+      "domain": "graph",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": "graph-node-list-card",
+      "produces": [
+        "graph.nodeId"
+      ],
+      "consumes": []
+    },
+    {
+      "name": "graph.node.search",
+      "domain": "graph",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": "graph-node-list-card",
+      "produces": [
+        "graph.nodeId"
+      ],
+      "consumes": [
+        "query"
+      ]
+    },
+    {
+      "name": "graph.node.upsert",
+      "domain": "graph",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": "graph-node-card",
+      "produces": [
+        "graph.nodeId"
+      ],
+      "consumes": [
+        "entity",
+        "graph.label",
+        "document.text"
+      ]
+    },
+    {
+      "name": "graph.stats",
+      "domain": "graph",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "image.analyze",
+      "domain": "image",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "image.create",
+      "domain": "image",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "image.generate",
+      "domain": "image",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "image.list",
+      "domain": "image",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "integration.configure",
+      "domain": "integration",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "integration.delete",
+      "domain": "integration",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "integration.get",
+      "domain": "integration",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "integration.install",
+      "domain": "integration",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "integration.list",
+      "domain": "integration",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "integration.metrics",
+      "domain": "integration",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "integration.sync",
+      "domain": "integration",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "notifications.list",
+      "domain": "notifications",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "notifications.mark",
+      "domain": "notifications",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "ontology.neighbors",
+      "domain": "ontology",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "ontology.query",
+      "domain": "ontology",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "org.member.add",
+      "domain": "organization",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "org.member.invite.accept",
+      "domain": "organization",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "org.member.invite.decline",
+      "domain": "organization",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "org.member.remove",
+      "domain": "organization",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "org.member.role.change",
+      "domain": "organization",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "org.settings.read",
+      "domain": "organization",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "org.settings.write",
+      "domain": "organization",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "organization.create",
+      "domain": "organization",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.catalog.browse",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.catalog.get",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.credential.reauth",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.credential.set_secret",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.org.install",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.org.install_bulk",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.org.list",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.org.set_enabled",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.org.uninstall",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.registry.add",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.registry.list",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.registry.remove",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.schema.get",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.schema.validate",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.settings.set_auth_alerts",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.version.list",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "plugin.workspace.set_enabled",
+      "domain": "plugin",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "privacy.data.erase",
+      "domain": "privacy",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "privacy.data.export",
+      "domain": "privacy",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "prompt.settings.read",
+      "domain": "workspace",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "prompt.settings.write",
+      "domain": "workspace",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "repo.configure",
+      "domain": "repo",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "repo.metrics",
+      "domain": "repo",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "repo.pause",
+      "domain": "repo",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "repo.resume",
+      "domain": "repo",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "repo.sync",
+      "domain": "repo",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "research.swarm.start",
+      "domain": "research",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": "research-swarm-card",
+      "produces": [
+        "swarm.id"
+      ],
+      "consumes": [
+        "topic"
+      ]
+    },
+    {
+      "name": "research.swarm.status",
+      "domain": "research",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": "research-swarm-card",
+      "produces": [
+        "search.results"
+      ],
+      "consumes": [
+        "swarm.id"
+      ]
+    },
+    {
+      "name": "semantic.edge.approve",
+      "domain": "semantic",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "semantic.edge.infer",
+      "domain": "semantic",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "semantic.edge.list",
+      "domain": "semantic",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "semantic.edge.suggest",
+      "domain": "semantic",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "skill.workspace.list",
+      "domain": "skill",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "svg.generate",
+      "domain": "svg",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "system.install.instructions",
+      "domain": "system",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "user.preferences.read",
+      "domain": "user",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "user.preferences.write",
+      "domain": "user",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "video.generate",
+      "domain": "video",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "web.fetch",
+      "domain": "web",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [
+        "document.text"
+      ],
+      "consumes": [
+        "url"
+      ]
+    },
+    {
+      "name": "web.search",
+      "domain": "web",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": "web-search-card",
+      "produces": [
+        "search.results"
+      ],
+      "consumes": [
+        "query",
+        "topic"
+      ]
+    },
+    {
+      "name": "workflow.cancel",
+      "domain": "workflow",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "workflow.run",
+      "domain": "workflow",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "workflow.status",
+      "domain": "workflow",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "workspace.create",
+      "domain": "workspace",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "workspace.invite.send",
+      "domain": "workspace",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "workspace.member.list",
+      "domain": "workspace",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "workspace.model.settings.read",
+      "domain": "workspace",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "workspace.model.settings.write",
+      "domain": "workspace",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "workspace.settings.read",
+      "domain": "workspace",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "workspace.settings.write",
+      "domain": "workspace",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    }
+  ]
+}

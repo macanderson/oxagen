@@ -1,0 +1,72 @@
+{
+  "name": "brandkit.apply",
+  "domain": "brandkit",
+  "description": "Apply a workspace brand kit (colours, fonts, logos) to an existing cloud file. Currently a console-logging stub — deferred backing.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "brandkit"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "brandKitId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "targetFileId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "workspaceId",
+      "brandKitId",
+      "targetFileId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "stub": {
+        "const": true
+      },
+      "applied": {
+        "const": false
+      },
+      "brandKitId": {
+        "type": "string"
+      },
+      "targetFileId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "stub",
+      "applied",
+      "brandKitId",
+      "targetFileId"
+    ],
+    "additionalProperties": false
+  }
+}
