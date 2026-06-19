@@ -9,7 +9,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // lines floor 49 (measured 49.75); auth.ts is Better Auth config (not unit-testable)
+      // lines floor 49 (measured 52.17); auth.ts is Better Auth config (not unit-testable)
       // branches floor 90 (reduced from 94 for CI stability)
       thresholds: {
         lines: 49,

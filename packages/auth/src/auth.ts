@@ -7,7 +7,12 @@ import { emitSecurityEvent } from "@oxagen/database/security";
 import { requireEnv } from "@oxagen/config/env";
 import { createLocalKmsAdapter, loadMasterKey } from "@oxagen/crypto/kms";
 import { buildAccountTokenHooks, buildStripOnlyAccountHooks } from "./token-encryption";
-import { sendEmail, resetPasswordEmailTemplate, emailVerificationTemplate } from "@oxagen/notifications";
+import { resolveIsLocalEnv } from "./local-env";
+import {
+  sendEmailFireAndForget,
+  resetPasswordEmailTemplate,
+  emailVerificationTemplate,
+} from "@oxagen/notifications";
 
 // Better Auth binds to the canonical auth.users row, not a parallel table.
 // The Drizzle adapter looks up columns via JS property lookup
@@ -49,11 +54,17 @@ const TOKEN_KEY_ID = "vercel-native-v1";
 // those E2E exemptions.
 const isE2E = process.env.E2E_TEST === "true";
 
-const isLocalEnv =
-  env.NODE_ENV === "development" ||
-  env.NODE_ENV === "test" ||
-  process.env.VERCEL_ENV === "development" ||
-  isE2E;
+// Single source of truth (see local-env.ts). The explicit OXAGEN_LOCAL_DEV flag
+// — set for the whole stack by tools/scripts/dev.ts — makes local detection
+// deterministic instead of racing NODE_ENV at module-load time (OXA-1752). It is
+// ignored on real Vercel deploys, so it can never relax production.
+const isLocalEnv = resolveIsLocalEnv({
+  nodeEnv: env.NODE_ENV,
+  vercel: process.env.VERCEL,
+  vercelEnv: process.env.VERCEL_ENV,
+  e2eTest: process.env.E2E_TEST,
+  localDevFlag: process.env.OXAGEN_LOCAL_DEV,
+});
 
 // The master key is a RUNTIME requirement, not a build-time one. Next.js
 // evaluates route modules during `next build` ("Collecting page data") with
@@ -235,10 +246,13 @@ export const auth = betterAuth({
       // in the background. The backgroundTasks.handler is not configured here
       // because Vercel's serverless execution keeps the function alive long
       // enough for a single sendEmail call (< 300 ms typical SMTP).
-      void sendEmail({
-        to: user.email,
-        ...resetPasswordEmailTemplate({ resetUrl: url, email: user.email }),
-      });
+      sendEmailFireAndForget(
+        {
+          to: user.email,
+          ...resetPasswordEmailTemplate({ resetUrl: url, email: user.email }),
+        },
+        "password-reset",
+      );
     },
   },
 
@@ -249,10 +263,13 @@ export const auth = betterAuth({
   // ---------------------------------------------------------------------------
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {
-      void sendEmail({
-        to: user.email,
-        ...emailVerificationTemplate({ verificationUrl: url, email: user.email }),
-      });
+      sendEmailFireAndForget(
+        {
+          to: user.email,
+          ...emailVerificationTemplate({ verificationUrl: url, email: user.email }),
+        },
+        "verification",
+      );
     },
     sendOnSignIn: true,
   },

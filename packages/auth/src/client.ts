@@ -14,7 +14,7 @@ import { loadEnv } from "@oxagen/config/env";
 // passed to better-auth. Passing `undefined` here causes better-auth to read
 // `process.env.BETTER_AUTH_URL` directly — bypassing `normalizeEnv` — which
 // produces an "Invalid URL" error on every SSR render.
-function resolveBaseURL(): string | undefined {
+export function resolveBaseURL(): string | undefined {
   // Use globalThis (not the bare `window` global) so this isomorphic module
   // typechecks in server packages whose tsconfig omits the DOM lib, while still
   // routing to the correct host in the browser.

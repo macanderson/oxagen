@@ -113,6 +113,15 @@ async function main(): Promise<void> {
       process.env[key] = value.slice(1, -1);
     }
   }
+
+  // Deterministically mark the whole local stack as a developer machine so the
+  // auth layer reliably relaxes its deployed-only controls (no email
+  // verification, no mandatory OAuth-token-encryption key). Without this those
+  // controls keyed off NODE_ENV, which next dev sets slightly late and tsx-run
+  // services (api/mcp) never set — intermittently 403'ing local sign-in until an
+  // unrelated recompile (OXA-1752). Never set on Vercel, so prod is unaffected.
+  process.env.OXAGEN_LOCAL_DEV = "1";
+
   await ensureEnvFile();
   // .env.local is authoritative for the local stack. tsx/node --env-file
   // never overrides inherited shell env, so a stale `export DATABASE_URL=...`
