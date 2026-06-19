@@ -21,6 +21,7 @@ const mockQuery = {
   organizations: { findFirst: vi.fn() },
   orgUsers: { findFirst: vi.fn() },
   workspaces: { findFirst: vi.fn() },
+  workspaceUsers: { findFirst: vi.fn() },
 };
 
 // Mock for Drizzle query builder used in resolveOrgScope (org.ts)
@@ -414,10 +415,41 @@ describe("resolveWorkspaceScope", () => {
     expect(result).toEqual({ ok: false, kind: "not_found" });
   });
 
-  it("returns workspaceId for a matching workspace", async () => {
+  it("returns workspaceId for a matching workspace (no userId — legacy path)", async () => {
     mockQuery.workspaces.findFirst.mockResolvedValueOnce({ id: "wrk_abc" });
     const result = await resolveWorkspaceScope("org_1", "my-workspace");
     expect(result).toEqual({ ok: true, workspaceId: "wrk_abc" });
+  });
+
+  it("returns workspaceId when userId is a member", async () => {
+    mockQuery.workspaces.findFirst.mockResolvedValueOnce({ id: "wrk_abc" });
+    mockQuery.workspaceUsers.findFirst.mockResolvedValueOnce({ id: "wsu_xyz" });
+    const result = await resolveWorkspaceScope("org_1", "my-workspace", "usr_1");
+    expect(result).toEqual({ ok: true, workspaceId: "wrk_abc" });
+  });
+
+  it("returns not_member when userId is not a member of the workspace", async () => {
+    // Workspace exists in the org, but the user is not a member.
+    mockQuery.workspaces.findFirst.mockResolvedValueOnce({ id: "wrk_beta" });
+    mockQuery.workspaceUsers.findFirst.mockResolvedValueOnce(undefined);
+    const result = await resolveWorkspaceScope("org_1", "ws-beta", "usr_alpha");
+    expect(result).toEqual({ ok: false, kind: "not_member" });
+  });
+
+  it("skips membership check when userId is null", async () => {
+    // API-key requests pass null — should still resolve successfully.
+    mockQuery.workspaces.findFirst.mockResolvedValueOnce({ id: "wrk_abc" });
+    const result = await resolveWorkspaceScope("org_1", "my-workspace", null);
+    expect(result).toEqual({ ok: true, workspaceId: "wrk_abc" });
+    expect(mockQuery.workspaceUsers.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("skips membership check when userId is undefined", async () => {
+    // Backward-compatible default — no userId arg behaves like the old API.
+    mockQuery.workspaces.findFirst.mockResolvedValueOnce({ id: "wrk_abc" });
+    const result = await resolveWorkspaceScope("org_1", "my-workspace", undefined);
+    expect(result).toEqual({ ok: true, workspaceId: "wrk_abc" });
+    expect(mockQuery.workspaceUsers.findFirst).not.toHaveBeenCalled();
   });
 
   it("cross-tenant isolation: slug that exists in org_b returns not_found when scoped to org_a", async () => {

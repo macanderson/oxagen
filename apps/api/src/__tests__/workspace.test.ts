@@ -69,6 +69,7 @@ import {
   makeOrgScopeOk,
   makeWorkspaceScopeOk,
   makeWorkspaceNotFound,
+  makeWorkspaceNotMember,
 } from "./_helpers";
 
 function orgWsPath(orgSlug = "my-org", wsSlug = "my-ws"): string {
@@ -142,5 +143,20 @@ describe("workspaceMiddleware — session-auth paths", () => {
       makeRequest(orgWsPath(), { headers: sessionHeaders() }),
     );
     expect(res.status).toBe(200);
+  });
+
+  it("workspace not_member → 403 Forbidden (workspace isolation — user in ws-alpha cannot reach ws-beta)", async () => {
+    // Simulates the cross-workspace isolation failure caught by the e2e spec:
+    // workspace-isolation.spec.ts — "ws-alpha session cannot list ws-beta conversations".
+    // resolveWorkspaceScope now checks workspace_users and returns not_member when
+    // the authenticated userId is not a member of the target workspace.
+    mocks.resolveWorkspaceScope.mockResolvedValue(makeWorkspaceNotMember());
+
+    const res = await app.fetch(
+      makeRequest(orgWsPath("my-org", "ws-beta"), { headers: sessionHeaders() }),
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { message: string } };
+    expect(body.error.message).toBe("Forbidden");
   });
 });

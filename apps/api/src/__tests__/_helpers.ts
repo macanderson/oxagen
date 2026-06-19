@@ -98,6 +98,11 @@ export function makeWorkspaceNotFound(): WorkspaceScopeResolution {
   return { ok: false, kind: "not_found" };
 }
 
+/** Workspace exists in org but the user is not a member (cross-workspace within same org). */
+export function makeWorkspaceNotMember(): WorkspaceScopeResolution {
+  return { ok: false, kind: "not_member" };
+}
+
 /**
  * Build an Authorization header value for an API key.
  */
