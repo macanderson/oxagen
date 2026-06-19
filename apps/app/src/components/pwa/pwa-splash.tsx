@@ -16,12 +16,22 @@ export function PwaSplash() {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    // iOS Safari standalone exposes `navigator.standalone` but does NOT reliably
+    // match the `display-mode: standalone` media query the CSS gate relies on.
+    // Set the attribute so the overlay still renders on an iOS home-screen launch.
+    const iosStandalone =
+      (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    if (iosStandalone) {
+      el.dataset.standalone = "true";
+    }
+
     // Dismiss after a short ramp so the app content is visible before we fade.
     // requestAnimationFrame ensures the browser has painted at least one frame.
     const raf = requestAnimationFrame(() => {
-      if (ref.current) {
-        ref.current.dataset.loaded = "true";
-      }
+      el.dataset.loaded = "true";
     });
     return () => cancelAnimationFrame(raf);
   }, []);

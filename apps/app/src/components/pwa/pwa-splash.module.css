@@ -1,88 +1,88 @@
 /**
  * PWA splash overlay styles.
  *
- * The `@media (display-mode: standalone)` and `(display-mode: minimal-ui)`
- * guards mean browser users (non-installed) NEVER see this overlay. The
- * overlay lives in the DOM but has `display:none` unless one of those modes
- * is active — zero layout cost for regular browser visits.
+ * The overlay only appears when the app runs from the installed home-screen
+ * shortcut. Two gates reveal it, so it works across platforms:
+ *   1. CSS `@media (display-mode: standalone | minimal-ui)` — fires at FIRST
+ *      PAINT before JS (Android Chrome, modern iOS 16.4+).
+ *   2. JS-set `[data-standalone="true"]` — set by the component from
+ *      `navigator.standalone` so iOS Safari standalone (where the display-mode
+ *      media query is unreliable) still shows the splash.
  *
- * Dismissal: when JS sets `data-loaded="true"` we fade out via CSS transition,
- * then use `pointer-events:none` so the content below is interactive
- * immediately. We keep `display:none` as the base outside standalone to avoid
- * a FOUC.
+ * The base `.splash` carries all the visible styling but stays `display:none`,
+ * so a gate only has to flip `display` — no rule duplication, zero cost for
+ * regular (non-installed) browser visits.
+ *
+ * Dismissal: the component sets `data-loaded="true"` after first paint → fade
+ * out, then `pointer-events:none` so the app below is immediately interactive.
  */
 
-/* Base: hidden in all non-standalone contexts */
 .splash {
+  /* Hidden until a standalone gate flips `display` (see below). */
   display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+
+  /* Dark background matches the PWA manifest background_color. */
+  background-color: #0b0d16;
+
+  /* Fade transition on dismiss — disabled under reduced-motion. */
+  opacity: 1;
+  transition: opacity 0.4s ease;
 }
 
-/* ── Standalone / installed mode ─────────────────────────── */
+@media (prefers-color-scheme: light) {
+  .splash {
+    background-color: #faf7f2;
+  }
+}
+
+/* ── Reveal gates ──────────────────────────────────────────── */
 @media (display-mode: standalone), (display-mode: minimal-ui) {
   .splash {
     display: flex;
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    align-items: center;
-    justify-content: center;
-
-    /* Dark background matches the PWA manifest background_color */
-    background-color: #0b0d16;
-
-    /* Fade transition on dismiss — disabled when reduced-motion is preferred */
-    opacity: 1;
-    transition: opacity 0.4s ease;
-  }
-
-  .splash[data-loaded="true"] {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .splash {
-      transition: none;
-    }
-
-    .splash[data-loaded="true"] {
-      display: none;
-    }
-  }
-
-  /* Light theme: swap background + spinner variant */
-  @media (prefers-color-scheme: light) {
-    .splash {
-      background-color: #faf7f2;
-    }
-  }
-
-  /* Dark spinner: visible by default (dark bg) */
-  .spinnerDark {
-    display: block;
-  }
-
-  /* Light spinner: hidden by default */
-  .spinnerLight {
-    display: none;
-  }
-
-  /* On light theme swap the gifs */
-  @media (prefers-color-scheme: light) {
-    .spinnerDark {
-      display: none;
-    }
-
-    .spinnerLight {
-      display: block;
-    }
   }
 }
 
-/* Outside standalone: hide both images unconditionally */
-@media not (display-mode: standalone) {
-  .spinnerDark,
-  .spinnerLight {
+/* JS fallback for iOS standalone (navigator.standalone). */
+.splash[data-standalone="true"] {
+  display: flex;
+}
+
+/* ── Dismiss ───────────────────────────────────────────────── */
+.splash[data-loaded="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash {
+    transition: none;
+  }
+
+  .splash[data-loaded="true"] {
     display: none;
+  }
+}
+
+/* ── Spinner theme variants (only visible while the splash is shown) ── */
+.spinnerDark {
+  display: block;
+}
+
+.spinnerLight {
+  display: none;
+}
+
+@media (prefers-color-scheme: light) {
+  .spinnerDark {
+    display: none;
+  }
+
+  .spinnerLight {
+    display: block;
   }
 }
