@@ -39,6 +39,9 @@ export function TenantProvider({
   // memoize on the primitive ids so context identity only changes on navigation.
   const memo = React.useMemo<ActiveTenant>(
     () => value,
+    // Intentional: memoize on the primitive ids (per the comment above) so context
+    // identity only changes on navigation, not on every new `value` object reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       value.orgId,
       value.orgSlug,

@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- animated GIF spinners (dark/light); next/image freezes and mis-optimizes animated GIFs, so a plain <img> is intentional here. */
+
 /**
  * PWA splash overlay — shown only when the app is launched from the installed
  * home-screen shortcut (standalone / minimal-ui display mode). Gate is pure CSS

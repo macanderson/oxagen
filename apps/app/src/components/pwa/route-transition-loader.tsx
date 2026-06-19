@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- animated GIF spinners (dark/light); next/image freezes and mis-optimizes animated GIFs, so a plain <img> is intentional here. */
+
 /**
  * Route-transition loading indicator for mobile.
  *

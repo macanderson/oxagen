@@ -1,4 +1,4 @@
-import { OxagenLogo } from "@oxagen/ui/components/brand";
+import { OxagenLogo } from "@/components/ui/brand";
 
 export default function VerifyPage(_props: { searchParams: Promise<{ email?: string }> }) {
   return (

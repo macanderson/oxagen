@@ -79,7 +79,8 @@ export function PluginDetailPanel({
     return () => {
       controller.abort();
     };
-  }, [serverName]);
+    // workspaceId is used in the fetch URL — refetch if the active workspace changes.
+  }, [serverName, workspaceId]);
 
   const handleInstall = async () => {
     if (!detail) return;

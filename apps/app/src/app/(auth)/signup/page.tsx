@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { OxagenLogo } from "@oxagen/ui/components/brand";
+import { OxagenLogo } from "@/components/ui/brand";
 import { LoginForm } from "@/components/auth/login-form";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
 

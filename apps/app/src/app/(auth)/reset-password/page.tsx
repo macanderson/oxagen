@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { OxagenLogo } from "@oxagen/ui/components/brand";
+import { OxagenLogo } from "@/components/ui/brand";
 import { ResetPasswordForm } from "./reset-password-form";
 
 interface ResetPasswordPageProps {

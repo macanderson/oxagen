@@ -94,7 +94,8 @@ function pluginTypeBadgeVariant(type: string): "outline" | "muted" | "secondary"
 export function WorkspacePluginsPanel({
   orgSlug,
   workspaceSlug,
-  orgId,
+  // orgId is part of the props contract but unused in this panel; not
+  // destructured to satisfy no-unused-vars while keeping the prop accepted.
   workspaceId,
   initialPlugins,
   initialRegistries,
