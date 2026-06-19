@@ -350,7 +350,7 @@ describe("plugin.registry.add handler", () => {
   });
 
   it("calls invoke with registry add args", async () => {
-    const fakeOutput = { registryId: "reg_1" };
+    const fakeOutput = { registryId: "reg_1", isDefault: false };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { name: "My Registry", baseUrl: "https://registry.example.com" };
@@ -407,7 +407,7 @@ describe("plugin.registry.remove handler", () => {
   });
 
   it("calls invoke with registry remove args", async () => {
-    const fakeOutput = { ok: true };
+    const fakeOutput = { ok: true, promotedId: null };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { registryId: "reg_1" };

@@ -160,6 +160,19 @@ import { metadata as integrationMetricsMetadata } from "./integration.metrics";
 import { metadata as integrationSyncMetadata } from "./integration.sync";
 import { metadata as ontologyQueryMetadata } from "./ontology.query";
 import { metadata as ontologyNeighborsMetadata } from "./ontology.neighbors";
+import { metadata as agentComposeMetadata } from "./agent.compose";
+import { metadata as agentSubagentCancelMetadata } from "./agent.subagent.cancel";
+import { metadata as agentSubagentLogsMetadata } from "./agent.subagent.logs";
+import { metadata as apiKeyRotateMetadata } from "./api.key.rotate";
+import { metadata as auditLogQueryMetadata } from "./audit.log.query";
+import { metadata as automationUpdateMetadata } from "./automation.update";
+import { metadata as connectionPauseMetadata } from "./connection.pause";
+import { metadata as connectionUpdateMetadata } from "./connection.update";
+import { metadata as graphIngestMetadata } from "./graph.ingest";
+import { metadata as orgSettingsReadMetadata } from "./org.settings.read";
+import { metadata as orgSettingsWriteMetadata } from "./org.settings.write";
+import { metadata as workspaceSettingsReadMetadata } from "./workspace.settings.read";
+import { metadata as workspaceSettingsWriteMetadata } from "./workspace.settings.write";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -308,6 +321,19 @@ const allToolMetadata = [
   integrationSyncMetadata,
   ontologyQueryMetadata,
   ontologyNeighborsMetadata,
+  agentComposeMetadata,
+  agentSubagentCancelMetadata,
+  agentSubagentLogsMetadata,
+  apiKeyRotateMetadata,
+  auditLogQueryMetadata,
+  automationUpdateMetadata,
+  connectionPauseMetadata,
+  connectionUpdateMetadata,
+  graphIngestMetadata,
+  orgSettingsReadMetadata,
+  orgSettingsWriteMetadata,
+  workspaceSettingsReadMetadata,
+  workspaceSettingsWriteMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────
