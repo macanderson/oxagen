@@ -9,6 +9,10 @@ import { registerHandler, registerHandlersOnce, type CapabilityHandlerFn } from 
 // on hot reload is a no-op instead of tripping the kernel's duplicate guard.
 registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler(
+    "agent.compose",
+    async () => (await import("./agent.compose")).agentComposeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "api.key.create",
     async () => (await import("./api.key.create")).apiKeyCreateHandler as CapabilityHandlerFn,
   );

@@ -155,4 +155,9 @@ export const CHAT_COMPONENTS = {
   "web-search-card": lazy(
     () => import("@/components/chat/registry-components/web-search-card"),
   ),
+  // Renders agent.compose output — the composed capability chain with per-step
+  // status, rationale, and expandable input/output (chain-of-thought view).
+  "capability-chain-card": lazy(
+    () => import("@/components/chat/registry-components/capability-chain-card"),
+  ),
 } as unknown as Record<string, AnyLazy>;

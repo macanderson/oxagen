@@ -5,6 +5,7 @@
 
 import "./contracts/agent.approval.resolve";
 import "./contracts/agent.code.execute";
+import "./contracts/agent.compose";
 import "./contracts/agent.definition.create";
 import "./contracts/agent.definition.get";
 import "./contracts/agent.definition.list";

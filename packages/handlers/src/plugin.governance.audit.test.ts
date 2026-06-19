@@ -18,13 +18,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   withSystemDb: vi.fn(),
+  withTenantDb: vi.fn(),
   getOxagenPlugin: vi.fn(),
   emitSecurityEvent: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withSystemDb: mocks.withSystemDb };
+  // The governance handlers run inside the tenant scope (withTenantDb); install
+  // also touches withSystemDb. Mock both so the fake tx is used either way.
+  return { ...real, withSystemDb: mocks.withSystemDb, withTenantDb: mocks.withTenantDb };
 });
 
 vi.mock("@oxagen/database/security", () => ({
@@ -58,6 +61,9 @@ const fakeManifest = {
   name: "Video Generation",
   description: "Generate videos from text prompts.",
   version: "1.0.0",
+  // pluginType is required (the five-type taxonomy); without it the install
+  // handler rejects the manifest and every governance op fails.
+  pluginType: "agent_capability" as const,
   tier: "premium",
   visibility: "ga",
   category: "media",
@@ -91,13 +97,14 @@ function makeTx(opts?: { listingId?: string }) {
 }
 
 function mockDbOk() {
-  mocks.withSystemDb.mockImplementation(
-    async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx()),
-  );
+  const impl = async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx());
+  mocks.withSystemDb.mockImplementation(impl);
+  mocks.withTenantDb.mockImplementation(impl);
 }
 
 function mockDbFail() {
   mocks.withSystemDb.mockRejectedValue(new Error("db down"));
+  mocks.withTenantDb.mockRejectedValue(new Error("db down"));
 }
 
 beforeEach(() => {
@@ -117,7 +124,7 @@ describe("plugin.org.uninstall — audit event", () => {
         eventType: "plugin.uninstalled",
         actorUserId: "user-1",
         orgId: "org-1",
-        workspaceId: null,
+        workspaceId: "ws-1",
         capability: "plugin.org.uninstall",
         outcome: "success",
         requestId: "req-1",
@@ -148,7 +155,7 @@ describe("plugin.org.set_enabled — audit event", () => {
         eventType: "plugin.enabled_changed",
         actorUserId: "user-1",
         orgId: "org-1",
-        workspaceId: null,
+        workspaceId: "ws-1",
         capability: "plugin.org.set_enabled",
         outcome: "success",
       }),
@@ -173,8 +180,8 @@ describe("plugin.org.install_bulk — audit event", () => {
     const out = (await installBulkHandler(
       {
         items: [
-          { pluginType: "capability", pluginId: "oxagen/media-video" },
-          { pluginType: "capability", pluginId: "oxagen/media-video" },
+          { pluginType: "agent_capability", pluginId: "oxagen/media-video" },
+          { pluginType: "agent_capability", pluginId: "oxagen/media-video" },
         ],
       },
       ctx,
@@ -200,8 +207,8 @@ describe("plugin.org.install_bulk — audit event", () => {
     const out = (await installBulkHandler(
       {
         items: [
-          { pluginType: "capability", pluginId: "oxagen/media-video" },
-          { pluginType: "capability", pluginId: "oxagen/nonexistent" },
+          { pluginType: "agent_capability", pluginId: "oxagen/media-video" },
+          { pluginType: "agent_capability", pluginId: "oxagen/nonexistent" },
         ],
       },
       ctx,
