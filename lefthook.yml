@@ -28,3 +28,28 @@ pre-commit:
         - ".agents/**"
         - ".claude/**"
       run: pnpm typecheck
+
+# pre-push is the test gate for direct-to-main: this repo pushes straight to
+# main (no PR), and CI on a push is post-hoc — it can flag a red main but can't
+# stop the commit from landing. pre-commit already covers lint + typecheck, so
+# pre-push covers what it can't: the test suite plus the contract/env integrity
+# checks that have repeatedly broken CI when skipped. All three were chosen
+# because they are fast and high-signal; the full build/migrate gate stays in CI.
+pre-push:
+  parallel: false
+  commands:
+    # Contract definitions must stay internally consistent (manifest parity is
+    # warn-only in CI; this is the hard check).
+    contracts:
+      run: pnpm check:contracts
+
+    # Registered env vars must validate against the schema — an unregistered var
+    # (NEXT_PUBLIC_DOCS_URL, OXAGEN_LOCAL_DEV, …) silently red-jobs the CI gate.
+    env-check:
+      run: pnpm env:check
+
+    # Unit tests for every package changed since origin/main (and its dependents).
+    # Scoped via the turbo filter so a one-package push doesn't run all 30 suites,
+    # while a cross-cutting change still fans out to everything it can break.
+    test-unit:
+      run: pnpm turbo run test:unit --filter='...[origin/main]'
