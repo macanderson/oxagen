@@ -26,6 +26,7 @@ import "./contracts/agent.subagent.cancel";
 import "./contracts/agent.subagent.dispatch";
 import "./contracts/agent.subagent.fanout.get";
 import "./contracts/agent.subagent.fanout.list";
+import "./contracts/agent.subagent.logs";
 import "./contracts/agent.task.background.cancel";
 import "./contracts/agent.task.background.read";
 import "./contracts/agent.task.background.start";

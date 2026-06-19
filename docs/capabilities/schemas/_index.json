@@ -1,5 +1,5 @@
 {
-  "generatedCount": 157,
+  "generatedCount": 158,
   "capabilities": [
     {
       "name": "agent.approval.resolve",
@@ -276,6 +276,23 @@
       "component": null,
       "produces": [],
       "consumes": []
+    },
+    {
+      "name": "agent.subagent.logs",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [
+        "asset.id",
+        "document.text"
+      ],
+      "consumes": [
+        "swarm.id"
+      ]
     },
     {
       "name": "agent.task.background.cancel",

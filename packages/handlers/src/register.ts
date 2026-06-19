@@ -17,6 +17,10 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () => (await import("./graph.ingest")).graphIngestHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "agent.subagent.logs",
+    async () => (await import("./agent.subagent.logs")).agentSubagentLogsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "api.key.create",
     async () => (await import("./api.key.create")).apiKeyCreateHandler as CapabilityHandlerFn,
   );

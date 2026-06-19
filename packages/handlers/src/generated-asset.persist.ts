@@ -80,6 +80,8 @@ const EXT_BY_MIME: Record<string, string> = {
   "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
   "application/pdf": "pdf",
   "application/zip": "zip",
+  "text/markdown": "md",
+  "text/plain": "txt",
 };
 
 function extFor(mimeType: string): string {
