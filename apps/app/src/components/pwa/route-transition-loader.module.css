@@ -1,0 +1,50 @@
+/**
+ * Route-transition loader styles.
+ *
+ * Visible ONLY on small screens (max-width: 768px) — desktop users are never
+ * interrupted. Centered overlay, subtle dark/light theme-aware background.
+ */
+
+/* Hidden on desktop — start with display:none */
+.loader {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .loader {
+    display: flex;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9997;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  /* Dark variant: default */
+  .spinnerDark {
+    display: block;
+  }
+
+  .spinnerLight {
+    display: none;
+  }
+
+  @media (prefers-color-scheme: light) {
+    .spinnerDark {
+      display: none;
+    }
+
+    .spinnerLight {
+      display: block;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .loader {
+      display: none;
+    }
+  }
+}

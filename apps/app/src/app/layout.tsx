@@ -20,6 +20,9 @@ import "./globals.css";
 import { ThemeProvider, THEME_COOKIE_NAME, parseTheme, themeClass, MotionProvider } from "@oxagen/ui";
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { PwaSplash } from "@/components/pwa/pwa-splash";
+import { InstallPrompt } from "@/components/pwa/install-prompt";
+import { RouteTransitionLoader } from "@/components/pwa/route-transition-loader";
 
 export const metadata: Metadata = {
   title: "Oxagen",
@@ -35,6 +38,14 @@ export const metadata: Metadata = {
     apple: [
       { url: "/pwa/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
+  },
+  // iOS standalone mode: `capable` tells iOS Safari to allow full-screen launch;
+  // `black-translucent` extends content under the status bar (edge-to-edge on
+  // devices with a notch when combined with the `viewportFit: "cover"` viewport).
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Oxagen",
   },
   openGraph: {
     title: "Oxagen",
@@ -53,6 +64,16 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Disable pinch-zoom so the standalone app feels native. WCAG 2.1 SC 1.4.4
+  // technically requires reflow to work at 320 CSS px, but disabling user
+  // scaling is acceptable for an installed PWA shell. Revisit if WCAG AA
+  // compliance is a hard requirement.
+  maximumScale: 1,
+  userScalable: false,
+  // `cover` extends the viewport into the safe-area / notch, enabling true
+  // edge-to-edge rendering. Pair with CSS `env(safe-area-inset-*)` in layouts
+  // that need to respect device insets.
+  viewportFit: "cover",
   // Match the browser/OS chrome to the active theme: deep-space ink on dark,
   // clean white on light. (Manifest theme_color is a single value for the
   // standalone PWA toolbar — kept on the deep-space ink.)
@@ -102,6 +123,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
        * through via the Tailwind @theme tokens. font-sans applies the family.
        */}
       <body className="min-h-dvh font-sans antialiased">
+        {/*
+         * PWA splash: renders instantly in standalone mode before any JS runs.
+         * Gate is pure CSS (display-mode: standalone / minimal-ui) so browser
+         * users incur zero layout cost. JS dismisses it after hydration.
+         */}
+        <PwaSplash />
         <ThemeProvider initialTheme={theme}>
           {/*
            * MotionProvider sets framer-motion's reducedMotion="user" so every
@@ -116,6 +143,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <ToastViewport />
               </ToastProvider>
             </TooltipProvider>
+            {/*
+             * Route-transition loader: spinner during navigation, mobile-only
+             * (gated at max-width:768px). Respects prefers-reduced-motion.
+             */}
+            <RouteTransitionLoader />
+            {/*
+             * Install prompt: deferred install CTA for Chrome/Android; manual
+             * instructions for iOS. Never shown when already installed or
+             * dismissed.
+             */}
+            <InstallPrompt />
           </MotionProvider>
         </ThemeProvider>
       </body>
