@@ -45,9 +45,22 @@ export function pkgLabel(name: string): string {
   return `pkg:${name}`;
 }
 
-// Token-extraction regex (JS, mirrors the rg pattern semantics).
-const ENV_REF_RE =
-  /(?:process\.env|[^.\w]env)[.[\]["']?([A-Z][A-Z0-9_]{2,})/g;
+// The single source of truth for env-var extraction, shared verbatim by BOTH
+// the ripgrep fast path (`-e ENV_REF_PATTERN`) and the Node.js fallback
+// (`new RegExp(ENV_REF_PATTERN, "g")`). Keeping ONE pattern string guarantees
+// the two paths attribute references identically — a previous hand-translated
+// JS literal silently dropped the `process.env["FOO"]` (bracket+quote) form,
+// so CI (rg-absent → fallback) under-attributed packages vs. local (rg present).
+//
+// Matches `process.env.FOO`, `process.env["FOO"]` / `process.env['FOO']`, and
+// `env.FOO`. The accessor is a single `[.\[]` character class (dot or open
+// bracket) followed by an optional quote — NOT a `\.…|…\[…` alternation: the
+// Rust regex engine ripgrep uses drops the bracket branch of such an
+// alternation when it shares the `process.env` prefix with the dot branch
+// (leftmost-first semantics), so quoted/bracket references silently go
+// unattributed. The character class sidesteps that entirely.
+const ENV_REF_PATTERN = String.raw`(?:process\.env|[^.\w]env)[.\[]["']?([A-Z][A-Z0-9_]{2,})`;
+const ENV_REF_RE = new RegExp(ENV_REF_PATTERN, "g");
 
 /**
  * Node.js-native fallback for `buildEnvRefIndex` — used when ripgrep is not
@@ -68,6 +81,20 @@ function walkRefIndex(
     }
     for (const entry of entries) {
       if (entry.name.startsWith(".")) continue;
+      // Never descend into dependency/build output trees. Without this the walk
+      // reads every file under apps/<app>/node_modules (which still matches the
+      // apps/ label filter below) — millions of files — and the env-check hangs.
+      // This fallback only runs on hosts where `rg` is absent (e.g. CI), so the
+      // bug never surfaced in the rg fast path used locally.
+      if (
+        entry.name === "node_modules" ||
+        entry.name === "dist" ||
+        entry.name === "build" ||
+        entry.name === ".next" ||
+        entry.name === "coverage"
+      ) {
+        continue;
+      }
       const absPath = join(absDir, entry.name);
       if (entry.isDirectory()) {
         walk(absPath);
@@ -115,16 +142,9 @@ export function buildEnvRefIndex(repoRoot: string): Map<string, Set<string>> {
   const index = new Map<string, Set<string>>();
   const searchDirs = ["apps", "packages", "tools"];
   // -o: only matched text; --no-heading + --with-filename: `path:match` per line.
-  // The pattern captures the env-var token; we re-extract it from the match text.
-  //
-  // Matches `process.env.FOO`, `process.env["FOO"]` / `process.env['FOO']`, and
-  // `env.FOO`. The accessor is a single `[.\[]` character class (dot or open
-  // bracket) followed by an optional quote, NOT a `\.…|…\[…` alternation: the
-  // Rust regex engine ripgrep uses drops the bracket branch of such an
-  // alternation when it shares the `process.env` prefix with the dot branch
-  // (leftmost-first semantics), so quoted/bracket references silently went
-  // unattributed. The character class sidesteps that entirely.
-  const pattern = String.raw`(?:process\.env|[^.\w]env)[.\[]["']?([A-Z][A-Z0-9_]{2,})`;
+  // ENV_REF_PATTERN (module scope) is the single source of truth, shared with the
+  // Node.js fallback below so the two paths attribute references identically.
+  const pattern = ENV_REF_PATTERN;
   let out = "";
   let rgAvailable = true;
   try {
