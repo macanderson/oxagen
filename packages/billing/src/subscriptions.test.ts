@@ -67,8 +67,21 @@ vi.mock("@oxagen/database/security", () => ({
   makeSecurityEventInserter: vi.fn(() => vi.fn()),
 }));
 
+// ---------------------------------------------------------------------------
+// Checkout mock — changeOrgPlan dynamically imports ./checkout when the org has
+// no active subscription (the Checkout-redirect branch).
+// ---------------------------------------------------------------------------
+
+vi.mock("./checkout", () => ({
+  createCheckoutSession: vi
+    .fn()
+    .mockResolvedValue({ url: "https://checkout.example/session" }),
+}));
+
 // Import after mocks.
-const { syncSubscriptionFromStripe } = await import("./subscriptions");
+const { syncSubscriptionFromStripe, changeOrgPlan, reactivateOrgSubscription } = await import(
+  "./subscriptions"
+);
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -175,5 +188,113 @@ describe("syncSubscriptionFromStripe", () => {
     await syncSubscriptionFromStripe("sub_test_001");
 
     expect(emitSecurityEventMock).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// changeOrgPlan — emits billing.plan_changed on an in-place plan swap (OXA-1594)
+// ---------------------------------------------------------------------------
+
+describe("changeOrgPlan audit emit", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const upsertChain = { onConflictDoUpdate: vi.fn().mockResolvedValue(undefined) };
+    dbMocks.insert.mockReturnValue({ values: vi.fn().mockReturnValue(upsertChain) });
+  });
+
+  it("active subscription + downgrade → swaps price in place and emits billing.plan_changed", async () => {
+    // Shared plans.findFirst superset row: covers targetPlan (slug lookup),
+    // currentPlanRow (tier), and the inner syncSubscriptionFromStripe (product id).
+    dbMocks.query.plans.findFirst.mockResolvedValue({
+      id: "plan-free-1",
+      tier: "free", // target tier — lower than current "scale" → downgrade (skips grants)
+      stripePriceIdMonthly: "price_free_month",
+      stripePriceIdAnnual: "price_free_year",
+    });
+    // Shared subscriptions.findFirst: covers activeSubRow (changeOrgPlan) and the
+    // prior-status read inside syncSubscriptionFromStripe.
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeSubscriptionId: "sub_test_001",
+      seatCount: 1,
+      planId: "plan-scale-1",
+      status: "active",
+    });
+    // syncSubscriptionFromStripe pulls the canonical record (active, known org).
+    getSubscriptionMock.mockResolvedValue(
+      makeSubscription({ productId: "prod_known", status: "active" }),
+    );
+
+    const result = await changeOrgPlan("org-abc-123", "free", "month");
+
+    // In-place swap returns null (no checkout redirect).
+    expect(result).toBeNull();
+
+    const planChangedCall = emitSecurityEventMock.mock.calls.find(
+      (c) => (c[0] as Record<string, unknown>).eventType === "billing.plan_changed",
+    );
+    expect(planChangedCall).toBeDefined();
+    const event = planChangedCall![0] as Record<string, unknown>;
+    expect(event.orgId).toBe("org-abc-123");
+    expect(event.outcome).toBe("success");
+    expect(event.actorUserId).toBeNull();
+  });
+
+  it("no active subscription → returns a checkout URL and does NOT emit billing.plan_changed", async () => {
+    // Target plan exists…
+    dbMocks.query.plans.findFirst.mockResolvedValue({
+      id: "plan-build-1",
+      tier: "build",
+      stripePriceIdMonthly: "price_build_month",
+      stripePriceIdAnnual: "price_build_year",
+    });
+    // …but there is no active subscription → Checkout branch.
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue(undefined);
+
+    const result = await changeOrgPlan("org-abc-123", "build", "month", {
+      successUrl: "https://app/success",
+      cancelUrl: "https://app/cancel",
+    });
+
+    expect(result).toEqual({ checkoutUrl: "https://checkout.example/session" });
+    const planChangedCall = emitSecurityEventMock.mock.calls.find(
+      (c) => (c[0] as Record<string, unknown>).eventType === "billing.plan_changed",
+    );
+    expect(planChangedCall).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// reactivateOrgSubscription — emits billing.subscription_reactivated (OXA-1594)
+// ---------------------------------------------------------------------------
+
+describe("reactivateOrgSubscription audit emit", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const upsertChain = { onConflictDoUpdate: vi.fn().mockResolvedValue(undefined) };
+    dbMocks.insert.mockReturnValue({ values: vi.fn().mockReturnValue(upsertChain) });
+  });
+
+  it("undoing a scheduled cancellation emits billing.subscription_reactivated", async () => {
+    // The cancellable subscription lookup + the inner sync's prior-status read.
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeSubscriptionId: "sub_test_001",
+      status: "active",
+    });
+    // syncSubscriptionFromStripe needs a resolvable plan + org metadata.
+    dbMocks.query.plans.findFirst.mockResolvedValue({ id: "plan-uuid-1" });
+    getSubscriptionMock.mockResolvedValue(
+      makeSubscription({ productId: "prod_known", status: "active" }),
+    );
+
+    await reactivateOrgSubscription("org-abc-123");
+
+    const reactivatedCall = emitSecurityEventMock.mock.calls.find(
+      (c) => (c[0] as Record<string, unknown>).eventType === "billing.subscription_reactivated",
+    );
+    expect(reactivatedCall).toBeDefined();
+    const event = reactivatedCall![0] as Record<string, unknown>;
+    expect(event.orgId).toBe("org-abc-123");
+    expect(event.outcome).toBe("success");
+    expect(event.actorUserId).toBeNull();
   });
 });

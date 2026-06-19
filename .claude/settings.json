@@ -14,6 +14,23 @@
     "POSTHOG_HOST": "https://us.i.posthog.com",
     "POSTHOG_LLMA_CUSTOM_PROPERTIES": "{\"ai_product\": \"oxagen\", \"repo\": \"monorepo\"}"
   },
+  "mcpServers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    },
+    "linear": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.linear.app/sse"]
+    },
+    "vercel": {
+      "type": "http",
+      "url": "https://mcp.vercel.com"
+    }
+  },
   "permissions": {
     "allow": [
       "Bash",
@@ -38,12 +55,18 @@
       "TaskOutput",
       "Agent",
       "ToolSearch",
-      "mcp__linear-server__list_teams",
-      "mcp__linear-server__list_issue_labels"
+      "mcp__linear__list_teams",
+      "mcp__linear__list_issue_labels",
+      "mcp__linear__create_issue",
+      "mcp__linear__update_issue",
+      "mcp__linear__list_issues",
+      "mcp__linear__list_projects",
+      "mcp__github__*",
+      "mcp__vercel__*"
     ],
     "defaultMode": "bypassPermissions"
   },
-  "model": "claude-fable-5[1m]",
+  "model": "claude-opus[1m]",
   "hooks": {
     "PostToolUse": [
       {
@@ -62,6 +85,12 @@
             "timeout": 3,
             "statusMessage": "Recording telemetry...",
             "async": true
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/tools/scripts/oxagen-run-record-edit.sh\"",
+            "timeout": 5,
+            "statusMessage": "Tracking edits for wrap-up proof..."
           }
         ]
       },
@@ -96,6 +125,16 @@
             "async": true
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/tools/scripts/oxagen-run-wrapup-reminder.sh\"",
+            "timeout": 10,
+            "statusMessage": "Checking for wrap-up proof..."
+          }
+        ]
       }
     ]
   },
@@ -109,13 +148,7 @@
       "target",
       "dist"
     ],
-    "sparsePaths": [
-      "apps",
-      "packages",
-      "tools",
-      ".agents",
-      ".claude"
-    ],
+    "sparsePaths": ["apps", "packages", "tools", ".agents", ".claude"],
     "baseRef": "fresh",
     "bgIsolation": "none"
   },

@@ -1,3 +1,4 @@
+// audit-exempt: read-only listing of installed plugins — no state mutation; the kernel capability.invoke_* audit covers access.
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";

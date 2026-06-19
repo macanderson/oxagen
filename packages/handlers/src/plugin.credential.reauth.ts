@@ -1,3 +1,4 @@
+// audit-exempt: read-only — resolves slugs and returns an OAuth authorize URL. It mutates no credential and grants no access (the actual token exchange happens later in the OAuth callback route). Covered by the kernel capability.invoke_* audit.
 import { and, eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";

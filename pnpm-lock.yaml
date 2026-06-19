@@ -195,6 +195,9 @@ importers:
       '@oxagen/inngest-functions':
         specifier: workspace:*
         version: link:../../packages/inngest-functions
+      '@oxagen/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../../packages/oxagen

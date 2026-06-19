@@ -1,3 +1,4 @@
+// audit-exempt: declining/revoking a still-pending invitation creates no member and grants no access — it only frees a seat. No fitting security-event type exists (org.member_removed implies an established member; org.member_invited is the inverse). Covered by the kernel capability.invoke_* audit. Do not invent a type.
 // org.member.invite.decline.ts — handler for org.member.invite.decline.
 //
 // Flow:

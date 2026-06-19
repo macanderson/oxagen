@@ -124,7 +124,43 @@ describe("resolveWorkspace", () => {
       orgId: "org-1",
       name: "Production",
       slug: "prod",
+      // description is derived from the settings JSONB bag; absent settings → "".
+      description: "",
     });
+  });
+
+  // (c2) Reads description out of the settings JSONB bag (settings.description)
+  // — the SAME key the workspace.settings.write handler writes. This is the
+  // read-back-source === write-target invariant for OXA-1465.
+  it("reads description from the settings.description JSONB key", async () => {
+    setMockRows([
+      {
+        id: "ws-3",
+        publicId: "pub-ws-3",
+        orgId: "org-3",
+        name: "Research",
+        slug: "research",
+        settings: { description: "saved description", promptConfig: { x: 1 } },
+      },
+    ]);
+    const result = await resolveWorkspace("org-3", "research");
+    expect(result.description).toBe("saved description");
+  });
+
+  // (c3) Non-string / missing settings.description normalizes to "".
+  it("falls back to an empty description when settings has no string description", async () => {
+    setMockRows([
+      {
+        id: "ws-4",
+        publicId: "pub-ws-4",
+        orgId: "org-4",
+        name: "NoDesc",
+        slug: "nodesc",
+        settings: { description: 42 },
+      },
+    ]);
+    const result = await resolveWorkspace("org-4", "nodesc");
+    expect(result.description).toBe("");
   });
 
   // (d) Calls notFound() when empty

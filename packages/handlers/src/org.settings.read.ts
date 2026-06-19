@@ -1,3 +1,4 @@
+// audit-exempt: read-only org-profile fetch — emits no privileged state change; the kernel capability.invoke_* audit covers access.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   orgSettingsRead,

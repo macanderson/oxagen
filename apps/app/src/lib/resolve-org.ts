@@ -22,6 +22,11 @@ export interface ResolvedWorkspace {
   orgId: string;
   name: string;
   slug: string;
+  // `description` lives in the workspaces.settings JSONB bag under the
+  // `description` key — the SAME key written by the workspace.settings.write
+  // handler (mapWorkspaceSettingsRow). Exposed here so the General settings
+  // page can render the saved value (persistence is observable).
+  description: string;
 }
 
 // Per-request memoization keeps slug → row resolution at one query per
@@ -55,12 +60,21 @@ export const resolveWorkspace = cache(
     );
     const row = rows[0];
     if (!row) notFound();
+    // Mirror mapWorkspaceSettingsRow: read description out of the settings
+    // JSONB bag (same `settings.description` key the write handler targets).
+    const settings =
+      row.settings && typeof row.settings === "object"
+        ? (row.settings as Record<string, unknown>)
+        : {};
+    const description =
+      typeof settings.description === "string" ? settings.description : "";
     return {
       id: row.id,
       publicId: row.publicId,
       orgId: row.orgId,
       name: row.name,
       slug: row.slug,
+      description,
     };
   },
 );

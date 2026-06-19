@@ -12,7 +12,8 @@
  *     - happy path → {ok:true}
  *
  * Mock seam: @/lib/session, @/lib/resolve-org, @oxagen/database, @oxagen/tenancy,
- * @oxagen/billing, @oxagen/handlers/logger, next/cache.
+ * @oxagen/billing, @oxagen/notifications, @oxagen/config/env,
+ * @oxagen/handlers/logger, next/cache.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -28,23 +29,30 @@ const {
   mockWithTenantDb,
   mockAssertSeatAvailable,
   mockRevalidatePath,
+  mockSendEmail,
+  mockInvitationEmailTemplate,
+  mockLoadEnv,
   dbState,
 } = vi.hoisted(() => {
   interface DbState {
     insertError: Error | null;
+    insertReturning: { publicId: string }[];
     updateReturning: { id: string }[];
   }
   const dbState: DbState = {
     insertError: null,
+    insertReturning: [{ publicId: "invi_test123" }],
     updateReturning: [{ id: "inv-1" }],
   };
 
   const mockTx = {
     insert: () => ({
-      values: () => {
-        if (dbState.insertError) throw dbState.insertError;
-        return Promise.resolve(undefined);
-      },
+      values: () => ({
+        returning: () => {
+          if (dbState.insertError) throw dbState.insertError;
+          return Promise.resolve(dbState.insertReturning);
+        },
+      }),
     }),
     update: () => ({
       set: () => ({
@@ -58,6 +66,16 @@ const {
   const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) => fn(mockTx));
   const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) => fn());
 
+  // Passthrough template: build subject/text/html that embed the inviteUrl so
+  // tests can assert the URL (and thus the publicId) is wired through.
+  const mockInvitationEmailTemplate = vi.fn(
+    (i: { inviteUrl: string; inviterName: string; orgName: string; role: string; email: string }) => ({
+      subject: `You've been invited to join ${i.orgName} on Oxagen`,
+      text: `${i.inviterName} invited ${i.email} — accept: ${i.inviteUrl}`,
+      html: `<a href="${i.inviteUrl}">Accept invitation</a>`,
+    }),
+  );
+
   return {
     mockGetSession: vi.fn(),
     mockResolveOrg: vi.fn(),
@@ -65,6 +83,9 @@ const {
     mockWithTenantDb,
     mockAssertSeatAvailable: vi.fn(),
     mockRevalidatePath: vi.fn(),
+    mockSendEmail: vi.fn(),
+    mockInvitationEmailTemplate,
+    mockLoadEnv: vi.fn(() => ({ NEXT_PUBLIC_APP_URL: "https://app.example.com" })),
     dbState,
   };
 });
@@ -107,11 +128,18 @@ vi.mock("@oxagen/handlers/logger", () => ({
 vi.mock("@oxagen/database/security", () => ({
   emitSecurityEvent: vi.fn(),
 }));
+vi.mock("@oxagen/notifications", () => ({
+  sendEmail: mockSendEmail,
+  invitationEmailTemplate: mockInvitationEmailTemplate,
+}));
+vi.mock("@oxagen/config/env", () => ({
+  loadEnv: mockLoadEnv,
+}));
 
 import { inviteMemberAction, declineInvitationAction } from "./actions";
 
-const ORG = { id: "org-1", slug: "acme" };
-const SESSION = { user: { id: "user-1" } };
+const ORG = { id: "org-1", name: "Acme Inc", slug: "acme" };
+const SESSION = { user: { id: "user-1", name: "Alice Inviter", email: "alice@example.com" } };
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -121,10 +149,12 @@ describe("inviteMemberAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbState.insertError = null;
+    dbState.insertReturning = [{ publicId: "invi_test123" }];
     dbState.updateReturning = [{ id: "inv-1" }];
     mockGetSession.mockResolvedValue(SESSION);
     mockResolveOrg.mockResolvedValue(ORG);
     mockAssertSeatAvailable.mockResolvedValue(undefined);
+    mockSendEmail.mockResolvedValue({ id: "msg-1", accepted: ["newmember@example.com"] });
   });
 
   it("returns validation_error for an invalid email", async () => {
@@ -178,6 +208,70 @@ describe("inviteMemberAction", () => {
     });
     expect(res).toEqual({ ok: true });
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/members");
+  });
+
+  it("sends the invitation email once, addressed to the invitee with the invite URL", async () => {
+    const res = await inviteMemberAction({
+      orgSlug: "acme",
+      email: "newmember@example.com",
+      role: "admin",
+    });
+    expect(res).toEqual({ ok: true });
+
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    const payload = mockSendEmail.mock.calls[0]![0] as {
+      to: string;
+      subject: string;
+      text: string;
+      html: string;
+    };
+    expect(payload.to).toBe("newmember@example.com");
+    // The publicId from the insert must be threaded into the invite URL.
+    expect(payload.subject).toContain("Acme Inc");
+    expect(payload.text).toContain("invi_test123");
+    expect(payload.html).toContain("invi_test123");
+    expect(payload.text).toContain("https://app.example.com/acme/members/accept?invitation=invi_test123");
+
+    // The template receives the org name, role, and invitee email.
+    expect(mockInvitationEmailTemplate).toHaveBeenCalledTimes(1);
+    expect(mockInvitationEmailTemplate.mock.calls[0]![0]).toMatchObject({
+      orgName: "Acme Inc",
+      role: "admin",
+      email: "newmember@example.com",
+      inviterName: "Alice Inviter",
+    });
+  });
+
+  it("still returns {ok:true} when sendEmail rejects (email is non-fatal)", async () => {
+    mockSendEmail.mockRejectedValue(new Error("SMTP not configured"));
+
+    const res = await inviteMemberAction({
+      orgSlug: "acme",
+      email: "newmember@example.com",
+      role: "member",
+    });
+
+    expect(res).toEqual({ ok: true });
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/members");
+  });
+
+  it("falls back to the inviter's email for inviterName when session.user.name is null", async () => {
+    mockGetSession.mockResolvedValue({
+      user: { id: "user-1", name: null, email: "alice@example.com" },
+    });
+
+    const res = await inviteMemberAction({
+      orgSlug: "acme",
+      email: "newmember@example.com",
+      role: "member",
+    });
+
+    expect(res).toEqual({ ok: true });
+    expect(mockInvitationEmailTemplate).toHaveBeenCalledTimes(1);
+    expect(mockInvitationEmailTemplate.mock.calls[0]![0]).toMatchObject({
+      inviterName: "alice@example.com",
+    });
   });
 });
 

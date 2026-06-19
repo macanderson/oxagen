@@ -26,6 +26,7 @@
  */
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { resolveApiKey } from "@oxagen/auth";
+import { emitSecurityEvent } from "@oxagen/database/security";
 
 /** xmcp's headers() helper returns this shape (array when a header repeats). */
 type HttpHeaders = Record<string, string | string[] | undefined>;
@@ -113,6 +114,24 @@ export async function resolveMcpContext(
         reason: resolution.kind === "expired" ? "expired_token" : "invalid_token",
       };
     }
+    // SOC2 audit: record machine-credential usage. Fires once per MCP tool
+    // invocation (buildContext runs per tool call) — the correct semantic for
+    // an "api_key.used" access-log event. Fire-and-forget: an audit-pipeline
+    // hiccup must never fail-closed a legitimately authenticated request.
+    // actorUserId is null (machine auth carries no user); ip is the resolved
+    // client IP. — OXA-1594
+    emitSecurityEvent({
+      eventType: "api_key.used",
+      actorUserId: null,
+      orgId: resolution.orgId,
+      workspaceId: resolution.workspaceId,
+      capability: null,
+      outcome: "success",
+      ip: clientIp,
+      userAgent: null,
+      requestId,
+    });
+
     return {
       ok: true,
       ctx: {

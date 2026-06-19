@@ -21,6 +21,7 @@ interface WorkspaceGeneralFormProps {
   workspaceId: string;
   initialName: string;
   initialSlug: string;
+  initialDescription: string;
 }
 
 interface FormValues {
@@ -39,12 +40,13 @@ export function WorkspaceGeneralForm({
   workspaceId,
   initialName,
   initialSlug,
+  initialDescription,
 }: WorkspaceGeneralFormProps) {
   const router = useRouter();
   const [values, setValues] = React.useState<FormValues>({
     name: initialName,
     slug: initialSlug,
-    description: "",
+    description: initialDescription,
   });
   const [isSaving, setIsSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<Date | null>(null);

@@ -1,3 +1,4 @@
+// audit-exempt: adds an MCP registry source (a discovery endpoint, not a credential or access grant). No fitting security-event type exists in the taxonomy (no plugin.registry_* family); covered by the kernel capability.invoke_* audit. Do not invent a type.
 import { withTenantDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { addRegistry } from "./registry-default";

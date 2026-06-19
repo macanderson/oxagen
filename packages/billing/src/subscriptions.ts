@@ -183,6 +183,20 @@ export async function reactivateOrgSubscription(orgId: string): Promise<void> {
   if (!row) throw new Error(`No cancellable subscription found for org ${orgId}`);
   logger.info({ orgId, stripeSubId: row.stripeSubscriptionId }, "billing: reactivating org subscription");
   await reactivateSubscription(row.stripeSubscriptionId);
+
+  // SOC2 audit: a user undid a scheduled cancellation — a privileged billing
+  // state change. Fire-and-forget — never blocks the reactivation. — OXA-1594
+  emitSecurityEvent({
+    eventType: "billing.subscription_reactivated",
+    actorUserId: null,
+    orgId,
+    workspaceId: null,
+    capability: null,
+    outcome: "success",
+    ip: null,
+    userAgent: null,
+    requestId: null,
+  });
 }
 
 export async function upgradeSubscription(
@@ -353,6 +367,23 @@ export async function changeOrgPlan(
   );
 
   await upgradeSubscription(activeSub.stripeSubscriptionId, newPriceId, prorationBehavior);
+
+  // SOC2 audit: an org's plan tier changed on an active subscription (upgrade
+  // OR downgrade) — a privileged billing mutation. The no-active-sub branch
+  // above returns a Checkout URL and does NOT change a plan in place, so it is
+  // not emitted here (the resulting checkout.session.completed webhook syncs a
+  // brand-new subscription). Fire-and-forget — never blocks the swap. — OXA-1594
+  emitSecurityEvent({
+    eventType: "billing.plan_changed",
+    actorUserId: null,
+    orgId,
+    workspaceId: null,
+    capability: null,
+    outcome: "success",
+    ip: null,
+    userAgent: null,
+    requestId: null,
+  });
 
   // Preserve seat count: if current seatCount > 1, update the quantity after
   // the price swap. upgradeSubscription keeps the same item, so quantity persists

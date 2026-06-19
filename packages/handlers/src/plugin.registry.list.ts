@@ -1,3 +1,4 @@
+// audit-exempt: read-only listing of MCP registries — no state mutation; the kernel capability.invoke_* audit covers access.
 import { and, eq } from "drizzle-orm";
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";

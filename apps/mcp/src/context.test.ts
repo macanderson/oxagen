@@ -20,6 +20,15 @@ vi.mock("@oxagen/auth", () => ({
   resolveApiKey: vi.fn(),
 }));
 
+// Mock the security-event emitter — context.ts fires api_key.used on a
+// successful resolveMcpContext (OXA-1594). The emit is fire-and-forget; we
+// assert it was called with the right shape, never that it blocks resolution.
+// vi.hoisted lets the mock fn be referenced inside the hoisted vi.mock factory.
+const { emitSecurityEventMock } = vi.hoisted(() => ({ emitSecurityEventMock: vi.fn() }));
+vi.mock("@oxagen/database/security", () => ({
+  emitSecurityEvent: emitSecurityEventMock,
+}));
+
 import { resolveApiKey } from "@oxagen/auth";
 import {
   McpUnauthorizedError,
@@ -133,6 +142,41 @@ describe("resolveMcpContext", () => {
       },
     });
     expect(resolveApiKey).toHaveBeenCalledWith("oxk_mysecret");
+  });
+
+  it("emits an api_key.used security event on a successful API-key resolution", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+
+    await resolveMcpContext("Bearer oxk_mysecret", requestId, "203.0.113.7");
+
+    expect(emitSecurityEventMock).toHaveBeenCalledOnce();
+    const [event] = emitSecurityEventMock.mock.calls[0] as [Record<string, unknown>];
+    expect(event.eventType).toBe("api_key.used");
+    expect(event.outcome).toBe("success");
+    expect(event.orgId).toBe("org-1");
+    expect(event.workspaceId).toBe("ws-1");
+    expect(event.actorUserId).toBeNull(); // machine auth — no user
+    expect(event.ip).toBe("203.0.113.7"); // resolved client IP, not from a trusted source
+    expect(event.requestId).toBe(requestId);
+  });
+
+  it("does NOT emit api_key.used when the API key fails to resolve", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({ ok: false, kind: "invalid" });
+
+    await resolveMcpContext("Bearer oxk_bad", requestId);
+
+    expect(emitSecurityEventMock).not.toHaveBeenCalled();
+  });
+
+  it("does NOT emit api_key.used for a rejected session token (no underscore)", async () => {
+    await resolveMcpContext("Bearer sessiontoken", requestId);
+
+    expect(emitSecurityEventMock).not.toHaveBeenCalled();
   });
 
   it("returns invalid_token when resolveApiKey reports a non-expired failure", async () => {

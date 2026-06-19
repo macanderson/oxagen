@@ -1,3 +1,4 @@
+// audit-exempt: org-profile field edit (name/slug/website/industry) — no fitting security-event type exists in the taxonomy (no org.settings_updated); covered by the kernel capability.invoke_* audit. Do not invent a type.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgSettingsWrite } from "@oxagen/oxagen/contracts/org.settings.write";
 import { schema, withTenantDb } from "@oxagen/database";

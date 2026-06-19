@@ -1,3 +1,4 @@
+// audit-exempt: workspace prompt-config edit (additional instructions / overrides / auto-improve toggle) — a behavioural tuning setting, not an access-control or credential change. No fitting security-event type exists in the taxonomy; covered by the kernel capability.invoke_* audit. Do not invent a type.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { promptSettingsWrite } from "@oxagen/oxagen/contracts/prompt.settings.write";
 import { schema, withTenantDb } from "@oxagen/database";

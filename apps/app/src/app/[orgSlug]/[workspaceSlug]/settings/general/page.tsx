@@ -17,6 +17,7 @@ export default async function SettingsGeneralPage({
       workspaceId={ws.id}
       initialName={ws.name}
       initialSlug={ws.slug}
+      initialDescription={ws.description}
     />
   );
 }

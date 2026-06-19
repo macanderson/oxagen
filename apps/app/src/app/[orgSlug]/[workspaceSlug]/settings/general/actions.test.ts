@@ -1,15 +1,20 @@
 /**
  * actions.test.ts — unit tests for updateWorkspaceGeneralAction (change
- * workspace name/slug/description).
+ * workspace name/slug/description through the workspace.settings.write kernel
+ * capability).
  *
  * Covers:
- *   - zod validation (rejects bad slugs before any DB work)
- *   - per-org slug-uniqueness guard on change (clean error, not a raw 23505)
- *   - happy paths for unchanged vs changed slug (revalidatePath fan-out)
- *   - description merge into the workspaces.settings JSONB
+ *   - zod validation (rejects bad slug / empty name BEFORE invoke is called)
+ *   - IAM gate: non-owner/admin workspace role → ok:false, no invoke
+ *   - happy path (unchanged slug): invoke called once with the mapped input +
+ *     { surface: "agent" }, returns { ok:true, slug }, revalidatePath fan-out
+ *   - changed-slug path: revalidates old + new paths (4 calls)
+ *   - handler slug-in-use error → mapped to the stable UX copy
+ *   - description "" / omitted → invoke receives description:null
  *
- * Mock seam: @/lib/session, @/lib/resolve-org, @oxagen/database, @oxagen/tenancy,
- * next/cache. drizzle-orm operators stay real (build-only against the mock tx).
+ * Mock seam: @/lib/session, @/lib/resolve-org, @oxagen/database (withTenantDb
+ * for the role re-read), @oxagen/tenancy, @oxagen/oxagen (invoke),
+ * @oxagen/handlers/register (side-effect), next/cache.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -18,56 +23,57 @@ const {
   mockGetSession,
   mockResolveOrg,
   mockResolveWorkspace,
+  mockAssertOrgMember,
+  mockRunInTenantScope,
+  mockWithTenantDb,
+  mockInvoke,
   mockRevalidatePath,
   dbState,
-} = vi.hoisted(() => ({
-  mockGetSession: vi.fn(),
-  mockResolveOrg: vi.fn(),
-  mockResolveWorkspace: vi.fn(),
-  mockRevalidatePath: vi.fn(),
-  dbState: {
-    conflictRows: [] as { id: string }[],
-    updateValues: [] as Record<string, unknown>[],
-  },
-}));
+} = vi.hoisted(() => {
+  const dbState: { wsRoleRows: Array<{ role: string }> } = {
+    wsRoleRows: [{ role: "owner" }],
+  };
+  const mockLimit = vi.fn(() => Promise.resolve(dbState.wsRoleRows));
+  const mockWhere = vi.fn(() => ({ limit: mockLimit }));
+  const mockFrom = vi.fn(() => ({ where: mockWhere }));
+  const mockSelect = vi.fn(() => ({ from: mockFrom }));
+  const mockTx = { select: mockSelect };
+  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) => fn(mockTx));
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) => fn());
+  return {
+    mockGetSession: vi.fn(),
+    mockResolveOrg: vi.fn(),
+    mockResolveWorkspace: vi.fn(),
+    mockAssertOrgMember: vi.fn(),
+    mockRunInTenantScope,
+    mockWithTenantDb,
+    mockInvoke: vi.fn(),
+    mockRevalidatePath: vi.fn(),
+    dbState,
+  };
+});
 
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
   resolveWorkspace: mockResolveWorkspace,
+  assertOrgMember: mockAssertOrgMember,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
-vi.mock("@oxagen/tenancy", () => ({
-  runInTenantScope: vi.fn((_scope: unknown, fn: () => unknown) => fn()),
-}));
-vi.mock("@oxagen/database", () => {
-  const makeTx = () => ({
-    select: (_cols: unknown) => ({
-      from: (_table: unknown) => ({
-        where: (_w: unknown) => ({
-          limit: (_n: number) => Promise.resolve(dbState.conflictRows),
-        }),
-      }),
-    }),
-    update: (_t: unknown) => ({
-      set: (values: Record<string, unknown>) => ({
-        where: (_w: unknown) => {
-          dbState.updateValues.push(values);
-          return Promise.resolve(undefined);
-        },
-      }),
-    }),
-  });
+vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
-    schema: { workspaces: { settings: "workspaces.settings_sentinel" } },
-    withTenantDb: vi.fn((fn: (tx: ReturnType<typeof makeTx>) => unknown) =>
-      fn(makeTx()),
-    ),
+    ...real,
+    withTenantDb: mockWithTenantDb,
   };
 });
+vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
+vi.mock("@oxagen/handlers/register", () => ({}));
 
 import { updateWorkspaceGeneralAction } from "./actions";
 
+const SESSION = { user: { id: "user-1" } };
 const ORG = { id: "org-1", slug: "acme" };
 const WS = { id: "ws-1", slug: "research" };
 
@@ -84,21 +90,38 @@ function base(overrides: Record<string, string> = {}) {
 describe("updateWorkspaceGeneralAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dbState.conflictRows = [];
-    dbState.updateValues = [];
-    mockGetSession.mockResolvedValue({ user: { id: "user-1" } });
+    dbState.wsRoleRows = [{ role: "owner" }];
+    mockGetSession.mockResolvedValue(SESSION);
     mockResolveOrg.mockResolvedValue(ORG);
     mockResolveWorkspace.mockResolvedValue(WS);
+    mockAssertOrgMember.mockResolvedValue(undefined);
+    // Default invoke result echoes the unchanged slug.
+    mockInvoke.mockResolvedValue({
+      name: "Research",
+      slug: "research",
+      description: null,
+    });
   });
 
-  it("updates name/description when the slug is unchanged (no conflict query)", async () => {
+  it("invokes workspace.settings.write once with { surface:'agent' } and returns ok:true on the happy path (unchanged slug)", async () => {
+    mockInvoke.mockResolvedValue({
+      name: "Research Renamed",
+      slug: "research",
+      description: "team space",
+    });
+
     const result = await updateWorkspaceGeneralAction(
       base({ name: "Research Renamed", description: "team space" }),
     );
 
     expect(result).toEqual({ ok: true, slug: "research" });
-    expect(dbState.updateValues).toHaveLength(1);
-    expect(dbState.updateValues[0]).toMatchObject({ name: "Research Renamed" });
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "workspace.settings.write",
+      { name: "Research Renamed", slug: "research", description: "team space" },
+      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+      { surface: "agent" },
+    );
     // Unchanged slug → only the base settings paths are revalidated.
     expect(mockRevalidatePath).toHaveBeenCalledWith(
       "/acme/research/settings/general",
@@ -107,7 +130,13 @@ describe("updateWorkspaceGeneralAction", () => {
     expect(mockRevalidatePath).toHaveBeenCalledTimes(2);
   });
 
-  it("updates the slug and revalidates old + new paths when changed", async () => {
+  it("revalidates old + new paths when the slug changes", async () => {
+    mockInvoke.mockResolvedValue({
+      name: "Research",
+      slug: "research-2",
+      description: null,
+    });
+
     const result = await updateWorkspaceGeneralAction(base({ slug: "research-2" }));
 
     expect(result).toEqual({ ok: true, slug: "research-2" });
@@ -118,8 +147,10 @@ describe("updateWorkspaceGeneralAction", () => {
     expect(mockRevalidatePath).toHaveBeenCalledTimes(4);
   });
 
-  it("rejects a slug already taken in the same org without writing", async () => {
-    dbState.conflictRows = [{ id: "other-ws" }];
+  it("maps the handler's slug-in-use error to the stable UX copy", async () => {
+    mockInvoke.mockRejectedValue(
+      new Error('Slug "taken" is already in use by another workspace in this org'),
+    );
 
     const result = await updateWorkspaceGeneralAction(base({ slug: "taken" }));
 
@@ -127,27 +158,50 @@ describe("updateWorkspaceGeneralAction", () => {
       ok: false,
       error: "That slug is already taken in this organization.",
     });
-    expect(dbState.updateValues).toHaveLength(0);
   });
 
-  it("rejects an invalid slug before any DB work", async () => {
+  it("rejects an invalid slug before invoking", async () => {
     const result = await updateWorkspaceGeneralAction(base({ slug: "Bad Slug!" }));
 
     expect(result.ok).toBe(false);
-    expect(dbState.updateValues).toHaveLength(0);
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
-  it("rejects an empty name", async () => {
+  it("rejects an empty name before invoking", async () => {
     const result = await updateWorkspaceGeneralAction(base({ name: "" }));
 
     expect(result.ok).toBe(false);
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
-  it("writes the workspace update including the merged settings expression", async () => {
-    await updateWorkspaceGeneralAction(base({ description: "hello" }));
+  it("rejects a non owner/admin workspace role without invoking (apps/app IAM gate)", async () => {
+    dbState.wsRoleRows = [{ role: "member" }];
 
-    expect(dbState.updateValues).toHaveLength(1);
-    expect(dbState.updateValues[0]).toHaveProperty("settings");
-    expect(dbState.updateValues[0]).toMatchObject({ name: "Research" });
+    const result = await updateWorkspaceGeneralAction(base());
+
+    expect(result.ok).toBe(false);
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("passes description:null to invoke when the description is omitted", async () => {
+    await updateWorkspaceGeneralAction(base());
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "workspace.settings.write",
+      { name: "Research", slug: "research", description: null },
+      expect.anything(),
+      { surface: "agent" },
+    );
+  });
+
+  it("passes description:null to invoke when the description is an empty string", async () => {
+    await updateWorkspaceGeneralAction(base({ description: "" }));
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "workspace.settings.write",
+      { name: "Research", slug: "research", description: null },
+      expect.anything(),
+      { surface: "agent" },
+    );
   });
 });

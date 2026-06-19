@@ -1,6 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceInviteSend } from "@oxagen/oxagen/contracts/workspace.invite.send";
 import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
+import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq } from "drizzle-orm";
 import { sendEmail, invitationEmailTemplate } from "@oxagen/notifications";
 import { logger, maskEmail } from "./logger";
@@ -75,6 +76,22 @@ export const workspaceInviteSendHandler: CapabilityHandler<typeof workspaceInvit
     { orgId: ctx.orgId, email: maskEmail(input.email), role: orgRole },
     "workspace.invite.send: invitation created or returned existing",
   );
+
+  // SOC2 audit: a privileged member-invitation was issued. Mirrors the
+  // org.member.add emit so both invite paths leave an audit trail. The
+  // org.member_invited taxonomy entry fits exactly. Fire-and-forget — an
+  // audit-write failure must never break the invite. — OXA-1594
+  emitSecurityEvent({
+    eventType: "org.member_invited",
+    actorUserId: ctx.userId,
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId ?? null,
+    capability: "workspace.invite.send",
+    outcome: "success",
+    ip: null,
+    userAgent: null,
+    requestId: ctx.requestId ?? null,
+  });
 
   // Best-effort: send invitation email. Failure here must never break the
   // invitation creation (critical path). Wrapped in try-catch + fire-and-forget.

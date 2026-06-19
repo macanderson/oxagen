@@ -1,13 +1,16 @@
 "use server";
 
 import { z } from "zod";
-import { eq, and, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { withTenantDb } from "@oxagen/database";
-import { schema } from "@oxagen/database";
+import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { invoke } from "@oxagen/oxagen";
+// Side-effect import: bind every foundation handler so invoke() can resolve.
+import "@oxagen/handlers/register";
+import type { WorkspaceSettingsWriteOutput } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
+import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 
 // ---------------------------------------------------------------------------
 // Input schema
@@ -39,20 +42,25 @@ export type UpdateWorkspaceGeneralResult =
 // ---------------------------------------------------------------------------
 // Action
 //
-// Writes `workspaces.name` and stores `description` in the JSONB
-// `workspaces.settings` column (no dedicated column required — the settings
-// JSONB is the correct home for arbitrary workspace metadata that does not
-// need to be indexed).
+// Routes the workspace general-settings save through the
+// `workspace.settings.write` kernel capability — the SAME chokepoint reached
+// from the in-app agent, MCP, and CLI — so the edit is metered, audited, and
+// IAM-gated with zero surface drift. The handler writes `name`/`slug` columns
+// and stores `description` inside the `workspaces.settings` JSONB bag (the
+// `settings.description` key), read back by resolveWorkspace() so persistence
+// is observable.
 //
 // Scoped to the authenticated user's org + workspace; resolveWorkspace calls
 // notFound() if the workspace does not belong to the org, preventing
-// cross-tenant writes.
+// cross-tenant writes. apps/app does NOT bootstrap IAM (invoke() in-app skips
+// role checks), so we re-read the caller's workspace role server-side and
+// reject non owner/admin before invoking — mirroring prompt-settings-action.
 // ---------------------------------------------------------------------------
 
 export async function updateWorkspaceGeneralAction(
   input: UpdateInput,
 ): Promise<UpdateWorkspaceGeneralResult> {
-  await getSessionOrRedirect();
+  const session = await getSessionOrRedirect();
 
   const parsed = UpdateWorkspaceGeneralSchema.safeParse(input);
   if (!parsed.success) {
@@ -65,63 +73,77 @@ export async function updateWorkspaceGeneralAction(
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
 
+  // Assert the caller is an org member first (IDOR guard).
+  await assertOrgMember(org.id, session.user.id);
+
   return await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    // Guard the per-org slug uniqueness before writing so we can return a clean
-    // error instead of surfacing a raw unique-constraint violation. Only check
-    // when the slug actually changed.
-    if (slug !== workspaceSlug) {
-      const conflict = await withTenantDb((tx) =>
-        tx
-          .select({ id: schema.workspaces.id })
-          .from(schema.workspaces)
-          .where(
-            and(
-              eq(schema.workspaces.orgId, org.id),
-              eq(schema.workspaces.slug, slug),
-            ),
-          )
-          .limit(1),
-      );
-      if (conflict.length > 0) {
-        return { ok: false, error: "That slug is already taken in this organization." };
-      }
-    }
-
-    // Merge description into the JSONB settings column. We use a Postgres
-    // JSONB concatenation (`||`) to preserve existing keys while updating
-    // only the 'description' key. The coalesce guards against NULL settings
-    // (the schema defaults to '{}', but defensive code never hurts).
-    const descriptionValue = description ?? "";
-    const newSettings = sql`
-      coalesce(${schema.workspaces.settings}, '{}'::jsonb)
-      || jsonb_build_object('description', ${descriptionValue}::text)
-    `;
-
-    await withTenantDb((tx) =>
+    // Re-read the caller's workspace role server-side — never trust the client.
+    // apps/app does not enforce IAM via invoke(), so this is the gate.
+    const wsRoleRows = await withTenantDb((tx) =>
       tx
-        .update(schema.workspaces)
-        .set({
-          name,
-          slug,
-          settings: newSettings,
-        })
+        .select({ role: schema.workspaceUsers.role })
+        .from(schema.workspaceUsers)
         .where(
           and(
-            eq(schema.workspaces.id, ws.id),
-            eq(schema.workspaces.orgId, org.id),
+            eq(schema.workspaceUsers.workspaceId, ws.id),
+            eq(schema.workspaceUsers.userId, session.user.id),
           ),
-        ),
+        )
+        .limit(1),
     );
 
-    // Revalidate both the old and (if changed) the new slug paths so the cache
-    // is correct regardless of which URL the client lands on next.
-    revalidatePath(`/${orgSlug}/${workspaceSlug}/settings/general`);
-    revalidatePath(`/${orgSlug}/${workspaceSlug}/settings`);
-    if (slug !== workspaceSlug) {
-      revalidatePath(`/${orgSlug}/${slug}/settings/general`);
-      revalidatePath(`/${orgSlug}/${slug}/settings`);
+    const wsRole = wsRoleRows[0]?.role ?? "";
+    if (!["owner", "admin"].includes(wsRole.toLowerCase())) {
+      return {
+        ok: false,
+        error: "Only workspace owners and admins can edit workspace settings.",
+      };
     }
 
-    return { ok: true, slug };
+    const ctx = {
+      orgId: org.id,
+      workspaceId: ws.id,
+      userId: session.user.id,
+      apiKeyId: null as string | null,
+      requestId: crypto.randomUUID(),
+      surface: "app" as const,
+      messageId: null as string | null,
+    };
+
+    try {
+      // CRITICAL: pass { surface: "agent" } — the contract's `surfaces` list is
+      // ["api","mcp","agent"] and does NOT include "app"; passing "app" throws
+      // surface_denied. (Same as the prompt.settings.write precedent.)
+      // Normalize empty/omitted description to null so the handler clears the
+      // settings.description key (rather than persisting an empty string).
+      const descriptionValue =
+        description === undefined || description === "" ? null : description;
+
+      const result = (await invoke(
+        "workspace.settings.write",
+        { name, slug, description: descriptionValue },
+        ctx,
+        { surface: "agent" },
+      )) as WorkspaceSettingsWriteOutput;
+
+      // Revalidate both the old and (if changed) the new slug paths so the cache
+      // is correct regardless of which URL the client lands on next.
+      revalidatePath(`/${orgSlug}/${workspaceSlug}/settings/general`);
+      revalidatePath(`/${orgSlug}/${workspaceSlug}/settings`);
+      if (result.slug !== workspaceSlug) {
+        revalidatePath(`/${orgSlug}/${result.slug}/settings/general`);
+        revalidatePath(`/${orgSlug}/${result.slug}/settings`);
+      }
+
+      return { ok: true, slug: result.slug };
+    } catch (err) {
+      // Map the handler's slug-conflict error to the existing UX copy so the
+      // form (and its tests) keep their stable message.
+      const message = err instanceof Error ? err.message : "";
+      if (message.toLowerCase().includes("already in use")) {
+        return { ok: false, error: "That slug is already taken in this organization." };
+      }
+      return { ok: false, error: message || "Failed to save workspace settings." };
+    }
   });
 }

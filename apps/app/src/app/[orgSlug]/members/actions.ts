@@ -6,6 +6,8 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { isSeatLimitError, assertSeatAvailable } from "@oxagen/billing";
+import { sendEmail, invitationEmailTemplate } from "@oxagen/notifications";
+import { loadEnv } from "@oxagen/config/env";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
 import { logger, maskEmail } from "@oxagen/handlers/logger";
@@ -61,7 +63,7 @@ export async function inviteMemberAction(
     try {
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-      await withTenantDb((tx) =>
+      const [inserted] = await withTenantDb((tx) =>
         tx
           .insert(schema.invitations)
           .values({
@@ -71,7 +73,8 @@ export async function inviteMemberAction(
             status: "pending",
             invitedByUserId: session.user.id,
             expiresAt,
-          }),
+          })
+          .returning({ publicId: schema.invitations.publicId }),
       );
 
       logger.info({ orgSlug, email: maskEmail(email), role }, "members: invitation created");
@@ -88,6 +91,32 @@ export async function inviteMemberAction(
         userAgent: null,
         requestId: null,
       });
+
+      // Send the transactional invitation email (non-fatal: sendEmail throws when
+      // SMTP is unconfigured, e.g. local dev — the invite still succeeds).
+      try {
+        if (!inserted) throw new Error("invitation insert returned no row");
+        const env = loadEnv();
+        const inviteUrl = `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/members/accept?invitation=${inserted.publicId}`;
+        const inviterName = session.user.name ?? session.user.email;
+        const { subject, text, html } = invitationEmailTemplate({
+          inviteUrl,
+          inviterName,
+          orgName: tenant.name,
+          role,
+          email,
+        });
+        await sendEmail({ to: email, subject, text, html });
+        logger.info(
+          { orgSlug, email: maskEmail(email) },
+          "members: invitation email sent",
+        );
+      } catch (emailErr) {
+        logger.error(
+          { err: emailErr, orgSlug, email: maskEmail(email) },
+          "members: invitation email failed (non-fatal)",
+        );
+      }
 
       revalidatePath(`/${orgSlug}/members`);
       return { ok: true };

@@ -1,3 +1,4 @@
+// audit-exempt: read-only billing/subscription fetch — no state mutation; the kernel capability.invoke_* audit covers access.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
 import { schema, withTenantDb } from "@oxagen/database";

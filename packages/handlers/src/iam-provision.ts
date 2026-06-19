@@ -1,3 +1,4 @@
+// audit-exempt: internal IAM-bootstrap helper, not a directly-invoked capability handler. It runs inside organization.create / workspace.create / org.member.invite.accept transactions, each of which already emits its own security event (organization.created / workspace.created / org.role_changed). Emitting here would double-count.
 // iam-provision.ts — IAM bootstrapping helpers for org/member creation (OXA-1524).
 //
 // Two exported helpers, both idempotent (safe to re-run):

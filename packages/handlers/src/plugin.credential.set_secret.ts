@@ -1,3 +1,4 @@
+// audit-exempt: stores a plugin OAuth/secret credential. No fitting security-event type exists in the current taxonomy (there is no plugin.credential_* family); inventing one is out of scope per OXA-1594. The write itself goes through the @oxagen/plugins KMS-wrapping seam (its own envelope-encryption audit) and the kernel capability.invoke_* audit records the privileged invocation. Re-evaluate when a plugin.credential.* taxonomy is added.
 import { setWorkspaceSecret } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
