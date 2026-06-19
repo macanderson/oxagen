@@ -30,6 +30,7 @@ type RunRow = {
   publicId: string;
   capabilityName: string;
   status: string;
+  inputPayload: Record<string, unknown> | null;
   outputPayload: Record<string, unknown> | null;
   errorReason: string | null;
   startedAt: Date | null;
@@ -53,6 +54,7 @@ function run(id: string, output: Record<string, unknown> | null, overrides: Part
     publicId: id,
     capabilityName: "test.cap",
     status: "completed",
+    inputPayload: { taskId: id },
     outputPayload: output,
     errorReason: null,
     startedAt: new Date("2024-01-01T00:00:00Z"),
@@ -112,6 +114,31 @@ describe("agent.subagent.aggregate handler", () => {
     expect(result.aggregatedData).toMatchObject({ taskId: "t1", result: "ok", extra: 42 });
     expect(result.firstError).toBeNull();
     expect(result.timeline).toHaveLength(2);
+  });
+
+  it("returns per-child full input + output via children (not merged)", async () => {
+    setupMocks(fanout(), [
+      run("sar_1", { results: ["a"] }, { inputPayload: { query: "q1" } }),
+      run("sar_2", { results: ["b"] }, { inputPayload: { query: "q2" } }),
+    ]);
+
+    const result = await agentSubagentAggregateHandler(
+      { fanoutId: "fan_1", timeoutMs: 1000 },
+      CTX,
+    );
+
+    expect(result.children).toHaveLength(2);
+    // Each child preserves its DISTINCT input + output — no collision on `results`.
+    expect(result.children[0]).toMatchObject({
+      runId: "sar_1",
+      input: { query: "q1" },
+      output: { results: ["a"] },
+      status: "completed",
+    });
+    expect(result.children[1]).toMatchObject({
+      input: { query: "q2" },
+      output: { results: ["b"] },
+    });
   });
 
   it("detects conflicts when two runs produce different values for the same key", async () => {

@@ -52,7 +52,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1394,6 +1394,24 @@
         "mcp",
         "agent",
         "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "graph.ingest",
+      "file": "graph.ingest.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "layers": {
         "schema": true,

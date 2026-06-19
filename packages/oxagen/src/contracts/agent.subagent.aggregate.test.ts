@@ -69,6 +69,7 @@ describe("agent.subagent.aggregate capability", () => {
       aggregatedData: null,
       conflicts: [],
       timeline: [],
+      children: [],
       firstError: null,
     });
     expect(parsed.status).toBe("completed");
@@ -83,6 +84,7 @@ describe("agent.subagent.aggregate capability", () => {
       aggregatedData: null,
       conflicts: [],
       timeline: [],
+      children: [],
       firstError: null,
     });
     expect(parsed.status).toBe("partial");
@@ -97,6 +99,7 @@ describe("agent.subagent.aggregate capability", () => {
       aggregatedData: null,
       conflicts: [],
       timeline: [],
+      children: [],
       firstError: "Something broke",
     });
     expect(parsed.status).toBe("failed");
@@ -112,6 +115,7 @@ describe("agent.subagent.aggregate capability", () => {
       aggregatedData: null,
       conflicts: [],
       timeline: [],
+      children: [],
       firstError: null,
     });
     expect(parsed.status).toBe("timed_out");
@@ -127,6 +131,7 @@ describe("agent.subagent.aggregate capability", () => {
         aggregatedData: null,
         conflicts: [],
         timeline: [],
+        children: [],
         firstError: null,
       }),
     ).toThrow();
@@ -143,6 +148,7 @@ describe("agent.subagent.aggregate capability", () => {
       aggregatedData: null,
       conflicts: [],
       timeline: [],
+      children: [],
       firstError: null,
     });
     expect(parsed.aggregatedData).toBeNull();
@@ -157,6 +163,7 @@ describe("agent.subagent.aggregate capability", () => {
       aggregatedData: { summary: "merged", count: 42 },
       conflicts: [],
       timeline: [],
+      children: [],
       firstError: null,
     });
     expect(parsed.aggregatedData).toEqual({ summary: "merged", count: 42 });
@@ -175,6 +182,7 @@ describe("agent.subagent.aggregate capability", () => {
         { key: "title", values: ["A", "B"], runIds: ["run_1", "run_2"] },
       ],
       timeline: [],
+      children: [],
       firstError: null,
     });
     expect(parsed.conflicts).toHaveLength(1);
@@ -202,6 +210,7 @@ describe("agent.subagent.aggregate capability", () => {
           errorReason: null,
         },
       ],
+      children: [],
       firstError: null,
     });
     expect(parsed.timeline).toHaveLength(1);
@@ -227,6 +236,7 @@ describe("agent.subagent.aggregate capability", () => {
           errorReason: null,
         },
       ],
+      children: [],
       firstError: null,
     });
     expect(parsed.timeline[0]?.startedAt).toBeNull();
@@ -244,6 +254,7 @@ describe("agent.subagent.aggregate capability", () => {
       aggregatedData: null,
       conflicts: [],
       timeline: [],
+      children: [],
       firstError: null,
     });
     expect(parsed.firstError).toBeNull();
@@ -260,6 +271,7 @@ describe("agent.subagent.aggregate capability", () => {
         aggregatedData: null,
         conflicts: [],
         timeline: [],
+        children: [],
         firstError: null,
       }),
     ).toThrow();
@@ -275,6 +287,7 @@ describe("agent.subagent.aggregate capability", () => {
         aggregatedData: "not-a-record",
         conflicts: [],
         timeline: [],
+        children: [],
         firstError: null,
       }),
     ).toThrow();

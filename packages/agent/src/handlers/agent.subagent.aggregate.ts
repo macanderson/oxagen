@@ -12,6 +12,7 @@ type RunRow = {
   publicId: string;
   capabilityName: string;
   status: string;
+  inputPayload: unknown;
   outputPayload: unknown;
   errorReason: string | null;
   startedAt: Date | null;
@@ -81,6 +82,7 @@ async function loadRuns(fanoutUuid: string, ctx: CapabilityContext): Promise<Run
         publicId: schema.subagentRuns.publicId,
         capabilityName: schema.subagentRuns.capabilityName,
         status: schema.subagentRuns.status,
+        inputPayload: schema.subagentRuns.inputPayload,
         outputPayload: schema.subagentRuns.outputPayload,
         errorReason: schema.subagentRuns.errorReason,
         startedAt: schema.subagentRuns.startedAt,
@@ -182,6 +184,17 @@ export async function agentSubagentAggregateHandler(
     errorReason: r.errorReason,
   }));
 
+  // Per-child raw results — full input + output, NOT merged. This is what lets
+  // research.swarm.status surface each query's hits instead of a collapsed blob.
+  const children = runs.map((r) => ({
+    runId: r.publicId,
+    capabilityName: r.capabilityName,
+    status: r.status,
+    input: r.inputPayload,
+    output: r.outputPayload,
+    errorReason: r.errorReason,
+  }));
+
   const completedCount = runs.filter((r) => r.status === "completed").length;
   const failedRuns = runs.filter((r) => r.status === "failed");
   const firstError = failedRuns[0]?.errorReason ?? null;
@@ -211,6 +224,7 @@ export async function agentSubagentAggregateHandler(
     aggregatedData,
     conflicts,
     timeline,
+    children,
     firstError,
   };
 }

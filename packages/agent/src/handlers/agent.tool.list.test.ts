@@ -29,6 +29,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 vi.mock("@oxagen/oxagen", () => ({
   listCapabilities: mocks.listCapabilities,
   getSurfaces: mocks.getSurfaces,
+  // getOxagenRegistry() reads getCapability off the module; the mock must define
+  // it (agent.tool.list doesn't use it, but the registry loader reads it eagerly).
+  getCapability: () => undefined,
 }));
 
 // Entitlement filter dependencies (WP4): pluginForContract maps a capability

@@ -37,6 +37,7 @@ const FIXTURE = [
 vi.mock("@oxagen/oxagen", () => ({
   listCapabilities: () => FIXTURE,
   getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+  getCapability: () => undefined,
 }));
 
 vi.mock("@oxagen/oxagen/plugins", () => ({
@@ -304,6 +305,7 @@ describe("materializeTools", () => {
     vi.doMock("@oxagen/oxagen", () => ({
       listCapabilities: () => fixtureGated,
       getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
@@ -328,6 +330,7 @@ describe("materializeTools", () => {
     vi.doMock("@oxagen/oxagen", () => ({
       listCapabilities: () => fixtureGated,
       getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
@@ -379,6 +382,7 @@ describe("materializeTools", () => {
     vi.doMock("@oxagen/oxagen", () => ({
       listCapabilities: () => customFixture,
       getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
@@ -403,6 +407,7 @@ describe("materializeTools", () => {
     vi.doMock("@oxagen/oxagen", () => ({
       listCapabilities: () => fixtureGated,
       getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
@@ -430,6 +435,7 @@ describe("materializeTools", () => {
     vi.doMock("@oxagen/oxagen", () => ({
       listCapabilities: () => fixtureGated,
       getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");

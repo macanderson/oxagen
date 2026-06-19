@@ -32,6 +32,7 @@ const BASE_AGG = {
   aggregatedData: { a: 1 },
   conflicts: [],
   timeline: [],
+  children: [],
   firstError: null,
 };
 

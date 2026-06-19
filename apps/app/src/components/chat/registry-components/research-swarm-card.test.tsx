@@ -23,7 +23,7 @@ describe("ResearchSwarmCard", () => {
     expect(screen.getByText("swm_1")).toBeTruthy();
   });
 
-  it("renders a complete swarm with the per-query result breakdown", () => {
+  it("renders a complete swarm with per-query hits as clickable links", () => {
     render(
       <ResearchSwarmCard
         output={{
@@ -32,8 +32,14 @@ describe("ResearchSwarmCard", () => {
           completedTasks: 2,
           totalTasks: 2,
           results: [
-            { query: "USS Nautilus crew", resultCount: 5 },
-            { query: "Nautilus Arctic voyage", resultCount: 3 },
+            {
+              query: "USS Nautilus crew",
+              resultCount: 5,
+              hits: [
+                { title: "Crew roster", url: "https://example.com/crew", snippet: "The crew…" },
+              ],
+            },
+            { query: "Nautilus Arctic voyage", resultCount: 3, hits: [] },
           ],
         }}
       />,
@@ -41,7 +47,10 @@ describe("ResearchSwarmCard", () => {
     expect(screen.getByText("Complete")).toBeTruthy();
     expect(screen.getByText("USS Nautilus crew")).toBeTruthy();
     expect(screen.getByText("5 results")).toBeTruthy();
-    expect(screen.getByText("3 results")).toBeTruthy();
+    // The actual hit renders as an external link (the reachable data, finally).
+    const link = screen.getByText("Crew roster").closest("a");
+    expect(link?.getAttribute("href")).toBe("https://example.com/crew");
+    expect(link?.getAttribute("target")).toBe("_blank");
   });
 
   it("renders a failed swarm", () => {

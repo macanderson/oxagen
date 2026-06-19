@@ -13,9 +13,16 @@ import { Badge } from "@/components/ui/badge";
  * componentId: "research-swarm-card"
  */
 
+interface SwarmHit {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
 interface SwarmResult {
   query: string;
   resultCount: number;
+  hits: SwarmHit[];
 }
 
 interface ResearchSwarmCardProps {
@@ -47,7 +54,15 @@ function readSwarm(output: unknown): SwarmShape {
         if (typeof r !== "object" || r === null) return [];
         const rr = r as Record<string, unknown>;
         if (typeof rr.query !== "string") return [];
-        return [{ query: rr.query, resultCount: typeof rr.resultCount === "number" ? rr.resultCount : 0 }];
+        const hits = Array.isArray(rr.hits)
+          ? rr.hits.flatMap((h): SwarmHit[] => {
+              if (typeof h !== "object" || h === null) return [];
+              const hh = h as Record<string, unknown>;
+              if (typeof hh.title !== "string" || typeof hh.url !== "string") return [];
+              return [{ title: hh.title, url: hh.url, snippet: typeof hh.snippet === "string" ? hh.snippet : "" }];
+            })
+          : [];
+        return [{ query: rr.query, resultCount: typeof rr.resultCount === "number" ? rr.resultCount : hits.length, hits }];
       })
     : [];
   return {
@@ -127,18 +142,37 @@ export default function ResearchSwarmCard(
         </div>
 
         {s.results.length > 0 ? (
-          <ul className="space-y-1">
+          <ul className="space-y-2">
             {s.results.slice(0, 20).map((r, i) => (
-              <li
-                key={i}
-                className="flex items-center justify-between gap-3 rounded-md bg-muted/30 px-2.5 py-1.5 text-xs"
-              >
-                <span className="min-w-0 truncate" title={r.query}>
-                  {r.query}
-                </span>
-                <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {r.resultCount} result{r.resultCount === 1 ? "" : "s"}
-                </span>
+              <li key={i} className="rounded-md bg-muted/30 px-2.5 py-2 text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate font-medium" title={r.query}>
+                    {r.query}
+                  </span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {r.resultCount} result{r.resultCount === 1 ? "" : "s"}
+                  </span>
+                </div>
+                {r.hits.length > 0 ? (
+                  <ul className="mt-1 space-y-0.5">
+                    {r.hits.slice(0, 3).map((h, j) => (
+                      <li key={j} className="truncate">
+                        <a
+                          href={h.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                          title={h.snippet || h.title}
+                        >
+                          {h.title}
+                        </a>
+                      </li>
+                    ))}
+                    {r.hits.length > 3 ? (
+                      <li className="text-muted-foreground">+{r.hits.length - 3} more</li>
+                    ) : null}
+                  </ul>
+                ) : null}
               </li>
             ))}
           </ul>

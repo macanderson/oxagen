@@ -13,6 +13,10 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () => (await import("./agent.compose")).agentComposeHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "graph.ingest",
+    async () => (await import("./graph.ingest")).graphIngestHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "api.key.create",
     async () => (await import("./api.key.create")).apiKeyCreateHandler as CapabilityHandlerFn,
   );

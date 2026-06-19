@@ -122,6 +122,7 @@ contract-first design, IAM enforcement, and instrumentation.
 | `graph.edge.upsert` | Create or update a directed relationship between two nodes. |
 | `graph.edge.delete` | Delete a directed relationship between two nodes.           |
 | `graph.cypher`      | Execute a read-only Cypher query against the tenant graph.  |
+| `graph.ingest`      | Extract entities + relationships from text and commit them to the graph with confidence. |
 | `graph.stats`       | Workspace graph statistics: node/edge counts by type.       |
 | `ontology.query`     | Typed multi-hop traversal from a start node over named relationship types. |
 | `ontology.neighbors` | One-hop neighborhood of a node, filtered by type and direction.            |

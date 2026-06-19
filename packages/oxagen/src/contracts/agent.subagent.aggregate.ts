@@ -58,6 +58,23 @@ export const agentSubagentAggregate = registerCapability({
         errorReason: z.string().nullable(),
       }),
     ),
+    children: z
+      .array(
+        z.object({
+          runId: z.string(),
+          capabilityName: z.string(),
+          status: z.string(),
+          input: z.unknown(),
+          output: z.unknown(),
+          errorReason: z.string().nullable(),
+        }),
+      )
+      .describe(
+        "Per-child run with its FULL input + output payloads — the raw fan-out " +
+          "results. Unlike aggregatedData (which deep-merges and collides on shared " +
+          "keys like `results`), this preserves each child's distinct result so " +
+          "callers can present per-task output (e.g. each web.search query's hits).",
+      ),
     firstError: z.string().nullable().describe("Error reason from the first failed child run, or null"),
   }),
 });

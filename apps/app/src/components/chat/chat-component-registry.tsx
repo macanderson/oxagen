@@ -160,4 +160,9 @@ export const CHAT_COMPONENTS = {
   "capability-chain-card": lazy(
     () => import("@/components/chat/registry-components/capability-chain-card"),
   ),
+  // Renders graph.ingest output — entities + relationships extracted from text
+  // and committed to the knowledge graph, with confidence labels + node links.
+  "graph-ingest-card": lazy(
+    () => import("@/components/chat/registry-components/graph-ingest-card"),
+  ),
 } as unknown as Record<string, AnyLazy>;
