@@ -1,9 +1,16 @@
+import { and, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import type { CapabilityContext } from "@oxagen/oxagen/types";
 import { getOxagenPlugin } from "@oxagen/oxagen/plugins";
+import {
+  deriveAuthKind,
+  deriveTransportTypes,
+  listServers,
+} from "@oxagen/plugins/registry";
+import type { AuthKind } from "@oxagen/plugins/registry";
 import { logger } from "./logger";
 
 export interface InstallOneInput {
@@ -104,7 +111,83 @@ export async function installOne(
     );
   }
 
-  const { name, title, description, endpointUrl, transport, authKind } = custom;
+  const { name, title, description } = custom;
+  let { endpointUrl, transport, authKind } = custom;
+  let source: "registry" | "custom" = "custom";
+
+  // ── Registry-sourced install: empty endpointUrl means "resolve from registry" ──
+  // When the app action passes endpointUrl: "" (a marketplace install, not a hand-
+  // entered custom server), resolve the real endpoint live from the workspace's
+  // enabled registries. This prevents storing an unusable empty endpoint URL.
+  if (!endpointUrl || endpointUrl.trim() === "") {
+    source = "registry";
+
+    // Load enabled registries for this org+workspace.
+    const registries = await withSystemDb((tx) =>
+      tx
+        .select({
+          id: schema.mcpRegistries.id,
+          baseUrl: schema.mcpRegistries.baseUrl,
+        })
+        .from(schema.mcpRegistries)
+        .where(
+          and(
+            eq(schema.mcpRegistries.orgId, ctx.orgId),
+            eq(schema.mcpRegistries.workspaceId, ctx.workspaceId!),
+            eq(schema.mcpRegistries.enabled, true),
+          ),
+        ),
+    );
+
+    // Search each registry for the server by name; stop at the first match.
+    let resolved = false;
+    for (const reg of registries) {
+      let result: Awaited<ReturnType<typeof listServers>>;
+      try {
+        result = await listServers(reg.baseUrl, { search: name, limit: 50 });
+      } catch (err) {
+        logger.warn(
+          { err, registryId: reg.id, serverName: name },
+          "plugin.org.install: registry fetch failed, skipping",
+        );
+        continue;
+      }
+
+      const match = result.servers.find((s) => s.server.name === name);
+      if (!match) continue;
+
+      const sd = match.server;
+
+      // Prefer the first remote endpoint (hosted MCP server URL).
+      const firstRemote = (sd.remotes ?? [])[0];
+      if (firstRemote?.url) {
+        endpointUrl = firstRemote.url;
+        // Prefer registry-declared transport type; fallback to the remote's own type.
+        const transportTypes = deriveTransportTypes(sd);
+        transport = transportTypes[0] ?? firstRemote.type ?? transport;
+        authKind = deriveAuthKind(sd) as AuthKind;
+        resolved = true;
+        logger.info(
+          { registryId: reg.id, serverName: name, endpointUrl, transport, authKind },
+          "plugin.org.install: resolved endpoint from registry",
+        );
+        break;
+      }
+
+      // Server found but has no remote URL — log and keep searching.
+      logger.warn(
+        { registryId: reg.id, serverName: name },
+        "plugin.org.install: server found in registry but has no remote endpoint, skipping",
+      );
+    }
+
+    if (!resolved) {
+      throw new Error(
+        `[plugin.org.install] Server "${name}" not found in any connected registry. ` +
+          `Ensure the server name matches exactly and at least one registry is enabled for this workspace.`,
+      );
+    }
+  }
 
   // Upsert the listing (enabled: true — all plugins are free, enable on install).
   // ON CONFLICT on the (org_id, workspace_id, plugin_type, name) unique index returns
@@ -116,7 +199,7 @@ export async function installOne(
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId!,
         pluginType,
-        source: "custom",
+        source,
         name,
         title: title ?? null,
         description: description ?? null,
