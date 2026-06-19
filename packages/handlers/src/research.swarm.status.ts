@@ -36,13 +36,16 @@ export const researchSwarmStatusHandler: CapabilityHandler<typeof researchSwarmS
     throw new Error(`research.swarm.status: swarm ${input.swarmId} not found`);
   }
 
-  // Delegate to agent.subagent.aggregate with a short non-blocking timeout (0ms
-  // = return current state immediately without polling).
+  // Delegate to agent.subagent.aggregate. The aggregate is ALWAYS a non-blocking
+  // snapshot (it never sleeps), so we do NOT pass timeoutMs:0 — `timeoutMs` is the
+  // *staleness window*, i.e. how old a still-running fanout may be before it is
+  // reported as `timed_out`. Passing 0 made every in-flight swarm read as
+  // timed_out (age 0 >= 0) → mapped to "failed", so a running swarm never showed
+  // progress and never completed. Omit it to use the contract default window.
   const aggregateResult = (await invoke(
     "agent.subagent.aggregate",
     {
       fanoutId: record.dispatchId,
-      timeoutMs: 0,
     },
     ctx,
   )) as AgentSubagentAggregateOutput;
@@ -92,6 +95,10 @@ export function mapChildrenToResults(
   children: AgentSubagentAggregateOutput["children"],
 ): SwarmQueryResult[] {
   const out: SwarmQueryResult[] = [];
+  // Defensive: a malformed/older aggregate payload (or a future shape change)
+  // could omit `children`. Iterating undefined throws "children is not iterable"
+  // and fails the whole status poll — degrade to "no results yet" instead.
+  if (!Array.isArray(children)) return out;
   for (const child of children) {
     const input = asRecord(child.input);
     const output = asRecord(child.output);

@@ -34,7 +34,10 @@ export const sourceConnections = ingestionSchema.table(
     connectorIdx: index("source_connections_connector_idx").on(t.connectorId),
     statusIdx: index("source_connections_status_idx").on(t.status),
     oauthAccountIdx: index("source_connections_oauth_account_idx").on(t.oauthAccountId),
-    statusCheck: check("source_connections_status_check", sql`${t.status} IN ('pending_setup', 'connected', 'paused', 'error')`),
+    // 'deleting' is set synchronously by connection.delete; 'deleted' is the
+    // terminal state written by the async purge job (ingestion.delete). Both
+    // were missing here, so any delete violated this CHECK → 500 (OXA-1751).
+    statusCheck: check("source_connections_status_check", sql`${t.status} IN ('pending_setup', 'connected', 'paused', 'error', 'deleting', 'deleted')`),
   }),
 );
 
@@ -239,7 +242,10 @@ export const deletionJobs = ingestionSchema.table(
     workspaceIdx: index("deletion_jobs_workspace_idx").on(t.workspaceId),
     statusIdx: index("deletion_jobs_status_idx").on(t.status),
     statusCheck: check("deletion_jobs_status_check", sql`${t.status} IN ('pending', 'running', 'completed', 'failed', 'cancelled')`),
-    deleteModeCheck: check("deletion_jobs_delete_mode_check", sql`${t.deleteMode} IN ('soft', 'hard')`),
+    // Contract modes are connection_only | data_only | full (connection.delete).
+    // The old 'soft'/'hard' values were stale, so every deletion job insert
+    // violated this CHECK → 500 (OXA-1751).
+    deleteModeCheck: check("deletion_jobs_delete_mode_check", sql`${t.deleteMode} IN ('connection_only', 'data_only', 'full')`),
   }),
 );
 

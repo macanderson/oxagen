@@ -218,7 +218,12 @@ export const auth = betterAuth({
     enabled: true,
     autoSignIn: true,
     minPasswordLength: 8,
-    requireEmailVerification: true,
+    // Require a verified email before sign-in in deployed (production/preview)
+    // environments only. Local development and the E2E harness have no real
+    // mail delivery (sendEmail is a no-op locally), so enforcing it would 403
+    // every credential sign-in and block all local frontend verification. Gated
+    // on isLocalEnv (NODE_ENV development/test, VERCEL_ENV development, or E2E).
+    requireEmailVerification: !isLocalEnv,
     // Tokens expire after 1 hour (Better Auth default). Single-use — deleted
     // on first successful reset. revokeSessionsOnPasswordReset invalidates all
     // existing sessions so a hijacked account is secured immediately.

@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import ResearchSwarmCard from "./research-swarm-card";
 
 vi.mock("@/components/ui/badge", () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("ResearchSwarmCard", () => {
   it("shows a running progress indicator from completed/total tasks", () => {
@@ -56,5 +60,71 @@ describe("ResearchSwarmCard", () => {
   it("renders a failed swarm", () => {
     render(<ResearchSwarmCard output={{ status: "failed", completedTasks: 0, totalTasks: 4 }} />);
     expect(screen.getByText("Failed")).toBeTruthy();
+  });
+
+  it("does not poll when tenant slugs are absent (static render)", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <ResearchSwarmCard
+        output={{ swarmId: "swm_x", status: "running", completedTasks: 0, totalTasks: 5 }}
+      />,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not poll when the initial snapshot is already terminal", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <ResearchSwarmCard
+        orgSlug="acme"
+        workspaceSlug="main"
+        output={{ swarmId: "swm_done", status: "complete", completedTasks: 5, totalTasks: 5, results: [] }}
+      />,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("polls research.swarm.status and updates to complete with live results", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        swarmId: "swm_live",
+        status: "complete",
+        completedTasks: 2,
+        totalTasks: 2,
+        results: [
+          {
+            query: "USS Nautilus reactor",
+            resultCount: 1,
+            hits: [{ title: "S2W reactor", url: "https://example.com/s2w", snippet: "The reactor…" }],
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    // Initial render reflects the fire-and-forget start output: running, 0%.
+    render(
+      <ResearchSwarmCard
+        orgSlug="acme"
+        workspaceSlug="main"
+        output={{ swarmId: "swm_live", status: "running", completedTasks: 0, totalTasks: 2 }}
+      />,
+    );
+    expect(screen.getByText("Running")).toBeTruthy();
+
+    // After the first poll the card reflects live status + results.
+    await waitFor(() => expect(screen.getByText("Complete")).toBeTruthy());
+    expect(screen.getByText("USS Nautilus reactor")).toBeTruthy();
+    const link = screen.getByText("S2W reactor").closest("a");
+    expect(link?.getAttribute("href")).toBe("https://example.com/s2w");
+
+    // The poll hit the org+workspace-scoped status route with the swarm id.
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/acme/main/research/swarm/status?swarmId=swm_live",
+      expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
+    );
   });
 });

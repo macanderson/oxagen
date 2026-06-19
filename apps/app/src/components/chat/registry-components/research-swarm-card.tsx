@@ -6,12 +6,31 @@ import { Badge } from "@/components/ui/badge";
 
 /**
  * research-swarm-card — renders research.swarm.start and research.swarm.status.
- * Shows a live progress indicator (completed / total tasks) and, once results
+ * Shows a LIVE progress indicator (completed / total tasks) and, once results
  * land, the per-query breakdown. This is the surface the user watches while the
  * swarm runs.
  *
+ * research.swarm.start is fire-and-forget: it returns `{ status: "running",
+ * completed: 0 }` and dispatches the fan-out asynchronously. The card therefore
+ * cannot be a static projection of that one snapshot — it must poll
+ * research.swarm.status until the swarm reaches a terminal state. Without this
+ * the bar renders at 0% and never updates or completes (the reported bug).
+ *
+ * Polling needs the tenant slugs (the status route is org+workspace scoped);
+ * translate-stream / resolveRenderDirective inject orgSlug + workspaceSlug into
+ * the component props, alongside the tool `output`.
+ *
  * componentId: "research-swarm-card"
  */
+
+// Poll cadence + ceiling. Web-search swarms finish in seconds; the ceiling only
+// bounds a tab left open on a genuinely stuck swarm so we never poll forever.
+const POLL_INTERVAL_MS = 2_000;
+const MAX_POLLS = 180; // ~6 min at 2s — safely past the aggregate staleness window
+
+function isTerminal(status: string): boolean {
+  return status === "complete" || status === "failed";
+}
 
 interface SwarmHit {
   title: string;
@@ -28,6 +47,10 @@ interface SwarmResult {
 interface ResearchSwarmCardProps {
   capability?: string;
   output?: unknown;
+  /** Tenant slugs injected by the chat stream so the card can poll the
+   *  org+workspace-scoped research.swarm.status route. */
+  orgSlug?: string;
+  workspaceSlug?: string;
 }
 
 interface SwarmShape {
@@ -99,7 +122,62 @@ function StatusBadge({ status }: { status: string }): React.ReactElement {
 export default function ResearchSwarmCard(
   props: ResearchSwarmCardProps,
 ): React.ReactElement {
-  const s = readSwarm(props.output);
+  const initial = readSwarm(props.output);
+  const orgSlug = typeof props.orgSlug === "string" ? props.orgSlug : "";
+  const workspaceSlug = typeof props.workspaceSlug === "string" ? props.workspaceSlug : "";
+
+  // Live state overrides the initial snapshot once polling returns. Null until
+  // the first successful poll, so the very first paint uses the tool output.
+  const [live, setLive] = React.useState<SwarmShape | null>(null);
+  const s = live ?? initial;
+
+  const swarmId = initial.swarmId;
+  // Only poll when we have everything required to build the scoped URL and the
+  // initial snapshot isn't already terminal (a direct status call may arrive
+  // complete — nothing left to watch).
+  const shouldPoll =
+    swarmId !== undefined &&
+    orgSlug !== "" &&
+    workspaceSlug !== "" &&
+    !isTerminal(initial.status);
+
+  React.useEffect(() => {
+    if (!shouldPoll || swarmId === undefined) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let polls = 0;
+    const url =
+      `/api/v1/${encodeURIComponent(orgSlug)}/${encodeURIComponent(workspaceSlug)}` +
+      `/research/swarm/status?swarmId=${encodeURIComponent(swarmId)}`;
+
+    async function poll(): Promise<void> {
+      polls += 1;
+      try {
+        const res = await fetch(url, { headers: { "Content-Type": "application/json" } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json: unknown = await res.json();
+        if (cancelled) return;
+        const next = readSwarm(json);
+        setLive(next);
+        if (!isTerminal(next.status) && polls < MAX_POLLS) {
+          timer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
+        }
+      } catch {
+        // Transient (the fan-out row may not be queryable for a beat after
+        // dispatch, or a network blip). Back off and retry until the ceiling.
+        if (!cancelled && polls < MAX_POLLS) {
+          timer = setTimeout(() => void poll(), POLL_INTERVAL_MS * 2);
+        }
+      }
+    }
+
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [shouldPoll, swarmId, orgSlug, workspaceSlug]);
+
   const pct = s.total > 0 ? Math.round((s.completed / s.total) * 100) : s.status === "complete" ? 100 : 0;
 
   return (

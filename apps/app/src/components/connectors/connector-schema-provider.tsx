@@ -84,6 +84,13 @@ export interface ConnectorSchemaProviderProps {
   children: React.ReactNode;
   /** Pre-loaded schema (skips fetch). Used in SSR/test contexts. */
   initialSchema?: ConnectorPluginSchema;
+  /**
+   * Existing field values to seed the form with — merged OVER schema-derived
+   * defaults. Used when editing an existing connection's config so the form
+   * opens pre-filled with the current `deliveryConfig`. Omit for the install
+   * flow (the form then starts from manifest defaults only).
+   */
+  initialValues?: FormValues;
 }
 
 export function ConnectorSchemaProvider({
@@ -92,13 +99,22 @@ export function ConnectorSchemaProvider({
   workspaceSlug,
   children,
   initialSchema,
+  initialValues,
 }: ConnectorSchemaProviderProps) {
   const [schema, setSchema] = React.useState<ConnectorPluginSchema | null>(initialSchema ?? null);
   const [loading, setLoading] = React.useState(!initialSchema);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
 
+  // Kept in a ref so the async schema-fetch effect can merge the latest seed
+  // values without taking `initialValues` (a fresh object each render) as a
+  // dependency — that would re-trigger the fetch on every parent re-render.
+  const initialValuesRef = React.useRef(initialValues);
+  React.useEffect(() => {
+    initialValuesRef.current = initialValues;
+  }, [initialValues]);
+
   const [formState, setFormState] = React.useState<ConnectorFormState>(() => ({
-    values: buildDefaultValues(initialSchema ?? null),
+    values: { ...buildDefaultValues(initialSchema ?? null), ...(initialValues ?? {}) },
     errors: [],
     touched: new Set<string>(),
   }));
@@ -130,7 +146,7 @@ export function ConnectorSchemaProvider({
         if (cancelled) return;
         setSchema(data);
         setFormState({
-          values: buildDefaultValues(data),
+          values: { ...buildDefaultValues(data), ...(initialValuesRef.current ?? {}) },
           errors: [],
           touched: new Set<string>(),
         });
@@ -197,7 +213,7 @@ export function ConnectorSchemaProvider({
   );
 
   const isFieldVisible = React.useCallback(
-    (fieldKey: string, dependsOn?: { field: string; value?: unknown }): boolean => {
+    (_fieldKey: string, dependsOn?: { field: string; value?: unknown }): boolean => {
       if (!dependsOn) return true;
       // Check against auth fields and config fields in form values
       const currentValue = formState.values[dependsOn.field];
@@ -208,7 +224,7 @@ export function ConnectorSchemaProvider({
 
   const resetForm = React.useCallback(() => {
     setFormState({
-      values: buildDefaultValues(schema),
+      values: { ...buildDefaultValues(schema), ...(initialValuesRef.current ?? {}) },
       errors: [],
       touched: new Set<string>(),
     });

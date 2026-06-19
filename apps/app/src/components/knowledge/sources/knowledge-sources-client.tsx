@@ -11,9 +11,30 @@ import {
   Clock,
   RefreshCw,
   GithubIcon,
+  MoreHorizontal,
+  Settings2,
+  Trash2,
 } from "lucide-react";
 import { GitHubConnectionWizard } from "./github-connection-wizard";
+import {
+  EditSourceConfigSheet,
+  type EditSourceTarget,
+} from "./edit-source-config-sheet";
+import {
+  DeleteSourceDialog,
+  type DeleteSourceTarget,
+} from "./delete-source-dialog";
+import { Button } from "@/components/ui/button";
+import {
+  Menu,
+  MenuTrigger,
+  MenuPopup,
+  MenuItem,
+  MenuSeparator,
+} from "@/components/ui/menu";
 import type { ConnectionListOutput } from "@oxagen/oxagen/contracts/connection.list";
+
+type Connection = ConnectionListOutput["connections"][number];
 
 // ── Display helpers ────────────────────────────────────────────────────────────
 
@@ -124,14 +145,14 @@ function formatDate(iso: string | null): string | null {
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 interface ConnectionRowProps {
-  connection: ConnectionListOutput["connections"][number];
-  orgSlug: string;
-  workspaceSlug: string;
+  connection: Connection;
   onResyncStart: (connectionId: string) => void;
+  onEdit: (connection: Connection) => void;
+  onDelete: (connection: Connection) => void;
   resyncing: Set<string>;
 }
 
-function ConnectionRow({ connection, orgSlug: _orgSlug, workspaceSlug: _workspaceSlug, onResyncStart, resyncing }: ConnectionRowProps) {
+function ConnectionRow({ connection, onResyncStart, onEdit, onDelete, resyncing }: ConnectionRowProps) {
   const statusConfig = getStatusConfig(connection.status);
   const StatusIcon = statusConfig.icon;
   const ConnectorIcon = CONNECTOR_ICONS[connection.connectorId] ?? Database;
@@ -194,12 +215,33 @@ function ConnectionRow({ connection, orgSlug: _orgSlug, workspaceSlug: _workspac
             Re-sync
           </button>
         )}
-        <button
-          type="button"
-          className="flex-shrink-0 rounded-md border border-border/60 bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
-        >
-          {connection.status === "needs_reauth" ? "Reconnect" : "Manage"}
-        </button>
+        <Menu>
+          <MenuTrigger
+            render={<Button variant="ghost" size="icon-sm" />}
+            data-testid={`source-menu-trigger-${connection.publicId}`}
+          >
+            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">Source actions</span>
+          </MenuTrigger>
+          <MenuPopup align="end">
+            <MenuItem
+              onClick={() => onEdit(connection)}
+              data-testid={`edit-source-${connection.publicId}`}
+            >
+              <Settings2 className="h-4 w-4" aria-hidden="true" />
+              Edit configuration
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem
+              onClick={() => onDelete(connection)}
+              className="text-destructive data-[highlighted]:text-destructive"
+              data-testid={`delete-source-${connection.publicId}`}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              Delete source
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
       </div>
     </li>
   );
@@ -262,10 +304,37 @@ export function KnowledgeSourcesClient({
     setupConnector === "github",
   );
   const [resyncing, setResyncing] = React.useState<Set<string>>(new Set());
+  const [editTarget, setEditTarget] = React.useState<Connection | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<Connection | null>(null);
 
   const activeConnections = connections.filter((c) => c.status !== "deleted");
   const syncedCount = activeConnections.filter((c) => c.status === "connected" || c.status === "active").length;
   const totalRecords = activeConnections.reduce((s, c) => s + c.entityCount, 0);
+
+  // Stable derived targets — memoized on the selected connection's identity so
+  // the sheet/dialog effects don't refetch on unrelated re-renders.
+  const editTargetProp = React.useMemo<EditSourceTarget | null>(
+    () =>
+      editTarget
+        ? {
+            publicId: editTarget.publicId,
+            connectorId: editTarget.connectorId,
+            displayName: editTarget.displayName,
+          }
+        : null,
+    [editTarget],
+  );
+  const deleteTargetProp = React.useMemo<DeleteSourceTarget | null>(
+    () =>
+      deleteTarget
+        ? {
+            publicId: deleteTarget.publicId,
+            displayName: deleteTarget.displayName,
+            entityCount: deleteTarget.entityCount,
+          }
+        : null,
+    [deleteTarget],
+  );
 
   const handleResync = React.useCallback(
     async (publicId: string) => {
@@ -344,9 +413,9 @@ export function KnowledgeSourcesClient({
               <ConnectionRow
                 key={connection.publicId}
                 connection={connection}
-                orgSlug={orgSlug}
-                workspaceSlug={workspaceSlug}
                 onResyncStart={handleResync}
+                onEdit={setEditTarget}
+                onDelete={setDeleteTarget}
                 resyncing={resyncing}
               />
             ))}
@@ -366,6 +435,22 @@ export function KnowledgeSourcesClient({
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
         initialConnectionId={setupConnector === "github" ? setupConnectionId : undefined}
+      />
+
+      <EditSourceConfigSheet
+        open={editTarget !== null}
+        onClose={() => setEditTarget(null)}
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+        target={editTargetProp}
+      />
+
+      <DeleteSourceDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+        target={deleteTargetProp}
       />
     </>
   );

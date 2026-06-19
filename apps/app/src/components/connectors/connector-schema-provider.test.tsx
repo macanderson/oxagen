@@ -458,3 +458,50 @@ describe("ConnectorSchemaProvider — fetch (no initialSchema)", () => {
     expect(capturedError).toBe("Network error");
   });
 });
+
+// ── initialValues seeding (edit flow) ──────────────────────────────────────────
+
+describe("ConnectorSchemaProvider — initialValues", () => {
+  function renderWithInitialValues(initialValues: Record<string, unknown>) {
+    let captured: Record<string, unknown> = {};
+    function Capture() {
+      const ctx = useConnectorSchema();
+      React.useEffect(() => {
+        captured = ctx.formState.values;
+      });
+      return null;
+    }
+    render(
+      <ConnectorSchemaProvider
+        pluginId="test-connector"
+        orgSlug="acme"
+        workspaceSlug="main"
+        initialSchema={SCHEMA}
+        initialValues={initialValues}
+      >
+        <Capture />
+      </ConnectorSchemaProvider>,
+    );
+    return () => captured;
+  }
+
+  it("seeds provided values over schema defaults", () => {
+    const get = renderWithInitialValues({ organizations: ["acme-eng"], syncDepth: 30 });
+    expect(get().organizations).toEqual(["acme-eng"]);
+    expect(get().syncDepth).toBe(30);
+  });
+
+  it("keeps non-schema operational keys present in initialValues", () => {
+    const get = renderWithInitialValues({ organizations: ["acme-eng"], owner: "acme", repo: "core" });
+    // Operational keys not described by the manifest survive in form state so a
+    // later merge-submit can preserve them.
+    expect(get().owner).toBe("acme");
+    expect(get().repo).toBe("core");
+  });
+
+  it("falls back to schema defaults for fields not in initialValues", () => {
+    const get = renderWithInitialValues({ organizations: ["acme-eng"] });
+    // syncDepth not seeded → keeps the manifest default of 90.
+    expect(get().syncDepth).toBe(90);
+  });
+});

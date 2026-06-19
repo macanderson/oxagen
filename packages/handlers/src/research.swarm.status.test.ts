@@ -63,6 +63,17 @@ describe("mapChildrenToResults", () => {
     expect(results).toHaveLength(1);
     expect(results[0]?.hits).toEqual([]);
   });
+
+  it("degrades to no results when children is missing instead of throwing", () => {
+    // A malformed/older aggregate payload could omit `children`. Iterating
+    // undefined throws "children is not iterable" and fails the whole poll.
+    expect(() =>
+      mapChildrenToResults(undefined as unknown as Parameters<typeof mapChildrenToResults>[0]),
+    ).not.toThrow();
+    expect(
+      mapChildrenToResults(undefined as unknown as Parameters<typeof mapChildrenToResults>[0]),
+    ).toEqual([]);
+  });
 });
 
 describe("researchSwarmStatusHandler", () => {
@@ -110,6 +121,35 @@ describe("researchSwarmStatusHandler", () => {
     const out = await researchSwarmStatusHandler({ swarmId: "swm_status_2" }, ctx);
     expect(out.status).toBe("running");
     expect(out.results).toBeUndefined();
+  });
+
+  it("does NOT force a zero staleness window on aggregate (running ≠ timed_out)", async () => {
+    // Regression: passing timeoutMs:0 made deriveAggregateStatus treat any
+    // in-flight fanout as timed_out (age 0 >= 0) → mapped to "failed", so a
+    // running swarm never showed progress. The status poll must let the
+    // aggregate use its default staleness window.
+    storeSwarm("swm_status_3", { dispatchId: "fan_3", totalTasks: 5, orgId: "org-1", workspaceId: "ws-1" });
+    invoke.mockResolvedValue({
+      fanoutId: "fan_3",
+      status: "running",
+      totalChildren: 5,
+      completedChildren: 2,
+      aggregatedData: null,
+      conflicts: [],
+      timeline: [],
+      children: [],
+      firstError: null,
+    });
+
+    await researchSwarmStatusHandler({ swarmId: "swm_status_3" }, ctx);
+
+    expect(invoke).toHaveBeenCalledWith(
+      "agent.subagent.aggregate",
+      expect.objectContaining({ fanoutId: "fan_3" }),
+      ctx,
+    );
+    const [, aggregateInput] = invoke.mock.calls[0] as [string, Record<string, unknown>, unknown];
+    expect(aggregateInput.timeoutMs).toBeUndefined();
   });
 
   it("throws when the swarm id is unknown to this tenant", async () => {
