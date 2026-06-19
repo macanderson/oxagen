@@ -10,7 +10,16 @@ vi.mock("./transport", () => ({
   }),
 }));
 
-import { sendEmail } from "./send-email";
+// Hoisted: the factory references errorMock at eval time (it's nested directly
+// in the returned object, not inside a lazy function like the transport mock).
+const { errorMock } = vi.hoisted(() => ({ errorMock: vi.fn() }));
+vi.mock("./logger", () => ({
+  logger: { error: errorMock, warn: vi.fn(), info: vi.fn() },
+}));
+
+import { sendEmail, sendEmailFireAndForget } from "./send-email";
+
+const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe("sendEmail", () => {
   beforeEach(() => {
@@ -98,5 +107,44 @@ describe("sendEmail", () => {
     sendMock.mockResolvedValue({ id: "<id>", accepted: ["a@x.com"], rejected: [] });
     await expect(sendEmail({ to: "a@x.com", subject: "s", html: " " })).resolves.toBeDefined();
     expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("sendEmailFireAndForget", () => {
+  beforeEach(() => {
+    sendMock.mockReset();
+    errorMock.mockReset();
+  });
+
+  it("returns void synchronously and logs nothing on success", async () => {
+    sendMock.mockResolvedValue({ id: "<id>", accepted: ["a@x.com"], rejected: [] });
+    const ret = sendEmailFireAndForget({ to: "a@x.com", subject: "s", text: "t" }, "verification");
+    expect(ret).toBeUndefined();
+    await flush();
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(errorMock).not.toHaveBeenCalled();
+  });
+
+  it("logs (does not throw) when the transport rejects — the prod silent-failure guard", async () => {
+    sendMock.mockRejectedValue(new Error("smtp down"));
+    expect(() =>
+      sendEmailFireAndForget({ to: "user@x.com", subject: "s", text: "t" }, "verification"),
+    ).not.toThrow();
+    await flush();
+    expect(errorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: "verification", to: "user@x.com" }),
+      expect.stringContaining("sendEmail failed"),
+    );
+  });
+
+  it("logs when the payload is invalid (schema rejection) instead of swallowing it", async () => {
+    // Neither text nor html → sendEmail rejects; the wrapper must surface it.
+    sendEmailFireAndForget({ to: "a@x.com", subject: "s" }, "password-reset");
+    await flush();
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(errorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: "password-reset" }),
+      expect.any(String),
+    );
   });
 });

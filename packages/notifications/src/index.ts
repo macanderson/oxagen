@@ -10,8 +10,8 @@
  *
  * Never import `nodemailer` outside this package — depend on `EmailTransport`.
  */
-export { sendEmail } from "./send-email";
-export { emailTransport } from "./transport";
+export { sendEmail, sendEmailFireAndForget } from "./send-email";
+export { emailTransport, isEmailTransportConfigured } from "./transport";
 export { createSmtpTransport } from "./smtp-transport";
 export { sendEmailInputSchema } from "./types";
 export type {

@@ -12,7 +12,7 @@ vi.mock("./smtp-transport", () => ({
   createSmtpTransport: (...args: unknown[]): unknown => createSmtpMock(...args),
 }));
 
-import { emailTransport, __resetTransportForTests } from "./transport";
+import { emailTransport, isEmailTransportConfigured, __resetTransportForTests } from "./transport";
 
 const FULL_ENV = {
   SMTP_HOST: "smtp.resend.com",
@@ -67,5 +67,27 @@ describe("emailTransport", () => {
       fromEmail: "noreply@notifications.oxagen.ai",
       fromName: "Oxagen (DO NOT REPLY)",
     });
+  });
+});
+
+describe("isEmailTransportConfigured", () => {
+  beforeEach(() => {
+    requireEnvMock.mockReset();
+    __resetTransportForTests();
+  });
+
+  it("is true when all required SMTP vars are present", () => {
+    requireEnvMock.mockReturnValue(FULL_ENV);
+    expect(isEmailTransportConfigured()).toBe(true);
+  });
+
+  it("is false when a required SMTP var is missing (does not throw)", () => {
+    requireEnvMock.mockReturnValue({ ...FULL_ENV, SMTP_PASSWORD: undefined });
+    expect(isEmailTransportConfigured()).toBe(false);
+  });
+
+  it("ignores the optional SMTP_FROM_NAME", () => {
+    requireEnvMock.mockReturnValue({ ...FULL_ENV, SMTP_FROM_NAME: undefined });
+    expect(isEmailTransportConfigured()).toBe(true);
   });
 });

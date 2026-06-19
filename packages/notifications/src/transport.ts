@@ -56,6 +56,23 @@ export function emailTransport(): EmailTransport {
   return _transport;
 }
 
+/**
+ * Whether all required SMTP_* vars are present, WITHOUT building the transport or
+ * throwing. Lets callers (e.g. auth boot) detect a deployed environment that
+ * would silently fail every transactional email — such as the verification email
+ * that gates production sign-in — and surface it loudly instead.
+ */
+export function isEmailTransportConfigured(): boolean {
+  const env = requireEnv([
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USERNAME",
+    "SMTP_PASSWORD",
+    "SMTP_FROM_EMAIL",
+  ] as const);
+  return REQUIRED_KEYS.every((key) => env[key] !== undefined);
+}
+
 /** Reset the memoized transport. Test-only. */
 export function __resetTransportForTests(): void {
   _transport = null;
