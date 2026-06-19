@@ -153,6 +153,19 @@ import { graphNodeList } from "./graph.node.list";
 import { graphStats } from "./graph.stats";
 import { ontologyQuery } from "./ontology.query";
 import { ontologyNeighbors } from "./ontology.neighbors";
+import { agentCompose } from "./agent.compose";
+import { agentSubagentCancel } from "./agent.subagent.cancel";
+import { agentSubagentLogs } from "./agent.subagent.logs";
+import { apiKeyRotate } from "./api.key.rotate";
+import { auditLogQuery } from "./audit.log.query";
+import { automationUpdate } from "./automation.update";
+import { connectionPause } from "./connection.pause";
+import { connectionUpdate } from "./connection.update";
+import { graphIngest } from "./graph.ingest";
+import { orgSettingsRead } from "./org.settings.read";
+import { orgSettingsWrite } from "./org.settings.write";
+import { workspaceSettingsRead } from "./workspace.settings.read";
+import { workspaceSettingsWrite } from "./workspace.settings.write";
 
 export {
   apiKeyCreate,
@@ -300,6 +313,19 @@ export {
   graphStats,
   ontologyQuery,
   ontologyNeighbors,
+  agentCompose,
+  agentSubagentCancel,
+  agentSubagentLogs,
+  apiKeyRotate,
+  auditLogQuery,
+  automationUpdate,
+  connectionPause,
+  connectionUpdate,
+  graphIngest,
+  orgSettingsRead,
+  orgSettingsWrite,
+  workspaceSettingsRead,
+  workspaceSettingsWrite,
 };
 
 /**
@@ -456,4 +482,17 @@ export const contracts = [
   graphStats,
   ontologyQuery,
   ontologyNeighbors,
+  agentCompose,
+  agentSubagentCancel,
+  agentSubagentLogs,
+  apiKeyRotate,
+  auditLogQuery,
+  automationUpdate,
+  connectionPause,
+  connectionUpdate,
+  graphIngest,
+  orgSettingsRead,
+  orgSettingsWrite,
+  workspaceSettingsRead,
+  workspaceSettingsWrite,
 ] as const;
