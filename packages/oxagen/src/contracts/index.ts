@@ -29,8 +29,14 @@ import { agentUiRender } from "./agent.ui.render";
 import { brandkitApply } from "./brandkit.apply";
 import { documentsGenerate } from "./documents.generate";
 import { documentsPdfCreate } from "./documents.pdf.create";
+import { markdownGenerate } from "./markdown.generate";
+import { mermaidGenerate } from "./mermaid.generate";
 import { agentMcpList } from "./agent.mcp.list";
 import { agentMcpRegister } from "./agent.mcp.register";
+import { agentMcpSetEnabled } from "./agent.mcp.set_enabled";
+import { agentMcpDelete } from "./agent.mcp.delete";
+import { agentMcpConsentResolve } from "./agent.mcp.consent.resolve";
+import { agentMcpConsentList } from "./agent.mcp.consent.list";
 import { agentMemoryRecall } from "./agent.memory.recall";
 import { agentMemoryWrite } from "./agent.memory.write";
 import { agentPlanApprove } from "./agent.plan.approve";
@@ -53,6 +59,7 @@ import { conversationDelete } from "./conversation.delete";
 import { conversationList } from "./conversation.list";
 import { conversationPurge } from "./conversation.purge";
 import { conversationRename } from "./conversation.rename";
+import { conversationFilesList } from "./conversation.files.list";
 import { formFill } from "./form.fill";
 import { organizationCreate } from "./organization.create";
 import { orgMemberAdd } from "./org.member.add";
@@ -107,6 +114,14 @@ import { automationDisable } from "./automation.disable";
 import { workspaceMemberList } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
 import { skillWorkspaceList } from "./skill.workspace.list";
+import { skillWorkspaceInstall } from "./skill.workspace.install";
+import { skillVersionList } from "./skill.version.list";
+import { skillVersionGet } from "./skill.version.get";
+import { skillVersionUpload } from "./skill.version.upload";
+import { skillVersionActivate } from "./skill.version.activate";
+import { skillEdit } from "./skill.edit";
+import { skillExport } from "./skill.export";
+import { skillMetricsRead } from "./skill.metrics.read";
 import { agentSubagentAggregate } from "./agent.subagent.aggregate";
 import { agentSubagentDispatch } from "./agent.subagent.dispatch";
 import { connectionList } from "./connection.list";
@@ -189,8 +204,14 @@ export {
   brandkitApply,
   documentsGenerate,
   documentsPdfCreate,
+  markdownGenerate,
+  mermaidGenerate,
   agentMcpList,
   agentMcpRegister,
+  agentMcpSetEnabled,
+  agentMcpDelete,
+  agentMcpConsentResolve,
+  agentMcpConsentList,
   agentMemoryRecall,
   agentMemoryWrite,
   agentPlanApprove,
@@ -213,6 +234,7 @@ export {
   conversationList,
   conversationPurge,
   conversationRename,
+  conversationFilesList,
   formFill,
   organizationCreate,
   orgMemberAdd,
@@ -267,6 +289,14 @@ export {
   workspaceMemberList,
   workspaceInviteSend,
   skillWorkspaceList,
+  skillWorkspaceInstall,
+  skillVersionList,
+  skillVersionGet,
+  skillVersionUpload,
+  skillVersionActivate,
+  skillEdit,
+  skillExport,
+  skillMetricsRead,
   agentSubagentAggregate,
   agentSubagentDispatch,
   connectionList,
@@ -357,8 +387,14 @@ export const contracts = [
   brandkitApply,
   documentsGenerate,
   documentsPdfCreate,
+  markdownGenerate,
+  mermaidGenerate,
   agentMcpList,
   agentMcpRegister,
+  agentMcpSetEnabled,
+  agentMcpDelete,
+  agentMcpConsentResolve,
+  agentMcpConsentList,
   agentMemoryRecall,
   agentMemoryWrite,
   agentPlanApprove,
@@ -381,6 +417,7 @@ export const contracts = [
   conversationList,
   conversationPurge,
   conversationRename,
+  conversationFilesList,
   formFill,
   organizationCreate,
   orgMemberAdd,
@@ -435,6 +472,14 @@ export const contracts = [
   workspaceMemberList,
   workspaceInviteSend,
   skillWorkspaceList,
+  skillWorkspaceInstall,
+  skillVersionList,
+  skillVersionGet,
+  skillVersionUpload,
+  skillVersionActivate,
+  skillEdit,
+  skillExport,
+  skillMetricsRead,
   agentExecutionRecord,
   agentSubagentAggregate,
   agentSubagentDispatch,

@@ -21,6 +21,8 @@ const dbMocks = vi.hoisted(() => {
       orgId: "mcp.orgId",
       workspaceId: "mcp.workspaceId",
       enabled: "mcp.enabled",
+      // OXA-820: soft-delete column the contributor now filters on.
+      deletedAt: "mcp.deletedAt",
       healthStatus: "mcp.healthStatus",
       orgListingId: "mcp.orgListingId",
       id: "mcp.id",
@@ -35,10 +37,6 @@ const dbMocks = vi.hoisted(() => {
       enabled: "listing.enabled",
       deletedAt: "listing.deletedAt",
       authKind: "listing.authKind",
-    },
-    pluginOrgDenylist: {
-      orgId: "deny.orgId",
-      serverName: "deny.serverName",
     },
   };
   const rowsByTable = new Map<unknown, unknown[]>();

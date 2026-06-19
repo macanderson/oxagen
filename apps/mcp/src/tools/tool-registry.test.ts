@@ -173,6 +173,24 @@ import { metadata as orgSettingsReadMetadata } from "./org.settings.read";
 import { metadata as orgSettingsWriteMetadata } from "./org.settings.write";
 import { metadata as workspaceSettingsReadMetadata } from "./workspace.settings.read";
 import { metadata as workspaceSettingsWriteMetadata } from "./workspace.settings.write";
+// OXA-768 content generation + conversation files
+import { metadata as markdownGenerateMetadata } from "./markdown.generate";
+import { metadata as mermaidGenerateMetadata } from "./mermaid.generate";
+import { metadata as conversationFilesListMetadata } from "./conversation.files.list";
+// OXA-768 external MCP consent + lifecycle
+import { metadata as agentMcpConsentResolveMetadata } from "./agent.mcp.consent.resolve";
+import { metadata as agentMcpConsentListMetadata } from "./agent.mcp.consent.list";
+import { metadata as agentMcpSetEnabledMetadata } from "./agent.mcp.set_enabled";
+import { metadata as agentMcpDeleteMetadata } from "./agent.mcp.delete";
+// OXA-768 skills lifecycle
+import { metadata as skillWorkspaceInstallMetadata } from "./skill.workspace.install";
+import { metadata as skillVersionListMetadata } from "./skill.version.list";
+import { metadata as skillVersionGetMetadata } from "./skill.version.get";
+import { metadata as skillVersionUploadMetadata } from "./skill.version.upload";
+import { metadata as skillVersionActivateMetadata } from "./skill.version.activate";
+import { metadata as skillEditMetadata } from "./skill.edit";
+import { metadata as skillExportMetadata } from "./skill.export";
+import { metadata as skillMetricsReadMetadata } from "./skill.metrics.read";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -334,6 +352,21 @@ const allToolMetadata = [
   orgSettingsWriteMetadata,
   workspaceSettingsReadMetadata,
   workspaceSettingsWriteMetadata,
+  markdownGenerateMetadata,
+  mermaidGenerateMetadata,
+  conversationFilesListMetadata,
+  agentMcpConsentResolveMetadata,
+  agentMcpConsentListMetadata,
+  agentMcpSetEnabledMetadata,
+  agentMcpDeleteMetadata,
+  skillWorkspaceInstallMetadata,
+  skillVersionListMetadata,
+  skillVersionGetMetadata,
+  skillVersionUploadMetadata,
+  skillVersionActivateMetadata,
+  skillEditMetadata,
+  skillExportMetadata,
+  skillMetricsReadMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────

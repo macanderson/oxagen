@@ -1,4 +1,5 @@
 import { boolean, check, index, integer, jsonb, text, timestamp, uniqueIndex, uuid, numeric, bigint } from "drizzle-orm/pg-core";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { agentSchema } from "./_schemas";
 import {
@@ -120,6 +121,18 @@ export const skills = agentSchema.table(
     // Per-workspace enable toggle (distinct from soft-delete). Disabled skills
     // are excluded from agent tool materialization but remain authorable.
     enabled: boolean("enabled").notNull().default(true),
+    // Explicitly pinned active version, decoupled from skill_versions.is_latest.
+    // Same-schema FK to skill_versions.id (forward ref — Drizzle resolves lazily).
+    activeVersionId: uuid("active_version_id").references((): AnyPgColumn => skillVersions.id),
+    // Audit of who/when last changed the active version. user-id is a
+    // cross-schema reference (auth.users) — app-enforced, no FK per storage rules.
+    activatedByUserId: uuid("activated_by_user_id"),
+    activatedAt: timestamp("activated_at", { withTimezone: true, mode: "date" }),
+    // Fast-path list display (OXA-1750): last invocation + total usage count.
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
+    usageCount: integer("usage_count").notNull().default(0),
+    // Provenance for workspace-owned copies installed from a template (OXA-1748).
+    installedFromSlug: citext("installed_from_slug"),
   },
   (t) => ({
     workspaceSlugIdx: uniqueIndex("skills_workspace_slug_idx").on(t.workspaceId, t.slug),

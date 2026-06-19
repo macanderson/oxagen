@@ -54,9 +54,12 @@ const dbMocks = vi.hoisted(() => {
       orgId: "mcp.orgId",
       workspaceId: "mcp.workspaceId",
       enabled: "mcp.enabled",
+      // OXA-820: soft-delete column the contributor now filters on.
+      deletedAt: "mcp.deletedAt",
       healthStatus: "mcp.healthStatus",
       orgListingId: "mcp.orgListingId",
       id: "mcp.id",
+      publicId: "mcp.publicId",
       name: "mcp.name",
       endpointUrl: "mcp.endpointUrl",
       authStrategy: "mcp.authStrategy",
@@ -190,6 +193,20 @@ vi.mock("../hooks/runtime", () => ({
 vi.mock("./approval", () => ({
   createApprovalRequest: mocks.createApprovalRequest,
   waitForApproval: mocks.waitForApproval,
+}));
+
+// Consent gate (OXA-816). checkConsent/recordConsent are spied so we can drive
+// first-use prompt / pre-grant-inline / denial-short-circuit paths.
+const consentMocks = vi.hoisted(() => ({
+  checkConsent: vi.fn(
+    async (): Promise<{ status: "granted" | "denied"; active: boolean } | null> => null,
+  ),
+  recordConsent: vi.fn(async () => ({ consentId: "mcons_x" })),
+}));
+vi.mock("./consent", () => ({
+  checkConsent: consentMocks.checkConsent,
+  recordConsent: consentMocks.recordConsent,
+  DEFAULT_CONSENT_TTL_MS: 30 * 24 * 60 * 60 * 1000,
 }));
 
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
@@ -621,6 +638,118 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       CTX,
       { serverAllowlist: allowlist },
     );
+  });
+});
+
+// ── First-use consent gate (OXA-816) ─────────────────────────────────────────
+// These tests verify the external-MCP consent gate runs AFTER the IAM gate and
+// BEFORE the transport: a first-use call (no grant) solicits consent + blocks;
+// a denied grant short-circuits; a pre-existing grant runs inline.
+describe("materializeTools — first-use consent gate (OXA-816)", () => {
+  const MCP_SERVER = {
+    id: "srv_abc",
+    name: "GitHub",
+    orgId: "ten_1",
+    workspaceId: "ws_1",
+    endpointUrl: "https://github.mcp.example.com",
+    authStrategy: "bearer",
+    authConfig: { token: "tok_test" },
+    healthStatus: "healthy",
+    authKind: "secret",
+  };
+  const fakeExecute = vi.fn(async () => ({ data: "result" }));
+  // Chat surface: messageId + userId present so the consent gate is active.
+  const CHAT_CTX = { ...CTX, messageId: "msg_42", userId: "u_1" };
+
+  beforeEach(() => {
+    vi.mocked(authorizeExternalCapability).mockClear();
+    vi.mocked(authorizeExternalCapability).mockResolvedValue({ allowed: true, outcome: "allow", reason: null });
+    fakeExecute.mockClear();
+    mocks.insertToolInvocation.mockClear();
+    mocks.insertToolInvocation.mockResolvedValue(undefined);
+    mocks.createApprovalRequest.mockClear();
+    mocks.createApprovalRequest.mockResolvedValue({ approvalId: "appr_consent" });
+    mocks.waitForApproval.mockClear();
+    mocks.waitForApproval.mockResolvedValue({ approvalId: "appr_consent", resolution: "approved", note: null });
+    consentMocks.checkConsent.mockClear();
+    consentMocks.checkConsent.mockResolvedValue(null);
+    consentMocks.recordConsent.mockClear();
+    consentMocks.recordConsent.mockResolvedValue({ consentId: "mcons_x" });
+
+    dbMocks.rowsByTable.clear();
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [MCP_SERVER]);
+    vi.mocked(connectMcp).mockResolvedValue({} as Awaited<ReturnType<typeof connectMcp>>);
+    vi.mocked(materializeMcpTools).mockResolvedValue({
+      [`mcp.${MCP_SERVER.id}.list_pull_requests`]: {
+        description: "List PRs",
+        inputSchema: z.record(z.string(), z.unknown()),
+        execute: fakeExecute,
+      } as unknown as import("ai").Tool,
+    });
+  });
+
+  it("first-use call with no grant solicits consent, blocks, then records + runs on approval", async () => {
+    const events: Array<{ approvalId: string; serverId: string; toolName: string }> = [];
+    const { tools } = await materializeTools(CHAT_CTX, {
+      onConsentRequired: (e) => events.push({ approvalId: e.approvalId, serverId: e.serverId, toolName: e.toolName }),
+    });
+    const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
+    // The consent check ran, an approval row was created, and the event fired.
+    expect(consentMocks.checkConsent).toHaveBeenCalledWith(CHAT_CTX, "u_1", MCP_SERVER.id, "list_pull_requests");
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.waitForApproval).toHaveBeenCalledTimes(1);
+    expect(events).toEqual([
+      { approvalId: "appr_consent", serverId: MCP_SERVER.id, toolName: "list_pull_requests" },
+    ]);
+    // The grant was persisted and the transport ran on approval.
+    expect(consentMocks.recordConsent).toHaveBeenCalledTimes(1);
+    expect(((consentMocks.recordConsent.mock.calls[0] as unknown as [{ status: string }])[0]).status).toBe("granted");
+    expect(fakeExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it("records denial and blocks the transport when consent is denied at the prompt", async () => {
+    mocks.waitForApproval.mockResolvedValueOnce({ approvalId: "appr_consent", resolution: "denied", note: null });
+    const { tools } = await materializeTools(CHAT_CTX);
+    const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    const result = await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
+    expect(consentMocks.recordConsent).toHaveBeenCalledTimes(1);
+    expect(((consentMocks.recordConsent.mock.calls[0] as unknown as [{ status: string }])[0]).status).toBe("denied");
+    expect(fakeExecute).not.toHaveBeenCalled();
+    expect(typeof result).toBe("string");
+    expect(result as string).toMatch(/consent denied/i);
+  });
+
+  it("short-circuits without prompting when an active denied grant exists", async () => {
+    consentMocks.checkConsent.mockResolvedValueOnce({ status: "denied", active: true });
+    const { tools } = await materializeTools(CHAT_CTX);
+    const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    const result = await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
+    // No new prompt, no new record — the existing denial decides it.
+    expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
+    expect(consentMocks.recordConsent).not.toHaveBeenCalled();
+    expect(fakeExecute).not.toHaveBeenCalled();
+    expect(result as string).toMatch(/consent denied/i);
+  });
+
+  it("runs inline (no prompt) when an active grant or wildcard pre-grant exists", async () => {
+    consentMocks.checkConsent.mockResolvedValueOnce({ status: "granted", active: true });
+    const { tools } = await materializeTools(CHAT_CTX);
+    const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
+    expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
+    expect(consentMocks.recordConsent).not.toHaveBeenCalled();
+    expect(fakeExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips the consent gate entirely on the direct (no-messageId) path", async () => {
+    // CTX has messageId:null — direct API/MCP caller. The gate must not fire.
+    const { tools } = await materializeTools(CTX);
+    const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
+    expect(consentMocks.checkConsent).not.toHaveBeenCalled();
+    expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
+    expect(fakeExecute).toHaveBeenCalledTimes(1);
   });
 });
 

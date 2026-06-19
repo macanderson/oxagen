@@ -1,38 +1,34 @@
 // GET /api/v1/conversations/[conversationId]/assets
 //
 // Returns the generated_assets associated with a given conversation, newest-first.
+// Thin adapter over the wired `conversation.files.list` capability so the query,
+// access-policy filter, and display-name derivation live in exactly one place
+// (packages/handlers/src/conversation.files.list.ts) and metering + IAM flow
+// through invoke() — no duplicated SQL in the app layer.
+//
 // Access control:
 //   - Session user must be authenticated.
-//   - The conversation must belong to an org the user is a member of.
-//   - Assets with policy "user" are filtered to those owned by the requesting user.
-//   - Assets with policy "org" or "public" are included for all org members.
-//
-// This route uses withSystemDb because there is no ALS tenant scope active in
-// Next.js route handlers (only RSC invocations have one via conversation-page.tsx).
-// The org-membership check is enforced in-code.
+//   - The conversation's org + workspace are resolved server-side from the row
+//     (Next.js route handlers have no ALS tenant scope), then validated against
+//     the caller's org membership before invoking the capability. The capability
+//     handler re-checks the conversation is in scope (defense in depth).
 //
 // Response: JSON array of ConversationAssetItem, ordered createdAt DESC.
 
-import { eq, and, desc, inArray, isNull } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
+import { invoke } from "@oxagen/oxagen";
+import "@oxagen/handlers/register";
+import type { ConversationAssetItem } from "@oxagen/oxagen/contracts/conversation.files.list";
 import { getSession } from "@/lib/session";
+
+// Re-export the canonical contract type so existing importers
+// (conversation-files.tsx) keep a single source of truth.
+export type { ConversationAssetItem };
 
 // Node runtime: uses crypto + DB.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-export interface ConversationAssetItem {
-  publicId: string;
-  kind: string;
-  name: string;
-  mimeType: string;
-  sizeBytes: number | null;
-  status: string;
-  accessPolicy: string;
-  createdAt: string;
-  /** Access-controlled serving URL via the assets route. */
-  url: string;
-}
 
 export async function GET(
   _req: Request,
@@ -45,12 +41,12 @@ export async function GET(
   const userId = session.user.id;
   const { conversationId } = await ctx.params;
 
-  // Resolve the conversation row (system db — no ALS scope).
+  // Resolve the conversation's org + workspace (system db — no ALS scope here).
   const convRows = await withSystemDb((tx) =>
     tx
       .select({
-        id: schema.conversations.id,
         orgId: schema.conversations.orgId,
+        workspaceId: schema.conversations.workspaceId,
       })
       .from(schema.conversations)
       .where(
@@ -83,98 +79,31 @@ export async function GET(
     return new Response("Not Found", { status: 404 });
   }
 
-  // Fetch assets for this conversation, all access policies.
-  const assets = await withSystemDb((tx) =>
-    tx
-      .select({
-        publicId: schema.generatedAssets.publicId,
-        kind: schema.generatedAssets.kind,
-        mimeType: schema.generatedAssets.mimeType,
-        sizeBytes: schema.generatedAssets.sizeBytes,
-        status: schema.generatedAssets.status,
-        accessPolicy: schema.generatedAssets.accessPolicy,
-        userId: schema.generatedAssets.userId,
-        prompt: schema.generatedAssets.prompt,
-        createdAt: schema.generatedAssets.createdAt,
-      })
-      .from(schema.generatedAssets)
-      .where(
-        and(
-          eq(schema.generatedAssets.conversationId, conv.id),
-          isNull(schema.generatedAssets.deletedAt),
-          eq(schema.generatedAssets.status, "ready"),
-          // "image" and "video" are rendered by dedicated components; include
-          // all kinds here so the files-list panel is comprehensive.
-          inArray(schema.generatedAssets.kind, [
-            "image",
-            "video",
-            "document",
-            "spreadsheet",
-            "presentation",
-            "pdf",
-            "archive",
-          ]),
-        ),
-      )
-      .orderBy(desc(schema.generatedAssets.createdAt)),
-  );
+  const capabilityCtx = {
+    orgId: conv.orgId,
+    workspaceId: conv.workspaceId,
+    userId,
+    apiKeyId: null as string | null,
+    requestId: crypto.randomUUID(),
+    surface: "app" as const,
+    messageId: null as string | null,
+  };
 
-  // Apply access-policy filter:
-  //   public / org  → visible to any org member (already verified above)
-  //   user          → visible only to the asset's creator
-  const visible = assets.filter(
-    (a) => a.accessPolicy !== "user" || a.userId === userId,
-  );
-
-  const items: ConversationAssetItem[] = visible.map((a) => ({
-    publicId: a.publicId,
-    kind: a.kind,
-    // Derive a display name: prefer the prompt's first sentence (≤60 chars),
-    // falling back to "kind-publicId".
-    name: deriveAssetName(a.kind, a.prompt, a.publicId),
-    mimeType: a.mimeType,
-    sizeBytes: a.sizeBytes !== null ? Number(a.sizeBytes) : null,
-    status: a.status,
-    accessPolicy: a.accessPolicy,
-    createdAt: a.createdAt.toISOString(),
-    // Serve via the access-controlled asset route (our own origin).
-    url: `/api/v1/assets/${a.publicId}`,
-  }));
-
-  return Response.json(items);
-}
-
-/**
- * Derive a human-readable name for an asset from its generation prompt.
- * Falls back to "<kind>-<publicId-suffix>" when the prompt is missing.
- */
-function deriveAssetName(
-  kind: string,
-  prompt: string,
-  publicId: string,
-): string {
-  if (prompt.trim().length > 0) {
-    // Take the first sentence or first 60 chars of the prompt.
-    const sentence = prompt.split(/[.!?\n]/)[0]?.trim() ?? prompt;
-    const label = sentence.length > 60 ? `${sentence.slice(0, 57)}…` : sentence;
-    if (label.length > 0) {
-      // Append a kind suffix so the file type is clear.
-      const ext = kindExtension(kind);
-      return ext ? `${label}${ext}` : label;
+  try {
+    const out = await invoke(
+      "conversation.files.list",
+      { conversationId, kind: undefined, limit: 200, cursor: null },
+      capabilityCtx,
+      { surface: "api" },
+    );
+    // The drawer consumes a flat array of ConversationAssetItem.
+    return Response.json((out as { files: ConversationAssetItem[] }).files);
+  } catch (err) {
+    // The handler throws "conversation not found" when out of scope; surface 404.
+    const message = err instanceof Error ? err.message : "Failed to list files";
+    if (message.includes("not found")) {
+      return new Response("Not Found", { status: 404 });
     }
-  }
-  return `${kind}-${publicId.slice(-8)}`;
-}
-
-function kindExtension(kind: string): string {
-  switch (kind) {
-    case "image": return "";
-    case "video": return "";
-    case "pdf": return ".pdf";
-    case "document": return ".docx";
-    case "spreadsheet": return ".xlsx";
-    case "presentation": return ".pptx";
-    case "archive": return ".zip";
-    default: return "";
+    return Response.json({ error: message }, { status: 500 });
   }
 }

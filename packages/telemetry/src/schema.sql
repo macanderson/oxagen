@@ -153,3 +153,24 @@ PARTITION BY toYYYYMM(entry_timestamp)
 ORDER BY (org_id, workspace_id, run_id, entry_timestamp)
 -- Matches execution_logs' 90-day window: agent logs are raw run telemetry.
 TTL toDateTime(entry_timestamp) + INTERVAL 90 DAY;
+
+-- Skill lifecycle telemetry (OXA-1750). One row per skill load — emitted when a
+-- workspace skill is loaded into an agent run (agent.skill.load) or surfaced
+-- through any other entry point. Powers the skill.metrics.read handler: loads
+-- per skill, loads per version, and last-used. org/workspace/skill are
+-- denormalized so metrics query in isolation without a Postgres join.
+-- skill_version is the integer skill version (UInt32); execution_step_id ties
+-- the load to a run step when one is in scope (NULL for standalone loads).
+CREATE TABLE IF NOT EXISTS skill_loads (
+  org_id String,
+  workspace_id String,
+  skill_id String,
+  skill_slug String,
+  skill_version UInt32,
+  execution_step_id Nullable(String),
+  surface String,
+  load_latency_ms Nullable(UInt32),
+  created_at DateTime DEFAULT now()
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(created_at)
+ORDER BY (org_id, workspace_id, skill_id, created_at);

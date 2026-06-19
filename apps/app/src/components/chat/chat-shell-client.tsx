@@ -8,6 +8,7 @@ import { MessageComposer, type ComposerAction } from "./message-composer";
 import type { ChatMessage, MessageBubbleCallbacks } from "./message-bubble";
 import { PlanCard } from "./plan-card";
 import { ApprovalCard } from "./approval-card";
+import { ConsentCard } from "./consent-card";
 import { ToolCallCard } from "./tool-call-card";
 import { CodeExecuteCard } from "./code-execute-card";
 import { MemoryCard } from "./memory-card";
@@ -65,6 +66,7 @@ export function ChatShellClient({
   messages,
   sendAction,
   resolveApprovalAction,
+  resolveConsentAction,
   resolvePlanAction,
   agentCapabilities,
   orgSlug,
@@ -85,6 +87,7 @@ export function ChatShellClient({
   messages: ChatMessage[];
   sendAction: ComposerAction;
   resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
+  resolveConsentAction: ChatShellProps["resolveConsentAction"];
   resolvePlanAction: ChatShellProps["resolvePlanAction"];
   agentCapabilities?: ChatShellProps["agentCapabilities"];
   orgSlug: string;
@@ -118,6 +121,7 @@ export function ChatShellClient({
   const {
     plans,
     pendingApprovals,
+    pendingConsents,
     toolCalls,
     reasonings,
     steps,
@@ -131,7 +135,9 @@ export function ChatShellClient({
     consume,
     reset,
     hasBlockingApproval,
+    hasBlockingConsent,
     signalApprovalResolved,
+    signalConsentResolved,
   } = useToolStream();
 
   const router = useRouter();
@@ -165,6 +171,7 @@ export function ChatShellClient({
   const consumeRef = useLatestRef(consume);
   const resetRef = useLatestRef(reset);
   const signalRef = useLatestRef(signalApprovalResolved);
+  const consentSignalRef = useLatestRef(signalConsentResolved);
   const orgSlugRef = useLatestRef(orgSlug);
   const workspaceSlugRef = useLatestRef(workspaceSlug);
   const setIsStreamingRef = useLatestRef(setIsStreaming);
@@ -196,7 +203,11 @@ export function ChatShellClient({
       ),
     [messages],
   );
-  const hasPendingApproval = hasPersistentPendingApproval || hasBlockingApproval;
+  // The composer is blocked while EITHER an approval-request or a first-use
+  // external-MCP consent prompt is still awaiting a decision — both pause the
+  // agent stream and must be resolved before the next turn can be sent.
+  const hasPendingApproval =
+    hasPersistentPendingApproval || hasBlockingApproval || hasBlockingConsent;
 
   // Wrap the approval resolver to also unblock the `consume` loop when the
   // user resolves an approval. Without this, the consume loop pauses after
@@ -213,6 +224,20 @@ export function ChatShellClient({
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- signalRef is a stable ref via useLatestRef; adding it would defeat the pattern
     [resolveApprovalAction],
+  );
+
+  // Mirror wrappedResolveApproval for first-use external-MCP consent (OXA-816):
+  // signal the consume loop first (so the paused stream unblocks immediately on
+  // a `consent-required` pause), then call the server action.
+  const wrappedResolveConsent = React.useCallback<
+    ChatShellProps["resolveConsentAction"]
+  >(
+    async (approvalId, decision, grantAllTools) => {
+      consentSignalRef.current(approvalId);
+      return resolveConsentAction(approvalId, decision, grantAllTools);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- consentSignalRef is a stable ref via useLatestRef; adding it would defeat the pattern
+    [resolveConsentAction],
   );
 
   // Wrap the server action: persist the turn (server action) FIRST to obtain
@@ -409,6 +434,7 @@ export function ChatShellClient({
 
   const callbacks: MessageBubbleCallbacks = {
     onResolveApproval: wrappedResolveApproval,
+    onResolveConsent: wrappedResolveConsent,
     onResolvePlan: resolvePlanAction,
     agentCapabilities,
     onNavigateToChild: (childMessageId) => {
@@ -564,6 +590,26 @@ export function ChatShellClient({
           ),
           tone: a.resolution ? "done" : "running",
           active: a.resolution === undefined,
+        };
+      }
+      case "consent": {
+        const c = pendingConsents[id];
+        if (!c) return null;
+        return {
+          node: (
+            <ConsentCard
+              approvalId={c.approvalId}
+              capability={c.capability}
+              serverId={c.serverId}
+              toolName={c.toolName}
+              inputPreview={c.inputPreview}
+              expiresAt={c.expiresAt}
+              resolution={c.resolution}
+              onResolved={wrappedResolveConsent}
+            />
+          ),
+          tone: c.resolution ? "done" : "running",
+          active: c.resolution === undefined,
         };
       }
       case "memory": {

@@ -28,6 +28,7 @@
     "@oxagen/notifications": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
+    "@oxagen/skills": "workspace:*",
     "@oxagen/storage": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/ontology": "workspace:*",
@@ -42,6 +43,7 @@
     "pdf-lib": "1.17.1",
     "pino": "9.14.0",
     "pptxgenjs": "4.0.1",
+    "yaml": "2.9.0",
     "zod": "3.25.76"
   },
   "devDependencies": {

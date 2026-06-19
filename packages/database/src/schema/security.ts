@@ -149,3 +149,67 @@ export const orgSecurityPolicy = securitySchema.table(
 
 export type OrgSecurityPolicy = typeof orgSecurityPolicy.$inferSelect;
 export type NewOrgSecurityPolicy = typeof orgSecurityPolicy.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// security.mcp_server_changes — append-only audit of external-MCP server
+// enable / disable / delete events (OXA-820).
+//
+// Every lifecycle mutation of an external MCP server lands one immutable row
+// here so an auditor can reconstruct who turned a server on/off or deleted it,
+// and when — the retention job that purges tool-descriptor snapshots keys off
+// the most recent `delete` row's occurred_at (>= 365 days).
+//
+// COMPLIANCE POLICY (mirrors security_events): NO updated_at / updated_by /
+// deleted_at / deleted_by — rows are inserted once and never mutated. It is
+// NOT a partitioned table (volume is tiny vs. security_events), so it uses a
+// plain UUID primary key, but it stays in the `security` schema so the same
+// append-only backup/permission posture applies.
+// ---------------------------------------------------------------------------
+
+export const mcpServerChanges = securitySchema.table(
+  "mcp_server_changes",
+  {
+    // Append-only: not idMixin (which carries updatedAt via auditMixin). Just a
+    // functionally-unique UUID PK.
+    id: uuid("id").primaryKey().notNull().default(sql`uuid_generate_v4()`),
+
+    // Scope. org_id always required; workspace_id always set for an MCP server
+    // (servers are workspace-scoped via orgScopeMixin), so NOT NULL here too.
+    orgId: uuid("org_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+
+    // The mcp.mcp_servers.id whose lifecycle changed. App-enforced reference
+    // (cross-schema FKs stay app-enforced per the storage rules).
+    serverId: uuid("server_id").notNull(),
+
+    // What happened. CHECK constraint mirrors the TS union.
+    changeType: text("change_type").notNull(), // enable | disable | delete
+
+    // Who triggered it. Nullable — system/cron-driven changes have no actor.
+    actorUserId: uuid("actor_user_id"),
+
+    occurredAt: timestamp("occurred_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // Audit range queries: "show me all changes for org X in period Y".
+    orgOccurredIdx: index("mcp_server_changes_org_occurred_idx").on(
+      t.orgId,
+      t.occurredAt,
+    ),
+    // Retention lookup: "the most recent delete for this server".
+    serverChangeIdx: index("mcp_server_changes_server_idx").on(
+      t.serverId,
+      t.changeType,
+      t.occurredAt,
+    ),
+    changeTypeCheck: check(
+      "mcp_server_changes_change_type_check",
+      sql`${t.changeType} IN ('enable','disable','delete')`,
+    ),
+  }),
+);
+
+export type McpServerChange = typeof mcpServerChanges.$inferSelect;
+export type NewMcpServerChange = typeof mcpServerChanges.$inferInsert;

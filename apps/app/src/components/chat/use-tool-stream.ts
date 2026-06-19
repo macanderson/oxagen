@@ -2,6 +2,7 @@
 import * as React from "react";
 import type {
   ApprovalResolution,
+  ConsentResolution,
   MemoryRecallHit,
   MemoryWeight,
   PlanDecision,
@@ -85,6 +86,17 @@ export interface LivePendingApproval {
   resolution?: ApprovalResolution;
 }
 
+/** A live first-use external-MCP consent prompt (OXA-816), keyed by approvalId. */
+export interface LivePendingConsent {
+  approvalId: string;
+  capability: string;
+  serverId: string;
+  toolName: string;
+  inputPreview: unknown;
+  expiresAt: string;
+  resolution?: ConsentResolution;
+}
+
 export interface LivePlan {
   planId: string;
   title: string;
@@ -133,6 +145,8 @@ export interface ToolStreamState {
   /** Interleaved assistant-text segments, keyed by segment key. */
   textSegments: Record<string, LiveTextSegment>;
   pendingApprovals: Record<string, LivePendingApproval>;
+  /** Live first-use external-MCP consent prompts (OXA-816), keyed by approvalId. */
+  pendingConsents: Record<string, LivePendingConsent>;
   plans: Record<string, LivePlan>;
   activeFanouts: Record<string, LiveFanout>;
   memoryRecalls: Record<string, LiveMemoryRecall>;
@@ -162,6 +176,7 @@ export const INITIAL_STATE: ToolStreamState = {
   steps: {},
   textSegments: {},
   pendingApprovals: {},
+  pendingConsents: {},
   plans: {},
   activeFanouts: {},
   memoryRecalls: {},
@@ -393,6 +408,35 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
         },
       };
     }
+    case "consent-required": {
+      return {
+        ...state,
+        pendingConsents: {
+          ...state.pendingConsents,
+          [e.approvalId]: {
+            approvalId: e.approvalId,
+            capability: e.capability,
+            serverId: e.serverId,
+            toolName: e.toolName,
+            inputPreview: e.inputPreview,
+            expiresAt: e.expiresAt,
+          },
+        },
+        order: withOrder(state.order, `consent:${e.approvalId}`),
+        activeTextKey: null,
+      };
+    }
+    case "consent-resolved": {
+      const existing = state.pendingConsents[e.approvalId];
+      if (!existing) return state;
+      return {
+        ...state,
+        pendingConsents: {
+          ...state.pendingConsents,
+          [e.approvalId]: { ...existing, resolution: e.resolution },
+        },
+      };
+    }
     case "plan-proposed": {
       return {
         ...state,
@@ -510,10 +554,15 @@ export interface UseToolStreamResult extends ToolStreamState {
   consume: (stream: ReadableStream<StreamEvent> | AsyncIterable<StreamEvent>) => Promise<void>;
   reset: () => void;
   hasBlockingApproval: boolean;
+  /** True while a first-use external-MCP consent prompt (OXA-816) is unresolved. */
+  hasBlockingConsent: boolean;
   /** Signal that a pending approval has been resolved (by user action or
    *  incoming stream event). Unblocks the `consume` loop so the stream
    *  continues processing subsequent events. */
   signalApprovalResolved: (approvalId: string) => void;
+  /** Signal that a pending consent has been resolved. Unblocks the `consume`
+   *  loop. Backed by the same waiter map as approvals (keyed by approvalId). */
+  signalConsentResolved: (approvalId: string) => void;
   /** Token + credit usage for the completed turn. Undefined until the
    *  "usage" event arrives (just before [DONE]). */
   turnUsage: TurnUsage | undefined;
@@ -540,22 +589,23 @@ export function useToolStream(): UseToolStreamResult {
         ? readableToAsyncIterable(stream)
         : stream;
       for await (const event of iter) {
-        // If the stream itself carries an `approval-resolved` event, signal
-        // the waiter BEFORE dispatching so the loop doesn't deadlock. The
-        // dispatch below then updates the UI to show the resolved state.
-        if (event.type === "approval-resolved") {
+        // If the stream itself carries an `approval-resolved` or
+        // `consent-resolved` event, signal the waiter BEFORE dispatching so the
+        // loop doesn't deadlock. Consent reuses the same waiter map keyed by the
+        // underlying approvalId. The dispatch below then updates the UI to show
+        // the resolved state.
+        if (event.type === "approval-resolved" || event.type === "consent-resolved") {
           signalApprovalResolved(event.approvalId);
         }
 
         dispatch({ type: "event", event });
 
-        // For `approval-required` events, pause the consume loop until the
-        // approval is resolved (either by the user clicking Approve/Deny or
-        // by a subsequent `approval-resolved` event from the stream). This
-        // ensures intermediate UI states (disabled composer, visible approval
-        // card) are observable before the stream continues — critical for
-        // correct UX and for the Playwright e2e assertions.
-        if (event.type === "approval-required") {
+        // For `approval-required` AND `consent-required` events, pause the
+        // consume loop until the user (or a subsequent *-resolved stream event)
+        // settles it. This ensures intermediate UI states (disabled composer,
+        // visible approval/consent card) are observable before the stream
+        // continues — critical for correct UX and the Playwright e2e assertions.
+        if (event.type === "approval-required" || event.type === "consent-required") {
           let resolveWaiter!: () => void;
           const promise = new Promise<void>((r) => {
             resolveWaiter = r;
@@ -563,8 +613,8 @@ export function useToolStream(): UseToolStreamResult {
           const waiter: ApprovalWaiter = { promise, resolve: resolveWaiter };
           approvalWaiters.current.set(event.approvalId, waiter);
           // Use a macrotask boundary so React has time to flush the
-          // approval-required dispatch above and actually render the
-          // approval card + disabled composer before we process more events.
+          // *-required dispatch above and actually render the card + disabled
+          // composer before we process more events.
           await new Promise<void>((r) => setTimeout(r, 0));
           await waiter.promise;
         }
@@ -589,7 +639,22 @@ export function useToolStream(): UseToolStreamResult {
     [state.pendingApprovals],
   );
 
-  return { ...state, consume, reset, hasBlockingApproval, signalApprovalResolved };
+  const hasBlockingConsent = React.useMemo(
+    () =>
+      Object.values(state.pendingConsents).some((c) => c.resolution === undefined),
+    [state.pendingConsents],
+  );
+
+  return {
+    ...state,
+    consume,
+    reset,
+    hasBlockingApproval,
+    hasBlockingConsent,
+    signalApprovalResolved,
+    // Consent reuses the same waiter map keyed by approvalId.
+    signalConsentResolved: signalApprovalResolved,
+  };
 }
 
 function isReadable<T>(

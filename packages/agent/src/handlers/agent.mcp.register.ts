@@ -1,6 +1,7 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import type { CapabilityContext } from "../types";
-import { healthcheck } from "../dispatch/mcp-client";
+import { healthcheck, type McpToolDescriptor } from "../dispatch/mcp-client";
+import { captureToolSnapshots } from "../runtime/mcp-snapshots";
 import type { AgentMcpRegisterInput, AgentMcpRegisterOutput } from "@oxagen/oxagen/contracts/agent.mcp.register";
 
 export type { AgentMcpRegisterInput, AgentMcpRegisterOutput };
@@ -11,15 +12,20 @@ export async function agentMcpRegisterHandler(
 ): Promise<AgentMcpRegisterOutput> {
   // Run the health check before insert so we persist the live tool list
   // alongside the row — the chat surface lists external tools without a
-  // second roundtrip.
-  const probe =
+  // second roundtrip. The probe also returns full per-tool JSONSchema
+  // descriptors so we can snapshot them for replay durability (OXA-820).
+  const probe: {
+    status: "healthy" | "degraded" | "unreachable";
+    discoveredTools: string[];
+    descriptors: McpToolDescriptor[];
+  } =
     input.transportType === "streamable-http"
       ? await healthcheck({
           endpointUrl: input.endpointUrl,
           authStrategy: input.authStrategy,
           authConfig: input.authConfig,
         })
-      : { status: "degraded" as const, discoveredTools: [] };
+      : { status: "degraded", discoveredTools: [], descriptors: [] };
 
   const [row] = await withTenantDb((tx) =>
     tx
@@ -35,10 +41,26 @@ export async function agentMcpRegisterHandler(
         healthStatus: probe.status,
         lastHealthcheckAt: new Date(),
         discoveredTools: probe.discoveredTools as object,
+        createdByUserId: ctx.userId,
       })
-      .returning({ publicId: schema.mcpServers.publicId }),
+      .returning({ id: schema.mcpServers.id, publicId: schema.mcpServers.publicId }),
   );
   if (!row) throw new Error("mcp_servers insert failed");
+
+  // Snapshot each discovered tool descriptor (OXA-820). Failure-isolated: a
+  // snapshot write must never fail registration of an otherwise-healthy server.
+  if (probe.descriptors.length > 0) {
+    await captureToolSnapshots({
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      mcpServerId: row.id,
+      descriptors: probe.descriptors,
+      createdByUserId: ctx.userId,
+    }).catch(() => {
+      /* swallow — server is registered; snapshots can be re-captured on re-enable */
+    });
+  }
+
   return {
     mcpServerId: row.publicId,
     healthStatus: probe.status,

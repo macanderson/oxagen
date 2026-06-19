@@ -7,11 +7,15 @@ const mocks = vi.hoisted(() => ({
   healthcheckMock: vi.fn(),
 }));
 
-mocks.insertReturning.mockResolvedValue([{ publicId: "mcp_pub_1" }]);
+// The handler's .returning() now yields { id, publicId } (id feeds the snapshot
+// capture). Capture snapshots is mocked so we can assert it without a DB.
+mocks.insertReturning.mockResolvedValue([{ id: "mcs_uuid_1", publicId: "mcp_pub_1" }]);
 mocks.insertValues.mockReturnValue({ returning: mocks.insertReturning });
 mocks.insertSpy.mockReturnValue({ values: mocks.insertValues });
 
 const fakeDb = { insert: mocks.insertSpy };
+
+const captureSnapshotsMock = vi.hoisted(() => vi.fn(async () => 0));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
@@ -25,6 +29,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 vi.mock("../dispatch/mcp-client", () => ({
   healthcheck: mocks.healthcheckMock,
+}));
+
+vi.mock("../runtime/mcp-snapshots", () => ({
+  captureToolSnapshots: captureSnapshotsMock,
 }));
 
 import { agentMcpRegisterHandler } from "./agent.mcp.register";
@@ -45,13 +53,18 @@ describe("agent.mcp.register handler", () => {
     mocks.insertValues.mockClear();
     mocks.insertReturning.mockClear();
     mocks.healthcheckMock.mockClear();
-    mocks.insertReturning.mockResolvedValue([{ publicId: "mcp_pub_1" }]);
+    captureSnapshotsMock.mockClear();
+    mocks.insertReturning.mockResolvedValue([{ id: "mcs_uuid_1", publicId: "mcp_pub_1" }]);
   });
 
   it("runs healthcheck for streamable-http transport and inserts the row", async () => {
     mocks.healthcheckMock.mockResolvedValueOnce({
       status: "healthy",
       discoveredTools: ["tool_a", "tool_b"],
+      descriptors: [
+        { name: "tool_a", description: null, inputSchema: {} },
+        { name: "tool_b", description: null, inputSchema: {} },
+      ],
     });
 
     const result = await agentMcpRegisterHandler(BASE_INPUT, CTX);
@@ -68,6 +81,34 @@ describe("agent.mcp.register handler", () => {
     expect(result.discoveredTools).toEqual(["tool_a", "tool_b"]);
   });
 
+  it("captures a tool-descriptor snapshot per discovered tool (OXA-820)", async () => {
+    mocks.healthcheckMock.mockResolvedValueOnce({
+      status: "healthy",
+      discoveredTools: ["tool_a"],
+      descriptors: [{ name: "tool_a", description: "A", inputSchema: { type: "object" } }],
+    });
+
+    await agentMcpRegisterHandler(BASE_INPUT, CTX);
+
+    expect(captureSnapshotsMock).toHaveBeenCalledTimes(1);
+    const arg = (captureSnapshotsMock.mock.calls[0] as unknown as [{
+      mcpServerId: string;
+      descriptors: unknown[];
+    }])[0];
+    expect(arg.mcpServerId).toBe("mcs_uuid_1");
+    expect(arg.descriptors).toHaveLength(1);
+  });
+
+  it("does not capture snapshots when no tools are discovered", async () => {
+    mocks.healthcheckMock.mockResolvedValueOnce({
+      status: "healthy",
+      discoveredTools: [],
+      descriptors: [],
+    });
+    await agentMcpRegisterHandler(BASE_INPUT, CTX);
+    expect(captureSnapshotsMock).not.toHaveBeenCalled();
+  });
+
   it("skips healthcheck for non-http transport and inserts with degraded status", async () => {
     const input = { ...BASE_INPUT, transportType: "stdio" as const };
 
@@ -80,14 +121,14 @@ describe("agent.mcp.register handler", () => {
   });
 
   it("throws when the insert returns no row", async () => {
-    mocks.healthcheckMock.mockResolvedValueOnce({ status: "healthy", discoveredTools: [] });
+    mocks.healthcheckMock.mockResolvedValueOnce({ status: "healthy", discoveredTools: [], descriptors: [] });
     mocks.insertReturning.mockResolvedValueOnce([]);
 
     await expect(agentMcpRegisterHandler(BASE_INPUT, CTX)).rejects.toThrow("mcp_servers insert failed");
   });
 
   it("inserts row with orgId and workspaceId scoped from context (tenant isolation)", async () => {
-    mocks.healthcheckMock.mockResolvedValueOnce({ status: "healthy", discoveredTools: [] });
+    mocks.healthcheckMock.mockResolvedValueOnce({ status: "healthy", discoveredTools: [], descriptors: [] });
 
     await agentMcpRegisterHandler(BASE_INPUT, CTX);
 

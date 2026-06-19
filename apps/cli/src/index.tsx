@@ -58,6 +58,14 @@ import { automationCreateCommand } from "./commands/automation.create.js";
 import { automationUpdateCommand } from "./commands/automation.update.js";
 import { automationTriggerCommand } from "./commands/automation.trigger.js";
 import { skillWorkspaceListCommand } from "./commands/skill.workspace.list.js";
+import { skillWorkspaceInstallCommand } from "./commands/skill.workspace.install.js";
+import { skillVersionListCommand } from "./commands/skill.version.list.js";
+import { skillVersionGetCommand } from "./commands/skill.version.get.js";
+import { skillVersionUploadCommand } from "./commands/skill.version.upload.js";
+import { skillVersionActivateCommand } from "./commands/skill.version.activate.js";
+import { skillEditCommand } from "./commands/skill.edit.js";
+import { skillExportCommand } from "./commands/skill.export.js";
+import { skillMetricsReadCommand } from "./commands/skill.metrics.read.js";
 import { agentMemoryRecallCommand } from "./commands/agent.memory.recall.js";
 import { agentMemoryWriteCommand } from "./commands/agent.memory.write.js";
 import { videoGenerateCommand } from "./commands/video.generate.js";
@@ -72,6 +80,10 @@ import { imageGenerateCommand } from "./commands/image.generate.js";
 import { documentsGenerateCommand } from "./commands/documents.generate.js";
 import { pluginRegistryAddCommand } from "./commands/plugin.registry.add.js";
 import { agentMcpRegisterCommand } from "./commands/agent.mcp.register.js";
+import { agentMcpSetEnabledCommand } from "./commands/agent.mcp.set_enabled.js";
+import { agentMcpDeleteCommand } from "./commands/agent.mcp.delete.js";
+import { agentMcpConsentResolveCommand } from "./commands/agent.mcp.consent.resolve.js";
+import { agentMcpConsentListCommand } from "./commands/agent.mcp.consent.list.js";
 import { agentPlanApproveCommand } from "./commands/agent.plan.approve.js";
 import { agentPlanCreateCommand } from "./commands/agent.plan.create.js";
 import { agentTaskBackgroundReadCommand } from "./commands/agent.task.background.read.js";
@@ -81,7 +93,10 @@ import { assetUploadCommand } from "./commands/asset.upload.js";
 import { billingSubscriptionUpgradeStartCommand } from "./commands/billing.subscription.upgrade.start.js";
 import { brandkitApplyCommand } from "./commands/brandkit.apply.js";
 import { conversationPurgeCommand } from "./commands/conversation.purge.js";
+import { conversationFilesListCommand } from "./commands/conversation.files.list.js";
 import { documentsPdfCreateCommand } from "./commands/documents.pdf.create.js";
+import { markdownGenerateCommand } from "./commands/markdown.generate.js";
+import { mermaidGenerateCommand } from "./commands/mermaid.generate.js";
 import { formFillCommand } from "./commands/form.fill.js";
 import { orgMemberInviteDeclineCommand } from "./commands/org.member.invite.decline.js";
 import { organizationCreateCommand } from "./commands/organization.create.js";
@@ -221,6 +236,11 @@ const agentMemory = agent.command("memory").description("Agent memory management
 agentMemory.addCommand(agentMemoryRecallCommand);
 agentMemory.addCommand(agentMemoryWriteCommand);
 agentMcp.addCommand(agentMcpRegisterCommand);
+agentMcp.addCommand(agentMcpSetEnabledCommand);
+agentMcp.addCommand(agentMcpDeleteCommand);
+const agentMcpConsent = agentMcp.command("consent").description("External MCP tool consent grants");
+agentMcpConsent.addCommand(agentMcpConsentResolveCommand);
+agentMcpConsent.addCommand(agentMcpConsentListCommand);
 const agentPlan = agent.command("plan").description("Agent plan management");
 agentPlan.addCommand(agentPlanApproveCommand);
 agentPlan.addCommand(agentPlanCreateCommand);
@@ -273,6 +293,7 @@ workspaceModelSettings.addCommand(workspaceModelSettingsWriteCommand);
 // conversation chat + purge
 conversation.addCommand(conversationChatCommand);
 conversation.addCommand(conversationPurgeCommand);
+conversation.addCommand(conversationFilesListCommand);
 
 // image
 const image = program.command("image").description("Image generation commands");
@@ -289,6 +310,11 @@ document.addCommand(documentReadCommand);
 const documents = program.command("documents").description("Document generation commands");
 documents.addCommand(documentsGenerateCommand);
 documents.addCommand(documentsPdfCreateCommand);
+documents.addCommand(markdownGenerateCommand);
+
+// mermaid (diagram generation — top-level group like svg/video)
+const mermaid = program.command("mermaid").description("Mermaid diagram generation commands");
+mermaid.addCommand(mermaidGenerateCommand);
 
 // automation
 const automation = program.command("automation").description("Automation management commands");
@@ -309,6 +335,15 @@ form.addCommand(formFillCommand);
 const skill = program.command("skill").description("Skill management commands");
 const skillWorkspace = skill.command("workspace").description("Workspace skill management");
 skillWorkspace.addCommand(skillWorkspaceListCommand);
+skillWorkspace.addCommand(skillWorkspaceInstallCommand);
+const skillVersion = skill.command("version").description("Skill version management");
+skillVersion.addCommand(skillVersionListCommand);
+skillVersion.addCommand(skillVersionGetCommand);
+skillVersion.addCommand(skillVersionUploadCommand);
+skillVersion.addCommand(skillVersionActivateCommand);
+skill.addCommand(skillEditCommand);
+skill.addCommand(skillExportCommand);
+skill.addCommand(skillMetricsReadCommand);
 
 // video
 const video = program.command("video").description("Video generation commands");

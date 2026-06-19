@@ -6,8 +6,13 @@
 // strips leading `--` comment lines from each chunk, and filters out empty
 // or comment-only statements.
 
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { splitStatements } from "./migrate";
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 describe("splitStatements", () => {
   it("empty input returns empty array", () => {
@@ -85,5 +90,81 @@ describe("splitStatements", () => {
     for (const s of result) {
       expect(s.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// skill_loads (OXA-1750) — assert the table is created by the migrate inputs.
+//
+// migrate() runs schema.sql then every migrations/*.sql on each run. We assert
+// the skill_loads CREATE is present in BOTH the canonical schema.sql (desired
+// state) and the versioned migration (existing-deployment path), and that
+// splitStatements — the exact function migrate() uses — extracts an executable
+// CREATE TABLE statement for it from each source.
+// ---------------------------------------------------------------------------
+
+describe("skill_loads migration inputs", () => {
+  const schemaSql = readFileSync(join(here, "schema.sql"), "utf8");
+  const migrationSql = readFileSync(
+    join(here, "migrations", "0008_skill_loads.sql"),
+    "utf8",
+  );
+
+  function skillLoadsCreate(sql: string): string | undefined {
+    return splitStatements(sql).find(
+      (s) => /CREATE TABLE IF NOT EXISTS skill_loads\b/i.test(s),
+    );
+  }
+
+  it("schema.sql defines skill_loads as a CREATE TABLE statement", () => {
+    const stmt = skillLoadsCreate(schemaSql);
+    expect(stmt).toBeDefined();
+    expect(stmt).toMatch(/CREATE TABLE IF NOT EXISTS skill_loads/i);
+  });
+
+  it("a versioned 0008 migration also creates skill_loads (existing-deployment path)", () => {
+    const stmt = skillLoadsCreate(migrationSql);
+    expect(stmt).toBeDefined();
+    expect(stmt).toMatch(/CREATE TABLE IF NOT EXISTS skill_loads/i);
+  });
+
+  it("the skill_loads CREATE carries every required column", () => {
+    const stmt = skillLoadsCreate(schemaSql) ?? "";
+    for (const col of [
+      "org_id String",
+      "workspace_id String",
+      "skill_id String",
+      "skill_slug String",
+      "skill_version UInt32",
+      "execution_step_id Nullable(String)",
+      "surface String",
+      "load_latency_ms Nullable(UInt32)",
+      "created_at DateTime",
+    ]) {
+      expect(stmt).toContain(col);
+    }
+  });
+
+  it("skill_loads uses MergeTree partitioned by month, ordered for metrics reads", () => {
+    const stmt = skillLoadsCreate(schemaSql) ?? "";
+    expect(stmt).toMatch(/ENGINE = MergeTree\(\)/);
+    expect(stmt).toMatch(/PARTITION BY toYYYYMM\(created_at\)/);
+    expect(stmt).toMatch(
+      /ORDER BY \(org_id, workspace_id, skill_id, created_at\)/,
+    );
+  });
+
+  it("the migrations directory contains the 0008 skill_loads file", () => {
+    const files = readdirSync(join(here, "migrations")).filter((f) =>
+      f.endsWith(".sql"),
+    );
+    expect(files).toContain("0008_skill_loads.sql");
+  });
+
+  it("comment-only lines are stripped, leaving an executable statement", () => {
+    // migrate() feeds raw file bytes (with -- comments) through splitStatements.
+    const stmt = skillLoadsCreate(migrationSql) ?? "";
+    expect(stmt).not.toMatch(/^\s*--/m);
+    expect(stmt.startsWith("CREATE TABLE")).toBe(true);
   });
 });

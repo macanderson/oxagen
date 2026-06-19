@@ -10,7 +10,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { mcpSchema } from "./_schemas";
-import { auditMixin, bytea, idMixin, orgScopeMixin } from "./_mixins";
+import { auditMixin, bytea, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
 
 /**
  * mcp.registries — registry sources an org+workspace can use. Every row is now
@@ -104,6 +104,10 @@ export const mcpServers = mcpSchema.table(
   {
     ...idMixin("mcs"),
     ...auditMixin(),
+    // Soft-delete (OXA-820): deleting a server stops tool registration but
+    // retains tool-descriptor snapshots >= 365 days for replay durability. The
+    // retention Inngest job keys off deleted_at to purge old snapshots.
+    ...softDeleteMixin(),
     ...orgScopeMixin(),
     // Links back to plugin.installed_plugins — nullable because column was added to an existing
     // table; the plugin install handler requires it on every new insert.
@@ -124,5 +128,97 @@ export const mcpServers = mcpSchema.table(
     wsListingUniq: uniqueIndex("mcp_servers_ws_listing_uniq")
       .on(t.workspaceId, t.orgListingId)
       .where(sql`org_listing_id IS NOT NULL`),
+  }),
+);
+
+/**
+ * mcp.consents — first-use consent + scope grants for external MCP tools
+ * (OXA-816). The FIRST time an agent invokes a `mcp.<serverId>.<tool>` for a
+ * given workspace+user+server+tool, the runtime pauses and renders a consent
+ * card; the user's approve/deny lands here. Subsequent calls within the TTL
+ * (expires_at) run inline without pausing.
+ *
+ * Pre-grant: a workspace policy may seed a tool-group grant with
+ * tool_name = '*' (the wildcard), which the runtime honours for every tool on
+ * that server without a per-tool card.
+ *
+ * Scope: orgScopeMixin (org_id + workspace_id NOT NULL) so it is a `standard`
+ * tenant-owned table in the RLS manifest. user_id makes each grant
+ * per-(workspace,user,server,tool) — different users on the same workspace
+ * consent independently.
+ */
+export const mcpConsents = mcpSchema.table(
+  "consents",
+  {
+    ...idMixin("mcons"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    userId: uuid("user_id").notNull(),
+    mcpServerId: uuid("mcp_server_id").notNull(),
+    // '*' is the wildcard pre-grant covering every tool on the server.
+    toolName: text("tool_name").notNull(),
+    status: text("status").notNull(), // granted | denied
+    grantedAt: timestamp("granted_at", { withTimezone: true, mode: "date" }),
+    deniedAt: timestamp("denied_at", { withTimezone: true, mode: "date" }),
+    // Grant TTL. NULL = never expires (workspace pre-grants); non-NULL =
+    // first-use grant that must be re-confirmed after expiry.
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    // One consent row per (workspace, user, server, tool). The runtime upserts
+    // on this key when a decision lands.
+    consentUniq: uniqueIndex("consents_ws_user_server_tool_uniq").on(
+      t.workspaceId,
+      t.userId,
+      t.mcpServerId,
+      t.toolName,
+    ),
+    // Lookup path used by checkConsent: scope by workspace+user+server.
+    lookupIdx: index("consents_lookup_idx").on(
+      t.workspaceId,
+      t.userId,
+      t.mcpServerId,
+    ),
+    statusCheck: check(
+      "consents_status_check",
+      sql`${t.status} IN ('granted','denied')`,
+    ),
+  }),
+);
+
+/**
+ * mcp.tool_snapshots — descriptor snapshots for external MCP tools (OXA-820).
+ * Each external tool's JSONSchema descriptor is captured at registration (and
+ * on re-enable) so replay of an old run can render the tool even after the
+ * server is disabled or soft-deleted. Disabling a server stops registration
+ * but keeps the snapshots; snapshots are retained >= 365 days after a server is
+ * deleted (purged by the mcp.tool-snapshot-retention Inngest cron).
+ *
+ * Scope: orgScopeMixin so it is a `standard` tenant-owned table in the RLS
+ * manifest. captured_at is the version axis — the newest snapshot for a
+ * (server, tool) is the live descriptor; older rows preserve replay fidelity.
+ */
+export const mcpToolSnapshots = mcpSchema.table(
+  "tool_snapshots",
+  {
+    ...idMixin("mtsnap"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    mcpServerId: uuid("mcp_server_id").notNull(),
+    toolName: text("tool_name").notNull(),
+    // The raw JSONSchema descriptor captured from the MCP server's listTools().
+    schemaJson: jsonb("schema_json").notNull(),
+    capturedAt: timestamp("captured_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // Replay lookup: "give me the descriptor for (server, tool) as captured
+    // most recently" — ordered scan on captured_at.
+    replayIdx: index("tool_snapshots_replay_idx").on(
+      t.mcpServerId,
+      t.toolName,
+      t.capturedAt,
+    ),
   }),
 );

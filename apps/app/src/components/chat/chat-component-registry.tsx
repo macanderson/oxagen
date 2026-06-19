@@ -75,6 +75,11 @@ export const CHAT_COMPONENTS = {
   "svg-preview": lazy(
     () => import("@/components/chat/registry-components/svg-preview"),
   ),
+  // Renders a Mermaid diagram inline as a client-side SVG artifact. Backs the
+  // mermaid.generate capability's render directive.
+  "mermaid-diagram": lazy(
+    () => import("@/components/chat/mermaid-diagram"),
+  ),
   "image-preview": lazy(
     () => import("@/components/chat/registry-components/image-preview"),
   ),

@@ -123,6 +123,11 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "mcp.credentials", policyClass: "standard" },
   { table: "mcp.mcp_servers", policyClass: "standard" },
   { table: "mcp.registries", policyClass: "standard" },
+  // External-MCP first-use consent grants + tool-descriptor snapshots
+  // (OXA-816 / OXA-820). Both carry orgScopeMixin (org_id + workspace_id NOT
+  // NULL) → standard.
+  { table: "mcp.consents", policyClass: "standard" },
+  { table: "mcp.tool_snapshots", policyClass: "standard" },
 
   // ── notification.* (org_id NOT NULL, workspace_id nullable) ──────────────
   { table: "notification.notifications", policyClass: "workspace_nullable" },
@@ -143,6 +148,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   partitioned parent — children inherit enforcement) ────────────────────
   { table: "security.security_events", policyClass: "workspace_nullable" },
   { table: "security.org_security_policy", policyClass: "org_only" },
+  // External-MCP server lifecycle audit (OXA-820). Append-only, but org_id +
+  // workspace_id are both NOT NULL (servers are workspace-scoped) → standard.
+  { table: "security.mcp_server_changes", policyClass: "standard" },
 
   // ── workflow.* — playbook domain (2026-06-11 rebuild). Versions/steps/edges
   //   carry no org cols (immutable children of playbooks → transitive). ──────

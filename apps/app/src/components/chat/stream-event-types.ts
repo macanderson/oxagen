@@ -40,6 +40,10 @@ export type ToolCallStatus = "pending" | "running" | "completed" | "failed";
 
 export type ApprovalResolution = "approved" | "denied" | "expired";
 
+// External-MCP consent resolution (OXA-816). Distinct vocabulary from
+// ApprovalResolution: a consent grant is "granted"/"denied" (not "approved").
+export type ConsentResolution = "granted" | "denied" | "expired";
+
 export type PlanDecision = "approved" | "denied" | "amended";
 
 export type SubagentStatus = "running" | "completed" | "partial" | "timed_out";
@@ -132,6 +136,25 @@ export type StreamEvent =
       type: "approval-resolved";
       approvalId: string;
       resolution: ApprovalResolution;
+    }
+  // ── External-MCP first-use consent (OXA-816) ────────────────────────────
+  // Emitted the first time the agent invokes an external MCP tool the user
+  // has not yet consented to. The client renders a ConsentCard; the user's
+  // approve/deny resolves it via agent.mcp.consent.resolve, which resumes the
+  // paused stream. `consent-resolved` mirrors `approval-resolved`.
+  | {
+      type: "consent-required";
+      approvalId: string;
+      capability: string;
+      serverId: string;
+      toolName: string;
+      inputPreview: unknown;
+      expiresAt: string;
+    }
+  | {
+      type: "consent-resolved";
+      approvalId: string;
+      resolution: ConsentResolution;
     }
   | {
       type: "plan-proposed";
@@ -246,6 +269,22 @@ export interface ApprovalRequestContentBlock {
   resolution?: ApprovalResolution;
 }
 
+/**
+ * A persisted external-MCP consent request block (OXA-816) — the terminal form
+ * of a consent-required → consent-resolved stream sequence. Rendered by the
+ * ConsentCard as a grant/deny prompt for a first-use external tool.
+ */
+export interface ConsentRequestContentBlock {
+  type: "consent-request";
+  approvalId: string;
+  capability: string;
+  serverId: string;
+  toolName: string;
+  inputPreview: unknown;
+  expiresAt: string;
+  resolution?: ConsentResolution;
+}
+
 export interface PlanContentBlock {
   type: "plan";
   planId: string;
@@ -289,6 +328,7 @@ export type AssistantContentBlock =
   | ToolCallContentBlock
   | CodeExecuteContentBlock
   | ApprovalRequestContentBlock
+  | ConsentRequestContentBlock
   | PlanContentBlock
   | SubagentFanoutContentBlock
   | MemoryRecallContentBlock

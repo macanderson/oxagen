@@ -257,6 +257,67 @@ describe("approval-resolved", () => {
 });
 
 // ---------------------------------------------------------------------------
+// consent-required / consent-resolved (OXA-816 external-MCP first-use consent)
+// ---------------------------------------------------------------------------
+
+describe("consent-required", () => {
+  it("creates a pending consent keyed by approvalId and adds a consent order key", () => {
+    const s = reducer(INITIAL_STATE, event({
+      type: "consent-required",
+      approvalId: "apr-c1",
+      capability: "mcp.srv_1.list_prs",
+      serverId: "srv_1",
+      toolName: "list_prs",
+      inputPreview: { repo: "oxagen" },
+      expiresAt: "2099-01-01T00:00:00Z",
+    }));
+    const c = s.pendingConsents["apr-c1"];
+    expect(c).toBeDefined();
+    expect(c?.resolution).toBeUndefined();
+    expect(c?.toolName).toBe("list_prs");
+    expect(c?.serverId).toBe("srv_1");
+    expect(s.order).toContain("consent:apr-c1");
+  });
+});
+
+describe("consent-resolved", () => {
+  it("sets resolution on an existing consent", () => {
+    let s = reducer(INITIAL_STATE, event({
+      type: "consent-required",
+      approvalId: "apr-c1",
+      capability: "mcp.srv_1.list_prs",
+      serverId: "srv_1",
+      toolName: "list_prs",
+      inputPreview: {},
+      expiresAt: "2099-01-01T00:00:00Z",
+    }));
+    s = reducer(s, event({ type: "consent-resolved", approvalId: "apr-c1", resolution: "granted" }));
+    expect(s.pendingConsents["apr-c1"]?.resolution).toBe("granted");
+  });
+
+  it("returns the same state reference on an unknown approvalId", () => {
+    const s = INITIAL_STATE;
+    const next = reducer(s, event({ type: "consent-resolved", approvalId: "nope", resolution: "denied" }));
+    expect(next).toBe(s);
+  });
+
+  it("reset clears pending consents", () => {
+    let s = reducer(INITIAL_STATE, event({
+      type: "consent-required",
+      approvalId: "apr-c1",
+      capability: "mcp.srv_1.list_prs",
+      serverId: "srv_1",
+      toolName: "list_prs",
+      inputPreview: {},
+      expiresAt: "2099-01-01T00:00:00Z",
+    }));
+    expect(Object.keys(s.pendingConsents)).toHaveLength(1);
+    s = reducer(s, { type: "reset" });
+    expect(Object.keys(s.pendingConsents)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // hasBlockingApproval logic (derived from pendingApprovals)
 // ---------------------------------------------------------------------------
 

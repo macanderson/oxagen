@@ -67,6 +67,8 @@ describe("getOxagenPlugin", () => {
     expect(plugin).toBeDefined();
     expect(plugin?.contracts).toContain("documents.generate");
     expect(plugin?.contracts).toContain("documents.pdf.create");
+    expect(plugin?.contracts).toContain("markdown.generate");
+    expect(plugin?.contracts).toContain("mermaid.generate");
     expect(plugin?.category).toBe("documents");
   });
 });
@@ -86,6 +88,8 @@ describe("pluginForContract", () => {
       ["svg.generate", "oxagen/media-svg"],
       ["documents.generate", "oxagen/documents"],
       ["documents.pdf.create", "oxagen/documents"],
+      ["markdown.generate", "oxagen/documents"],
+      ["mermaid.generate", "oxagen/documents"],
     ];
     for (const [contract, expectedId] of contractCases) {
       const plugin = pluginForContract(contract);

@@ -57,5 +57,8 @@ describe("index.ts barrel exports", () => {
     // Security
     expect(typeof mod.chInsert).toBe("function");
     expect(typeof mod.chSelect).toBe("function");
+    // Skill telemetry (OXA-1750)
+    expect(typeof mod.recordSkillLoad).toBe("function");
+    expect(typeof mod.readSkillMetrics).toBe("function");
   });
 });

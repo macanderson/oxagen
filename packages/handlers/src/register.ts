@@ -76,6 +76,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () => (await import("./documents.pdf.create")).documentsPdfCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "markdown.generate",
+    async () => (await import("./markdown.generate")).markdownGenerateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "mermaid.generate",
+    async () => (await import("./mermaid.generate")).mermaidGenerateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "brandkit.apply",
     async () => (await import("./brandkit.apply")).brandkitApplyHandler as CapabilityHandlerFn,
   );
@@ -178,6 +186,10 @@ registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler(
     "conversation.purge",
     async () => (await import("./conversation.purge")).conversationPurgeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "conversation.files.list",
+    async () => (await import("./conversation.files.list")).conversationFilesListHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "plugin.registry.list",
@@ -332,6 +344,46 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "skill.workspace.list",
     async () =>
       (await import("./skill.workspace.list")).skillWorkspaceListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "skill.workspace.install",
+    async () =>
+      (await import("./skill.workspace.install"))
+        .skillWorkspaceInstallHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "skill.version.list",
+    async () =>
+      (await import("./skill.version.list")).skillVersionListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "skill.version.get",
+    async () =>
+      (await import("./skill.version.get")).skillVersionGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "skill.version.upload",
+    async () =>
+      (await import("./skill.version.upload")).skillVersionUploadHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "skill.version.activate",
+    async () =>
+      (await import("./skill.version.activate"))
+        .skillVersionActivateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "skill.edit",
+    async () => (await import("./skill.edit")).skillEditHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "skill.export",
+    async () => (await import("./skill.export")).skillExportHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "skill.metrics.read",
+    async () =>
+      (await import("./skill.metrics.read")).skillMetricsReadHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "agent.execution.record",

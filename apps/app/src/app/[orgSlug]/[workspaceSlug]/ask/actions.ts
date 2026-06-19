@@ -13,6 +13,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import type { DbMessageRow, ConversationRow } from "@oxagen/database";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
+import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp.consent.resolve";
 import { agentPlanApprove } from "@oxagen/oxagen/contracts/agent.plan.approve";
 import { agentTaskBackgroundCancel } from "@oxagen/oxagen/contracts/agent.task.background.cancel";
 import { agentTaskBackgroundRead } from "@oxagen/oxagen/contracts/agent.task.background.read";
@@ -209,6 +210,29 @@ export async function resolveApprovalAction(
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to resolve approval" };
+  }
+}
+
+export async function resolveConsentAction(
+  ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
+  approvalId: string,
+  decision: "granted" | "denied",
+  grantAllTools: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await getSessionOrRedirect();
+  const parsed = agentMcpConsentResolve.input.safeParse({ approvalId, decision, grantAllTools });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  try {
+    await invoke(
+      "agent.mcp.consent.resolve",
+      parsed.data,
+      capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
+      { surface: "agent" },
+    );
+    revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to resolve consent" };
   }
 }
 

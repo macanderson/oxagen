@@ -23,7 +23,8 @@ import {
   subagentFanouts,
   subagentRuns,
 } from "./schema/agent";
-import { mcpServers } from "./schema/mcp";
+import { mcpServers, mcpConsents, mcpToolSnapshots } from "./schema/mcp";
+import { mcpServerChanges } from "./schema/security";
 import {
   playbooks,
   playbookVersions,
@@ -100,8 +101,40 @@ export const workspaceUsersRelations = relations(workspaceUsers, ({ one }) => ({
 }));
 
 
-export const mcpServersRelations = relations(mcpServers, ({ one }) => ({
+export const mcpServersRelations = relations(mcpServers, ({ one, many }) => ({
   org: one(organizations, { fields: [mcpServers.orgId], references: [organizations.id] }),
+  consents: many(mcpConsents),
+  toolSnapshots: many(mcpToolSnapshots),
+}));
+
+// External-MCP consent grants (OXA-816). Each row links a server + the granting
+// user; the server link is the in-domain relation.
+export const mcpConsentsRelations = relations(mcpConsents, ({ one }) => ({
+  org: one(organizations, { fields: [mcpConsents.orgId], references: [organizations.id] }),
+  server: one(mcpServers, {
+    fields: [mcpConsents.mcpServerId],
+    references: [mcpServers.id],
+  }),
+  user: one(users, { fields: [mcpConsents.userId], references: [users.id] }),
+}));
+
+// External-MCP tool-descriptor snapshots (OXA-820).
+export const mcpToolSnapshotsRelations = relations(mcpToolSnapshots, ({ one }) => ({
+  org: one(organizations, { fields: [mcpToolSnapshots.orgId], references: [organizations.id] }),
+  server: one(mcpServers, {
+    fields: [mcpToolSnapshots.mcpServerId],
+    references: [mcpServers.id],
+  }),
+}));
+
+// External-MCP server lifecycle audit (OXA-820). Append-only; references the
+// server + the acting user, both app-enforced.
+export const mcpServerChangesRelations = relations(mcpServerChanges, ({ one }) => ({
+  org: one(organizations, { fields: [mcpServerChanges.orgId], references: [organizations.id] }),
+  server: one(mcpServers, {
+    fields: [mcpServerChanges.serverId],
+    references: [mcpServers.id],
+  }),
 }));
 
 // Agent-runtime epic relations. Cross-domain joins (messages, execution

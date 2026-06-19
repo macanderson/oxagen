@@ -51,6 +51,18 @@ vi.mock("./workspace-registry-seed", () => ({
   seedWorkspaceDefaultRegistry: vi.fn(async () => "mreg_stub"),
 }));
 
+// Stub seedWorkspaceDefaultCapabilities to isolate workspace.create tests from
+// capability-seeding behaviour — covered by workspace-capability-seed tests.
+vi.mock("./workspace-capability-seed", () => ({
+  seedWorkspaceDefaultCapabilities: vi.fn(async () => undefined),
+}));
+
+// Stub seedWorkspaceDefaultSkills to isolate workspace.create tests from
+// skill-seeding behaviour — covered by skill-workspace-seed tests.
+vi.mock("./skill-workspace-seed", () => ({
+  seedWorkspaceDefaultSkills: vi.fn(async () => ({ scanned: 0, inserted: 0 })),
+}));
+
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
@@ -159,6 +171,26 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
     await workspaceCreateHandler({ name: "Tx Ws", slug: "tx-ws" }, CTX);
     // withTenantDb replaces db().transaction(); verify the ws insert was called.
     expect(mocks.txInsertWs).toHaveBeenCalledTimes(1);
+  });
+
+  it("seeds the default capability packs after workspace creation", async () => {
+    const { seedWorkspaceDefaultCapabilities } = await import(
+      "./workspace-capability-seed"
+    );
+    await workspaceCreateHandler({ name: "Cap Ws", slug: "cap-ws" }, CTX);
+    expect(seedWorkspaceDefaultCapabilities).toHaveBeenCalledWith({
+      orgId: CTX.orgId,
+      workspaceId: "internal_ws_id",
+    });
+  });
+
+  it("seeds the default workspace skills after workspace creation", async () => {
+    const { seedWorkspaceDefaultSkills } = await import("./skill-workspace-seed");
+    await workspaceCreateHandler({ name: "Skill Ws", slug: "skill-ws" }, CTX);
+    expect(seedWorkspaceDefaultSkills).toHaveBeenCalledWith({
+      orgId: CTX.orgId,
+      workspaceId: "internal_ws_id",
+    });
   });
 
   it("throws when the transaction insert returns no row", async () => {

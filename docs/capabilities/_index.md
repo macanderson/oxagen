@@ -10,8 +10,12 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.code.execute](agent.code.execute.md) — Execute a code snippet in an isolated sandbox and return the exit code, stdout, stderr, and execution time
 - [agent.compose](agent.compose.md) — Plan and execute a chain of capabilities to accomplish a goal, threading each step's output into dependent inputs, then synthesize a summary
 - [agent.execution.record](agent.execution.record.md) — Persist a complete agent execution record including steps, tool calls, and result summary for observability and audit
+- [agent.mcp.consent.list](agent.mcp.consent.list.md) — List external MCP tool consent grants in the active workspace (which tools the agent may invoke without re-prompting)
+- [agent.mcp.consent.resolve](agent.mcp.consent.resolve.md) — Grant or deny first-use consent for an external MCP tool; the decision resumes the paused agent stream and is remembered for subsequent calls
+- [agent.mcp.delete](agent.mcp.delete.md) — Soft-delete a registered external MCP server; its tools stop registering immediately while tool-descriptor snapshots are retained for replay
 - [agent.mcp.list](agent.mcp.list.md) — List registered external MCP servers in the active workspace with status, transport, auth kind, and tool inventory
 - [agent.mcp.register](agent.mcp.register.md) — Register an external MCP server with the workspace; the runner runs a separate process and injects its tools into the agent
+- [agent.mcp.set_enabled](agent.mcp.set_enabled.md) — Enable or disable a registered external MCP server; disabling stops its tools from registering but keeps tool-descriptor snapshots for replay
 - [agent.memory.recall](agent.memory.recall.md) — Query Neo4j AgentMemory nodes by semantic similarity plus a weight-sorted rank
 - [agent.memory.write](agent.memory.write.md) — Persist a weighted memory tied to a graph node per the schema.memory contract
 - [agent.plan.approve](agent.plan.approve.md) — Approve, deny, or amend a previously-proposed plan; approval releases the agent stream to execute the plan's side-effectful steps
@@ -85,11 +89,12 @@ contract-first design, IAM enforcement, and instrumentation.
 - [connection.preview](connection.preview.md) — Preview sample records from a data source connection for the setup wizard
 - [connection.update](connection.update.md) — Rename a connection and/or adjust its delivery configuration (sync schedule/scope)
 
-## Conversation (6)
+## Conversation (7)
 
 - [conversation.archive](conversation.archive.md) — Archive or restore one or more conversations in a single set-based update
 - [conversation.chat](conversation.chat.md) — Post a message to an existing conversation; appends to the conversation thread
 - [conversation.delete](conversation.delete.md) — Permanently delete one or more conversations from the user's view via soft-delete
+- [conversation.files.list](conversation.files.list.md) — List the ready generated assets attached to a conversation, access-policy filtered, newest-first, keyset-paginated
 - [conversation.list](conversation.list.md) — List a user's conversations in a workspace, filtered by active or archived status
 - [conversation.purge](conversation.purge.md) — Bulk soft-delete every archived conversation the caller owns in the active workspace
 - [conversation.rename](conversation.rename.md) — Set a conversation's title; low-risk metadata edit exposed via long-press or double-click
@@ -100,10 +105,11 @@ contract-first design, IAM enforcement, and instrumentation.
 - [document.list](document.list.md) — List documents in the workspace
 - [document.read](document.read.md) — Read a document by ID; returns title, content, and metadata
 
-## Documents (2)
+## Documents (3)
 
 - [documents.generate](documents.generate.md) — Generate a new document, spreadsheet, or presentation in a cloud provider (stub)
 - [documents.pdf.create](documents.pdf.create.md) — Render a PDF from either raw HTML or an existing cloud file (stub)
+- [markdown.generate](markdown.generate.md) — Persist a Markdown document as a first-class generated asset (blob storage, file-attachment render directive)
 
 ## Form (3)
 
@@ -144,6 +150,10 @@ contract-first design, IAM enforcement, and instrumentation.
 - [integration.list](integration.list.md) — Browse installed plugin instances with status and sync metrics
 - [integration.metrics](integration.metrics.md) — Get sync statistics and metrics for a plugin instance
 - [integration.sync](integration.sync.md) — Trigger synchronization of a plugin instance (async)
+
+## Mermaid (1)
+
+- [mermaid.generate](mermaid.generate.md) — Produce a Mermaid diagram rendered inline in chat as a client-side SVG artifact
 
 ## Notifications (2)
 
@@ -217,9 +227,17 @@ contract-first design, IAM enforcement, and instrumentation.
 - [semantic.edge.list](semantic.edge.list.md) — Paginated browse of inferred semantic edges with filtering
 - [semantic.edge.suggest](semantic.edge.suggest.md) — Return unapproved edge candidates for human review
 
-## Skill (1)
+## Skill (9)
 
 - [skill.workspace.list](skill.workspace.list.md) — List skills available in the workspace
+- [skill.workspace.install](skill.workspace.install.md) — Install a skill into a workspace from a builtin template or custom upload, idempotent on slug
+- [skill.version.list](skill.version.list.md) — List the time-ordered version history for a workspace skill
+- [skill.version.get](skill.version.get.md) — Fetch a specific version of a workspace skill including body and parsed frontmatter
+- [skill.version.upload](skill.version.upload.md) — Upload a new immutable skill version from raw .skill.md content
+- [skill.version.activate](skill.version.activate.md) — Set a specific skill version as the workspace's active version
+- [skill.edit](skill.edit.md) — Save an edited skill body as a new immutable version
+- [skill.export](skill.export.md) — Export a skill version as a downloadable .skill.md string
+- [skill.metrics.read](skill.metrics.read.md) — Read aggregated skill usage and cost metrics for the workspace
 
 ## Svg (1)
 

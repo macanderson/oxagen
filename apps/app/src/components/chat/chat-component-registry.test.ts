@@ -50,6 +50,10 @@ describe("CHAT_COMPONENTS — config-derived completeness", () => {
     expect(CHAT_COMPONENTS).toHaveProperty("svg-preview");
   });
 
+  it("contains 'mermaid-diagram' as a registered componentId", () => {
+    expect(CHAT_COMPONENTS).toHaveProperty("mermaid-diagram");
+  });
+
   it("contains 'image-preview' as a registered componentId", () => {
     expect(CHAT_COMPONENTS).toHaveProperty("image-preview");
   });

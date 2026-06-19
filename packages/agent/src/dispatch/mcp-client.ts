@@ -44,6 +44,28 @@ export async function listMcpTools(client: Client): Promise<string[]> {
   return tools.map((t) => t.name);
 }
 
+// The raw per-tool descriptor as advertised by the MCP server. Captured at
+// registration into mcp.tool_snapshots (OXA-820) so a replayed run can render
+// the tool even after the server is disabled or deleted.
+export interface McpToolDescriptor {
+  name: string;
+  description: string | null;
+  // The tool's JSONSchema input descriptor, exactly as the server advertised it.
+  inputSchema: Record<string, unknown>;
+}
+
+// Return the full descriptor (JSONSchema) for every tool the server advertises.
+export async function listMcpToolDescriptors(
+  client: Client,
+): Promise<McpToolDescriptor[]> {
+  const { tools } = await client.listTools();
+  return tools.map((t) => ({
+    name: t.name,
+    description: t.description ?? null,
+    inputSchema: (t.inputSchema ?? {}) as Record<string, unknown>,
+  }));
+}
+
 // Wrap each MCP-side tool as an AI SDK Tool. We use z.record(z.string(), z.unknown())
 // because the MCP server's JSONSchema isn't a Zod schema; the remote server
 // re-validates on call. z.record is type-safe while still accepting arbitrary k/v.
@@ -70,14 +92,21 @@ export async function materializeMcpTools(
 export async function healthcheck(args: McpConnectArgs): Promise<{
   status: "healthy" | "degraded" | "unreachable";
   discoveredTools: string[];
+  // Full per-tool descriptors (JSONSchema) captured during the probe so the
+  // caller can snapshot them without a second connection (OXA-820).
+  descriptors: McpToolDescriptor[];
 }> {
   try {
     const client = await connectMcp(args);
-    const tools = await listMcpTools(client);
+    const descriptors = await listMcpToolDescriptors(client);
     await client.close();
-    return { status: "healthy", discoveredTools: tools };
+    return {
+      status: "healthy",
+      discoveredTools: descriptors.map((d) => d.name),
+      descriptors,
+    };
   } catch (err) {
     logger.warn({ endpointUrl: args.endpointUrl, err }, "MCP healthcheck failed; marking unreachable");
-    return { status: "unreachable", discoveredTools: [] };
+    return { status: "unreachable", discoveredTools: [], descriptors: [] };
   }
 }

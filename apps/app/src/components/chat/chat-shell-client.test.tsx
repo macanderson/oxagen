@@ -130,6 +130,7 @@ async function renderClient(props: Partial<{
       messages={[]}
       sendAction={noop}
       resolveApprovalAction={async () => ({ ok: true })}
+      resolveConsentAction={async () => ({ ok: true })}
       resolvePlanAction={async () => ({ ok: true })}
       orgSlug="test-org"
       workspaceSlug="test-ws"
@@ -224,6 +225,7 @@ describe("ChatShellClient — activeServerIds in stream request body", () => {
           userMessageId: "msg-456",
         })}
         resolveApprovalAction={async () => ({ ok: true })}
+        resolveConsentAction={async () => ({ ok: true })}
         resolvePlanAction={async () => ({ ok: true })}
         orgSlug="test-org"
         workspaceSlug="test-ws"

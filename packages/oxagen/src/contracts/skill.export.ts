@@ -1,0 +1,32 @@
+import { z } from "zod";
+import { registerCapability } from "../registry";
+
+export const skillExport = registerCapability({
+  name: "skill.export",
+  domain: "skill",
+  description: "Export the active (or a specified) version of a skill as a downloadable .skill.md string that round-trips through parseSkill",
+  mode: "sync",
+  surfaces: ["api", "mcp"],
+  layers: ["schema", "api", "docs", "mcp"],
+  scoped: true,
+  noBillingGate: true,
+  agent: { requiresApproval: false, riskLevel: "low", category: "skill" },
+  sensitivity: "low",
+  defaultEffect: "deny",
+  defaultRoles: {
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Admin: "allow", Member: "allow" },
+  },
+  input: z.object({
+    skillId: z.string().describe("Public ID of the skill (skl_…)"),
+    versionNumber: z.number().int().positive().optional().describe("Version number to export; defaults to the active version"),
+  }),
+  output: z.object({
+    filename: z.string().describe("Suggested filename for the download (e.g. my-skill.skill.md)"),
+    content: z.string().describe("Full .skill.md text including YAML frontmatter and body"),
+    versionNumber: z.number().int().positive().describe("Version number that was exported"),
+  }),
+});
+
+export type SkillExportInput = z.output<typeof skillExport.input>;
+export type SkillExportOutput = z.output<typeof skillExport.output>;

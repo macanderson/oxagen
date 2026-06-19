@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ToolCallCard } from "./tool-call-card";
 import { ApprovalCard } from "./approval-card";
+import { ConsentCard } from "./consent-card";
 import { PlanCard, type AgentCapability } from "./plan-card";
 import { SubagentFanout } from "./subagent-fanout";
 import { MemoryCard } from "./memory-card";
@@ -30,6 +31,11 @@ export interface MessageBubbleCallbacks {
   onResolveApproval?: (
     approvalId: string,
     decision: "approved" | "denied",
+  ) => Promise<{ ok: boolean; error?: string }>;
+  onResolveConsent?: (
+    approvalId: string,
+    decision: "granted" | "denied",
+    grantAllTools: boolean,
   ) => Promise<{ ok: boolean; error?: string }>;
   onResolvePlan?: (
     planId: string,
@@ -167,6 +173,20 @@ function renderBlock(
           onResolved={callbacks?.onResolveApproval}
         />
       );
+    case "consent-request":
+      return (
+        <ConsentCard
+          key={`consent:${block.approvalId}`}
+          approvalId={block.approvalId}
+          capability={block.capability}
+          serverId={block.serverId}
+          toolName={block.toolName}
+          inputPreview={block.inputPreview}
+          expiresAt={block.expiresAt}
+          resolution={block.resolution}
+          onResolved={callbacks?.onResolveConsent}
+        />
+      );
     case "plan":
       return (
         <PlanCard
@@ -257,6 +277,7 @@ function blockTone(
           ? "failed"
           : "running";
     case "approval-request":
+    case "consent-request":
       return block.resolution ? "done" : "running";
     case "plan":
       return block.status === "pending" ? "running" : "done";
@@ -287,6 +308,8 @@ function blockKey(block: AssistantContentBlock, idx: number): string {
       return `component:${block.toolCallId}`;
     case "approval-request":
       return `approval:${block.approvalId}`;
+    case "consent-request":
+      return `consent:${block.approvalId}`;
     case "plan":
       return `plan:${block.planId}`;
     case "subagent-fanout":

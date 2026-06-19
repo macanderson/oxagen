@@ -25,6 +25,7 @@ import { ingestionSemanticEdgeInfer } from "./functions/ingestion.semantic-edge-
 import { ingestionSyncRequested } from "./functions/ingestion.sync-requested";
 import { playbookTriggerMatch } from "./functions/playbook.trigger.match";
 import { playbookRunExecute } from "./functions/playbook.run.execute";
+import { mcpToolSnapshotRetention } from "./functions/mcp.tool-snapshot-retention";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -62,4 +63,5 @@ export const functions: any[] = [
   ingestionSyncRequested,
   playbookTriggerMatch,
   playbookRunExecute,
+  mcpToolSnapshotRetention,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

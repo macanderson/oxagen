@@ -188,6 +188,59 @@
       }
     },
     {
+      "name": "agent.mcp.consent.list",
+      "file": "agent.mcp.consent.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "agent.mcp.consent.resolve",
+      "file": "agent.mcp.consent.resolve.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "agent.mcp.delete",
+      "file": "agent.mcp.delete.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.mcp.list",
       "file": "agent.mcp.list.ts",
       "domain": "agent",
@@ -221,6 +274,23 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "agent.mcp.set_enabled",
+      "file": "agent.mcp.set_enabled.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
         "docs": true
       }
     },
@@ -1176,6 +1246,24 @@
       }
     },
     {
+      "name": "conversation.files.list",
+      "file": "conversation.files.list.ts",
+      "domain": "conversation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "conversation.list",
       "file": "conversation.list.ts",
       "domain": "conversation",
@@ -1744,6 +1832,42 @@
       "layers": {
         "schema": true,
         "api": false,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "markdown.generate",
+      "file": "markdown.generate.ts",
+      "domain": "documents",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "mermaid.generate",
+      "file": "mermaid.generate.ts",
+      "domain": "mermaid",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
         "mcp": true,
         "unit": true,
         "docs": true
@@ -2531,6 +2655,134 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "skill.edit",
+      "file": "skill.edit.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true
+      }
+    },
+    {
+      "name": "skill.export",
+      "file": "skill.export.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true
+      }
+    },
+    {
+      "name": "skill.metrics.read",
+      "file": "skill.metrics.read.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true
+      }
+    },
+    {
+      "name": "skill.version.activate",
+      "file": "skill.version.activate.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true
+      }
+    },
+    {
+      "name": "skill.version.get",
+      "file": "skill.version.get.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true
+      }
+    },
+    {
+      "name": "skill.version.list",
+      "file": "skill.version.list.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true
+      }
+    },
+    {
+      "name": "skill.version.upload",
+      "file": "skill.version.upload.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true
+      }
+    },
+    {
+      "name": "skill.workspace.install",
+      "file": "skill.workspace.install.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true
       }
     },
     {

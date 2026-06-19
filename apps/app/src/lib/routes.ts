@@ -165,6 +165,7 @@ export const workspace = {
     integrations: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/integrations`,
     prompts: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/prompts`,
     plugins: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/plugins`,
+    skills: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/skills`,
   },
 } as const;
 

@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import {
   wandSendAction,
   wandResolveApprovalAction,
+  wandResolveConsentAction,
   wandResolvePlanAction,
 } from "@/app/[orgSlug]/shell-actions";
 import type { ComposerAction } from "@/components/chat/message-composer";
@@ -102,6 +103,14 @@ export function AskDrawer({ orgSlug, availableWorkspaces, modelConfig }: AskDraw
     [orgSlug, activeWorkspaceSlug],
   );
 
+  const scopedResolveConsentAction = React.useCallback<
+    ChatShellProps["resolveConsentAction"]
+  >(
+    async (approvalId, decision, grantAllTools) =>
+      wandResolveConsentAction(orgSlug, activeWorkspaceSlug, approvalId, decision, grantAllTools),
+    [orgSlug, activeWorkspaceSlug],
+  );
+
   const scopedResolvePlanAction = React.useCallback<ChatShellProps["resolvePlanAction"]>(
     async (planId, decision, amendedSteps) =>
       wandResolvePlanAction(orgSlug, activeWorkspaceSlug, planId, decision, amendedSteps),
@@ -151,6 +160,7 @@ export function AskDrawer({ orgSlug, availableWorkspaces, modelConfig }: AskDraw
             workspaceSlug={activeWorkspaceSlug}
             sendAction={scopedSendAction}
             resolveApprovalAction={scopedResolveApprovalAction}
+            resolveConsentAction={scopedResolveConsentAction}
             resolvePlanAction={scopedResolvePlanAction}
             modelConfig={modelConfig}
             buildPageContext={buildPageContext}
@@ -174,6 +184,7 @@ function AskDrawerChatShell({
   workspaceSlug,
   sendAction,
   resolveApprovalAction,
+  resolveConsentAction,
   resolvePlanAction,
   modelConfig,
   buildPageContext,
@@ -184,6 +195,7 @@ function AskDrawerChatShell({
   workspaceSlug: string;
   sendAction: ComposerAction;
   resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
+  resolveConsentAction: ChatShellProps["resolveConsentAction"];
   resolvePlanAction: ChatShellProps["resolvePlanAction"];
   modelConfig: ResolvedTierCatalog;
   buildPageContext: () => ChatPageContext | null;
@@ -212,6 +224,7 @@ function AskDrawerChatShell({
         messages={EMPTY_MESSAGES}
         sendAction={sendAction}
         resolveApprovalAction={resolveApprovalAction}
+        resolveConsentAction={resolveConsentAction}
         resolvePlanAction={resolvePlanAction}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}

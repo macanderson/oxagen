@@ -32,6 +32,7 @@ import { getSessionOrRedirect } from "@/lib/session";
 import type { PlanStep } from "@/components/chat/stream-event-types";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
+import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp.consent.resolve";
 import { agentPlanApprove } from "@oxagen/oxagen/contracts/agent.plan.approve";
 import { invoke } from "@oxagen/oxagen";
 
@@ -313,6 +314,44 @@ export async function wandResolveApprovalAction(
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to resolve approval" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// wandResolveConsentAction
+//
+// Mirrors wandResolveApprovalAction for first-use external-MCP consent
+// (OXA-816). The orgSlug/workspaceSlug are passed explicitly and resolved to
+// IDs server-side; the consent decision resumes the paused agent stream.
+// ---------------------------------------------------------------------------
+
+export async function wandResolveConsentAction(
+  orgSlug: string,
+  workspaceSlug: string,
+  approvalId: string,
+  decision: "granted" | "denied",
+  grantAllTools: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await getSessionOrRedirect();
+
+  const resolved = await resolveWorkspaceFromSlugs(orgSlug, workspaceSlug);
+  if (!resolved) return { ok: false, error: "No active workspace." };
+  const { orgId, workspaceId } = resolved;
+
+  const parsed = agentMcpConsentResolve.input.safeParse({ approvalId, decision, grantAllTools });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+
+  try {
+    await invoke(
+      "agent.mcp.consent.resolve",
+      parsed.data,
+      buildCapabilityContext({ orgId, workspaceId, userId: session.user.id }),
+      { surface: "agent" },
+    );
+    revalidatePath(`/${orgSlug}/${workspaceSlug}/ask`);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to resolve consent" };
   }
 }
 

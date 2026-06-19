@@ -24,6 +24,11 @@ export interface ChatShellProps {
     approvalId: string,
     decision: "approved" | "denied",
   ) => Promise<{ ok: boolean; error?: string }>;
+  resolveConsentAction: (
+    approvalId: string,
+    decision: "granted" | "denied",
+    grantAllTools: boolean,
+  ) => Promise<{ ok: boolean; error?: string }>;
   resolvePlanAction: (
     planId: string,
     decision: "approved" | "denied" | "amended",
@@ -57,6 +62,7 @@ export function ChatShell({
   messagesPromise,
   sendAction,
   resolveApprovalAction,
+  resolveConsentAction,
   resolvePlanAction,
   fetchBackgroundTask,
   cancelBackgroundTask,
@@ -79,6 +85,7 @@ export function ChatShell({
           activeLeafMessageId={activeLeafMessageId}
           sendAction={sendAction}
           resolveApprovalAction={resolveApprovalAction}
+          resolveConsentAction={resolveConsentAction}
           resolvePlanAction={resolvePlanAction}
           agentCapabilities={agentCapabilities}
           orgSlug={orgSlug}
@@ -105,6 +112,7 @@ async function AsyncShell({
   activeLeafMessageId,
   sendAction,
   resolveApprovalAction,
+  resolveConsentAction,
   resolvePlanAction,
   agentCapabilities,
   orgSlug,
@@ -120,6 +128,7 @@ async function AsyncShell({
   activeLeafMessageId: string | null;
   sendAction: ComposerAction;
   resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
+  resolveConsentAction: ChatShellProps["resolveConsentAction"];
   resolvePlanAction: ChatShellProps["resolvePlanAction"];
   agentCapabilities?: ChatShellProps["agentCapabilities"];
   orgSlug: string;
@@ -139,6 +148,7 @@ async function AsyncShell({
       messages={messages}
       sendAction={sendAction}
       resolveApprovalAction={resolveApprovalAction}
+      resolveConsentAction={resolveConsentAction}
       resolvePlanAction={resolvePlanAction}
       agentCapabilities={agentCapabilities}
       orgSlug={orgSlug}

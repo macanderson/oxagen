@@ -44,6 +44,12 @@ export interface ConversationPageActions {
     approvalId: string,
     decision: "approved" | "denied",
   ) => Promise<{ ok: boolean; error?: string }>;
+  resolveConsentAction: (
+    ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
+    approvalId: string,
+    decision: "granted" | "denied",
+    grantAllTools: boolean,
+  ) => Promise<{ ok: boolean; error?: string }>;
   resolvePlanAction: (
     ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
     planId: string,
@@ -147,6 +153,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
 
   const sendAction = actions.sendMessageAction.bind(null, actionCtx);
   const boundResolveApproval = actions.resolveApprovalAction.bind(null, actionCtx);
+  const boundResolveConsent = actions.resolveConsentAction.bind(null, actionCtx);
   const boundResolvePlan = actions.resolvePlanAction.bind(null, actionCtx);
   const boundCancelTask = actions.cancelBackgroundTaskAction.bind(null, actionCtx);
   const boundReadTask = actions.readBackgroundTaskAction.bind(null, {
@@ -274,6 +281,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
             messagesPromise={messagesPromise}
             sendAction={sendAction}
             resolveApprovalAction={boundResolveApproval}
+            resolveConsentAction={boundResolveConsent}
             resolvePlanAction={boundResolvePlan}
             fetchBackgroundTask={boundReadTask}
             cancelBackgroundTask={boundCancelTask}

@@ -11,6 +11,11 @@ export const documentsManifest: OxagenPluginManifest = {
   visibility: "ga",
   category: "documents",
   icon: "file-text",
-  contracts: ["documents.generate", "documents.pdf.create"],
+  contracts: [
+    "documents.generate",
+    "documents.pdf.create",
+    "markdown.generate",
+    "mermaid.generate",
+  ],
   scopes: [],
 };

@@ -128,10 +128,12 @@ describe("tenant policy manifest", () => {
     expect(unique.size).toBe(tables.length);
   });
 
-  it("covers exactly the 62 policied tables of the v0.4.x schema", () => {
+  it("covers exactly the 65 policied tables of the v0.4.x schema", () => {
     // Intentional ratchet: adding a tenant-owned table means updating BOTH the
     // manifest and this count (and regenerating the Atlas RLS migration).
     // 62 = 63 baseline − plugin.org_denylist (removed 2026-06-17 workspace-scoping rebuild).
-    expect(POLICY_MANIFEST.length).toBe(62);
+    // 65 = 62 + mcp.consents + mcp.tool_snapshots + security.mcp_server_changes
+    //      (OXA-816 / OXA-820 external-MCP consent + snapshot tables).
+    expect(POLICY_MANIFEST.length).toBe(65);
   });
 });

@@ -9,6 +9,7 @@ import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 import { beforeTool, afterTool, onError } from "../hooks/runtime";
 import { createApprovalRequest, waitForApproval } from "./approval";
+import { checkConsent, recordConsent, DEFAULT_CONSENT_TTL_MS } from "./consent";
 import { isSandboxAvailable } from "@oxagen/sandbox";
 import {
   getPluginTypeContributors,
@@ -85,6 +86,24 @@ export interface ApprovalRequiredEvent {
   expiresAt: string;
 }
 
+// OXA-816: first-use consent for an external MCP tool. Emitted BEFORE the
+// runtime blocks on waitForApproval so the stream route can render the consent
+// card immediately (same pattern as ApprovalRequiredEvent).
+export interface ConsentRequiredEvent {
+  /** The approval row id the consent card resolves against. */
+  approvalId: string;
+  /** Synthetic capability id: `mcp.<serverId>.<tool>`. */
+  capability: string;
+  /** The external MCP server's internal id. */
+  serverId: string;
+  /** The external tool name. */
+  toolName: string;
+  /** The tool's input for this call (sample input shown on the card). */
+  inputPreview: unknown;
+  /** ISO string — when the consent request expires server-side. */
+  expiresAt: string;
+}
+
 export interface MaterializeOptions {
   allowlist?: Set<string>;
   // Workspace risk policy: when set to "low" or "medium", any capability
@@ -100,6 +119,14 @@ export interface MaterializeOptions {
    * until the 5-minute TTL expires — the approval card never appears.
    */
   onApprovalRequired?: (event: ApprovalRequiredEvent) => void;
+  /**
+   * OXA-816: called immediately after a first-use consent request is created
+   * and BEFORE the runtime blocks waiting for the user's decision. Lets the
+   * stream route emit a `consent-required` SSE event so the consent card
+   * renders before execution pauses. Without it the stream hangs silently
+   * until the consent TTL expires.
+   */
+  onConsentRequired?: (event: ConsentRequiredEvent) => void;
 }
 
 // Result of materializeTools: the Vercel AI SDK tool map keyed by *model-safe*
@@ -141,6 +168,21 @@ function passesRisk(cap: AnyCapability, ceiling?: MaterializeOptions["riskCeilin
 // itself enforces scope from CapabilityContext).
 // Default TTL must stay in sync with approval.ts DEFAULT_TTL_MS (5 min).
 const APPROVAL_TTL_MS = 5 * 60 * 1000;
+// HITL window the consent card is answerable in (same as the approval card).
+const CONSENT_PROMPT_TTL_MS = 5 * 60 * 1000;
+
+// Parse a synthetic external-MCP capability id `mcp.<serverId>.<tool>` into its
+// parts. serverId is a UUID (no dots); the tool name may itself contain dots,
+// so split on the first two dots only.
+function parseMcpSyntheticId(
+  cap: string,
+): { serverId: string; toolName: string } | null {
+  if (!cap.startsWith("mcp.")) return null;
+  const rest = cap.slice("mcp.".length);
+  const dot = rest.indexOf(".");
+  if (dot <= 0) return null;
+  return { serverId: rest.slice(0, dot), toolName: rest.slice(dot + 1) };
+}
 
 export async function materializeTools(
   ctx: CapabilityContext,
@@ -349,6 +391,89 @@ export async function materializeTools(
             return `Tool blocked by workspace policy: ${reason}`;
           }
           // ── End IAM gate ────────────────────────────────────────────────
+
+          // ── First-use consent gate (OXA-816) ────────────────────────────
+          // The FIRST time this (workspace, user, server, tool) is invoked we
+          // pause and render a consent card; the decision is durable so the
+          // second call runs inline. Only fires on the chat surface (messageId
+          // + userId present) — direct API/MCP callers are governed by their
+          // own auth surface. A workspace pre-grant (tool_name='*') and any
+          // unexpired prior grant short-circuit without prompting.
+          const mcpParts = parseMcpSyntheticId(capturedKey);
+          if (mcpParts && ctx.messageId && ctx.userId) {
+            const consentUserId = ctx.userId;
+            const decision = await runInTenantScope(
+              { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+              () => checkConsent(ctx, consentUserId, mcpParts.serverId, mcpParts.toolName),
+            );
+            if (decision?.status === "denied") {
+              try {
+                await insertToolInvocation(buildInvocationPayload(
+                  { invocationId, ctx, capabilityName: capturedKey, externalServerId, inputBytes: byteSize(input) },
+                  { status: "failed", outputBytes: 0, latencyMs: Date.now() - startedAt, errorClass: "ConsentDenied" },
+                ));
+              } catch {
+                /* telemetry must never fail the call */
+              }
+              return `Tool blocked: consent denied for ${capturedKey}`;
+            }
+            if (decision === null) {
+              // No active grant — solicit consent via the HITL approval row,
+              // emit the consent-required event, then block until resolved.
+              const expiresAt = new Date(Date.now() + CONSENT_PROMPT_TTL_MS).toISOString();
+              const { approvalId } = await runInTenantScope(
+                { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                () =>
+                  createApprovalRequest({
+                    orgId: ctx.orgId,
+                    workspaceId: ctx.workspaceId,
+                    messageId: ctx.messageId!,
+                    capabilityName: capturedKey,
+                    inputPreview: input,
+                    riskLevel: "medium",
+                    ttlMs: CONSENT_PROMPT_TTL_MS,
+                  }),
+              );
+              opts.onConsentRequired?.({
+                approvalId,
+                capability: capturedKey,
+                serverId: mcpParts.serverId,
+                toolName: mcpParts.toolName,
+                inputPreview: input,
+                expiresAt,
+              });
+              const resolution = await waitForApproval(approvalId, CONSENT_PROMPT_TTL_MS);
+              const granted = resolution.resolution === "approved";
+              // Persist the durable grant/denial so the next call is inline.
+              await runInTenantScope(
+                { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                () =>
+                  recordConsent({
+                    orgId: ctx.orgId,
+                    workspaceId: ctx.workspaceId,
+                    userId: consentUserId,
+                    serverId: mcpParts.serverId,
+                    toolName: mcpParts.toolName,
+                    status: granted ? "granted" : "denied",
+                    ttlMs: DEFAULT_CONSENT_TTL_MS,
+                  }),
+              ).catch(() => {
+                /* a failed grant write must not crash the turn — re-prompt next time */
+              });
+              if (!granted) {
+                try {
+                  await insertToolInvocation(buildInvocationPayload(
+                    { invocationId, ctx, capabilityName: capturedKey, externalServerId, inputBytes: byteSize(input) },
+                    { status: "failed", outputBytes: 0, latencyMs: Date.now() - startedAt, errorClass: "ConsentDenied" },
+                  ));
+                } catch {
+                  /* telemetry must never fail the call */
+                }
+                return `Tool blocked: consent ${resolution.resolution} for ${capturedKey}`;
+              }
+            }
+          }
+          // ── End consent gate ────────────────────────────────────────────
 
           try {
             const result = await capturedExecute(input, {

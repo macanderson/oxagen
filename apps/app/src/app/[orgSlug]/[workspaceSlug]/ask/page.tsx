@@ -3,6 +3,7 @@ import {
   cancelBackgroundTaskAction,
   readBackgroundTaskAction,
   resolveApprovalAction,
+  resolveConsentAction,
   resolvePlanAction,
   sendMessageAction,
 } from "./actions";
@@ -23,6 +24,7 @@ export default async function AskPage({
       actions={{
         sendMessageAction,
         resolveApprovalAction,
+        resolveConsentAction,
         resolvePlanAction,
         cancelBackgroundTaskAction,
         readBackgroundTaskAction,

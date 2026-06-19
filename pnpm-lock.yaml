@@ -246,6 +246,9 @@ importers:
       lucide-react:
         specifier: 0.469.0
         version: 0.469.0(react@19.2.6)
+      mermaid:
+        specifier: 11.15.0
+        version: 11.15.0
       motion:
         specifier: 12.40.0
         version: 12.40.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -860,6 +863,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/skills':
+        specifier: workspace:*
+        version: link:../skills
       '@oxagen/storage':
         specifier: workspace:*
         version: link:../storage
@@ -899,6 +905,9 @@ importers:
       pptxgenjs:
         specifier: 4.0.1
         version: 4.0.1
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
       zod:
         specifier: 3.25.76
         version: 3.25.76

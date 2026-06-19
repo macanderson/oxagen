@@ -100,7 +100,8 @@ export async function installPlugin(
     // Map browse-row fields to plugin.org.install input.
     // For mcp_server/integration: pass custom endpoint details (no catalogServerId).
     // For agent_capability: pass pluginId.
-    // For agent_skill/knowledge_source: installed by default, nothing to install.
+    // For agent_skill: install the builtin template into the workspace.
+    // For knowledge_source: installed by default, nothing to install.
     const pluginType = parsed.data.pluginType;
     let installInput: {
       pluginType: typeof pluginType;
@@ -113,7 +114,18 @@ export async function installPlugin(
       };
     };
     if (pluginType === "agent_skill") {
-      // agent_skill entries are installed by default — no-op install.
+      // agent_skill entries install a workspace-owned copy of the builtin
+      // template (idempotent on slug). The browse-row id carries the slug.
+      const slug = parsed.data.catalogServerId ?? parsed.data.pluginId;
+      if (!slug) return { ok: false, error: "skill slug is required" };
+      await invoke(
+        "skill.workspace.install",
+        { slug, workspace_id: ws.id },
+        ctx,
+        { surface: "agent" },
+      );
+      const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+      revalidatePath(pluginsPath(routeCtx));
       return { ok: true };
     } else if (pluginType === "agent_capability") {
       installInput = { pluginType, pluginId: parsed.data.pluginId ?? parsed.data.catalogServerId };

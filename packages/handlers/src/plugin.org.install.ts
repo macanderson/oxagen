@@ -11,6 +11,7 @@ import {
   listServers,
 } from "@oxagen/plugins/registry";
 import type { AuthKind } from "@oxagen/plugins/registry";
+import { upsertCapabilityInstall } from "./capability-install";
 import { logger } from "./logger";
 
 export interface InstallOneInput {
@@ -61,45 +62,19 @@ export async function installOne(
       );
     }
 
-    // Upsert the listing. Capability listings have no endpoint/transport.
-    // authKind is "none" since capability packs are invoked internally.
-    // source="oxagen" distinguishes first-party capability packs.
-    const inserted = await withTenantDb(async (tx) => {
-      const [row] = await tx
-        .insert(schema.pluginInstalledPlugins)
-        .values({
-          orgId: ctx.orgId,
-          workspaceId: ctx.workspaceId!,
-          pluginType: "agent_capability",
-          source: "oxagen",
-          name: pluginId,
-          title: manifest.name,
-          description: manifest.description,
-          // iconUrl is a Lucide icon name on capability packs, not a URL — leave null
-          // to avoid a broken next/image src in the org plugins panel.
-          iconUrl: null,
-          endpointUrl: null,
-          transport: null,
-          authKind: "none",
-          enabled: true,
-        })
-        .onConflictDoUpdate({
-          target: [
-            schema.pluginInstalledPlugins.orgId,
-            schema.pluginInstalledPlugins.workspaceId,
-            schema.pluginInstalledPlugins.pluginType,
-            schema.pluginInstalledPlugins.name,
-          ],
-          set: { updatedAt: sql`now()` },
-        })
-        .returning({ id: schema.pluginInstalledPlugins.id });
-      return row ?? null;
-    });
-
-    if (!inserted) {
-      throw new Error("[plugin.org.install] Capability insert returned no row.");
-    }
-    return inserted.id;
+    // Upsert the listing via the shared helper. Capability listings have no
+    // endpoint/transport; authKind is "none" since capability packs are invoked
+    // internally; source="oxagen" distinguishes first-party capability packs.
+    // The same helper backs workspace-capability-seed so the write never drifts.
+    const installedId = await withTenantDb((tx) =>
+      upsertCapabilityInstall(tx, {
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId!,
+        pluginId,
+        manifest,
+      }),
+    );
+    return installedId;
   }
 
   // ── MCP server / integration / agent_skill / knowledge_source path ──────────

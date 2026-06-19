@@ -42,7 +42,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { wandSendAction, wandResolveApprovalAction, wandResolvePlanAction } from "@/app/[orgSlug]/shell-actions";
+import { wandSendAction, wandResolveApprovalAction, wandResolveConsentAction, wandResolvePlanAction } from "@/app/[orgSlug]/shell-actions";
 import type { ComposerAction } from "@/components/chat/message-composer";
 import type { ChatShellProps } from "@/components/chat/chat-shell";
 import type { ChatMessage } from "@/components/chat/message-bubble";
@@ -142,6 +142,15 @@ export function WandPanel({ orgSlug, availableWorkspaces, modelConfig }: WandPan
     [orgSlug, activeWorkspaceSlug],
   );
 
+  const scopedResolveConsentAction = React.useCallback<
+    ChatShellProps["resolveConsentAction"]
+  >(
+    async (approvalId, decision, grantAllTools) => {
+      return wandResolveConsentAction(orgSlug, activeWorkspaceSlug, approvalId, decision, grantAllTools);
+    },
+    [orgSlug, activeWorkspaceSlug],
+  );
+
   const scopedResolvePlanAction = React.useCallback<
     ChatShellProps["resolvePlanAction"]
   >(
@@ -197,6 +206,7 @@ export function WandPanel({ orgSlug, availableWorkspaces, modelConfig }: WandPan
             workspaceSlug={activeWorkspaceSlug}
             sendAction={scopedSendAction}
             resolveApprovalAction={scopedResolveApprovalAction}
+            resolveConsentAction={scopedResolveConsentAction}
             resolvePlanAction={scopedResolvePlanAction}
             modelConfig={modelConfig}
             buildPageContext={buildPageContext}
@@ -224,6 +234,7 @@ function WandChatShell({
   workspaceSlug,
   sendAction,
   resolveApprovalAction,
+  resolveConsentAction,
   resolvePlanAction,
   modelConfig,
   buildPageContext,
@@ -234,6 +245,7 @@ function WandChatShell({
   workspaceSlug: string;
   sendAction: ComposerAction;
   resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
+  resolveConsentAction: ChatShellProps["resolveConsentAction"];
   resolvePlanAction: ChatShellProps["resolvePlanAction"];
   modelConfig: ResolvedTierCatalog;
   buildPageContext: () => ChatPageContext | null;
@@ -260,6 +272,7 @@ function WandChatShell({
         messages={EMPTY_MESSAGES}
         sendAction={sendAction}
         resolveApprovalAction={resolveApprovalAction}
+        resolveConsentAction={resolveConsentAction}
         resolvePlanAction={resolvePlanAction}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}

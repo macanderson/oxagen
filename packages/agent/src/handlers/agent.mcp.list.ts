@@ -1,5 +1,5 @@
 import { withTenantDb, schema } from "@oxagen/database";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
 import type { AgentMcpListInput, AgentMcpListOutput } from "@oxagen/oxagen/contracts/agent.mcp.list";
 
@@ -25,6 +25,8 @@ export async function agentMcpListHandler(
         and(
           eq(schema.mcpServers.orgId, ctx.orgId),
           eq(schema.mcpServers.workspaceId, ctx.workspaceId),
+          // Hide soft-deleted servers (OXA-820) from the live list.
+          isNull(schema.mcpServers.deletedAt),
         ),
       ),
   );

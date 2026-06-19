@@ -31,6 +31,9 @@ async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContri
       eq(schema.mcpServers.orgId, ctx.orgId),
       eq(schema.mcpServers.workspaceId, workspaceId),
       eq(schema.mcpServers.enabled, true),
+      // Soft-deleted servers (OXA-820) stop registering tools but keep their
+      // descriptor snapshots for replay.
+      isNull(schema.mcpServers.deletedAt),
       eq(schema.mcpServers.healthStatus, "healthy"),
       eq(schema.pluginInstalledPlugins.enabled, true),
       isNull(schema.pluginInstalledPlugins.deletedAt),
