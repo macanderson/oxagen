@@ -1,34 +1,54 @@
-/**
- * AWS KMS adapter — implements `KmsAdapter` using AWS KMS for DEK wrapping.
- *
- * This is a stub. The constructor throws until AWS KMS is provisioned and the
- * required env vars are set. Flip `INGESTION_CRYPTO_PROVIDER=kms` and supply
- * `AWS_KMS_INGESTION_KEY_ARN` to activate.
- *
- * TODO(kms): Implement using @aws-sdk/client-kms:
- *
- *   generateDataKey:
- *     1. Call kms.send(new GenerateDataKeyCommand({ KeyId, KeySpec: "AES_256" }))
- *     2. Return { plaintext: Plaintext, encrypted: CiphertextBlob }
- *     3. Zero Plaintext from memory after encrypt() uses it (done by envelope.ts)
- *
- *   decryptDataKey:
- *     1. Call kms.send(new DecryptCommand({ CiphertextBlob: encrypted, KeyId }))
- *     2. Return Plaintext
- *     3. Zero Plaintext from memory after decrypt() uses it (done by envelope.ts)
- *
- *   Performance: cache the KMSClient instance (one per region).
- *   Do NOT cache plaintext DEKs — generate fresh per encrypt call for forward secrecy.
- *   The KMS GenerateDataKey API is cheap (~1 ms + ~$0.000003 per call).
- */
-
+import { KMSClient, GenerateDataKeyCommand, DecryptCommand } from "@aws-sdk/client-kms";
 import type { KmsAdapter } from "../types";
 
-export function createAwsKmsAdapter(_keyArn: string): KmsAdapter {
-  throw new Error(
-    "[crypto/kms/aws] AWS KMS adapter is not yet implemented. " +
-      "Set INGESTION_CRYPTO_PROVIDER=env and INGESTION_ENCRYPTION_KEY until " +
-      "AWS KMS is provisioned. See packages/crypto/src/kms/aws.ts for the " +
-      "implementation TODO.",
-  );
+function regionFromArn(arn: string): string {
+  // arn:aws:kms:<region>:<account>:key/<id>  or  alias/<name>
+  const region = arn.split(":")[3];
+  if (!region) {
+    throw new Error(`[crypto/kms/aws] Cannot parse AWS region from KMS ARN: "${arn}"`);
+  }
+  return region;
+}
+
+/**
+ * Build a `KmsAdapter` that wraps/unwraps DEKs using AWS KMS.
+ *
+ * The KMSClient is created once per adapter instance (bound to the region
+ * extracted from `keyArn`). The adapter is intended to be constructed once
+ * at app startup and reused across requests.
+ *
+ * DEK plaintext is NEVER cached — a fresh DEK is generated on every
+ * `encrypt()` call for forward secrecy. Zeroing of the plaintext DEK after
+ * use is handled by `envelope.ts`.
+ */
+export function createAwsKmsAdapter(keyArn: string): KmsAdapter {
+  if (!keyArn) {
+    throw new Error("[crypto/kms/aws] keyArn must not be empty");
+  }
+
+  const client = new KMSClient({ region: regionFromArn(keyArn) });
+
+  return {
+    async generateDataKey(_keyId: string) {
+      const response = await client.send(
+        new GenerateDataKeyCommand({ KeyId: keyArn, KeySpec: "AES_256" }),
+      );
+      if (!response.Plaintext || !response.CiphertextBlob) {
+        throw new Error(
+          "[crypto/kms/aws] GenerateDataKey returned empty Plaintext or CiphertextBlob",
+        );
+      }
+      return { plaintext: response.Plaintext, encrypted: response.CiphertextBlob };
+    },
+
+    async decryptDataKey(encrypted: Uint8Array, _keyId: string) {
+      const response = await client.send(
+        new DecryptCommand({ CiphertextBlob: encrypted, KeyId: keyArn }),
+      );
+      if (!response.Plaintext) {
+        throw new Error("[crypto/kms/aws] Decrypt returned empty Plaintext");
+      }
+      return response.Plaintext;
+    },
+  };
 }

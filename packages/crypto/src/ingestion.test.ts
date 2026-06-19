@@ -95,16 +95,17 @@ describe("createIngestionCryptoAdapter", () => {
     );
   });
 
-  it("throws the not-implemented error when provider=kms and ARN is supplied", () => {
+  it("returns KMS adapter with KMS key id when provider=kms and ARN is supplied", () => {
     withEnv(
       {
         INGESTION_CRYPTO_PROVIDER: "kms",
         AWS_KMS_INGESTION_KEY_ARN: "arn:aws:kms:us-east-2:123456789012:key/test-key",
       },
       () => {
-        expect(() => createIngestionCryptoAdapter()).toThrow(
-          /AWS KMS adapter is not yet implemented/,
-        );
+        const result = createIngestionCryptoAdapter();
+        expect(result.keyId).toBe(INGESTION_KEY_ID_KMS);
+        expect(typeof result.adapter.generateDataKey).toBe("function");
+        expect(typeof result.adapter.decryptDataKey).toBe("function");
       },
     );
   });

@@ -97,6 +97,13 @@ tools/env-manager/secrets.db*
 .playwright*
 .superpowers/
 
+# OpenTofu / Terraform
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.backup
+**/crash.log
+**/crash.*.log
+
 # Test results folder
 .test-results/
 
