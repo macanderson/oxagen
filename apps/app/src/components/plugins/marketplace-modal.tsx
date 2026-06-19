@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PluginDetailPanel } from "./plugin-detail-panel";
 import { useToast } from "@/components/ui/toast";
+import { useTenant } from "@/lib/tenant/tenant-context";
 import { Search, Package, Plug, ShoppingBag, BrainCircuit, Sparkles, BookOpen } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -39,10 +40,6 @@ interface CatalogServer {
 type PluginTypeValue = "mcp_server" | "integration" | "agent_capability" | "agent_skill" | "knowledge_source";
 
 interface MarketplaceModalProps {
-  orgSlug: string;
-  orgId?: string;
-  workspaceSlug: string;
-  workspaceId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Server action: install single plugin */
@@ -76,16 +73,13 @@ const PLUGIN_TABS = [
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function MarketplaceModal({
-  orgSlug,
-  orgId: _orgId,
-  workspaceSlug: _workspaceSlug,
-  workspaceId,
   open,
   onOpenChange,
   installAction,
   installBulkAction,
 }: MarketplaceModalProps) {
   const toast = useToast();
+  const { orgSlug, workspaceId } = useTenant();
   const [activeTab, setActiveTab] = React.useState<PluginTypeValue>("mcp_server");
   const [search, setSearch] = React.useState("");
   const [authFilter, setAuthFilter] = React.useState<"" | "oauth" | "secret" | "none">("");
@@ -479,7 +473,6 @@ export function MarketplaceModal({
                       return (
                         <PluginDetailPanel
                           serverName={detailServer?.name ?? detailId}
-                          orgSlug={orgSlug}
                           pluginType={value as PluginTypeValue}
                           installAction={(input) =>
                             installAction({ ...input, workspaceId })

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
+import { useTenant } from "@/lib/tenant/tenant-context";
 import { ExternalLink, X, Plug } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -30,7 +31,6 @@ interface CatalogDetail {
 interface PluginDetailPanelProps {
   /** Registry server name used to fetch detail via catalog/get?name=&version=latest */
   serverName: string;
-  orgSlug: string;
   pluginType: PluginTypeValue;
   installAction: (input: {
     orgSlug: string;
@@ -45,13 +45,13 @@ interface PluginDetailPanelProps {
 
 export function PluginDetailPanel({
   serverName,
-  orgSlug,
   pluginType,
   installAction,
   onInstalled,
   onClose,
 }: PluginDetailPanelProps) {
   const toast = useToast();
+  const { orgSlug, workspaceId } = useTenant();
   const [detail, setDetail] = React.useState<CatalogDetail | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [installing, setInstalling] = React.useState(false);
@@ -63,7 +63,7 @@ export function PluginDetailPanel({
     setDetail(null);
     setError(null);
     fetch(
-      `/api/v1/plugin/catalog/get?name=${encodeURIComponent(serverName)}&version=latest`,
+      `/api/v1/plugin/catalog/get?name=${encodeURIComponent(serverName)}&version=latest&workspaceId=${encodeURIComponent(workspaceId)}`,
       { signal: controller.signal },
     )
       .then((r) => r.json() as Promise<CatalogDetail>)

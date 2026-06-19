@@ -97,13 +97,41 @@ export async function installPlugin(
   const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
 
   try {
+    // Map browse-row fields to plugin.org.install input.
+    // For mcp_server/integration: pass custom endpoint details (no catalogServerId).
+    // For agent_capability: pass pluginId.
+    // For agent_skill/knowledge_source: installed by default, nothing to install.
+    const pluginType = parsed.data.pluginType;
+    let installInput: {
+      pluginType: typeof pluginType;
+      pluginId?: string;
+      custom?: {
+        name: string;
+        endpointUrl: string;
+        transport: string;
+        authKind: "oauth" | "secret" | "none";
+      };
+    };
+    if (pluginType === "agent_skill") {
+      // agent_skill entries are installed by default — no-op install.
+      return { ok: true };
+    } else if (pluginType === "agent_capability") {
+      installInput = { pluginType, pluginId: parsed.data.pluginId ?? parsed.data.catalogServerId };
+    } else {
+      // mcp_server, integration, knowledge_source: catalogServerId is the registry name.
+      installInput = { pluginType };
+      if (parsed.data.catalogServerId) {
+        installInput.custom = {
+          name: parsed.data.catalogServerId,
+          endpointUrl: "",
+          transport: "streamable-http",
+          authKind: "none",
+        };
+      }
+    }
     const out = await invoke(
-      "plugin.workspace.install",
-      {
-        pluginType: parsed.data.pluginType,
-        catalogServerId: parsed.data.catalogServerId,
-        pluginId: parsed.data.pluginId,
-      },
+      "plugin.org.install",
+      installInput,
       ctx,
       { surface: "agent" },
     );
@@ -155,7 +183,7 @@ export async function installBulkPlugin(
 
   try {
     await invoke(
-      "plugin.workspace.install_bulk",
+      "plugin.org.install_bulk",
       { items: parsed.data.items },
       ctx,
       { surface: "agent" },
@@ -226,7 +254,7 @@ export async function uninstallPlugin(
 
   try {
     await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-      invoke("plugin.workspace.uninstall", { orgListingId }, ctx, { surface: "agent" }),
+      invoke("plugin.org.uninstall", { orgListingId }, ctx, { surface: "agent" }),
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(pluginsPath(routeCtx));

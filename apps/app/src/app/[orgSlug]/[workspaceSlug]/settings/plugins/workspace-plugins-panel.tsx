@@ -319,10 +319,6 @@ export function WorkspacePluginsPanel({
       </div>
 
       <MarketplaceModal
-        orgSlug={orgSlug}
-        orgId={orgId}
-        workspaceSlug={workspaceSlug}
-        workspaceId={workspaceId}
         open={marketplaceOpen}
         onOpenChange={setMarketplaceOpen}
         installAction={(input) =>

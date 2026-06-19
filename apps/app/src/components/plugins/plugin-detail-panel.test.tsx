@@ -28,6 +28,19 @@ vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ add: vi.fn() }),
 }));
 
+// useTenant is sourced from TenantContext; mock it so the panel renders without
+// a real TenantProvider ancestor in the unit-test tree.
+vi.mock("@/lib/tenant/tenant-context", () => ({
+  useTenant: () => ({
+    orgId: "org-123",
+    orgSlug: "acme",
+    orgName: "Acme Corp",
+    workspaceId: "ws-123",
+    workspaceSlug: "acme-ws",
+    workspaceName: "Acme Workspace",
+  }),
+}));
+
 afterEach(cleanup);
 
 const mockDetail = {
@@ -48,7 +61,6 @@ const mockDetail = {
 
 const defaultProps = {
   serverName: "github",
-  orgSlug: "acme",
   pluginType: "mcp_server" as const,
   installAction: vi.fn().mockResolvedValue({ ok: true, orgListingId: "listing-1" }),
   onInstalled: vi.fn(),
@@ -82,12 +94,13 @@ describe("PluginDetailPanel — loading state", () => {
 });
 
 describe("PluginDetailPanel — fetch URL", () => {
-  it("fetches using name+version query params (not catalogId)", async () => {
+  it("fetches using name+version+workspaceId query params (not catalogId)", async () => {
     render(<PluginDetailPanel {...defaultProps} serverName="@acme/my-server" />);
     await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
     const url = mockFetch.mock.calls[0]?.[0] as string;
     expect(url).toContain("name=%40acme%2Fmy-server");
     expect(url).toContain("version=latest");
+    expect(url).toContain("workspaceId=ws-123");
     expect(url).not.toContain("catalogId");
   });
 });

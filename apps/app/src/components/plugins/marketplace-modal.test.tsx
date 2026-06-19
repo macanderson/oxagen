@@ -45,7 +45,6 @@ vi.mock("./plugin-detail-panel", () => ({
     serverName: string;
     onClose: () => void;
     onInstalled: () => void;
-    orgSlug: string;
     pluginType: string;
     installAction: unknown;
   }) => (
@@ -66,15 +65,25 @@ vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ add: vi.fn() }),
 }));
 
+// useTenant is sourced from TenantContext; mock it so the modal renders without
+// a real TenantProvider ancestor in the unit-test tree.
+vi.mock("@/lib/tenant/tenant-context", () => ({
+  useTenant: () => ({
+    orgId: "org-123",
+    orgSlug: "acme",
+    orgName: "Acme Corp",
+    workspaceId: "ws-123",
+    workspaceSlug: "acme-ws",
+    workspaceName: "Acme Workspace",
+  }),
+}));
+
 afterEach(cleanup);
 
 const installAction = vi.fn().mockResolvedValue({ ok: true, orgListingId: "listing-1" });
 const installBulkAction = vi.fn().mockResolvedValue({ ok: true });
 
 const defaultProps = {
-  orgSlug: "acme",
-  workspaceSlug: "acme-ws",
-  workspaceId: "ws-123",
   open: false,
   onOpenChange: vi.fn(),
   installAction,
@@ -246,7 +255,7 @@ describe("MarketplaceModal — fetch method", () => {
   });
 
   it("does NOT include orgId in the browse request URL", async () => {
-    render(<MarketplaceModal {...defaultProps} open orgId="org-should-not-appear" />);
+    render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
     const url = mockFetch.mock.calls[0]?.[0] as string;
     expect(url).not.toContain("orgId");
