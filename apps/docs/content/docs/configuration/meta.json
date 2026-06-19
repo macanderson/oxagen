@@ -1,0 +1,8 @@
+{
+  "title": "Configuration",
+  "pages": [
+    "overview",
+    "email",
+    "local-development"
+  ]
+}
