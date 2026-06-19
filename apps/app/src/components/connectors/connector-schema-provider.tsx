@@ -132,7 +132,10 @@ export function ConnectorSchemaProvider({
     setFetchError(null);
 
     fetch(
-      `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/plugins/${encodeURIComponent(pluginId)}/schema`,
+      // Route is mounted at /plugin-schema/:pluginId (see apps/api app.ts +
+      // routes/v1/plugin-schema.ts). The previous /plugins/:id/schema path 404'd,
+      // silently degrading every connector config form to "schema couldn't be loaded".
+      `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/plugin-schema/${encodeURIComponent(pluginId)}`,
       { credentials: "include" },
     )
       .then(async (res) => {

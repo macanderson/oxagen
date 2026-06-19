@@ -155,7 +155,8 @@ export function ConnectorConfigForm({
       try {
         // 2. Server-side schema validation
         const validateRes = await fetch(
-          `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/plugins/${encodeURIComponent(schema.metadata.id)}/schema/validate`,
+          // Route is /plugin-schema/:pluginId/validate (not /plugins/:id/schema/validate).
+          `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/plugin-schema/${encodeURIComponent(schema.metadata.id)}/validate`,
           {
             method: "POST",
             credentials: "include",
