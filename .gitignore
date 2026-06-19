@@ -103,3 +103,5 @@ tools/env-manager/secrets.db*
 # Artifact files — error logs, test output (security risk: stack traces, paths, credentials)
 errors.txt
 test_output.json
+.linear-triage/
+research-swarm-complete-verified.png
