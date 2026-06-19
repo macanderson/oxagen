@@ -1,78 +1,67 @@
 ---
 title: Plugin governance
-description: How organizations control which MCP servers, integrations, and content tools agents can access.
+description: How organizations control which plugins agents can access, and how audit trails and role requirements work.
 ---
 
-Oxagen plugins extend the agent toolchain with external capabilities: MCP servers that connect to third-party APIs, data-source integrations that bring external data into the knowledge graph, and content tools that enable specialized generation workflows.
+Oxagen plugins extend the agent toolchain with external tools and first-party capabilities. Every plugin installation is **workspace-scoped**: a plugin installed in one workspace is not visible to any other workspace, giving security and compliance teams a fine-grained control surface.
 
-Every plugin must be explicitly approved at the organization level before any workspace can use it. This two-tier model gives security and compliance teams centralized control over the external attack surface of your AI agents.
-
-## The two-tier governance model
+## Workspace-scoped plugin model
 
 ```
-Organization level    → admins install and maintain the org allow-list
-       ↓
-Workspace level       → workspace owners enable from the org allow-list
+Workspace A    → plugins installed here are available only in Workspace A
+Workspace B    → independent plugin list; no visibility into Workspace A's plugins
+Workspace C    → ...
 ```
 
-Plugins installed at the org level are **disabled by default** in every workspace. Workspace owners must explicitly enable a plugin for their workspace before agents in that workspace can access its tools.
+Org Owners and Admins can install plugins from the marketplace into any workspace they have access to. Workspace Owners and Admins can install plugins into their own workspace. All install, connect, and enable/disable actions are workspace-specific.
 
-This means a plugin compromise or misconfiguration is bounded to the workspaces that have explicitly enabled it — not the entire organization.
+## Installing plugins
 
-## Installing plugins at the org level
-
-See [Plugin Marketplace](/docs/plugins/marketplace) for the full installation guide.
+See [Plugin marketplace](/docs/plugins/marketplace) for the full installation guide.
 
 In summary:
 
-1. Go to **Organization settings → Plugins → Browse marketplace**.
-2. Review the plugin's tools, README, and authentication requirements.
-3. Click **Install to organization**. The plugin is added to the org allow-list (disabled in all workspaces by default).
-4. Org Admins can also add custom MCP servers by URL and custom plugin registries.
+1. Go to **Workspace settings → Plugins → Browse marketplace**.
+2. Choose a tab (MCP Servers, Integrations, Agent Capabilities, Agent Skills, Knowledge Sources).
+3. Review the plugin's tools, README, and authentication requirements.
+4. Click **Install to workspace**. The plugin is enabled immediately in this workspace.
 
-## The denylist
+For MCP server and integration plugins that require authentication, a **Connect** step follows install to supply credentials and activate the network endpoint.
 
-The org denylist is the hard block: any plugin on the denylist cannot be installed or enabled in any workspace under the organization, regardless of workspace preferences. Denylisted plugins are shown in the marketplace with a "Blocked" badge.
+## Enable and disable
 
-Use the denylist for:
-- Known malicious or untrusted MCP servers.
-- Plugins that access data types prohibited by your data classification policy.
-- Plugins from vendors who have not completed your security review.
+- **`plugin.org.set_enabled`** — toggles the `enabled` flag on the workspace plugin listing. Disabling a listing prevents agents from using the plugin's tools and (for MCP servers) blocks re-connection until re-enabled.
+- **`plugin.workspace.set_enabled`** — for MCP server and integration plugins: creates or deactivates the workspace-level MCP server connection. Cannot be used to toggle Oxagen Agent Capability plugins (those are managed via `plugin.org.set_enabled`).
 
-Manage the denylist at **Organization settings → Plugins → Denied plugins**.
+## Credential security
 
-## Enabling plugins in workspaces
+OAuth tokens and API keys are encrypted at rest with AES-256-GCM. If an OAuth token expires or is revoked, the workspace member who authorized it receives an in-app notification and must re-authenticate before the plugin's tools become available again.
 
-Workspace Owners and Admins enable org-installed plugins at **Workspace settings → Integrations**. Plugins that require authentication show a **Connect** button (OAuth) or **Set secret** button (API key).
+## Uninstalling
 
-Plugin OAuth tokens and API keys are encrypted at rest with AES-256-GCM. If a token expires, the user who authorized it receives an in-app notification and email, and must re-authenticate.
-
-## Disabling and uninstalling
-
-- **Disable in a workspace:** Toggle the plugin off in **Workspace settings → Integrations**. The plugin's tools are immediately removed from the agent toolchain in that workspace.
-- **Uninstall from org:** Go to **Organization settings → Plugins → Installed plugins** and click Uninstall. This immediately disables and removes the plugin from all workspaces. Existing tool call records referencing the plugin are retained in the audit log.
+Go to **Workspace settings → Plugins → Installed** and click **Uninstall**. Uninstalling immediately blocks all new invocations of the plugin's tools in this workspace. Existing tool call records referencing the plugin are retained in the audit log. Generated content (images, documents, videos) is not deleted.
 
 ## Audit trail
 
-All plugin governance actions are recorded:
+All plugin governance actions are recorded in `security.security_events` (Postgres) and `audit_events` (ClickHouse):
 
-- `plugin.org.install` / `plugin.org.uninstall` — org-level installation changes.
-- `plugin.org.set_enabled` — org-level enable/disable toggle.
-- `plugin.workspace.set_enabled` — workspace-level enable/disable toggle.
-- `plugin.denylist.add` / `plugin.denylist.remove` — denylist changes.
-- `plugin.credential.set_secret` / `plugin.credential.reauth` — credential changes.
-
-These events appear in both the Postgres `security.security_events` table and the ClickHouse `audit_events` store.
+| Event | When it fires |
+|---|---|
+| `plugin.org.install` | Plugin installed into a workspace. |
+| `plugin.org.uninstall` | Plugin uninstalled from a workspace. |
+| `plugin.enabled_changed` | Plugin listing enabled or disabled (`plugin.org.set_enabled`). |
+| `plugin.enabled_changed` | Workspace MCP server connection activated or deactivated (`plugin.workspace.set_enabled`). |
+| `plugin.credential.set_secret` | API key stored for a plugin. |
+| `plugin.credential.reauth` | OAuth token refreshed or re-authorized. |
 
 ## Role requirements
 
 | Action | Required role |
 |---|---|
-| Browse marketplace | Any org member |
-| Install or uninstall from org | Org Owner or Admin |
-| Manage denylist | Org Owner or Admin |
-| Add custom server or registry | Org Owner or Admin |
-| Enable or disable in workspace | Workspace Owner or Admin |
-| Connect OAuth or set API key | Workspace Owner or Admin |
+| Browse marketplace | Any workspace member |
+| Install or uninstall a plugin | Workspace Owner or Org Owner/Admin |
+| Connect OAuth or set API key | Workspace Owner or Org Owner/Admin |
+| Add custom MCP server or registry | Workspace Owner or Org Owner/Admin |
+| Enable or disable a plugin | Workspace Owner or Org Owner/Admin |
 
-For more information on the marketplace and workspace plugin configuration, see the [Plugin Marketplace](/docs/plugins/marketplace) and [Workspace Plugins](/docs/plugins/workspace-plugins) guides.
+For more information, see the [Plugin marketplace](/docs/plugins/marketplace) and [Workspace plugins](/docs/plugins/workspace-plugins) guides.

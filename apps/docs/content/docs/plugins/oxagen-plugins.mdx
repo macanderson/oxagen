@@ -1,86 +1,74 @@
 ---
 title: Oxagen Plugins
-description: First-party capability packs that extend what Oxagen agents can do in your organization.
+description: First-party agent capability packs that extend what Oxagen agents can do in your workspace.
 ---
 
 ## Overview
 
-**Oxagen Plugins** are first-party capability packs built and maintained by Oxagen. Each pack
-bundles a set of related AI capabilities — image generation, video, SVGs, document creation, and
-more — that an org admin can install from the marketplace. Capabilities not packaged into a plugin
-are always available and require no install step.
+**Oxagen Plugins** are first-party capability packs built and maintained by Oxagen. Each pack is of type `agent_capability` and bundles a set of related AI capabilities — image generation, video creation, SVG drawing, document assembly — that agents can invoke without any external MCP server.
 
-Plugins follow the same governance model as third-party MCP servers: an org Owner or Admin installs
-a plugin at the org level (disabled by default), then enables it before agents can use the tools.
+Unlike MCP server or integration plugins, Oxagen capability packs are invoked internally through the capability kernel. There is no external endpoint and no Connect step: install the plugin and the capabilities are immediately available to agents in that workspace.
 
 ## Available plugins
 
-Oxagen ships four capability packs in the initial release:
+Oxagen ships four capability packs, all available on the **Agent Capabilities** tab of the marketplace. All are free-tier and generally available.
 
-| Plugin | Tier | What it enables |
+| Plugin | Plugin ID | What it enables |
 |---|---|---|
-| **Image Generation** | Free | Generate, create, analyze, and manage AI images in your workspace. |
-| **SVG Generation** | Free | Generate scalable vector graphics from natural language. |
-| **Document Generation** | Free | Generate rich documents and export them as PDF. |
-| **Video Generation** | Premium | Generate videos from text prompts and images. |
+| **Image Generation** | `oxagen/media-image` | Generate, create, and analyze AI images; list workspace images. |
+| **SVG Generation** | `oxagen/media-svg` | Generate scalable vector graphics from natural language. |
+| **Video Generation** | `oxagen/media-video` | Generate videos from text prompts and images. |
+| **Document Generation** | `oxagen/documents` | Generate rich documents and export them as PDF. |
 
-**Free** plugins are available on any plan. **Premium** plugins require an eligible paid plan
-(enforcement begins in a future release — you can install them now to prepare).
+## Capabilities unlocked per plugin
 
-## How to install an Oxagen Plugin
+Each plugin unlocks a specific set of named capabilities across the API, MCP, and in-app agent surfaces:
 
-1. Sign in as an org **Owner** or **Admin**.
-2. Go to **Org settings → Plugins**.
-3. Click **Browse marketplace**.
-4. Select the **Oxagen Plugins** tab.
-5. Click the plugin card you want to install.
-6. Click **Install to organization**.
-
-The plugin is added to your org (disabled by default) and appears in the
-**Installed Plugins** section of the Plugins settings page.
-
-## Enabling a plugin
-
-After installing, the plugin is disabled until you turn it on:
-
-1. In **Org settings → Plugins**, find the plugin under **Installed Plugins**.
-2. Toggle the **Enable** switch.
-
-Once enabled, the plugin's tools become available to agents in all workspaces for your org.
-
-## Role requirements
-
-| Action | Required role |
+| Plugin | Capabilities |
 |---|---|
-| Browse Oxagen Plugins | Any org member |
-| Install / uninstall | Org Owner or Admin |
-| Enable / disable | Org Owner or Admin |
-| Manage denylist | Org Owner or Admin |
+| Image Generation | `image.generate` · `image.create` · `image.analyze` · `image.list` |
+| SVG Generation | `svg.generate` |
+| Video Generation | `video.generate` |
+| Document Generation | `documents.generate` · `documents.pdf.create` |
 
-## What happens when a plugin is not installed
+## Installing an Oxagen Plugin
 
-If an agent tries to use a capability that belongs to a plugin your org has not installed or
-enabled, the agent will not offer that tool to the user. If a direct API or MCP call targets the
-capability anyway, it returns a `capability_not_installed` error with an install hint:
+1. Go to **Workspace settings → Plugins → Browse marketplace**.
+2. Select the **Agent Capabilities** tab.
+3. Click the plugin card you want.
+4. Click **Install to workspace**.
+
+The plugin is enabled immediately. No Connect step is required.
+
+## Disabling a plugin
+
+Go to **Workspace settings → Plugins → Installed**, find the plugin, and toggle it off. Agents in this workspace will no longer have access to the plugin's capabilities.
+
+To re-enable, toggle it back on. No reinstall is needed.
+
+## Uninstalling a plugin
+
+Click **Uninstall** from the installed plugins list. Uninstalling blocks all invocations of the plugin's capabilities immediately. Content that was previously generated (images, videos, documents) is your data — it is not deleted and remains accessible from your workspace.
+
+To reinstall later, follow the install steps above.
+
+## What happens when a capability is not installed
+
+If an agent or direct API/MCP call targets a capability that belongs to a plugin not installed (or disabled) in the current workspace, the platform returns a `capability_not_installed` error with an install hint:
 
 ```json
 {
   "code": "capability_not_installed",
-  "message": "The 'video.generate' capability requires the 'oxagen/media-video' plugin (Video Generation) to be installed. Install it from Org settings → Plugins → Oxagen Plugins."
+  "message": "The 'video.generate' capability requires the 'oxagen/media-video' plugin (Video Generation) to be installed. Install it from Workspace settings → Plugins → Browse marketplace → Agent Capabilities."
 }
 ```
 
 This response is identical across the in-app agent, the REST API, and the MCP surface.
 
-## Uninstalling a plugin
+## Role requirements
 
-1. In **Org settings → Plugins**, find the plugin under **Installed Plugins**.
-2. Click **Uninstall**.
-
-Uninstalling blocks new invocations of the plugin's capabilities immediately. Any jobs already
-in progress when you uninstall will run to completion. Content that was previously generated
-(images, videos, documents) is your data — it is not deleted and continues to be accessible
-from your workspace.
-
-To reinstall a plugin later, follow the install steps above. Your previously generated content
-is unaffected.
+| Action | Required role |
+|---|---|
+| Browse Agent Capabilities | Any workspace member |
+| Install / uninstall | Workspace Owner or Org Owner/Admin |
+| Enable / disable | Workspace Owner or Org Owner/Admin |

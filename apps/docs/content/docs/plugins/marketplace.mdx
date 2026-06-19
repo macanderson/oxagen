@@ -1,85 +1,76 @@
 ---
 title: Plugin marketplace
-description: Discover and install MCP servers, integrations, and content tools for your organization.
+description: Browse and install MCP servers, integrations, agent capabilities, agent skills, and knowledge sources into your workspace.
 ---
 
 ## Overview
 
-The **Plugin Marketplace** lets organization Owners and Admins browse, install, and govern
-third-party plugin servers — MCP servers, data-source integrations, and content tools — that
-contribute additional AI tools to every workspace in your org.
+The **Plugin Marketplace** lets workspace Owners and Admins browse and install plugins from the marketplace catalog. All plugins are **workspace-scoped**: installing a plugin makes it available only in the workspace you installed it into.
 
-Plugins must be installed at the **org level** first (where they are disabled by default),
-then enabled for individual workspaces. This two-tier model gives admins centralized control
-over what agents can access.
+Open the marketplace from **Workspace settings → Plugins → Browse marketplace**.
 
-## Opening the marketplace
+## Marketplace tabs
 
-1. Sign in as an org **Owner** or **Admin**.
-2. Go to **Org settings → Plugins**.
-3. Click **Browse marketplace**.
+The marketplace has five tabs, one per plugin type:
 
-The marketplace dialog opens with three tabs: **MCP Servers**, **Integrations**, and
-**Content Tools**. Use the search bar and filters (auth kind) to narrow results.
+| Tab | Plugin type | What you find here |
+|---|---|---|
+| **MCP Servers** | `mcp_server` | Third-party tools served over the MCP protocol. |
+| **Integrations** | `integration` | Platform connectors (SaaS APIs, data services). |
+| **Agent Capabilities** | `agent_capability` | Oxagen first-party capability packs (image, video, SVG, documents). |
+| **Agent Skills** | `agent_skill` | Reusable workflow skills callable by name from within agent prompts. |
+| **Knowledge Sources** | `knowledge_source` | External retrieval sources for workspace context. |
 
-## Installing a server
+Use the search bar and auth-kind filter (on MCP Servers and Integrations tabs) to narrow results.
+
+## Installing a plugin
 
 ### Single install
 
-1. Click a server card to open its detail panel.
+1. Click a plugin card to open its detail panel.
 2. Review the description, tools list, and README.
-3. Click **Install to organization**. The server is added to your org allow-list (disabled by default).
+3. Click **Install to workspace**. The plugin is installed and enabled immediately.
 
 ### Bulk install
 
-1. Check the checkbox on one or more server cards.
-2. The **Install selected (n)** button appears at the bottom of the dialog.
-3. Click it to install all selected servers at once.
+1. Check the checkbox on one or more plugin cards.
+2. Click **Install selected (n)** at the bottom of the dialog.
 
-After installation each server appears in the **Installed Plugins** section of the Plugins settings page.
-Enable it there, then enable it per-workspace from **Workspace settings → Integrations**.
+After installation each plugin appears in the **Installed** section of **Workspace settings → Plugins**.
 
-## Denied servers
+## After install: Connect step (MCP servers and integrations)
 
-Servers blocked by your org's denylist are shown with a greyed-out, disabled treatment
-and a **"Blocked by your organization's admins"** label. They cannot be installed while
-on the denylist. See [Denylist](#denylist) below.
+For `mcp_server` and `integration` plugins that require authentication, a **Connect** button appears after install. The plugin is installed but its tools are not active until you connect:
 
-## Adding a custom server
+- **OAuth**: Click **Connect**, authorize on the provider's page, and return. Status changes to **Connected**.
+- **API key**: Click **Set secret**, paste your key, and save. The secret is encrypted at rest.
 
-1. On the **Plugins** settings page, click **Add custom MCP server**.
+Agent Capability, Agent Skill, and Knowledge Source plugins do not require a Connect step.
+
+## Adding a custom MCP server
+
+1. On **Workspace settings → Plugins**, click **Add custom MCP server**.
 2. Enter a name and the MCP endpoint URL.
 3. Choose the transport (streamable HTTP or SSE) and authentication kind (OAuth, API key, or none).
-4. Click **Add plugin**. The server is added directly to your org allow-list.
+4. Click **Add plugin**. The server is installed immediately.
 
 ## Adding a custom registry
 
-1. Click **Add registry**.
-2. Enter a name and the base URL (must implement the MCP Registry OpenAPI 2025-12-01 spec).
-3. Click **Add registry**. The registry syncs its catalog automatically.
+See [MCP server registries](/docs/plugins/registries) for adding a custom registry that populates the marketplace catalog with additional servers.
 
-After syncing, servers from the registry appear in the marketplace under the MCP Servers tab.
+## Uninstalling a plugin
 
-## Denylist
+1. Go to **Workspace settings → Plugins → Installed**.
+2. Find the plugin and click **Uninstall**.
 
-The denylist prevents specific servers from being installed or enabled in any workspace under your organization.
-
-1. On the **Plugins** settings page, scroll to **Denied Plugins**.
-2. Click **Deny a plugin**.
-3. Enter the server name (reverse-DNS format, e.g. `io.github.acme.my-server`).
-4. Optionally enter a reason.
-5. Click **Deny plugin**.
-
-Denylisted servers are immediately disabled and removed from all workspace installs. They remain visible in the marketplace with a "Blocked" badge so admins know they exist.
-
-To remove a server from the denylist, click the trash icon next to its entry in the **Denied Plugins** table.
+Uninstalling removes the plugin and its tools from the workspace immediately. Any content generated by the plugin (images, documents, videos) is retained in your workspace.
 
 ## Role requirements
 
 | Action | Required role |
 |---|---|
-| Browse marketplace | Any org member |
-| Install / uninstall from org | Org Owner or Admin |
-| Manage denylist | Org Owner or Admin |
-| Add custom server | Org Owner or Admin |
-| Add custom registry | Org Owner or Admin |
+| Browse marketplace | Any workspace member |
+| Install / uninstall | Workspace Owner or Org Owner/Admin |
+| Connect OAuth / set API key | Workspace Owner or Org Owner/Admin |
+| Add custom server | Workspace Owner or Org Owner/Admin |
+| Add custom registry | Workspace Owner or Org Owner/Admin |

@@ -1,67 +1,68 @@
 ---
 title: Workspace plugins
-description: Enable org-installed plugin servers for your workspace so agents can use their tools.
+description: Manage installed plugins for your workspace — connect, authenticate, monitor health, and enable or disable.
 ---
 
 ## Overview
 
-Once an org admin has installed a plugin server at the org level, workspace Owners and
-Admins can enable it for their workspace. Only enabled servers have their tools injected
-into the agent toolchain for that workspace.
+After installing a plugin from the marketplace, you manage it from **Workspace settings → Plugins**. This page lists all plugins installed in the current workspace, their connection status, and their health.
 
-## Enabling a plugin for your workspace
+## Plugin status
 
-1. Go to **Workspace settings → Integrations**.
-2. The page lists all org-installed servers available to this workspace.
-3. Toggle a server on with the **Enable** switch.
-4. If the server requires authentication (OAuth or API key), a **Connect** button appears — see below.
+Each installed plugin shows one of the following statuses:
 
-## Authenticating an OAuth server
+| Status | Meaning |
+|---|---|
+| **Active** | Installed and available to agents. For MCP servers and integrations, the server is connected and responding. |
+| **Needs Connect** | Installed but not yet connected (MCP servers and integrations only). Run the Connect step to activate. |
+| **Needs re-auth** | OAuth token expired or revoked. Re-authentication required. |
+| **Disabled** | Manually disabled. Tools are not injected into the agent toolchain. |
+| **Healthy / Degraded / Unreachable** | Health probe results for connected MCP servers and integrations (see [Health status](#health-status)). |
 
-1. Click **Connect** next to an OAuth-protected server.
+## Connecting an MCP server or integration
+
+Agent Skill, Knowledge Source, and Agent Capability plugins activate immediately on install. For `mcp_server` and `integration` plugins, you must complete a Connect step:
+
+### OAuth
+
+1. Click **Connect** next to the plugin.
 2. You are redirected to the provider's authorization page.
-3. After granting access you are returned to the integrations page with status **Connected**.
-4. Tokens are stored encrypted (AES-256-GCM + KMS). You will receive an in-app notification
-   if your token expires and re-authentication is needed.
+3. After granting access you are returned with status **Connected**.
+4. Tokens are stored encrypted (AES-256-GCM + KMS). You receive an in-app notification if your token expires.
 
-## Storing an API key (secret auth)
+### API key (secret auth)
 
-1. Click **Set secret** next to a server that requires an API key.
-2. Paste your API key or bearer token into the input.
-3. Click **Save**. The secret is encrypted at rest and never exposed in the UI after saving.
+1. Click **Set secret** next to the plugin.
+2. Paste your API key or bearer token.
+3. Click **Save**. The secret is encrypted at rest and never shown in the UI again.
 
 ## Re-authenticating
 
-If an OAuth token expires or is revoked, the server's status changes to **Needs re-auth**. A
-notification appears in the bell menu with a deep link to re-authenticate. You can also
-click **Re-authenticate** directly on the integrations page.
+If an OAuth token expires or is revoked, the plugin's status changes to **Needs re-auth**. A notification appears in the bell menu with a link to re-authenticate. You can also click **Re-authenticate** directly on the plugins page.
 
 ## Health status
 
-Each server row shows a health indicator:
+Connected MCP server and integration plugins report a live health status:
 
 | Status | Meaning |
 |---|---|
 | Healthy | Server is reachable and responding to health probes. |
 | Degraded | Some MCP calls are failing; tools may be unreliable. |
 | Unreachable | Server did not respond to the last health probe. |
-| Needs re-auth | OAuth token is expired or revoked. |
+| Unknown | No health probe has run yet since the server was connected. |
 
-Agents only use servers with **Healthy** status. Degraded or unreachable servers are
-skipped at runtime and a warning is logged in execution telemetry.
+Agents skip servers with Degraded or Unreachable status and log a warning in execution telemetry.
 
 ## Disabling a plugin
 
-Toggle the **Enable** switch off at any time. The server's tools are immediately removed
-from the agent toolchain for this workspace. The org listing and credential remain intact;
-you can re-enable at any time.
+Toggle a plugin off from the installed plugins list at any time. For MCP servers and integrations, this deactivates the workspace server connection — the plugin listing and any stored credentials remain intact and can be re-enabled later.
 
 ## Role requirements
 
 | Action | Required role |
 |---|---|
-| Enable / disable for workspace | Workspace Owner or Org Owner/Admin |
+| View installed plugins | Any workspace member |
 | Connect / re-authenticate OAuth | Workspace Owner or Org Owner/Admin |
 | Set API key / secret | Workspace Owner or Org Owner/Admin |
-| Install / uninstall from org | Org Owner or Admin only |
-| Manage denylist | Org Owner or Admin only |
+| Enable / disable a plugin | Workspace Owner or Org Owner/Admin |
+| Uninstall a plugin | Workspace Owner or Org Owner/Admin |

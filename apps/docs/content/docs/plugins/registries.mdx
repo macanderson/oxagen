@@ -5,54 +5,38 @@ description: Add and manage MCP server registries so the marketplace automatical
 
 ## What is a registry?
 
-An **MCP server registry** is an HTTP endpoint that implements the MCP Registry OpenAPI
-specification (`/v0.1/servers`). When you add a registry to a workspace, every server it
-publishes appears **live** in the marketplace — nothing is copied or synced into your workspace.
-The platform fetches the registry catalog on demand, so servers you haven't installed consume no
-resources and carry no risk.
+An **MCP server registry** is an HTTP endpoint that implements the MCP Registry OpenAPI specification (`/v0.1/servers`). When you add a registry to a workspace, every server it publishes appears in the **MCP Servers** tab of the marketplace. Servers from the registry consume no resources until you explicitly install one.
 
-You install individual servers from the registry the same way you install any other server:
-browse the marketplace, click the server you want, and install it. Registries are the discovery
-layer; installation is always an explicit step.
+You install individual servers the same way you install any other plugin: browse the marketplace, select the server, and install it. Registries are the discovery layer; installation is always a separate explicit step.
 
 ## Default registry
 
-Every new workspace is automatically seeded with the **Official MCP Registry**:
+Every new workspace is seeded with the **Official MCP Registry**:
 
 ```
 https://registry.modelcontextprotocol.io
 ```
 
-This registry is published by the MCP project and lists a broad, curated catalog of community
-and vendor MCP servers. It is set as the workspace default when the workspace is created. You
-can remove it if you don't need it.
+This registry is published by the MCP project and lists a broad catalog of community and vendor MCP servers. It is set as the workspace default at workspace creation and can be removed if you don't need it.
 
 ## Registries are workspace-scoped
 
-Each workspace manages its own registry list independently. Adding a registry in one workspace
-has no effect on other workspaces in your org. Registry settings live at
-**Workspace settings → Plugins → Registries**.
+Each workspace manages its own registry list independently. Adding a registry in one workspace has no effect on other workspaces in your org. Registry settings live at **Workspace settings → Plugins → Registries**.
 
 ## The single-default rule
 
-Every workspace has exactly one default registry at all times. The rules are:
+Every workspace has exactly one default registry at all times:
 
-- **First registry added** is automatically the default. There is no option to change this
-  during setup — the system sets it for you.
-- **If you remove the default** and other registries remain, the most recently added registry
-  becomes the new default automatically.
-- **If you have exactly one registry**, it is the default and cannot be changed. Add a second
-  registry first if you want to make a different one the default, then remove the original.
-- **If you remove all registries**, there is no default — the marketplace shows only servers
-  installed via custom MCP server entries or the org allow-list.
+- **First registry added** is automatically the default.
+- **If you remove the default** and other registries remain, the most recently added registry becomes the new default automatically.
+- **If you have exactly one registry**, it is the default and cannot be changed. Add a second registry first if you need to swap.
+- **If you remove all registries**, there is no default and the marketplace shows only servers installed directly by URL.
 
-There is no manual "Set as default" control. The default is always determined by the order
-registries were added.
+There is no manual "Set as default" control.
 
 ## Adding a registry
 
-You need a URL that serves the MCP Registry OpenAPI 2025-12-01 spec. The platform calls
-`{base_url}/v0.1/servers` — enter only the host root, without a path suffix.
+The platform calls `{base_url}/v0.1/servers` — enter only the host root, without a path suffix.
 
 **Example registry URLs:**
 
@@ -61,29 +45,22 @@ https://registry.modelcontextprotocol.io
 https://registry.example.com
 ```
 
-To add a registry:
-
-1. Go to **Workspace settings → Plugins**.
+1. Go to **Workspace settings → Plugins → Registries**.
 2. Click **Add registry**.
 3. Enter a display name and the base URL.
 4. Click **Add registry** to confirm.
 
-The registry is enabled immediately. Its servers appear in the **MCP Servers** tab of the
-marketplace. If the registry is unreachable, an error is shown and no servers are listed from it
-until connectivity is restored.
+The registry is enabled immediately. Its servers appear in the **MCP Servers** tab of the marketplace. If the registry is unreachable, an error is shown and no servers are listed from it until connectivity is restored.
 
 ## Removing a registry
 
 1. Go to **Workspace settings → Plugins → Registries**.
-2. Click the trash icon next to the registry you want to remove.
+2. Click the trash icon next to the registry.
 3. Confirm the removal.
 
-Removing a registry removes all its servers from the marketplace view for this workspace. Any
-servers you already installed from that registry remain installed — they are not automatically
-uninstalled.
+Removing a registry removes its servers from the marketplace view for this workspace. Any servers you have already installed from that registry remain installed and are not automatically uninstalled.
 
-If the removed registry was the default and other registries exist, the most recently added
-registry is promoted to default automatically.
+If the removed registry was the default and other registries remain, the most recently added registry is promoted to default automatically.
 
 ## Role requirements
 
