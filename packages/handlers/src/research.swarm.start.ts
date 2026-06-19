@@ -1,11 +1,9 @@
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { generateObjectFor } from "@oxagen/ai";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { researchSwarmStart } from "@oxagen/oxagen/contracts/research.swarm.start";
 import { invoke } from "@oxagen/oxagen/kernel";
 import type { AgentSubagentDispatchOutput } from "@oxagen/oxagen/contracts/agent.subagent.dispatch";
-import { storeSwarm } from "./research.swarm.store";
 import { logger } from "./logger";
 
 // TODO: OXA-XXXX wire result aggregation to graph.node.upsert via agent.subagent.aggregate once results land
@@ -59,15 +57,13 @@ export const researchSwarmStartHandler: CapabilityHandler<typeof researchSwarmSt
     ctx,
   )) as AgentSubagentDispatchOutput;
 
-  const swarmId = randomUUID();
-
-  // Store the swarmId → dispatchId mapping for status polling.
-  storeSwarm(swarmId, {
-    dispatchId: dispatchResult.dispatchId,
-    totalTasks: queries.length,
-    orgId: ctx.orgId,
-    workspaceId: ctx.workspaceId,
-  });
+  // The swarm IS its subagent fanout — use the fanout's durable public_id as the
+  // swarmId rather than minting a random UUID kept in an in-process map. That map
+  // only lived in whichever process ran the start (the in-app agent runtime), so
+  // research.swarm.status polled from a different process (apps/api) always 500'd
+  // with "swarm not found". The fanout public_id is persisted in Postgres and
+  // tenant-scoped by agent.subagent.aggregate, so any process can resolve it.
+  const swarmId = dispatchResult.dispatchId;
 
   logger.info(
     {

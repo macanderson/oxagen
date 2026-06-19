@@ -48,9 +48,6 @@ export default defineConfig({
         // tested at the Inngest function level (packages/inngest-functions).
         "src/privacy.data.erase.ts",
         "src/privacy.data.export.ts",
-        // iam-provision helpers and internal utilities — tested via the handlers
-        // that call them; pure internal module with no direct test entry point.
-        "src/research.swarm.store.ts",
         // Pure barrel / registration wiring — no business logic.
         // index.ts re-exports all handlers; register.ts registers them with the
         // handler registry. Both are side-effect-only and have no branch logic.

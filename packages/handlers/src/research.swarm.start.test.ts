@@ -4,7 +4,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   generateObjectFor: vi.fn(),
   invoke: vi.fn(),
-  storeSwarm: vi.fn(),
 }));
 
 mocks.generateObjectFor.mockResolvedValue({
@@ -30,10 +29,6 @@ vi.mock("@oxagen/ai", () => ({
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
   invoke: mocks.invoke,
-}));
-
-vi.mock("./research.swarm.store", () => ({
-  storeSwarm: mocks.storeSwarm,
 }));
 
 import { researchSwarmStartHandler } from "./research.swarm.start";
@@ -95,7 +90,10 @@ describe("researchSwarmStartHandler", () => {
     expect(result.estimatedTasks).toBe(3);
   });
 
-  it("stores the swarmId → dispatchId mapping", async () => {
+  it("uses the durable fanout public_id as the swarmId (no in-process store)", async () => {
+    // The swarmId must equal the dispatchId so any process (apps/api polling)
+    // can resolve the swarm via agent.subagent.aggregate against Postgres —
+    // no shared in-memory map, which broke cross-process status polling.
     const result = await researchSwarmStartHandler(
       {
         topic: "test topic",
@@ -107,14 +105,8 @@ describe("researchSwarmStartHandler", () => {
       CTX,
     );
 
-    expect(mocks.storeSwarm).toHaveBeenCalledWith(
-      result.swarmId,
-      expect.objectContaining({
-        dispatchId: "fanout_abc",
-        orgId: CTX.orgId,
-        workspaceId: CTX.workspaceId,
-      }),
-    );
+    expect(result.swarmId).toBe("fanout_abc");
+    expect(result.swarmId).toBe(result.dispatchId);
   });
 
   it("respects depth=medium → 8 queries in the prompt", async () => {

@@ -2,7 +2,6 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { researchSwarmStatus } from "@oxagen/oxagen/contracts/research.swarm.status";
 import { invoke } from "@oxagen/oxagen/kernel";
 import type { AgentSubagentAggregateOutput } from "@oxagen/oxagen/contracts/agent.subagent.aggregate";
-import { lookupSwarm } from "./research.swarm.store";
 import { logger } from "./logger";
 
 // Maps aggregate fanout status → swarm status for the research domain.
@@ -27,14 +26,13 @@ export const researchSwarmStatusHandler: CapabilityHandler<typeof researchSwarmS
   input,
   ctx,
 ) => {
-  const record = lookupSwarm(input.swarmId, ctx.orgId, ctx.workspaceId);
-  if (!record) {
-    logger.warn(
-      { swarmId: input.swarmId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-      "research.swarm.status: swarm not found",
-    );
-    throw new Error(`research.swarm.status: swarm ${input.swarmId} not found`);
-  }
+  // The swarmId IS the subagent fanout's public_id (research.swarm.start returns
+  // dispatchId as the swarmId). No in-process lookup is needed — and must not be
+  // used: the old in-memory map only existed in whichever process ran the start,
+  // so polling from apps/api 500'd with "swarm not found". agent.subagent.aggregate
+  // resolves the fanout from Postgres and enforces org+workspace scoping, so a
+  // cross-tenant or unknown id surfaces as a clean "Fanout not found" from there.
+  const fanoutId = input.swarmId;
 
   // Delegate to agent.subagent.aggregate. The aggregate is ALWAYS a non-blocking
   // snapshot (it never sleeps), so we do NOT pass timeoutMs:0 — `timeoutMs` is the
@@ -45,7 +43,7 @@ export const researchSwarmStatusHandler: CapabilityHandler<typeof researchSwarmS
   const aggregateResult = (await invoke(
     "agent.subagent.aggregate",
     {
-      fanoutId: record.dispatchId,
+      fanoutId,
     },
     ctx,
   )) as AgentSubagentAggregateOutput;
@@ -61,7 +59,7 @@ export const researchSwarmStatusHandler: CapabilityHandler<typeof researchSwarmS
   logger.info(
     {
       swarmId: input.swarmId,
-      dispatchId: record.dispatchId,
+      dispatchId: fanoutId,
       aggregateStatus: aggregateResult.status,
       swarmStatus: status,
       completedChildren: aggregateResult.completedChildren,
@@ -73,7 +71,7 @@ export const researchSwarmStatusHandler: CapabilityHandler<typeof researchSwarmS
 
   return {
     swarmId: input.swarmId,
-    dispatchId: record.dispatchId,
+    dispatchId: fanoutId,
     status,
     completedTasks: aggregateResult.completedChildren,
     totalTasks: aggregateResult.totalChildren,

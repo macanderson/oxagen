@@ -6,7 +6,6 @@ vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: (...a: unknown[]) => invoke(..
 
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { researchSwarmStatusHandler, mapChildrenToResults } from "./research.swarm.status";
-import { storeSwarm } from "./research.swarm.store";
 
 const ctx: CapabilityContext = {
   orgId: "org-1",
@@ -79,8 +78,9 @@ describe("mapChildrenToResults", () => {
 describe("researchSwarmStatusHandler", () => {
   afterEach(() => invoke.mockReset());
 
-  it("returns the aggregated hits once the swarm produces output", async () => {
-    storeSwarm("swm_status_1", { dispatchId: "fan_1", totalTasks: 2, orgId: "org-1", workspaceId: "ws-1" });
+  it("resolves the swarm by passing swarmId straight through as the fanoutId", async () => {
+    // No in-process store: the swarmId IS the fanout public_id, so it is handed
+    // directly to agent.subagent.aggregate (which resolves it from Postgres).
     invoke.mockResolvedValue({
       fanoutId: "fan_1",
       status: "completed",
@@ -97,15 +97,21 @@ describe("researchSwarmStatusHandler", () => {
       firstError: null,
     });
 
-    const out = await researchSwarmStatusHandler({ swarmId: "swm_status_1" }, ctx);
+    const out = await researchSwarmStatusHandler({ swarmId: "fan_1" }, ctx);
+    expect(invoke).toHaveBeenCalledWith(
+      "agent.subagent.aggregate",
+      expect.objectContaining({ fanoutId: "fan_1" }),
+      ctx,
+    );
     expect(out.status).toBe("complete");
+    expect(out.swarmId).toBe("fan_1");
+    expect(out.dispatchId).toBe("fan_1");
     expect(out.completedTasks).toBe(2);
     expect(out.results).toBeDefined();
     expect(out.results?.[0]?.hits[0]?.title).toBe("Nautilus");
   });
 
   it("omits results while the swarm is still running with no output", async () => {
-    storeSwarm("swm_status_2", { dispatchId: "fan_2", totalTasks: 3, orgId: "org-1", workspaceId: "ws-1" });
     invoke.mockResolvedValue({
       fanoutId: "fan_2",
       status: "running",
@@ -118,7 +124,7 @@ describe("researchSwarmStatusHandler", () => {
       firstError: null,
     });
 
-    const out = await researchSwarmStatusHandler({ swarmId: "swm_status_2" }, ctx);
+    const out = await researchSwarmStatusHandler({ swarmId: "fan_2" }, ctx);
     expect(out.status).toBe("running");
     expect(out.results).toBeUndefined();
   });
@@ -128,7 +134,6 @@ describe("researchSwarmStatusHandler", () => {
     // in-flight fanout as timed_out (age 0 >= 0) → mapped to "failed", so a
     // running swarm never showed progress. The status poll must let the
     // aggregate use its default staleness window.
-    storeSwarm("swm_status_3", { dispatchId: "fan_3", totalTasks: 5, orgId: "org-1", workspaceId: "ws-1" });
     invoke.mockResolvedValue({
       fanoutId: "fan_3",
       status: "running",
@@ -141,7 +146,7 @@ describe("researchSwarmStatusHandler", () => {
       firstError: null,
     });
 
-    await researchSwarmStatusHandler({ swarmId: "swm_status_3" }, ctx);
+    await researchSwarmStatusHandler({ swarmId: "fan_3" }, ctx);
 
     expect(invoke).toHaveBeenCalledWith(
       "agent.subagent.aggregate",
@@ -152,7 +157,10 @@ describe("researchSwarmStatusHandler", () => {
     expect(aggregateInput.timeoutMs).toBeUndefined();
   });
 
-  it("throws when the swarm id is unknown to this tenant", async () => {
+  it("propagates the aggregate's not-found error for an unknown fanout", async () => {
+    // Tenant isolation + unknown-id handling now live in agent.subagent.aggregate
+    // (Postgres lookup scoped by org+workspace), so its error surfaces verbatim.
+    invoke.mockRejectedValue(new Error("Fanout nope not found"));
     await expect(researchSwarmStatusHandler({ swarmId: "nope" }, ctx)).rejects.toThrow(/not found/);
   });
 });
