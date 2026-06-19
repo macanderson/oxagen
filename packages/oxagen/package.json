@@ -12,6 +12,7 @@
     "./kernel": "./src/kernel.ts",
     "./agent-schema": "./src/agent-schema.ts",
     "./interactive-agent": "./src/interactive-agent.ts",
+    "./capability-meta": "./src/capability-meta.ts",
     "./types": "./src/types.ts",
     "./iam": "./src/iam/index.ts",
     "./contracts": "./src/contracts/index.ts",

@@ -264,6 +264,80 @@ function emitSecurityEvent(event: KernelSecurityEvent): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Capability trace sink — pluggable, fire-and-forget.
+//
+// Where the security emitter records the AUTHZ outcome of every call, the trace
+// sink records the EXECUTION of a call: the validated input, the validated
+// output, timing, and the request/message correlation ids. It is the durable
+// substrate for the chain-of-thought inspection UI and the downloadable
+// per-subagent logfiles ("traceable down to individual queries and results").
+//
+// Like the security emitter it is injected once at surface bootstrap, never
+// awaited (the response path is never delayed by a trace write), and never
+// allowed to throw into a capability invocation. When no sink is registered the
+// call proceeds with zero overhead. The sink implementation decides persistence
+// and any input/output redaction — the kernel hands over the raw validated data
+// since the inspection surface needs to show real values.
+// ---------------------------------------------------------------------------
+
+export interface KernelTraceEvent {
+  capability: string;
+  /** "ok" when the handler ran and output validated; "error" otherwise. */
+  status: "ok" | "error";
+  /**
+   * Surface the call arrived on (CapabilitySurface from opts.surface when set,
+   * else the transport-level ctx.surface).
+   */
+  surface: string | undefined;
+  orgId: string;
+  workspaceId: string;
+  actorUserId: string | null;
+  /** Correlates every call in one request/turn. */
+  requestId: string;
+  /** Correlates calls to a chat message DAG node; null off the chat surface. */
+  messageId: string | null;
+  /**
+   * The validated input passed to the handler, or the raw input when validation
+   * failed before the handler ran. The sink owns any redaction.
+   */
+  input: unknown;
+  /** The validated output — present only when status === "ok". */
+  output?: unknown;
+  /** Failure code when status === "error". */
+  errorCode?: CapabilityErrorCode | "no_tenant_scope";
+  /** Wall-clock milliseconds from invoke() entry to emit. */
+  durationMs: number;
+}
+
+type KernelTraceSink = (event: KernelTraceEvent) => void;
+
+let _traceSink: KernelTraceSink | null = null;
+
+/**
+ * Register a fire-and-forget trace sink. Call once during surface bootstrap.
+ * Re-registration is allowed (matches the security emitter) so a restarting
+ * surface can re-register without a process restart.
+ */
+export function setKernelTraceSink(sink: KernelTraceSink): void {
+  _traceSink = sink;
+}
+
+/** Remove the current trace sink. Primarily used in tests. */
+export function clearKernelTraceSink(): void {
+  _traceSink = null;
+}
+
+function emitTraceEvent(event: KernelTraceEvent): void {
+  if (_traceSink) {
+    try {
+      _traceSink(event);
+    } catch {
+      // A broken trace sink must never crash a capability invocation.
+    }
+  }
+}
+
 /**
  * Bind a handler to a capability name. Throws on a double-registration so a
  * copy-paste that shadows an existing handler fails loudly at boot rather
@@ -395,6 +469,19 @@ export async function invoke(
       workspaceId: ctx.workspaceId,
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
+      errorCode: "invalid_input",
+      durationMs: Date.now() - startMs,
+    });
+    emitTraceEvent({
+      capability: name,
+      status: "error",
+      surface: opts.surface ?? ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      messageId: ctx.messageId,
+      input: rawInput,
       errorCode: "invalid_input",
       durationMs: Date.now() - startMs,
     });
@@ -571,6 +658,19 @@ export async function invoke(
       errorCode: isCapErr ? err.code : scopeCode,
       durationMs: Date.now() - startMs,
     });
+    emitTraceEvent({
+      capability: name,
+      status: "error",
+      surface: opts.surface ?? ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      messageId: ctx.messageId,
+      input: inputResult.data,
+      errorCode: isCapErr ? err.code : (scopeCode ?? undefined),
+      durationMs: Date.now() - startMs,
+    });
     throw err;
   }
 
@@ -584,6 +684,20 @@ export async function invoke(
       workspaceId: ctx.workspaceId,
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
+      errorCode: "invalid_output",
+      durationMs: Date.now() - startMs,
+    });
+    emitTraceEvent({
+      capability: name,
+      status: "error",
+      surface: opts.surface ?? ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      messageId: ctx.messageId,
+      input: inputResult.data,
+      output,
       errorCode: "invalid_output",
       durationMs: Date.now() - startMs,
     });
@@ -604,6 +718,19 @@ export async function invoke(
     actorUserId: ctx.userId,
     requestId: ctx.requestId,
     errorCode: null,
+    durationMs: Date.now() - startMs,
+  });
+  emitTraceEvent({
+    capability: name,
+    status: "ok",
+    surface: opts.surface ?? ctx.surface,
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    actorUserId: ctx.userId,
+    requestId: ctx.requestId,
+    messageId: ctx.messageId,
+    input: inputResult.data,
+    output: outputResult.data,
     durationMs: Date.now() - startMs,
   });
 

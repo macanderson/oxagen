@@ -4,7 +4,7 @@
  *
  * Render tests for RiskBadge:
  *   - Each risk level renders expected text
- *   - Each risk level applies the correct jewel-tone color and background
+ *   - Each risk level applies the correct status token color (success/warning/error)
  */
 
 import { describe, it, expect, afterEach } from "vitest";
@@ -29,21 +29,21 @@ describe("RiskBadge", () => {
     expect(screen.getByText("high risk")).toBeInTheDocument();
   });
 
-  it("applies green jewel-tone color for low risk", () => {
+  it("applies the success token color for low risk", () => {
     render(<RiskBadge risk="low" />);
-    const el = screen.getByText("low risk");
-    expect(el).toHaveStyle({ color: "rgb(103, 209, 130)" });
+    const el = screen.getByText("low risk") as HTMLElement;
+    expect(el.style.color).toBe("var(--success)");
   });
 
-  it("applies amber jewel-tone color for medium risk", () => {
+  it("applies the warning token color for medium risk", () => {
     render(<RiskBadge risk="medium" />);
-    const el = screen.getByText("medium risk");
-    expect(el).toHaveStyle({ color: "rgb(255, 190, 99)" });
+    const el = screen.getByText("medium risk") as HTMLElement;
+    expect(el.style.color).toBe("var(--warning)");
   });
 
-  it("applies salmon jewel-tone color for high risk", () => {
+  it("applies the error token color for high risk", () => {
     render(<RiskBadge risk="high" />);
-    const el = screen.getByText("high risk");
-    expect(el).toHaveStyle({ color: "rgb(255, 138, 107)" });
+    const el = screen.getByText("high risk") as HTMLElement;
+    expect(el.style.color).toBe("var(--error)");
   });
 });

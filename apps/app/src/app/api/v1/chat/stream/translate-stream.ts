@@ -3,6 +3,7 @@ import type {
   RenderDirective,
   StreamEvent,
 } from "@/components/chat/stream-event-types";
+import { resolveRenderDirective } from "@oxagen/oxagen/capability-meta";
 import {
   partType,
   isRecord,
@@ -68,6 +69,9 @@ export async function translateAgentStream(args: {
   const reasoningBlockIndex: Record<string, number> = {};
   const reasoningStartedAt: Record<string, number> = {};
   const toolBlockIndex: Record<string, number> = {};
+  // toolCallId → real dotted capability name, so the tool-result arm can resolve
+  // a render directive for outputs that don't embed one (generic engine).
+  const toolCapability: Record<string, string> = {};
   // Multi-step boundary counter (start-step/finish-step).
   let stepIndex = -1;
 
@@ -131,6 +135,7 @@ export async function translateAgentStream(args: {
       // name so the UI labels and routes (e.g. agent.code.execute →
       // CodeExecuteCard) on the real name.
       const capability = toolNameMap[part.toolName] ?? part.toolName;
+      toolCapability[part.toolCallId] = capability;
       flushText();
       // Reserve a terminal block; tool-result/tool-error fills it in.
       toolBlockIndex[part.toolCallId] = blocks.length;
@@ -193,9 +198,17 @@ export async function translateAgentStream(args: {
         output: part.output,
         durationMs,
       });
-      // If the tool result carries a render directive, emit a "component" event
-      // so the client renders the typed React component inline.
+      // Render directive resolution (generic capability engine):
+      //   1. If the output EMBEDS its own `render` directive (the archive.create
+      //      / graph.stats / media pattern — flat, component-specific props),
+      //      emit it verbatim with tenant slugs merged in.
+      //   2. Otherwise synthesize one via resolveRenderDirective: a bespoke
+      //      component for prioritized capabilities, else the generic
+      //      `capability-result` card (typed key/value + deep-linked record ids),
+      //      so the user NEVER sees a raw-JSON tool result.
+      // Either way the client renders CHAT_COMPONENTS[componentId] inline.
       const rawResult = part.output;
+      let emittedComponent = false;
       if (rawResult !== null && rawResult !== undefined && typeof rawResult === "object") {
         const render = (rawResult as Record<string, unknown>)["render"] as
           | RenderDirective
@@ -225,6 +238,35 @@ export async function translateAgentStream(args: {
             toolCallId: part.toolCallId,
             componentId: render.componentId,
             props,
+          });
+          emittedComponent = true;
+        }
+      }
+      // Generic fallback synthesis. Skip agent.code.execute (it owns a dedicated
+      // code-execute block) so we don't double-render the result.
+      const capabilityForResult = toolCapability[part.toolCallId];
+      if (
+        !emittedComponent &&
+        capabilityForResult !== undefined &&
+        capabilityForResult !== "agent.code.execute"
+      ) {
+        const directive = resolveRenderDirective({
+          capability: capabilityForResult,
+          output: rawResult,
+          slugs: { orgSlug, workspaceSlug },
+        });
+        if (directive !== null) {
+          blocks.push({
+            type: "component",
+            toolCallId: part.toolCallId,
+            componentId: directive.componentId,
+            props: directive.props,
+          });
+          emit({
+            type: "component",
+            toolCallId: part.toolCallId,
+            componentId: directive.componentId,
+            props: directive.props,
           });
         }
       }

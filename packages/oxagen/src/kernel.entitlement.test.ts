@@ -122,7 +122,8 @@ describe("kernel capability entitlement gate", () => {
     await invoke("image.generate", { v: "hi" }, ctx);
 
     expect(gate).toHaveBeenCalledOnce();
-    expect(gate).toHaveBeenCalledWith("image.generate", ctx.orgId);
+    // Entitlement is workspace-scoped — the gate receives (name, orgId, workspaceId).
+    expect(gate).toHaveBeenCalledWith("image.generate", ctx.orgId, ctx.workspaceId);
   });
 
   it("propagates the gate throw with code capability_not_installed", async () => {

@@ -3,12 +3,11 @@
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "CLAUDE_CODE_USE_WORKTREES": "1",
-    "CLAUDE_CODE_MAX_WORKTREES": "4",
-    "CLAUDE_CODE_MAX_PARALLEL_AGENTS": "3",
+    "CLAUDE_CODE_MAX_WORKTREES": "6",
+    "CLAUDE_CODE_MAX_PARALLEL_AGENTS": "6",
     "CLAUDE_CODE_WORKTREE_BASE_DIR": "${CLAUDE_PROJECT_DIR}/.worktrees",
-    "CLAUDE_CODE_AGENT_TEAM_SIZE": "3",
+    "CLAUDE_CODE_AGENT_TEAM_SIZE": "6",
     "CLAUDE_CODE_BACKGROUND_AGENTS": "1",
-    "NODE_OPTIONS": "--max-old-space-size=4096",
     "CLAUDE_TELEMETRY_LOGGER": "${CLAUDE_PROJECT_DIR}/tools/scripts/claude-telemetry-logger.ts",
     "POSTHOG_LLMA_CC_ENABLED": "true",
     "POSTHOG_API_KEY": "phc_mnBFDvrZmhrSGwU4MbPddzjj7fL8tCNfEfe4iNJXz4wo",
@@ -46,27 +45,13 @@
   },
   "model": "claude-fable-5[1m]",
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [[ -n \"$PRODUCTION_ANALYTICS_URL\" && -n \"$PRODUCTION_ANALYTICS_USER\" && -n \"$PRODUCTION_ANALYTICS_PASSWORD\" ]]; then cd \"$CLAUDE_PROJECT_DIR\" && npx tsx tools/scripts/backfill-claude-telemetry.ts 2>&1 | grep -E '(✓|Error|error)' | tail -3 || true; else : ; fi",
-            "timeout": 120,
-            "statusMessage": "Backfilling Claude Code telemetry...",
-            "async": false
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
-            "command": "cd $CLAUDE_PROJECT_DIR && pnpm lint --filter=...[HEAD] 2>/dev/null && echo '✓ Lint passed' || echo '⚠ Lint found issues'",
+            "command": "\"$CLAUDE_PROJECT_DIR/tools/scripts/hook-guard.sh\" lint 20 'pnpm lint --filter=...[HEAD] >/dev/null 2>&1 && echo \"✓ Lint passed\" || echo \"⚠ Lint found issues\"'",
             "timeout": 60,
             "statusMessage": "Linting changed packages...",
             "async": true
@@ -85,7 +70,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [[ \"$BASH_COMMAND\" == *\"git push\"* ]] || [[ \"$BASH_COMMAND\" == *\"git commit\"* ]]; then cd $CLAUDE_PROJECT_DIR && echo 'Pre-push verification: running full CI gate...' && pnpm gate --silent 2>&1 | tail -20 || echo '⚠ CI gate check failed — review output above'; fi",
+            "command": "\"$CLAUDE_PROJECT_DIR/tools/scripts/hook-guard.sh\" gate 5 'if [[ \"$BASH_COMMAND\" == *\"git push\"* || \"$BASH_COMMAND\" == *\"git commit\"* ]]; then echo \"Pre-push verification: running full CI gate...\"; NODE_OPTIONS=--max-old-space-size=4096 pnpm gate --silent 2>&1 | tail -20 || echo \"⚠ CI gate check failed — review output above\"; fi'",
             "timeout": 120,
             "statusMessage": "Verifying CI gate before push...",
             "async": false
@@ -95,6 +80,19 @@
             "command": "node $CLAUDE_TELEMETRY_LOGGER",
             "timeout": 3,
             "statusMessage": "Recording telemetry...",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/tools/scripts/hook-guard.sh\" backfill 120 'if [[ -n \"$PRODUCTION_ANALYTICS_URL\" && -n \"$PRODUCTION_ANALYTICS_USER\" && -n \"$PRODUCTION_ANALYTICS_PASSWORD\" ]]; then ./node_modules/.bin/tsx tools/scripts/backfill-claude-telemetry.ts >/dev/null 2>&1 || true; fi'",
+            "timeout": 90,
+            "statusMessage": "Backfilling telemetry (debounced)...",
             "async": true
           }
         ]

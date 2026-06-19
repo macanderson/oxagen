@@ -63,14 +63,14 @@ export interface ConversationPageActions {
 
 interface ConversationPageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
-  searchParams: Promise<{ c?: string }>;
+  searchParams: Promise<{ c?: string; new?: string }>;
   actions: ConversationPageActions;
 }
 
 
 export async function ConversationPage({ params, searchParams, actions }: ConversationPageProps) {
   const session = await getSessionOrRedirect();
-  const [{ orgSlug, workspaceSlug }, { c: conversationPublicId }] = await Promise.all([
+  const [{ orgSlug, workspaceSlug }, { c: conversationPublicId, new: forceNew }] = await Promise.all([
     params,
     searchParams,
   ]);
@@ -80,35 +80,38 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
   let conversationId: string | null = null;
   let activeLeafMessageId: string | null = null;
 
-  // A `?c=<publicId>` param selects a specific conversation; its absence is a
-  // deliberate blank slate (the "New conversation" affordance and the default
-  // landing state), NOT a cue to auto-resume the most recent thread — that
-  // fallback hijacked the new-conversation button so it could never reach an
-  // empty composer. History lives in the conversation nav; a fresh load starts
-  // a new turn. The first sent message creates the row and the client pins the
-  // URL to its `?c=`, so reloads mid-conversation resolve correctly.
+  // `?c=<publicId>` selects a specific conversation. `?new=1` forces a blank
+  // slate (used by the "New conversation" button). Without either, auto-resume
+  // the most recent active conversation so users land in context on page load.
+  // A blank slate is only shown when no active conversations exist.
   // Workspace-scoped read — real orgId + workspaceId. — OXA-1515
-  const conv: ConversationRow | undefined = conversationPublicId
-    ? (
-        await runInTenantScope(
-          { orgId: tenant.id, workspaceId: workspace.id },
-          () =>
-            withTenantDb((tx) =>
-              tx
-                .select()
-                .from(schema.conversations)
-                .where(
-                  and(
-                    eq(schema.conversations.publicId, conversationPublicId),
-                    eq(schema.conversations.orgId, tenant.id),
-                    eq(schema.conversations.workspaceId, workspace.id),
-                  ),
-                )
-                .limit(1),
-            ),
-        )
-      )[0]
-    : undefined;
+  const conv: ConversationRow | undefined = forceNew === "1"
+    ? undefined
+    : await runInTenantScope(
+        { orgId: tenant.id, workspaceId: workspace.id },
+        () =>
+          withTenantDb((tx) =>
+            tx
+              .select()
+              .from(schema.conversations)
+              .where(
+                conversationPublicId
+                  ? and(
+                      eq(schema.conversations.publicId, conversationPublicId),
+                      eq(schema.conversations.orgId, tenant.id),
+                      eq(schema.conversations.workspaceId, workspace.id),
+                    )
+                  : and(
+                      eq(schema.conversations.orgId, tenant.id),
+                      eq(schema.conversations.workspaceId, workspace.id),
+                      isNull(schema.conversations.archivedAt),
+                      isNull(schema.conversations.deletedAt),
+                    ),
+              )
+              .orderBy(desc(schema.conversations.updatedAt))
+              .limit(1),
+          ),
+      ).then((rows) => rows[0]).catch(() => undefined);
 
   if (conv) {
     conversationId = conv.id;

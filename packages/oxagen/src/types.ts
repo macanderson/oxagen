@@ -79,6 +79,61 @@ export interface CapabilityAgentMetadata {
   category?: string;
 }
 
+// ── Capability presentation + chaining metadata (generic capability engine) ───
+//
+// These optional, FULLY-SERIALIZABLE descriptors let the chat layer render every
+// capability's output as a typed React component (never raw JSON) and let the
+// composition planner discover valid capability chains. They carry NO functions,
+// so they survive the registry signature (registry.ts → JSON.stringify) and the
+// JSON manifest unchanged. The controlled vocabularies, route registry, and the
+// resolution precedence all live in capability-meta.ts; only the shapes live
+// here so a contract can declare them inline where it reads naturally.
+
+/**
+ * A semantic data tag naming a kind of value that flows between capabilities.
+ * The composition planner matches one capability's `produces` tags against
+ * another's `consumes` tags to discover valid output→input chains. The
+ * controlled vocabulary (e.g. "graph.nodeId", "document.text", "asset.id") is
+ * documented in capability-meta.ts (CAPABILITY_DATA_TAGS).
+ */
+export type CapabilityDataTag = string;
+
+/**
+ * Declarative spec for turning a record-id field in a capability's output into a
+ * deep link to its detail page. Serializable (no functions) so it survives the
+ * registry signature + JSON manifest. `recordType` keys the route registry in
+ * capability-meta.ts (RECORD_LINK_ROUTES).
+ */
+export interface RecordLinkSpec {
+  /** Dot-path into the output object holding the record id (e.g. "nodeId"). */
+  field: string;
+  /** Record kind — keys RECORD_LINK_ROUTES (e.g. "graph.node", "conversation"). */
+  recordType: string;
+  /** Optional dot-path to a human label for the link text. */
+  labelField?: string;
+}
+
+/**
+ * Render hint for a capability's output. The chat layer resolves an effective
+ * render directive by precedence:
+ *   1. an explicit `render` directive embedded in the OUTPUT VALUE
+ *      (the archive.create pattern — flat, component-specific props), then
+ *   2. this contract-level hint (or the curated table in capability-meta.ts),
+ *      rendered through the uniform result envelope, then
+ *   3. the generic `capability-result` fallback with heuristic record links.
+ * Serializable — no functions.
+ */
+export interface CapabilityRenderHint {
+  /** Registered chat component id to render the output with. */
+  componentId: string;
+  /** Record-id fields in the output that deep-link to detail pages. */
+  recordLinks?: readonly RecordLinkSpec[];
+  /** Output fields to omit from a generic key/value render (noise/internal). */
+  hideFields?: readonly string[];
+  /** Dot-path to the field whose value titles the result card. */
+  titleField?: string;
+}
+
 export interface CapabilityDeclaration<
   TInput extends z.ZodTypeAny = z.ZodTypeAny,
   TOutput extends z.ZodTypeAny = z.ZodTypeAny,
@@ -132,6 +187,27 @@ export interface CapabilityDeclaration<
     org: Partial<Record<SystemOrgRole, GrantEffect>>;
     workspace: Partial<Record<SystemWorkspaceRole, GrantEffect>>;
   };
+  /**
+   * Optional chat-render hint for this capability's OUTPUT. Absent → the chat
+   * layer falls back to the generic `capability-result` component. Resolution
+   * precedence lives in capability-meta.ts (resolveRenderDirective).
+   */
+  render?: CapabilityRenderHint;
+  /**
+   * Semantic data tags this capability's OUTPUT yields, for the composition
+   * planner. e.g. graph.node.upsert produces ["graph.nodeId"].
+   */
+  produces?: readonly CapabilityDataTag[];
+  /**
+   * Semantic data tags this capability's INPUT requires, for the composition
+   * planner. e.g. graph.edge.upsert consumes ["graph.nodeId"].
+   */
+  consumes?: readonly CapabilityDataTag[];
+  /**
+   * Capability names that commonly run after this one — a soft hint the planner
+   * and the in-chat agent use to suggest the next step in a chain.
+   */
+  chainHints?: readonly string[];
 }
 
 export const DEFAULT_SURFACES: readonly CapabilitySurface[] = ["api", "mcp"];

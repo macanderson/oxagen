@@ -6,6 +6,9 @@ const validManifest = {
   name: "Test Plugin",
   description: "A test plugin for validation purposes.",
   version: "1.0.0",
+  // pluginType is a required field (the five-type taxonomy); every real catalog
+  // manifest declares it. This fixture must too or the whole schema fails.
+  pluginType: "agent_capability" as const,
   tier: "free" as const,
   visibility: "ga" as const,
   category: "media",

@@ -85,12 +85,11 @@ export function ConversationList({
   );
 
   const newConversation = useCallback(() => {
-    // Navigate to the bare path (blank slate — no ?c= param means no
-    // conversation is selected). router.refresh() ensures the server re-fetches
-    // and the list reflects any conversations that were created during the
-    // previous session but not yet visible (e.g. created mid-stream before the
-    // end-of-stream refresh fired).
-    router.push(pathname);
+    // `?new=1` signals the server to render a blank slate even if active
+    // conversations exist (without it, the page auto-resumes the most recent).
+    // router.refresh() ensures the list reflects conversations created during
+    // the previous session but not yet visible.
+    router.push(`${pathname}?new=1`);
     router.refresh();
     onNavigate?.();
   }, [pathname, router, onNavigate]);

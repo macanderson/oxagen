@@ -129,4 +129,30 @@ export const CHAT_COMPONENTS = {
   "graph-stats": lazy(
     () => import("@/components/chat/registry-components/graph-stats"),
   ),
+  // Generic fallback — renders ANY capability output as a typed, deep-linked
+  // key/value card so the user never sees raw JSON. Synthesized by
+  // resolveRenderDirective (@oxagen/oxagen/capability-meta) when a capability
+  // has no bespoke component and no embedded render directive.
+  "capability-result": lazy(
+    () => import("@/components/chat/registry-components/capability-result"),
+  ),
+  // Bespoke, deep-linked components for the prioritized capabilities.
+  "graph-node-card": lazy(
+    () => import("@/components/chat/registry-components/graph-node-card"),
+  ),
+  "graph-node-list-card": lazy(
+    () => import("@/components/chat/registry-components/graph-node-list-card"),
+  ),
+  "graph-edge-card": lazy(
+    () => import("@/components/chat/registry-components/graph-edge-card"),
+  ),
+  "research-swarm-card": lazy(
+    () => import("@/components/chat/registry-components/research-swarm-card"),
+  ),
+  "conversation-list-card": lazy(
+    () => import("@/components/chat/registry-components/conversation-list-card"),
+  ),
+  "web-search-card": lazy(
+    () => import("@/components/chat/registry-components/web-search-card"),
+  ),
 } as unknown as Record<string, AnyLazy>;

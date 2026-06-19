@@ -14,7 +14,7 @@ export default async function AskPage({
   searchParams,
 }: {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
-  searchParams: Promise<{ c?: string }>;
+  searchParams: Promise<{ c?: string; new?: string }>;
 }) {
   return (
     <ConversationPage

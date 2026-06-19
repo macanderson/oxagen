@@ -109,6 +109,11 @@ export const workspace = {
     sources: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge/sources`,
     graph: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge/graph`,
     memories: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge/memories`,
+    // Inspectable detail page for a single KnowledgeNode. Mirrors the
+    // capability-meta RECORD_LINK_ROUTES["graph.node"] template so chat
+    // deep-links and in-app navigation resolve to the same URL.
+    node: (ctx: Required<ScopeContext>, nodeId: string): string =>
+      `${wsBase(ctx)}/knowledge/nodes/${encodeURIComponent(nodeId)}`,
   },
 
   // Agents — IA spec §4/§5: agents are a tab of Automation. Canonical path is
