@@ -19,6 +19,7 @@ describe("MarketingHeroPage", () => {
 
   it("renders the Oxagen wordmark lockup", () => {
     const { getAllByText } = render(<MarketingHeroPage />);
-    expect(getAllByText("Oxagen").length).toBeGreaterThan(0);
+    // Brand spec: wordmark is always lowercase "oxagen" (enforced in CSS via .ox-wordmark).
+    expect(getAllByText("oxagen").length).toBeGreaterThan(0);
   });
 });
