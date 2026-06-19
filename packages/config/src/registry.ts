@@ -529,6 +529,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "vercel_blob_rw_xxxxxxxxxxxxxxxx",
   },
+  STORAGE_DRIVER: {
+    group: "File storage",
+    description:
+      "Selects the @oxagen/storage backend. Currently only 'vercel-blob'; the swap-point for an S3/R2 driver.",
+    secret: false,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "vercel-blob",
+  },
   AI_GATEWAY_API_KEY: {
     group: "AI providers",
     description:
