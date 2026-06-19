@@ -87,6 +87,14 @@ export const integrationConfigureHandler: CapabilityHandler<typeof integrationCo
     config["confidenceThreshold"] ?? existing.semanticInference?.confidenceThreshold,
   );
 
+  // Custom inference prompts. The contract accepts these as first-class inputs;
+  // persist them under semanticInference (where the enrichment worker fleet and
+  // semantic.edge.infer read them) instead of silently dropping them. Omitting an
+  // input preserves the existing value; passing an empty string clears it.
+  const ontologyPrompt = input.ontologyPrompt ?? existing.semanticInference?.ontologyPrompt;
+  const semanticEdgePrompt =
+    input.semanticEdgePrompt ?? existing.semanticInference?.semanticEdgePrompt;
+
   const updatedDeliveryConfig: DeliveryConfig & Record<string, unknown> = {
     // Preserve connector-specific fields (spread first so our typed fields win)
     ...existing,
@@ -99,6 +107,8 @@ export const integrationConfigureHandler: CapabilityHandler<typeof integrationCo
       enabled: inferenceEnabled,
       perRecordType,
       confidenceThreshold,
+      ...(ontologyPrompt !== undefined ? { ontologyPrompt } : {}),
+      ...(semanticEdgePrompt !== undefined ? { semanticEdgePrompt } : {}),
     },
   };
 

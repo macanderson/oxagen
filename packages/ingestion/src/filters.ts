@@ -53,6 +53,14 @@ export interface DeliveryConfig {
     perRecordType?: Record<string, boolean>;
     /** Minimum confidence for inferred edges to be persisted. Default 0.75. */
     confidenceThreshold?: number;
+    /** Custom prompt steering entity extraction for this source (overrides the
+     * default). Set via integration.configure; consumed by the enrichment worker
+     * fleet. */
+    ontologyPrompt?: string;
+    /** Custom prompt steering cross-source relationship inference for this source
+     * (overrides the default). Set via integration.configure; consumed by
+     * semantic.edge.infer. */
+    semanticEdgePrompt?: string;
   };
 }
 
