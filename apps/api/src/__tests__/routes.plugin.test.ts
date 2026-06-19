@@ -125,18 +125,18 @@ describe("plugin.catalog.get route", () => {
       version: "1.0.0",
     };
     mocks.invoke.mockResolvedValue(invokeResult);
-    const res = await app.fetch(post(PATH, { catalogId: "cat-1" }));
+    const res = await app.fetch(post(PATH, { name: "slack" }));
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'plugin.catalog.get' and catalogId", async () => {
-    await app.fetch(post(PATH, { catalogId: "cat-abc" }));
+  it("calls invoke with 'plugin.catalog.get' and name", async () => {
+    await app.fetch(post(PATH, { name: "slack" }));
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("plugin.catalog.get");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.catalogId).toBe("cat-abc");
+    expect(body.name).toBe("slack");
   });
 
-  it("missing catalogId → 400", async () => {
+  it("missing name → 400", async () => {
     const res = await app.fetch(post(PATH, {}));
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
@@ -201,16 +201,17 @@ describe("plugin.org.install route", () => {
   it("happy path: 200", async () => {
     mocks.invoke.mockResolvedValue({ orgListingId: "lst-new" });
     const res = await app.fetch(
-      post(PATH, { catalogServerId: "srv-1" }),
+      post(PATH, { pluginType: "agent_capability", pluginId: "srv-1" }),
     );
     expect(res.status).toBe(200);
   });
 
   it("calls invoke with 'plugin.org.install'", async () => {
-    await app.fetch(post(PATH, { catalogServerId: "srv-1" }));
+    await app.fetch(post(PATH, { pluginType: "agent_capability", pluginId: "srv-1" }));
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("plugin.org.install");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.catalogServerId).toBe("srv-1");
+    expect(body.pluginType).toBe("agent_capability");
+    expect(body.pluginId).toBe("srv-1");
   });
 });
 

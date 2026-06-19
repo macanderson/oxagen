@@ -79,6 +79,8 @@ function contractNameToPathSegment(name: string): string {
     "user.preferences": "user/preferences",
     "workspace.model": "workspace/model-settings",
     "prompt.settings": "workspace/prompt-settings",
+    // org.settings.read/write collapse onto REST GET/POST at /org/settings.
+    "org.settings": "org/settings",
     "billing.subscription": "billing/subscription",
     "billing.credits": "billing/credits",
     "agent.tool": "agent/tools",
