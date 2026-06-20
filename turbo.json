@@ -94,7 +94,8 @@
         "INGESTION_CRYPTO_PROVIDER",
         "AWS_KMS_INGESTION_KEY_ARN",
         "INGESTION_ENCRYPTION_KEY",
-        "PRIVACY_ERASURE_GRACE_DAYS"
+        "PRIVACY_ERASURE_GRACE_DAYS",
+        "TAVILY_API_KEY"
       ]
     },
 
@@ -194,7 +195,8 @@
         "INGESTION_CRYPTO_PROVIDER",
         "AWS_KMS_INGESTION_KEY_ARN",
         "INGESTION_ENCRYPTION_KEY",
-        "PRIVACY_ERASURE_GRACE_DAYS"
+        "PRIVACY_ERASURE_GRACE_DAYS",
+        "TAVILY_API_KEY"
       ],
       "passThroughEnv": ["CI"]
     },
@@ -269,7 +271,8 @@
         "INGESTION_CRYPTO_PROVIDER",
         "AWS_KMS_INGESTION_KEY_ARN",
         "INGESTION_ENCRYPTION_KEY",
-        "PRIVACY_ERASURE_GRACE_DAYS"
+        "PRIVACY_ERASURE_GRACE_DAYS",
+        "TAVILY_API_KEY"
       ],
       "passThroughEnv": ["CI"]
     },

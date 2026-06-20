@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDb, editSecret, getSecret, listSecrets, upsertFromPull } from "./secrets-db";
+import { createDb, editSecret, getSecret, listSecrets, openDb, upsertFromPull } from "./secrets-db";
 import type { PullUpsert } from "./secrets-db";
 
 function pull(over: Partial<PullUpsert> = {}): PullUpsert {
@@ -110,5 +110,92 @@ describe("listSecrets / getSecret", () => {
   it("returns null for a missing key", () => {
     const db = createDb(":memory:");
     expect(getSecret(db, "absent")).toBeNull();
+  });
+});
+
+describe("openDb", () => {
+  it("returns the same DB instance on repeated calls (module-level cache)", () => {
+    // openDb caches _db at module scope; calling it twice must return the same object
+    const db1 = openDb(":memory:");
+    const db2 = openDb(":memory:");
+    expect(db1).toBe(db2);
+  });
+});
+
+describe("parseUsage (via upsertFromPull + getSecret)", () => {
+  it("returns an empty array when the raw usage column is an empty string", () => {
+    // Insert a row normally, then manually corrupt the usage column with an empty string
+    const db = createDb(":memory:");
+    upsertFromPull(db, pull({ seedUsage: [] }), "t0");
+    // Directly overwrite to an empty string to exercise the empty-string branch
+    db.prepare("UPDATE secrets SET usage = '' WHERE key = ?").run("oxagen-stripe-secret");
+    const row = getSecret(db, "oxagen-stripe-secret");
+    expect(row?.usage).toEqual([]);
+  });
+
+  it("returns an empty array when the usage column contains invalid JSON", () => {
+    const db = createDb(":memory:");
+    upsertFromPull(db, pull(), "t0");
+    // Corrupt the usage column with malformed JSON
+    db.prepare("UPDATE secrets SET usage = ? WHERE key = ?").run("not-valid-json{{{", "oxagen-stripe-secret");
+    const row = getSecret(db, "oxagen-stripe-secret");
+    expect(row?.usage).toEqual([]);
+  });
+
+  it("filters out non-string array members from the usage column", () => {
+    const db = createDb(":memory:");
+    upsertFromPull(db, pull(), "t0");
+    // Store a JSON array that mixes string and non-string values
+    db.prepare("UPDATE secrets SET usage = ? WHERE key = ?").run(
+      JSON.stringify(["app:api", 42, null, "pkg:billing", true]),
+      "oxagen-stripe-secret",
+    );
+    const row = getSecret(db, "oxagen-stripe-secret");
+    expect(row?.usage).toEqual(["app:api", "pkg:billing"]);
+  });
+
+  it("returns empty array when usage column contains a JSON non-array (e.g. object)", () => {
+    const db = createDb(":memory:");
+    upsertFromPull(db, pull(), "t0");
+    db.prepare("UPDATE secrets SET usage = ? WHERE key = ?").run(
+      JSON.stringify({ key: "not-an-array" }),
+      "oxagen-stripe-secret",
+    );
+    const row = getSecret(db, "oxagen-stripe-secret");
+    expect(row?.usage).toEqual([]);
+  });
+});
+
+describe("editSecret — additional field coverage", () => {
+  it("edits description and locks desc_locked", () => {
+    const db = createDb(":memory:");
+    upsertFromPull(db, pull(), "t0");
+    const row = editSecret(db, "oxagen-stripe-secret", "description", "updated description");
+    expect(row.description).toBe("updated description");
+    expect(row.desc_locked).toBe(true);
+  });
+
+  it("edits vendor_url and locks vendor_locked", () => {
+    const db = createDb(":memory:");
+    upsertFromPull(db, pull(), "t0");
+    const row = editSecret(db, "oxagen-stripe-secret", "vendor_url", "https://updated.example.com");
+    expect(row.vendor_url).toBe("https://updated.example.com");
+    expect(row.vendor_locked).toBe(true);
+  });
+
+  it("accepts an array value for a non-usage field by joining with comma", () => {
+    const db = createDb(":memory:");
+    upsertFromPull(db, pull(), "t0");
+    const row = editSecret(db, "oxagen-stripe-secret", "description", ["part1", "part2"]);
+    expect(row.description).toBe("part1,part2");
+    expect(row.desc_locked).toBe(true);
+  });
+
+  it("accepts a single string for usage (wraps it in an array)", () => {
+    const db = createDb(":memory:");
+    upsertFromPull(db, pull(), "t0");
+    const row = editSecret(db, "oxagen-stripe-secret", "usage", "app:mcp");
+    expect(row.usage).toEqual(["app:mcp"]);
+    expect(row.usage_locked).toBe(true);
   });
 });

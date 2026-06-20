@@ -127,6 +127,12 @@ export const baseEnvSchema = z.object({
   // Server-side app origin for plugin OAuth authorize/callback URLs
   // (falls back to NEXT_PUBLIC_APP_URL at the call site).
   APP_URL: z.string().url().optional(),
+  // Browser-exposed docs-site origin override (apps/app docs links). Optional —
+  // getDocsBaseUrl() resolves a correct dev/prod default when unset.
+  NEXT_PUBLIC_DOCS_URL: z.string().url().optional(),
+  // MCP protocol endpoint origin surfaced by system.install.instructions.
+  // Optional — the handler falls back to the prod MCP URL when unset.
+  MCP_URL: z.string().url().optional(),
 
   // Observability / feature flags — read raw via process.env in services and
   // libraries; declared here so env-check validates them against the registry.
@@ -167,6 +173,27 @@ export const baseEnvSchema = z.object({
   // `openssl rand -base64 32`.
   AUTH_TOKEN_ENCRYPTION_KEY: z.string().min(1).optional(),
 
+  // OXA-1720: ingestion connector-credential encryption. INGESTION_CRYPTO_PROVIDER
+  // selects the KMS adapter: "env" (default) wraps with a local base64 master key
+  // held in INGESTION_ENCRYPTION_KEY; "kms" wraps via AWS KMS keyed by
+  // AWS_KMS_INGESTION_KEY_ARN. All optional in the base schema — createIngestion-
+  // CryptoAdapter() enforces the provider-specific key at startup and fails closed.
+  INGESTION_CRYPTO_PROVIDER: z.enum(["env", "kms"]).default("env").optional(),
+  AWS_KMS_INGESTION_KEY_ARN: z.string().min(1).optional(),
+  INGESTION_ENCRYPTION_KEY: z.string().min(1).optional(),
+
+  // Audit-export download-URL signing (HMAC). Optional dedicated secret; the
+  // route falls back to BETTER_AUTH_SECRET. Must be >= 16 bytes when set
+  // (enforced at the signing call site in the audit export route).
+  AUDIT_EXPORT_SIGNING_SECRET: z.string().min(16).optional(),
+
+  // Privacy erasure grace period in days before hard-delete runs. Optional —
+  // privacy.data.erase defaults to 30; 0 forces immediate erasure (test envs).
+  PRIVACY_ERASURE_GRACE_DAYS: z.coerce.number().int().nonnegative().optional(),
+
+  // Tavily web-search API key (web.search capability). Optional in the base
+  // schema; packages/web throws a precise error at call time when it is absent.
+  TAVILY_API_KEY: z.string().min(1).optional(),
 
   // OXA-1515: Row-Level Security enforcement gate. Default OFF during the
   // seeding window: withTenantDb always sets the scope GUCs, but additionally

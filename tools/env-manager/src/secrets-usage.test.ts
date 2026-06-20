@@ -30,6 +30,20 @@ describe("deriveUsage", () => {
   it("returns empty usage when there is no env key", () => {
     expect(deriveUsage(null, new Map())).toEqual([]);
   });
+
+  it("returns only registry services when refIndex has no matching entry", () => {
+    // A key that exists in ENV_REGISTRY but has no grep hits
+    const usage = deriveUsage("DATABASE_URL", new Map());
+    // Only registry services, no grep refs
+    expect(usage.length).toBeGreaterThan(0);
+    expect(usage.every((u) => u.startsWith("app:"))).toBe(true);
+  });
+
+  it("handles an envKey not in the registry gracefully (only grep refs)", () => {
+    const refIndex = new Map<string, Set<string>>([["MY_CUSTOM_VAR", new Set(["pkg:utils"])]]);
+    const usage = deriveUsage("MY_CUSTOM_VAR", refIndex);
+    expect(usage).toContain("pkg:utils");
+  });
 });
 
 describe("listWorkspace + buildEnvRefIndex", () => {

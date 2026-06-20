@@ -764,8 +764,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Optional override for the docs site origin (browser-exposed). When unset, " +
       "apps/app resolves the correct URL per environment automatically (dev → " +
       "http://localhost:3300; prod → https://docs.oxagen.ai). Set only to test a " +
-      "custom docs deployment. NOTE: read via raw process.env — not yet in " +
-      "baseEnvSchema (optional, no boot validation needed).",
+      "custom docs deployment. Validated as an optional URL by baseEnvSchema.",
     secret: false,
     clientExposed: true,
     services: ["app"],

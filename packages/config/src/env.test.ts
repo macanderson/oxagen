@@ -126,6 +126,94 @@ describe("TENANT_RLS_ENFORCEMENT_ENABLED", () => {
   });
 });
 
+// ── Promoted-to-schema vars (registry → baseEnvSchema) ────────────────────────
+// These were previously read via raw process.env and tracked only in
+// ENV_REGISTRY. Now validated by baseEnvSchema: each is optional (its consuming
+// surface enforces presence or falls back), so an absent value never fails a
+// service that does not use it.
+
+describe("promoted env vars", () => {
+  beforeEach(() => {
+    __resetEnvCacheForTests();
+  });
+
+  it("treats every promoted var as optional when absent", () => {
+    const env = requireEnv(
+      [
+        "NEXT_PUBLIC_DOCS_URL",
+        "MCP_URL",
+        "INGESTION_CRYPTO_PROVIDER",
+        "AWS_KMS_INGESTION_KEY_ARN",
+        "INGESTION_ENCRYPTION_KEY",
+        "AUDIT_EXPORT_SIGNING_SECRET",
+        "PRIVACY_ERASURE_GRACE_DAYS",
+        "TAVILY_API_KEY",
+      ] as const,
+      {},
+    );
+    expect(env.NEXT_PUBLIC_DOCS_URL).toBeUndefined();
+    expect(env.MCP_URL).toBeUndefined();
+    expect(env.INGESTION_CRYPTO_PROVIDER).toBeUndefined();
+    expect(env.AWS_KMS_INGESTION_KEY_ARN).toBeUndefined();
+    expect(env.INGESTION_ENCRYPTION_KEY).toBeUndefined();
+    expect(env.AUDIT_EXPORT_SIGNING_SECRET).toBeUndefined();
+    expect(env.PRIVACY_ERASURE_GRACE_DAYS).toBeUndefined();
+    expect(env.TAVILY_API_KEY).toBeUndefined();
+  });
+
+  it("validates NEXT_PUBLIC_DOCS_URL and MCP_URL as URLs", () => {
+    const ok = requireEnv(["NEXT_PUBLIC_DOCS_URL", "MCP_URL"] as const, {
+      NEXT_PUBLIC_DOCS_URL: "https://docs.example.com",
+      MCP_URL: "https://mcp.example.com",
+    });
+    expect(ok.NEXT_PUBLIC_DOCS_URL).toBe("https://docs.example.com");
+    expect(ok.MCP_URL).toBe("https://mcp.example.com");
+    expect(() => requireEnv(["MCP_URL"] as const, { MCP_URL: "not-a-url" })).toThrow(
+      /Invalid environment/,
+    );
+  });
+
+  it("restricts INGESTION_CRYPTO_PROVIDER to env|kms", () => {
+    const env = requireEnv(["INGESTION_CRYPTO_PROVIDER"] as const, {
+      INGESTION_CRYPTO_PROVIDER: "kms",
+    });
+    expect(env.INGESTION_CRYPTO_PROVIDER).toBe("kms");
+    expect(() =>
+      requireEnv(["INGESTION_CRYPTO_PROVIDER"] as const, {
+        INGESTION_CRYPTO_PROVIDER: "vault",
+      }),
+    ).toThrow(/Invalid environment/);
+  });
+
+  it("requires AUDIT_EXPORT_SIGNING_SECRET to be >= 16 chars when set", () => {
+    expect(() =>
+      requireEnv(["AUDIT_EXPORT_SIGNING_SECRET"] as const, {
+        AUDIT_EXPORT_SIGNING_SECRET: "tooshort",
+      }),
+    ).toThrow(/Invalid environment/);
+    const env = requireEnv(["AUDIT_EXPORT_SIGNING_SECRET"] as const, {
+      AUDIT_EXPORT_SIGNING_SECRET: "0123456789abcdef0123",
+    });
+    expect(env.AUDIT_EXPORT_SIGNING_SECRET).toBe("0123456789abcdef0123");
+  });
+
+  it("coerces PRIVACY_ERASURE_GRACE_DAYS to a non-negative integer", () => {
+    const env = requireEnv(["PRIVACY_ERASURE_GRACE_DAYS"] as const, {
+      PRIVACY_ERASURE_GRACE_DAYS: "30",
+    });
+    expect(env.PRIVACY_ERASURE_GRACE_DAYS).toBe(30);
+    const zero = requireEnv(["PRIVACY_ERASURE_GRACE_DAYS"] as const, {
+      PRIVACY_ERASURE_GRACE_DAYS: "0",
+    });
+    expect(zero.PRIVACY_ERASURE_GRACE_DAYS).toBe(0);
+    expect(() =>
+      requireEnv(["PRIVACY_ERASURE_GRACE_DAYS"] as const, {
+        PRIVACY_ERASURE_GRACE_DAYS: "-1",
+      }),
+    ).toThrow(/Invalid environment/);
+  });
+});
+
 // ── requireEnv ────────────────────────────────────────────────────────────────
 
 describe("requireEnv", () => {
