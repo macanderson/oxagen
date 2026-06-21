@@ -10,28 +10,50 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockInvoke, mockGetSession, mockWithSystemDb } = vi.hoisted(() => ({
-  mockInvoke: vi.fn(),
-  mockGetSession: vi.fn(),
-  mockWithSystemDb: vi.fn(),
-}));
-
-vi.mock("@oxagen/handlers/register", () => ({}));
-vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mockInvoke }));
-vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
-vi.mock("@oxagen/database", () => ({
-  withSystemDb: mockWithSystemDb,
-  schema: {
-    organizations: { id: "id" },
-    orgUsers: { userId: "userId", orgId: "orgId" },
-    privacyExportRequests: {
-      id: "id",
-      userId: "userId",
-      status: "status",
-      exportUrl: "exportUrl",
-      completedAt: "completedAt",
+const { mockGetSession, capturedWhere, dbState } = vi.hoisted(() => {
+  return {
+    mockGetSession: vi.fn(),
+    capturedWhere: { value: undefined as unknown },
+    dbState: {
+      rows: [] as Array<{ status: string; exportUrl: string | null; completedAt: Date | null }>,
     },
-  },
+  };
+});
+
+vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
+vi.mock("@oxagen/handlers/register", () => ({}));
+vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: vi.fn() }));
+
+// Capture the where() predicate so we can assert userId scoping is applied.
+vi.mock("@oxagen/database", () => {
+  const makeTx = () => ({
+    select: (_cols: unknown) => ({
+      from: (_table: unknown) => ({
+        where: (w: unknown) => {
+          capturedWhere.value = w;
+          return { limit: (_n: number) => Promise.resolve(dbState.rows) };
+        },
+      }),
+    }),
+  });
+  return {
+    withSystemDb: vi.fn((fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx())),
+    schema: {
+      privacyExportRequests: {
+        id: "id_col",
+        status: "status_col",
+        exportUrl: "exportUrl_col",
+        completedAt: "completedAt_col",
+        userId: "userId_col",
+      },
+    },
+  };
+});
+
+// `and` / `eq` return marker objects so we can assert the predicate was built.
+vi.mock("drizzle-orm", () => ({
+  and: (...parts: unknown[]) => ({ __and: parts }),
+  eq: (col: unknown, val: unknown) => ({ __eq: [col, val] }),
 }));
 
 import { getExportStatusAction } from "./privacy-actions";
