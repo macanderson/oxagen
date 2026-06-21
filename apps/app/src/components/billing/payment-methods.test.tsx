@@ -180,7 +180,7 @@ describe("AddCardForm — CRITICAL: sync failure after Stripe confirmSetup succe
 
     // No "Card saved" success toast — only the error toast
     const successCalls = toastAdd.mock.calls.filter(
-      ([arg]: [{ title?: string }]) => arg?.title === "Card saved",
+      (call) => (call[0] as { title?: string } | undefined)?.title === "Card saved",
     );
     expect(successCalls).toHaveLength(0);
   });

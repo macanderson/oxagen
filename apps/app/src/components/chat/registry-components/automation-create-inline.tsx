@@ -72,15 +72,13 @@ export default function AutomationCreateInline({
   const [eventType, setEventType] = React.useState<"node.created" | "node.updated" | "node.deleted" | "">(
     initialEventType ?? "",
   );
-  const [conditions, setConditions] = React.useState<ConditionRow[]>(() =>
-    initialConditions && initialConditions.length > 0
-      ? initialConditions.map(toConditionRow)
-      : [],
+  const [conditions, setConditions] = React.useState<PropertyCondition[]>(() =>
+    initialConditions && initialConditions.length > 0 ? initialConditions : [],
   );
   const [cronExpression, setCronExpression] = React.useState(initialCron);
   const [timezone, setTimezone] = React.useState(initialTimezone);
-  const [steps, setSteps] = React.useState<StepRow[]>(() =>
-    initialSteps && initialSteps.length > 0 ? initialSteps.map(toStepRow) : [],
+  const [steps, setSteps] = React.useState<AutomationStep[]>(() =>
+    initialSteps && initialSteps.length > 0 ? initialSteps : [],
   );
 
   const [formState, setFormState] = React.useState<FormState>("editing");

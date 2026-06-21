@@ -50,7 +50,7 @@ export async function fillFormAction(input: FillFormActionInput): Promise<FormFi
     // to honour this action's never-throw contract.
     const memberRole = await getOrgRole(org.id, session.user.id);
     if (!memberRole) {
-      return noopResult;
+      return { fields: noopFields, error: "You do not have access to this organization." };
     }
 
     let workspaceId = "";
