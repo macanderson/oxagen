@@ -21,8 +21,9 @@ import { logger } from "./logger";
 // @oxagen/ai — that is the single AI + telemetry + billing chokepoint for image
 // generation. This handler never imports a provider SDK directly.
 //
-// When AI_GATEWAY_API_KEY is absent this handler returns a placeholder URL —
-// it never throws (policy §0.5).
+// When AI_GATEWAY_API_KEY is absent, or when the provider returns no bytes,
+// this handler throws so the caller receives a real error instead of a
+// fabricated placeholder ID that has no DB record.
 
 // Map the contract model slug to the gateway model id. The contract exposes the
 // two white-labeled options so the caller never references gateway paths directly.
@@ -50,15 +51,13 @@ export const imageCreateHandler: CapabilityHandler<typeof imageCreate> = async (
   }
 
   if (!hasImagePath) {
-    logger.info(
-      { orgId: ctx.orgId, workspaceId: ctx.workspaceId, prompt: input.prompt },
-      "image.create: AI_GATEWAY_API_KEY not configured — returning placeholder",
+    logger.error(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "image.create: AI_GATEWAY_API_KEY not configured — image generation is unavailable",
     );
-    return {
-      image_id: `placeholder_${Date.now()}`,
-      url: "https://placehold.co/1024x1024",
-      created_at: new Date().toISOString(),
-    };
+    throw new Error(
+      "image.create: AI_GATEWAY_API_KEY is not configured. Image generation is unavailable.",
+    );
   }
 
   const gatewayModelId = MODEL_ID_MAP[input.model] ?? "openai/gpt-image-1";
@@ -101,15 +100,13 @@ export const imageCreateHandler: CapabilityHandler<typeof imageCreate> = async (
 
   const b64 = images[0];
   if (!b64) {
-    logger.warn(
+    logger.error(
       { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-      "image.create: provider returned no image bytes — returning placeholder",
+      "image.create: provider returned no image bytes",
     );
-    return {
-      image_id: `placeholder_${Date.now()}`,
-      url: "https://placehold.co/1024x1024",
-      created_at: new Date().toISOString(),
-    };
+    throw new Error(
+      "image.create: image generation provider returned no image bytes. The request may have been filtered or the provider is temporarily unavailable.",
+    );
   }
 
   const asset = await persistGeneratedAsset({

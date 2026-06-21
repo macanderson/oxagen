@@ -179,7 +179,7 @@ const InstallBulkSchema = z.object({
 
 export async function installBulkPlugin(
   input: z.infer<typeof InstallBulkSchema>,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; failures?: string[] }> {
   const parsed = InstallBulkSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
@@ -194,12 +194,26 @@ export async function installBulkPlugin(
   const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
 
   try {
-    await invoke(
+    const result = (await invoke(
       "plugin.org.install_bulk",
       { items: parsed.data.items },
       ctx,
       { surface: "agent" },
-    );
+    )) as { installed: Array<{ pluginId: string | null; orgListingId: string | null; error: string | null }> };
+
+    // Inspect per-item results. The handler always returns HTTP 200; partial
+    // failures are embedded in the installed[] array rather than thrown.
+    const failures = result.installed
+      .filter((r) => r.error !== null)
+      .map((r) => r.error as string);
+
+    if (failures.length > 0) {
+      return {
+        ok: false,
+        error: `${failures.length} of ${result.installed.length} plugin(s) failed to install`,
+        failures,
+      };
+    }
 
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(pluginsPath(routeCtx));

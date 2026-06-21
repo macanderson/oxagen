@@ -121,24 +121,28 @@ describe("imageCreateHandler", () => {
     );
   });
 
-  it("returns a placeholder when AI_GATEWAY_API_KEY is missing", async () => {
+  it("throws when AI_GATEWAY_API_KEY is missing instead of returning a placeholder", async () => {
     mocks.requireEnv.mockImplementation(() => {
       throw new Error("missing key");
     });
 
-    const result = await imageCreateHandler({ prompt: "test", model: "gpt-image-1" }, CTX);
+    await expect(
+      imageCreateHandler({ prompt: "test", model: "gpt-image-1" }, CTX),
+    ).rejects.toThrow(/AI_GATEWAY_API_KEY.*not configured|image generation is unavailable/i);
 
-    expect(result.image_id).toMatch(/^placeholder_/);
-    expect(result.url).toBe("https://placehold.co/1024x1024");
+    // The caller must receive a real error — not a fake placeholder ID.
     expect(mocks.generateImageFor).not.toHaveBeenCalled();
+    expect(mocks.persistGeneratedAsset).not.toHaveBeenCalled();
   });
 
-  it("returns a placeholder when generateImageFor returns no images", async () => {
+  it("throws when generateImageFor returns no images instead of returning a placeholder", async () => {
     mocks.generateImageFor.mockResolvedValue({ images: [], imageCount: 0, durationMs: 500 });
 
-    const result = await imageCreateHandler({ prompt: "test", model: "gpt-image-1" }, CTX);
+    await expect(
+      imageCreateHandler({ prompt: "test", model: "gpt-image-1" }, CTX),
+    ).rejects.toThrow(/no image bytes|provider returned no/i);
 
-    expect(result.image_id).toMatch(/^placeholder_/);
+    // No asset should be persisted for a failed generation.
     expect(mocks.persistGeneratedAsset).not.toHaveBeenCalled();
   });
 
