@@ -444,7 +444,7 @@ graph TB
 ### Build Fast, Ship Complete
 
 - **No pre-launch customers** → dangerous edits are allowed
-- **Commit directly to `main`** after `pnpm gate` passes
+- **Branch, commit, never push** → `main` is contested; run `pnpm gate`, commit on a branch, and leave it for a maintainer to push (the pre-push hook gates on the test suite)
 - **Fix every bug you find** → investigate root cause, fix instances, verify
 - **Everything shipped must be complete** → fully wired, every layer, tests passing
 

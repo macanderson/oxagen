@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Node.js 24+ (`node -v`)
-- pnpm 10+ (`npm i -g pnpm`)
+- pnpm 11+ (`npm i -g pnpm`) — the repo pins `pnpm@11.7.0` via `packageManager`
 - Docker (for local Postgres, Neo4j, ClickHouse)
 
 ## First-Time Setup
@@ -15,15 +15,15 @@ pnpm env:check               # validate .env.local
 pnpm dev                     # starts Docker + migrations + all apps
 ```
 
-## Before Every Push
+## Before Every Commit
 
-**All three must pass:**
+**The gate must pass:**
 
 ```bash
 pnpm gate     # lint + typecheck + tests + build + manifest + contracts + env + db
 ```
 
-If `gate` fails on any step, fix it before pushing. The CI gate is identical.
+If `gate` fails on any step, fix it before committing. The CI gate is identical.
 
 ## Adding a Feature
 
@@ -101,10 +101,20 @@ Register in `packages/ingestion/src/connectors/types.ts`.
 
 ## Git Workflow
 
-- **Commit directly to `main`** after `pnpm gate` passes (pre-launch, no live customers)
-- Use `gh run watch` to confirm CI is green after push
+`main` is a shared, contested branch worked in parallel by multiple agents, and the
+pre-push hook runs the affected unit-test suite as a gate. To keep those test runs
+from stacking, **work on a branch, commit, and never push.**
+
+- **Always start from a fresh, synced `main`:** `git fetch origin`; if `origin/main`
+  is ahead, `git switch main && git rebase origin/main` (resolve conflicts) before
+  cutting your branch.
+- **Cut a branch (or `git worktree`) for the work** — use a worktree for any large body
+  of work: `git worktree add ../oxagen-<slug> -b <branch>`.
+- **Run `pnpm gate`, then commit and stop.** Leave the work committed but unpushed;
+  Mac performs every push himself, one at a time. This is a hard rule — never run
+  `git push` yourself unless explicitly told to in-session.
 - Commit messages: imperative mood, under 72 chars (`Add capability: agent.code.execute`)
-- Never push with `--no-verify`
+- Never commit or push with `--no-verify`.
 
 ## Dependency Management
 
