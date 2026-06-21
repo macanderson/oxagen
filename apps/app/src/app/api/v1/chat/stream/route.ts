@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { tool, type ToolSet } from "@oxagen/ai";
 import { and, desc, eq } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
@@ -25,7 +24,6 @@ import { invoke } from "@oxagen/oxagen";
 import { formFill } from "@oxagen/oxagen/contracts/form.fill";
 import { fieldDescriptorSchema } from "@oxagen/oxagen/contracts/form.fill";
 import { randomUUID } from "node:crypto";
-import type { ModelMessage } from "@oxagen/ai";
 import type { StreamEvent } from "@/components/chat/stream-event-types";
 import { autoTitleConversation } from "./auto-title";
 import { streamMediaGeneration } from "./media-generation";
