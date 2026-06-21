@@ -2,9 +2,9 @@
 import "@oxagen/handlers/register";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
+import { resolveOrg, assertOrgMember, assertSecurityManager } from "@/lib/resolve-org";
 import { withSystemDb, schema } from "@oxagen/database";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 interface ExportResult {
   exportId: string;
@@ -38,16 +38,13 @@ export async function requestOrgDataEraseAction(orgSlug: string): Promise<EraseR
     getSessionOrRedirect(),
     resolveOrg(orgSlug),
   ]);
-  // Ownership check — enforced in handler too, but defense-in-depth at the action layer
-  const rows = await withSystemDb((tx) =>
-    tx
-      .select({ role: schema.orgUsers.role })
-      .from(schema.orgUsers)
-      .where(eq(schema.orgUsers.orgId, org.id))
-      .limit(50),
-  );
-  const userRow = rows.find(() => true); // handler enforces ownership properly
-  if (!userRow) throw new Error("Not a member of this organization");
+  // Org-wide data erase is destructive and irreversible: require an owner/admin
+  // role, not mere membership. assertSecurityManager 404s a non-manager (it
+  // re-reads the caller's own (orgId, userId) role row), so a member of org A
+  // cannot erase org B by guessing its slug, and a non-owner member of org A
+  // cannot erase their own org. The handler also enforces this; this is the
+  // action-layer gate that closes the IDOR before invoke() is ever reached.
+  await assertSecurityManager(org.id, session.user.id);
 
   const result = await invoke(
     "privacy.data.erase",
@@ -58,7 +55,16 @@ export async function requestOrgDataEraseAction(orgSlug: string): Promise<EraseR
   return result as EraseResult;
 }
 
-export async function getOrgExportStatusAction(exportId: string) {
+export async function getOrgExportStatusAction(orgSlug: string, exportId: string) {
+  // withSystemDb bypasses RLS, so the query MUST be constrained to the caller's
+  // org. Without resolveOrg + assertOrgMember + the orgId filter, any authed
+  // user could poll any export id and read another org's signed download URL.
+  const [session, org] = await Promise.all([
+    getSessionOrRedirect(),
+    resolveOrg(orgSlug),
+  ]);
+  await assertOrgMember(org.id, session.user.id);
+
   const rows = await withSystemDb((tx) =>
     tx
       .select({
@@ -66,7 +72,12 @@ export async function getOrgExportStatusAction(exportId: string) {
         exportUrl: schema.privacyExportRequests.exportUrl,
       })
       .from(schema.privacyExportRequests)
-      .where(eq(schema.privacyExportRequests.id, exportId))
+      .where(
+        and(
+          eq(schema.privacyExportRequests.id, exportId),
+          eq(schema.privacyExportRequests.orgId, org.id),
+        ),
+      )
       .limit(1),
   );
   return rows[0] ?? null;

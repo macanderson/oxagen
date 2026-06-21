@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { motion } from "motion/react";
 import { fadeInUp } from "@oxagen/ui/lib/motion";
 import { MessageBubble, type ChatMessage, type MessageBubbleCallbacks } from "./message-bubble";
@@ -8,7 +9,12 @@ import { MessageBubble, type ChatMessage, type MessageBubbleCallbacks } from "./
 // active branch we walk from the conversation's active_leaf back to the
 // root and reverse. Branch siblings are surfaced via siblingCount so the
 // switcher can offer navigation without re-fetching the whole tree.
-export function MessageTree({
+//
+// Memoized: the parent chat shell re-renders on every streaming token, but the
+// persisted message tree only changes when `messages` changes. With a stable
+// `callbacks` identity (memoized by the parent), React.memo keeps the whole
+// tree from re-rendering on each token.
+function MessageTreeImpl({
   messages,
   callbacks,
 }: {
@@ -35,3 +41,5 @@ export function MessageTree({
     </div>
   );
 }
+
+export const MessageTree = React.memo(MessageTreeImpl);

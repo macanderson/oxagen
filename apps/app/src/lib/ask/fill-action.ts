@@ -1,7 +1,7 @@
 "use server";
 import "@oxagen/handlers/register";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
+import { resolveOrg, resolveWorkspace, getOrgRole } from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen";
 import { formFill, type FormFillOutput } from "@oxagen/oxagen/contracts/form.fill";
 import { logger } from "@oxagen/handlers/logger";
@@ -42,6 +42,16 @@ export async function fillFormAction(input: FillFormActionInput): Promise<FormFi
     const session = await getSessionOrRedirect();
 
     const org = await resolveOrg(input.context.orgSlug);
+
+    // resolveOrg only maps slug→id, and invoke() from apps/app does NOT run the
+    // IAM membership check (the kernel skips it on the app surface). Gate org
+    // membership here so a session scoped to org A cannot drive form.fill
+    // against org B by passing its slug. Non-throwing (returns the safe no-op)
+    // to honour this action's never-throw contract.
+    const memberRole = await getOrgRole(org.id, session.user.id);
+    if (!memberRole) {
+      return noopResult;
+    }
 
     let workspaceId = "";
     if (input.context.workspaceSlug) {
