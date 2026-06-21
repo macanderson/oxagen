@@ -246,8 +246,14 @@ export function PluginDetailPanel({
         <p className="mb-3 text-sm text-muted-foreground">{detail.description}</p>
         {!isAgentOrKnowledge && (
           detail.readmeHtml ? (
-            // readmeHtml is sanitized by rehype-sanitize server-side in Plan 2 (catalog sync).
-            // dangerouslySetInnerHTML is safe here — no user-supplied content, only registry README.
+            // TRUST BOUNDARY — readmeHtml MUST be produced by
+            // packages/plugins/src/registry/readme.ts `fetchAndRenderReadme`,
+            // which runs the pipeline:
+            //   remarkParse → remarkGfm → remarkRehype → rehypeSanitize → rehypeStringify
+            // The `plugin.catalog.get` handler (packages/handlers/src/plugin.catalog.get.ts)
+            // does NOT yet return this field; when it is wired up it MUST call
+            // `fetchAndRenderReadme` so that rehype-sanitize runs before serialisation.
+            // Do NOT assign unsanitized markdown or third-party HTML to this prop.
             <div
               className="prose prose-sm dark:prose-invert max-w-none text-sm"
               dangerouslySetInnerHTML={{ __html: detail.readmeHtml }}

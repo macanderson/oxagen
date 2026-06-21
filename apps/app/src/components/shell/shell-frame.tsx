@@ -84,6 +84,14 @@ export function ShellFrame({
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background md:gap-2 md:p-2">
+      {/* Skip-to-main link — visually hidden until focused (WCAG 2.4.1). */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[10000] focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-ring"
+      >
+        Skip to main content
+      </a>
+
       {/* Floating, collapsible sidebar (desktop). Mobile uses MobileBottomBar. */}
       <Sidebar ctx={ctx} user={user} planTier={planTier} />
 
@@ -151,7 +159,7 @@ export function ShellFrame({
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 pb-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap)+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
+        <main id="main-content" className="flex-1 overflow-y-auto p-4 pb-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap)+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
           {children}
         </main>
       </div>

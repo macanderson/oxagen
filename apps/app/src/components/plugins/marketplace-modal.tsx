@@ -144,6 +144,9 @@ export function MarketplaceModal({
 
   // Debounce search input
   const searchTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Clear any pending debounce when the modal unmounts so the callback cannot
+  // fire against an already-unmounted component.
+  React.useEffect(() => () => clearTimeout(searchTimeoutRef.current), []);
   const handleSearchChange = (val: string) => {
     setSearch(val);
     clearTimeout(searchTimeoutRef.current);
