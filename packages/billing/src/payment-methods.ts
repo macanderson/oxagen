@@ -404,7 +404,11 @@ export async function removeOrgPaymentMethod(
     if (remaining.length > 0) {
       const next = remaining[0]!;
       const customerId = await resolveCustomerId(orgId);
-      // Best-effort: update Stripe default and DB flag.
+      // Promote next card to default in Stripe and in the DB mirror.
+      // If this fails the org will have zero cards with isDefault: true in the DB,
+      // disabling auto-reload and any default-card-dependent billing path silently.
+      // We must propagate the error so the caller knows the default state is inconsistent
+      // and can trigger a re-sync (syncPaymentMethodsFromStripe) to recover.
       try {
         await billingProvider().setDefaultPaymentMethod(
           customerId,
@@ -424,10 +428,15 @@ export async function removeOrgPaymentMethod(
           "billing: promoted next card to default after removal",
         );
       } catch (err) {
+        // Log with the full context needed to diagnose and manually recover.
+        // The removed card has already been detached from Stripe; the org now has
+        // zero cards marked isDefault in the DB. Re-throw so the caller surfaces
+        // the failure and can trigger syncPaymentMethodsFromStripe to repair state.
         logger.error(
-          { orgId, err },
-          "billing: failed to promote next card to default — continuing",
+          { orgId, failedPmId: next.stripePaymentMethodId, err },
+          "billing: failed to promote next card to default after removal — DB default state is inconsistent; caller must re-sync",
         );
+        throw err;
       }
     }
   }

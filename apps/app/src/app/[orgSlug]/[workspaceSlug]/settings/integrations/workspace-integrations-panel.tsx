@@ -14,15 +14,27 @@ import type { schema } from "@oxagen/database";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type OrgListing = typeof schema.pluginInstalledPlugins.$inferSelect;
-type McpServer = typeof schema.mcpServers.$inferSelect;
+
+/**
+ * Sanitized workspace MCP-install view for the client. Deliberately a narrow
+ * projection of `mcpServers` — it MUST NOT carry `authConfig` (the live bearer
+ * token) or any other secret/connection field across the server→client
+ * boundary. Only the fields this panel renders are exposed.
+ */
+export interface WorkspaceMcpInstall {
+  orgListingId: string | null;
+  enabled: boolean;
+  healthStatus: string;
+  lastHealthcheckAt: Date | null;
+}
 
 interface WorkspaceIntegrationsPanelProps {
   orgSlug: string;
   workspaceSlug: string;
   canManage: boolean;
   orgListings: OrgListing[];
-  /** orgListingId → workspace install row */
-  wsInstallMap: Record<string, McpServer>;
+  /** orgListingId → sanitized workspace install row (no secrets) */
+  wsInstallMap: Record<string, WorkspaceMcpInstall>;
   setEnabledAction: (input: {
     orgSlug: string;
     workspaceSlug: string;

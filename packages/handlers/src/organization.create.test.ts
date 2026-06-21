@@ -425,21 +425,56 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     expect(billingProfileInsertValues).toHaveLength(0);
   });
 
-  // ── grantFreeCredits error handling (lines 149–155) ─────────────────────
+  // ── grantFreeCredits error handling with idempotent retry ───────────────
 
-  it("does not throw when grantFreeCredits fails — org creation still succeeds", async () => {
-    mocks.grantFreeCredits.mockRejectedValueOnce(new Error("billing service unavailable"));
+  it("retries grantFreeCredits once on first failure — org creation still succeeds", async () => {
+    // First call fails, retry succeeds.
+    mocks.grantFreeCredits
+      .mockRejectedValueOnce(new Error("billing service unavailable"))
+      .mockResolvedValueOnce(undefined);
 
-    // Should not propagate the billing error
     const result = await organizationCreateHandler(
-      { name: "Credits Fail", slug: "credits-fail", planSlug: "free", type: "business" as const },
+      { name: "Credits Retry", slug: "credits-retry", planSlug: "free", type: "business" as const },
       CTX,
     );
 
-    // Org was created successfully despite grantFreeCredits failure
+    // Org was created successfully.
+    expect(result.publicId).toBe("org_pub_1");
+    // grantFreeCredits must have been called twice: first attempt + one retry.
+    expect(mocks.grantFreeCredits).toHaveBeenCalledTimes(2);
+    expect(mocks.grantFreeCredits).toHaveBeenCalledWith("internal_org_id");
+  });
+
+  it("does not throw when both grantFreeCredits attempts fail — org creation still succeeds", async () => {
+    // Both attempts fail (transient infra failure). Org creation must not surface
+    // the billing error since the org row is committed and the grant can be
+    // re-applied manually using the orgId logged at error level.
+    mocks.grantFreeCredits
+      .mockRejectedValueOnce(new Error("billing DB down"))
+      .mockRejectedValueOnce(new Error("billing DB down"));
+
+    const result = await organizationCreateHandler(
+      { name: "Credits Both Fail", slug: "credits-both-fail", planSlug: "free", type: "business" as const },
+      CTX,
+    );
+
+    // Org was created successfully despite both grantFreeCredits failures.
     expect(result.publicId).toBe("org_pub_1");
     expect(result.slug).toBe("acme");
-    // grantFreeCredits was called (and failed silently)
+    // Both attempts must be made.
+    expect(mocks.grantFreeCredits).toHaveBeenCalledTimes(2);
+  });
+
+  it("succeeds without retrying when first grantFreeCredits call succeeds", async () => {
+    // Happy path: grantFreeCredits succeeds on first try — no retry needed.
+    mocks.grantFreeCredits.mockResolvedValueOnce(undefined);
+
+    await organizationCreateHandler(
+      { name: "Credits OK", slug: "credits-ok", planSlug: "free", type: "business" as const },
+      CTX,
+    );
+
+    // Must only be called once when the first attempt succeeds.
     expect(mocks.grantFreeCredits).toHaveBeenCalledTimes(1);
   });
 });

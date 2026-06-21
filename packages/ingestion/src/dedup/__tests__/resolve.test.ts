@@ -92,6 +92,19 @@ describe("resolveEntity — Pass A: exact naturalKey hit", () => {
 
     expect(mocks.sessionClose).toHaveBeenCalled();
   });
+
+  it("passes orgId in the Pass A query parameters (regression: missing orgId caused permanent cache miss)", async () => {
+    // This test guards against the bug where orgId was absent from Pass A params,
+    // causing Neo4j to evaluate `orgId = null` and always return no records.
+    mockSessionReturning([{ nodeId: "existing-node-id" }]);
+
+    await resolveEntity(makeMutation(), "org-42");
+
+    expect(mocks.sessionRun).toHaveBeenCalledWith(
+      expect.stringContaining("orgId: $orgId"),
+      expect.objectContaining({ orgId: "org-42", naturalKey: "github:conn-1:42" }),
+    );
+  });
 });
 
 describe("resolveEntity — Pass B: no natural key match → new principal", () => {
@@ -118,6 +131,30 @@ describe("resolveEntity — Pass B: no natural key match → new principal", () 
     expect(mocks.embedText).toHaveBeenCalledOnce();
     expect(mocks.upsertEntityNode).toHaveBeenCalledOnce();
     expect(mocks.createAliasEdge).not.toHaveBeenCalled();
+  });
+
+  it("passes orgId in the Pass B vector query parameters (regression: missing orgId caused all candidates to be filtered out)", async () => {
+    // Guards against the bug where orgId was absent from Pass B params, causing
+    // the WHERE clause `n.orgId = $orgId` to evaluate as `n.orgId = null` and
+    // filter out every vector search candidate.
+    mocks.scopedSession.mockReturnValue({
+      run: mocks.sessionRun,
+      close: mocks.sessionClose,
+    });
+    // First call = Pass A (miss), second call = Pass B vector search (no results)
+    mocks.sessionRun
+      .mockResolvedValueOnce({ records: [] }) // Pass A miss
+      .mockResolvedValueOnce({ records: [] }); // Pass B no candidates
+    const mutation = makeMutation();
+
+    await resolveEntity(mutation, "org-99");
+
+    // The second session.run call is the vector search — verify orgId is present
+    const secondCall = mocks.sessionRun.mock.calls[1];
+    expect(secondCall).toBeDefined();
+    const secondParams = secondCall![1] as Record<string, unknown>;
+    expect(secondParams["orgId"]).toBe("org-99");
+    expect(secondParams["entityType"]).toBe(mutation.entityType);
   });
 
   it("passes correct telemetry to embedText", async () => {

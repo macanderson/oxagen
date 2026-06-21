@@ -69,14 +69,21 @@ export function SuggestedPromptChips({
   const prompts = useSuggestedPrompts();
   const [pending, startTransition] = React.useTransition();
   const [activatingIndex, setActivatingIndex] = React.useState<number | null>(null);
+  const [chipError, setChipError] = React.useState<string | null>(null);
 
   const handleActivate = React.useCallback(
     (prompt: string, index: number) => {
       if (pending) return;
       setActivatingIndex(index);
+      setChipError(null);
       const fd = buildChipFormData(prompt, conversationId, parentMessageId);
       startTransition(async () => {
-        await action(fd);
+        const result = await action(fd);
+        if (!result.ok) {
+          // Surface the error so the user knows the message was not sent,
+          // rather than leaving the chip silently de-activating.
+          setChipError(result.error ?? "Failed to send message");
+        }
         setActivatingIndex(null);
       });
     },
@@ -95,8 +102,18 @@ export function SuggestedPromptChips({
   );
 
   return (
+    <div className={cn("flex flex-col gap-1.5", className)}>
+      {chipError ? (
+        <p
+          role="alert"
+          data-testid="chip-error"
+          className="text-xs text-destructive text-center"
+        >
+          {chipError}
+        </p>
+      ) : null}
     <div
-      className={cn("flex flex-wrap items-center gap-2", className)}
+      className="flex flex-wrap items-center gap-2"
       role="group"
       aria-label="Suggested prompts"
     >
@@ -136,6 +153,7 @@ export function SuggestedPromptChips({
           )}
         </button>
       ))}
+    </div>
     </div>
   );
 }

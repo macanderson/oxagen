@@ -14,6 +14,7 @@ import { withSystemDb, schema } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertSecurityManager } from "@/lib/resolve-org";
+import { isAuthDenialError } from "@/lib/auth-denial";
 import { logger } from "@oxagen/handlers/logger";
 
 // Sentinel workspaceId for org-only actions. — OXA-1515
@@ -51,8 +52,16 @@ export async function saveMfaPolicyAction(
     orgId = tenant.id;
     // Enforces owner|admin — calls notFound() if not permitted.
     await assertSecurityManager(orgId, session.user.id);
-  } catch {
-    return { ok: false, code: "forbidden" };
+  } catch (err) {
+    // Only a genuine authorization denial (notFound sentinel) maps to
+    // forbidden. A DB/infra failure here must surface as internal (and be
+    // logged) — otherwise a degraded Postgres looks like a permission error
+    // to the admin, who stops retrying, and the outage is invisible.
+    if (isAuthDenialError(err)) {
+      return { ok: false, code: "forbidden" };
+    }
+    logger.error({ orgSlug, err: String(err) }, "mfa-policy: auth gate failed unexpectedly");
+    return { ok: false, code: "internal", error: "Failed to verify access" };
   }
 
   try {

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { requireScope } from "@oxagen/tenancy";
 import { db, type Database } from "./client";
 import { rlsEnforced } from "./tenant-flag";
+import { recordIfUnscoped } from "./unscoped-meter";
 
 /** The transaction handle Drizzle hands to a `.transaction(cb)` callback. */
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -49,6 +50,12 @@ export async function withTenantDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
  * surrounding comment. Unlike withTenantDb it requires NO active ALS scope.
  */
 export async function withSystemDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  // Count every withSystemDb call that runs with no active tenant scope. During
+  // the seeding window (TENANT_RLS_ENFORCEMENT_ENABLED off) this counter is the
+  // operator signal: when db.query.unscoped reads zero it is safe to flip
+  // enforcement on. withSystemDb is the intentional, audited RLS bypass — these
+  // calls still must be counted or the gate is permanently unreachable.
+  recordIfUnscoped("withSystemDb");
   return db().transaction(async (tx) => {
     await tx.execute(sql`select set_config('app.rls_bypass', 'on', true)`);
     return fn(tx);

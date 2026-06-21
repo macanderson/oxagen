@@ -82,34 +82,55 @@ export interface AuditPage {
 }
 
 /**
- * Fetch one page of audit events for the viewer. Returns up to `pageSize` rows
+ * Core keyset page fetch. Throws on any DB/RLS error — the caller decides
+ * whether to swallow (viewer) or propagate (export). Kept private so the two
+ * public entry points can apply different failure policies without duplicating
+ * the query.
+ */
+async function fetchAuditPage(
+  orgId: string,
+  filter: AuditFilter,
+  pageSize: number,
+): Promise<AuditPage> {
+  const conds = buildConditions(orgId, filter);
+  const rows = await runInTenantScope({ orgId, workspaceId: ORG_ONLY_WS }, () =>
+    withTenantDb((tx) =>
+      tx
+        .select(COLUMNS)
+        .from(schema.securityEvents)
+        .where(and(...conds))
+        .orderBy(desc(schema.securityEvents.occurredAt), desc(schema.securityEvents.id))
+        .limit(pageSize + 1),
+    ),
+  );
+
+  const hasMore = rows.length > pageSize;
+  const page = hasMore ? rows.slice(0, pageSize) : rows;
+  const last = page[page.length - 1];
+  return {
+    rows: page,
+    nextCursor: hasMore && last ? { occurredAt: last.occurredAt, id: last.id } : null,
+  };
+}
+
+/**
+ * Fetch one page of audit events for the VIEWER. Returns up to `pageSize` rows
  * plus a `nextCursor` when more exist.
+ *
+ * A DB/RLS error is logged and degraded to an empty page so the viewer renders
+ * without crashing. This swallow is SAFE here because an empty viewer page is
+ * not interpreted as a complete dataset — it must NOT be used by the export
+ * path, where an empty page is indistinguishable from end-of-results and would
+ * silently truncate a signed compliance export. The export path uses
+ * {@link queryAuditForExport}, which propagates the error instead.
  */
 export async function queryAuditPage(
   orgId: string,
   filter: AuditFilter,
   pageSize = AUDIT_PAGE_SIZE,
 ): Promise<AuditPage> {
-  const conds = buildConditions(orgId, filter);
   try {
-    const rows = await runInTenantScope({ orgId, workspaceId: ORG_ONLY_WS }, () =>
-      withTenantDb((tx) =>
-        tx
-          .select(COLUMNS)
-          .from(schema.securityEvents)
-          .where(and(...conds))
-          .orderBy(desc(schema.securityEvents.occurredAt), desc(schema.securityEvents.id))
-          .limit(pageSize + 1),
-      ),
-    );
-
-    const hasMore = rows.length > pageSize;
-    const page = hasMore ? rows.slice(0, pageSize) : rows;
-    const last = page[page.length - 1];
-    return {
-      rows: page,
-      nextCursor: hasMore && last ? { occurredAt: last.occurredAt, id: last.id } : null,
-    };
+    return await fetchAuditPage(orgId, filter, pageSize);
   } catch (err) {
     logger.error({ err, orgId }, "queryAuditPage failed");
     return { rows: [], nextCursor: null };
@@ -119,6 +140,14 @@ export async function queryAuditPage(
 /**
  * Stream-ish bulk fetch for export: walks keyset pages up to `maxRows` so a
  * full evidence export does not load an unbounded result set into memory.
+ *
+ * Unlike the viewer path, this PROPAGATES any DB/RLS error rather than
+ * swallowing it. A mid-export failure that returned an empty page would be
+ * structurally identical to a legitimate end-of-results response, so the loop
+ * would break early and the export route would HMAC-sign a silently truncated
+ * (possibly empty) dataset — an undetectable gap in the SOC 2 evidence chain.
+ * By throwing, the export route returns a non-200 and never emits a partial
+ * file that looks complete.
  */
 export async function queryAuditForExport(
   orgId: string,
@@ -130,7 +159,9 @@ export async function queryAuditForExport(
   while (out.length < maxRows) {
     const remaining = maxRows - out.length;
     const pageSize = Math.min(AUDIT_PAGE_SIZE, remaining);
-    const page = await queryAuditPage(orgId, { ...filter, cursor }, pageSize);
+    // fetchAuditPage (not queryAuditPage) — propagate errors so a DB failure
+    // cannot masquerade as a complete-but-short export.
+    const page = await fetchAuditPage(orgId, { ...filter, cursor }, pageSize);
     out.push(...page.rows);
     if (!page.nextCursor) break;
     cursor = page.nextCursor;

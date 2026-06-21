@@ -163,16 +163,12 @@ async function readWorkspacePrompt(ctx: CapabilityContext): Promise<string> {
 }
 
 async function readEnabledSkills(ctx: CapabilityContext): Promise<string> {
-  try {
-    const out = (await invoke("skill.workspace.list", {}, ctx)) as {
-      skills?: Array<{ name: string; description: string; enabled: boolean }>;
-    };
-    const enabled = (out.skills ?? []).filter((s) => s.enabled);
-    if (enabled.length === 0) return "";
-    return enabled.map((s) => `- ${s.name}: ${s.description}`).join("\n");
-  } catch {
-    return "";
-  }
+  const out = (await invoke("skill.workspace.list", {}, ctx)) as {
+    skills?: Array<{ name: string; description: string; enabled: boolean }>;
+  };
+  const enabled = (out.skills ?? []).filter((s) => s.enabled);
+  if (enabled.length === 0) return "";
+  return enabled.map((s) => `- ${s.name}: ${s.description}`).join("\n");
 }
 
 interface PlannedStep {

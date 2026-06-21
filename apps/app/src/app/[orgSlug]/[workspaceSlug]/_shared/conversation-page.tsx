@@ -117,7 +117,13 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
               .orderBy(desc(schema.conversations.updatedAt))
               .limit(1),
           ),
-      ).then((rows) => rows[0]).catch(() => undefined);
+      ).then((rows) => rows[0]).catch((err: unknown) => {
+        // Non-fatal: degrade to a blank new-conversation state rather than
+        // crashing the page. Log so operators can detect RLS misconfigurations
+        // or DB failures without silent production blind spots.
+        console.error("[conversation-page] conversation lookup failed", err);
+        return undefined;
+      });
 
   if (conv) {
     conversationId = conv.id;

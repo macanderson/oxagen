@@ -405,6 +405,46 @@ describe("parseSourceFile", () => {
       expect(result.symbols).toEqual([]);
       expect(result.error).toMatch(/WASM load failed/);
     });
+
+    it("logs a console.error when the parser throws (regression: silent WASM failure)", async () => {
+      // Guards against the bug where parser failures were swallowed silently.
+      // A missing WASM bundle in a Vercel deployment would return empty symbols
+      // with no observable signal — this test verifies the error is now logged.
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+      mocks.languageLoad
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({});
+      mocks.parserInit.mockRejectedValueOnce(new Error("WASM load failed"));
+      _resetForTest();
+
+      await parseSourceFile("missing-wasm.ts", "const x = 1;");
+
+      expect(consoleSpy).toHaveBeenCalledOnce();
+      expect(consoleSpy.mock.calls[0]![0]).toMatch(/parseSourceFile failed/);
+      expect(consoleSpy.mock.calls[0]![0]).toMatch(/missing-wasm\.ts/);
+      expect(consoleSpy.mock.calls[0]![0]).toMatch(/WASM load failed/);
+
+      consoleSpy.mockRestore();
+    });
+
+    it("error field in ParseResult is populated and not undefined on parse failure", async () => {
+      // Callers that check result.error can distinguish failure from a file
+      // with genuinely no top-level symbols.
+      mocks.languageLoad
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({});
+      mocks.parserInit.mockRejectedValueOnce(new Error("tree-sitter wasm not found: typescript.wasm"));
+      _resetForTest();
+
+      const result = await parseSourceFile("src/index.ts", "export const x = 1;");
+
+      expect(result.error).toBeDefined();
+      expect(result.error).toMatch(/tree-sitter wasm not found/);
+      // Symbols are empty — but error is set so callers can distinguish this
+      // from a file that simply has no extractable top-level symbols.
+      expect(result.symbols).toHaveLength(0);
+    });
   });
 
   // ── Loader caching ─────────────────────────────────────────────────────────

@@ -17,6 +17,8 @@ import { withSystemDb, schema } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertSecurityManager, assertOrgMember } from "@/lib/resolve-org";
+import { isAuthDenialError } from "@/lib/auth-denial";
+import { logger } from "@oxagen/handlers/logger";
 
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
@@ -56,8 +58,12 @@ export async function confirmMemberAccessAction(
     orgId = tenant.id;
     // Any org member can confirm (read-level review).
     await assertOrgMember(orgId, session.user.id);
-  } catch {
-    return { ok: false, code: "forbidden" };
+  } catch (err) {
+    if (isAuthDenialError(err)) {
+      return { ok: false, code: "forbidden" };
+    }
+    logger.error({ orgSlug, err: String(err) }, "confirm-member: auth gate failed unexpectedly");
+    return { ok: false, code: "internal", error: "Failed to verify access" };
   }
 
   emitSecurityEvent({
@@ -98,8 +104,12 @@ export async function revokeMemberAccessAction(
     const tenant = await resolveOrg(orgSlug);
     orgId = tenant.id;
     await assertSecurityManager(orgId, session.user.id);
-  } catch {
-    return { ok: false, code: "forbidden" };
+  } catch (err) {
+    if (isAuthDenialError(err)) {
+      return { ok: false, code: "forbidden" };
+    }
+    logger.error({ orgSlug, err: String(err) }, "revoke-member: auth gate failed unexpectedly");
+    return { ok: false, code: "internal", error: "Failed to verify access" };
   }
 
   const deleted = await withSystemDb((tx) =>

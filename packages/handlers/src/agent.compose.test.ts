@@ -87,6 +87,53 @@ describe("isSafeToAutoExecute", () => {
 // ── Executor / handler integration ────────────────────────────────────────────
 
 function registerFakes(): void {
+  // skill.workspace.list — required so readEnabledSkills (which no longer
+  // swallows errors) has a real handler in tests. Returns an empty skill set
+  // by default; individual tests can override the handler as needed.
+  registerCapability({
+    name: "skill.workspace.list",
+    domain: "skill",
+    description: "List skills available in the workspace",
+    mode: "sync",
+    surfaces: ["api", "mcp"],
+    layers: ["schema"],
+    scoped: true,
+    sensitivity: "low",
+    defaultEffect: "deny",
+    defaultRoles: {
+      org: { Owner: "allow", Admin: "allow" },
+      workspace: { Owner: "allow", Admin: "allow", Member: "allow" },
+    },
+    input: z.object({ workspace_id: z.string().optional() }),
+    output: z.object({
+      skills: z.array(
+        z.object({ id: z.string(), name: z.string(), description: z.string(), enabled: z.boolean() }),
+      ),
+    }),
+  });
+  registerHandler("skill.workspace.list", async () => async () => ({ skills: [] }));
+
+  // prompt.settings.read — required so readWorkspacePrompt has a handler.
+  // Returns empty additional instructions by default.
+  registerCapability({
+    name: "prompt.settings.read",
+    domain: "prompt",
+    description: "Read workspace prompt settings",
+    mode: "sync",
+    surfaces: ["api", "mcp"],
+    layers: ["schema"],
+    scoped: true,
+    sensitivity: "low",
+    defaultEffect: "deny",
+    defaultRoles: {
+      org: {},
+      workspace: { Owner: "allow", Admin: "allow", Member: "allow" },
+    },
+    input: z.object({}),
+    output: z.object({ additionalInstructions: z.string().nullable().optional() }),
+  });
+  registerHandler("prompt.settings.read", async () => async () => ({ additionalInstructions: null }));
+
   registerCapability({
     name: "test.compose.search",
     domain: "test",
@@ -239,5 +286,101 @@ describe("agentComposeHandler", () => {
     const names = buildCatalog().map((c) => c.name);
     expect(names).not.toContain("agent.compose");
     expect(names).toContain("test.compose.search");
+  });
+
+  // ── readEnabledSkills error propagation ───────────────────────────────────
+  // readEnabledSkills no longer swallows errors from invoke("skill.workspace.list").
+  // A failure (e.g. IAM denial, DB timeout, handler not found) must propagate
+  // to the agentComposeHandler caller so it surfaces as a real error rather
+  // than silently degrading the planner prompt.
+
+  it("propagates skill.workspace.list errors to the caller instead of silently degrading", async () => {
+    // Rebuild the registry with the skills handler replaced by one that throws.
+    // We must clear THEN re-register to avoid the double-registration guard.
+    clearHandlersForTests();
+    clearRegistryForTests();
+    // Re-run registerFakes but swap in the throwing handler for skill.workspace.list
+    // by registering everything fresh. We build the override set manually so we
+    // never double-register.
+    registerCapability({
+      name: "skill.workspace.list",
+      domain: "skill",
+      description: "List skills",
+      mode: "sync",
+      surfaces: ["api", "mcp"],
+      layers: ["schema"],
+      scoped: true,
+      sensitivity: "low",
+      defaultEffect: "deny",
+      defaultRoles: { org: {}, workspace: {} },
+      input: z.object({ workspace_id: z.string().optional() }),
+      output: z.object({
+        skills: z.array(
+          z.object({ id: z.string(), name: z.string(), description: z.string(), enabled: z.boolean() }),
+        ),
+      }),
+    });
+    registerHandler(
+      "skill.workspace.list",
+      async () => async () => { throw new Error("skill listing DB timeout"); },
+    );
+
+    await expect(
+      agentComposeHandler({ goal: "research", maxSteps: 6, autoExecute: true }, ctx),
+    ).rejects.toThrow("skill listing DB timeout");
+
+    // generateObjectFor (planner) must NOT have been called — the error should
+    // have propagated before planning begins.
+    expect(generateObjectFor).not.toHaveBeenCalled();
+  });
+
+  it("propagates skill.workspace.list errors even when prompt.settings.read succeeds", async () => {
+    clearHandlersForTests();
+    clearRegistryForTests();
+    // Register only the capabilities needed: prompt.settings.read (succeeds)
+    // and skill.workspace.list (throws). No test-compose-* needed since we
+    // expect failure before planning starts.
+    registerCapability({
+      name: "prompt.settings.read",
+      domain: "prompt",
+      description: "Read workspace prompt settings",
+      mode: "sync",
+      surfaces: ["api", "mcp"],
+      layers: ["schema"],
+      scoped: true,
+      sensitivity: "low",
+      defaultEffect: "deny",
+      defaultRoles: { org: {}, workspace: {} },
+      input: z.object({}),
+      output: z.object({ additionalInstructions: z.string().nullable().optional() }),
+    });
+    registerHandler("prompt.settings.read", async () => async () => ({ additionalInstructions: null }));
+
+    registerCapability({
+      name: "skill.workspace.list",
+      domain: "skill",
+      description: "List skills",
+      mode: "sync",
+      surfaces: ["api", "mcp"],
+      layers: ["schema"],
+      scoped: true,
+      sensitivity: "low",
+      defaultEffect: "deny",
+      defaultRoles: { org: {}, workspace: {} },
+      input: z.object({ workspace_id: z.string().optional() }),
+      output: z.object({
+        skills: z.array(
+          z.object({ id: z.string(), name: z.string(), description: z.string(), enabled: z.boolean() }),
+        ),
+      }),
+    });
+    registerHandler(
+      "skill.workspace.list",
+      async () => async () => { throw new Error("skills IAM denied"); },
+    );
+
+    await expect(
+      agentComposeHandler({ goal: "test", maxSteps: 3, autoExecute: false }, ctx),
+    ).rejects.toThrow("skills IAM denied");
   });
 });

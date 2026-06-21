@@ -201,21 +201,39 @@ export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): P
       where: eq(schema.subscriptions.stripeSubscriptionId, invoice.subscriptionId!),
       columns: { orgId: true, planId: true },
     });
-    if (!sub) return;
+    if (!sub) {
+      logger.warn(
+        { stripeSubscriptionId: invoice.subscriptionId, invoiceId: invoice.providerInvoiceId },
+        "billing: plan credit grant — no subscription row found for stripe subscription id; credits not granted",
+      );
+      return;
+    }
 
     const plan = await tx.query.plans.findFirst({
       where: eq(schema.plans.id, sub.planId),
       columns: { includedCreditCents: true },
     });
     const credits = plan?.includedCreditCents ?? 0;
-    if (credits <= 0) return;
+    if (credits <= 0) {
+      logger.warn(
+        { orgId: sub.orgId, planId: sub.planId, includedCreditCents: plan?.includedCreditCents ?? null },
+        "billing: plan credit grant — plan has zero/null includedCreditCents; no credits granted (check plan configuration)",
+      );
+      return;
+    }
 
     const invoiceRow = await tx.query.invoices.findFirst({
       where: eq(schema.invoices.stripeInvoiceId, invoice.providerInvoiceId),
       columns: { id: true },
     });
     const referenceId = invoiceRow?.id;
-    if (!referenceId) return;
+    if (!referenceId) {
+      logger.warn(
+        { orgId: sub.orgId, stripeInvoiceId: invoice.providerInvoiceId },
+        "billing: plan credit grant — no local invoice row found for stripe invoice id; credits not granted (invoice may not have synced yet)",
+      );
+      return;
+    }
 
     const grantDate = new Date();
     const expiresAt = endOfGrantMonth(grantDate);

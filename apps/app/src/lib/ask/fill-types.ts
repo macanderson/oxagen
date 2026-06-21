@@ -55,6 +55,14 @@ export interface FieldDiff {
 export interface FormFillResult {
   /** One FieldDiff per field in the original FillableFormSpec.fields array. */
   fields: FieldDiff[];
+  /**
+   * Set when the fill action failed (auth/IAM/billing denial, capability error,
+   * or unexpected throw) and returned an all-unchanged fallback. Lets the caller
+   * distinguish a genuine "AI proposed no changes" result from a swallowed
+   * failure, so the UI can surface an actionable error instead of rendering
+   * nothing. Absent on a successful fill.
+   */
+  error?: string;
 }
 
 /**

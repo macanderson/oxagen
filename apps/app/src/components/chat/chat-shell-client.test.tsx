@@ -265,6 +265,105 @@ describe("ChatShellClient — activeServerIds in stream request body", () => {
   });
 });
 
+// ── Stream error banner ───────────────────────────────────────────────────────
+// Tests that a non-2xx SSE response and a mid-stream network error both render
+// a visible error banner to the user (data-testid="stream-error-banner").
+
+describe("ChatShellClient — stream error banner on non-2xx SSE response", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function renderAndSubmit(fetchImpl: (url: string, init?: RequestInit) => Promise<Response>) {
+    vi.stubGlobal("fetch", vi.fn(fetchImpl));
+    cleanup();
+    capturedComposerProps = {};
+    const { ChatShellClient } = await import("./chat-shell-client");
+    render(
+      <ChatShellClient
+        conversationId={null}
+        conversationPublicId={null}
+        activeLeafMessageId={null}
+        messages={[]}
+        sendAction={async () => ({
+          ok: true,
+          conversationId: "conv-err-test",
+          conversationPublicId: "conv_pub_err",
+          userMessageId: "msg-err",
+        })}
+        resolveApprovalAction={async () => ({ ok: true })}
+        resolveConsentAction={async () => ({ ok: true })}
+        resolvePlanAction={async () => ({ ok: true })}
+        orgSlug="test-org"
+        workspaceSlug="test-ws"
+        modelConfig={modelConfig}
+      />,
+    );
+    const action = capturedComposerProps.action as (fd: FormData) => Promise<unknown>;
+    const fd = new FormData();
+    fd.set("content", "Hello");
+    await action(fd);
+    // Allow micro-task queue to flush
+    await new Promise((r) => setTimeout(r, 20));
+  }
+
+  it("renders stream-error-banner when SSE endpoint returns 500", async () => {
+    await renderAndSubmit(async () =>
+      new Response(null, { status: 500, statusText: "Internal Server Error" }),
+    );
+    expect(screen.getByTestId("stream-error-banner")).toBeInTheDocument();
+    expect(screen.getByTestId("stream-error-banner")).toHaveTextContent("500");
+  });
+
+  it("renders stream-error-banner when SSE endpoint returns 401", async () => {
+    await renderAndSubmit(async () =>
+      new Response(null, { status: 401, statusText: "Unauthorized" }),
+    );
+    expect(screen.getByTestId("stream-error-banner")).toBeInTheDocument();
+    expect(screen.getByTestId("stream-error-banner")).toHaveTextContent("401");
+  });
+
+  it("renders stream-error-banner when SSE endpoint returns 429", async () => {
+    await renderAndSubmit(async () =>
+      new Response(null, { status: 429, statusText: "Too Many Requests" }),
+    );
+    expect(screen.getByTestId("stream-error-banner")).toBeInTheDocument();
+  });
+
+  it("renders stream-error-banner when fetch throws a non-abort network error", async () => {
+    await renderAndSubmit(async () => {
+      throw new Error("ERR_CONNECTION_RESET");
+    });
+    expect(screen.getByTestId("stream-error-banner")).toBeInTheDocument();
+    expect(screen.getByTestId("stream-error-banner")).toHaveTextContent(
+      "ERR_CONNECTION_RESET",
+    );
+  });
+
+  it("does NOT render stream-error-banner on a clean 200 response", async () => {
+    await renderAndSubmit(async () =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            c.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+            c.close();
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    expect(screen.queryByTestId("stream-error-banner")).not.toBeInTheDocument();
+  });
+
+  it("does NOT render stream-error-banner on AbortError (interrupt is expected)", async () => {
+    await renderAndSubmit(async () => {
+      throw new DOMException("The operation was aborted.", "AbortError");
+    });
+    // AbortErrors are expected (user interrupt / unmount) — no banner
+    expect(screen.queryByTestId("stream-error-banner")).not.toBeInTheDocument();
+  });
+});
+
 describe("ChatShellClient — live-timeline unknown componentId fallback", () => {
   afterEach(() => {
     mockStream.overrides = {};

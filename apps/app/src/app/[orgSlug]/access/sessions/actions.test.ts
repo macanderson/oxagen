@@ -52,9 +52,19 @@ vi.mock("@/lib/resolve-org", () => ({
   assertSecurityManager: mockAssertSecurityManager,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
+vi.mock("@oxagen/handlers/logger", () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
 vi.mock("@oxagen/database/security", () => ({
   emitSecurityEvent: mockEmitSecurityEvent,
 }));
+
+/** Error shaped like the sentinel `notFound()` throws (digest carries the 404 fallback code). */
+function authDenial(): Error {
+  const e = new Error("NEXT_HTTP_ERROR_FALLBACK");
+  (e as Error & { digest: string }).digest = "NEXT_HTTP_ERROR_FALLBACK;404";
+  return e;
+}
 vi.mock("@oxagen/database", () => {
   let callCount = 0;
   const makeTx = () => ({
@@ -144,8 +154,8 @@ describe("revokeSessionAction", () => {
     if (!res.ok) expect(res.code).toBe("validation_error");
   });
 
-  it("returns forbidden when assertSecurityManager throws", async () => {
-    mockAssertSecurityManager.mockRejectedValue(new Error("access denied"));
+  it("returns forbidden when assertSecurityManager denies (notFound sentinel)", async () => {
+    mockAssertSecurityManager.mockRejectedValue(authDenial());
     const res = await revokeSessionAction({
       orgSlug: "acme",
       sessionId: "sess-xyz",
@@ -153,6 +163,19 @@ describe("revokeSessionAction", () => {
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("forbidden");
+  });
+
+  it("returns internal (NOT forbidden) when the auth gate hits a DB/infra error", async () => {
+    // A plain Error has no notFound digest — it must NOT be misclassified as a
+    // permission denial, or a degraded DB looks like an access denial to admins.
+    mockAssertSecurityManager.mockRejectedValue(new Error("connection refused"));
+    const res = await revokeSessionAction({
+      orgSlug: "acme",
+      sessionId: "sess-xyz",
+      targetUserId: VALID_UUID,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("internal");
   });
 
   it("returns not_found when target user is not an org member", async () => {

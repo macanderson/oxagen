@@ -5,6 +5,8 @@
  *  - getOrgBillingStatus reads settings + subscription
  *  - assertOrgCanConsume: allows active/grace, throws BillingSuspendedError when suspended
  *  - onInvoicePaymentFailed: sets grace state, idempotent on delinquentSince
+ *  - onInvoicePaymentFailed: notification fires AFTER transaction commits (post-tx withSystemDb)
+ *  - onInvoicePaymentFailed: notification failure does not mask grace state write
  *  - onInvoiceRecovered: resets to active, no-op if already active
  *  - sweepDunning: grace + elapsed → suspended; grace + not elapsed → skipped
  *  - isBillingSuspended type guard
@@ -12,6 +14,22 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { BillingInvoice } from "./provider";
+
+// ---------------------------------------------------------------------------
+// Notifications mock
+// ---------------------------------------------------------------------------
+
+const notifyOrgManagersMock = vi.fn().mockResolvedValue(undefined);
+const paymentFailedTemplateMock = vi.fn().mockReturnValue({
+  subject: "Payment failed",
+  text: "Payment failed text",
+  html: "<p>Payment failed</p>",
+});
+
+vi.mock("@oxagen/notifications", () => ({
+  notifyOrgManagers: notifyOrgManagersMock,
+  paymentFailedTemplate: paymentFailedTemplateMock,
+}));
 
 // ---------------------------------------------------------------------------
 // Drizzle-orm mock — minimal stubs used by dunning.ts
@@ -25,6 +43,7 @@ interface DbState {
   settingsRow: Record<string, unknown> | null;
   settingsMany: Array<Record<string, unknown>>;
   subRow: Record<string, unknown> | null;
+  orgRow: Record<string, unknown> | null;
   insertCalled: boolean;
   updateSets: Array<Record<string, unknown>>;
 }
@@ -34,6 +53,7 @@ function makeDbState(): DbState {
     settingsRow: null,
     settingsMany: [],
     subRow: null,
+    orgRow: { name: "Test Org" },
     insertCalled: false,
     updateSets: [],
   };
@@ -48,6 +68,9 @@ function makeDb(state: DbState) {
       },
       subscriptions: {
         findFirst: vi.fn(async () => state.subRow),
+      },
+      organizations: {
+        findFirst: vi.fn(async () => state.orgRow),
       },
     },
     insert: vi.fn(() => ({
@@ -254,6 +277,17 @@ describe("assertOrgCanConsume", () => {
 });
 
 describe("onInvoicePaymentFailed", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Reset notification mock to its default resolved behavior.
+    notifyOrgManagersMock.mockResolvedValue(undefined);
+    paymentFailedTemplateMock.mockReturnValue({
+      subject: "Payment failed",
+      text: "Payment failed text",
+      html: "<p>Payment failed</p>",
+    });
+  });
+
   it("sets dunningState to grace when no existing settings row", async () => {
     const state = makeDbState();
     state.settingsRow = null; // no existing row
@@ -315,6 +349,54 @@ describe("onInvoicePaymentFailed", () => {
 
     expect(state.insertCalled).toBe(false);
     expect(state.updateSets).toHaveLength(0);
+  });
+
+  it("calls notifyOrgManagers after the grace state is written (not inside the tx)", async () => {
+    // Verifies fix for floating-promise-over-committed-tx bug:
+    // the notification must be awaited in a post-transaction withSystemDb call,
+    // not in a void IIFE that closes over the already-committed `tx`.
+    const state = makeDbState();
+    state.settingsRow = null;
+    dbStateHolder.instance = makeDb(state);
+
+    await onInvoicePaymentFailed(makeInvoice({ orgId: "org-abc" }));
+
+    // Grace state written (insert) AND notification fired.
+    expect(state.insertCalled).toBe(true);
+    expect(notifyOrgManagersMock).toHaveBeenCalledOnce();
+    expect(notifyOrgManagersMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: "org-abc", kind: "system" }),
+    );
+  });
+
+  it("notification failure does not prevent grace state write from resolving", async () => {
+    // If the notification throws, the dunning state write must still be visible
+    // to the caller. The notification catch block swallows the error.
+    const state = makeDbState();
+    state.settingsRow = null;
+    dbStateHolder.instance = makeDb(state);
+    notifyOrgManagersMock.mockRejectedValueOnce(new Error("smtp timeout"));
+
+    // Must NOT throw.
+    await expect(
+      onInvoicePaymentFailed(makeInvoice({ orgId: "org-abc" })),
+    ).resolves.toBeUndefined();
+
+    // Grace state was written before the notification failed.
+    expect(state.insertCalled).toBe(true);
+    // Notification was attempted.
+    expect(notifyOrgManagersMock).toHaveBeenCalledOnce();
+  });
+
+  it("notification is not sent when orgId cannot be resolved", async () => {
+    const state = makeDbState();
+    state.settingsRow = null;
+    state.subRow = null;
+    dbStateHolder.instance = makeDb(state);
+
+    await onInvoicePaymentFailed(makeInvoice({ orgId: null, subscriptionId: null }));
+
+    expect(notifyOrgManagersMock).not.toHaveBeenCalled();
   });
 });
 

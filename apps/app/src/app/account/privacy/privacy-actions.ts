@@ -3,7 +3,7 @@ import "@oxagen/handlers/register";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { getSessionOrRedirect } from "@/lib/session";
 import { withSystemDb, schema } from "@oxagen/database";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 interface ExportResult {
   exportId: string;
@@ -76,6 +76,10 @@ export async function requestUserDataEraseAction(): Promise<EraseResult> {
 }
 
 export async function getExportStatusAction(exportId: string) {
+  // withSystemDb bypasses RLS: constrain to the caller's own user id. Without
+  // the session + userId filter, any authed user could poll any export id and
+  // read another user's signed download URL (IDOR).
+  const session = await getSessionOrRedirect();
   const rows = await withSystemDb((tx) =>
     tx
       .select({
@@ -84,7 +88,12 @@ export async function getExportStatusAction(exportId: string) {
         completedAt: schema.privacyExportRequests.completedAt,
       })
       .from(schema.privacyExportRequests)
-      .where(eq(schema.privacyExportRequests.id, exportId))
+      .where(
+        and(
+          eq(schema.privacyExportRequests.id, exportId),
+          eq(schema.privacyExportRequests.userId, session.user.id),
+        ),
+      )
       .limit(1),
   );
   return rows[0] ?? null;

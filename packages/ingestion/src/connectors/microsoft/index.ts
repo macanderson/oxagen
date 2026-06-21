@@ -139,13 +139,40 @@ const microsoft: ConnectorDefinition<Config> = {
     }
   },
 
-  verifyWebhook(_payload, _headers, secret): boolean {
-    // MS Graph lifecycle notifications: the clientState field in the notification
-    // body is matched against the secret stored at subscription time.
-    // Full validation happens at the route layer (query param `validationToken` handshake).
-    // This method is a no-op passthrough — actual secret comparison is done inline
-    // in the webhook route handler where the JSON body is already parsed.
-    return secret != null;
+  verifyWebhook(payload, _headers, secret): boolean {
+    // MS Graph lifecycle notifications carry a `clientState` field in the JSON
+    // body. We set clientState = the webhook secret at subscription time, so we
+    // verify by parsing the notification body and confirming every notification
+    // entry's clientState matches the stored secret.
+    //
+    // The `validationToken` handshake (one-time subscription lifecycle) is
+    // handled at the route layer before verifyWebhook is called — it never
+    // reaches here.
+    if (secret == null) return false;
+
+    let body: unknown;
+    try {
+      body = JSON.parse(Buffer.from(payload).toString("utf8"));
+    } catch {
+      return false;
+    }
+
+    if (
+      body === null ||
+      typeof body !== "object" ||
+      !Array.isArray((body as Record<string, unknown>)["value"])
+    ) {
+      return false;
+    }
+
+    const notifications = (body as Record<string, unknown>)["value"] as unknown[];
+    if (notifications.length === 0) return false;
+
+    return notifications.every((n) => {
+      if (n === null || typeof n !== "object") return false;
+      const clientState = (n as Record<string, unknown>)["clientState"];
+      return typeof clientState === "string" && clientState === secret;
+    });
   },
 };
 

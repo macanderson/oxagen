@@ -2,7 +2,7 @@ import pino from "pino";
 import { embed } from "ai";
 import { gateway } from "@ai-sdk/gateway";
 import { insertTokenUsage, providerFromModelId, hashPrompt, type Surface } from "@oxagen/telemetry";
-import { providerCostUsdMicros } from "@oxagen/billing";
+import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.embed" } });
 
@@ -46,6 +46,15 @@ export async function embedText(text: string, opts: EmbedTextOpts): Promise<numb
 
   const { orgId, workspaceId, surface, executionStepId } = opts.telemetry;
   const durationMs = Date.now() - startedAt;
+  // Warn when the AI SDK embedding response omits usage (gateway outage, partial
+  // response, or SDK version skew) so the billing gap is visible in logs rather
+  // than silently recorded as zero tokens / zero cost (OXA-1425).
+  if (!usage) {
+    logger.warn(
+      { model: MODEL, executionStepId },
+      "embedText: usage field absent from embed() response — token count and charge will be zero",
+    );
+  }
   const inputTokens = usage?.tokens ?? 0;
   // Embeddings are input-only; the rate card prices them per the same meter.
   const costUsdMicros = providerCostUsdMicros({ model: MODEL, inputTokens, outputTokens: 0 });
@@ -71,6 +80,23 @@ export async function embedText(text: string, opts: EmbedTextOpts): Promise<numb
   } catch (err) {
     // Telemetry is best-effort; never fail the caller.
     logger.error({ err }, "embedText telemetry write failed");
+  }
+
+  // Debit the org's credits for what this embedding call cost. Best-effort and
+  // post-call — a metering failure must not fail the caller (mirrors stream.ts
+  // and generate-object.ts). OXA-1351 / OXA-1425.
+  try {
+    await chargeUsageCredits({
+      orgId,
+      model: MODEL,
+      referenceId: executionStepId,
+      inputTokens,
+      outputTokens: 0,
+      cachedTokens: 0,
+    });
+  } catch (err) {
+    // Swallow — credit metering must never fail a capability call.
+    logger.error({ err }, "embedText credit charge failed");
   }
 
   return embedding;

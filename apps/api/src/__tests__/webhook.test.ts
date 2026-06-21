@@ -239,10 +239,16 @@ describe("signature verification", () => {
     );
   });
 
-  it("trusts connector when verifyWebhook is undefined (no HMAC support)", async () => {
+  it("rejects with 401 (fail closed) when connector has no verifyWebhook", async () => {
+    // A webhook-delivery connector that ships no verifyWebhook is incomplete /
+    // misconfigured. The security gate must default CLOSED — never admit the
+    // payload unverified into the ingestion pipeline.
     mocks.getConnector.mockReturnValue({});
     const res = await app.fetch(makePost("{}"));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("Webhook verification unavailable");
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 });
 
@@ -311,15 +317,18 @@ describe("happy path — with secretEnc (HMAC decryption)", () => {
     );
   });
 
-  it("proceeds without secret if decrypt throws", async () => {
+  it("fails closed with 500 when decrypt throws (key-management failure)", async () => {
+    // A stored secret that cannot be decrypted is a key-management failure
+    // (missing key, corrupted ciphertext). Proceeding without it would degrade
+    // the gate to unauthenticated for connectors that treat a null secret as
+    // "no secret configured". Reject and never verify or enqueue.
     mocks.decrypt.mockRejectedValue(new Error("KMS error"));
     const res = await app.fetch(makePost("{}"));
-    expect(res.status).toBe(200);
-    expect(mocks.verifyWebhook).toHaveBeenCalledWith(
-      expect.any(Uint8Array),
-      expect.any(Object),
-      null,
-    );
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("Webhook secret unavailable");
+    expect(mocks.verifyWebhook).not.toHaveBeenCalled();
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 });
 

@@ -3,6 +3,7 @@ import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { generateObjectFor } from "@oxagen/ai";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { NonRetriableError } from "@oxagen/functions";
 import { insertEvents, insertToolInvocation, type EventRow } from "@oxagen/telemetry";
 import { invoke } from "@oxagen/oxagen/kernel";
 import "@oxagen/oxagen";
@@ -129,7 +130,13 @@ export const [playbookRunExecute] = createFunction(
 
     if (!run) {
       logger.error({ runId, orgId }, "playbook-run-execute: run not found");
-      return { status: "failed", reason: "run not found" };
+      // Throw so Inngest marks the function run as failed and does NOT retry.
+      // A missing playbook_runs row will not appear on retry — this is a
+      // permanent failure, not a transient one.
+      throw new NonRetriableError(
+        `playbook-run-execute: run not found (runId=${runId})`,
+        { cause: { runId, orgId } },
+      );
     }
 
     if (run.status !== "pending") {
@@ -341,13 +348,15 @@ export const [playbookRunExecute] = createFunction(
               .returning({ id: schema.playbookStepRuns.id }),
           ),
         );
-        return stepRunRow?.id ?? null;
+        if (!stepRunRow?.id) {
+          // The DB returned no rows — treat this as a fatal step error so
+          // Inngest retries the step rather than silently completing the run.
+          throw new Error(
+            `playbook-run-execute: step_run insert returned no row for step ${stepDef.id} (playbookRunId=${runId})`,
+          );
+        }
+        return stepRunRow.id;
       });
-
-      if (!stepRunId) {
-        logger.error({ runId, stepId: stepDef.id }, "playbook-run-execute: step_run insert failed");
-        break;
-      }
 
       // Emit step_started event
       const stepStartedEventType = "step_started" as const;

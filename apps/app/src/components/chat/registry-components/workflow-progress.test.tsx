@@ -183,3 +183,98 @@ describe("WorkflowProgress", () => {
     });
   });
 });
+
+// ── Cancel error surfacing ────────────────────────────────────────────────────
+// Tests that a failed DELETE /api/v1/workflow/:id call surfaces a visible
+// error to the user instead of being silently swallowed.
+
+import { fireEvent } from "@testing-library/react";
+
+describe("WorkflowProgress — cancel error surfacing", () => {
+  it("shows cancel-error alert when DELETE returns non-2xx", async () => {
+    global.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (!init?.method || init.method === "GET") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
+        });
+      }
+      // DELETE
+      return Promise.resolve({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ error: "Internal server error" }),
+      });
+    });
+
+    const WorkflowProgress = (await import("./workflow-progress")).default;
+    render(<WorkflowProgress workflowId="wf_123" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Cancel/ })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Cancel/ }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("cancel-error")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("cancel-error")).toHaveTextContent(/cancel failed/i);
+    expect(screen.getByTestId("cancel-error")).toHaveTextContent(/still running/i);
+  });
+
+  it("shows cancel-error alert when DELETE throws a network error", async () => {
+    global.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (!init?.method || init.method === "GET") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
+        });
+      }
+      return Promise.reject(new Error("ERR_NETWORK"));
+    });
+
+    const WorkflowProgress = (await import("./workflow-progress")).default;
+    render(<WorkflowProgress workflowId="wf_123" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Cancel/ })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Cancel/ }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("cancel-error")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("cancel-error")).toHaveTextContent("ERR_NETWORK");
+  });
+
+  it("does NOT show cancel-error when DELETE succeeds", async () => {
+    global.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (!init?.method || init.method === "GET") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ cancelled: true }),
+      });
+    });
+
+    const WorkflowProgress = (await import("./workflow-progress")).default;
+    render(<WorkflowProgress workflowId="wf_123" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Cancel/ })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Cancel/ }));
+
+    // Give time for the async handler to settle
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(screen.queryByTestId("cancel-error")).not.toBeInTheDocument();
+  });
+});

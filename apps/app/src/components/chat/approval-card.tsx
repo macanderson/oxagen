@@ -32,7 +32,7 @@ export function ApprovalCard({
   const [pending, setPending] = React.useState<"approved" | "denied" | null>(null);
   const [optimistic, setOptimistic] = React.useState<ApprovalResolution | undefined>(resolution);
   const [error, setError] = React.useState<string | null>(null);
-  const remaining = useCountdown(expiresAt);
+  const remaining = useCountdown(expiresAt, optimistic !== undefined);
 
   const handle = async (decision: "approved" | "denied") => {
     if (!onResolved) return;
@@ -115,13 +115,22 @@ export function ApprovalCard({
   );
 }
 
-function useCountdown(expiresAt: string): number {
+function useCountdown(expiresAt: string, stop: boolean): number {
   const target = React.useMemo(() => new Date(expiresAt).getTime(), [expiresAt]);
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    // Don't tick once the card is settled or already past its deadline — and
+    // self-clear the moment the deadline is crossed. Without this the interval
+    // re-renders a resolved/expired card every second for the rest of the
+    // conversation's life (mirrors useElapsed in background-task-tray).
+    if (stop || Date.now() >= target) return;
+    const id = setInterval(() => {
+      const t = Date.now();
+      setNow(t);
+      if (t >= target) clearInterval(id);
+    }, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [stop, target]);
   return Math.max(0, target - now);
 }
 

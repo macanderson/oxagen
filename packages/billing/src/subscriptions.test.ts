@@ -78,8 +78,40 @@ vi.mock("./checkout", () => ({
     .mockResolvedValue({ url: "https://checkout.example/session" }),
 }));
 
+// ---------------------------------------------------------------------------
+// Customers mock — resolveCustomerId dynamically imports ./customers when the
+// org has no subscription row with a stripeCustomerId.
+// ---------------------------------------------------------------------------
+
+vi.mock("./customers", () => ({
+  ensureStripeCustomer: vi.fn().mockRejectedValue(new Error("no customer in test")),
+}));
+
+// ---------------------------------------------------------------------------
+// Seats + entitlements mocks — previewPlanChange / changeOrgPlan may call these.
+// ---------------------------------------------------------------------------
+
+vi.mock("./seats", () => ({
+  getOrgSeatUsage: vi.fn().mockResolvedValue({ licenses: 5, used: 1 }),
+  SeatLimitError: class SeatLimitError extends Error {
+    code = "seat_limit_reached" as const;
+    readonly licenses: number;
+    readonly used: number;
+    constructor(licenses = 5, used = 1) {
+      super("Seat limit reached");
+      this.licenses = licenses;
+      this.used = used;
+    }
+  },
+  isSeatLimitError: (e: unknown) => e instanceof Error && (e as { code?: string }).code === "seat_limit_reached",
+}));
+
+vi.mock("./entitlements", () => ({
+  meetsMinimumTier: vi.fn().mockReturnValue(false),
+}));
+
 // Import after mocks.
-const { syncSubscriptionFromStripe, changeOrgPlan, reactivateOrgSubscription } = await import(
+const { syncSubscriptionFromStripe, changeOrgPlan, reactivateOrgSubscription, previewPlanChange } = await import(
   "./subscriptions"
 );
 
@@ -296,5 +328,80 @@ describe("reactivateOrgSubscription audit emit", () => {
     expect(event.orgId).toBe("org-abc-123");
     expect(event.outcome).toBe("success");
     expect(event.actorUserId).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// previewPlanChange — annualCents null guard (OXA-silent-fix)
+// ---------------------------------------------------------------------------
+
+describe("previewPlanChange — annual price misconfiguration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const upsertChain = { onConflictDoUpdate: vi.fn().mockResolvedValue(undefined) };
+    dbMocks.insert.mockReturnValue({ values: vi.fn().mockReturnValue(upsertChain) });
+  });
+
+  it("throws when annualCents is null for an annual-interval plan (bad-fallback fix)", async () => {
+    // Verifies fix for subscriptions.ts:631-634 where `annualCents ?? monthlyCents`
+    // previously fell back to the monthly price (e.g. $20 instead of $200) when
+    // annualCents was null, giving the customer a 10× under-quote while Stripe
+    // charged the full annual amount.
+    dbMocks.query.plans.findFirst.mockResolvedValue({
+      id: "plan-build-1",
+      tier: "build",
+      stripePriceIdMonthly: "price_build_month",
+      stripePriceIdAnnual: "price_build_year",   // annual price ID exists…
+      monthlyCents: 2000,
+      annualCents: null,                          // …but annualCents is not configured
+    });
+    // No active subscription → triggers the checkout preview path that uses fullPriceCents.
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue(undefined);
+
+    await expect(previewPlanChange("org-abc-123", "build", "year")).rejects.toThrow(
+      /annualCents/,
+    );
+  });
+
+  it("does not throw when annualCents is properly configured", async () => {
+    // Happy path: annualCents is set — the preview should compute the correct amount
+    // and return requiresCheckout: true with the annual price.
+    // (customers mock rejects so the no-active-sub path's card lookup is caught silently)
+    dbMocks.query.plans.findFirst.mockResolvedValue({
+      id: "plan-build-1",
+      tier: "build",
+      stripePriceIdMonthly: "price_build_month",
+      stripePriceIdAnnual: "price_build_year",
+      monthlyCents: 2000,
+      annualCents: 24000,
+    });
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue(undefined);
+
+    const result = await previewPlanChange("org-abc-123", "build", "year");
+
+    expect(result.requiresCheckout).toBe(true);
+    expect(result.amountCents).toBe(24000);
+    expect(result.interval).toBe("year");
+  });
+
+  it("does not throw for monthly interval even when annualCents is null", async () => {
+    // The guard must only fire for interval=year; monthly plans legitimately
+    // have annualCents=null and must not be affected.
+    dbMocks.query.plans.findFirst.mockResolvedValue({
+      id: "plan-free-1",
+      tier: "free",
+      stripePriceIdMonthly: "price_free_month",
+      stripePriceIdAnnual: null,
+      monthlyCents: 0,
+      annualCents: null,
+    });
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue(undefined);
+
+    const result = await previewPlanChange("org-abc-123", "free", "month");
+
+    // monthlyCents = 0, stripePriceIdMonthly = "price_free_month" → valid.
+    // No throw because interval !== "year".
+    expect(result.requiresCheckout).toBe(true);
+    expect(result.amountCents).toBe(0);
   });
 });

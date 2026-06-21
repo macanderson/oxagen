@@ -14,6 +14,9 @@ import {
   resolvePrompt,
   chatSystemPrompt,
   loadWorkspacePromptConfig,
+  tool,
+  type ToolSet,
+  type ModelMessage,
 } from "@oxagen/ai";
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
 import { withTenantDb, schema } from "@oxagen/database";
@@ -35,7 +38,11 @@ import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 
 const BodySchema = z.object({
-  content: z.string().min(1),
+  // Bound the message body: an unbounded `content` lets a single authed request
+  // forward an arbitrarily large prompt to the LLM, driving unbounded metering
+  // cost and blowing the per-turn token budget. 32 KiB is generous for a chat
+  // turn while capping abuse.
+  content: z.string().min(1).max(32_768),
   conversationId: z.string().nullable().default(null),
   parentMessageId: z.string().nullable().default(null),
   orgSlug: z.string().min(1),
@@ -545,6 +552,12 @@ export async function POST(request: NextRequest): Promise<Response> {
           });
         }
       } catch (err) {
+        // Log server-side first: this catch covers model-framework crashes,
+        // materializeTools failures, IAM kernel panics, and any unexpected
+        // throw in the turn. Without this, agent-turn failures are invisible
+        // in server logs and ClickHouse — an operator can't tell a transient
+        // rate-limit from a recurring code defect.
+        logger.error({ err, requestId }, "[chat/stream] turn error");
         // Surface stream errors as a text event so the client can show them.
         const message = err instanceof Error ? err.message : "Stream error";
         emit({ type: "text", messageId: requestId, text: `\n\n[Error: ${message}]` });

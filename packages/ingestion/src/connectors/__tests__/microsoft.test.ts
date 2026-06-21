@@ -150,13 +150,71 @@ describe("microsoft connector – normalizeRecord", () => {
 });
 
 describe("microsoft connector – verifyWebhook", () => {
-  const payload = Buffer.from("notification-body");
+  const secret = "my-client-state-secret";
 
-  it("returns true when secret is provided (passthrough validation)", () => {
-    expect(microsoft.verifyWebhook!(payload, {}, "any-secret")).toBe(true);
+  function makeNotificationPayload(clientState: string | undefined, count = 1): Uint8Array {
+    const notifications = Array.from({ length: count }, () => ({
+      clientState,
+      changeType: "created",
+      resource: "users/user-id/messages/msg-id",
+    }));
+    return Buffer.from(JSON.stringify({ value: notifications }));
+  }
+
+  it("returns true when all notifications have a clientState matching the secret", () => {
+    const payload = makeNotificationPayload(secret);
+    expect(microsoft.verifyWebhook!(payload, {}, secret)).toBe(true);
+  });
+
+  it("returns true for multiple notifications all with matching clientState", () => {
+    const payload = makeNotificationPayload(secret, 3);
+    expect(microsoft.verifyWebhook!(payload, {}, secret)).toBe(true);
+  });
+
+  it("returns false when clientState does not match the secret", () => {
+    const payload = makeNotificationPayload("wrong-secret");
+    expect(microsoft.verifyWebhook!(payload, {}, secret)).toBe(false);
+  });
+
+  it("returns false when any notification has a mismatched clientState", () => {
+    const body = {
+      value: [
+        { clientState: secret, changeType: "created", resource: "a" },
+        { clientState: "wrong", changeType: "created", resource: "b" },
+      ],
+    };
+    const payload = Buffer.from(JSON.stringify(body));
+    expect(microsoft.verifyWebhook!(payload, {}, secret)).toBe(false);
+  });
+
+  it("returns false when clientState field is absent from a notification", () => {
+    const body = { value: [{ changeType: "created", resource: "a" }] };
+    const payload = Buffer.from(JSON.stringify(body));
+    expect(microsoft.verifyWebhook!(payload, {}, secret)).toBe(false);
   });
 
   it("returns false when secret is null", () => {
+    const payload = makeNotificationPayload(secret);
     expect(microsoft.verifyWebhook!(payload, {}, null)).toBe(false);
+  });
+
+  it("returns false when secret is null even if payload would otherwise match", () => {
+    const payload = makeNotificationPayload(undefined);
+    expect(microsoft.verifyWebhook!(payload, {}, null)).toBe(false);
+  });
+
+  it("returns false when the notification body is not valid JSON", () => {
+    const payload = Buffer.from("not-json");
+    expect(microsoft.verifyWebhook!(payload, {}, secret)).toBe(false);
+  });
+
+  it("returns false when the body has no 'value' array", () => {
+    const payload = Buffer.from(JSON.stringify({ notifications: [] }));
+    expect(microsoft.verifyWebhook!(payload, {}, secret)).toBe(false);
+  });
+
+  it("returns false when the 'value' array is empty", () => {
+    const payload = Buffer.from(JSON.stringify({ value: [] }));
+    expect(microsoft.verifyWebhook!(payload, {}, secret)).toBe(false);
   });
 });

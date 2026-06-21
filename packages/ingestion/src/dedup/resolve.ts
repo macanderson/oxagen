@@ -50,7 +50,7 @@ export async function resolveEntity(
     const result = await session.run(
       `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
        RETURN n.publicId AS nodeId`,
-      { naturalKey: mutation.naturalKey },
+      { naturalKey: mutation.naturalKey, orgId },
     );
     const record = result.records[0];
     if (record) {
@@ -104,7 +104,7 @@ export async function resolveEntity(
               n.displayName AS displayName,
               n.properties AS properties,
               score`,
-      { vector, entityType: mutation.entityType },
+      { vector, orgId, entityType: mutation.entityType },
     );
 
     for (const record of result.records) {
