@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import * as readline from "node:readline";
-import { apiRequest, ApiError } from "../lib/api-client.js";
+import { apiRequest, requireAuth, ApiError } from "../lib/api-client.js";
 
 
 interface EraseResponse {
@@ -25,6 +25,8 @@ export const privacyEraseCommand = new Command("erase")
   .option("--org-id <id>", "Organization ID (required when --scope=org)")
   .option("-y, --yes", "Skip interactive confirmation (CI use only)")
   .action(async (options: { scope: string; orgId?: string; yes?: boolean }) => {
+    requireAuth();
+
     if (options.scope !== "user" && options.scope !== "org") {
       console.error("Error: --scope must be 'user' or 'org'");
       process.exit(1);
