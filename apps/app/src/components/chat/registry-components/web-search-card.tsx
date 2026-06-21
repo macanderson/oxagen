@@ -2,6 +2,7 @@
 import * as React from "react";
 import { Globe, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { safeHref } from "@/lib/safe-url";
 
 /**
  * web-search-card — renders web.search output: a ranked list of results with
@@ -80,26 +81,35 @@ export default function WebSearchCard(props: WebSearchCardProps): React.ReactEle
         <p className="px-4 py-3 text-sm text-muted-foreground">No results.</p>
       ) : (
         <ul className="divide-y divide-border/60">
-          {shown.map((r, i) => (
-            <li key={`${r.url}:${i}`} className="px-4 py-3">
-              <a
-                href={r.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={cn(
-                  "inline-flex items-start gap-1 text-sm font-medium text-primary",
-                  "hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          {shown.map((r, i) => {
+            // r.url is untrusted web-search/model output: validate the scheme
+            // before rendering a link. Unsafe → show the title as plain text.
+            const safe = safeHref(r.url);
+            return (
+              <li key={`${r.url}:${i}`} className="px-4 py-3">
+                {safe ? (
+                  <a
+                    href={safe}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(
+                      "inline-flex items-start gap-1 text-sm font-medium text-primary",
+                      "hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    )}
+                  >
+                    <span className="min-w-0">{r.title}</span>
+                    <ExternalLink className="mt-0.5 size-3 shrink-0 opacity-70" aria-hidden="true" />
+                  </a>
+                ) : (
+                  <span className="text-sm font-medium text-foreground">{r.title}</span>
                 )}
-              >
-                <span className="min-w-0">{r.title}</span>
-                <ExternalLink className="mt-0.5 size-3 shrink-0 opacity-70" aria-hidden="true" />
-              </a>
-              <p className="mt-0.5 text-xs text-muted-foreground">{domainOf(r.url)}</p>
-              {r.content ? (
-                <p className="mt-1 text-xs text-foreground/80">{truncate(r.content)}</p>
-              ) : null}
-            </li>
-          ))}
+                <p className="mt-0.5 text-xs text-muted-foreground">{domainOf(r.url)}</p>
+                {r.content ? (
+                  <p className="mt-1 text-xs text-foreground/80">{truncate(r.content)}</p>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       )}
 

@@ -26,7 +26,7 @@ export function OrgPrivacyPanel({ orgSlug }: { orgSlug: string }) {
       const result = await requestOrgDataExportAction(orgSlug);
       setExportState({ phase: "queued", exportId: result.exportId });
       const poll = setInterval(async () => {
-        const status = await getOrgExportStatusAction(result.exportId);
+        const status = await getOrgExportStatusAction(orgSlug, result.exportId);
         if (status?.status === "ready" && status.exportUrl) {
           clearInterval(poll);
           setExportState({ phase: "ready", downloadUrl: status.exportUrl });

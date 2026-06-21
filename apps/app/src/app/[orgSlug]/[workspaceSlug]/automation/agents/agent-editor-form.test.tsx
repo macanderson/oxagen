@@ -65,11 +65,20 @@ vi.mock("@/components/ui/button", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () => ({
-  Save: () => <svg aria-hidden="true" />,
-  Plus: () => <svg aria-hidden="true" />,
-  Trash2: () => <svg aria-hidden="true" />,
-}));
+// Auto-stub every icon: a hardcoded subset breaks whenever a component in the
+// render tree adds an icon (this test previously failed on a missing `Check`).
+vi.mock("lucide-react", () => new Proxy(
+  {},
+  {
+    get: (_target, prop) => {
+      if (prop === "__esModule") return true;
+      if (typeof prop === "symbol") return undefined;
+      const Icon = () => <svg aria-hidden="true" data-icon={String(prop)} />;
+      Icon.displayName = `MockIcon(${String(prop)})`;
+      return Icon;
+    },
+  },
+));
 
 import { AgentEditorForm } from "./agent-editor-form";
 import { defaultAgentConfig } from "./agent-ui";

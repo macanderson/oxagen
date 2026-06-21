@@ -9,8 +9,14 @@ import { isSeatLimitError, assertSeatAvailable } from "@oxagen/billing";
 import { sendEmail, invitationEmailTemplate } from "@oxagen/notifications";
 import { loadEnv } from "@oxagen/config/env";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg } from "@/lib/resolve-org";
+import { resolveOrg, getOrgRole } from "@/lib/resolve-org";
 import { logger, maskEmail } from "@oxagen/handlers/logger";
+
+// Roles permitted to invite members at all. A plain member cannot grow the org.
+const INVITER_ROLES = new Set(["owner", "admin"]);
+// Elevated roles only an owner may grant — prevents an admin from minting peers
+// at or above their own privilege (privilege-escalation guard).
+const OWNER_GRANTABLE_ROLES = new Set(["owner", "admin"]);
 
 // Sentinel workspaceId for org-only actions (no workspace context). — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
@@ -29,6 +35,7 @@ export type InviteMemberResult =
   | { ok: true }
   | { ok: false; code: "seat_limit_reached"; billingHref: string }
   | { ok: false; code: "validation_error"; error: string }
+  | { ok: false; code: "forbidden"; error: string }
   | { ok: false; code: "already_invited"; error: string }
   | { ok: false; code: "internal"; error: string };
 
@@ -43,6 +50,40 @@ export async function inviteMemberAction(
 
   const { orgSlug, email, role } = parsed.data;
   const tenant = await resolveOrg(orgSlug);
+
+  // Authorization gate. resolveOrg only maps slug→id; it is NOT a membership
+  // check, and apps/app does not bootstrap IAM, so the invite must be gated
+  // here. Without this, any authenticated user could POST an arbitrary orgSlug
+  // + role:"owner" and mint an owner invitation in any org (cross-tenant IDOR +
+  // privilege escalation). A non-member and a non-privileged member are treated
+  // identically ("forbidden") so org existence is never confirmed to outsiders.
+  const inviterRole = await getOrgRole(tenant.id, session.user.id);
+  if (!inviterRole || !INVITER_ROLES.has(inviterRole)) {
+    emitSecurityEvent({
+      eventType: "org.member_invited",
+      actorUserId: session.user.id,
+      orgId: tenant.id,
+      workspaceId: null,
+      capability: "org.member.add",
+      outcome: "deny",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
+    return {
+      ok: false,
+      code: "forbidden",
+      error: "You don't have permission to invite members to this organization.",
+    };
+  }
+  // Only an owner may grant owner/admin — an admin cannot escalate a peer.
+  if (OWNER_GRANTABLE_ROLES.has(role) && inviterRole !== "owner") {
+    return {
+      ok: false,
+      code: "forbidden",
+      error: "Only an owner can grant the owner or admin role.",
+    };
+  }
 
   try {
     // Assert a license is available before creating the invitation.

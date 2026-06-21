@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 import { getSessionOrRedirect } from "@/lib/session";
 import { AppShell } from "@/components/shell/app-shell";
+import type { ShellNavData } from "@/components/shell/shell-nav-slots";
 import { PageContextProvider } from "@/lib/page-context";
 import { AskDrawer } from "@/components/shell/ask/ask-drawer";
 import { CommandMenu } from "@/components/shell/ask/command-menu";
@@ -60,11 +61,20 @@ export default async function AccountLayout({
 
   const ctx = { orgSlug: primaryOrg.slug };
 
+  // The account shell has no workspace/balance context and the org list is
+  // already resolved above; wrap it in a settled promise to satisfy AppShell's
+  // streamed navDataPromise contract. — progressive-loading-ux
+  const navDataPromise: Promise<ShellNavData> = Promise.resolve({
+    availableOrgs: orgsRows,
+    availableWorkspaces: [],
+    balance: null,
+  });
+
   return (
     <PageContextProvider>
       <AppShell
         org={primaryOrg}
-        availableOrgs={orgsRows}
+        navDataPromise={navDataPromise}
         user={user}
       >
         {children}

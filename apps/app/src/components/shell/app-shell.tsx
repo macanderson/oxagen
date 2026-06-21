@@ -11,13 +11,17 @@
  * The shell is a server component. Collapse state + the interactive header live
  * in the client ShellFrame, wrapped here in SidebarProvider. PageContextProvider,
  * AskDrawer, and CommandMenu are mounted in the route layout (not here).
+ *
+ * Heavy nav data (org list, workspace list, balance) arrives as `navDataPromise`
+ * and is resolved inside ShellFrame's <Suspense> slots, so the frame + page
+ * children render without waiting on it. — progressive-loading-ux
  */
 
 import type { ReactNode } from "react";
 import { SidebarProvider } from "./sidebar-context";
 import { ShellFrame } from "./shell-frame";
 import { MobileBottomBar } from "./mobile-bottom-bar";
-import type { OrgOption } from "@/components/org/org-switcher";
+import type { ShellNavData } from "./shell-nav-slots";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
 import type { SessionUser } from "./user-switcher";
 import { createWorkspaceAction } from "@/app/[orgSlug]/new-workspace/actions";
@@ -28,12 +32,10 @@ import type { PlanTier } from "@oxagen/oxagen/types";
 export interface AppShellProps {
   org: ResolvedOrg;
   workspace?: ResolvedWorkspace;
-  availableOrgs: OrgOption[];
-  availableWorkspaces?: { publicId: string; slug: string; name: string }[];
+  /** Heavy nav data (org list, workspace list, balance) streamed off the layout's critical path. */
+  navDataPromise: Promise<ShellNavData>;
   /** May be undefined during a transient post-signup render; guarded in UserSwitcher. */
   user: SessionUser | undefined;
-  /** Org credit balance for the always-visible header pill. Null hides it. */
-  balance?: { cents: number; low: boolean } | null;
   /** Org subscription tier — gates enterprise-only nav items (e.g. Access). */
   planTier?: PlanTier;
   children: ReactNode;
@@ -42,10 +44,8 @@ export interface AppShellProps {
 export function AppShell({
   org,
   workspace,
-  availableOrgs,
-  availableWorkspaces,
+  navDataPromise,
   user,
-  balance,
   planTier,
   children,
 }: AppShellProps) {
@@ -64,10 +64,8 @@ export function AppShell({
       <ShellFrame
         org={org}
         workspace={workspace}
-        availableOrgs={availableOrgs}
-        availableWorkspaces={availableWorkspaces}
+        navDataPromise={navDataPromise}
         user={user}
-        balance={balance}
         planTier={planTier}
         createWorkspaceAction={boundCreateWorkspace}
       >

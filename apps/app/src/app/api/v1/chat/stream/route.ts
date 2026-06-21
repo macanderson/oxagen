@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { tool, type ToolSet } from "ai";
+import { tool, type ToolSet } from "@oxagen/ai";
 import { and, desc, eq } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
@@ -14,6 +14,9 @@ import {
   resolvePrompt,
   chatSystemPrompt,
   loadWorkspacePromptConfig,
+  tool,
+  type ToolSet,
+  type ModelMessage,
 } from "@oxagen/ai";
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
 import { withTenantDb, schema } from "@oxagen/database";
@@ -22,7 +25,7 @@ import { invoke } from "@oxagen/oxagen";
 import { formFill } from "@oxagen/oxagen/contracts/form.fill";
 import { fieldDescriptorSchema } from "@oxagen/oxagen/contracts/form.fill";
 import { randomUUID } from "node:crypto";
-import type { ModelMessage } from "ai";
+import type { ModelMessage } from "@oxagen/ai";
 import type { StreamEvent } from "@/components/chat/stream-event-types";
 import { autoTitleConversation } from "./auto-title";
 import { streamMediaGeneration } from "./media-generation";
@@ -35,7 +38,11 @@ import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 
 const BodySchema = z.object({
-  content: z.string().min(1),
+  // Bound the message body: an unbounded `content` lets a single authed request
+  // forward an arbitrarily large prompt to the LLM, driving unbounded metering
+  // cost and blowing the per-turn token budget. 32 KiB is generous for a chat
+  // turn while capping abuse.
+  content: z.string().min(1).max(32_768),
   conversationId: z.string().nullable().default(null),
   parentMessageId: z.string().nullable().default(null),
   orgSlug: z.string().min(1),

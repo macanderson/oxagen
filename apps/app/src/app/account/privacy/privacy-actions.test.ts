@@ -1,10 +1,11 @@
 /**
- * privacy-actions.test.ts — unit tests for getExportStatusAction.
+ * privacy-actions.test.ts — authorization regression test for the account-level
+ * export-status read.
  *
- * Regression for the cross-user IDOR silent-failure fix: the status poll must
- * self-authenticate and scope the lookup to the caller's own user id, so one
- * user can never retrieve another user's signed GDPR export URL by guessing a
- * UUID.
+ * Defect fixed: getExportStatusAction queried privacyExportRequests by id only
+ * under withSystemDb (RLS bypassed) with no session and no userId filter, so any
+ * authed user could poll any export id and retrieve another user's signed
+ * exportUrl (IDOR). It must now require a session and scope by userId.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
