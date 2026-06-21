@@ -1,10 +1,10 @@
 ---
-description: Comprehensive React/JSX code review for hook correctness, render performance, server/client component boundaries, accessibility, and React-specific security. Invokes the react-reviewer agent (and typescript-reviewer alongside on TSX/JSX changes).
+description: Comprehensive React/JSX code review for hook correctness, render performance, server/client component boundaries, accessibility, and React-specific security. Invokes the react-reviewer agent (and eval-typescript alongside on TSX/JSX changes).
 ---
 
 # React Code Review
 
-This command invokes the **react-reviewer** agent for React-specific code review. For pull requests touching `.tsx`/`.jsx` files, both `react-reviewer` and `typescript-reviewer` should run — each owns a distinct lane.
+This command invokes the **react-reviewer** agent for React-specific code review. For pull requests touching `.tsx`/`.jsx` files, both `react-reviewer` and `eval-typescript` should run — each owns a distinct lane.
 
 ## What This Command Does
 
@@ -25,18 +25,18 @@ Use `/react-review` when:
 - Reviewing a new hook for rules-of-hooks and dependency correctness
 - Auditing a Next.js App Router server/client component boundary
 
-For pure `.ts`/`.js` changes with no React imports, use `/code-review` (general) or invoke `typescript-reviewer` directly.
+For pure `.ts`/`.js` changes with no React imports, use `/code-review` (general) or invoke `eval-typescript` directly.
 
 ## Scope vs `/code-review` and TypeScript Review
 
 | Tool | Scope |
 |---|---|
 | `react-reviewer` (this command) | Hooks rules, JSX, RSC, a11y, React-specific security, render perf |
-| `typescript-reviewer` | Generic TS/JS — `any` abuse, async correctness, Node security |
-| `security-reviewer` | Project-wide security audit |
+| `eval-typescript` | Generic TS/JS — `any` abuse, async correctness, Node security |
+| `eval-security` | Project-wide security audit |
 | `/code-review` | Generic uncommitted-changes or PR review |
 
-On a TSX/JSX PR, invoke both `react-reviewer` and `typescript-reviewer`. Findings from each are non-overlapping by design.
+On a TSX/JSX PR, invoke both `react-reviewer` and `eval-typescript`. Findings from each are non-overlapping by design.
 
 ## Review Categories
 
@@ -165,6 +165,6 @@ Recommendation: FAIL: Block merge until CRITICAL issue is fixed
 ## Related
 
 - Agent: `agents/react-reviewer.md`
-- Companion agent: `agents/typescript-reviewer.md` (run alongside for TSX/JSX PRs)
+- Companion agent: `agents/eval-typescript.md` (run alongside for TSX/JSX PRs)
 - Skills: `skills/react-patterns/`, `skills/react-testing/`, `skills/accessibility/`
 - Rules: `rules/react/`

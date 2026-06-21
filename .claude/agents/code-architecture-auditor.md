@@ -1,1 +1,0 @@
-../../.agents/agents/code-architecture-auditor.md

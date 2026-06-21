@@ -40,6 +40,7 @@ Construct a rubric appropriate to the file types under review. Every criterion m
 | Completeness | All requirements addressed, no missing cases |
 | Internal consistency | No contradictions between files or sections |
 | No regressions | Changes don't break existing behavior |
+| Performance | Code is async (if possible) and performance is optimized (cached used, etc.) |
 
 Add domain-specific criteria based on file types (e.g., type safety for TS, memory safety for Rust, migration safety for SQL).
 
@@ -63,6 +64,8 @@ Each reviewer evaluates every rubric criterion as PASS or FAIL, then returns str
 The verdict gate (Step 4) maps these to NICE/NAUGHTY: both PASS → NICE, either FAIL → NAUGHTY.
 
 #### Reviewer A: Claude Agent (always runs)
+
+If `$ARGUMENTS` specifies a model to use for the second reviewer use that model instead of the `opus` model specified below.
 
 Launch an Agent (subagent_type: `code-reviewer`, model: `opus`) with the full rubric + all files under review. The prompt must include:
 - The complete rubric
@@ -101,7 +104,7 @@ rm -f "$PROMPT_FILE"
 ```
 
 **Claude Agent fallback** (only if neither `codex` nor `gemini` is installed)
-Launch a second Claude Agent (subagent_type: `code-reviewer`, model: `opus`). Log a warning that both reviewers share the same model family — true model diversity was not achieved but context isolation is still enforced.
+Launch a second Claude Agent (subagent_type: `eval-code`, model: `sonnet`). Log a warning that both reviewers share the same model family — true model diversity was not achieved but context isolation is still enforced.
 
 In all cases, the reviewer must return the same structured JSON verdict as Reviewer A.
 

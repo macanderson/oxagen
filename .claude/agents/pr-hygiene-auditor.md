@@ -1,1 +1,0 @@
-../../.agents/agents/pr-hygiene-auditor.md

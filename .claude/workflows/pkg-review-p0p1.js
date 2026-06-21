@@ -11,13 +11,13 @@ const WT = '/home/macanderson/Workspaces/oxagen-pkg-review'
 const MANIFEST = `${WT}/.pkg-review-units.json`
 
 const AGENT_OF = {
-  db: 'database-reviewer',
-  perf: 'performance-optimizer',
-  ts: 'typescript-reviewer',
-  types: 'type-design-analyzer',
-  comments: 'comment-analyzer',
-  arch: 'code-architecture-auditor',
-  sec: 'security-reviewer',
+  db: 'eval-database',
+  perf: 'eval-performance',
+  ts: 'eval-typescript',
+  types: 'eval-types',
+  comments: 'eval-comments',
+  arch: 'eval-architecture',
+  sec: 'eval-security',
 }
 
 const LENS_FOCUS = {
