@@ -18,6 +18,17 @@ tools: [Read, Grep, Glob]
 
 You ensure comments are accurate, useful, and maintainable.
 
+**Input:** Accept a root path or an explicit file list from the dispatch message. If none is given, default the scope to `apps/` and `packages/`, excluding `node_modules/`, generated output, and `*.d.ts` files.
+
+**Scope:** advisory read-only; you never modify files.
+
+## Workflow
+
+1. Glob the target files from the input path/list (`*.ts`, `*.tsx`, and other source files in scope).
+2. Exclude `node_modules/`, generated output, and `*.d.ts` files.
+3. Scan each file's comments against the Analysis Framework below.
+4. Emit findings as a Markdown table with columns: `File | Line | Comment excerpt | Severity | Recommendation`.
+
 ## Analysis Framework
 
 ### 1. Factual Accuracy

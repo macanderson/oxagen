@@ -1,7 +1,7 @@
 ---
 name: architect
 description: Software architecture specialist for system design, scalability, and technical decision-making. Use PROACTIVELY when planning new features, refactoring large systems, or making architectural decisions.
-tools: ["Read", "Grep", "Glob"]
+tools: ["Read", "Grep", "Glob", "Write"]
 model: opus
 ---
 
@@ -114,40 +114,41 @@ For each design decision, document:
 
 ## Architecture Decision Records (ADRs)
 
-For significant architectural decisions, create ADRs:
+For significant architectural decisions, create ADRs in `docs/adr/`:
 
 ```markdown
-# ADR-001: Use Redis for Semantic Search Vector Storage
+# ADR-001: Use Neo4j for Semantic Retrieval and Embedding Storage
 
 ## Context
-Need to store and query 1536-dimensional embeddings for semantic market search.
+Need to store and query embeddings plus the ontology/entity relationships
+that back semantic retrieval and knowledge-graph traversal.
 
 ## Decision
-Use Redis Stack with vector search capability.
+Store embeddings and entity relationships in Neo4j, alongside the existing
+graph data (ontology, workflow lineage, agent memory). This keeps semantic
+retrieval co-located with the relationships it traverses, consistent with the
+four-store boundary (graph data only in Neo4j).
 
 ## Consequences
 
 ### Positive
-- Fast vector similarity search (<10ms)
-- Built-in KNN algorithm
-- Simple deployment
-- Good performance up to 100K vectors
+- Semantic retrieval co-located with the graph it traverses (no cross-store join)
+- Reuses the existing graph store — no new datastore to operate
+- Honors the four-store data model boundaries
 
 ### Negative
-- In-memory storage (expensive for large datasets)
-- Single point of failure without clustering
-- Limited to cosine similarity
+- Vector index tuning in Neo4j is less mature than dedicated vector DBs
+- Graph store now carries embedding write/read load — capacity-plan accordingly
 
 ### Alternatives Considered
-- **PostgreSQL pgvector**: Slower, but persistent storage
-- **Pinecone**: Managed service, higher cost
-- **Weaviate**: More features, more complex setup
+- **Postgres pgvector**: would put graph/semantic concerns in the transactional store — violates the four-store boundary
+- **Dedicated vector DB (Pinecone/Weaviate)**: adds a fifth datastore and a cross-store join to the graph
 
 ## Status
 Accepted
 
 ## Date
-2025-01-15
+2026-06-20
 ```
 
 ## System Design Checklist
@@ -192,29 +193,25 @@ Watch for these architectural anti-patterns:
 - **Tight Coupling**: Components too dependent
 - **God Object**: One class/component does everything
 
-## Project-Specific Architecture (Example)
+## Oxagen Platform Architecture
 
-Example architecture for an AI-powered SaaS platform:
+The Oxagen monorepo is deployed on Vercel and organized as four apps over a shared four-store data model.
 
-### Current Architecture
-- **Frontend**: Next.js 15 (Vercel/Cloud Run)
-- **Backend**: FastAPI or Express (Cloud Run/Railway)
-- **Database**: PostgreSQL (Supabase)
-- **Cache**: Redis (Upstash/Railway)
-- **AI**: Claude API with structured output
-- **Real-time**: Supabase subscriptions
+### Apps
+- **`apps/app`**: Next.js 16.2.7 App Router (RSC, streaming). Request interception via `proxy.ts` (not `middleware.ts`).
+- **`apps/api`**: Hono REST. Routes at `apps/api/src/routes/v1/<capability>.ts`.
+- **`apps/mcp`**: xmcp. Tools at `apps/mcp/src/tools/<capability>.ts`. Connect at `/mcp`.
+- **`apps/cli`**: Commander + Ink CLI.
 
-### Key Design Decisions
-1. **Hybrid Deployment**: Vercel (frontend) + Cloud Run (backend) for optimal performance
-2. **AI Integration**: Structured output with Pydantic/Zod for type safety
-3. **Real-time Updates**: Supabase subscriptions for live data
-4. **Immutable Patterns**: Spread operators for predictable state
-5. **Many Small Files**: High cohesion, low coupling
+### Four-store data model (authoritative boundaries)
+- **PostgreSQL via Drizzle** — transactional state only: users, orgs, permissions, billing, configs, job metadata, durable application state.
+- **Neo4j** — graph data only: ontology/entity relationships, workflow lineage, agent memory, semantic retrieval.
+- **ClickHouse** — append-only runtime events only: execution events, logs, metrics, traces, token analytics, telemetry.
+- **Vercel Blob via `@oxagen/storage`** — binary assets only: avatars, generated media, uploaded files. The reference row (URL + metadata) lives in Postgres.
 
-### Scalability Plan
-- **10K users**: Current architecture sufficient
-- **100K users**: Add Redis clustering, CDN for static assets
-- **1M users**: Microservices architecture, separate read/write databases
-- **10M users**: Event-driven architecture, distributed caching, multi-region
+### Repo constraints
+- **Capability parity rule**: every new user-facing action fans out as contract (`packages/oxagen/src/contracts/`) → API route → MCP tool → CLI command → docs. Verify with `pnpm check:manifest`.
+- **Never cross the four-store boundaries**: no analytics in Neo4j, no graph relationships in Postgres, no transactional state in ClickHouse, no binary payloads in any DB.
+- **All LLM calls go through `@oxagen/ai`** (metering/observability); never import `generateText`/`streamText`/`generateObject` directly from `ai`.
 
 **Remember**: Good architecture enables rapid development, easy maintenance, and confident scaling. The best architecture is simple, clear, and follows established patterns.

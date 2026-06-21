@@ -11,12 +11,16 @@ edit files. Goal: industry-leading coverage that runs *fast* on PRs — speed co
 the affected graph + cache, not from skipping tests.
 
 1. **Skill adherence** — re-check the working diff against each `.agents/skills`
-   principle; list violations per skill.
-2. **Regressions** — run the affected graph: `turbo run test --filter='...[origin/main]'`.
-   Any test newly failing vs `main` is a FAIL.
-3. **Test coverage** — target ≥85% line / ≥80% branch on changed packages; a whole
-   untested module is a FAIL regardless of repo average. Confirm per-package
-   thresholds are enforced in config (vitest `coverage.thresholds`, pytest
+   principle; list violations per skill (skip and mark N/A if no working diff is in
+   context).
+2. **Regressions** — run `pgrep -fl vitest` first; if a suite is already in flight,
+   skip the test run and note it. Otherwise run the affected graph:
+   `turbo run test:unit --filter='...[origin/main]'`. Any test newly failing vs `main`
+   is a FAIL.
+3. **Test coverage** — require coverage at or above each package's existing
+   `vitest.config.ts` `coverage.thresholds`; read it per changed package before
+   judging. A whole untested module is a FAIL regardless of repo average. Confirm
+   per-package thresholds are enforced in config (vitest `coverage.thresholds`, pytest
    `--cov-fail-under`) so the gate lives in the build. Flag assertion-light tests
    (execute code, assert little) as WARN.
 4. **Turborepo cache hygiene** — audit `turbo.json`: every `test`/`build`/`lint`/
@@ -28,9 +32,11 @@ the affected graph + cache, not from skipping tests.
    change invalidates a *small* set — world-invalidation signals a bad edge.
 5. **Remote cache** — confirm one remote cache backs both CI and Vercel (same
    `TURBO_TOKEN` + `TURBO_TEAM`); two disconnected caches → WARN. Vercel build command
-   is `turbo run build --filter=<app>`, not a bare `next build`. Report cache-hit %
-   over the last 5 PR runs + 5 deploys; <70% on no-op-adjacent changes → WARN with the
-   likely cause.
+   is `turbo run build --filter=<app>`, not a bare `next build`. Cache-hit % is only
+   available via the Vercel Turbo dashboard or `turbo run <task> --dry=json` (FULL/HIT
+   per task); if unavailable, report 'not retrievable via CLI' rather than estimating.
+   Report cache-hit % over the last 5 PR runs + 5 deploys; <70% on no-op-adjacent
+   changes → WARN with the likely cause.
 6. **PR build-time budget** — report wall-clock for affected
    `lint + typecheck + test + build`; over the 8-min default → WARN with the longest /
    cache-missed tasks and a concrete fix (split a package, shard Playwright, move heavy
