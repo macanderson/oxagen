@@ -86,3 +86,34 @@
     display: block;
   }
 }
+
+/* ── CSS fallback spinner (shown when GIF assets fail to load) ── */
+.cssSpinner {
+  width: 60px;
+  height: 60px;
+  /* Default color for dark background (#0b0d16) */
+  color: #e0ddd8;
+  border: 4px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: pwa-splash-spin 0.7s linear infinite;
+}
+
+@media (prefers-color-scheme: light) {
+  .cssSpinner {
+    /* Color for light background (#faf7f2) */
+    color: #2a2a35;
+  }
+}
+
+@keyframes pwa-splash-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cssSpinner {
+    animation: none;
+  }
+}
