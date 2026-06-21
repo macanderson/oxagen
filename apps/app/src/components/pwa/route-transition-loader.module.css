@@ -42,9 +42,25 @@
     }
   }
 
+  .cssSpinner {
+    width: 28px;
+    height: 28px;
+    color: #a0a0b0;
+    border: 3px solid color-mix(in srgb, currentColor 25%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: route-loader-spin 0.7s linear infinite;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .loader {
       display: none;
     }
+  }
+}
+
+@keyframes route-loader-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
