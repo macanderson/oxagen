@@ -4,19 +4,22 @@
 
 When you encounter a bug, broken path, dead value, mispriced meter, stale config, or any defect — **fix it now, in place, completely.** Investigate to root cause, fix every co-located instance, and verify with tests/typecheck before declaring done. The only acceptable deferral is a true external action you cannot perform (e.g. flipping a prod env var) — and even then, fix everything in code first.
 
-## Operating mode — branch, commit, NEVER push
+## Operating mode — branch early, commit often, push regularly, open a PR
 
-`main` is a **shared, contested branch.** Multiple Claude sessions and an automated optimizer work this same tree in parallel, and the git **pre-push hook runs the affected unit-test suite (`turbo run test:unit --filter=...[origin/main]`) as a gate on every push.** If several agents push at once, those test runs stack into overlapping vitest herds that can saturate every core and take the machine down. The workflow below exists to make that impossible.
+`main` is a **shared, contested branch.** Multiple Claude sessions and an automated optimizer work this same tree in parallel. **Never commit or push directly to `main`** — every body of work lives on its own branch, pushed to the remote, with a pull request open against `main`. Test suites no longer run in git hooks (they run in CI on every PR and push), so pushing is cheap and safe — push early and often.
 
-- **NEVER push. Commit and stop.** Do the work, run `pnpm gate` locally, commit it, and **leave it committed but unpushed.** Mac performs every push himself, one at a time — that is what keeps the pre-push test gate from ever running concurrently. This is a hard rule: it **overrides** any older "commit and push directly to `main`" guidance. The *only* exception is when Mac explicitly says "push" in this session.
+- **Branch early and push it immediately.** The moment you start a body of work, cut a branch from a fresh, synced `main` and push it to the remote (`git push -u origin <branch>`). This backs the work up and makes it visible to the other sessions right away, before you've written much.
+- **Commit frequently, push regularly.** Commit in small increments as you go — at every meaningful step, not just at the end — and push after committing so the remote branch stays current. Don't hoard a giant uncommitted or unpushed change. A work-in-progress branch that's pushed beats a perfect change sitting on your disk.
+- **Open a pull request for your work.** Open a PR against `main` (a draft early on is fine) and keep pushing to it. The PR is where CI runs the full affected gate and where the work gets reviewed and merged.
+- **Don't over-optimize for cleanliness.** Many agents touch this tree at once, so unrelated changes will occasionally land in the same branch or PR by accident, and commit history will be messy. **That is fine and expected.** Do not rebase, squash, or cherry-pick to "tidy" shared history, and do not block on perfect commit or PR boundaries. Correct, complete, pushed work beats a pretty history every time.
 - **Never burn CPU on redundant or parallel heavy runs.** Verify with the **narrowest** command that proves the change — a single package's `test:unit` / `test:coverage`, or one test file — not a whole-repo run. Before launching anything heavy, check for an in-flight run (`pgrep -fl vitest`, `pgrep -fl lefthook`) and **wait** rather than stack on top of it. Never run two full suites at once.
-- **NEVER run all tests — this is a hard rule for every agent and subagent.** Do not run `pnpm test`, `turbo run test`, a whole-repo `pnpm gate`, or any all-package/all-file suite. Run ONLY the specific tests obviously implicated by the files you changed: map each changed file to its nearest test and run just that file or that one package's `test:unit` (e.g. `pnpm --filter @oxagen/billing test:unit -- grants.test.ts`). Subagents make edits and write tests but do **not** execute suites unless explicitly told to run one specific file. The full gate runs in CI after Mac pushes. When you dispatch any subagent, restate this rule in its prompt verbatim.
+- **NEVER run all tests — this is a hard rule for every agent and subagent.** Do not run `pnpm test`, `turbo run test`, a whole-repo `pnpm gate`, or any all-package/all-file suite. Run ONLY the specific tests obviously implicated by the files you changed: map each changed file to its nearest test and run just that file or that one package's `test:unit` (e.g. `pnpm --filter @oxagen/billing test:unit -- grants.test.ts`). Subagents make edits and write tests but do **not** execute suites unless explicitly told to run one specific file. The full gate runs in CI on every push and PR — that is the authoritative gate, not your laptop. When you dispatch any subagent, restate this rule in its prompt verbatim.
 - **Always start from a fresh, synced cut of `main`:**
   1. `git fetch origin`.
   2. If `origin/main` is ahead of local `main`, bring local up first: `git switch main && git rebase origin/main`, and **resolve any rebase conflicts** before continuing.
   3. If local `main` already matches `origin/main`, skip the rebase.
   4. Cut the branch (or worktree) from the now-current local `main`.
-- **Use a git worktree for any large body of work — do this autonomously, do NOT ask.** `git worktree add ../oxagen-<slug> -b <branch>` off the fresh cut of `main`; do the work in isolation, commit there, and leave it for Mac to review and push. Small, single-file, sequentially-dependent edits may stay in the main workspace on a branch.
+- **Use a git worktree for any large body of work — do this autonomously, do NOT ask.** `git worktree add ../oxagen-<slug> -b <branch>` off the fresh cut of `main`; do the work in isolation, commit and push frequently, and open a PR. Small, single-file, sequentially-dependent edits may stay in the main workspace on a branch.
 - **Dangerous, breaking edits are allowed.** Non-negotiable: **everything committed must be functionally complete** — fully wired end-to-end, every layer present, tests passing, no dead code.
 
 ## Test gate enforcement
@@ -26,7 +29,7 @@ Every code change must leave the package's test suite at or above its `vitest.co
 - **New code requires new tests.** Route handlers, contracts, utilities — all need tests before the commit lands.
 - **E2E parity.** Any user-facing flow added or changed needs an e2e test in `apps/app/e2e/`.
 - **Thresholds are ratchets capped at 90 — never lower them.** When new tested code raises coverage, bump the threshold only up to `floor(current coverage − 2.5)`, so the gate always keeps **at least 2.5% headroom** below actual coverage (razor-thin gates fail CI on environment noise). Never bump unless that headroom holds, **never past 90** (once a metric is at or above 90%, its gate floor is 90 and stays there), and never reduce a threshold below its current value.
-- **Run `pnpm gate` before committing a finished body of work.** Lint (`--max-warnings 0`), typecheck, coverage, tests, builds, migrations — all must pass locally. (You never push; the commit is the handoff to Mac.)
+- **Run `pnpm gate` before marking a PR ready to merge.** Lint (`--max-warnings 0`), typecheck, coverage, tests, builds, migrations — all must pass locally. (This is a pre-merge gate, not a per-commit one — commit and push freely as you work; run the full gate once the body of work is finished.)
 - **Lint is part of the gate.** Zero ESLint warnings; no `eslint-disable` unless genuinely inapplicable (inline comment required).
 
 ## Verification discipline
@@ -41,7 +44,7 @@ Never claim a task is complete without concrete verification. Always provide evi
 
 ## Golden rule — the three-command gate
 
-**Before committing a finished body of work (which Mac — not you — will later push), ALL THREE of the following must pass locally with no errors:**
+**Before marking a finished body of work ready to merge, ALL THREE of the following must pass locally with no errors:**
 
 ```bash
 pnpm i --no-frozen-lockfile          # sync lockfile; run after any dep change
@@ -57,7 +60,7 @@ pnpm gate                            # lint + typecheck + coverage + tests + mig
 
 **If you hit a "port already in use" error, run `pnpm kill` first**, then retry.
 
-This gate is non-negotiable. Do not consider the work done — or hand it to Mac to push — until all four commands succeed. You never run `git push` yourself.
+This gate is non-negotiable. Do not mark the work ready to merge until all four commands succeed. (Incremental commits and pushes to your branch during the work do not each need the full gate — that would mean running all tests, which is banned; the gate is a pre-merge check.)
 
 ## Dependencies
 
@@ -67,10 +70,10 @@ This gate is non-negotiable. Do not consider the work done — or hand it to Mac
 
 ## CI / Build
 
-**Before committing a finished body of work (so it is safe for Mac to push):**
+**Before marking a PR ready to merge:**
 1. Run the three-command gate above — build, dev, and `pnpm gate` all pass.
 2. Verify `.env.example` and lockfile are in sync.
-3. CI runs after **Mac** pushes; confirm green via `gh run watch` only when Mac asks you to watch a push he made. You do not push.
+3. CI runs on every push and PR; after you push, confirm it green via `gh run watch`.
 
 ## Database and migration targeting
 
@@ -85,7 +88,7 @@ Before running any mutation/migration script, **confirm you are targeting the co
 
 - **Use writable agents.** Architect agents return blueprints only; use `general-purpose` or equivalent for file edits.
 - **Grant full find-and-fix permissions.** Bug-fix workers must be able to diagnose, fix across files, run tests, and commit.
-- **Subagents never push either.** They commit on the working branch/worktree and stop; the no-push rule (see **Operating mode**) applies to every agent you dispatch.
+- **Subagents commit and push too.** They commit frequently on the working branch/worktree, same as you; the session that owns the branch keeps it pushed and opens the PR. When dispatching a subagent, tell it which branch it is on.
 - **Dispatch the test-completeness-judge before committing a finished body of work.**
 - **Verify agents actually committed.** Run `git log -5 --oneline` (and `git status`) on the branch/worktree. Do not accept "committed" claims without this.
 
@@ -95,15 +98,15 @@ For files >50k tokens, do NOT read the whole file. Grep or slice first:
 - `grep "pattern" file | head -50` for matching lines
 - `sed -n '/START/,/END/p' file | head -100` for sections
 
-## Completion workflow — commit, hand off (never push)
+## Completion workflow — branch, commit, push, open a PR
 
-1. Cut a fresh, synced branch/worktree from `main` (see **Operating mode** — fetch, rebase local `main` onto `origin/main` if behind, resolve conflicts, then cut).
-2. Implement all code changes.
+1. Cut a fresh, synced branch/worktree from `main` (see **Operating mode** — fetch, rebase local `main` onto `origin/main` if behind, resolve conflicts, then cut) and **push it to the remote immediately** (`git push -u origin <branch>`).
+2. Implement all code changes, **committing and pushing frequently** as you go.
 3. Write unit tests for all new/changed logic.
 4. Write E2E tests for user-facing changes (screenshots to `e2e/screenshots/`).
 5. Run `pnpm gate` — all gates green.
 6. Dispatch **test-completeness-judge** to audit coverage. Re-run until APPROVED.
-7. **Commit** the work on its branch and **leave it committed but unpushed.** Tell Mac it is ready and on which branch/worktree. **Mac pushes** — you never run `git push` and never open the PR yourself unless he explicitly asks.
+7. Push the final commits and **open (or mark ready) a pull request against `main`.** Confirm CI green via `gh run watch`. Don't fuss over perfectly clean commits or a perfectly scoped PR — see **Operating mode**.
 
 ## Working with this user
 
@@ -136,7 +139,7 @@ Decomposition:
 - **`test-completeness-judge`** — gates PR opening. Audits unit, integration, E2E coverage with proof. Do not open PR until judge approves.
 - **`ci-green`** — full local CI gate, env file sync, push, watch GitHub Actions until green.
 
-Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first, then `ci-green` to run the full local gate before committing. (`ci-green` may also push and watch CI — invoke that part **only** when Mac explicitly asks you to push.)
+Routing: code/schema/test/PR/CI → `oxagen-engineering-policy` first, then `ci-green` to run the full local gate, push, and watch CI green before opening or finalizing the PR.
 UI → `coss-ui` + `frontend-patterns` + component libs as needed.
 Auth → `vendor-better-auth` + Better Auth `*-best-practices`. New features → `oxagen-feature`.
 
@@ -258,7 +261,7 @@ git fetch origin && git rebase origin/main  # on main: sync local to remote befo
 - **Turbopack extensionless imports** — `import Foo from "./Foo"` not `"./Foo.tsx"`.
 - **`proxy.ts` not `middleware.ts`** — `middleware.ts` is no longer recognized.
 - **Raw `db()` is banned** — use `withTenantDb` / `withSystemDb` / `scopedSession`. `FORCE RLS` requires the `oxagen_app` non-superuser role.
-- **Rebase before cutting a branch, not before pushing (you never push)** — `git fetch origin`, and if `origin/main` is ahead, `git switch main && git rebase origin/main` (resolve conflicts), then cut your branch/worktree from the updated local `main`.
+- **Rebase before cutting a branch** — `git fetch origin`, and if `origin/main` is ahead, `git switch main && git rebase origin/main` (resolve conflicts), then cut your branch/worktree from the updated local `main`. Once your branch is cut, push it and work on it; don't rebase shared branch history to tidy it (see **Operating mode**).
 - **`apps/app` does not bootstrap IAM** — `invoke()` from `apps/app` skips IAM role checks. Add explicit `assertBillingManager` / `assertOrgMember` gates at the call site; do not rely on the kernel.
 - **Better Auth `rateLimits` plural** — `drizzleAdapter` with `usePlural: true` pluralizes `rateLimit` → `rateLimits`. Wrong table = 500 on all auth calls in prod (passes dev/e2e since rate-limiting is disabled locally). Always verify auth changes against a prod-equivalent environment.
 - **`tsx --env-file` does NOT override shell `DATABASE_URL`** — `unset DATABASE_URL` for local targeting. Always confirm target env before any migration. Migration files go in `packages/database/migrations/`, never in `apps/`.
