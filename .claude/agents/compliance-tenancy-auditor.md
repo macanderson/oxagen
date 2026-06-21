@@ -1,1 +1,0 @@
-../../.agents/agents/compliance-tenancy-auditor.md

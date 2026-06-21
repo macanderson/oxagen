@@ -115,6 +115,7 @@ export function InferenceApprovalModal({
 
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
 
       if (e.shiftKey) {
         // Shift+Tab: if focus is at or before the first element, wrap to last.

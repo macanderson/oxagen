@@ -1,1 +1,0 @@
-../../.agents/agents/parity-docs-auditor.md

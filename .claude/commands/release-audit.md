@@ -390,12 +390,12 @@ document.getElementById("method").textContent =
 
 After Phase 0 completes, dispatch these audits **in parallel in a single turn** - issue all Task calls together, do not await one before starting the next:
 
-- `code-architecture-auditor` → Phase 1
-- `compliance-tenancy-auditor` → Phase 2
-- `grep-auditor` → checks 2, 6 (secret scan), 8
-- `test-build-auditor` → Phases 4–5
-- `parity-docs-auditor` → check 12, Phase 6
-- `pr-hygiene-auditor` → Phase 7
+- `eval-architecture` → Phase 1
+- `eval-compliance` → Phase 2
+- `eval-grep` → checks 2, 6 (secret scan), 8
+- `eval-test-build` → Phases 4–5
+- `eval-parity` → check 12, Phase 6
+- `eval-pr-hygiene` → Phase 7
 
 Wait for all to return, then synthesize their tables into the unified report.
 

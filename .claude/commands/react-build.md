@@ -1,15 +1,15 @@
 ---
-description: Fix React build failures (Vite, webpack, Next.js, CRA, Parcel, esbuild, Bun) incrementally — JSX/TSX compile errors, hydration mismatches, server/client component boundary failures, missing types. Invokes the react-build-resolver agent for minimal, surgical fixes.
+description: Fix React build failures in a Turborepo monorepo using Next.js (App Router) — incremental fixes for TypeScript/JSX compile errors, Next.js server/client component boundary issues, hydration mismatches, and missing types. Invokes the react-build-resolver agent for minimal, surgical fixes.
 ---
 
 # React Build and Fix
 
-This command invokes the **react-build-resolver** agent to incrementally fix React build errors with minimal changes.
+This command invokes the **react-build-resolver** agent to incrementally fix React/Next.js build errors in a Turborepo monorepo with minimal, surgical changes.
 
 ## What This Command Does
 
-1. **Detect Build System**: Identify Vite, webpack, Next.js, CRA, Parcel, esbuild, or Bun
-2. **Run Build**: Execute the project's build script
+1. **Detect Build System**: Focus on Next.js apps inside a Turborepo monorepo
+2. **Run Build**: Execute the workspace build targeting affected Next.js app(s)
 3. **Parse Errors**: Group by layer (TypeScript / bundler config / runtime / hydration)
 4. **Fix Incrementally**: One error at a time, re-running build after each change
 5. **Report Summary**: Show what was fixed and what remains
@@ -18,37 +18,32 @@ This command invokes the **react-build-resolver** agent to incrementally fix Rea
 
 Use `/react-build` when:
 
-- `npm run build` (or pnpm/yarn/bun equivalent) fails
+- `pnpm -w turbo run build` or a workspace build fails, or a specific Next.js app build fails
 - JSX/TSX compile errors after a TypeScript or React upgrade
 - Next.js hydration mismatch errors at runtime
-- Server/Client Component boundary errors in App Router
-- After installing or upgrading `react`, `react-dom`, `@types/react`, or a bundler
-- Missing types or "module not found" errors involving React
+- Server/Client Component boundary errors in the App Router
+- After upgrading `react`, `react-dom`, `@types/react`, next, or shared workspace packages
+- Missing types or "module not found" errors involving React/shared packages
 
 ## Scope
 
-This command owns **React build/bundler/runtime hydration** failures. For pure TypeScript type errors with no React involvement, use `/build-fix` (generic) instead.
+This command owns **Next.js (App Router) build, server/client component, and hydration** failures in a Turborepo monorepo. For pure TypeScript type errors with no React/Next.js involvement, use `/build-fix` (generic) instead.
 
 ## Diagnostic Commands Run
 
 ```bash
-# Project build script (preferred)
-npm run build --if-present
-pnpm build 2>/dev/null
-yarn build 2>/dev/null
-bun run build 2>/dev/null
+# Monorepo build (preferred)
+pnpm -w turbo run build 2> /dev/null
 
-# Standalone typecheck
-npm run typecheck --if-present
-tsc --noEmit -p tsconfig.json
+# Build a specific Next.js app (from workspace root)
+pnpm --filter ./apps/<app-name> run build
 
-# Bundler-specific fallback
-next build                          # Next.js
-vite build                          # Vite
-react-scripts build                 # CRA
-webpack --mode=production           # webpack
-parcel build src/index.html         # Parcel
-bun build ./src/index.tsx --outdir=dist
+# Standalone typecheck (workspace-aware)
+pnpm -w run typecheck --if-present
+pnpm --filter ./apps/<app-name> exec tsc --noEmit -p apps/<app-name>/tsconfig.json
+
+# Next.js explicit build
+next build apps/<app-name> || (cd apps/<app-name> && pnpm run build)
 ```
 
 ## Example Session
@@ -60,25 +55,25 @@ Agent:
 # React Build Resolution
 
 ## Build System Detected
-Vite (vite.config.ts present, @vitejs/plugin-react in deps)
+Turborepo monorepo with Next.js apps (detect apps/* or packages/* with next.config.js / package.json scripts)
 
 ## Initial Diagnostics
 
 ```bash
-$ npm run build
-> tsc -b && vite build
+$ pnpm --filter ./apps/web run build
+> tsc -b && next build
 
-src/components/UserCard.tsx:1:8 - error TS6133: 'React' is declared but its value is never read.
-src/components/Modal.tsx:12:15 - error TS7016: Could not find a declaration file for module 'react-portal'.
-src/pages/Home.tsx:42:5 - error: 'useState' is not defined
+apps/web/src/app/components/UserCard.tsx:1:8 - error TS6133: 'React' is declared but its value is never read.
+apps/web/src/app/components/Modal.tsx:12:15 - error TS7016: Could not find a declaration file for module 'react-portal'.
+apps/web/src/app/page.tsx:42:5 - error: 'useState' is not defined
 ```
 
 Errors found: 3
 
-## Fix 1: Old JSX transform leftover
+## Fix 1: Old JSX transform leftover (monorepo app)
 
-File: src/components/UserCard.tsx:1
-Cause: `tsconfig.json` already uses `"jsx": "react-jsx"`; the explicit `import React` is unused.
+File: apps/web/src/app/components/UserCard.tsx:1
+Cause: app tsconfig or root tsconfig.json uses `"jsx": "react-jsx"`; explicit `import React` is unused.
 
 ```tsx
 // Removed
@@ -92,12 +87,11 @@ $ npm run build
 
 ## Fix 2: Missing types
 
-File: src/components/Modal.tsx
-Cause: `@types/react-portal` not installed.
+File: apps/web/src/app/components/Modal.tsx
+Cause: `@types/react-portal` not installed in workspace.
 
 ```bash
-$ npm i -D @types/react-portal
-added 1 package
+pnpm -w add -D @types/react-portal
 ```
 
 ```bash
@@ -107,7 +101,7 @@ $ npm run build
 
 ## Fix 3: Missing hook import
 
-File: src/pages/Home.tsx
+File: apps/web/src/app/page.tsx
 Cause: `useState` referenced but not imported.
 
 ```tsx
@@ -116,18 +110,18 @@ Cause: `useState` referenced but not imported.
 ```
 
 ```bash
-$ npm run build
+$ pnpm --filter ./apps/web run build
 # Build successful!
 ```
 
 ## Final Verification
 
 ```bash
-$ npm run build
-✓ built in 2.34s
+pnpm -w turbo run build
+[32m✓ built apps/web in 2.34s[0m
 
-$ npm test
-✓ 47 tests passed
+pnpm -w test
+[32m✓ 47 tests passed[0m
 ```
 
 ## Summary
