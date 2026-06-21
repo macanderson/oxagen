@@ -117,7 +117,7 @@ For each design decision, document:
 For significant architectural decisions, create ADRs in `docs/adr/`:
 
 ```markdown
-# ADR-001: Use Neo4j for Semantic Retrieval and Embedding Storage
+# ADR-NNN: Use Neo4j for Semantic Retrieval and Embedding Storage
 
 ## Context
 Need to store and query embeddings plus the ontology/entity relationships

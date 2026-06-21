@@ -98,7 +98,7 @@ Use `nullif(..., '')` so an unset GUC yields `NULL` (no rows) rather than a cast
 ## Oxagen DB conventions
 
 - **Raw `db()` is banned** — all app-level access goes through `withTenantDb` / `withSystemDb` / `scopedSession`. Flag any direct `db()` usage in app/handler code.
-- **Migrations live in `packages/database/drizzle/`** (and `packages/database/migrations/`) — never under `apps/`.
+- **Migrations live in `packages/database/drizzle/`** (drizzle-kit `out`, the authoritative location) — never under `apps/`.
 - **Always confirm the target DB before any mutation/migration** — local = `localhost:5433`; prod = Vercel secrets. `tsx --env-file` does NOT override a shell `DATABASE_URL`; `unset DATABASE_URL` to force local. Verify with a `SELECT` after migrating — don't trust logs alone.
 
 ## Review Checklist
