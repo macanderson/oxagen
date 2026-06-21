@@ -115,3 +115,4 @@ research-swarm-complete-verified.png
 
 # Storybook static build output
 storybook-static/
+.devtools
