@@ -107,6 +107,10 @@ export function MessageComposer({
   React.useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
   const activeServerIdsRef = React.useRef(activeServerIds);
   React.useEffect(() => { activeServerIdsRef.current = activeServerIds; }, [activeServerIds]);
+  // Holds the id of the deferred-dispatch setTimeout so it can be cancelled on
+  // unmount and before scheduling a new one.
+  const dispatchTimerRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+  React.useEffect(() => () => clearTimeout(dispatchTimerRef.current), []);
 
   // FIFO queue for messages submitted while a stream is in flight (queue mode).
   const [queue, setQueue] = React.useState<QueuedMessage[]>([]);
@@ -276,7 +280,8 @@ export function MessageComposer({
       // queue-drain doesn't cascade synchronously within a React effect
       // (satisfies react-hooks/set-state-in-effect) and so send-now doesn't
       // start a transition inside an unrelated render.
-      setTimeout(() => dispatch(fd), 0);
+      clearTimeout(dispatchTimerRef.current);
+      dispatchTimerRef.current = setTimeout(() => dispatch(fd), 0);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- *Ref values are stable refs; dispatch/modelConfig are stable enough across renders for the drain semantics
     [modelConfig],
