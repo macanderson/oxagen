@@ -27,3 +27,7 @@ with a new ADR if the call changes.
 - [ADR-012](./ADR-012-connector-dual-write-pattern.md) — Connector dual-write to Postgres + Neo4j
 - [ADR-013](./ADR-013-oxagen-plugins-capability-packs.md) — Oxagen Plugins: first-party capability packs as a fourth plugin type
 - [ADR-014](./ADR-014-workspace-scoped-mcp-registry-single-default.md) — Workspace-scoped MCP registries with a single-default state machine
+
+## Developer workflow epic
+
+- [ADR-015](./ADR-015-graph-edge-driven-git-hooks-and-biome.md) — Graph-edge-driven git hooks (Vitest import-graph) + Biome formatting
