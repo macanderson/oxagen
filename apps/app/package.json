@@ -12,6 +12,7 @@
     "test:unit": "vitest run --passWithNoTests",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "clean:cache": "rm -rf .next/dev/cache",
     "storybook": "storybook dev -p 6007 --no-open",
     "build-storybook": "storybook build"
   },
