@@ -49,8 +49,13 @@ export async function GET(request: NextRequest) {
   const rawInstalled = searchParams.get("installed");
   const installed =
     rawInstalled === "true" ? true : rawInstalled === "false" ? false : undefined;
-  const limit = Math.min(parseInt(searchParams.get("limit") ?? "30", 10), 100);
-  const offset = Math.max(parseInt(searchParams.get("offset") ?? "0", 10), 0);
+  // Safe parse: parseInt can return NaN for non-numeric input; NaN flows into
+  // SQL LIMIT/OFFSET as an invalid value. Clamp to sane bounds after guarding
+  // against NaN. Defaults match the JSDoc above (limit 30, offset 0; max 100).
+  const rawLimit = Number.parseInt(searchParams.get("limit") ?? "", 10);
+  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 30;
+  const rawOffset = Number.parseInt(searchParams.get("offset") ?? "", 10);
+  const offset = Number.isFinite(rawOffset) ? Math.max(rawOffset, 0) : 0;
   // The client sends only workspaceId; orgId is resolved server-side from it
   // (and membership is validated) via the canonical tenant seam — never trust a
   // client-supplied orgId, and never pass an empty placeholder into invoke().

@@ -85,6 +85,42 @@ describe("createVercelBlobAdapter", () => {
     );
   });
 
+  it("reports access='public' when a private put falls back on a public-only store", async () => {
+    // First call (private) rejects as on a public-only store; retry (public) succeeds.
+    putMock
+      .mockRejectedValueOnce(new Error("Cannot use private access on this store"))
+      .mockResolvedValueOnce({
+        url: "https://store.public.blob.vercel-storage.com/generated/images/org/abc.png",
+        pathname: "generated/images/org/abc.png",
+      });
+    const adapter = createVercelBlobAdapter("tok-public-only");
+    const body = new Uint8Array([1, 2, 3, 4]);
+
+    const result = await adapter.put({
+      key: "generated/images/org/abc.png",
+      body,
+      contentType: "image/png",
+      access: "private",
+    });
+
+    // The blob was physically stored as public — the result MUST reflect that
+    // so callers never treat a world-readable blob as access-controlled.
+    expect(result.access).toBe("public");
+    expect(result.key).toBe("generated/images/org/abc.png");
+    expect(putMock).toHaveBeenCalledTimes(2);
+    expect(putMock).toHaveBeenLastCalledWith(
+      "generated/images/org/abc.png",
+      Buffer.from(body),
+      {
+        access: "public",
+        token: "tok-public-only",
+        contentType: "image/png",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+      },
+    );
+  });
+
   it("computes bytes from a Blob body", async () => {
     putMock.mockResolvedValue({ url: "https://blob.example/k", pathname: "k" });
     const adapter = createVercelBlobAdapter("tok");

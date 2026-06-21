@@ -178,6 +178,28 @@ describe("resolve — Rule 6: org default grant", () => {
     }
     expect(result.trace.decidedBy.rule).toBe("6:org_grant");
   });
+
+  it("inherits org allow grant during a WORKSPACE-scoped invocation (org → workspace inheritance)", () => {
+    // Regression: a principal holding only an org-level allow grant invokes a
+    // capability in a workspace context (the kernel's default). The org grant
+    // must be inherited via Rule 6 — it must NOT be discarded by the scope
+    // filter and fall through to the contract defaultEffect (deny).
+    const orgGrant = makeGrant({ scopeKind: "org", scopeId: ORG_ID, effect: "allow" });
+    const result = resolve(
+      baseInput({ grants: [orgGrant], scope: wsScope, defaultEffect: "deny" }),
+    );
+    expect(result.outcome).toBe("allow");
+    expect(result.trace.decidedBy.rule).toBe("6:org_grant");
+  });
+
+  it("inherits org deny grant during a WORKSPACE-scoped invocation when no workspace override", () => {
+    const orgDeny = makeGrant({ scopeKind: "org", scopeId: ORG_ID, effect: "deny" });
+    const result = resolve(
+      baseInput({ grants: [orgDeny], scope: wsScope, defaultEffect: "allow" }),
+    );
+    expect(result.outcome).toBe("deny");
+    expect(result.trace.decidedBy.rule).toBe("6:org_grant");
+  });
 });
 
 describe("resolve — Rule 1: workspace explicit deny", () => {

@@ -12,7 +12,7 @@ export const privacyDataExport = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "privacy" },
   sensitivity: "high",
-  defaultEffect: "allow",
+  defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},

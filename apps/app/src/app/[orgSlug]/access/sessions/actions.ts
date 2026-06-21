@@ -14,6 +14,8 @@ import { withSystemDb, schema } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertSecurityManager } from "@/lib/resolve-org";
+import { isAuthDenialError } from "@/lib/auth-denial";
+import { logger } from "@oxagen/handlers/logger";
 
 // Sentinel workspaceId for org-only actions. — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
@@ -52,8 +54,15 @@ export async function revokeSessionAction(
     const tenant = await resolveOrg(orgSlug);
     orgId = tenant.id;
     await assertSecurityManager(orgId, session.user.id);
-  } catch {
-    return { ok: false, code: "forbidden" };
+  } catch (err) {
+    // Distinguish a real authorization denial (notFound sentinel) from a
+    // DB/infra failure — the latter must surface as internal (and be logged),
+    // not be silently misclassified as forbidden.
+    if (isAuthDenialError(err)) {
+      return { ok: false, code: "forbidden" };
+    }
+    logger.error({ orgSlug, err: String(err) }, "revoke-session: auth gate failed unexpectedly");
+    return { ok: false, code: "internal", error: "Failed to verify access" };
   }
 
   // Verify target user is a member of this org before revoking.

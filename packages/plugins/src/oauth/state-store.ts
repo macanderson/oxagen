@@ -60,7 +60,14 @@ export async function loadOAuthState(
     return r ?? null;
   });
   if (!row) return null;
-  return JSON.parse(row.value) as OAuthStateData;
+  // The stored value may be corrupt, truncated, or tampered with. A parse
+  // failure must not crash the OAuth callback handler — treat it as an
+  // absent/invalid state so the caller surfaces a clean "expired/missing" error.
+  try {
+    return JSON.parse(row.value) as OAuthStateData;
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteOAuthState(state: string): Promise<void> {

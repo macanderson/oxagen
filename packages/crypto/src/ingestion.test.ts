@@ -8,7 +8,10 @@ import {
 
 const validBase64Key = randomBytes(32).toString("base64");
 
-function withEnv(vars: Record<string, string | undefined>, fn: () => void) {
+function withEnv(
+  vars: Record<string, string | undefined>,
+  fn: () => void | Promise<void>,
+): Promise<void> {
   const saved: Record<string, string | undefined> = {};
   for (const [k, v] of Object.entries(vars)) {
     saved[k] = process.env[k];
@@ -18,9 +21,7 @@ function withEnv(vars: Record<string, string | undefined>, fn: () => void) {
       process.env[k] = v;
     }
   }
-  try {
-    fn();
-  } finally {
+  const restore = () => {
     for (const [k, v] of Object.entries(saved)) {
       if (v === undefined) {
         delete process.env[k];
@@ -28,7 +29,19 @@ function withEnv(vars: Record<string, string | undefined>, fn: () => void) {
         process.env[k] = v;
       }
     }
+  };
+  let result: void | Promise<void>;
+  try {
+    result = fn();
+  } catch (err) {
+    restore();
+    throw err;
   }
+  if (result instanceof Promise) {
+    return result.finally(restore);
+  }
+  restore();
+  return Promise.resolve();
 }
 
 afterEach(() => {
@@ -119,7 +132,7 @@ describe("createIngestionCryptoAdapter", () => {
   });
 
   it("adapter from env provider can round-trip encryption", async () => {
-    withEnv(
+    await withEnv(
       {
         INGESTION_CRYPTO_PROVIDER: "env",
         INGESTION_ENCRYPTION_KEY: validBase64Key,

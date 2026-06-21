@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { safeHref } from "@/lib/safe-url";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
 import { listNotificationsAction, markNotificationAction } from "@/lib/actions/notifications";
 import { useParams } from "next/navigation";
@@ -169,7 +170,11 @@ export function NotificationsBell() {
                       className="flex-1 text-left"
                       onClick={() => {
                         void handleMarkRead(n);
-                        if (n.deepLink) window.location.href = n.deepLink;
+                        // deepLink is server-supplied (and may originate from an
+                        // automated notification producer): validate the scheme
+                        // before navigating so a `javascript:` value can't fire.
+                        const target = safeHref(n.deepLink);
+                        if (target) window.location.href = target;
                       }}
                     >
                       <p

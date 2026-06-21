@@ -151,6 +151,75 @@ describe("inferSemanticEdges", () => {
     expect(result.inferredEdges[0]!.edgeType).toBe("PART_OF");
   });
 
+  it("drops inferred edges below the confidence threshold (default 0.75)", async () => {
+    const nodeSession = makeSession({
+      records: [
+        { get: (k: string) => ({ naturalKey: "github:conn-1:42", displayName: "Task A" })[k] },
+      ],
+    });
+    // One sub-threshold edge (0.5) and one above-threshold edge (0.9).
+    mocks.generateObjectFor.mockResolvedValue({
+      object: {
+        inferredEdges: [
+          { targetNaturalKey: "github:conn-1:low", edgeType: "REFERENCES", confidence: 0.5, rationale: "weak" },
+          { targetNaturalKey: "github:conn-1:high", edgeType: "PART_OF", confidence: 0.9, rationale: "strong" },
+        ],
+      },
+    });
+    // Resolve session: both naturalKeys map to graph nodes, so only the
+    // threshold filter (not graph resolution) can drop the weak edge.
+    const resolveSession = makeSession({
+      records: [
+        { get: (k: string) => ({ naturalKey: "github:conn-1:low", nodeId: "low-node" })[k] },
+        { get: (k: string) => ({ naturalKey: "github:conn-1:high", nodeId: "high-node" })[k] },
+      ],
+    });
+
+    let callCount = 0;
+    mocks.scopedSession.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return nodeSession;
+      return resolveSession;
+    });
+
+    const result = await inferSemanticEdges(makeJob());
+
+    // Only the resolve query should receive the above-threshold naturalKey.
+    const resolveParams = resolveSession.run.mock.calls[0]![1] as { naturalKeys: string[] };
+    expect(resolveParams.naturalKeys).toEqual(["github:conn-1:high"]);
+
+    expect(mocks.upsertInferredEdges).toHaveBeenCalledOnce();
+    const edgesArg = mocks.upsertInferredEdges.mock.calls[0]![0] as Array<{ toNodeId: string }>;
+    expect(edgesArg).toHaveLength(1);
+    expect(edgesArg[0]!.toNodeId).toBe("high-node");
+
+    expect(result.inferredEdges).toHaveLength(1);
+    expect(result.inferredEdges[0]!.targetNodeId).toBe("high-node");
+  });
+
+  it("returns empty edges when all inferred edges are below the confidence threshold", async () => {
+    const nodeSession = makeSession({
+      records: [
+        { get: (k: string) => ({ naturalKey: "github:conn-1:42", displayName: "Task A" })[k] },
+      ],
+    });
+    mocks.generateObjectFor.mockResolvedValue({
+      object: {
+        inferredEdges: [
+          { targetNaturalKey: "github:conn-1:weak", edgeType: "REFERENCES", confidence: 0.1, rationale: "noise" },
+        ],
+      },
+    });
+    mocks.scopedSession.mockReturnValue(nodeSession);
+
+    const result = await inferSemanticEdges(makeJob());
+
+    expect(result.inferredEdges).toHaveLength(0);
+    // No resolve query and no write should happen once the only edge is filtered.
+    expect(nodeSession.run).toHaveBeenCalledTimes(1);
+    expect(mocks.upsertInferredEdges).not.toHaveBeenCalled();
+  });
+
   it("returns empty edges when generateObjectFor returns no inferredEdges", async () => {
     const nodeSession = makeSession({
       records: [

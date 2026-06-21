@@ -174,6 +174,37 @@ describe("fetchAuthz()", () => {
     expect(result.policies).toHaveLength(0);
   });
 
+  // ── API-key caller fail-closed ───────────────────────────────────────────
+
+  it("fails closed with an org-enforced deny policy when userId is null but apiKeyId is set", async () => {
+    // No DB queries should fire — the function returns before any select.
+    mocks.dbFn.mockReturnValue(buildDbMock());
+
+    const result = await fetchAuthz({
+      userId: null,
+      apiKeyId: "aky_1",
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      capability: "markdown.generate",
+    });
+
+    // A sentinel service principal is returned (not EMPTY_AUTHZ) so the request
+    // is denied via rule 2 rather than degrading to defaultEffect.
+    expect(result.principal?.kind).toBe("service");
+    expect(result.grants).toHaveLength(0);
+    expect(result.roles).toHaveLength(0);
+    expect(result.roleGrants).toHaveLength(0);
+    // Synthetic org-enforced deny policy scoped to the requested capability/org.
+    expect(result.policies).toHaveLength(1);
+    expect(result.policies[0]).toMatchObject({
+      capabilityId: "markdown.generate",
+      scopeKind: "org",
+      scopeId: "org_1",
+      effect: "deny",
+      enforced: true,
+    });
+  });
+
   // ── !principal early return ──────────────────────────────────────────────
 
   it("returns EMPTY_AUTHZ when no principal row matches the userId in this org", async () => {

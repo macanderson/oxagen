@@ -18,6 +18,7 @@ export async function agentTaskBackgroundCancelHandler(
         and(
           eq(schema.backgroundTasks.publicId, input.taskId),
           eq(schema.backgroundTasks.orgId, ctx.orgId),
+          eq(schema.backgroundTasks.workspaceId, ctx.workspaceId),
         ),
       )
       .limit(1),

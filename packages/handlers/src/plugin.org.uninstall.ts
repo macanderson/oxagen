@@ -25,9 +25,17 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         );
 
       // Hard-delete dependent MCP server rows so the runtime drops them.
+      // Scope by org + workspace (not orgListingId alone) so a guessed/leaked
+      // listing id from another tenant can never delete that tenant's rows.
       await tx
         .delete(schema.mcpServers)
-        .where(eq(schema.mcpServers.orgListingId, orgListingId));
+        .where(
+          and(
+            eq(schema.mcpServers.orgListingId, orgListingId),
+            eq(schema.mcpServers.orgId, ctx.orgId),
+            eq(schema.mcpServers.workspaceId, ctx.workspaceId!),
+          ),
+        );
     });
   } catch (err) {
     logger.error({ err, orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "plugin.org.uninstall: failed");

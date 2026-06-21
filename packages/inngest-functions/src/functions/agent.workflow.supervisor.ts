@@ -4,6 +4,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { generateObjectFor } from "@oxagen/ai";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { NonRetriableError } from "@oxagen/functions";
 import { logger } from "../logger";
 import { z } from "zod";
 
@@ -60,7 +61,36 @@ export const [agentWorkflowSupervisor] = createFunction(
 
     if (!execution) {
       logger.error({ executionId, orgId }, "agent.workflow.supervisor: execution not found");
-      return { status: "failed", reason: "execution not found" };
+      // Mark the execution row as failed in Postgres so the DB record reflects
+      // the terminal state (it would otherwise remain stuck in "planning").
+      // Use a best-effort update — ignore any secondary DB error here because
+      // the row may simply not exist, and we are about to throw anyway.
+      try {
+        await step.run("mark-failed-not-found", () =>
+          runInTenantScope({ orgId, workspaceId }, () =>
+            withTenantDb((tx) =>
+              tx
+                .update(schema.agentExecutions)
+                .set({ status: "failed", updatedAt: new Date() })
+                .where(
+                  and(
+                    eq(schema.agentExecutions.id, executionId),
+                    eq(schema.agentExecutions.orgId, orgId),
+                  ),
+                ),
+            ),
+          ),
+        );
+      } catch {
+        // Swallow secondary DB errors — the NonRetriableError below is the
+        // authoritative failure signal to Inngest.
+      }
+      // Throw so Inngest marks the run as failed and does NOT retry (a missing
+      // row will not self-heal on retry).
+      throw new NonRetriableError(
+        `agent.workflow.supervisor: execution not found (executionId=${executionId})`,
+        { cause: { executionId, orgId } },
+      );
     }
 
     const { goal, outputFormat } = execution.inputPayload as {

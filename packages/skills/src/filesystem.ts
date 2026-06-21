@@ -29,8 +29,18 @@ async function walk(dir: string, out: Skill[]): Promise<void> {
       continue;
     }
     if (entry.isFile() && entry.name.endsWith(".skill.md")) {
-      const skill = await loadSkillFile(full, { source: "builtin" });
-      out.push(skill);
+      try {
+        const skill = await loadSkillFile(full, { source: "builtin" });
+        out.push(skill);
+      } catch (err: unknown) {
+        // A single corrupt or unparseable skill file must not abort the whole
+        // scan and break every skill lookup for the process. Surface the
+        // offending path so the author can fix it; continue with the rest.
+        console.warn("[skills] failed to load skill file — skipping", {
+          path: full,
+          error: err,
+        });
+      }
     }
   }
 }

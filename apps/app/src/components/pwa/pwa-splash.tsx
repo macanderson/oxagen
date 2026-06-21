@@ -11,11 +11,12 @@
  * No data fetching, no heavy deps — intentionally dependency-free.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./pwa-splash.module.css";
 
 export function PwaSplash() {
   const ref = useRef<HTMLDivElement>(null);
+  const [imgFailed, setImgFailed] = useState<boolean>(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -46,23 +47,32 @@ export function PwaSplash() {
       role="presentation"
     >
       {/* Dark-variant spinner for the dark background (#0B0D16).
-          Light variant shown via CSS when the system prefers light. */}
-      <img
-        src="/pwa/oxagen-spinner-assemble-dark.gif"
-        alt=""
-        width={64}
-        height={64}
-        className={styles.spinnerDark}
-        aria-hidden="true"
-      />
-      <img
-        src="/pwa/oxagen-spinner-assemble-light.gif"
-        alt=""
-        width={64}
-        height={64}
-        className={styles.spinnerLight}
-        aria-hidden="true"
-      />
+          Light variant shown via CSS when the system prefers light.
+          Falls back to a pure-CSS ring if either GIF fails to load. */}
+      {imgFailed ? (
+        <span className={styles.cssSpinner} aria-hidden="true" />
+      ) : (
+        <>
+          <img
+            src="/spinner/oxagen-spinner-assemble-dark.gif"
+            alt=""
+            width={64}
+            height={64}
+            className={styles.spinnerDark}
+            aria-hidden="true"
+            onError={() => setImgFailed(true)}
+          />
+          <img
+            src="/spinner/oxagen-spinner-assemble-light.gif"
+            alt=""
+            width={64}
+            height={64}
+            className={styles.spinnerLight}
+            aria-hidden="true"
+            onError={() => setImgFailed(true)}
+          />
+        </>
+      )}
     </div>
   );
 }

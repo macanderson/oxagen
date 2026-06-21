@@ -10,6 +10,13 @@ pre-commit:
     # Lint staged TS/JS, auto-fix, and re-stage the fixes.
     # docs/, .agents/, and .claude/ are excluded (docs + agent/skill assets
     # are not part of the typed source tree).
+    #
+    # ADR-015: Biome is installed as the formatter and `pnpm format` is wired,
+    # but the pre-commit Biome-format step is intentionally NOT enabled yet — it
+    # must follow the one-shot `pnpm format` sweep (a coordinated, isolated commit
+    # in a quiet window) so unrelated PRs don't each carry whole-file reformatting.
+    # Until then pre-commit stays ESLint-only; pre-push already moved to the
+    # import-graph test selection below.
     lint:
       glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
       exclude:
@@ -61,14 +68,17 @@ pre-push:
         - "scripts/**"
       run: pnpm env:check
 
-    # Unit tests for every package changed since origin/main (and its dependents).
-    # Scoped via the turbo filter so a one-package push doesn't run all 30 suites,
-    # while a cross-cutting change still fans out to everything it can break.
-    test-unit:
+    # Import-graph-scoped tests (ADR-015): run only the suites whose module-import
+    # edges reach a file changed since origin/main. Vitest's `--changed` walks the
+    # module graph to select affected tests — replacing the blunt turbo
+    # `...[origin/main]` dependency-closure fan-out that herded every core when
+    # several sessions pushed at once. CI still runs the full fan-out as the
+    # authoritative gate; this hook is fast, local, related-only feedback.
+    test-related:
       glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
       exclude:
         - "docs/**"
         - ".agents/**"
         - ".claude/**"
         - "scripts/**"
-      run: pnpm turbo run test:unit --filter='...[origin/main]'
+      run: pnpm exec vitest run --changed origin/main --passWithNoTests

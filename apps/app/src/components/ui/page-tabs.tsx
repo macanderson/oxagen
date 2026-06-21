@@ -73,6 +73,41 @@ export function PageTabs({ tabs, className }: PageTabsProps) {
     return () => ro.disconnect();
   }, [updateFades, tabs]);
 
+  // Roving-tabindex keyboard navigation. With only the active tab in the tab
+  // order (tabIndex 0 vs -1), a keyboard user otherwise can't reach the other
+  // tabs at all — the WAI-ARIA tablist pattern requires Arrow/Home/End to move
+  // focus between tabs. Focus only (manual activation): Enter follows the link.
+  const tabRefs = React.useRef<(HTMLAnchorElement | null)[]>([]);
+  const handleKeyDown = React.useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const count = tabs.length;
+      if (count === 0) return;
+      const current = tabRefs.current.findIndex(
+        (el) => el === document.activeElement,
+      );
+      let next = -1;
+      switch (e.key) {
+        case "ArrowRight":
+          next = current < 0 ? 0 : (current + 1) % count;
+          break;
+        case "ArrowLeft":
+          next = current < 0 ? 0 : (current - 1 + count) % count;
+          break;
+        case "Home":
+          next = 0;
+          break;
+        case "End":
+          next = count - 1;
+          break;
+        default:
+          return;
+      }
+      e.preventDefault();
+      tabRefs.current[next]?.focus();
+    },
+    [tabs.length],
+  );
+
   return (
     /*
      * Outer wrapper: horizontally scrollable, edge-faded when overflowing.
@@ -98,16 +133,20 @@ export function PageTabs({ tabs, className }: PageTabsProps) {
       <div
         ref={scrollerRef}
         onScroll={updateFades}
+        onKeyDown={handleKeyDown}
         role="tablist"
         aria-label="Page sections"
         className="flex items-end gap-0 overflow-x-auto scrollbar-none border-b border-border/40 pl-0"
         style={{ scrollbarWidth: "none" } as React.CSSProperties}
       >
-        {tabs.map((tab) => {
+        {tabs.map((tab, index) => {
           const isActive = tab.href === activeHref;
           return (
             <Link
               key={tab.href}
+              ref={(el) => {
+                tabRefs.current[index] = el;
+              }}
               href={tab.href}
               role="tab"
               aria-selected={isActive}

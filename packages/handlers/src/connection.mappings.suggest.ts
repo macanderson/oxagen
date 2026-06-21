@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { connectionMappingsSuggest } from "@oxagen/oxagen/contracts/connection.mappings.suggest";
 import { schema, withTenantDb } from "@oxagen/database";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { generateObjectFor, selectModel } from "@oxagen/ai";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -24,12 +24,18 @@ const SuggestionSchema = z.object({
 export const connectionMappingsSuggestHandler: CapabilityHandler<
   typeof connectionMappingsSuggest
 > = async (input, ctx) => {
-  // Verify connection ownership
+  // Verify connection ownership (scoped to org + workspace)
   const [conn] = await withTenantDb((tx) =>
     tx
       .select({ id: schema.sourceConnections.id })
       .from(schema.sourceConnections)
-      .where(eq(schema.sourceConnections.publicId, input.connectionId))
+      .where(
+        and(
+          eq(schema.sourceConnections.publicId, input.connectionId),
+          eq(schema.sourceConnections.orgId, ctx.orgId),
+          eq(schema.sourceConnections.workspaceId, ctx.workspaceId),
+        ),
+      )
       .limit(1),
   );
 

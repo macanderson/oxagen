@@ -20,12 +20,15 @@ vi.mock("@oxagen/billing", () => ({
 vi.mock("@oxagen/database", () => ({
   withSystemDb: mocks.withSystemDb,
   schema: {
-    orgBillingSettings: { dunningState: "dunning_state" },
+    orgBillingSettings: { dunningState: "dunning_state", orgId: "org_id" },
   },
 }));
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((...args: unknown[]) => args),
+  and: vi.fn((...args: unknown[]) => args),
+  gt: vi.fn((...args: unknown[]) => args),
+  asc: vi.fn((...args: unknown[]) => args),
 }));
 
 vi.mock("../logger", () => ({

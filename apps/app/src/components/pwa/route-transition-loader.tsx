@@ -21,6 +21,7 @@ export function RouteTransitionLoader() {
   const pathname = usePathname();
   const [, startTransition] = useTransition();
   const [visible, setVisible] = useState(false);
+  const [imgFailed, setImgFailed] = useState<boolean>(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track the previous pathname so we only trigger on *changes*, not the
   // initial mount render.
@@ -49,22 +50,30 @@ export function RouteTransitionLoader() {
 
   return (
     <div className={styles.loader} role="status" aria-label="Navigating">
-      <img
-        src="/pwa/oxagen-spinner-assemble-dark.gif"
-        alt=""
-        width={36}
-        height={36}
-        className={styles.spinnerDark}
-        aria-hidden="true"
-      />
-      <img
-        src="/pwa/oxagen-spinner-assemble-light.gif"
-        alt=""
-        width={36}
-        height={36}
-        className={styles.spinnerLight}
-        aria-hidden="true"
-      />
+      {imgFailed ? (
+        <span className={styles.cssSpinner} aria-hidden="true" />
+      ) : (
+        <>
+          <img
+            src="/spinner/oxagen-spinner-assemble-dark.gif"
+            alt=""
+            width={36}
+            height={36}
+            className={styles.spinnerDark}
+            aria-hidden="true"
+            onError={() => setImgFailed(true)}
+          />
+          <img
+            src="/spinner/oxagen-spinner-assemble-light.gif"
+            alt=""
+            width={36}
+            height={36}
+            className={styles.spinnerLight}
+            aria-hidden="true"
+            onError={() => setImgFailed(true)}
+          />
+        </>
+      )}
     </div>
   );
 }

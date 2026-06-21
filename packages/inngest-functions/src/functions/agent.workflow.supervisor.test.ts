@@ -130,10 +130,43 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
     mocks.inngestSend.mockResolvedValue(undefined);
   });
 
-  it("returns failed when the execution is not found", async () => {
+  it("throws NonRetriableError when the execution is not found", async () => {
     mocks.dbFindFirst.mockResolvedValueOnce(null);
-    const result = await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
-    expect(result).toEqual({ status: "failed", reason: "execution not found" });
+    await expect(
+      capturedHandler!({ event: BASE_EVENT, step: makeStep() }),
+    ).rejects.toThrow("execution not found");
+  });
+
+  it("calls tx.update to mark execution failed before throwing when execution is not found", async () => {
+    mocks.dbFindFirst.mockResolvedValueOnce(null);
+
+    // The withTenantDb mock routes tx.update(table).set(...) through mocks.dbUpdateSet.
+    // Configure it to succeed so the not-found path can complete its best-effort update.
+    mocks.dbUpdateSet.mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+
+    await expect(
+      capturedHandler!({ event: BASE_EVENT, step: makeStep() }),
+    ).rejects.toThrow("execution not found");
+
+    // The supervisor must have called tx.update(agentExecutions).set({ status: "failed", ... })
+    // as part of the "mark-failed-not-found" step before throwing.
+    expect(mocks.dbUpdateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed" }),
+    );
+  });
+
+  it("thrown error is surfaced as a NonRetriableError (name=NonRetriableError)", async () => {
+    mocks.dbFindFirst.mockResolvedValueOnce(null);
+    let caughtError: unknown;
+    try {
+      await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
+    } catch (err) {
+      caughtError = err;
+    }
+    expect(caughtError).toBeDefined();
+    // wrapHandler translates @oxagen/functions.NonRetriableError (isNonRetriable=true)
+    // into Inngest's native NonRetriableError, which has name="NonRetriableError".
+    expect((caughtError as Error).name).toBe("NonRetriableError");
   });
 
   it("calls generateObjectFor with the execution goal", async () => {

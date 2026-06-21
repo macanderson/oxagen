@@ -153,14 +153,24 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
 
   // Grant the free $5 (500 credits) signup bonus AFTER the org transaction
   // commits so a billing failure never rolls back the org creation itself.
-  // grantFreeCredits is idempotent — safe to re-run on retries.
-  await grantFreeCredits(orgId).catch((err: unknown) => {
-    // Log but do not fail org creation. The grant can be re-applied manually.
-    const errMsg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
-    logger.error(
-      { err, errMsg, orgId },
-      "organization.create: grantFreeCredits failed — org created, credits not granted",
+  // grantFreeCredits is idempotent — INSERT … ON CONFLICT DO NOTHING — so a
+  // second attempt is always safe, even if the first partially succeeded.
+  await grantFreeCredits(orgId).catch(async (firstErr: unknown) => {
+    const firstErrMsg = firstErr instanceof Error ? `${firstErr.message}\n${firstErr.stack}` : String(firstErr);
+    logger.warn(
+      { err: firstErr, firstErrMsg, orgId },
+      "organization.create: grantFreeCredits failed on first attempt — retrying once",
     );
+    // One idempotent retry. If this also fails, log the error and continue so
+    // the org creation itself is not surfaced as a failure to the caller.
+    // The orgId is logged at error level so ops can re-run the grant manually.
+    await grantFreeCredits(orgId).catch((retryErr: unknown) => {
+      const retryErrMsg = retryErr instanceof Error ? `${retryErr.message}\n${retryErr.stack}` : String(retryErr);
+      logger.error(
+        { err: retryErr, retryErrMsg, orgId },
+        "organization.create: grantFreeCredits failed after retry — org created, credits not granted; re-apply manually",
+      );
+    });
   });
 
   // Note: global-seed registry sync removed in workspace-scoping rebuild (2026-06-17).

@@ -17,6 +17,8 @@
     "env:secrets:pull": "pnpm --filter @oxagen/env-manager pull",
     "build": "turbo run build",
     "lint": "turbo run lint",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test:unit",
     "test:coverage": "turbo run test:coverage",
@@ -50,6 +52,7 @@
     "db:backfill-capabilities": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-workspace-capabilities.ts"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.2.0",
     "@changesets/cli": "2.31.0",
     "@eslint/js": "9.39.4",
     "@types/node": "25.9.1",
@@ -58,10 +61,10 @@
     "inngest-cli": "1.30.0",
     "lefthook": "latest",
     "playwright": "^1.61.0",
-    "prettier": "3.8.3",
     "tsx": "4.22.3",
     "turbo": "2.9.18",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.60.0"
+    "typescript-eslint": "8.60.0",
+    "vitest": "2.1.9"
   }
 }

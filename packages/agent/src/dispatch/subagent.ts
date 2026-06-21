@@ -92,13 +92,18 @@ export interface FanoutSnapshot {
 export async function readFanout(
   fanoutId: string,
   orgId: string,
+  workspaceId: string,
 ): Promise<FanoutSnapshot | null> {
   return withTenantDb(async (tx) => {
     const [fan] = await tx
       .select()
       .from(schema.subagentFanouts)
       .where(
-        and(eq(schema.subagentFanouts.id, fanoutId), eq(schema.subagentFanouts.orgId, orgId)),
+        and(
+          eq(schema.subagentFanouts.id, fanoutId),
+          eq(schema.subagentFanouts.orgId, orgId),
+          eq(schema.subagentFanouts.workspaceId, workspaceId),
+        ),
       )
       .limit(1);
     if (!fan) return null;
@@ -106,7 +111,11 @@ export async function readFanout(
       .select()
       .from(schema.subagentRuns)
       .where(
-        and(eq(schema.subagentRuns.fanoutId, fanoutId), eq(schema.subagentRuns.orgId, orgId)),
+        and(
+          eq(schema.subagentRuns.fanoutId, fanoutId),
+          eq(schema.subagentRuns.orgId, orgId),
+          eq(schema.subagentRuns.workspaceId, workspaceId),
+        ),
       );
     return {
       fanoutId,

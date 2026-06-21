@@ -93,16 +93,17 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
       );
     }
 
-    // Record per-tool-call edges.
+    // Record per-tool-call edges in a single round-trip via UNWIND. One
+    // session.run() per tool call is an N+1 against Neo4j on the execution hot
+    // path; UNWIND collapses all tool-call MERGEs into one query.
     if (toolCalls?.length) {
-      for (const tc of toolCalls) {
-        await neo4j.run(
-          `MATCH (e:${NodeLabels.Execution} {id: $executionId, orgId: $orgId})
-           MERGE (t:${NodeLabels.Tool} {name: $toolName, type: $toolType, orgId: $orgId})
-           MERGE (e)-[:${EdgeTypes.CALLED_TOOL}]->(t)`,
-          { executionId, toolName: tc.toolName, toolType: tc.toolType },
-        );
-      }
+      await neo4j.run(
+        `MATCH (e:${NodeLabels.Execution} {id: $executionId, orgId: $orgId})
+         UNWIND $toolCalls AS tc
+         MERGE (t:${NodeLabels.Tool} {name: tc.toolName, type: tc.toolType, orgId: $orgId})
+         MERGE (e)-[:${EdgeTypes.CALLED_TOOL}]->(t)`,
+        { executionId, toolCalls },
+      );
     }
   } finally {
     await neo4j.close();

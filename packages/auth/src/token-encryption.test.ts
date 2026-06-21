@@ -247,9 +247,11 @@ describe("buildAccountTokenHooks", () => {
 
     expect(result.data.accessTokenEnc).toBe(encBuf);
     expect(result.data).not.toHaveProperty("accessToken");
-    // refreshToken / idToken not in input: their enc columns will be null (encryptToken returns null for undefined)
-    expect(result.data.refreshTokenEnc).toBeNull();
-    expect(result.data.idTokenEnc).toBeNull();
+    // refreshToken / idToken not in the update payload: their enc columns must
+    // NOT be emitted at all (omitting them preserves the existing encrypted
+    // values; emitting null would wipe a previously-stored refresh/id token).
+    expect(result.data).not.toHaveProperty("refreshTokenEnc");
+    expect(result.data).not.toHaveProperty("idTokenEnc");
     // Non-token field passes through
     expect(result.data.userId).toBe("u1");
   });
@@ -264,8 +266,9 @@ describe("buildAccountTokenHooks", () => {
 
     expect(result.data.refreshTokenEnc).toBe(encBuf);
     expect(result.data).not.toHaveProperty("refreshToken");
-    expect(result.data.accessTokenEnc).toBeNull();
-    expect(result.data.idTokenEnc).toBeNull();
+    // Untouched token fields must not be emitted (preserve existing *_enc).
+    expect(result.data).not.toHaveProperty("accessTokenEnc");
+    expect(result.data).not.toHaveProperty("idTokenEnc");
   });
 
   it("update.before with only idToken → idTokenEnc set, idToken stripped", async () => {
@@ -278,8 +281,9 @@ describe("buildAccountTokenHooks", () => {
 
     expect(result.data.idTokenEnc).toBe(encBuf);
     expect(result.data).not.toHaveProperty("idToken");
-    expect(result.data.accessTokenEnc).toBeNull();
-    expect(result.data.refreshTokenEnc).toBeNull();
+    // Untouched token fields must not be emitted (preserve existing *_enc).
+    expect(result.data).not.toHaveProperty("accessTokenEnc");
+    expect(result.data).not.toHaveProperty("refreshTokenEnc");
   });
 
   it("update.before with { accessToken: null } → key present but encryptToken(null) → accessTokenEnc: null, plaintext stripped", async () => {
@@ -295,8 +299,33 @@ describe("buildAccountTokenHooks", () => {
     expect(result.data.accessTokenEnc).toBeNull();
     // plaintext must be stripped even when the value was null
     expect(result.data).not.toHaveProperty("accessToken");
+    // Untouched token fields must not be emitted.
+    expect(result.data).not.toHaveProperty("refreshTokenEnc");
+    expect(result.data).not.toHaveProperty("idTokenEnc");
     // Non-token fields pass through
     expect(result.data.userId).toBe("u4");
+  });
+
+  it("update.before with accessToken only does NOT wipe a stored refresh_token (OAuth refresh flow)", async () => {
+    // Regression: Google omits refresh_token on access-token refresh. The hook
+    // must encrypt the new access token but leave refresh_token_enc / id_token_enc
+    // untouched so the previously-stored encrypted refresh token survives.
+    const encBuf = Buffer.from("enc_new_access");
+    mockEncrypt.mockResolvedValue(encBuf);
+
+    const adapter = makeMockAdapter();
+    const hooks = buildAccountTokenHooks(adapter, KEY_ID);
+    const result = await hooks.update.before({ accessToken: "ya29.refreshed" });
+
+    expect(result.data.accessTokenEnc).toBe(encBuf);
+    // The columns NOT in the payload must be absent from the write set, so the
+    // existing encrypted refresh/id tokens in the DB are preserved.
+    expect(result.data).not.toHaveProperty("refreshTokenEnc");
+    expect(result.data).not.toHaveProperty("idTokenEnc");
+    // KMS key id is still recorded for the touched column.
+    expect(result.data.tokenKmsKeyId).toBe(KEY_ID);
+    // Only the access token was encrypted.
+    expect(mockEncrypt).toHaveBeenCalledTimes(1);
   });
 });
 

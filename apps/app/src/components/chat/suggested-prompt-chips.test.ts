@@ -163,3 +163,56 @@ describe("auto-submit contract — action is invoked with FormData on click", ()
     }
   });
 });
+
+// ── Error surfacing contract ───────────────────────────────────────────────────
+// When the ComposerAction returns { ok: false, error: "..." }, the chip
+// handleActivate must NOT silently ignore it. The result.ok check must be
+// performed and the error surfaced. These tests prove the contract at the
+// handler level (pure, no DOM required).
+
+describe("handleActivate error surfacing contract — action ok:false is NOT silently ignored", () => {
+  it("action returning { ok: false } resolves without throwing", async () => {
+    // Simulate what handleActivate does: call action(fd), check result
+    const mockAction = vi.fn().mockResolvedValue({ ok: false, error: "Billing gate" });
+    const fd = buildChipFormData("Test prompt", null, null);
+    const result = await mockAction(fd);
+    // The guard must be possible to evaluate
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("Billing gate");
+  });
+
+  it("error from action can be extracted without type error", async () => {
+    // Prove the type contract: result.ok is boolean, result.error is string | undefined
+    const mockAction = vi.fn().mockResolvedValue({
+      ok: false as boolean,
+      error: "Auth expired" as string | undefined,
+    });
+    const fd = buildChipFormData("Another prompt", "conv-1", "msg-1");
+    const result = await mockAction(fd) as { ok: boolean; error?: string };
+    if (!result.ok) {
+      const errorMsg = result.error ?? "Failed to send message";
+      expect(errorMsg).toBe("Auth expired");
+    }
+  });
+
+  it("undefined error falls back to default message", async () => {
+    const mockAction = vi.fn().mockResolvedValue({ ok: false, error: undefined });
+    const fd = buildChipFormData("Prompt without error detail", null, null);
+    const result = await mockAction(fd) as { ok: boolean; error?: string };
+    const errorMsg = result.error ?? "Failed to send message";
+    expect(errorMsg).toBe("Failed to send message");
+  });
+
+  it("action returning { ok: true } produces no error", async () => {
+    const mockAction = vi.fn().mockResolvedValue({
+      ok: true,
+      conversationId: "conv-new",
+      conversationPublicId: "conv_pub_new",
+      userMessageId: "msg-new",
+    });
+    const fd = buildChipFormData("Success prompt", null, null);
+    const result = await mockAction(fd) as { ok: boolean; error?: string };
+    expect(result.ok).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+});

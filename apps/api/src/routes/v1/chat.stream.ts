@@ -93,6 +93,10 @@ type CollectedExecution = {
 type ConsumeStreamResult = {
   assistantText: string;
   execution: CollectedExecution;
+  // True when the model surfaced an `error` part mid-stream. The accumulated
+  // assistantText is then partial/untrustworthy and must not be persisted as a
+  // successful assistant turn.
+  streamErrored: boolean;
 };
 
 // Consume the agent fullStream, emit SSE events, and return the accumulated
@@ -105,6 +109,7 @@ async function consumeStream(
   emit: (event: ApiStreamEvent) => void,
 ): Promise<ConsumeStreamResult> {
   let assistantText = "";
+  let streamErrored = false;
   const toolStartedAt: Record<string, number> = {};
   const reasoningStartedAt: Record<string, number> = {};
   let stepIndex = -1;
@@ -225,15 +230,24 @@ async function consumeStream(
         },
       });
     } else if (pType === "error") {
+      // AI SDK surfaces model-layer failures (rate limits, context overflow,
+      // model unavailability) as yielded `error` parts — NOT thrown exceptions,
+      // so the outer try/catch never sees them. Propagate as a typed `error`
+      // SSE event (so clients can distinguish failure from a complete reply) and
+      // log it so model-layer failures are visible to monitoring. Do not inject
+      // the error into assistantText: that would corrupt the persisted turn.
       const errVal = (raw as { error?: unknown }).error;
       const message = errVal instanceof Error ? errVal.message
         : typeof errVal === "string" ? errVal : "Stream error";
-      emit({ type: "text", text: `\n\n[Error: ${message}]` });
+      streamErrored = true;
+      console.error("[chat.stream] LLM stream error part:", message);
+      emit({ type: "error", message });
     }
   }
 
   return {
     assistantText,
+    streamErrored,
     execution: {
       inputTokens: collectedInputTokens,
       outputTokens: collectedOutputTokens,
@@ -441,14 +455,16 @@ chatStreamRoute.post("/", async (c) => {
           },
         });
 
-        const { assistantText, execution: collectedExecution } = await consumeStream(
+        const { assistantText, execution: collectedExecution, streamErrored } = await consumeStream(
           result.fullStream as AsyncIterable<unknown>,
           toolNameMap,
           emit,
         );
 
         // Persist user message + assistant reply for conversation threading.
-        if (conversationId && (assistantText.length > 0 || content.length > 0)) {
+        // Skip persistence on a mid-stream model error: the assistantText is
+        // partial/untrustworthy and must not be written as a successful turn.
+        if (!streamErrored && conversationId && (assistantText.length > 0 || content.length > 0)) {
           try {
             await runInTenantScope(
               { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
@@ -494,8 +510,15 @@ chatStreamRoute.post("/", async (c) => {
                   }
                 }),
             );
-          } catch {
-            // Persistence failure must not corrupt the already-sent SSE response.
+          } catch (persistErr) {
+            // Persistence failure must not corrupt the already-sent SSE response,
+            // but it is silent data loss (conversation history dropped) unless we
+            // log it. Surface to monitoring; do not rethrow into the SSE stream.
+            const message = persistErr instanceof Error ? persistErr.message : String(persistErr);
+            console.error(
+              `[chat.stream] message persistence failed for conversation ${conversationId} (org ${ctx.orgId}, workspace ${ctx.workspaceId}):`,
+              message,
+            );
           }
         }
 
@@ -540,8 +563,16 @@ chatStreamRoute.post("/", async (c) => {
               { ...ctx, surface: "api" as const },
               { surface: "api" },
             );
-          } catch {
-            // Execution recording failure must not corrupt the already-sent SSE response.
+          } catch (execErr) {
+            // Execution recording failure must not corrupt the already-sent SSE
+            // response, but this is the SOC 2 audit trail (CC6/CC7) — a silent
+            // gap is a compliance defect. Log so the missing audit record is
+            // visible to monitoring; do not rethrow into the SSE stream.
+            const message = execErr instanceof Error ? execErr.message : String(execErr);
+            console.error(
+              `[chat.stream] execution recording failed for message ${assistantMsgId} (org ${ctx.orgId}, workspace ${ctx.workspaceId}):`,
+              message,
+            );
           }
         }
       } catch (err) {

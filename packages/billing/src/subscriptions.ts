@@ -628,9 +628,20 @@ export async function previewPlanChange(
   }
 
   // Full plan price for checkout scenario.
+  // `annualCents` is nullable in the DB schema (plans with no annual price have
+  // annualCents = null). Falling back to monthlyCents when annualCents is null
+  // would quote the customer the monthly price (~10× too low) while Stripe charges
+  // the actual annual price — a deceptive UI and chargeback risk.
+  // Throw explicitly so misconfigured plans are caught before any checkout session
+  // is created rather than silently misleading the customer.
+  if (interval === "year" && targetPlan.annualCents === null) {
+    throw new Error(
+      `Plan '${targetPlanSlug}' has no annualCents configured; cannot preview annual subscription price`,
+    );
+  }
   const fullPriceCents =
     interval === "year"
-      ? (targetPlan.annualCents ?? targetPlan.monthlyCents)
+      ? (targetPlan.annualCents as number)
       : targetPlan.monthlyCents;
 
   // Helper: resolve default card.

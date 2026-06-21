@@ -60,12 +60,16 @@ export const chatMessageExecutionHandler: CapabilityHandler<typeof chatMessageEx
 
     if (!execution) throw new Error("execution insert returned no row");
 
-    // 3. Insert execution steps and tool calls (if provided)
+    // 3. Bulk-insert execution steps, then bulk-insert all tool calls. A serial
+    // loop over steps with a nested serial loop over tool calls produces
+    // 1 + N + (N*M) round trips on the hot messaging path; two batch inserts
+    // collapse that to at most two. Postgres preserves VALUES order in the
+    // RETURNING result, so stepRows[i] aligns with input.steps[i].
     if (input.steps && input.steps.length > 0) {
-      for (const step of input.steps) {
-        const [executionStep] = await tx
-          .insert(schema.agentExecutionSteps)
-          .values({
+      const stepRows = await tx
+        .insert(schema.agentExecutionSteps)
+        .values(
+          input.steps.map((step) => ({
             executionId: execution.id,
             orgId: ctx.orgId,
             workspaceId: ctx.workspaceId,
@@ -80,28 +84,32 @@ export const chatMessageExecutionHandler: CapabilityHandler<typeof chatMessageEx
             outputTokens: step.outputTokens ?? null,
             createdByUserId: ctx.userId ?? null,
             updatedByUserId: ctx.userId ?? null,
-          })
-          .returning({ id: schema.agentExecutionSteps.id });
+          })),
+        )
+        .returning({ id: schema.agentExecutionSteps.id });
 
-        if (!executionStep) throw new Error(`execution step ${step.stepNumber} insert returned no row`);
+      if (stepRows.length !== input.steps.length) {
+        throw new Error("execution step bulk insert returned unexpected row count");
+      }
 
-        if (step.toolCalls && step.toolCalls.length > 0) {
-          for (const toolCall of step.toolCalls) {
-            await tx.insert(schema.agentToolCalls).values({
-              executionStepId: executionStep.id,
-              orgId: ctx.orgId,
-              workspaceId: ctx.workspaceId,
-              toolName: toolCall.toolName,
-              toolType: toolCall.toolType,
-              requestPayload: toolCall.requestPayload,
-              responsePayload: toolCall.responsePayload ?? null,
-              status: toolCall.status,
-              latencyMs: toolCall.latencyMs ?? null,
-              inputTokens: toolCall.inputTokens ?? null,
-              outputTokens: toolCall.outputTokens ?? null,
-            });
-          }
-        }
+      const toolCallRows = input.steps.flatMap((step, i) =>
+        (step.toolCalls ?? []).map((toolCall) => ({
+          executionStepId: stepRows[i]!.id,
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          toolName: toolCall.toolName,
+          toolType: toolCall.toolType,
+          requestPayload: toolCall.requestPayload,
+          responsePayload: toolCall.responsePayload ?? null,
+          status: toolCall.status,
+          latencyMs: toolCall.latencyMs ?? null,
+          inputTokens: toolCall.inputTokens ?? null,
+          outputTokens: toolCall.outputTokens ?? null,
+        })),
+      );
+
+      if (toolCallRows.length > 0) {
+        await tx.insert(schema.agentToolCalls).values(toolCallRows);
       }
     }
 

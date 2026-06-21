@@ -1,7 +1,7 @@
 // audit-exempt: org-profile field edit (name/slug/website/industry) — no fitting security-event type exists in the taxonomy (no org.settings_updated); covered by the kernel capability.invoke_* audit. Do not invent a type.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgSettingsWrite } from "@oxagen/oxagen/contracts/org.settings.write";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { mapOrgSettingsRow } from "./org.settings.read";
 import { logger } from "./logger";
@@ -15,16 +15,6 @@ const READ_COLUMNS = {
   employeeSize: true,
   type: true,
 } as const;
-
-// Postgres unique_violation — the organizations_slug_idx unique index fires
-// when a slug is already taken by another org.
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    (err as { code?: string }).code === "23505"
-  );
-}
 
 // Partial update of org.organizations for the active org. Every field is
 // optional: omit = unchanged, value = set, null = clear (nullable fields only).

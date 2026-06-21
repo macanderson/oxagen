@@ -56,9 +56,19 @@ vi.mock("@/lib/resolve-org", () => ({
   assertOrgMember: mockAssertOrgMember,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
+vi.mock("@oxagen/handlers/logger", () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
 vi.mock("@oxagen/database/security", () => ({
   emitSecurityEvent: mockEmitSecurityEvent,
 }));
+
+/** Error shaped like the sentinel `notFound()` throws (digest carries the 404 fallback code). */
+function authDenial(): Error {
+  const e = new Error("NEXT_HTTP_ERROR_FALLBACK");
+  (e as Error & { digest: string }).digest = "NEXT_HTTP_ERROR_FALLBACK;404";
+  return e;
+}
 vi.mock("@oxagen/database", () => {
   const makeTx = () => ({
     delete: (_table: unknown) => ({
@@ -115,8 +125,8 @@ describe("confirmMemberAccessAction", () => {
     if (!res.ok) expect(res.code).toBe("validation_error");
   });
 
-  it("returns forbidden when resolveOrg throws", async () => {
-    mockResolveOrg.mockRejectedValue(new Error("not found"));
+  it("returns forbidden when resolveOrg denies (notFound sentinel)", async () => {
+    mockResolveOrg.mockRejectedValue(authDenial());
     const res = await confirmMemberAccessAction({
       orgSlug: "acme",
       targetUserId: VALID_TARGET_UUID,
@@ -125,14 +135,24 @@ describe("confirmMemberAccessAction", () => {
     if (!res.ok) expect(res.code).toBe("forbidden");
   });
 
-  it("returns forbidden when assertOrgMember throws", async () => {
-    mockAssertOrgMember.mockRejectedValue(new Error("not a member"));
+  it("returns forbidden when assertOrgMember denies (notFound sentinel)", async () => {
+    mockAssertOrgMember.mockRejectedValue(authDenial());
     const res = await confirmMemberAccessAction({
       orgSlug: "acme",
       targetUserId: VALID_TARGET_UUID,
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("forbidden");
+  });
+
+  it("returns internal (NOT forbidden) when the auth gate hits a DB/infra error", async () => {
+    mockAssertOrgMember.mockRejectedValue(new Error("connection refused"));
+    const res = await confirmMemberAccessAction({
+      orgSlug: "acme",
+      targetUserId: VALID_TARGET_UUID,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("internal");
   });
 
   it("returns ok:true and emits access.member_access_confirmed on success", async () => {
@@ -189,14 +209,24 @@ describe("revokeMemberAccessAction", () => {
     expect(mockAssertSecurityManager).not.toHaveBeenCalled();
   });
 
-  it("returns forbidden when assertSecurityManager throws", async () => {
-    mockAssertSecurityManager.mockRejectedValue(new Error("insufficient role"));
+  it("returns forbidden when assertSecurityManager denies (notFound sentinel)", async () => {
+    mockAssertSecurityManager.mockRejectedValue(authDenial());
     const res = await revokeMemberAccessAction({
       orgSlug: "acme",
       targetUserId: VALID_TARGET_UUID,
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("forbidden");
+  });
+
+  it("returns internal (NOT forbidden) when the auth gate hits a DB/infra error", async () => {
+    mockAssertSecurityManager.mockRejectedValue(new Error("connection refused"));
+    const res = await revokeMemberAccessAction({
+      orgSlug: "acme",
+      targetUserId: VALID_TARGET_UUID,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("internal");
   });
 
   it("returns not_found when delete returns 0 rows", async () => {

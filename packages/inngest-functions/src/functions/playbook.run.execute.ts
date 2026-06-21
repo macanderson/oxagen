@@ -3,6 +3,7 @@ import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { generateObjectFor } from "@oxagen/ai";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { NonRetriableError } from "@oxagen/functions";
 import { insertEvents, insertToolInvocation, type EventRow } from "@oxagen/telemetry";
 import { invoke } from "@oxagen/oxagen/kernel";
 import "@oxagen/oxagen";
@@ -46,6 +47,93 @@ interface WebhookStepConfig {
   url: string;
   headers?: Record<string, string>;
   method?: "POST" | "GET" | "PUT";
+}
+
+// ---------------------------------------------------------------------------
+// SSRF protection for webhook steps
+// ---------------------------------------------------------------------------
+// The webhook step performs a server-side fetch to a user-configured URL from
+// inside the trusted runner. An https-only check is NOT sufficient: an internal
+// target can still serve TLS, and DNS can resolve an attacker domain to a
+// private IP (the cloud metadata endpoint 169.254.169.254 included). We reject
+// any URL whose host is a private/loopback/link-local/unique-local IP literal or
+// a known internal hostname. Mirrors the guard in @oxagen/handlers
+// (asset.upload.ts) — copied rather than imported because @oxagen/handlers
+// depends on this package, so importing it back would create a dependency cycle.
+
+function isIPv4Literal(host: string): boolean {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+}
+
+function isPrivateIPv4(host: string): boolean {
+  const parts = host.split(".").map((s) => {
+    const n = Number.parseInt(s, 10);
+    return Number.isNaN(n) ? -1 : n;
+  });
+  if (parts.length !== 4 || parts.some((p) => p < 0 || p > 255)) return false;
+  const [a, b] = parts as [number, number, number, number];
+  return (
+    a === 0 || // 0.0.0.0/8 — unspecified
+    a === 10 || // 10.0.0.0/8
+    a === 127 || // 127.0.0.0/8 — loopback
+    (a === 172 && b >= 16 && b <= 31) || // 172.16.0.0/12
+    (a === 192 && b === 168) || // 192.168.0.0/16
+    (a === 169 && b === 254) // 169.254.0.0/16 (incl. 169.254.169.254 IMDS)
+  );
+}
+
+function isPrivateIPv6(ip: string): boolean {
+  const lower = ip.toLowerCase();
+  if (lower === "::1" || lower === "0:0:0:0:0:0:0:1") return true; // loopback
+  if (/^fe[89ab][0-9a-f]:/i.test(lower)) return true; // fe80::/10 link-local
+  if (/^f[cd][0-9a-f]{2}:/i.test(lower)) return true; // fc00::/7 unique-local
+  return false;
+}
+
+/**
+ * Assert that `raw` is a publicly routable https:// URL safe to fetch from the
+ * runner. Throws on non-https schemes, internal hostnames, and private/
+ * loopback/link-local/unique-local IP literals.
+ */
+function assertPublicWebhookUrl(raw: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error(`webhook step: invalid URL "${raw}"`);
+  }
+
+  if (parsed.protocol !== "https:") {
+    throw new Error(
+      `webhook step: only https:// URLs are allowed (got: ${parsed.protocol})`,
+    );
+  }
+
+  const host = parsed.hostname.toLowerCase();
+
+  const blockedHostnames = new Set(["localhost", "metadata.google.internal"]);
+  if (blockedHostnames.has(host)) {
+    throw new Error(`webhook step: refusing to fetch internal hostname "${host}"`);
+  }
+
+  // IPv6 literal (wrapped in brackets in the URL hostname field)
+  if (host.startsWith("[")) {
+    const ipv6 = host.slice(1, -1);
+    if (isPrivateIPv6(ipv6)) {
+      throw new Error(
+        `webhook step: refusing to fetch non-routable IPv6 address "${ipv6}"`,
+      );
+    }
+    return parsed;
+  }
+
+  if (isIPv4Literal(host) && isPrivateIPv4(host)) {
+    throw new Error(
+      `webhook step: refusing to fetch non-routable IPv4 address "${host}"`,
+    );
+  }
+
+  return parsed;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +217,13 @@ export const [playbookRunExecute] = createFunction(
 
     if (!run) {
       logger.error({ runId, orgId }, "playbook-run-execute: run not found");
-      return { status: "failed", reason: "run not found" };
+      // Throw so Inngest marks the function run as failed and does NOT retry.
+      // A missing playbook_runs row will not appear on retry — this is a
+      // permanent failure, not a transient one.
+      throw new NonRetriableError(
+        `playbook-run-execute: run not found (runId=${runId})`,
+        { cause: { runId, orgId } },
+      );
     }
 
     if (run.status !== "pending") {
@@ -341,13 +435,15 @@ export const [playbookRunExecute] = createFunction(
               .returning({ id: schema.playbookStepRuns.id }),
           ),
         );
-        return stepRunRow?.id ?? null;
+        if (!stepRunRow?.id) {
+          // The DB returned no rows — treat this as a fatal step error so
+          // Inngest retries the step rather than silently completing the run.
+          throw new Error(
+            `playbook-run-execute: step_run insert returned no row for step ${stepDef.id} (playbookRunId=${runId})`,
+          );
+        }
+        return stepRunRow.id;
       });
-
-      if (!stepRunId) {
-        logger.error({ runId, stepId: stepDef.id }, "playbook-run-execute: step_run insert failed");
-        break;
-      }
 
       // Emit step_started event
       const stepStartedEventType = "step_started" as const;
@@ -814,13 +910,10 @@ export const [playbookRunExecute] = createFunction(
               throw new Error(`webhook step "${stepDef.stepKey}": missing config.url`);
             }
 
-            // Only HTTPS URLs — never follow redirects to non-https
-            const parsedUrl = new URL(cfg.url);
-            if (parsedUrl.protocol !== "https:") {
-              throw new Error(
-                `webhook step "${stepDef.stepKey}": only https:// URLs are allowed (got: ${parsedUrl.protocol})`,
-              );
-            }
+            // SSRF guard: https-only AND reject internal/private/link-local
+            // destinations (incl. the cloud metadata endpoint). Never follow
+            // redirects to non-https.
+            assertPublicWebhookUrl(cfg.url);
 
             const webhookBody = JSON.stringify({
               runId,

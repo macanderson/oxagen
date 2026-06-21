@@ -121,7 +121,7 @@ export const [ingestionPipeline] = createFunction(
           const result = await session.run(
             `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
              RETURN n.publicId AS nodeId`,
-            { naturalKey: mutation.naturalKey },
+            { naturalKey: mutation.naturalKey, orgId },
           );
           const record = result.records[0];
           if (record) {

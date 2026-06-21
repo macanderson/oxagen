@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { connectionMappingsSet } from "@oxagen/oxagen/contracts/connection.mappings.set";
 import { schema, withTenantDb } from "@oxagen/database";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { eventClient } from "./event-client";
 import { logger } from "./logger";
@@ -32,28 +32,46 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
 
   if (!conn) throw new HTTPException(404, { message: "Connection not found" });
 
-  let created = 0;
-  let updated = 0;
   const now = new Date();
 
-  for (const mapping of input.mappings) {
-    // Upsert each mapping: insert new or update existing for this (connection, sourceRecordType)
-    const existing = await withTenantDb((tx) =>
-      tx
-        .select({ id: schema.entityTypeMappings.id })
-        .from(schema.entityTypeMappings)
-        .where(
-          and(
-            eq(schema.entityTypeMappings.connectionId, conn.id),
-            eq(schema.entityTypeMappings.sourceRecordType, mapping.sourceRecordType),
-          ),
-        )
-        .limit(1),
-    );
+  // "connected" is the live state in the source_connections_status_check
+  // constraint (pending_setup | connected | paused | error) — "active" is not
+  // a valid value and would fail the CHECK on write.
+  const willActivate = input.activateConnection && conn.status === "pending_setup";
 
-    if (existing.length > 0 && existing[0]) {
-      await withTenantDb((tx) =>
-        tx
+  // Upsert every mapping AND (optionally) the connection status flip inside a
+  // single tenant-scoped transaction. This is atomic — a mid-batch failure
+  // rolls back every write — and collapses the previous O(N) round-trips
+  // (one SELECT + one INSERT/UPDATE per mapping) into a fixed two-query batch.
+  const { created, updated } = await withTenantDb(async (tx) => {
+    // One batched lookup of all existing mappings for this connection that
+    // collide with the incoming source record types, instead of one SELECT
+    // per mapping.
+    const sourceTypes = input.mappings.map((m) => m.sourceRecordType);
+    const existingRows = sourceTypes.length
+      ? await tx
+          .select({
+            id: schema.entityTypeMappings.id,
+            sourceRecordType: schema.entityTypeMappings.sourceRecordType,
+          })
+          .from(schema.entityTypeMappings)
+          .where(
+            and(
+              eq(schema.entityTypeMappings.connectionId, conn.id),
+              inArray(schema.entityTypeMappings.sourceRecordType, sourceTypes),
+            ),
+          )
+      : [];
+
+    const existingByType = new Map(existingRows.map((r) => [r.sourceRecordType, r.id]));
+
+    let createdCount = 0;
+    let updatedCount = 0;
+
+    for (const mapping of input.mappings) {
+      const existingId = existingByType.get(mapping.sourceRecordType);
+      if (existingId) {
+        await tx
           .update(schema.entityTypeMappings)
           .set({
             oxagenEntityType: mapping.oxagenEntityType,
@@ -61,13 +79,11 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
             isActive: true,
             updatedAt: now,
           })
-          .where(eq(schema.entityTypeMappings.id, existing[0]!.id)),
-      );
-      updated++;
-    } else {
-      const publicId = `etm_${Date.now().toString(36)}_${mapping.sourceRecordType}`;
-      await withTenantDb((tx) =>
-        tx.insert(schema.entityTypeMappings).values({
+          .where(eq(schema.entityTypeMappings.id, existingId));
+        updatedCount++;
+      } else {
+        const publicId = `etm_${Date.now().toString(36)}_${mapping.sourceRecordType}`;
+        await tx.insert(schema.entityTypeMappings).values({
           publicId,
           connectionId: conn.id,
           workspaceId: ctx.workspaceId,
@@ -78,27 +94,29 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
           isActive: true,
           createdAt: now,
           updatedAt: now,
-        }),
-      );
-      created++;
+        });
+        createdCount++;
+      }
     }
-  }
 
-  // Activate the connection if requested and currently in pending_setup.
-  // "connected" is the live state in the source_connections_status_check
-  // constraint (pending_setup | connected | paused | error) — "active" is not
-  // a valid value and would fail the CHECK on write.
-  let connectionStatus = conn.status;
-  if (input.activateConnection && conn.status === "pending_setup") {
-    await withTenantDb((tx) =>
-      tx
+    // Activate the connection if requested and currently in pending_setup —
+    // in the same transaction so mappings + status flip commit together.
+    if (willActivate) {
+      await tx
         .update(schema.sourceConnections)
         .set({ status: "connected", updatedAt: now })
-        .where(eq(schema.sourceConnections.id, conn.id)),
-    );
+        .where(eq(schema.sourceConnections.id, conn.id));
+    }
+
+    return { created: createdCount, updated: updatedCount };
+  });
+
+  let connectionStatus = conn.status;
+  if (willActivate) {
     connectionStatus = "connected";
 
-    // Fire the GitHub initial-sync Inngest event when activating a GitHub connection.
+    // Fire the GitHub initial-sync Inngest event when activating a GitHub
+    // connection — after the transaction commits, never inside it.
     // deliveryConfig carries { selectedRepos, installationId, owner, repo, defaultBranch }
     // set by the connection wizard before calling connection.mappings.set.
     if (conn.connectorId === "github") {

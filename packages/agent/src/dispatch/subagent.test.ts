@@ -120,7 +120,7 @@ describe("subagent dispatch", () => {
         errorReason: null,
       },
     ];
-    const snap = await readFanout("fan_123", "ten_1");
+    const snap = await readFanout("fan_123", "ten_1", "ws_1");
     expect(snap).not.toBeNull();
     expect(snap!.fanoutId).toBe("fan_123");
     expect(snap!.status).toBe("pending");
@@ -132,7 +132,7 @@ describe("subagent dispatch", () => {
 
   it("readFanout returns null when fanout row is absent", async () => {
     mocks.limitFanout.mockImplementationOnce(async () => []);
-    const snap = await readFanout("missing", "ten_1");
+    const snap = await readFanout("missing", "ten_1", "ws_1");
     expect(snap).toBeNull();
   });
 });

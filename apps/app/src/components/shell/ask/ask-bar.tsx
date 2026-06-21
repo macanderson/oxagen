@@ -29,6 +29,7 @@ import { usePageContext } from "@/lib/page-context";
 import { classifyIntent } from "@/lib/command-menu/intent-router";
 import { useRecent } from "@/lib/command-menu/use-recent";
 import { fillFormAction } from "@/lib/ask/fill-action";
+import { useToast } from "@/components/ui/toast";
 import type { ScopeContext } from "@/lib/scope";
 
 // Module-level stable noop — useSyncExternalStore requires a *stable* subscribe
@@ -50,6 +51,7 @@ export function AskBar({ ctx, className }: AskBarProps) {
   const router = useRouter();
   const pageCtx = usePageContext();
   const { push: pushRecent } = useRecent();
+  const toast = useToast();
 
   const [value, setValue] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
@@ -77,6 +79,8 @@ export function AskBar({ ctx, className }: AskBarProps) {
   const ctxRef = React.useRef(ctx);
   const pushRecentRef = React.useRef(pushRecent);
   const routerRef = React.useRef(router);
+  const toastRef = React.useRef(toast);
+  React.useEffect(() => { toastRef.current = toast; }, [toast]);
   React.useEffect(() => { pageCtxRef.current = pageCtx; }, [pageCtx]);
   // Depend on primitives (orgSlug, workspaceSlug) rather than the ctx object
   // reference. ShellFrame creates a new ctx object on every re-render (e.g.
@@ -157,6 +161,17 @@ export function AskBar({ ctx, className }: AskBarProps) {
               entitySummary: pc.entity?.summary,
             },
           });
+          // A swallowed auth/IAM/billing denial or capability error returns an
+          // all-unchanged fallback carrying `error`. Surface it so the user
+          // sees an actionable message instead of the overlay silently not
+          // rendering (which reads as "the AI had no suggestions").
+          if (result.error) {
+            toastRef.current.add({
+              title: "Couldn't fill the form",
+              description: result.error,
+              type: "error",
+            });
+          }
           pc._setFillResult(result);
         } finally {
           setIsLoading(false);

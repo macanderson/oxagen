@@ -370,7 +370,7 @@ describe("HMAC signature enforcement", () => {
     );
   });
 
-  it("passes null secret when connector has no verifyWebhook method", async () => {
+  it("rejects (401, fail closed) when connector has no verifyWebhook method", async () => {
     mocks.getConnector.mockReturnValue({}); // no verifyWebhook
     const res = await app.fetch(
       makeRequest(WEBHOOK_PATH, {
@@ -379,9 +379,11 @@ describe("HMAC signature enforcement", () => {
         body: "{}",
       }),
     );
-    // Connector without verifyWebhook is trusted unconditionally
-    expect(res.status).toBe(200);
+    // The security gate defaults CLOSED: a connector that ships no verifyWebhook
+    // is rejected, not admitted, and nothing is enqueued.
+    expect(res.status).toBe(401);
     expect(mocks.verifyWebhook).not.toHaveBeenCalled();
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 });
 

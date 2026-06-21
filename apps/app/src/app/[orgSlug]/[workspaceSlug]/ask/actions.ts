@@ -21,6 +21,7 @@ import { invoke } from "@oxagen/oxagen";
 import type { PlanStep } from "@/components/chat/stream-event-types";
 import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
 import { getSessionOrRedirect } from "@/lib/session";
+import { logger } from "@oxagen/handlers/logger";
 
 const FormSchema = z.object({
   content: z.string().min(1),
@@ -304,21 +305,47 @@ export async function readBackgroundTaskAction(
   taskId: string,
 ): Promise<BackgroundTaskSnapshot> {
   const session = await getSessionOrRedirect();
-  const parsed = agentTaskBackgroundRead.input.parse({ taskId });
-  const out = await invoke(
-    "agent.task.background.read",
-    parsed,
-    capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
-    { surface: "agent" },
-  ) as import("@oxagen/oxagen/contracts/agent.task.background.read").AgentTaskBackgroundReadOutput;
-  return {
-    taskId: out.taskId,
-    kind: out.kind,
-    label: out.label,
-    status: out.status,
-    createdAt: out.createdAt,
-    startedAt: out.startedAt,
-    completedAt: out.completedAt,
-    failureReason: out.failureReason,
-  };
+  try {
+    const parsed = agentTaskBackgroundRead.input.safeParse({ taskId });
+    if (!parsed.success) {
+      throw new Error(parsed.error.issues[0]?.message ?? "Invalid task id");
+    }
+    const out = await invoke(
+      "agent.task.background.read",
+      parsed.data,
+      capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
+      { surface: "agent" },
+    ) as import("@oxagen/oxagen/contracts/agent.task.background.read").AgentTaskBackgroundReadOutput;
+    return {
+      taskId: out.taskId,
+      kind: out.kind,
+      label: out.label,
+      status: out.status,
+      createdAt: out.createdAt,
+      startedAt: out.startedAt,
+      completedAt: out.completedAt,
+      failureReason: out.failureReason,
+    };
+  } catch (err) {
+    // The poller (background-task-tray) calls this inside Promise.allSettled
+    // and silently drops rejected results, freezing the row forever at its
+    // last known state. Instead of letting the failure vanish, log it with
+    // context and surface a terminal "failed" snapshot so the user sees the
+    // real outcome and polling stops.
+    const failureReason = err instanceof Error ? err.message : "Failed to read task status";
+    logger.error(
+      { err, taskId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "[ask] readBackgroundTaskAction failed",
+    );
+    return {
+      taskId,
+      kind: "unknown",
+      label: null,
+      status: "failed",
+      createdAt: new Date().toISOString(),
+      startedAt: null,
+      completedAt: new Date().toISOString(),
+      failureReason,
+    };
+  }
 }

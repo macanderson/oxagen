@@ -1,7 +1,7 @@
 "use server";
 import "@oxagen/handlers/register";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
+import { resolveOrg, resolveWorkspace, getOrgRole } from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen";
 import { formFill, type FormFillOutput } from "@oxagen/oxagen/contracts/form.fill";
 import { logger } from "@oxagen/handlers/logger";
@@ -25,23 +25,33 @@ export interface FillFormActionInput {
  * audit write run on every call — matching the behaviour of the API and MCP
  * surfaces (no-drift guarantee).
  *
- * Never throws — on any error returns all fields unchanged so the caller
- * can safely render the result.
+ * Never throws — on any error returns all fields unchanged so the caller can
+ * safely render the result. The fallback carries an `error` field so the caller
+ * can distinguish a swallowed auth/IAM/billing denial from a legitimate
+ * "no changes proposed" result and surface an actionable message.
  */
 export async function fillFormAction(input: FillFormActionInput): Promise<FormFillResult> {
-  const noopResult: FormFillResult = {
-    fields: input.spec.fields.map((f) => ({
-      name: f.name,
-      current: f.current,
-      proposed: f.current,
-      changed: false,
-    })),
-  };
+  const noopFields = input.spec.fields.map((f) => ({
+    name: f.name,
+    current: f.current,
+    proposed: f.current,
+    changed: false,
+  }));
 
   try {
     const session = await getSessionOrRedirect();
 
     const org = await resolveOrg(input.context.orgSlug);
+
+    // resolveOrg only maps slug→id, and invoke() from apps/app does NOT run the
+    // IAM membership check (the kernel skips it on the app surface). Gate org
+    // membership here so a session scoped to org A cannot drive form.fill
+    // against org B by passing its slug. Non-throwing (returns the safe no-op)
+    // to honour this action's never-throw contract.
+    const memberRole = await getOrgRole(org.id, session.user.id);
+    if (!memberRole) {
+      return { fields: noopFields, error: "You do not have access to this organization." };
+    }
 
     let workspaceId = "";
     if (input.context.workspaceSlug) {
@@ -91,7 +101,11 @@ export async function fillFormAction(input: FillFormActionInput): Promise<FormFi
     return { fields };
   } catch (err) {
     // Policy §0.5: never throw from a server action that has a safe fallback.
+    // But DO carry an `error` so the caller can distinguish this swallowed
+    // failure (auth/IAM/billing denial, capability error) from a legitimate
+    // "no changes proposed" result and surface an actionable message.
     logger.error({ err, route: input.context.route }, "fillFormAction failed");
-    return noopResult;
+    const message = err instanceof Error ? err.message : "Unable to fill the form. Please try again.";
+    return { fields: noopFields, error: message };
   }
 }

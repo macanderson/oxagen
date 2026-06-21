@@ -301,6 +301,34 @@ describe("resolveApiKey", () => {
     expect(result).toEqual({ ok: false, kind: "invalid" });
   });
 
+  it("returns invalid (not a crash) when the stored keyHash has an unexpected length", async () => {
+    // A corrupted/truncated keyHash yields a buffer whose length differs from
+    // the 32-byte SHA-256 digest. timingSafeEqual would throw RangeError on
+    // mismatched lengths; the length guard must return a clean auth failure.
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
+      id: "aky_corrupt",
+      keyHash: "deadbeef", // 4 bytes — not a full SHA-256 digest
+      orgId: "org_1",
+      workspaceId: "wrk_1",
+      expiresAt: null,
+    });
+    const result = await resolveApiKey("pfx_some_secret");
+    expect(result).toEqual({ ok: false, kind: "invalid" });
+  });
+
+  it("returns invalid (not a crash) when the stored keyHash contains non-hex characters", async () => {
+    // Buffer.from(nonHex, 'hex') silently produces a short/zero-length buffer.
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
+      id: "aky_garbage",
+      keyHash: "not-a-valid-hex-string",
+      orgId: "org_1",
+      workspaceId: "wrk_1",
+      expiresAt: null,
+    });
+    const result = await resolveApiKey("pfx_some_secret");
+    expect(result).toEqual({ ok: false, kind: "invalid" });
+  });
+
   it("returns expired when the key has passed its expiry", async () => {
     const rawKey = "pfx_mysecret";
     mockQuery.apiKeys.findFirst.mockResolvedValueOnce({

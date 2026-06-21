@@ -1,5 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+// Hoist the pino warn spy so the vi.mock factory below can reference it safely.
+const { pinoWarnSpy } = vi.hoisted(() => ({ pinoWarnSpy: vi.fn() }));
+
+// Stub pino so tests don't need a real logging transport and so we can assert
+// the malformed-NOTIFY-payload warning fires.
+vi.mock("pino", () => ({
+  default: vi.fn(() => ({ warn: pinoWarnSpy, error: vi.fn(), info: vi.fn() })),
+}));
+
 // Capture row inserted via the spy chain so the test can assert the shape.
 const insertedValues: unknown[] = [];
 const executeSpy = vi.fn(async () => undefined);
@@ -55,13 +64,18 @@ import {
 describe("approval runtime", () => {
   beforeEach(() => {
     insertedValues.length = 0;
-    listenHandlers.length = 0;
+    // listenHandlers is intentionally NOT cleared: the NOTIFY listener is a
+    // per-process singleton registered exactly once by the first
+    // waitForApproval. ensureListener short-circuits on every later call, so the
+    // handler is never re-registered — clearing the array would leave later
+    // tests (e.g. the malformed-payload case) with no handler to invoke.
     insertMock.mockClear();
     valuesMock.mockClear();
     returningMock.mockClear();
     executeSpy.mockClear();
     selectMock.mockClear();
     whereMock.mockClear();
+    pinoWarnSpy.mockClear();
   });
 
   it("createApprovalRequest inserts row with computed expiresAt", async () => {
@@ -176,6 +190,42 @@ describe("approval runtime", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("malformed NOTIFY payload logs a warn and does NOT resolve the waiter", async () => {
+    // Register a waiter so we can confirm a corrupt payload does not resolve it.
+    const promise = waitForApproval("appr_malformed", 60_000);
+    // Allow ensureListener to register the handler.
+    await new Promise((r) => setTimeout(r, 0));
+    const handler = listenHandlers[listenHandlers.length - 1]!;
+
+    // Fire a corrupt payload that will fail JSON.parse.
+    handler("this is not json {{{");
+
+    // The warn logger must have been called with the corrupt payload.
+    expect(pinoWarnSpy).toHaveBeenCalledTimes(1);
+    const [meta, msg] = pinoWarnSpy.mock.calls[0] as [Record<string, unknown>, string];
+    expect(msg).toContain("malformed NOTIFY payload");
+    expect(meta).toHaveProperty("payload", "this is not json {{{");
+    expect(meta).toHaveProperty("err");
+
+    // The waiter must NOT be resolved by the corrupt payload — it stays pending.
+    const raceResult = await Promise.race([
+      promise.then(() => "resolved" as const),
+      new Promise<"pending">((r) => setTimeout(() => r("pending"), 20)),
+    ]);
+    expect(raceResult).toBe("pending");
+
+    // Drain the still-pending waiter with a VALID NOTIFY so the promise settles.
+    // (The TTL timer was scheduled under real timers when waitForApproval was
+    // called, so switching to fake timers and advancing them would never fire it
+    // — that mismatch would hang the test.) The lingering real TTL timer is a
+    // harmless no-op once the waiter has been deleted by this resolution.
+    handler(
+      JSON.stringify({ approvalId: "appr_malformed", resolution: "denied", note: null }),
+    );
+    const res = await promise;
+    expect(res.resolution).toBe("denied");
   });
 
   it("readApproval shapes select with id + orgId filters", async () => {

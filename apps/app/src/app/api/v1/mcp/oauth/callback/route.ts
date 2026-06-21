@@ -84,11 +84,30 @@ export async function GET(req: NextRequest) {
   });
 
   // Exchange the code for tokens (mcpAuth detects the code and calls the token endpoint).
-  const result = await mcpAuth(provider, {
-    serverUrl: listing.endpointUrl,
-    authorizationCode: code,
-    fetchFn: safeFetch,
-  });
+  // A token-exchange failure must NOT become an unhandled rejection (opaque 500)
+  // and must NOT leak the ephemeral PKCE state: catch it, return the same
+  // ?mcp=error redirect as the unexpected-REDIRECT path, and clean up state in
+  // `finally` so it is deleted on success, failure, AND throw.
+  let result: Awaited<ReturnType<typeof mcpAuth>>;
+  try {
+    result = await mcpAuth(provider, {
+      serverUrl: listing.endpointUrl,
+      authorizationCode: code,
+      fetchFn: safeFetch,
+    });
+  } catch (err) {
+    await deleteOAuthState(state).catch(() => undefined);
+    logger.error(
+      {
+        orgId: stateData.orgId,
+        orgListingId: stateData.orgListingId,
+        err: String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      },
+      "mcp-oauth: mcpAuth threw during callback",
+    );
+    return NextResponse.redirect(`${url.origin}${stateData.returnTo}?mcp=error`);
+  }
 
   // Clean up the ephemeral state regardless of outcome.
   await deleteOAuthState(state);

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   runFindFirst: vi.fn(),
   updateSet: vi.fn(),
   updateWhere: vi.fn(),
+  updateReturning: vi.fn(),
   inngestSend: vi.fn(),
 }));
 
@@ -13,7 +14,10 @@ const COMPLETED_RUN = { id: "wfr-uuid-2", status: "completed" };
 const CANCELLED_RUN = { id: "wfr-uuid-3", status: "cancelled" };
 
 mocks.runFindFirst.mockResolvedValue(RUNNING_RUN);
-mocks.updateWhere.mockResolvedValue([{ id: "wfr-uuid-1" }]);
+// The guarded UPDATE only flips a still-cancellable row; .returning() yields the
+// flipped row in that case. Default: one row flipped (running -> cancelled).
+mocks.updateReturning.mockResolvedValue([{ id: "wfr-uuid-1" }]);
+mocks.updateWhere.mockReturnValue({ returning: mocks.updateReturning });
 mocks.updateSet.mockReturnValue({ where: mocks.updateWhere });
 mocks.inngestSend.mockResolvedValue(undefined);
 
@@ -49,7 +53,8 @@ describe("workflow.cancel handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.runFindFirst.mockResolvedValue(RUNNING_RUN);
-    mocks.updateWhere.mockResolvedValue([{ id: "wfr-uuid-1" }]);
+    mocks.updateReturning.mockResolvedValue([{ id: "wfr-uuid-1" }]);
+    mocks.updateWhere.mockReturnValue({ returning: mocks.updateReturning });
     mocks.updateSet.mockReturnValue({ where: mocks.updateWhere });
     mocks.inngestSend.mockResolvedValue(undefined);
   });
@@ -63,16 +68,31 @@ describe("workflow.cancel handler", () => {
 
   it("returns cancelled:false for already completed workflows", async () => {
     mocks.runFindFirst.mockResolvedValueOnce(COMPLETED_RUN);
+    // Guarded UPDATE flips no row for a terminal status.
+    mocks.updateReturning.mockResolvedValueOnce([]);
     const result = await workflowCancelHandler({ workflowId: "wfr-uuid-2" }, CTX);
     expect(result.cancelled).toBe(false);
-    expect(mocks.updateSet).not.toHaveBeenCalled();
     expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 
   it("returns cancelled:false for already cancelled workflows", async () => {
     mocks.runFindFirst.mockResolvedValueOnce(CANCELLED_RUN);
+    mocks.updateReturning.mockResolvedValueOnce([]);
     const result = await workflowCancelHandler({ workflowId: "wfr-uuid-3" }, CTX);
     expect(result.cancelled).toBe(false);
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
+  });
+
+  it("does not corrupt a run that transitions to completed mid-cancel (TOCTOU)", async () => {
+    // The existence read still sees the run as running, but the guarded UPDATE
+    // flips zero rows because the worker raced it to a terminal status. The
+    // handler must report cancelled:false and emit no cancel event rather than
+    // overwriting the terminal state.
+    mocks.runFindFirst.mockResolvedValueOnce(RUNNING_RUN);
+    mocks.updateReturning.mockResolvedValueOnce([]);
+    const result = await workflowCancelHandler({ workflowId: "wfr-uuid-1" }, CTX);
+    expect(result.cancelled).toBe(false);
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 
   it("sets status to cancelled and fires inngest event for running workflow", async () => {

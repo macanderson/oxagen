@@ -66,6 +66,11 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
   if (!row) return { ok: false, kind: "invalid" };
   const storedHashBuf = Buffer.from(row.keyHash, "hex");
   const computedHashBuf = Buffer.from(hash, "hex");
+  // `timingSafeEqual` throws RangeError when the two buffers differ in length.
+  // A corrupted/truncated/odd-length `keyHash` in the DB would otherwise crash
+  // the auth path with a 500 instead of a clean auth failure. Guard the length
+  // first (a mismatch can never be a valid key) and return `invalid`.
+  if (storedHashBuf.length !== computedHashBuf.length) return { ok: false, kind: "invalid" };
   if (!timingSafeEqual(storedHashBuf, computedHashBuf)) return { ok: false, kind: "invalid" };
   if (row.expiresAt && row.expiresAt.getTime() < Date.now()) {
     return { ok: false, kind: "expired" };

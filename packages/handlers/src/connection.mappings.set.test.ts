@@ -37,14 +37,20 @@ import { connectionMappingsSetHandler } from "./connection.mappings.set";
 // ── helper: build a mock transaction that returns fixed rows ──────────────────
 
 /**
- * Creates a tx mock whose select chain always resolves .limit() to `rows`.
- * Also provides insert and update stubs.
+ * Creates a tx mock whose select chain resolves to `rows`.
+ *
+ * The connection lookup terminates at `.limit()`; the batched mapping lookup
+ * terminates at `.where()`. Both terminal links resolve to `rows`, and `.where()`
+ * also returns the chain so the connection lookup's `.where().limit()` still
+ * works. Insert and update stubs resolve to an empty result.
  */
 function makeTxReturning(rows: unknown[]) {
+  const whereResult = Object.assign(Promise.resolve(rows), {
+    limit: vi.fn().mockResolvedValue(rows),
+  });
   const selectChain = {
     from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue(rows),
+    where: vi.fn().mockReturnValue(whereResult),
   };
   return {
     select: vi.fn().mockReturnValue(selectChain),
@@ -78,9 +84,10 @@ const GITHUB_CONN_ROW = {
 
 /**
  * Set up withTenantDb to return specific rows per sequential call.
- * Call 1: connection lookup → connRow
- * Call 2: existing mapping lookup → existingRow
- * Call 3+: write operations → empty
+ * Call 1: connection lookup → connRow (terminates at .limit()).
+ * Call 2: the upsert+activate transaction. Its batched mapping lookup
+ *         (terminates at .where()) resolves to existingRow; inserts/updates
+ *         within the same tx resolve to empty.
  */
 function setupDbSequence(
   connRow: unknown[],
@@ -91,7 +98,7 @@ function setupDbSequence(
     callIdx++;
     if (callIdx === 1) return fn(makeTxReturning(connRow) as TxLike);
     if (callIdx === 2) return fn(makeTxReturning(existingRow) as TxLike);
-    // Subsequent calls: insert/update/activate — return empty
+    // Any further calls (defensive): return empty.
     return fn(makeTxReturning([]) as TxLike);
   });
 }
@@ -147,7 +154,10 @@ describe("connectionMappingsSetHandler — new mapping (insert)", () => {
 describe("connectionMappingsSetHandler — update existing mapping", () => {
   it("updates an existing mapping and returns mappingsUpdated=1", async () => {
     // connection found (active), existing mapping found → update path
-    setupDbSequence([{ ...GITHUB_CONN_ROW, status: "connected" }], [{ id: "etm-uuid-1" }]);
+    setupDbSequence(
+      [{ ...GITHUB_CONN_ROW, status: "connected" }],
+      [{ id: "etm-uuid-1", sourceRecordType: "pull_request" }],
+    );
 
     const result = await connectionMappingsSetHandler(
       { ...ONE_MAPPING_INPUT, activateConnection: false },

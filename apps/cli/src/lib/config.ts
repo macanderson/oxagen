@@ -16,7 +16,16 @@ export function readConfig(): CliConfig {
   if (!existsSync(CONFIG_FILE)) return {};
   try {
     return JSON.parse(readFileSync(CONFIG_FILE, "utf8")) as CliConfig;
-  } catch {
+  } catch (err) {
+    // existsSync confirmed the file exists; reaching here means the file could
+    // not be read (permissions, I/O error) or contains invalid JSON (truncated
+    // write, corruption). Emit a clear warning so the user understands why all
+    // credentials appear missing, rather than silently returning empty config.
+    const detail = err instanceof Error ? err.message : String(err);
+    process.stderr.write(
+      `Warning: failed to read config file ${CONFIG_FILE}: ${detail}\n` +
+      `Run \`oxagen auth login\` to re-authenticate.\n`,
+    );
     return {};
   }
 }

@@ -160,6 +160,12 @@ export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
 
     const now = new Date();
 
+    // credit_ledger.reference_id is a UUID column, so the Stripe dispute id
+    // (e.g. "dp_...") cannot be stored raw — derive a deterministic UUID from
+    // it (same pattern as onChargeRefunded). This also makes the ledger
+    // idempotency pre-check below stable across re-deliveries.
+    const clawbackReferenceId = deterministicUuid(dispute.id);
+
     // Upsert the dispute row — idempotent on stripeDisputeId.
     const existing = await tx.query.billingDisputes.findFirst({
       where: eq(schema.billingDisputes.stripeDisputeId, dispute.id),
@@ -192,12 +198,40 @@ export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
     let clawedBackCents = 0n;
 
     if (requestedCents > 0n) {
+      // Atomicity guard: consumeCredits opens its OWN withTenantDb transaction,
+      // separate from this withSystemDb tx. If the outer tx (the
+      // billing_disputes INSERT/UPDATE that carries clawedBackCents) rolls back
+      // after consumeCredits has already committed its debit, a retried webhook
+      // would see clawedBackCents == 0 and clawback a SECOND time — double
+      // charging the org. The CLAWBACK_DISPUTE reason is NOT covered by the
+      // grant_* partial unique index, so the ledger cannot self-dedupe. Mirror
+      // onChargeRefunded: pre-check the ledger for an existing debit keyed to
+      // this dispute and skip if one is present.
+      const existingLedgerRow = await tx.query.creditLedger.findFirst({
+        where: and(
+          eq(schema.creditLedger.orgId, orgId),
+          eq(schema.creditLedger.reason, CREDIT_REASONS.CLAWBACK_DISPUTE),
+          eq(schema.creditLedger.referenceType, "dispute"),
+          eq(schema.creditLedger.referenceId, clawbackReferenceId),
+          isNotNull(schema.creditLedger.referenceId),
+        ),
+        columns: { id: true },
+      });
+
+      if (existingLedgerRow) {
+        logger.debug(
+          { disputeId: dispute.id, orgId, clawbackReferenceId },
+          "billing: dispute.created — clawback ledger row already exists, skipping (idempotent)",
+        );
+        return;
+      }
+
       const { chargedCents } = await consumeCredits({
         orgId,
         requestedCents,
         reason: CREDIT_REASONS.CLAWBACK_DISPUTE,
         referenceType: "dispute",
-        referenceId: dispute.id,
+        referenceId: clawbackReferenceId,
       });
       clawedBackCents = chargedCents;
     }

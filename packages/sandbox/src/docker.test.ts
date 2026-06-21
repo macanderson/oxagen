@@ -163,6 +163,17 @@ describe("hostConfigFor — memory", () => {
     const cfg = hostConfigFor(makeReq({ memoryMb: 128 }), TEST_SPEC);
     expect(cfg.MemorySwap).toBe(cfg.Memory);
   });
+
+  it("enforces a positive memory floor when memoryMb is 0 (Docker treats 0 as unlimited)", () => {
+    const cfg = hostConfigFor(makeReq({ memoryMb: 0 }), TEST_SPEC);
+    expect(cfg.Memory).toBe(16 * 1024 * 1024);
+    expect(cfg.MemorySwap).toBe(cfg.Memory);
+  });
+
+  it("clamps a sub-floor memoryMb up to the 16 MB minimum", () => {
+    const cfg = hostConfigFor(makeReq({ memoryMb: 4 }), TEST_SPEC);
+    expect(cfg.Memory).toBe(16 * 1024 * 1024);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -243,6 +254,31 @@ describe("createDockerSandbox — run()", () => {
     expect(result.timedOut).toBe(false);
     expect(result.oomKilled).toBe(false);
   });
+
+  it("does not hang when the stream 'end' fires before container.wait() resolves", async () => {
+    const { docker, container, attachEmitter } = makeMockDockerSetup();
+
+    // Emit data + "end" eagerly during start(), then resolve wait() on a
+    // LATER macrotask. This reproduces the real-Docker race where stream EOF
+    // precedes container exit. If the "end" listener were registered only
+    // after the wait/timeout race (the previous behaviour), this emit would be
+    // missed and run() would hang forever. The listener is now registered
+    // before start(), so the run resolves.
+    container.start = vi.fn().mockImplementation(async () => {
+      attachEmitter.emit("data", dockerFrame(1, "fast\n"));
+      attachEmitter.emit("end");
+    });
+    container.wait = vi.fn().mockImplementation(
+      () => new Promise<{ StatusCode: number }>((r) => setTimeout(() => r({ StatusCode: 0 }), 5)),
+    );
+
+    const sandbox = createDockerSandbox(() => docker);
+    const result = await sandbox.run(makeReq());
+
+    expect(result.stdout).toBe("fast\n");
+    expect(result.exitCode).toBe(0);
+    expect(result.timedOut).toBe(false);
+  }, 5_000);
 
   it("returns stderr output when container writes to stderr", async () => {
     const { docker, container, attachEmitter } = makeMockDockerSetup();

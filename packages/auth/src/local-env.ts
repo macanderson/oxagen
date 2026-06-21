@@ -46,6 +46,10 @@ export function resolveIsLocalEnv(signals: LocalEnvSignals): boolean {
     signals.nodeEnv === "development" ||
     signals.nodeEnv === "test" ||
     signals.vercelEnv === "development" ||
-    signals.e2eTest === "true"
+    // E2E_TEST is a developer/CI-harness signal, never a deployment one. Guard it
+    // with !isVercelDeploy exactly like localDevFlag so a leaked E2E_TEST=true in
+    // a real Vercel env can't relax production auth (email verification, OAuth
+    // token-encryption guard, secure cookies, rate limiting).
+    (!isVercelDeploy && signals.e2eTest === "true")
   );
 }

@@ -155,31 +155,35 @@ export const [ingestionGithubInitialSync] = createFunction(
     );
 
     // ── Step 4: Dispatch parse-file events in batches of BATCH_SIZE ───────────
-    await step.run("dispatch-file-parse", async () => {
-      const batches: Array<typeof filteredFiles> = [];
-      for (let i = 0; i < filteredFiles.length; i += BATCH_SIZE) {
-        batches.push(filteredFiles.slice(i, i + BATCH_SIZE));
-      }
+    // `step.sendEvent` MUST be called at the top level — Inngest only memoizes
+    // top-level `step.*` calls. Nesting `step.sendEvent` inside a `step.run`
+    // closure means the sends are not durably checkpointed: any retry of the
+    // outer step re-fires every event, fanning out duplicate parse-file jobs
+    // (N×cost explosion on large repos). Each batch is its own memoized step
+    // with a stable, index-derived id so replays are deterministic.
+    const batches: Array<typeof filteredFiles> = [];
+    for (let i = 0; i < filteredFiles.length; i += BATCH_SIZE) {
+      batches.push(filteredFiles.slice(i, i + BATCH_SIZE));
+    }
 
-      for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
-        const batch = batches[batchIdx]!;
-        await step.sendEvent(
-          `dispatch-files-batch-${batchIdx}`,
-          batch.map((file) => ({
-            name: "ingestion/github.parse-file" as const,
-            data: {
-              connectionId,
-              orgId,
-              workspaceId,
-              owner,
-              repo,
-              sha: file.sha,
-              path: file.path,
-            },
-          })),
-        );
-      }
-    });
+    for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+      const batch = batches[batchIdx]!;
+      await step.sendEvent(
+        `dispatch-files-batch-${batchIdx}`,
+        batch.map((file) => ({
+          name: "ingestion/github.parse-file" as const,
+          data: {
+            connectionId,
+            orgId,
+            workspaceId,
+            owner,
+            repo,
+            sha: file.sha,
+            path: file.path,
+          },
+        })),
+      );
+    }
 
     // ── Step 5: Mark connection as connected ──────────────────────────────────
     // "connected" is the live state allowed by source_connections_status_check

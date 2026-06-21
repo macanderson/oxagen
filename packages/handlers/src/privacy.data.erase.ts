@@ -59,8 +59,12 @@ export const privacyDataEraseHandler: CapabilityHandler<
   const orgId = input.scope === "org" ? (input.orgId ?? ctx.orgId) : ctx.orgId;
   const scheduledAt = new Date(Date.now() + getGracePeriodMs());
 
-  const [row] = await withSystemDb((tx) =>
-    tx
+  // Persist the erasure request AND revoke all active sessions atomically in a
+  // single transaction. If these ran as two separate withSystemDb calls, a crash
+  // between them could record the request (blocking re-request) while leaving
+  // sessions active — violating the GDPR requirement to revoke access on erasure.
+  const row = await withSystemDb(async (tx) => {
+    const [inserted] = await tx
       .insert(schema.privacyErasureRequests)
       .values({
         publicId: generatePublicId("preras"),
@@ -70,15 +74,15 @@ export const privacyDataEraseHandler: CapabilityHandler<
         status: "queued",
         scheduledAt,
       })
-      .returning({ id: schema.privacyErasureRequests.id }),
-  );
+      .returning({ id: schema.privacyErasureRequests.id });
 
-  if (!row) throw new Error("Failed to create erasure request");
+    if (!inserted) throw new Error("Failed to create erasure request");
 
-  // Immediately revoke all active sessions for this user
-  await withSystemDb((tx) =>
-    tx.delete(schema.sessions).where(eq(schema.sessions.userId, ctx.userId!)),
-  );
+    // Immediately revoke all active sessions for this user.
+    await tx.delete(schema.sessions).where(eq(schema.sessions.userId, ctx.userId!));
+
+    return inserted;
+  });
 
   const eventType = (
     input.scope === "org" ? "privacy.org_erasure_requested" : "privacy.erasure_requested"

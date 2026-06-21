@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── Mocks (hoisted so vi.mock factories can reference them) ──────────────────
 
 const mocks = vi.hoisted(() => ({
-  withSystemDb: vi.fn(),
+  withTenantDb: vi.fn(),
   listOxagenPlugins: vi.fn(),
   listServers: vi.fn(),
   mapServerDetailToCatalogRow: vi.fn(),
@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withSystemDb: mocks.withSystemDb };
+  return { ...real, withTenantDb: mocks.withTenantDb };
 });
 
 vi.mock("@oxagen/oxagen/plugins", () => ({
@@ -135,11 +135,11 @@ function makeServerResponse(name: string, version = "1.0.0") {
   };
 }
 
-// ── withSystemDb helpers ─────────────────────────────────────────────────────
+// ── withTenantDb helpers ─────────────────────────────────────────────────────
 
-/** Mock a single withSystemDb call that returns registries. */
+/** Mock a single withTenantDb call that returns registries. */
 function mockRegistries(regs: typeof fakeRegistry[]) {
-  mocks.withSystemDb.mockImplementationOnce(
+  mocks.withTenantDb.mockImplementationOnce(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         select: () => ({ from: () => ({ where: () => Promise.resolve(regs) }) }),
@@ -147,9 +147,9 @@ function mockRegistries(regs: typeof fakeRegistry[]) {
   );
 }
 
-/** Mock a single withSystemDb call that returns installed plugin name rows. */
+/** Mock a single withTenantDb call that returns installed plugin name rows. */
 function mockInstalledNames(names: string[]) {
-  mocks.withSystemDb.mockImplementationOnce(
+  mocks.withTenantDb.mockImplementationOnce(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         select: () => ({
@@ -211,7 +211,7 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
 
   it("org-less browse reports nothing installed and skips the DB query", async () => {
     const selectSpy = vi.fn();
-    mocks.withSystemDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         select: () => {
           selectSpy();
@@ -225,7 +225,7 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
     )) as { servers: Array<{ installed: boolean }> };
     expect(result.servers.length).toBeGreaterThan(0);
     expect(result.servers.every((s) => s.installed === false)).toBe(true);
-    // withSystemDb is still called but the inner tx.select() should not be,
+    // withTenantDb is still called but the inner tx.select() should not be,
     // because the handler short-circuits on empty orgId.
     expect(selectSpy).not.toHaveBeenCalled();
   });
@@ -342,9 +342,9 @@ const fakeSkills = [
   },
 ];
 
-/** Mock a single withSystemDb call that returns skill rows from agent.skills. */
+/** Mock a single withTenantDb call that returns skill rows from agent.skills. */
 function mockSkillRows(skills: typeof fakeSkills) {
-  mocks.withSystemDb.mockImplementationOnce(
+  mocks.withTenantDb.mockImplementationOnce(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         select: () => ({
@@ -429,8 +429,8 @@ describe("plugin.catalog.browse handler — agent_skill path", () => {
   });
 
   it("returns empty when no org context (org-less browse)", async () => {
-    // withSystemDb returns [] for missing orgId (handler short-circuits).
-    mocks.withSystemDb.mockImplementationOnce(
+    // withTenantDb returns [] for missing orgId (handler short-circuits).
+    mocks.withTenantDb.mockImplementationOnce(
       async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({ select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }) }),
     );
@@ -700,7 +700,7 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
 
     await handler({ pluginType: "mcp_server", limit: 30, offset: 0 }, ctx);
 
-    // Both withSystemDb calls are workspace-scoped; just verify listServers was called
+    // Both withTenantDb calls are workspace-scoped; just verify listServers was called
     // (meaning the registry lookup succeeded with the right ctx).
     expect(mocks.listServers).toHaveBeenCalledOnce();
   });
@@ -713,7 +713,7 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
       servers: names.map((n) => makeServerResponse(n)),
       nextCursor: undefined,
     });
-    // Second withSystemDb call: installed-names lookup for 3 live rows.
+    // Second withTenantDb call: installed-names lookup for 3 live rows.
     mockInstalledNames([]);
 
     const result = (await handler(

@@ -44,6 +44,7 @@ export async function agentMcpConsentResolveHandler(
         and(
           eq(schema.approvalRequests.id, input.approvalId),
           eq(schema.approvalRequests.orgId, ctx.orgId),
+          eq(schema.approvalRequests.workspaceId, ctx.workspaceId),
           sql`${schema.approvalRequests.expiresAt} > now()`,
           sql`${schema.approvalRequests.resolution} IS NULL`,
         ),

@@ -1,6 +1,6 @@
 import { createFunction } from "../create-function";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { generateObjectFor } from "@oxagen/ai";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { insertToolInvocation } from "@oxagen/telemetry";
@@ -155,39 +155,29 @@ Provide a summary, any relevant structured data, and source references if applic
     const stepCounts = await step.run("count-steps", () =>
       runInTenantScope({ orgId, workspaceId }, () =>
         withTenantDb(async (tx) => {
-          const [totalRow] = await tx
-            .select({ n: count(schema.agentExecutionSteps.id) })
+          // Single aggregating query: total, completed, and failed must be read
+          // from one consistent snapshot. Three separate COUNT statements run at
+          // independent READ COMMITTED snapshots, so a concurrent task completing
+          // between them could make the terminal check (`completed + failed >=
+          // total`) flip incorrectly — with concurrency up to 100/org this race
+          // can leave an execution stuck non-final or finalize it twice.
+          const [row] = await tx
+            .select({
+              total: count(schema.agentExecutionSteps.id),
+              completed: sql<number>`count(*) filter (where ${schema.agentExecutionSteps.status} = 'completed')`,
+              failed: sql<number>`count(*) filter (where ${schema.agentExecutionSteps.status} = 'failed')`,
+            })
             .from(schema.agentExecutionSteps)
             .where(
               and(
                 eq(schema.agentExecutionSteps.executionId, executionId),
                 eq(schema.agentExecutionSteps.orgId, orgId),
-              ),
-            );
-          const [completedRow] = await tx
-            .select({ n: count(schema.agentExecutionSteps.id) })
-            .from(schema.agentExecutionSteps)
-            .where(
-              and(
-                eq(schema.agentExecutionSteps.executionId, executionId),
-                eq(schema.agentExecutionSteps.orgId, orgId),
-                eq(schema.agentExecutionSteps.status, "completed"),
-              ),
-            );
-          const [failedRow] = await tx
-            .select({ n: count(schema.agentExecutionSteps.id) })
-            .from(schema.agentExecutionSteps)
-            .where(
-              and(
-                eq(schema.agentExecutionSteps.executionId, executionId),
-                eq(schema.agentExecutionSteps.orgId, orgId),
-                eq(schema.agentExecutionSteps.status, "failed"),
               ),
             );
           return {
-            total: totalRow?.n ?? 0,
-            completed: completedRow?.n ?? 0,
-            failed: failedRow?.n ?? 0,
+            total: Number(row?.total ?? 0),
+            completed: Number(row?.completed ?? 0),
+            failed: Number(row?.failed ?? 0),
           };
         }),
       ),

@@ -79,7 +79,21 @@ function AddCardForm({ orgSlug, onSuccess, onCancel }: AddCardFormProps) {
       }
 
       // Sync the newly attached card into our DB mirror.
-      await syncPaymentMethodsAction({ orgSlug });
+      try {
+        await syncPaymentMethodsAction({ orgSlug });
+      } catch (syncErr) {
+        // The SetupIntent already confirmed in Stripe — the card IS live there.
+        // If the DB mirror sync fails, surface it so the user knows and can
+        // reload the page to re-trigger the sync rather than assuming success.
+        toast.add({
+          title: "Card saved in Stripe, but sync failed",
+          description:
+            "Your card was accepted by Stripe but could not be saved to your account. Please refresh the page. If the card does not appear, contact support.",
+          type: "error",
+        });
+        console.error("[payment-methods] syncPaymentMethodsAction failed after Stripe confirmSetup", syncErr);
+        return;
+      }
       toast.add({ title: "Card saved", type: "success" });
       onSuccess();
     } finally {

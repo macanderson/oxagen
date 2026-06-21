@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   embeddingModel: vi.fn(),
   insertTokenUsage: vi.fn(),
   hashPrompt: vi.fn(),
+  providerCostUsdMicros: vi.fn(),
+  chargeUsageCredits: vi.fn(),
+  warn: vi.fn(),
 }));
 
 // Stub the AI SDK embed call.
@@ -19,9 +22,29 @@ mocks.embeddingModel.mockReturnValue({ modelId: "openai/text-embedding-3-small" 
 // Telemetry stubs.
 mocks.insertTokenUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("deadbeefdeadbeef");
+// Billing stubs.
+mocks.providerCostUsdMicros.mockReturnValue(42);
+mocks.chargeUsageCredits.mockResolvedValue({
+  costUsdMicros: 42,
+  creditsMetered: 1n,
+  creditsCharged: 1n,
+  shortfallCredits: 0n,
+});
 
 vi.mock("ai", () => ({ embed: mocks.embed }));
 vi.mock("@ai-sdk/gateway", () => ({ gateway: { embeddingModel: mocks.embeddingModel } }));
+// Stub pino so the usage-absent warning is observable.
+vi.mock("pino", () => ({
+  default: vi.fn(() => ({ warn: mocks.warn, error: vi.fn(), info: vi.fn() })),
+}));
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/billing")>();
+  return {
+    ...real,
+    providerCostUsdMicros: mocks.providerCostUsdMicros,
+    chargeUsageCredits: mocks.chargeUsageCredits,
+  };
+});
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return {
@@ -49,6 +72,14 @@ describe("embedText (@oxagen/ai)", () => {
     mocks.embed.mockClear();
     mocks.insertTokenUsage.mockClear();
     mocks.hashPrompt.mockClear();
+    mocks.providerCostUsdMicros.mockClear();
+    mocks.chargeUsageCredits.mockClear();
+    mocks.warn.mockClear();
+    // Restore the default healthy embed response (some tests override it).
+    mocks.embed.mockImplementation(async () => ({
+      embedding: new Array(1536).fill(0).map((_, i) => i / 1536),
+      usage: { tokens: 7 },
+    }));
   });
 
   it("calls the gateway embedding model with the correct model id and returns a 1536-d vector", async () => {
@@ -101,5 +132,45 @@ describe("embedText (@oxagen/ai)", () => {
     });
     // Embedding must succeed even when ClickHouse is unreachable.
     expect(v).toHaveLength(1536);
+  });
+
+  it("debits credits via chargeUsageCredits exactly once with the correct fields", async () => {
+    await embedText("charge me", { telemetry: BASE_TELEMETRY });
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledWith({
+      orgId: "org_1",
+      model: "text-embedding-3-small",
+      referenceId: "req_abc",
+      inputTokens: 7,
+      outputTokens: 0,
+      cachedTokens: 0,
+    });
+  });
+
+  it("swallows credit-charge errors and still returns the embedding", async () => {
+    mocks.chargeUsageCredits.mockRejectedValueOnce(new Error("billing down"));
+    const v = await embedText("resilient", { telemetry: BASE_TELEMETRY });
+    // Embedding must succeed even when billing is unreachable.
+    expect(v).toHaveLength(1536);
+  });
+
+  it("warns and bills zero tokens when the embed() response omits usage", async () => {
+    mocks.embed.mockImplementationOnce(async () => ({
+      embedding: new Array(1536).fill(0),
+      usage: undefined,
+    }));
+    const v = await embedText("no usage", { telemetry: BASE_TELEMETRY });
+    expect(v).toHaveLength(1536);
+    // The missing-usage gap must be logged, not silently zeroed.
+    expect(mocks.warn).toHaveBeenCalledTimes(1);
+    const [meta, msg] = mocks.warn.mock.calls[0] as [Record<string, unknown>, string];
+    expect(msg).toContain("usage field absent");
+    expect(meta).toMatchObject({ model: "text-embedding-3-small", executionStepId: "req_abc" });
+    // token_usage row and credit charge still recorded, with zero input tokens.
+    const usageRow = (mocks.insertTokenUsage.mock.calls[0] as [Record<string, unknown>[]])[0][0]!;
+    expect(usageRow.input_tokens).toBe(0);
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 0 }),
+    );
   });
 });

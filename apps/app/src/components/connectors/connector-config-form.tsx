@@ -176,8 +176,15 @@ export function ConnectorConfigForm({
             setSubmitting(false);
             return;
           }
+        } else {
+          // Non-2xx from the validation endpoint is a hard failure, not a
+          // silent degradation. Surface it so the user knows validation could
+          // not run rather than letting potentially-invalid credentials through.
+          const msg = `Validation service unavailable (HTTP ${validateRes.status}) — please try again.`;
+          setSubmitError(msg);
+          setSubmitting(false);
+          return;
         }
-        // Non-200 from validate = skip server validation (graceful degradation)
 
         // 3. Submit: install or configure
         const endpoint =

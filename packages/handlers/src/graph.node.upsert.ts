@@ -10,9 +10,11 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
 ) => {
   const { orgId, workspaceId } = ctx;
 
-  // Natural key: externalId when provided; otherwise label+displayName+workspaceId
+  // Natural key is always workspace-scoped: externalId when provided
+  // (prefixed with workspaceId so the same external id in two workspaces of the
+  // same org does not collide), otherwise label+displayName+workspaceId.
   const naturalKey = input.externalId
-    ? `ext:${input.externalId}`
+    ? `ext:${workspaceId}:${input.externalId}`
     : `${input.label}:${input.displayName}:${workspaceId}`;
 
   const propertiesJson = input.properties ? JSON.stringify(input.properties) : null;
@@ -24,10 +26,13 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
     const session = scopedSession();
     try {
       const result = await session.run(
-        `MERGE (n:KnowledgeNode {naturalKey: $naturalKey, orgId: $orgId})
+        // MERGE key includes orgId AND workspaceId so a node is uniquely scoped
+        // to its workspace; this prevents a same-org sibling workspace from
+        // matching (and overwriting) another workspace's node. $orgId and
+        // $workspaceId are injected automatically by scopedSession().
+        `MERGE (n:KnowledgeNode {naturalKey: $naturalKey, orgId: $orgId, workspaceId: $workspaceId})
          ON CREATE SET
            n.publicId     = randomUUID(),
-           n.workspaceId  = $workspaceId,
            n.label        = $label,
            n.displayName  = $displayName,
            n.description  = $description,

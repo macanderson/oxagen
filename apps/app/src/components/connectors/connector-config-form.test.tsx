@@ -6,7 +6,7 @@
  * and cancel button.
  */
 
-import { render, cleanup, screen } from "@testing-library/react";
+import { render, cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import * as React from "react";
@@ -299,6 +299,122 @@ describe("ConnectorConfigForm — submit error (no required fields)", () => {
     // Wait for async submit flow to settle
     const alertEl = await screen.findByRole("alert", {}, { timeout: 3000 });
     expect(alertEl).toHaveTextContent("Integration already exists");
+  });
+});
+
+// ── Validate non-2xx error surfacing ─────────────────────────────────────────
+// When the plugin-schema validate endpoint returns a non-2xx (500, 401, 503),
+// the original code silently skipped server validation and proceeded to submit.
+// The fix surfaces the error to the user instead of silently bypassing validation.
+
+describe("ConnectorConfigForm — validate endpoint non-2xx is surfaced (not silently bypassed)", () => {
+  const NO_REQUIRED_SCHEMA: ConnectorPluginSchema = {
+    apiVersion: "oxagen.ai/v1alpha1",
+    kind: "ConnectorPlugin",
+    metadata: {
+      id: "simple",
+      displayName: "Simple",
+      version: "1.0.0",
+      schemaVersion: "1",
+      publisher: { name: "Oxagen", verified: true },
+    },
+    config: {
+      fields: [{ key: "name", label: "Name", widget: "text" }],
+    },
+  };
+
+  function renderNoRequired(props: Partial<Parameters<typeof ConnectorConfigForm>[0]> = {}) {
+    return render(
+      <ConnectorSchemaProvider
+        pluginId="simple"
+        orgSlug="acme"
+        workspaceSlug="main"
+        initialSchema={NO_REQUIRED_SCHEMA}
+      >
+        <ConnectorConfigForm orgSlug="acme" workspaceSlug="main" {...props} />
+      </ConnectorSchemaProvider>,
+    );
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows an error alert when validate returns 500 (does NOT proceed to install)", async () => {
+    let installCalled = false;
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((_url: string) => {
+      if ((_url as string).includes("validate")) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: async () => ({ error: "Internal error" }),
+        });
+      }
+      // This should NOT be reached
+      installCalled = true;
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ jobId: "job-1", status: "queued" }),
+      });
+    }));
+
+    renderNoRequired();
+    await userEvent.click(screen.getByRole("button", { name: /connect/i }));
+
+    const alertEl = await screen.findByRole("alert", {}, { timeout: 3000 });
+    expect(alertEl).toHaveTextContent(/validation service unavailable/i);
+    expect(alertEl).toHaveTextContent("500");
+    // The install endpoint must NOT have been called
+    expect(installCalled).toBe(false);
+  });
+
+  it("shows an error alert when validate returns 401 (does NOT proceed to install)", async () => {
+    let installCalled = false;
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((_url: string) => {
+      if ((_url as string).includes("validate")) {
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          json: async () => ({ error: "Unauthorized" }),
+        });
+      }
+      installCalled = true;
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ jobId: "job-1", status: "queued" }),
+      });
+    }));
+
+    renderNoRequired();
+    await userEvent.click(screen.getByRole("button", { name: /connect/i }));
+
+    const alertEl = await screen.findByRole("alert", {}, { timeout: 3000 });
+    expect(alertEl).toHaveTextContent("401");
+    expect(installCalled).toBe(false);
+  });
+
+  it("proceeds to install when validate returns 200 with { valid: true }", async () => {
+    const onSuccess = vi.fn();
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((_url: string) => {
+      if ((_url as string).includes("validate")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ valid: true, errors: [] }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ jobId: "job-ok", status: "queued" }),
+      });
+    }));
+
+    renderNoRequired({ onSuccess });
+    await userEvent.click(screen.getByRole("button", { name: /connect/i }));
+
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalledWith({ jobId: "job-ok", status: "queued" });
+    }, { timeout: 3000 });
   });
 });
 

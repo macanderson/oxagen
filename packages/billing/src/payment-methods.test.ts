@@ -373,6 +373,58 @@ describe("removeOrgPaymentMethod", () => {
     );
     expect(detachPaymentMethodMock).not.toHaveBeenCalled();
   });
+
+  it("propagates error when default-promotion Stripe call fails (no silent swallow)", async () => {
+    // Verifies fix for payment-methods.ts:407 swallowed catch.
+    // After the removed card is soft-deleted, the org has zero isDefault=true cards.
+    // If the Stripe call to promote the next card fails, the error must NOT be
+    // swallowed — callers need to know so they can trigger a re-sync.
+    _findManyResult = [
+      makeDbPm({ stripePaymentMethodId: "pm_default", isDefault: true, id: "uuid-001" }),
+      makeDbPm({ stripePaymentMethodId: "pm_other", isDefault: false, id: "uuid-002" }),
+    ];
+    dbMocks.query.paymentMethods.findMany.mockResolvedValue(_findManyResult);
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeCustomerId: "cus_001",
+    });
+
+    // Simulate Stripe failing to update the default.
+    setDefaultPaymentMethodMock.mockRejectedValueOnce(new Error("stripe_error: network timeout"));
+
+    await expect(removeOrgPaymentMethod("org-001", "pm_default")).rejects.toThrow(
+      "stripe_error: network timeout",
+    );
+
+    // The removed card was still detached (that already succeeded before promotion).
+    expect(detachPaymentMethodMock).toHaveBeenCalledWith("pm_default");
+    // Promotion was attempted.
+    expect(setDefaultPaymentMethodMock).toHaveBeenCalledWith("cus_001", "pm_other");
+  });
+
+  it("propagates error when default-promotion DB update fails (no silent swallow)", async () => {
+    // Same bug class but the Stripe call succeeds and the DB update fails.
+    _findManyResult = [
+      makeDbPm({ stripePaymentMethodId: "pm_default", isDefault: true, id: "uuid-001" }),
+      makeDbPm({ stripePaymentMethodId: "pm_other", isDefault: false, id: "uuid-002" }),
+    ];
+    dbMocks.query.paymentMethods.findMany.mockResolvedValue(_findManyResult);
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeCustomerId: "cus_001",
+    });
+    setDefaultPaymentMethodMock.mockResolvedValueOnce(undefined); // Stripe OK
+
+    // The first update (soft-delete of the removed card) succeeds; the SECOND
+    // update (promoting the next card to isDefault=true) is the one that fails.
+    updateWhereMock.mockResolvedValueOnce(undefined); // soft-delete OK
+    updateWhereMock.mockRejectedValueOnce(new Error("db: connection lost")); // promote fails
+
+    await expect(removeOrgPaymentMethod("org-001", "pm_default")).rejects.toThrow(
+      "db: connection lost",
+    );
+
+    expect(detachPaymentMethodMock).toHaveBeenCalledWith("pm_default");
+    expect(setDefaultPaymentMethodMock).toHaveBeenCalledWith("cus_001", "pm_other");
+  });
 });
 
 describe("isLastPaymentMethodError", () => {

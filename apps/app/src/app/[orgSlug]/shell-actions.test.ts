@@ -27,17 +27,28 @@ const {
     wsRows: Array<{ id: string }>;
     convRows: Array<{ id: string; publicId: string; leaf: string | null }>;
     msgRows: Array<{ id: string }>;
+    // Rows returned by the workspace-membership SELECT (workspace.workspace_users).
+    // A non-empty array => caller IS a member; empty => not a member.
+    wsUserRows: Array<{ id: string }>;
     // Tracks global withSystemDb call count — resolveWorkspaceFromSlugs makes
     // two separate withSystemDb calls: org lookup (odd calls) + ws lookup (even calls).
     // Reset in beforeEach so each test starts fresh.
     systemCallIdx: number;
+    // Tracks tenant-DB SELECT order: 1st select in wandSendAction is the
+    // membership check, subsequent selects are the conversation lookup.
+    tenantSelectIdx: number;
+    // Tracks tenant-DB INSERT order: 1st insert is the conversation, 2nd the message.
+    tenantInsertIdx: number;
   }
   const dbState: DbState = {
     orgRows: [{ id: "org-1" }],
     wsRows: [{ id: "ws-1" }],
     convRows: [],
     msgRows: [{ id: "msg-1" }],
+    wsUserRows: [{ id: "wu-1" }],
     systemCallIdx: 0,
+    tenantSelectIdx: 0,
+    tenantInsertIdx: 0,
   };
 
   const mockRunInTenantScope = vi.fn(
@@ -86,15 +97,24 @@ vi.mock("@oxagen/database", () => {
     select: (_cols: unknown) => ({
       from: (_table: unknown) => ({
         where: (_w: unknown) => ({
-          limit: (_n: number) => Promise.resolve(dbState.convRows),
+          limit: (_n: number) => {
+            // First tenant SELECT in wandSendAction is the workspace-membership
+            // check; subsequent ones are the conversation lookup.
+            dbState.tenantSelectIdx++;
+            if (dbState.tenantSelectIdx === 1) return Promise.resolve(dbState.wsUserRows);
+            return Promise.resolve(dbState.convRows);
+          },
         }),
       }),
     }),
     insert: (_table: unknown) => ({
       values: (_vals: unknown) => ({
         returning: () => {
-          // Alternate between conversation and message returns.
-          if (dbState.convRows.length > 0) {
+          // wandSendAction inserts the conversation first (when no
+          // conversationId was supplied) then the user message. Track order so
+          // the conversation row carries a publicId and the message row an id.
+          dbState.tenantInsertIdx++;
+          if (dbState.tenantInsertIdx === 1 && dbState.convRows.length === 0) {
             return Promise.resolve([{ id: "conv-1", publicId: "pub-1" }]);
           }
           return Promise.resolve(dbState.msgRows);
@@ -120,6 +140,7 @@ vi.mock("@oxagen/database", () => {
     schema: {
       organizations: { id: "org_id", slug: "org_slug" },
       workspaces: { id: "ws_id", orgId: "ws_orgId", slug: "ws_slug" },
+      workspaceUsers: { id: "wu_id", workspaceId: "wu_wsId", userId: "wu_userId" },
       conversations: {
         id: "conv_id",
         publicId: "conv_pid",
@@ -184,11 +205,69 @@ vi.mock("@oxagen/oxagen/contracts/agent.plan.approve", () => ({
 }));
 
 import {
+  wandSendAction,
   wandResolveApprovalAction,
   wandResolvePlanAction,
 } from "./shell-actions";
 
 const SESSION = { user: { id: "user-1" } };
+
+/** Build the FormData payload wandSendAction expects. */
+function sendFormData(overrides: Record<string, string> = {}): FormData {
+  const fd = new FormData();
+  fd.set("orgSlug", "acme");
+  fd.set("workspaceSlug", "main");
+  fd.set("content", "hello");
+  for (const [k, v] of Object.entries(overrides)) fd.set(k, v);
+  return fd;
+}
+
+// ---------------------------------------------------------------------------
+// Tests — wandSendAction workspace-membership gate (IDOR regression)
+//
+// The membership gate previously returned `true` for ANY caller whenever the
+// DB query succeeded (the bug discarded the row count). These tests prove the
+// gate now denies non-members and admits real members.
+// ---------------------------------------------------------------------------
+
+describe("wandSendAction — workspace membership gate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    dbState.orgRows = [{ id: "org-1" }];
+    dbState.wsRows = [{ id: "ws-1" }];
+    dbState.convRows = [];
+    dbState.msgRows = [{ id: "msg-1" }];
+    dbState.wsUserRows = [{ id: "wu-1" }];
+    dbState.systemCallIdx = 0;
+    dbState.tenantSelectIdx = 0;
+    dbState.tenantInsertIdx = 0;
+    mockGetSession.mockResolvedValue(SESSION);
+  });
+
+  it("denies a non-member (zero membership rows) — no cross-workspace write", async () => {
+    dbState.wsUserRows = [];
+    const res = await wandSendAction(sendFormData());
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("access");
+  });
+
+  it("admits a real member (membership row present) and creates the message", async () => {
+    dbState.wsUserRows = [{ id: "wu-1" }];
+    const res = await wandSendAction(sendFormData());
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.userMessageId).toBe("msg-1");
+      expect(res.conversationId).toBeTruthy();
+    }
+  });
+
+  it("denies when the workspace cannot be resolved from slugs", async () => {
+    dbState.wsRows = [];
+    const res = await wandSendAction(sendFormData());
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("Workspace not found");
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Tests — wandResolveApprovalAction

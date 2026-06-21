@@ -131,13 +131,17 @@ async function resolveOrgFromInvoice(tx: Tx, invoice: BillingInvoice): Promise<s
 export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<void> {
   const start = Date.now();
 
-  await withSystemDb(async (tx) => {
+  // Capture the org context resolved inside the transaction so the best-effort
+  // notification can run AFTER the transaction has committed — never reusing the
+  // committed `tx` handle (its connection is released back to the pool). Mirrors
+  // the notifyLowBalance pattern in autoreload.ts.
+  const notifyCtx = await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (org resolved from Stripe invoice, no workspace
     // context; billing is org_only; webhook path with no tenant scope) — OXA-1515
     const orgId = await resolveOrgFromInvoice(tx, invoice);
     if (!orgId) {
       logger.warn({ invoiceId: invoice.providerInvoiceId }, "billing: dunning — could not resolve orgId from invoice");
-      return;
+      return null;
     }
 
     const now = new Date();
@@ -170,6 +174,13 @@ export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<v
       });
     }
 
+    // Resolve the human-readable org name within the transaction so the
+    // post-commit notification does not touch `tx`.
+    const orgRow = await tx.query.organizations.findFirst({
+      where: eq(schema.organizations.id, orgId),
+      columns: { name: true },
+    });
+
     logger.info(
       {
         orgId,
@@ -180,32 +191,33 @@ export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<v
       "billing: dunning — entered grace period after payment failure",
     );
 
-    // Fire-and-forget: billing state update is the critical path, notification is best-effort.
-    void (async () => {
-      try {
-        // Resolve the human-readable org name from the database.
-        const orgRow = await tx.query.organizations.findFirst({
-          where: eq(schema.organizations.id, orgId),
-          columns: { name: true },
-        });
-        const orgName = orgRow?.name ?? "your organization";
-
-        const appUrl = process.env["APP_URL"] ?? "https://oxagen-v2-app.vercel.app";
-        const billingUrl = `${appUrl}/settings/billing`;
-        const template = paymentFailedTemplate({ orgName, graceDays: DUNNING_GRACE_DAYS, billingUrl });
-        await notifyOrgManagers({
-          orgId,
-          kind: "system",
-          title: template.subject,
-          body: `Your payment has failed. You have ${DUNNING_GRACE_DAYS} days to update your payment method before service is suspended.`,
-          emailHtml: template.html,
-          deepLink: "/settings/billing",
-        });
-      } catch (err) {
-        logger.warn({ orgId, err }, "billing: dunning — failed to send payment failure notification");
-      }
-    })();
+    return { orgId, orgName: orgRow?.name ?? "your organization" };
   });
+
+  if (!notifyCtx) return;
+
+  // Best-effort notification AFTER the transaction commits: the billing state
+  // write is the critical path, so a notification failure must never roll back
+  // or mask it. Awaited (not fire-and-forget) so the attempt completes before
+  // the webhook handler returns — a detached promise can be dropped when the
+  // serverless runtime freezes the process after the handler returns. No `tx`
+  // handle is referenced here (its connection is already released to the pool).
+  const { orgId, orgName } = notifyCtx;
+  try {
+    const appUrl = process.env["APP_URL"] ?? "https://oxagen-v2-app.vercel.app";
+    const billingUrl = `${appUrl}/settings/billing`;
+    const template = paymentFailedTemplate({ orgName, graceDays: DUNNING_GRACE_DAYS, billingUrl });
+    await notifyOrgManagers({
+      orgId,
+      kind: "system",
+      title: template.subject,
+      body: `Your payment has failed. You have ${DUNNING_GRACE_DAYS} days to update your payment method before service is suspended.`,
+      emailHtml: template.html,
+      deepLink: "/settings/billing",
+    });
+  } catch (err) {
+    logger.warn({ orgId, err }, "billing: dunning — failed to send payment failure notification");
+  }
 }
 
 /**

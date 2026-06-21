@@ -24,15 +24,22 @@ export const connectionCreateHandler: CapabilityHandler<typeof connectionCreate>
   const cipherBuf = await encrypt(plaintext, keyId, { adapter });
   const encryptedPayload = { keyId, ciphertext: cipherBuf.toString("base64") };
 
-  const [row] = await withTenantDb((tx) =>
-    tx
+  const authScheme = (input.authCredential["type"] as string) ?? "api_key";
+
+  // Insert the connection row and its encrypted credentials atomically in a
+  // single transaction. A two-call approach would leave an orphaned
+  // pending_setup connection with no credentials if the credential insert
+  // failed (constraint violation, transient error, or crash), breaking every
+  // later preview/sync/decrypt path.
+  const row = await withTenantDb(async (tx) => {
+    const [conn] = await tx
       .insert(schema.sourceConnections)
       .values({
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
         connectorId: input.connectorId,
         displayName: input.displayName,
-        authScheme: input.authCredential["type"] as string ?? "api_key",
+        authScheme,
         deliveryMethod,
         deliveryConfig: input.connectionConfig ?? null,
         status: "pending_setup",
@@ -43,19 +50,18 @@ export const connectionCreateHandler: CapabilityHandler<typeof connectionCreate>
         connectorId: schema.sourceConnections.connectorId,
         displayName: schema.sourceConnections.displayName,
         status: schema.sourceConnections.status,
-      }),
-  );
+      });
 
-  if (!row) throw new Error("connection.create: insert returned no row");
+    if (!conn) throw new Error("connection.create: insert returned no row");
 
-  // Store encrypted credentials separately
-  await withTenantDb((tx) =>
-    tx.insert(schema.authCredentials).values({
-      connectionId: row.id,
-      authScheme: input.authCredential["type"] as string ?? "api_key",
+    await tx.insert(schema.authCredentials).values({
+      connectionId: conn.id,
+      authScheme,
       encryptedPayload,
-    }),
-  );
+    });
+
+    return conn;
+  });
 
   logger.info(
     {

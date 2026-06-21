@@ -82,9 +82,54 @@ describe("memory neo4j", () => {
     expect(cypher).toContain("MERGE (m:AgentMemory");
     expect(cypher).toContain("orgId: $orgId");
     expect(cypher).toContain("nodeRef: $nodeRef");
+    // The optional REMEMBERS source match must be tenant-scoped so a
+    // user-supplied nodeRef can never reach another tenant's node.
+    expect(cypher).toContain("OPTIONAL MATCH (target { id: $nodeRef, orgId: $orgId })");
+    // The edge-count must live in a CALL subquery so an empty relatedNodeIds
+    // list (UNWIND []) does not collapse the outer m row to zero records.
+    expect(cypher).toContain("CALL {");
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(params.lesson).toBe("be careful");
     expect(params.weight).toBe("high");
     expect(sessionClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("writeMemory returns the memory id even when relatedNodeIds is empty", async () => {
+    // Regression: the previous UNWIND-then-aggregate shape returned zero rows
+    // when relatedNodeIds was [], yielding memoryId === undefined. The CALL
+    // subquery preserves the m row, so the id is always returned.
+    sessionRun.mockResolvedValueOnce({
+      records: [fakeRecord({ id: "m_empty", edgesCreated: 0 })],
+    });
+    const res = await withTestScope(() =>
+      writeMemory({
+        nodeRef: "Function:foo",
+        embedding: new Array<number>(1536).fill(0.2),
+        weight: "low",
+        kind: "constraint",
+        lesson: "no related nodes",
+        source: "feature",
+      }),
+    );
+    expect(res.memoryId).toBe("m_empty");
+    expect(res.edgesCreated).toBe(0);
+    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.relatedNodeIds).toEqual([]);
+  });
+
+  it("writeMemory throws when the MERGE returns no record", async () => {
+    sessionRun.mockResolvedValueOnce({ records: [] });
+    await expect(
+      withTestScope(() =>
+        writeMemory({
+          nodeRef: "Function:foo",
+          embedding: new Array<number>(1536).fill(0.2),
+          weight: "high",
+          kind: "constraint",
+          lesson: "boom",
+          source: "feature",
+        }),
+      ),
+    ).rejects.toThrow("writeMemory: MERGE returned no record");
   });
 });

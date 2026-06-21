@@ -19,6 +19,7 @@ import { z } from "zod";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { generateObjectFor } from "@oxagen/ai";
 import { upsertInferredEdges } from "../mutations/upsert-entity";
+import { inferenceConfidenceThreshold } from "../filters";
 import type { SemanticInferenceJob, InferenceOutput } from "../types";
 
 const InferenceOutputSchema = z.object({
@@ -104,12 +105,23 @@ export async function inferSemanticEdges(
     },
   });
 
-  if (object.inferredEdges.length === 0) {
+  // Enforce the data-quality control: drop low-confidence inferred edges before
+  // they reach the graph. The threshold is the documented
+  // DeliveryConfig.semanticInference.confidenceThreshold (default 0.75), applied
+  // here via the shared helper so the default stays single-sourced. Sub-threshold
+  // LLM guesses would otherwise pollute the knowledge graph and surface as junk
+  // relationships in context queries.
+  const confidenceThreshold = inferenceConfidenceThreshold(undefined);
+  const candidateEdges = object.inferredEdges.filter(
+    (e) => e.confidence >= confidenceThreshold,
+  );
+
+  if (candidateEdges.length === 0) {
     return { nodeId, inferredEdges: [], inferredNodes: [] };
   }
 
   // Step 4: Resolve targetNaturalKey → publicId via a single batch read.
-  const targetNaturalKeys = object.inferredEdges.map((e) => e.targetNaturalKey);
+  const targetNaturalKeys = candidateEdges.map((e) => e.targetNaturalKey);
   const resolveSession = scopedSession();
   const keyToNodeId = new Map<string, string>();
   try {
@@ -130,7 +142,7 @@ export async function inferSemanticEdges(
   }
 
   // Step 5: Write edges for targets that exist in the graph.
-  const edgesWithIds = object.inferredEdges.flatMap((e) => {
+  const edgesWithIds = candidateEdges.flatMap((e) => {
     const toNodeId = keyToNodeId.get(e.targetNaturalKey);
     if (!toNodeId) return [];
     return [{ fromNodeId: nodeId, toNodeId, edgeType: e.edgeType, confidence: e.confidence }];

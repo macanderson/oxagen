@@ -89,7 +89,7 @@ describe("connectionListHandler", () => {
     displayName: "My GitHub",
     authScheme: "oauth2",
     deliveryMethod: "webhook",
-    status: "active",
+    status: "connected",
     entityCount: 10,
     lastSyncAt: NOW,
     createdAt: NOW,
@@ -120,7 +120,7 @@ describe("connectionListHandler", () => {
 
   it("passes status filter to query builder", async () => {
     mocks.withTenantDb.mockImplementation((fn: DbFn) => fn(makeTxReturning([]) as TxLike));
-    await connectionListHandler({ status: "active" }, CTX);
+    await connectionListHandler({ status: "connected" }, CTX);
     // We can only assert the call was made — the drizzle chain internals are opaque in tests.
     expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
   });
@@ -146,7 +146,7 @@ describe("connectionGetHandler", () => {
     authScheme: "oauth2",
     deliveryMethod: "webhook",
     deliveryConfig: { owner: "acme" },
-    status: "active",
+    status: "connected",
     entityCount: 10,
     lastSyncAt: NOW,
     errorMessage: null,
@@ -200,12 +200,10 @@ describe("connectionCreateHandler", () => {
   };
 
   beforeEach(() => {
-    let callCount = 0;
-    mocks.withTenantDb.mockImplementation((fn: DbFn) => {
-      callCount++;
-      if (callCount === 1) return fn(makeTxReturning([CONN_ROW]) as TxLike); // insert source_connections
-      return fn(makeTxReturning([]) as TxLike); // insert auth_credentials
-    });
+    // The handler inserts the connection row and its encrypted credentials in a
+    // single atomic transaction (one withTenantDb call). The connection insert
+    // returns CONN_ROW; the credentials insert resolves on the same tx.
+    mocks.withTenantDb.mockImplementation((fn: DbFn) => fn(makeTxReturning([CONN_ROW]) as TxLike));
   });
 
   it("throws when userId is not set (unauthenticated)", async () => {
@@ -245,8 +243,10 @@ describe("connectionCreateHandler", () => {
       },
       CTX,
     );
-    // Just verify it doesn't throw and calls withTenantDb twice (connection + credentials)
-    expect(mocks.withTenantDb).toHaveBeenCalledTimes(2);
+    // The connection row and its credentials are written in ONE atomic
+    // transaction, so withTenantDb is invoked exactly once (no orphaned
+    // pending_setup connection if the credential insert fails).
+    expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
   });
 });
 

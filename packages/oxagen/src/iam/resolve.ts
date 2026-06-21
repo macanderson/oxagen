@@ -163,14 +163,22 @@ export function resolve(input: ResolveInput): ResolveResult {
   const steps: TraceStep[] = [];
 
   // Filter grants to those relevant to this (principal, capability, scope).
+  //
+  // A grant is relevant when it is a workspace grant matching the invocation's
+  // workspaceId (only meaningful on a workspace-scoped invocation), OR an
+  // org grant matching the invocation's orgId. Org grants are ALWAYS relevant —
+  // including during a workspace-scoped invocation — so that Rule 6 (org default
+  // grant inheritance) can fire. Filtering org grants out on workspace scope
+  // (the previous behaviour) made Rule 6 dead for every workspace invocation,
+  // wrongly denying principals who hold only an org-level allow grant.
   const relevantGrants = grants.filter(
     (g) =>
       g.principalId === principal.id &&
       g.capabilityId === capability &&
-      g.scopeKind === scope.kind &&
-      (scope.kind === "org"
-        ? g.scopeId === scope.orgId
-        : g.scopeId === scope.workspaceId),
+      ((g.scopeKind === "workspace" &&
+        scope.kind === "workspace" &&
+        g.scopeId === scope.workspaceId) ||
+        (g.scopeKind === "org" && g.scopeId === scope.orgId)),
   );
 
   // Helper: split grants by scope_kind for rules 1-6.

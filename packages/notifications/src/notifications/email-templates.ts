@@ -12,6 +12,20 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * Escapes a URL for use inside an `href="..."` attribute, additionally
+ * rejecting any non-http(s) scheme. HTML escaping alone does not neutralize
+ * dangerous URI schemes (e.g. `javascript:alert(1)` contains no HTML-special
+ * characters), so a plain `esc()` on an href is an XSS vector in email clients
+ * that execute JavaScript in anchor hrefs. This guard fails closed.
+ */
+function safeHref(url: string): string {
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error(`Unsafe URL scheme in email template: ${url}`);
+  }
+  return esc(url);
+}
+
 export interface ReauthEmailTemplateInput {
   /** Short server name, e.g. "GitHub". */
   serverName: string;
@@ -57,7 +71,7 @@ export function reauthEmailTemplate(input: ReauthEmailTemplateInput): {
         expired or been revoked.
       </p>
       <p style="margin:0 0 24px">
-        <a href="${esc(reauthUrl)}"
+        <a href="${safeHref(reauthUrl)}"
            style="display:inline-block;background:#6366f1;color:#ffffff;font-size:14px;font-weight:600;padding:10px 20px;border-radius:6px;text-decoration:none">
           Reconnect ${esc(serverName)}
         </a>

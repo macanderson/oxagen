@@ -3,7 +3,10 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
-import { WorkspaceIntegrationsPanel } from "./workspace-integrations-panel";
+import {
+  WorkspaceIntegrationsPanel,
+  type WorkspaceMcpInstall,
+} from "./workspace-integrations-panel";
 import { setWorkspacePluginEnabledAction, setSecretAction } from "./integration-actions";
 
 export const dynamic = "force-dynamic";
@@ -59,21 +62,28 @@ export default async function SettingsIntegrationsPage({
       ),
   ).catch(() => [] as (typeof schema.pluginInstalledPlugins.$inferSelect)[]);
 
-  // Fetch workspace-level install rows to get per-listing enabled state + health
+  // Fetch workspace-level install rows to get per-listing enabled state + health.
+  // Project ONLY non-secret display columns: this data crosses into the client
+  // component below, and the full row carries `authConfig` (a live bearer token).
+  // Never `.select()` the whole row here.
   const wsInstalls = await runInTenantScope(
     { orgId: org.id, workspaceId: ws.id },
     () =>
       withTenantDb((tx) =>
         tx
-          .select()
+          .select({
+            orgListingId: schema.mcpServers.orgListingId,
+            enabled: schema.mcpServers.enabled,
+            healthStatus: schema.mcpServers.healthStatus,
+            lastHealthcheckAt: schema.mcpServers.lastHealthcheckAt,
+          })
           .from(schema.mcpServers)
           .where(eq(schema.mcpServers.workspaceId, ws.id)),
       ),
-  ).catch(() => [] as (typeof schema.mcpServers.$inferSelect)[]);
+  ).catch(() => [] as WorkspaceMcpInstall[]);
 
-  // Build a map: orgListingId → workspace install row
-  type WsInstall = (typeof wsInstalls)[number];
-  const wsInstallMap: Record<string, WsInstall> = {};
+  // Build a map: orgListingId → sanitized workspace install row
+  const wsInstallMap: Record<string, WorkspaceMcpInstall> = {};
   for (const row of wsInstalls) {
     if (row.orgListingId) wsInstallMap[row.orgListingId] = row;
   }

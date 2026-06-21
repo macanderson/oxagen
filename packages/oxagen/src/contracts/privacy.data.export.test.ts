@@ -61,8 +61,8 @@ describe("privacy.data.export capability", () => {
     ).toThrow();
   });
 
-  it("has defaultEffect of 'allow'", () => {
-    expect(privacyDataExport.defaultEffect).toBe("allow");
+  it("has defaultEffect of 'deny'", () => {
+    expect(privacyDataExport.defaultEffect).toBe("deny");
   });
 
   it("is available on api, mcp, and agent surfaces", () => {
