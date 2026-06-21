@@ -59,15 +59,31 @@ export async function requestOrgDataEraseAction(orgSlug: string): Promise<EraseR
 }
 
 export async function getOrgExportStatusAction(exportId: string) {
+  // Self-authenticate: server actions are independently POST-callable and the
+  // [orgSlug]/layout auth guard does NOT run for direct action calls. Mirror
+  // the sibling actions (requestOrgDataExportAction / requestOrgDataEraseAction).
+  const session = await getSessionOrRedirect();
+
   const rows = await withSystemDb((tx) =>
     tx
       .select({
         status: schema.privacyExportRequests.status,
         exportUrl: schema.privacyExportRequests.exportUrl,
+        orgId: schema.privacyExportRequests.orgId,
       })
       .from(schema.privacyExportRequests)
       .where(eq(schema.privacyExportRequests.id, exportId))
       .limit(1),
   );
-  return rows[0] ?? null;
+
+  const row = rows[0];
+  if (!row) return null;
+
+  // Authorize: the caller must be a member of the org that owns this export.
+  // assertOrgMember() calls notFound() (treated as 404) for non-members, so a
+  // foreign exportId is indistinguishable from a missing one — no cross-org
+  // leak of the signed export URL.
+  await assertOrgMember(row.orgId, session.user.id);
+
+  return { status: row.status, exportUrl: row.exportUrl };
 }

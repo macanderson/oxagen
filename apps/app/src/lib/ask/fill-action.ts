@@ -25,18 +25,18 @@ export interface FillFormActionInput {
  * audit write run on every call — matching the behaviour of the API and MCP
  * surfaces (no-drift guarantee).
  *
- * Never throws — on any error returns all fields unchanged so the caller
- * can safely render the result.
+ * Never throws — on any error returns all fields unchanged so the caller can
+ * safely render the result. The fallback carries an `error` field so the caller
+ * can distinguish a swallowed auth/IAM/billing denial from a legitimate
+ * "no changes proposed" result and surface an actionable message.
  */
 export async function fillFormAction(input: FillFormActionInput): Promise<FormFillResult> {
-  const noopResult: FormFillResult = {
-    fields: input.spec.fields.map((f) => ({
-      name: f.name,
-      current: f.current,
-      proposed: f.current,
-      changed: false,
-    })),
-  };
+  const noopFields = input.spec.fields.map((f) => ({
+    name: f.name,
+    current: f.current,
+    proposed: f.current,
+    changed: false,
+  }));
 
   try {
     const session = await getSessionOrRedirect();
@@ -91,7 +91,11 @@ export async function fillFormAction(input: FillFormActionInput): Promise<FormFi
     return { fields };
   } catch (err) {
     // Policy §0.5: never throw from a server action that has a safe fallback.
+    // But DO carry an `error` so the caller can distinguish this swallowed
+    // failure (auth/IAM/billing denial, capability error) from a legitimate
+    // "no changes proposed" result and surface an actionable message.
     logger.error({ err, route: input.context.route }, "fillFormAction failed");
-    return noopResult;
+    const message = err instanceof Error ? err.message : "Unable to fill the form. Please try again.";
+    return { fields: noopFields, error: message };
   }
 }

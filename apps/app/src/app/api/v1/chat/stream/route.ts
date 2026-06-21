@@ -545,6 +545,12 @@ export async function POST(request: NextRequest): Promise<Response> {
           });
         }
       } catch (err) {
+        // Log server-side first: this catch covers model-framework crashes,
+        // materializeTools failures, IAM kernel panics, and any unexpected
+        // throw in the turn. Without this, agent-turn failures are invisible
+        // in server logs and ClickHouse — an operator can't tell a transient
+        // rate-limit from a recurring code defect.
+        logger.error({ err, requestId }, "[chat/stream] turn error");
         // Surface stream errors as a text event so the client can show them.
         const message = err instanceof Error ? err.message : "Stream error";
         emit({ type: "text", messageId: requestId, text: `\n\n[Error: ${message}]` });

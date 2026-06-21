@@ -84,11 +84,30 @@ export async function GET(req: NextRequest) {
   });
 
   // Exchange the code for tokens (mcpAuth detects the code and calls the token endpoint).
-  const result = await mcpAuth(provider, {
-    serverUrl: listing.endpointUrl,
-    authorizationCode: code,
-    fetchFn: safeFetch,
-  });
+  // Mirror the authorize route: a throw here (network failure, invalid grant,
+  // token endpoint 4xx/5xx, JSON parse error) must NOT bubble out as a raw 500.
+  // Log it, clean up the ephemeral PKCE state (so it doesn't leak), and redirect
+  // the user back to the integrations page with ?mcp=error so they can retry.
+  let result: string;
+  try {
+    result = await mcpAuth(provider, {
+      serverUrl: listing.endpointUrl,
+      authorizationCode: code,
+      fetchFn: safeFetch,
+    });
+  } catch (err) {
+    await deleteOAuthState(state).catch(() => undefined);
+    logger.error(
+      {
+        orgId: stateData.orgId,
+        orgListingId: stateData.orgListingId,
+        err: String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      },
+      "mcp-oauth: mcpAuth threw during callback",
+    );
+    return NextResponse.redirect(`${url.origin}${stateData.returnTo}?mcp=error`);
+  }
 
   // Clean up the ephemeral state regardless of outcome.
   await deleteOAuthState(state);
