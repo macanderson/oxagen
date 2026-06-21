@@ -36,33 +36,57 @@ const NOTIFY_CHANNEL = "agent_approval_resolved";
 // resolves the matching entry when a row resolves.
 const waiters = new Map<string, (r: ApprovalResolution) => void>();
 
-let listenerStarted = false;
 let listenSql: ReturnType<typeof postgres> | null = null;
+// `listenerReady` is the synchronous fast-path flag (set once init resolves) so
+// repeat callers short-circuit without adding a microtask hop.
+// `listenerPromise` is the shared, memoized initialization promise: concurrent
+// first-callers (serverless cold-start fan-out) must NOT each allocate a
+// postgres() client and race to overwrite listenSql — the loser would be
+// orphaned and its idle connection would leak forever (closeApprovalListener
+// only closes the surviving reference). Awaiting the one promise guarantees
+// exactly one client is created no matter how many callers arrive at once.
+let listenerReady = false;
+let listenerPromise: Promise<void> | null = null;
 
 async function ensureListener(): Promise<void> {
-  if (listenerStarted) return;
-  const env = requireEnv(["DATABASE_URL"] as const);
-  // A dedicated single-connection client; the pooled `db()` client cannot
-  // hold a long-lived LISTEN.
-  listenSql = postgres(env.DATABASE_URL, { max: 1, prepare: false });
-  await listenSql.listen(NOTIFY_CHANNEL, (payload) => {
-    try {
-      const data = JSON.parse(payload) as ApprovalResolution;
-      const w = waiters.get(data.approvalId);
-      if (w) {
-        waiters.delete(data.approvalId);
-        w(data);
+  if (listenerReady) return;
+  if (!listenerPromise) {
+    listenerPromise = (async () => {
+      const env = requireEnv(["DATABASE_URL"] as const);
+      // A dedicated single-connection client; the pooled `db()` client cannot
+      // hold a long-lived LISTEN.
+      const client = postgres(env.DATABASE_URL, { max: 1, prepare: false });
+      try {
+        await client.listen(NOTIFY_CHANNEL, (payload) => {
+          try {
+            const data = JSON.parse(payload) as ApprovalResolution;
+            const w = waiters.get(data.approvalId);
+            if (w) {
+              waiters.delete(data.approvalId);
+              w(data);
+            }
+          } catch (err) {
+            // A malformed or truncated NOTIFY payload (PG's 8000-byte limit,
+            // schema drift, encoding issue) must be logged so ops can detect
+            // systematic corruption. The registered waiter stays in the Map and
+            // will resolve as "expired" after its TTL — the correct fallback for
+            // a single corrupted notification. We deliberately do NOT resolve
+            // any waiter here.
+            logger.warn({ err, payload }, "malformed NOTIFY payload on channel agent_approval_resolved");
+          }
+        });
+      } catch (err) {
+        // Init failed — close the half-open client and clear the memo so a later
+        // call can retry instead of being stuck on a rejected promise.
+        await client.end().catch(() => {});
+        listenerPromise = null;
+        throw err;
       }
-    } catch (err) {
-      // A malformed or truncated NOTIFY payload (PG's 8000-byte limit, schema
-      // drift, encoding issue) must be logged so ops can detect systematic
-      // corruption. The registered waiter stays in the Map and will resolve as
-      // "expired" after its TTL — the correct fallback for a single corrupted
-      // notification. We deliberately do NOT resolve any waiter here.
-      logger.warn({ err, payload }, "malformed NOTIFY payload on channel agent_approval_resolved");
-    }
-  });
-  listenerStarted = true;
+      listenSql = client;
+      listenerReady = true;
+    })();
+  }
+  await listenerPromise;
 }
 
 export async function createApprovalRequest(
@@ -111,10 +135,14 @@ export async function waitForApproval(
 // it in afterAll/afterEach blocks in tests that need clean module isolation
 // (instead of relying on vi.resetModules()).
 export async function closeApprovalListener(): Promise<void> {
-  if (!listenerStarted) return;
+  if (!listenerPromise) return;
+  // Wait for any in-flight initialization to settle so we never end() a client
+  // that ensureListener is still assigning to listenSql.
+  await listenerPromise.catch(() => {});
   await listenSql?.end();
   listenSql = null;
-  listenerStarted = false;
+  listenerPromise = null;
+  listenerReady = false;
   waiters.clear();
 }
 

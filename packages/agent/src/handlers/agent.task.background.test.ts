@@ -71,6 +71,22 @@ import { agentTaskBackgroundCancelHandler } from "./agent.task.background.cancel
 
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
+// Recursively walk a drizzle SQL/condition object collecting referenced column
+// names (e.g. "org_id", "workspace_id"). Used to assert tenant-scoping
+// predicates without depending on drizzle's opaque internal chunk shape.
+function collectColumns(node: unknown, out: Set<string>, seen = new Set<unknown>()): void {
+  if (!node || typeof node !== "object" || seen.has(node)) return;
+  seen.add(node);
+  const n = node as Record<string, unknown>;
+  if (typeof n.name === "string" && "table" in n) out.add(n.name);
+  for (const key of Object.keys(n)) {
+    if (key === "table") continue;
+    const value = n[key];
+    if (Array.isArray(value)) value.forEach((v) => collectColumns(v, out, seen));
+    else if (value && typeof value === "object") collectColumns(value, out, seen);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // START
 // ─────────────────────────────────────────────────────────────────────────────
@@ -244,12 +260,21 @@ describe("agentTaskBackgroundCancelHandler", () => {
     ).rejects.toThrow("Background task task_ghost not found");
   });
 
-  it("queries with orgId from context (tenant isolation)", async () => {
+  it("queries with orgId and workspaceId from context (tenant isolation)", async () => {
     mocks.selectResult.mockReturnValue([{ id: "id_4", status: "running" }]);
     const beforeSelect = mocks.selectSpy.mock.calls.length;
     const beforeWhere = mocks.selectWhere.mock.calls.length;
     await agentTaskBackgroundCancelHandler({ taskId: "task_pub_1" }, CTX);
     expect(mocks.selectSpy.mock.calls.length - beforeSelect).toBe(1);
     expect(mocks.selectWhere.mock.calls.length - beforeWhere).toBe(1);
+
+    // The lookup must be scoped by BOTH org and workspace, otherwise a caller
+    // in workspace A could cancel a task belonging to workspace B in the same org.
+    const whereArg = mocks.selectWhere.mock.calls.at(-1)?.[0];
+    const cols = new Set<string>();
+    collectColumns(whereArg, cols);
+    expect(cols).toContain("public_id");
+    expect(cols).toContain("org_id");
+    expect(cols).toContain("workspace_id");
   });
 });

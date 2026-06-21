@@ -1,11 +1,17 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
-const pluginTypeEnum = z.enum(["mcp_server", "integration", "content_tool", "capability"]);
+const pluginTypeEnum = z.enum([
+  "mcp_server",
+  "integration",
+  "agent_skill",
+  "agent_capability",
+  "knowledge_source",
+]);
 
 const installItemSchema = z.object({
   pluginType: pluginTypeEnum.default("mcp_server"),
-  // Required when pluginType === "capability"; validated in the handler.
+  // Required when pluginType === "agent_capability"; validated in the handler.
   pluginId: z.string().optional(),
   catalogServerId: z.string().optional(),
   custom: z

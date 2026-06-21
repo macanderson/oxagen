@@ -413,8 +413,10 @@ describe("removeOrgPaymentMethod", () => {
     });
     setDefaultPaymentMethodMock.mockResolvedValueOnce(undefined); // Stripe OK
 
-    // DB update for setting isDefault=true fails.
-    updateWhereMock.mockRejectedValueOnce(new Error("db: connection lost"));
+    // The first update (soft-delete of the removed card) succeeds; the SECOND
+    // update (promoting the next card to isDefault=true) is the one that fails.
+    updateWhereMock.mockResolvedValueOnce(undefined); // soft-delete OK
+    updateWhereMock.mockRejectedValueOnce(new Error("db: connection lost")); // promote fails
 
     await expect(removeOrgPaymentMethod("org-001", "pm_default")).rejects.toThrow(
       "db: connection lost",

@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { skillWorkspaceInstall } from "@oxagen/oxagen/contracts/skill.workspace.install";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { createSkillRegistry } from "@oxagen/skills";
 import { join } from "node:path";
@@ -10,7 +10,10 @@ import { logger } from "./logger";
 // Resolve the built-in skills directory relative to this file so the path
 // stays correct regardless of working directory.
 const __filename = fileURLToPath(import.meta.url);
-const SKILLS_DIR = join(__filename, "../../../../skills/skills");
+// __filename = packages/handlers/src/skill.workspace.install.ts
+// Three `..` traversals: <file> → src → handlers → packages, then + skills/skills
+// lands at packages/skills/skills (the built-in skill registry root).
+const SKILLS_DIR = join(__filename, "../../../skills/skills");
 
 /**
  * Derive a workspace-safe slug from a custom skill name. The name must already
@@ -76,30 +79,40 @@ export const skillWorkspaceInstallHandler: CapabilityHandler<typeof skillWorkspa
     installedFromSlug = null;
   }
 
-  // ── Idempotency: return existing skill if one already exists for this slug ─
-  const existing = await withTenantDb((tx) =>
-    tx
-      .select({
-        id: schema.skills.id,
-        publicId: schema.skills.publicId,
-        slug: schema.skills.slug,
-        activeVersionId: schema.skills.activeVersionId,
-      })
-      .from(schema.skills)
-      .where(
-        and(
-          eq(schema.skills.orgId, ctx.orgId),
-          eq(schema.skills.workspaceId, ctx.workspaceId!),
-          eq(schema.skills.slug, targetSlug),
-          isNull(schema.skills.deletedAt),
-        ),
-      )
-      .limit(1),
-  );
+  const orgId = ctx.orgId;
+  const workspaceId = ctx.workspaceId;
 
-  if (existing[0]) {
-    // Resolve active version number for the response.
+  // Build the idempotent "already exists" response for a given slug, resolving
+  // the active version number. Returns null if no live skill exists.
+  const buildExistingResponse = async (): Promise<{
+    publicId: string;
+    slug: string;
+    activeVersion: number;
+    installed: false;
+  } | null> => {
+    const existing = await withTenantDb((tx) =>
+      tx
+        .select({
+          id: schema.skills.id,
+          publicId: schema.skills.publicId,
+          slug: schema.skills.slug,
+          activeVersionId: schema.skills.activeVersionId,
+        })
+        .from(schema.skills)
+        .where(
+          and(
+            eq(schema.skills.orgId, orgId),
+            eq(schema.skills.workspaceId, workspaceId),
+            eq(schema.skills.slug, targetSlug),
+            isNull(schema.skills.deletedAt),
+          ),
+        )
+        .limit(1),
+    );
+
     const existingSkill = existing[0];
+    if (!existingSkill) return null;
+
     let activeVersionNumber = 1;
     if (existingSkill.activeVersionId) {
       const verRows = await withTenantDb((tx) =>
@@ -114,21 +127,32 @@ export const skillWorkspaceInstallHandler: CapabilityHandler<typeof skillWorkspa
       }
     }
 
-    logger.info(
-      { slug: targetSlug, publicId: existingSkill.publicId, workspaceId: ctx.workspaceId },
-      "skill.workspace.install: idempotent — skill already exists",
-    );
-
     return {
       publicId: existingSkill.publicId,
       slug: existingSkill.slug,
       activeVersion: activeVersionNumber,
       installed: false,
     };
+  };
+
+  // ── Idempotency: return existing skill if one already exists for this slug ─
+  const existingResponse = await buildExistingResponse();
+  if (existingResponse) {
+    logger.info(
+      { slug: targetSlug, publicId: existingResponse.publicId, workspaceId },
+      "skill.workspace.install: idempotent — skill already exists",
+    );
+    return existingResponse;
   }
 
   // ── Insert the skills row + first version in a single transaction ──────────
-  const result = await withTenantDb(async (tx) => {
+  // The existence check above and this insert run in separate sessions, so two
+  // concurrent installs for the same (orgId, workspaceId, slug) can both pass
+  // the check. The skills_workspace_slug_idx unique index makes the second
+  // insert throw 23505; we catch it and return the idempotent response.
+  let result: { publicId: string; slug: string; activeVersion: number };
+  try {
+    result = await withTenantDb(async (tx) => {
     // Insert the skill identity row (without activeVersionId — set after version insert).
     const [skillRow] = await tx
       .insert(schema.skills)
@@ -190,7 +214,22 @@ export const skillWorkspaceInstallHandler: CapabilityHandler<typeof skillWorkspa
       slug: skillRow.slug,
       activeVersion: versionRow.versionNumber,
     };
-  });
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      // Concurrent install won the race: re-read and return the idempotent
+      // response rather than surfacing a 23505 unique-violation 500.
+      const raceResponse = await buildExistingResponse();
+      if (raceResponse) {
+        logger.info(
+          { slug: targetSlug, publicId: raceResponse.publicId, workspaceId },
+          "skill.workspace.install: idempotent — lost insert race",
+        );
+        return raceResponse;
+      }
+    }
+    throw err;
+  }
 
   logger.info(
     {

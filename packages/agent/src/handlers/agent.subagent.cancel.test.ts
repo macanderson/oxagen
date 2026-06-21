@@ -10,11 +10,26 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...real, withTenantDb: vi.fn() };
 });
 
-import { withTenantDb } from "@oxagen/database";
+// Capture every eq() invocation so tests can assert which column/value pairs the
+// handler builds — in particular that the child-runs query keys subagentRuns.fanoutId
+// on the resolved internal uuid (fanout.id), not the public fanout id.
+const { eqCalls } = vi.hoisted(() => ({ eqCalls: [] as Array<[unknown, unknown]> }));
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const real = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...real,
+    eq: (col: unknown, val: unknown) => {
+      eqCalls.push([col, val]);
+      return real.eq(col as never, val as never);
+    },
+  };
+});
+
+import { withTenantDb, schema } from "@oxagen/database";
 import { agentSubagentCancelHandler } from "./agent.subagent.cancel";
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
-type FanoutRow = { publicId: string; status: string };
+type FanoutRow = { id: string; publicId: string; status: string };
 
 // The handler issues up to three withTenantDb calls:
 //   0: resolve fanout            select→from→where→limit
@@ -53,6 +68,7 @@ function setup(fanoutRow: FanoutRow | null, nonTerminalRunIds: string[]) {
 describe("agent.subagent.cancel handler", () => {
   beforeEach(() => {
     vi.mocked(withTenantDb).mockReset();
+    eqCalls.length = 0;
     mockInsertEvents.mockClear();
     mockInsertEvents.mockResolvedValue(undefined);
   });
@@ -65,10 +81,10 @@ describe("agent.subagent.cancel handler", () => {
   });
 
   it("transitions non-terminal children, sets a terminal fanout status, and meters", async () => {
-    const { updateRunsSpy, updateFanoutSpy } = setup({ publicId: "fan_1", status: "running" }, [
-      "sar_1",
-      "sar_2",
-    ]);
+    const { updateRunsSpy, updateFanoutSpy } = setup(
+      { id: "fan_uuid_1", publicId: "fan_1", status: "running" },
+      ["sar_1", "sar_2"],
+    );
     const out = await agentSubagentCancelHandler({ fanoutId: "fan_1" }, CTX);
 
     expect(out.fanoutId).toBe("fan_1");
@@ -77,6 +93,13 @@ describe("agent.subagent.cancel handler", () => {
     expect(updateRunsSpy).toHaveBeenCalledTimes(1);
     expect(updateFanoutSpy).toHaveBeenCalledTimes(1);
 
+    // Regression: the child-runs query must key subagentRuns.fanoutId on the
+    // resolved internal uuid (fanout.id), NOT the public id passed by the caller.
+    const runsFanoutEq = eqCalls.find(([col]) => col === schema.subagentRuns.fanoutId);
+    expect(runsFanoutEq).toBeDefined();
+    expect(runsFanoutEq![1]).toBe("fan_uuid_1");
+    expect(runsFanoutEq![1]).not.toBe("fan_1");
+
     expect(mockInsertEvents).toHaveBeenCalledTimes(1);
     const rows = mockInsertEvents.mock.calls[0]![0] as Array<Record<string, unknown>>;
     expect(rows[0]!.event_type).toBe("agent.subagent.cancel.ran");
@@ -84,7 +107,10 @@ describe("agent.subagent.cancel handler", () => {
   });
 
   it("does not update child runs when none are non-terminal", async () => {
-    const { updateRunsSpy, updateFanoutSpy } = setup({ publicId: "fan_2", status: "running" }, []);
+    const { updateRunsSpy, updateFanoutSpy } = setup(
+      { id: "fan_uuid_2", publicId: "fan_2", status: "running" },
+      [],
+    );
     const out = await agentSubagentCancelHandler({ fanoutId: "fan_2" }, CTX);
     expect(out.cancelledChildren).toBe(0);
     expect(updateRunsSpy).not.toHaveBeenCalled();
@@ -93,7 +119,7 @@ describe("agent.subagent.cancel handler", () => {
 
   it("never fails the cancel when telemetry throws", async () => {
     mockInsertEvents.mockRejectedValueOnce(new Error("clickhouse down"));
-    setup({ publicId: "fan_3", status: "running" }, ["sar_9"]);
+    setup({ id: "fan_uuid_3", publicId: "fan_3", status: "running" }, ["sar_9"]);
     const out = await agentSubagentCancelHandler({ fanoutId: "fan_3" }, CTX);
     expect(out.cancelledChildren).toBe(1);
   });

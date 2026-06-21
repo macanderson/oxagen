@@ -99,7 +99,7 @@ describe("recordExecutionInGraph", () => {
     expect(originCall).toBeUndefined();
   });
 
-  it("creates CALLED_TOOL edges for each toolCall", async () => {
+  it("creates CALLED_TOOL edges for all toolCalls in a single UNWIND query", async () => {
     const toolCalls = [
       { toolName: "web.search", toolType: "builtin" },
       { toolName: "document.create", toolType: "capability" },
@@ -109,7 +109,11 @@ describe("recordExecutionInGraph", () => {
     const toolCallCyphers = mockNeoRun.mock.calls.filter(([cypher]) =>
       (cypher as string).includes("CALLED_TOOL"),
     );
-    expect(toolCallCyphers).toHaveLength(2);
+    // UNWIND collapses all tool-call MERGEs into one round-trip (no N+1).
+    expect(toolCallCyphers).toHaveLength(1);
+    expect(toolCallCyphers[0]![0]).toContain("UNWIND");
+    const params = toolCallCyphers[0]![1] as Record<string, unknown>;
+    expect(params.toolCalls).toEqual(toolCalls);
   });
 
   it("skips CALLED_TOOL edges when toolCalls is empty", async () => {

@@ -15,7 +15,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
           eventType: "plugin.installed",
           actorUserId: ctx.userId ?? null,
           orgId: ctx.orgId,
-          workspaceId: null,
+          workspaceId: ctx.workspaceId ?? null,
           capability: "plugin.org.install_bulk",
           outcome: "success",
           ip: null,

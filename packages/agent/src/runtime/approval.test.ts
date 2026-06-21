@@ -64,7 +64,11 @@ import {
 describe("approval runtime", () => {
   beforeEach(() => {
     insertedValues.length = 0;
-    listenHandlers.length = 0;
+    // listenHandlers is intentionally NOT cleared: the NOTIFY listener is a
+    // per-process singleton registered exactly once by the first
+    // waitForApproval. ensureListener short-circuits on every later call, so the
+    // handler is never re-registered — clearing the array would leave later
+    // tests (e.g. the malformed-payload case) with no handler to invoke.
     insertMock.mockClear();
     valuesMock.mockClear();
     returningMock.mockClear();
@@ -212,12 +216,16 @@ describe("approval runtime", () => {
     ]);
     expect(raceResult).toBe("pending");
 
-    // Drain the lingering waiter via its TTL so no timer leaks into later tests.
-    vi.useFakeTimers();
-    vi.advanceTimersByTime(60_001);
-    const res = await promise; // resolves as "expired"
-    expect(res.resolution).toBe("expired");
-    vi.useRealTimers();
+    // Drain the still-pending waiter with a VALID NOTIFY so the promise settles.
+    // (The TTL timer was scheduled under real timers when waitForApproval was
+    // called, so switching to fake timers and advancing them would never fire it
+    // — that mismatch would hang the test.) The lingering real TTL timer is a
+    // harmless no-op once the waiter has been deleted by this resolution.
+    handler(
+      JSON.stringify({ approvalId: "appr_malformed", resolution: "denied", note: null }),
+    );
+    const res = await promise;
+    expect(res.resolution).toBe("denied");
   });
 
   it("readApproval shapes select with id + orgId filters", async () => {

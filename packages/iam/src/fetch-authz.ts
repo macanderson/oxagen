@@ -33,6 +33,56 @@ const EMPTY_AUTHZ: AuthzData = {
 };
 
 /**
+ * Sentinel principal id used for the fail-closed deny emitted for API-key
+ * callers we cannot yet resolve to a real service principal. Distinct from the
+ * all-zero principal the kernel substitutes so denials are traceable.
+ */
+const UNRESOLVED_SERVICE_PRINCIPAL_ID = "00000000-0000-0000-0000-0000000000ff";
+
+/**
+ * Build a fail-closed AuthzData for an API-key-authenticated request that we
+ * cannot resolve to a service principal.
+ *
+ * Service principals are not yet linked to API keys in the data model
+ * (api_keys carries no principal_id, and principals has no parent_api_key_id),
+ * so we cannot resolve role grants for an API-key caller. Returning EMPTY_AUTHZ
+ * here would let the resolver fall through to rule 8 (contract defaultEffect):
+ * any capability whose defaultEffect is "allow" would be granted to every API
+ * key regardless of the enterprise org's role-grant matrix, and an explicit
+ * role-grant deny would be silently ignored — an IAM bypass on the
+ * machine-to-machine surface (this path only runs for enterprise orgs; the tier
+ * gate in check-iam.ts bypasses the resolver for everyone else).
+ *
+ * Instead we fail closed by emitting a synthetic org-enforced DENY policy for
+ * the requested capability. resolve()'s rule 2 (org enforced deny) is a hard
+ * stop that overrides defaultEffect, so the request is denied rather than
+ * degraded. Replace this with a real service-principal lookup once API keys are
+ * linked to principals.
+ */
+function denyApiKeyAuthz(orgId: string, workspaceId: string, capability: string): AuthzData {
+  return {
+    principal: {
+      id: UNRESOLVED_SERVICE_PRINCIPAL_ID,
+      kind: "service",
+      orgId,
+      workspaceId,
+    },
+    grants: [],
+    roles: [],
+    roleGrants: [],
+    policies: [
+      {
+        capabilityId: capability,
+        scopeKind: "org",
+        scopeId: orgId,
+        effect: "deny",
+        enforced: true,
+      },
+    ],
+  };
+}
+
+/**
  * Postgres error code for "relation does not exist". Thrown when the IAM
  * migration has not been applied to the target database.
  */
@@ -90,11 +140,18 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   // IAM rows) pass through alongside current-workspace rows. All cross-workspace
   // org-wide IAM reads (roles, policies, org-wide PRAs) therefore remain
   // correctly visible inside withTenantDb. No query is over-filtered.
-  const { userId, orgId, workspaceId, capability } = args;
+  const { userId, apiKeyId, orgId, workspaceId, capability } = args;
 
   // Resolve the principal from the userId (human kind).
-  // Service accounts resolve from apiKeyId — extend here when needed.
-  if (!userId) return EMPTY_AUTHZ;
+  if (!userId) {
+    // API-key-authenticated request (userId null, apiKeyId set): we cannot yet
+    // resolve a service principal from the API key, so FAIL CLOSED rather than
+    // fall through to defaultEffect (which would bypass enterprise role grants).
+    // See denyApiKeyAuthz for the full rationale.
+    if (apiKeyId) return denyApiKeyAuthz(orgId, workspaceId, capability);
+    // No user and no API key — nothing to resolve.
+    return EMPTY_AUTHZ;
+  }
 
   return withTenantDb(async (tx) => {
     const principalRows = await tx

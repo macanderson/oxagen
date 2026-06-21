@@ -1,5 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { schema, withSystemDb } from "@oxagen/database";
+import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { listOxagenPlugins } from "@oxagen/oxagen/plugins";
 import {
@@ -82,7 +82,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   // installed (they are not tracked in plugin.installed_plugins). Skills are
   // surfaced read-only here; no dual-write to installed_plugins occurs.
   if (pluginType === "agent_skill") {
-    let rows = await withSystemDb(async (tx) => {
+    let rows = await withTenantDb(async (tx) => {
       if (!ctx.orgId) return [];
       return tx
         .select({
@@ -171,7 +171,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     }
 
     // Resolve install state from plugin.installed_plugins for (orgId, workspaceId).
-    const installedNames = await withSystemDb(async (tx) => {
+    const installedNames = await withTenantDb(async (tx) => {
       if (!ctx.orgId) return new Set<string>();
       const rows = await tx
         .select({ name: schema.pluginInstalledPlugins.name })
@@ -235,7 +235,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
 
   try {
     // Fetch enabled registries for this org+workspace.
-    const registries = await withSystemDb((tx) =>
+    const registries = await withTenantDb((tx) =>
       tx
         .select({
           id: schema.mcpRegistries.id,
@@ -289,7 +289,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
 
     // Overlay install state from plugin.installed_plugins.
     if (ctx.orgId && liveRows.length > 0) {
-      const installedRows = await withSystemDb((tx) =>
+      const installedRows = await withTenantDb((tx) =>
         tx
           .select({ name: schema.pluginInstalledPlugins.name })
           .from(schema.pluginInstalledPlugins)

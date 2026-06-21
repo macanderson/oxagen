@@ -60,7 +60,10 @@ const customWebhook: ConnectorDefinition<Config> = {
   },
 
   verifyWebhook(payload, headers, secret): boolean {
-    if (!secret) return true; // no secret configured — allow all
+    // Fail closed: an unsigned webhook is rejected. A custom-webhook connection
+    // must have a signing secret configured; without one we cannot authenticate
+    // the sender, so we refuse the delivery rather than ingest arbitrary input.
+    if (!secret) return false;
 
     // Try common HMAC-SHA256 signature headers
     const candidateHeaders = ["x-signature", "x-webhook-signature", "x-hub-signature-256"];

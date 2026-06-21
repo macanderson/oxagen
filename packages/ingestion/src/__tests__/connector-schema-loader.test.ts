@@ -338,6 +338,59 @@ sync:
   });
 });
 
+// ── loadSchema — SSRF guard (scheme + private-host blocking) ──────────────────
+
+describe("loadSchema — SSRF protection on partner schemaUrl", () => {
+  beforeEach(() => {
+    _clearSchemaCacheForTest();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("rejects a non-HTTPS schemaUrl without fetching", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    await expect(
+      loadSchema("custom-partner", { schemaUrl: "http://cdn.example.com/schema.yaml" }),
+    ).rejects.toThrow(/must use HTTPS/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects the cloud metadata IP (169.254.169.254) without fetching", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    await expect(
+      loadSchema("custom-partner", {
+        schemaUrl: "https://169.254.169.254/latest/meta-data/",
+      }),
+    ).rejects.toThrow(/non-public address/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a loopback IP literal without fetching", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    await expect(
+      loadSchema("custom-partner", { schemaUrl: "https://127.0.0.1/schema.yaml" }),
+    ).rejects.toThrow(/non-public address/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects an RFC1918 private IP literal without fetching", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    await expect(
+      loadSchema("custom-partner", { schemaUrl: "https://10.0.0.5/schema.yaml" }),
+    ).rejects.toThrow(/non-public address/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects localhost without fetching", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    await expect(
+      loadSchema("custom-partner", { schemaUrl: "https://localhost/schema.yaml" }),
+    ).rejects.toThrow(/not a permitted public host/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
 // ── loadSchema — integration: cache cleared between tests ─────────────────────
 
 describe("loadSchema — after cache clear, re-fetches partner schema", () => {

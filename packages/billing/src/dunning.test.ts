@@ -96,10 +96,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => dbStateHolder.instance,
-  withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbStateHolder.instance),
-  withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbStateHolder.instance),
-
+    db: () => dbStateHolder.instance,
+    withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbStateHolder.instance),
+    withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbStateHolder.instance),
   };
 });
 

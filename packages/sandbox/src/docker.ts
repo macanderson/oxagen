@@ -23,6 +23,14 @@ import type {
 const NANOCPUS = 500_000_000;
 const NOBODY = "65534:65534";
 
+// Hard floor for the container memory limit. Docker treats `Memory: 0` as
+// "unlimited", which would let untrusted code exhaust host RAM and defeat the
+// core resource-isolation guarantee of the sandbox. applyPolicy only clamps
+// the ceiling (and explicitly passes memoryMb=0 through), so we enforce a
+// positive minimum here at the point where the HostConfig is built — the last
+// trust boundary before the value reaches the Docker daemon.
+const MIN_MEMORY_MB = 16;
+
 // Maximum bytes accumulated from stdout+stderr across the Docker socket.
 // Container memory (memoryMb) caps RAM inside the container; this caps
 // host-side buffering of the multiplexed output stream.
@@ -54,10 +62,12 @@ function envArray(env: Record<string, string> | undefined): string[] {
 }
 
 export function hostConfigFor(req: SandboxRequest, spec: ImageSpec): Dockerode.HostConfig {
+  // Never allow a non-positive memory limit through to Docker (0 == unlimited).
+  const memoryBytes = Math.max(req.memoryMb, MIN_MEMORY_MB) * 1024 * 1024;
   return {
     AutoRemove: true,
-    Memory: req.memoryMb * 1024 * 1024,
-    MemorySwap: req.memoryMb * 1024 * 1024,
+    Memory: memoryBytes,
+    MemorySwap: memoryBytes,
     NanoCpus: NANOCPUS,
     PidsLimit: 128,
     NetworkMode: req.network === "deny" ? "none" : "bridge",
@@ -187,6 +197,20 @@ export function createDockerSandbox(dockerFactory?: () => Dockerode): SandboxDri
       accumulatedBytes += c.length;
     });
 
+    // Capture stream EOF BEFORE the wait/timeout race. Container exit and
+    // attach-stream EOF are concurrent in the Docker API: the multiplexed
+    // stream can emit "end" before (or at the same time as) container.wait()
+    // resolves. Node EventEmitters do not replay past events, so registering
+    // the listener after the race could miss "end" entirely and hang run()
+    // forever on the happy path. `once` + a readableEnded guard makes this
+    // robust regardless of ordering.
+    const streamEnded = new Promise<void>((resolve) => {
+      // @types/dockerode types attach() as NodeJS.ReadWriteStream, which omits
+      // the readableEnded flag present on the concrete Readable at runtime.
+      if ((stream as unknown as { readableEnded?: boolean }).readableEnded) resolve();
+      else stream.once("end", () => resolve());
+    });
+
     await container.start();
     if (req.stdin) {
       stream.write(req.stdin);
@@ -195,11 +219,15 @@ export function createDockerSandbox(dockerFactory?: () => Dockerode): SandboxDri
 
     let timedOut = false;
     const wait = container.wait();
-    const timer = new Promise<"timeout">((resolve) =>
-      setTimeout(() => resolve("timeout"), req.timeoutMs),
-    );
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    const timer = new Promise<"timeout">((resolve) => {
+      timeoutHandle = setTimeout(() => resolve("timeout"), req.timeoutMs);
+    });
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- @types/dockerode types container.wait() as Promise<any>; outcome is only compared against "timeout" string, never accessed.
     const outcome = await Promise.race([wait, timer]);
+    // Always clear the timer so a fast-completing container does not keep the
+    // event loop (and serverless billing clock) alive for the full timeout.
+    if (timeoutHandle) clearTimeout(timeoutHandle);
     if (outcome === "timeout") {
       timedOut = true;
       // Best-effort kill; AutoRemove tears the container down once stopped.
@@ -209,7 +237,7 @@ export function createDockerSandbox(dockerFactory?: () => Dockerode): SandboxDri
         // Container may already be gone if it raced past the timeout.
       }
     }
-    await new Promise<void>((resolve) => stream.on("end", () => resolve()));
+    await streamEnded;
 
     let exitCode = 0;
     let oomKilled = false;

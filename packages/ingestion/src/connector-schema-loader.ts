@@ -17,7 +17,9 @@
  * depends on @oxagen/oxagen, casts the loaded value to the canonical type.
  */
 
+import { lookup } from "node:dns/promises";
 import { readFileSync } from "node:fs";
+import { isIP } from "node:net";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
@@ -227,10 +229,175 @@ export async function loadSchema(
 const RETRY_DELAY_MS = 500;
 
 /**
+ * Maximum number of redirect hops to follow when fetching a partner schema.
+ * Each hop is re-validated against the SSRF guard so a public URL cannot
+ * bounce to an internal target.
+ */
+const MAX_REDIRECTS = 3;
+
+/**
+ * Reject a hostname that is not safe to fetch from a server context (SSRF
+ * protection).  Blocks IP-literal targets in private / loopback / link-local
+ * ranges, the cloud instance-metadata address, and obviously-internal host
+ * suffixes.  For DNS names, resolves the host and re-checks every resolved
+ * address so a public name cannot point at an internal IP.
+ *
+ * Throws (with the standard module prefix so callers treat it as permanent)
+ * when the host is not allowed.
+ */
+async function assertPublicHost(parsed: URL): Promise<void> {
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+
+  // Obvious internal names that should never be fetched server-side.
+  if (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".internal") ||
+    host.endsWith(".local")
+  ) {
+    throw new Error(
+      `connector-schema-loader: schemaUrl host "${parsed.hostname}" is not a permitted public host`,
+    );
+  }
+
+  // If the host is an IP literal, validate it directly.
+  if (isIP(host) !== 0) {
+    if (isBlockedAddress(host)) {
+      throw new Error(
+        `connector-schema-loader: schemaUrl host "${parsed.hostname}" resolves to a non-public address`,
+      );
+    }
+    return;
+  }
+
+  // DNS name: resolve every address and reject if any is non-public. This
+  // closes the public-name → private-IP rebinding vector. A resolution failure
+  // (ENOTFOUND/ENODATA) is left to the subsequent fetch to surface, so the
+  // guard never throws on a host it could not look up.
+  let addresses: { address: string; family: number }[];
+  try {
+    addresses = await lookup(host, { all: true });
+  } catch {
+    return;
+  }
+  for (const { address } of addresses) {
+    if (isBlockedAddress(address)) {
+      throw new Error(
+        `connector-schema-loader: schemaUrl host "${parsed.hostname}" resolves to a non-public address`,
+      );
+    }
+  }
+}
+
+/**
+ * Return true when an IP address (v4 or v6) is in a private, loopback,
+ * link-local, or otherwise non-routable / metadata range that must not be
+ * reachable via a caller-supplied URL.
+ */
+function isBlockedAddress(ip: string): boolean {
+  const kind = isIP(ip);
+  if (kind === 4) {
+    return isBlockedIPv4(ip);
+  }
+  if (kind === 6) {
+    return isBlockedIPv6(ip);
+  }
+  // Not a valid IP — fail closed.
+  return true;
+}
+
+function isBlockedIPv4(ip: string): boolean {
+  const parts = ip.split(".").map((p) => Number(p));
+  if (parts.length !== 4 || parts.some((p) => !Number.isInteger(p) || p < 0 || p > 255)) {
+    return true;
+  }
+  const [a, b] = parts as [number, number, number, number];
+  if (a === 0) return true; // 0.0.0.0/8
+  if (a === 10) return true; // 10.0.0.0/8 (RFC1918)
+  if (a === 127) return true; // 127.0.0.0/8 loopback
+  if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local (incl. cloud metadata)
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 (RFC1918)
+  if (a === 192 && b === 168) return true; // 192.168.0.0/16 (RFC1918)
+  if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
+  if (a >= 224) return true; // multicast / reserved
+  return false;
+}
+
+function isBlockedIPv6(ip: string): boolean {
+  const addr = ip.toLowerCase();
+  if (addr === "::1" || addr === "::") return true; // loopback / unspecified
+  if (addr.startsWith("fe80")) return true; // link-local
+  if (addr.startsWith("fc") || addr.startsWith("fd")) return true; // unique-local fc00::/7
+  if (addr.startsWith("ff")) return true; // multicast
+  // IPv4-mapped (::ffff:a.b.c.d) — re-check the embedded v4 address.
+  const mapped = addr.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped?.[1]) return isBlockedIPv4(mapped[1]);
+  return false;
+}
+
+/**
+ * Validate a URL (HTTPS scheme + public host) and fetch it, following
+ * redirects manually so every hop is re-validated.  Prevents a public URL
+ * from 3xx-bouncing to an internal target.
+ */
+async function fetchValidatedUrl(
+  initialUrl: string,
+  signal: AbortSignal,
+): Promise<Response> {
+  let currentUrl = initialUrl;
+
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    let parsed: URL;
+    try {
+      parsed = new URL(currentUrl);
+    } catch {
+      throw new Error(
+        `connector-schema-loader: schemaUrl is not a valid URL (${currentUrl})`,
+      );
+    }
+
+    if (parsed.protocol !== "https:") {
+      throw new Error(
+        `connector-schema-loader: schemaUrl must use HTTPS (${currentUrl})`,
+      );
+    }
+
+    await assertPublicHost(parsed);
+
+    const response = await fetch(currentUrl, { signal, redirect: "manual" });
+
+    // Manually handle redirects so each target is re-validated.
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) {
+        return response;
+      }
+      if (hop === MAX_REDIRECTS) {
+        throw new Error(
+          `connector-schema-loader: schemaUrl exceeded the redirect limit (${initialUrl})`,
+        );
+      }
+      currentUrl = new URL(location, currentUrl).toString();
+      continue;
+    }
+
+    return response;
+  }
+
+  // Unreachable — the loop either returns a response or throws.
+  throw new Error(
+    `connector-schema-loader: schemaUrl exceeded the redirect limit (${initialUrl})`,
+  );
+}
+
+/**
  * Fetch and parse a partner schema YAML from an HTTPS URL.
  *
  * Retries on 5xx and network errors up to `maxRetries` times with a fixed
  * delay.  Throws on 4xx (bad URL / permission), invalid YAML, or timeout.
+ *
+ * SSRF hardening: the URL must use HTTPS and resolve to a public host, and
+ * redirects are followed manually so each hop is re-validated.
  */
 async function fetchPartnerSchema(
   schemaUrl: string,
@@ -250,7 +417,7 @@ async function fetchPartnerSchema(
 
       let response: Response;
       try {
-        response = await fetch(schemaUrl, { signal: controller.signal });
+        response = await fetchValidatedUrl(schemaUrl, controller.signal);
       } finally {
         clearTimeout(timer);
       }

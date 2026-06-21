@@ -10,8 +10,8 @@ describe("connection.list capability", () => {
   });
 
   it("parses valid status filter", () => {
-    const parsed = connectionList.input.parse({ status: "active" });
-    expect(parsed.status).toBe("active");
+    const parsed = connectionList.input.parse({ status: "connected" });
+    expect(parsed.status).toBe("connected");
   });
 
   it("rejects unknown status", () => {

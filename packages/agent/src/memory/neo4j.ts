@@ -113,17 +113,20 @@ export async function writeMemory(
           m.embedding = $embedding,
           m.updatedAt = datetime()
         WITH m
-        OPTIONAL MATCH (target { id: $nodeRef })
+        OPTIONAL MATCH (target { id: $nodeRef, orgId: $orgId })
         FOREACH (_ IN CASE WHEN target IS NULL THEN [] ELSE [1] END |
           MERGE (target)-[:REMEMBERS]->(m)
         )
         WITH m
-        UNWIND $relatedNodeIds AS nid
-        OPTIONAL MATCH (kn:KnowledgeNode {publicId: nid, orgId: $orgId})
-        FOREACH (_ IN CASE WHEN kn IS NULL THEN [] ELSE [1] END |
-          MERGE (m)-[:ABOUT]->(kn)
-        )
-        WITH m, count(kn) AS edgesCreated
+        CALL {
+          WITH m
+          UNWIND $relatedNodeIds AS nid
+          OPTIONAL MATCH (kn:KnowledgeNode {publicId: nid, orgId: $orgId})
+          FOREACH (_ IN CASE WHEN kn IS NULL THEN [] ELSE [1] END |
+            MERGE (m)-[:ABOUT]->(kn)
+          )
+          RETURN count(kn) AS edgesCreated
+        }
         RETURN m.id AS id, edgesCreated
       `,
       {
@@ -136,7 +139,13 @@ export async function writeMemory(
         relatedNodeIds: args.relatedNodeIds ?? [],
       },
     );
-    const id = result.records[0]?.get("id") as string;
+    const id = result.records[0]?.get("id") as string | undefined;
+    if (!id) {
+      // The MERGE always produces an m row, and the edge-count subquery preserves
+      // it even when relatedNodeIds is empty — a missing record means the write
+      // genuinely failed, so surface it rather than returning an undefined id.
+      throw new Error("writeMemory: MERGE returned no record");
+    }
     const edgesCreated = Number(result.records[0]?.get("edgesCreated") ?? 0);
     return { memoryId: id, edgesCreated };
   } finally {

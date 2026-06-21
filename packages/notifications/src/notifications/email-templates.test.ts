@@ -108,6 +108,24 @@ describe("reauthEmailTemplate", () => {
       expect(html).toContain("&gt;&amp;");
     });
 
+    it("rejects a javascript: scheme in reauthUrl (href XSS guard)", () => {
+      expect(() =>
+        reauthEmailTemplate({
+          ...baseInput,
+          reauthUrl: "javascript:alert(document.cookie)",
+        }),
+      ).toThrow(/Unsafe URL scheme/);
+    });
+
+    it("rejects a non-http(s) scheme in reauthUrl", () => {
+      expect(() =>
+        reauthEmailTemplate({
+          ...baseInput,
+          reauthUrl: "data:text/html,<script>alert(1)</script>",
+        }),
+      ).toThrow(/Unsafe URL scheme/);
+    });
+
     it("does NOT escape in plain text output (text carries raw values)", () => {
       const { text } = reauthEmailTemplate(dangerousInput);
       // text is unescaped, so raw values appear as-is

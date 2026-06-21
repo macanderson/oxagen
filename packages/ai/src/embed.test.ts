@@ -167,7 +167,7 @@ describe("embedText (@oxagen/ai)", () => {
     expect(msg).toContain("usage field absent");
     expect(meta).toMatchObject({ model: "text-embedding-3-small", executionStepId: "req_abc" });
     // token_usage row and credit charge still recorded, with zero input tokens.
-    const usageRow = (mocks.insertTokenUsage.mock.calls[0] as [Record<string, unknown>[]])[0][0];
+    const usageRow = (mocks.insertTokenUsage.mock.calls[0] as [Record<string, unknown>[]])[0][0]!;
     expect(usageRow.input_tokens).toBe(0);
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith(
       expect.objectContaining({ inputTokens: 0 }),

@@ -41,6 +41,7 @@ export async function agentSubagentCancelHandler(
   const fanout = await withTenantDb(async (tx) => {
     const [row] = await tx
       .select({
+        id: schema.subagentFanouts.id,
         publicId: schema.subagentFanouts.publicId,
         status: schema.subagentFanouts.status,
       })
@@ -68,7 +69,10 @@ export async function agentSubagentCancelHandler(
       .from(schema.subagentRuns)
       .where(
         and(
-          eq(schema.subagentRuns.fanoutId, input.fanoutId),
+          // subagentRuns.fanoutId is the internal uuid FK (subagentFanouts.id),
+          // NOT the public id. Use the resolved fanout.id from step 1 — matching
+          // agent.subagent.aggregate.ts (loadRuns) and agent.subagent.fanout.get.ts.
+          eq(schema.subagentRuns.fanoutId, fanout.id),
           eq(schema.subagentRuns.orgId, ctx.orgId),
           eq(schema.subagentRuns.workspaceId, ctx.workspaceId),
           inArray(schema.subagentRuns.status, [...NON_TERMINAL_RUN_STATUSES]),

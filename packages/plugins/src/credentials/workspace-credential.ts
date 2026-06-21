@@ -41,6 +41,39 @@ export async function setWorkspaceSecret(input: SetWorkspaceSecretInput): Promis
     },
     kms,
   );
+  // Partial-update semantics: the OAuth flow persists this row in two distinct
+  // phases against the same (workspaceId, orgListingId) — saveClientInformation()
+  // writes only the DCR client id/secret, then saveTokens() writes only the
+  // access/refresh tokens. A field absent from `input` (key undefined) must be
+  // PRESERVED on conflict; only explicitly-provided fields (including an explicit
+  // null, which clears the value) are written. Unconditionally writing every
+  // column would let the token write null out the just-stored DCR client id and
+  // break the next refresh.
+  const set: Record<string, unknown> = {
+    authKind: input.authKind,
+    status: "active",
+    updatedAt: new Date(),
+  };
+  if (input.secret !== undefined) set["secretEnc"] = enc.secretEnc;
+  if (input.accessToken !== undefined) set["accessTokenEnc"] = enc.accessTokenEnc;
+  if (input.refreshToken !== undefined) set["refreshTokenEnc"] = enc.refreshTokenEnc;
+  if (input.oauthClientSecret !== undefined) {
+    set["oauthClientSecretEnc"] = enc.oauthClientSecretEnc;
+  }
+  // tokenKmsKeyId tracks whichever secret columns were (re)encrypted this write;
+  // only update it when at least one secret column is being written.
+  if (
+    input.secret !== undefined ||
+    input.accessToken !== undefined ||
+    input.refreshToken !== undefined ||
+    input.oauthClientSecret !== undefined
+  ) {
+    set["tokenKmsKeyId"] = enc.tokenKmsKeyId;
+  }
+  if (input.oauthClientId !== undefined) set["oauthClientId"] = input.oauthClientId ?? null;
+  if (input.scopes !== undefined) set["scopes"] = input.scopes;
+  if (input.expiresAt !== undefined) set["expiresAt"] = input.expiresAt ?? null;
+
   return withSystemDb(async (tx) => {
     const [row] = await tx
       .insert(schema.mcpCredentials)
@@ -61,19 +94,7 @@ export async function setWorkspaceSecret(input: SetWorkspaceSecretInput): Promis
       })
       .onConflictDoUpdate({
         target: [schema.mcpCredentials.workspaceId, schema.mcpCredentials.orgListingId],
-        set: {
-          authKind: input.authKind,
-          secretEnc: enc.secretEnc,
-          accessTokenEnc: enc.accessTokenEnc,
-          refreshTokenEnc: enc.refreshTokenEnc,
-          oauthClientSecretEnc: enc.oauthClientSecretEnc,
-          tokenKmsKeyId: enc.tokenKmsKeyId,
-          oauthClientId: input.oauthClientId ?? null,
-          scopes: input.scopes ?? [],
-          expiresAt: input.expiresAt ?? null,
-          status: "active",
-          updatedAt: new Date(),
-        },
+        set,
       })
       .returning({ id: schema.mcpCredentials.id });
     if (!row) throw new Error("[plugins] credential upsert returned no row");
@@ -122,6 +143,11 @@ export async function getWorkspaceSecret(key: {
       .from(schema.mcpCredentials)
       .where(
         and(
+          // Defense-in-depth tenant scoping: withSystemDb bypasses RLS, so the
+          // orgId predicate is the only guard preventing a caller from reading
+          // another tenant's decrypted credential by supplying a foreign
+          // (workspaceId, orgListingId) pair.
+          eq(schema.mcpCredentials.orgId, key.orgId),
           eq(schema.mcpCredentials.workspaceId, key.workspaceId),
           eq(schema.mcpCredentials.orgListingId, key.orgListingId),
         ),

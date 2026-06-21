@@ -242,6 +242,40 @@ describe("skillWorkspaceInstallHandler (@oxagen/handlers)", () => {
     expect(result.activeVersion).toBe(1);
   });
 
+  // ── concurrency: lost insert race ────────────────────────────────────────
+
+  it("returns idempotent installed=false when the insert loses a unique-violation race", async () => {
+    // existence check (call 1) sees nothing → proceeds to insert;
+    // insert throws 23505; catch re-reads: existence check (call 2) now sees the
+    // row a concurrent caller inserted, then version lookup (call 3).
+    queueSelects(
+      [],
+      [
+        {
+          id: "uuid-race",
+          publicId: "skl_RACE",
+          slug: "summarization",
+          activeVersionId: "uuid-ver-race",
+        },
+      ],
+      [{ versionNumber: 1 }],
+    );
+    mocks.skillInsertReturning.mockRejectedValueOnce({ code: "23505" });
+
+    const result = await skillWorkspaceInstallHandler({ slug: "summarization" }, CTX);
+    expect(result.installed).toBe(false);
+    expect(result.publicId).toBe("skl_RACE");
+    expect(result.slug).toBe("summarization");
+    expect(result.activeVersion).toBe(1);
+  });
+
+  it("rethrows non-unique-violation insert errors", async () => {
+    mocks.skillInsertReturning.mockRejectedValueOnce(new Error("connection reset"));
+    await expect(
+      skillWorkspaceInstallHandler({ slug: "summarization" }, CTX),
+    ).rejects.toThrow("connection reset");
+  });
+
   // ── output shape compliance ────────────────────────────────────────────────
 
   it("output always includes publicId, slug, activeVersion, installed", async () => {

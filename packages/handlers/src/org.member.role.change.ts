@@ -16,7 +16,7 @@
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member.role.change";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, isNull } from "drizzle-orm";
 import { logger } from "./logger";
@@ -24,43 +24,48 @@ import { logger } from "./logger";
 const OWNER_ROLE_NAME = "Owner";
 const AUTHORIZED_ROLES = new Set(["Owner", "Admin"]);
 
-/** Resolve the internal principal id and their active org role name for a user. */
+/**
+ * Resolve the internal principal id and their active org role name for a user,
+ * inside an existing tenant-scoped transaction. Must run in the SAME `tx` as
+ * the mutation so the actor authorization check and the role swap are one atomic
+ * unit — otherwise a concurrent demotion of the actor between the check and the
+ * write would let a now-unauthorized actor complete the change (TOCTOU).
+ */
 async function resolveActorPrincipalAndRole(
+  tx: Tx,
   orgId: string,
   userId: string,
 ): Promise<{ principalId: string; roleName: string | null }> {
-  return withTenantDb(async (tx) => {
-    const [principalRow] = await tx
-      .select({ id: schema.principals.id })
-      .from(schema.principals)
-      .where(
-        and(
-          eq(schema.principals.orgId, orgId),
-          eq(schema.principals.parentUserId, userId),
-          eq(schema.principals.status, "active"),
-        ),
-      )
-      .limit(1);
+  const [principalRow] = await tx
+    .select({ id: schema.principals.id })
+    .from(schema.principals)
+    .where(
+      and(
+        eq(schema.principals.orgId, orgId),
+        eq(schema.principals.parentUserId, userId),
+        eq(schema.principals.status, "active"),
+      ),
+    )
+    .limit(1);
 
-    if (!principalRow) return { principalId: "", roleName: null };
+  if (!principalRow) return { principalId: "", roleName: null };
 
-    const [praRow] = await tx
-      .select({ roleName: schema.roles.name })
-      .from(schema.principalRoleAssignments)
-      .innerJoin(schema.roles, eq(schema.roles.id, schema.principalRoleAssignments.roleId))
-      .where(
-        and(
-          eq(schema.principalRoleAssignments.principalId, principalRow.id),
-          eq(schema.principalRoleAssignments.orgId, orgId),
-          eq(schema.roles.scopeKind, "org"),
-          isNull(schema.principalRoleAssignments.workspaceId),
-          isNull(schema.principalRoleAssignments.deletedAt),
-        ),
-      )
-      .limit(1);
+  const [praRow] = await tx
+    .select({ roleName: schema.roles.name })
+    .from(schema.principalRoleAssignments)
+    .innerJoin(schema.roles, eq(schema.roles.id, schema.principalRoleAssignments.roleId))
+    .where(
+      and(
+        eq(schema.principalRoleAssignments.principalId, principalRow.id),
+        eq(schema.principalRoleAssignments.orgId, orgId),
+        eq(schema.roles.scopeKind, "org"),
+        isNull(schema.principalRoleAssignments.workspaceId),
+        isNull(schema.principalRoleAssignments.deletedAt),
+      ),
+    )
+    .limit(1);
 
-    return { principalId: principalRow.id, roleName: praRow?.roleName ?? null };
-  });
+  return { principalId: principalRow.id, roleName: praRow?.roleName ?? null };
 }
 
 export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleChange> = async (
@@ -79,22 +84,26 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleC
 
   const actorId = ctx.userId ?? ctx.apiKeyId ?? "system";
 
-  // ── Actor role gate (IAM, not legacy role string) ─────────────────────────────
-  const { roleName: actorRole } = await resolveActorPrincipalAndRole(ctx.orgId, actorId);
-  if (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) {
-    logger.warn(
-      { orgId: ctx.orgId, actorId, actorRole },
-      "org.member.role.change: rejected — insufficient org role",
-    );
-    throw new Error("Forbidden: only org Owners and Admins can change member roles");
-  }
-
   // ── Scoped reads + mutation (single tenant-scoped transaction) ────────────────
-  // withTenantDb opens one RLS-scoped transaction for the current org. The IDOR
-  // and last-owner guards plus the role swap all run inside it so they are
-  // atomic and RLS-policied; a guard throw rolls back and propagates a 403/404.
+  // withTenantDb opens one RLS-scoped transaction for the current org. The actor
+  // role gate, the IDOR and last-owner guards, plus the role swap all run inside
+  // it so they are atomic and RLS-policied; a guard throw rolls back and
+  // propagates a 403/404. Resolving the actor role inside this same transaction
+  // (rather than in a prior, separate one) closes a TOCTOU window: a concurrent
+  // demotion of the actor between an earlier check and the write could otherwise
+  // let a now-unauthorized actor complete the change.
   // Returns the target's previous role for the audit event below.
   const previousRole = await withTenantDb(async (tx) => {
+    // ── Actor role gate (IAM, not legacy role string) ──────────────────────────
+    const { roleName: actorRole } = await resolveActorPrincipalAndRole(tx, ctx.orgId, actorId);
+    if (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) {
+      logger.warn(
+        { orgId: ctx.orgId, actorId, actorRole },
+        "org.member.role.change: rejected — insufficient org role",
+      );
+      throw new Error("Forbidden: only org Owners and Admins can change member roles");
+    }
+
     // ── Resolve target membership (IDOR guard) ──────────────────────────────────
     const [targetOrgUser] = await tx
       .select({ id: schema.orgUsers.id, role: schema.orgUsers.role })

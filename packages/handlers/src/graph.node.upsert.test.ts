@@ -83,7 +83,15 @@ describe("graphNodeUpsertHandler", () => {
       CTX,
     );
     const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(params.naturalKey).toBe("ext:ext-bob-123");
+    expect(params.naturalKey).toBe(`ext:${CTX.workspaceId}:ext-bob-123`);
+  });
+
+  it("scopes the MERGE key by both orgId and workspaceId", async () => {
+    await graphNodeUpsertHandler({ label: "Person", displayName: "Grace" }, CTX);
+    const cypher = mocks.run.mock.calls[0]?.[0] as string;
+    expect(cypher).toContain(
+      "MERGE (n:KnowledgeNode {naturalKey: $naturalKey, orgId: $orgId, workspaceId: $workspaceId})",
+    );
   });
 
   it("uses label+displayName+workspaceId as naturalKey when no externalId", async () => {

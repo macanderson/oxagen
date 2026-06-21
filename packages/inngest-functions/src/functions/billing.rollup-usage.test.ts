@@ -152,6 +152,42 @@ describe("billingRollupUsage Inngest handler", () => {
     expect(mocks.dbInsertOnConflict).toHaveBeenCalledTimes(1);
   });
 
+  it("upserts with EXCLUDED references so re-runs overwrite stale totals", async () => {
+    // Regression guard: the set clause MUST reference the EXCLUDED (incoming)
+    // row, not the table's own columns. Referencing schema.usageRecords.quantity
+    // emits `SET quantity = quantity` (a self-referential no-op) which freezes
+    // usage at the first nightly run and systematically under-bills.
+    const sub = {
+      id: "sub_ddd",
+      orgId: "org_4",
+      currentPeriodStart: new Date("2025-01-01T00:00:00Z"),
+      currentPeriodEnd: new Date("2025-02-01T00:00:00Z"),
+    };
+    mocks.findMany.mockResolvedValueOnce([sub]).mockResolvedValueOnce([]);
+    mocks.sumTokenUsage.mockResolvedValue([
+      { metric: "tokens_input", quantity: 100, costMicros: 250n },
+    ]);
+
+    await capturedHandler!({ step: makeStep() });
+
+    const conflictArg = mocks.dbInsertOnConflict.mock.calls[0]?.[0] as {
+      set: { quantity: unknown; totalCostMicros: unknown };
+    };
+    expect(conflictArg).toBeDefined();
+
+    // Each set value is a drizzle `sql` template; flatten its query chunks and
+    // assert it points at the EXCLUDED pseudo-row, not the base column.
+    const sqlText = (frag: unknown): string => {
+      const chunks = (frag as { queryChunks?: Array<{ value?: unknown }> }).queryChunks ?? [];
+      return chunks
+        .map((c) => (Array.isArray(c.value) ? c.value.join("") : ""))
+        .join("");
+    };
+
+    expect(sqlText(conflictArg.set.quantity)).toBe("excluded.quantity");
+    expect(sqlText(conflictArg.set.totalCostMicros)).toBe("excluded.total_cost_micros");
+  });
+
   it("skips the upsert when sumTokenUsage returns an empty array", async () => {
     const sub = {
       id: "sub_ccc",

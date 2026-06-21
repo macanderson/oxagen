@@ -3,23 +3,31 @@
  *
  * Provides `databaseHooks` for the `account` model that:
  *   - WRITE: encrypt access_token, refresh_token, id_token into the *_enc
- *     bytea columns before create/update.
- *   - READ: decrypt the *_enc columns on the way out.
+ *     bytea columns before create/update, and strip the plaintext columns.
  *
- * CONTRACT PHASE: Migration 0012 has dropped the plaintext `access_token` and
- * `refresh_token` columns from the `accounts` table. This module no longer
- * dual-writes plaintext — only the *_enc columns are written.
+ * Decryption is NOT wired into databaseHooks. `decryptAccountTokens` is exported
+ * for explicit call-site use only (e.g. a DATA-client token-refresh path) — it
+ * does not run automatically on Better Auth reads.
+ *
+ * COLUMN STATE: The plaintext `access_token`, `refresh_token`, and `id_token`
+ * columns are STILL PRESENT in the DB (nullable). They were restored after
+ * OXA-1420 because Better Auth's drizzle adapter writes them directly on OAuth
+ * account create/link paths that bypass this application-layer hook; dropping
+ * them broke sign-in. The strip hooks here are defense-in-depth for hook-covered
+ * write paths only — the Postgres BEFORE INSERT/UPDATE trigger (migration
+ * archive 0003_soc2_auth_hardening.sql) is the primary backstop that nulls each
+ * plaintext column whenever its *_enc counterpart is non-null on ANY write path.
  *
  * ENCRYPTION COVERAGE: All three token fields — access_token, refresh_token,
  * AND id_token — are encrypted into their *_enc counterparts and their
  * plaintext columns are stripped before any write. The previous "leave idToken
- * plaintext" exception has been removed as part of SOC2 hardening (migration
- * 0009): a Postgres BEFORE INSERT/UPDATE trigger on auth.accounts provides a
- * defense-in-depth backstop, nulling any plaintext col when its *_enc
- * counterpart is NOT NULL. Double protection:
+ * plaintext" exception has been removed as part of SOC2 hardening: a Postgres
+ * BEFORE INSERT/UPDATE trigger on auth.accounts provides a defense-in-depth
+ * backstop, nulling any plaintext col when its *_enc counterpart is NOT NULL.
+ * Double protection:
  *   1. Application hook (this file) strips plaintext on covered write paths.
- *   2. DB trigger (migration 0009) strips on ANY write path, including Better
- *      Auth internal paths that may bypass the application-layer hook.
+ *   2. DB trigger (migration archive 0003_soc2_auth_hardening.sql) strips on ANY
+ *      write path, including Better Auth internal paths that bypass this hook.
  *
  * NEVER log plaintext token values anywhere in this module.
  */
@@ -35,11 +43,12 @@ import type { KmsAdapter } from "@oxagen/crypto";
  * The subset of an Account record that carries token fields.  Better-auth
  * passes the full account object; we only care about these fields.
  *
- * NOTE: `accessToken` and `refreshToken` plain-text fields are no longer
- * persisted to the DB (dropped by migration 0012 / OXA-1504 CONTRACT phase).
- * They may still be present on the incoming account object from Better Auth's
- * in-memory representation during the OAuth callback — we read them for
- * encryption purposes only and do NOT write them back.
+ * NOTE: the plaintext `accessToken` / `refreshToken` / `idToken` columns still
+ * exist in the DB but this module strips them before write so plaintext is not
+ * durably stored once the *_enc counterpart is populated. They may be present on
+ * the incoming account object from Better Auth's in-memory representation during
+ * the OAuth callback — we read them for encryption purposes only and strip them
+ * from the write set.
  */
 interface TokenFields {
   accessToken?: string | null;
@@ -90,9 +99,8 @@ async function decryptToken(
 /**
  * Encrypt the three token fields of an account record for database storage.
  *
- * CONTRACT PHASE (migration 0012): the plaintext `access_token` and
- * `refresh_token` columns have been dropped. `id_token` still exists as a
- * column but is stripped by the caller's stripPlaintextTokens before writing.
+ * The plaintext `access_token` / `refresh_token` / `id_token` columns still
+ * exist but are stripped by the caller's stripPlaintextTokens before writing.
  * This function returns ONLY the encrypted columns — it does NOT write back
  * any plaintext value.
  *
@@ -124,10 +132,10 @@ export async function encryptAccountTokens(
 /**
  * Decrypt the token fields of an account record loaded from the database.
  *
- * CONTRACT PHASE (migration 0012): plaintext `access_token` / `refresh_token`
- * columns no longer exist in the DB. This function only reads the *_enc bytea
- * columns. If `tokenKmsKeyId` is absent the row predates OXA-1420 and the
- * tokens are unavailable — returns the record with null token fields.
+ * This function only reads the *_enc bytea columns (the plaintext columns are
+ * stripped on write and must not be trusted). If `tokenKmsKeyId` is absent the
+ * row predates OXA-1420 encryption and the encrypted tokens are unavailable —
+ * returns the record with null token fields.
  */
 export async function decryptAccountTokens(
   data: TokenFields,
@@ -136,7 +144,8 @@ export async function decryptAccountTokens(
   const keyId = data.tokenKmsKeyId;
 
   // No KMS key id means the row predates OXA-1420 encryption. The plaintext
-  // columns have been dropped, so there is nothing to return.
+  // columns are stripped on write and not trusted, so there is nothing to
+  // return for these rows.
   if (!keyId) {
     return { ...data, accessToken: null, refreshToken: null, idToken: null };
   }
@@ -173,12 +182,11 @@ export async function decryptAccountTokens(
 
 /**
  * Remove plaintext token fields from an account object before writing.
- * - access_token / refresh_token: dropped by migration 0012; passing them to
- *   the Drizzle adapter raises an "unknown column" error.
- * - id_token: still a column in the schema (Better Auth reads it on some paths)
- *   but we strip it here so the plaintext is never durably stored when the
- *   encrypted id_token_enc counterpart exists. The DB trigger (migration 0009)
- *   is the final backstop for any write path that bypasses this hook.
+ * - access_token / refresh_token / id_token: all still columns in the schema
+ *   (Better Auth writes/reads them on some paths) but we strip them here so the
+ *   plaintext is never durably stored once the encrypted *_enc counterpart
+ *   exists. The DB trigger (migration archive 0003_soc2_auth_hardening.sql) is
+ *   the final backstop for any write path that bypasses this hook.
  * MUST run on every account write.
  */
 function stripPlaintextTokens(account: Record<string, unknown>): Record<string, unknown> {
@@ -191,7 +199,7 @@ function stripPlaintextTokens(account: Record<string, unknown>): Record<string, 
 
 /**
  * Account hooks for environments WITHOUT an encryption key (local dev / tests).
- * The dropped plaintext columns must always be stripped or OAuth sign-up fails;
+ * The plaintext token columns must always be stripped or OAuth sign-up fails;
  * without a KMS key the tokens simply aren't persisted (the *_enc columns stay
  * null) but the account + user are still created so social sign-in works.
  */
@@ -223,20 +231,38 @@ export function buildAccountTokenHooks(adapter: KmsAdapter, keyId: string): {
     create: {
       async before(account: Record<string, unknown>) {
         const encrypted = await encryptAccountTokens(account as TokenFields, keyId, adapter);
-        // Strip plaintext columns (dropped in migration 0012) and merge encrypted fields.
+        // Strip plaintext columns and merge encrypted fields.
         return { data: { ...stripPlaintextTokens(account), ...encrypted } };
       },
     },
     update: {
       async before(account: Record<string, unknown>) {
         // Only encrypt if at least one token field is being updated.
-        const hasTokenField =
-          "accessToken" in account ||
-          "refreshToken" in account ||
-          "idToken" in account;
-        if (!hasTokenField) return { data: account };
-        const encrypted = await encryptAccountTokens(account as TokenFields, keyId, adapter);
-        // Strip plaintext columns and merge encrypted fields.
+        const hasAccess = "accessToken" in account;
+        const hasRefresh = "refreshToken" in account;
+        const hasId = "idToken" in account;
+        if (!hasAccess && !hasRefresh && !hasId) return { data: account };
+
+        // Encrypt ONLY the token fields actually present in this update payload.
+        // A partial update (e.g. the OAuth access-token refresh flow, where
+        // Google omits the refresh_token) must NOT emit `*_enc: null` for the
+        // untouched fields — Drizzle would write those nulls and overwrite the
+        // previously-stored encrypted refresh_token/id_token, permanently
+        // breaking future refreshes. The DB trigger only nulls *plaintext*
+        // columns; it does not preserve an existing *_enc value.
+        const fields = account as TokenFields;
+        const [accessTokenEnc, refreshTokenEnc, idTokenEnc] = await Promise.all([
+          hasAccess ? encryptToken(fields.accessToken, keyId, adapter) : Promise.resolve(undefined),
+          hasRefresh ? encryptToken(fields.refreshToken, keyId, adapter) : Promise.resolve(undefined),
+          hasId ? encryptToken(fields.idToken, keyId, adapter) : Promise.resolve(undefined),
+        ]);
+
+        const encrypted: TokenFields = { tokenKmsKeyId: keyId };
+        if (hasAccess) encrypted.accessTokenEnc = accessTokenEnc;
+        if (hasRefresh) encrypted.refreshTokenEnc = refreshTokenEnc;
+        if (hasId) encrypted.idTokenEnc = idTokenEnc;
+
+        // Strip plaintext columns and merge only the touched encrypted fields.
         return { data: { ...stripPlaintextTokens(account), ...encrypted } };
       },
     },

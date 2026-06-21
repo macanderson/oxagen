@@ -111,8 +111,8 @@ describe("custom-webhook connector – verifyWebhook", () => {
   const secret = "webhook-secret-abc";
   const payload = Buffer.from("event-body");
 
-  it("allows all requests when no secret is configured (null)", () => {
-    expect(customWebhook.verifyWebhook!(payload, {}, null)).toBe(true);
+  it("rejects requests when no secret is configured (fail closed)", () => {
+    expect(customWebhook.verifyWebhook!(payload, {}, null)).toBe(false);
   });
 
   it("accepts valid HMAC on x-signature header", () => {

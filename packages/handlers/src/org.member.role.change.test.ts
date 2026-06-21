@@ -43,9 +43,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  // The handler runs all reads + writes inside a single withTenantDb (one
-  // RLS-scoped transaction); resolveActorPrincipalAndRole uses its own. Both
-  // route to the same fluent tx mock so the call sequence is continuous.
+  // The handler runs the actor role gate + all reads + writes inside a single
+  // withTenantDb (one RLS-scoped transaction) so the authorization check and the
+  // mutation are atomic (no TOCTOU). The mock routes to the same fluent tx mock
+  // so the call sequence is continuous.
   withTenantDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
 
   };

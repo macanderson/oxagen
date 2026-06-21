@@ -66,6 +66,20 @@ describe("org.settings.write handler", () => {
     );
   });
 
+  it("maps a Drizzle-wrapped unique-violation (code on .cause) to a friendly error", async () => {
+    // Production path: drizzle wraps the postgres.js error and the SQLSTATE
+    // lives on `.cause`, not the top level. The shared isUniqueViolation walks
+    // the cause chain; a top-level-only check would miss this and leak raw SQL.
+    mocks.where.mockRejectedValueOnce({
+      name: "DrizzleQueryError",
+      message: "Failed query: update org.organizations ...",
+      cause: { code: "23505", constraint_name: "organizations_slug_idx" },
+    });
+    await expect(orgSettingsWriteHandler({ slug: "taken" }, CTX)).rejects.toThrow(
+      /already in use/,
+    );
+  });
+
   it("throws when the organization is not found after update", async () => {
     mocks.findFirst.mockResolvedValue(undefined);
     await expect(orgSettingsWriteHandler({ name: "X" }, CTX)).rejects.toThrow(

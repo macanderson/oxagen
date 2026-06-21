@@ -2,6 +2,8 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // Mock @oxagen/database so the service is unit-testable without a live DB.
 const rows: Record<string, unknown>[] = [];
+// Captures the `set` clause passed to onConflictDoUpdate for partial-update assertions.
+const conflictSets: Record<string, unknown>[] = [];
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
@@ -15,9 +17,10 @@ function makeTx() {
   return {
     insert: () => ({
       values: (v: Record<string, unknown>) => ({
-        onConflictDoUpdate: () => ({
+        onConflictDoUpdate: (o: { set: Record<string, unknown> }) => ({
           returning: async () => {
             rows.push(v);
+            conflictSets.push(o.set);
             return [{ id: "cred-1" }];
           },
         }),
@@ -35,6 +38,7 @@ function makeTx() {
 
 beforeEach(() => {
   rows.length = 0;
+  conflictSets.length = 0;
   process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 5).toString("base64");
 });
 

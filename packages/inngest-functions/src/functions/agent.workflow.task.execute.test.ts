@@ -5,9 +5,9 @@ const mocks = vi.hoisted(() => ({
   dbUpdateSet: vi.fn(),
   dbUpdateWhere: vi.fn(),
   dbUpdate: vi.fn(),
-  // selectCallCount tracks which of the three count queries is being called.
+  // selectCallCount tracks how many times the count-steps query runs.
   selectCallCount: { value: 0 },
-  // countOverride: when set, all three count queries return this scenario
+  // countOverride: the single aggregating count query returns this scenario.
   countOverride: { total: 2, completed: 1, failed: 0 } as { total: number; completed: number; failed: number },
   generateObjectFor: vi.fn(),
   insertToolInvocation: vi.fn(),
@@ -31,17 +31,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
       const tx = {
         update: (_table: unknown) => ({ set: mocks.dbUpdateSet }),
-        // Returns [{n: count}] — the impl destructures [totalRow], [completedRow], [failedRow].
+        // count-steps now issues a single aggregating query that returns one
+        // row of { total, completed, failed } from a consistent snapshot.
         select: (_fields: unknown) => ({
           from: (_table: unknown) => ({
             where: (_cond: unknown) => {
               mocks.selectCallCount.value += 1;
-              // Call order: 1=total, 2=completed, 3=failed
-              const call = mocks.selectCallCount.value;
               const { total, completed, failed } = mocks.countOverride;
-              if (call === 1) return Promise.resolve([{ n: total }]);
-              if (call === 2) return Promise.resolve([{ n: completed }]);
-              return Promise.resolve([{ n: failed }]);
+              return Promise.resolve([{ total, completed, failed }]);
             },
           }),
         }),

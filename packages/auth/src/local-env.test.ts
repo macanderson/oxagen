@@ -54,6 +54,20 @@ describe("resolveIsLocalEnv", () => {
     ).toBe(false);
   });
 
+  // E2E_TEST is a harness signal, never a deployment one — a leaked E2E_TEST=true
+  // in a real Vercel env must NOT relax production auth controls.
+  it("ignores E2E_TEST on a real Vercel deployment", () => {
+    expect(
+      resolveIsLocalEnv({
+        ...base,
+        nodeEnv: "production",
+        vercel: "1",
+        vercelEnv: "production",
+        e2eTest: "true",
+      }),
+    ).toBe(false);
+  });
+
   it("is false when nothing signals local", () => {
     expect(resolveIsLocalEnv(base)).toBe(false);
   });

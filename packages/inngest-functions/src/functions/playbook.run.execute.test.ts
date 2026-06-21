@@ -510,6 +510,50 @@ describe("playbook-run-execute Inngest function", () => {
     expect(result).toMatchObject({ status: "failed" });
   });
 
+  it("rejects (SSRF) a webhook step targeting a private/internal IP", async () => {
+    const webhookStep = {
+      id: "sw", stepKey: "ssrf_hook", name: "SSRF", stepType: "webhook",
+      isAsync: false, exitOnError: true,
+      // 169.254.169.254 is the cloud metadata endpoint — must never be fetched.
+      config: { url: "https://169.254.169.254/latest/meta-data/" },
+    };
+
+    buildSystemDbForExecution({ run: PENDING_RUN, steps: [webhookStep], edges: [] });
+    buildTenantDb();
+
+    const mockFetch = vi.fn().mockResolvedValue({ status: 200, ok: true });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const step = makeStep();
+    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    // exitOnError=true → run should fail, and fetch must never be reached.
+    expect(result).toMatchObject({ status: "failed" });
+    expect(mockFetch).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects (SSRF) a webhook step targeting localhost", async () => {
+    const webhookStep = {
+      id: "sw", stepKey: "ssrf_localhost", name: "SSRFLocal", stepType: "webhook",
+      isAsync: false, exitOnError: true,
+      config: { url: "https://localhost/internal" },
+    };
+
+    buildSystemDbForExecution({ run: PENDING_RUN, steps: [webhookStep], edges: [] });
+    buildTenantDb();
+
+    const mockFetch = vi.fn().mockResolvedValue({ status: 200, ok: true });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const step = makeStep();
+    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    expect(result).toMatchObject({ status: "failed" });
+    expect(mockFetch).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
   // ── human_input step → pause ──────────────────────────────────────────────────
 
   it("pauses run with waiting_approval for human_input step", async () => {

@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import { db, closeDatabase } from "./client";
+import { closeDatabase } from "./client";
+import { withSystemDb } from "./tenant";
 import {
   plans,
   organizations,
@@ -54,10 +55,15 @@ const PLAN_SEEDS = [
  * DB / `pnpm db:reset` always re-seeds it idempotently.
  */
 export async function seedPlatform(): Promise<void> {
-  const database = db();
-  for (const plan of PLAN_SEEDS) {
-    await database.insert(plans).values(plan).onConflictDoNothing({ target: plans.slug });
-  }
+  // Bootstrap data that must exist before any tenant scope — wrap in
+  // withSystemDb so app.rls_bypass='on' is set for the duration. Raw db() would
+  // leave the bypass GUC unset; under TENANT_RLS_ENFORCEMENT_ENABLED=true the
+  // FORCE RLS policies would then reject every insert and break DB bootstrap.
+  await withSystemDb(async (tx) => {
+    for (const plan of PLAN_SEEDS) {
+      await tx.insert(plans).values(plan).onConflictDoNothing({ target: plans.slug });
+    }
+  });
 }
 
 /**
@@ -65,115 +71,120 @@ export async function seedPlatform(): Promise<void> {
  * Must NOT run against production — call only from local tooling.
  */
 export async function seedDev(): Promise<void> {
-  const database = db();
+  // Tenant-root bootstrap (org/workspace/user/agent) must run with RLS bypassed
+  // since no tenant scope exists yet — withSystemDb sets app.rls_bypass='on' for
+  // the whole transaction. Using raw db() would leave the bypass GUC unset and,
+  // under RLS enforcement, every insert into these FORCE RLS tables would be
+  // rejected by the policy WITH CHECK predicate.
+  await withSystemDb(async (tx) => {
+    const orgSlug = "oxagen-dev";
+    await tx
+      .insert(organizations)
+      .values({ name: "Oxagen Dev", slug: orgSlug, planType: "free", status: "active" })
+      .onConflictDoNothing({ target: organizations.slug });
+    const orgRow = (
+      await tx.select().from(organizations).where(eq(organizations.slug, orgSlug)).limit(1)
+    )[0];
+    if (!orgRow) throw new Error("Failed to upsert dev org");
 
-  const orgSlug = "oxagen-dev";
-  await database
-    .insert(organizations)
-    .values({ name: "Oxagen Dev", slug: orgSlug, planType: "free", status: "active" })
-    .onConflictDoNothing({ target: organizations.slug });
-  const orgRow = (
-    await database.select().from(organizations).where(eq(organizations.slug, orgSlug)).limit(1)
-  )[0];
-  if (!orgRow) throw new Error("Failed to upsert dev org");
+    const userEmail = "dev@oxagen.ai";
+    await tx
+      .insert(users)
+      .values({ email: userEmail, displayName: "Dev User", status: "active" })
+      .onConflictDoNothing({ target: users.email });
+    const userRow = (
+      await tx.select().from(users).where(eq(users.email, userEmail)).limit(1)
+    )[0];
+    if (!userRow) throw new Error("Failed to upsert dev user");
 
-  const userEmail = "dev@oxagen.ai";
-  await database
-    .insert(users)
-    .values({ email: userEmail, displayName: "Dev User", status: "active" })
-    .onConflictDoNothing({ target: users.email });
-  const userRow = (
-    await database.select().from(users).where(eq(users.email, userEmail)).limit(1)
-  )[0];
-  if (!userRow) throw new Error("Failed to upsert dev user");
+    const workspaceSlug = "playground";
+    await tx
+      .insert(workspaces)
+      .values({ orgId: orgRow.id, name: "Playground", slug: workspaceSlug })
+      .onConflictDoNothing({ target: [workspaces.orgId, workspaces.slug] });
+    const workspaceRow = (
+      await tx
+        .select()
+        .from(workspaces)
+        .where(and(eq(workspaces.orgId, orgRow.id), eq(workspaces.slug, workspaceSlug)))
+        .limit(1)
+    )[0];
+    if (!workspaceRow) throw new Error("Failed to upsert dev workspace");
 
-  const workspaceSlug = "playground";
-  await database
-    .insert(workspaces)
-    .values({ orgId: orgRow.id, name: "Playground", slug: workspaceSlug })
-    .onConflictDoNothing({ target: [workspaces.orgId, workspaces.slug] });
-  const workspaceRow = (
-    await database
-      .select()
-      .from(workspaces)
-      .where(and(eq(workspaces.orgId, orgRow.id), eq(workspaces.slug, workspaceSlug)))
-      .limit(1)
-  )[0];
-  if (!workspaceRow) throw new Error("Failed to upsert dev workspace");
-
-  await database
-    .insert(orgUsers)
-    .values({
-      orgId: orgRow.id,
-      userId: userRow.id,
-      role: "owner",
-      joinedAt: new Date(),
-    })
-    .onConflictDoNothing({ target: [orgUsers.orgId, orgUsers.userId] });
-
-  await database
-    .insert(workspaceUsers)
-    .values({
-      workspaceId: workspaceRow.id,
-      userId: userRow.id,
-      role: "owner",
-      joinedAt: new Date(),
-    })
-    .onConflictDoNothing({ target: [workspaceUsers.workspaceId, workspaceUsers.userId] });
-
-  // Seed the built-in qa-chat agent for the dev workspace. Inline logic avoids
-  // importing @oxagen/handlers (would create a database ↔ handlers dep cycle).
-  await database
-    .insert(agents)
-    .values({
-      workspaceId: workspaceRow.id,
-      orgId: orgRow.id,
-      slug: "qa-chat",
-      name: "QA Chat Agent",
-      agentType: "interactive_chat",
-      status: "active",
-      createdByUserId: userRow.id,
-      updatedByUserId: userRow.id,
-    })
-    .onConflictDoNothing();
-
-  const agentRow = (
-    await database
-      .select({ id: agents.id, activeVersionId: agents.activeVersionId })
-      .from(agents)
-      .where(and(eq(agents.workspaceId, workspaceRow.id), eq(agents.slug, "qa-chat")))
-      .limit(1)
-  )[0];
-  if (!agentRow) throw new Error("Failed to upsert dev qa-chat agent");
-
-  // Only insert the version and wire activeVersionId when it is missing.
-  if (!agentRow.activeVersionId) {
-    await database
-      .insert(agentVersions)
+    await tx
+      .insert(orgUsers)
       .values({
-        agentId: agentRow.id,
-        version: 1,
-        isPublished: true,
-        checksum: null,
-        config: {},
+        orgId: orgRow.id,
+        userId: userRow.id,
+        role: "owner",
+        joinedAt: new Date(),
+      })
+      .onConflictDoNothing({ target: [orgUsers.orgId, orgUsers.userId] });
+
+    await tx
+      .insert(workspaceUsers)
+      .values({
+        workspaceId: workspaceRow.id,
+        userId: userRow.id,
+        role: "owner",
+        joinedAt: new Date(),
+      })
+      .onConflictDoNothing({ target: [workspaceUsers.workspaceId, workspaceUsers.userId] });
+
+    // Seed the built-in qa-chat agent for the dev workspace. Inline logic avoids
+    // importing @oxagen/handlers (would create a database ↔ handlers dep cycle).
+    await tx
+      .insert(agents)
+      .values({
+        workspaceId: workspaceRow.id,
+        orgId: orgRow.id,
+        slug: "qa-chat",
+        name: "QA Chat Agent",
+        agentType: "interactive_chat",
+        status: "active",
         createdByUserId: userRow.id,
+        updatedByUserId: userRow.id,
       })
       .onConflictDoNothing();
 
-    const versionRow = (
-      await database
-        .select({ id: agentVersions.id })
-        .from(agentVersions)
-        .where(and(eq(agentVersions.agentId, agentRow.id), eq(agentVersions.version, 1)))
+    const agentRow = (
+      await tx
+        .select({ id: agents.id, activeVersionId: agents.activeVersionId })
+        .from(agents)
+        .where(and(eq(agents.workspaceId, workspaceRow.id), eq(agents.slug, "qa-chat")))
         .limit(1)
     )[0];
-    if (!versionRow) throw new Error("Failed to upsert dev qa-chat agent version");
+    if (!agentRow) throw new Error("Failed to upsert dev qa-chat agent");
 
-    await database
-      .update(agents)
-      .set({ activeVersionId: versionRow.id, updatedByUserId: userRow.id })
-      .where(eq(agents.id, agentRow.id));
-  }
+    // Only insert the version and wire activeVersionId when it is missing.
+    if (!agentRow.activeVersionId) {
+      await tx
+        .insert(agentVersions)
+        .values({
+          agentId: agentRow.id,
+          version: 1,
+          isPublished: true,
+          checksum: null,
+          config: {},
+          createdByUserId: userRow.id,
+        })
+        .onConflictDoNothing();
+
+      const versionRow = (
+        await tx
+          .select({ id: agentVersions.id })
+          .from(agentVersions)
+          .where(and(eq(agentVersions.agentId, agentRow.id), eq(agentVersions.version, 1)))
+          .limit(1)
+      )[0];
+      if (!versionRow) throw new Error("Failed to upsert dev qa-chat agent version");
+
+      await tx
+        .update(agents)
+        .set({ activeVersionId: versionRow.id, updatedByUserId: userRow.id })
+        .where(eq(agents.id, agentRow.id));
+    }
+  });
 }
 
 /**

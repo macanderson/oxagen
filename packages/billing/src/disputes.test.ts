@@ -144,8 +144,32 @@ describe("onDisputeCreated", () => {
       requestedCents: 5000n,
       reason: "clawback_dispute",
       referenceType: "dispute",
-      referenceId: "dp_test_001",
     }));
+    // referenceId must be a deterministic UUID derived from the Stripe dispute
+    // id (credit_ledger.reference_id is a UUID column), not the raw "dp_..." id.
+    const call = consumeCreditsMock.mock.calls[0]![0] as { referenceId: string };
+    expect(call.referenceId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+  });
+
+  it("idempotent: skips clawback when a clawback ledger row already exists for this dispute", async () => {
+    const state = makeState();
+    state.creditLedgerRow = { id: "ledger-uuid-1" }; // prior dispute clawback debit
+    const db = makeDb(state);
+    let callCount = 0;
+    vi.spyOn(db.query.billingDisputes, "findFirst").mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) return null; // upsert check → insert path
+      return { id: "dispute-uuid-1", clawedBackCents: 0n };
+    });
+    dbHolder.instance = db as ReturnType<typeof makeDb>;
+
+    await onDisputeCreated(makeDispute({ orgId: "org-abc" }));
+
+    // Even though the billing_disputes row shows clawedBackCents == 0, the
+    // ledger pre-check must short-circuit before debiting credits again.
+    expect(consumeCreditsMock).not.toHaveBeenCalled();
   });
 
   it("is idempotent: skips clawback when clawedBackCents already > 0", async () => {

@@ -88,9 +88,36 @@ export async function ingestImageFromUrl(
   // a caller forgets the `isIngestibleImageUrl` pre-check.
   if (!isIngestibleImageUrl(url)) return null;
 
+  // SSRF defense: do NOT blindly follow redirects. An open redirect on a
+  // trusted OAuth host (or a path that 302s) could otherwise send fetch to an
+  // internal address (e.g. http://169.254.169.254/ metadata, RFC1918 hosts),
+  // bypassing the host allowlist. We follow manually, re-validating every hop's
+  // target through isIngestibleImageUrl, with a small hop cap.
+  const MAX_REDIRECTS = 3;
+  let currentUrl = url;
   let res: Response;
   try {
-    res = await fetchImpl(url, { redirect: "follow" });
+    let hops = 0;
+    for (;;) {
+      res = await fetchImpl(currentUrl, { redirect: "manual" });
+      const status = res.status;
+      const isRedirect = status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+      if (!isRedirect) break;
+      if (hops >= MAX_REDIRECTS) return null;
+      const location = res.headers.get("location");
+      if (!location) return null;
+      // Resolve relative redirects against the current URL, then re-check the
+      // host allowlist before following.
+      let next: string;
+      try {
+        next = new URL(location, currentUrl).toString();
+      } catch {
+        return null;
+      }
+      if (!isIngestibleImageUrl(next)) return null;
+      currentUrl = next;
+      hops += 1;
+    }
   } catch {
     return null;
   }

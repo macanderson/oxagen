@@ -8,58 +8,63 @@ import { logger } from "./logger";
 // Static map: each allowed edge type has its own MERGE template.
 // No dynamic Cypher — the edge type selector pattern prevents injection and
 // keeps the query planner happy with static relationship types.
+//
+// Both endpoints are scoped by BOTH orgId AND workspaceId. Org-only scoping
+// (the previous behaviour) let a caller in one workspace MERGE an edge against
+// a same-publicId node in another workspace of the same org — a tenant-isolation
+// breach (policy §0). This mirrors the fix already applied to graph.edge.delete.
 const EDGE_TYPE_QUERIES: Record<GraphEdgeType, string> = {
-  RELATED_TO: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId})
-               MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId})
+  RELATED_TO: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
+               MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
                MERGE (from)-[r:RELATED_TO]->(to)
                ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
                ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
                RETURN r._created AS wasCreated`,
 
-  PART_OF: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId})
-             MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId})
+  PART_OF: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
+             MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
              MERGE (from)-[r:PART_OF]->(to)
              ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
              ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
              RETURN r._created AS wasCreated`,
 
-  CAUSED_BY: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId})
-               MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId})
+  CAUSED_BY: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
+               MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
                MERGE (from)-[r:CAUSED_BY]->(to)
                ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
                ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
                RETURN r._created AS wasCreated`,
 
-  REFERENCES: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId})
-                MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId})
+  REFERENCES: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
+                MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
                 MERGE (from)-[r:REFERENCES]->(to)
                 ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
                 ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
                 RETURN r._created AS wasCreated`,
 
-  SIMILAR_TO: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId})
-                MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId})
+  SIMILAR_TO: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
+                MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
                 MERGE (from)-[r:SIMILAR_TO]->(to)
                 ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
                 ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
                 RETURN r._created AS wasCreated`,
 
-  DEPENDS_ON: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId})
-                MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId})
+  DEPENDS_ON: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
+                MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
                 MERGE (from)-[r:DEPENDS_ON]->(to)
                 ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
                 ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
                 RETURN r._created AS wasCreated`,
 
-  CREATED_BY: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId})
-                MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId})
+  CREATED_BY: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
+                MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
                 MERGE (from)-[r:CREATED_BY]->(to)
                 ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
                 ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
                 RETURN r._created AS wasCreated`,
 
-  MENTIONS: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId})
-              MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId})
+  MENTIONS: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
+              MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
               MERGE (from)-[r:MENTIONS]->(to)
               ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
               ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false

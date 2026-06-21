@@ -128,4 +128,82 @@ describe("ingestImageFromUrl", () => {
     );
     expect(result).toBeNull();
   });
+
+  it("uses manual redirect handling (does not blindly follow)", async () => {
+    const fetchImpl = vi.fn(async () => jpegResponse(10));
+    const putImpl = vi.fn(async () => OK_PUT);
+    await ingestImageFromUrl(
+      { url: "https://lh3.googleusercontent.com/a/x", kind: "avatar", ownerId: "u" },
+      { fetchImpl, putImpl },
+    );
+    expect(fetchImpl).toHaveBeenCalledWith("https://lh3.googleusercontent.com/a/x", {
+      redirect: "manual",
+    });
+  });
+
+  it("SSRF: refuses to follow a redirect to an untrusted/internal host", async () => {
+    // Trusted host issues an open redirect to the cloud metadata endpoint.
+    const fetchImpl = vi.fn(async (target: string | URL | Request) => {
+      if (String(target).startsWith("https://lh3.googleusercontent.com")) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "http://169.254.169.254/latest/meta-data" },
+        });
+      }
+      // Should never be reached — the metadata host is not on the allowlist.
+      return jpegResponse(10);
+    });
+    const putImpl = vi.fn(async () => OK_PUT);
+
+    const result = await ingestImageFromUrl(
+      { url: "https://lh3.googleusercontent.com/a/x", kind: "avatar", ownerId: "u" },
+      { fetchImpl, putImpl },
+    );
+
+    expect(result).toBeNull();
+    // The redirect target was never fetched.
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(putImpl).not.toHaveBeenCalled();
+  });
+
+  it("follows a redirect to another trusted host and stores the bytes", async () => {
+    const fetchImpl = vi.fn(async (target: string | URL | Request) => {
+      if (String(target) === "https://lh3.googleusercontent.com/a/x") {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://avatars.githubusercontent.com/u/1" },
+        });
+      }
+      return jpegResponse(10);
+    });
+    const putImpl = vi.fn(async () => OK_PUT);
+
+    const result = await ingestImageFromUrl(
+      { url: "https://lh3.googleusercontent.com/a/x", kind: "avatar", ownerId: "u" },
+      { fetchImpl, putImpl },
+    );
+
+    expect(result).toEqual(OK_PUT);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(putImpl).toHaveBeenCalledOnce();
+  });
+
+  it("returns null when the redirect chain exceeds the hop cap", async () => {
+    // Trusted host that keeps redirecting to itself forever.
+    const fetchImpl = vi.fn(async () => {
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://lh3.googleusercontent.com/a/loop" },
+      });
+    });
+    const putImpl = vi.fn(async () => OK_PUT);
+
+    const result = await ingestImageFromUrl(
+      { url: "https://lh3.googleusercontent.com/a/start", kind: "avatar", ownerId: "u" },
+      { fetchImpl, putImpl },
+    );
+
+    expect(result).toBeNull();
+    expect(putImpl).not.toHaveBeenCalled();
+  });
 });

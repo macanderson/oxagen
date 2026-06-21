@@ -137,6 +137,12 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       const access = input.access ?? "public";
       const bytes = byteLength(input.body);
 
+      // The access level the blob is ACTUALLY written with. On a public-only
+      // store a requested "private" put falls back to "public"; we must report
+      // the real visibility so callers persist accurate metadata and never
+      // treat a world-readable blob as access-controlled.
+      let effectiveAccess = access;
+
       const result = await blobPut(input.key, toPutBody(input.body), {
         access,
         token,
@@ -150,9 +156,14 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
           err instanceof Error &&
           err.message.includes("Cannot use private access")
         ) {
-          logger.info(
-            { driver: "vercel-blob", key: input.key, reason: "store is public-only" },
-            "storage: retrying put with public access",
+          effectiveAccess = "public"; // store is public-only — blob is stored world-readable
+          logger.warn(
+            {
+              driver: "vercel-blob",
+              key: input.key,
+              reason: "store is public-only; private blob stored as public",
+            },
+            "storage: put fallback — private blob stored publicly",
           );
           return blobPut(input.key, toPutBody(input.body), {
             access: "public",
@@ -166,13 +177,15 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       });
 
       logger.info(
-        { driver: "vercel-blob", key: input.key, access, contentType: input.contentType, bytes, durationMs: Date.now() - start },
+        { driver: "vercel-blob", key: input.key, access: effectiveAccess, contentType: input.contentType, bytes, durationMs: Date.now() - start },
         "storage: object written",
       );
       // For private blobs, result.url is the authenticated access URL (not a
       // public CDN URL). We return result.pathname as the canonical key in all
       // cases; callers must use the adapter get() to retrieve private bytes.
-      return { url: result.url, key: result.pathname, bytes, access };
+      // `effectiveAccess` reflects the visibility the blob was actually written
+      // with (see the public-only fallback above).
+      return { url: result.url, key: result.pathname, bytes, access: effectiveAccess };
     },
 
     async delete(urlOrKey: string): Promise<void> {

@@ -136,4 +136,35 @@ describe("agent.mcp.register handler", () => {
     expect(valuesArg.orgId).toBe("org_1");
     expect(valuesArg.workspaceId).toBe("ws_1");
   });
+
+  // ── SSRF guard ────────────────────────────────────────────────────────────
+  it.each([
+    ["http://localhost:8080/mcp", "localhost"],
+    ["http://127.0.0.1/mcp", "loopback IPv4"],
+    ["http://10.1.2.3/mcp", "RFC1918 class A"],
+    ["http://172.16.0.5/mcp", "RFC1918 class B"],
+    ["http://192.168.1.1/mcp", "RFC1918 class C"],
+    ["http://169.254.169.254/latest/meta-data/", "cloud-metadata link-local"],
+    ["http://[::1]/mcp", "IPv6 loopback"],
+    ["ftp://mcp.example.com/", "non-http scheme"],
+  ])("rejects internal/private endpoint %s (%s) before any outbound probe", async (url) => {
+    const input = { ...BASE_INPUT, endpointUrl: url };
+
+    await expect(agentMcpRegisterHandler(input, CTX)).rejects.toThrow(
+      /Refusing to register MCP server/,
+    );
+    // The guard must fire before the network probe and before any DB write.
+    expect(mocks.healthcheckMock).not.toHaveBeenCalled();
+    expect(mocks.insertSpy).not.toHaveBeenCalled();
+  });
+
+  it("allows a publicly routable https endpoint", async () => {
+    mocks.healthcheckMock.mockResolvedValueOnce({ status: "healthy", discoveredTools: [], descriptors: [] });
+    const input = { ...BASE_INPUT, endpointUrl: "https://mcp.public-host.com/mcp" };
+
+    const result = await agentMcpRegisterHandler(input, CTX);
+
+    expect(mocks.healthcheckMock).toHaveBeenCalledTimes(1);
+    expect(result.mcpServerId).toBe("mcp_pub_1");
+  });
 });

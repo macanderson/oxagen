@@ -10,7 +10,7 @@ import { createFunction } from "../create-function";
 // the inserts and the inArray(status) filter on the load keep isolation correct
 // for this cron path.
 import { withSystemDb, schema } from "@oxagen/database";
-import { and, gt, inArray } from "drizzle-orm";
+import { and, gt, inArray, sql } from "drizzle-orm";
 import { sumTokenUsage } from "@oxagen/telemetry";
 import { logger } from "../logger";
 
@@ -118,7 +118,12 @@ export const [billingRollupUsage] = createFunction(
               )
               // The (subscription_id, metric, period_start, period_end)
               // unique index makes this rollup idempotent even if the cron
-              // double-fires.
+              // double-fires. On conflict we overwrite quantity/cost with the
+              // freshly recomputed period totals (the EXCLUDED row), so any
+              // re-run within a billing period always lands the most-current
+              // total. Referencing the schema columns directly would emit
+              // `SET quantity = quantity` (a self-referential no-op) and freeze
+              // usage at the first run — systematic under-billing.
               .onConflictDoUpdate({
                 target: [
                   schema.usageRecords.subscriptionId,
@@ -127,8 +132,8 @@ export const [billingRollupUsage] = createFunction(
                   schema.usageRecords.periodEnd,
                 ],
                 set: {
-                  quantity: schema.usageRecords.quantity,
-                  totalCostMicros: schema.usageRecords.totalCostMicros,
+                  quantity: sql`excluded.quantity`,
+                  totalCostMicros: sql`excluded.total_cost_micros`,
                 },
               });
           });
