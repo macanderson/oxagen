@@ -12,9 +12,13 @@
  * Client component: it consumes the sidebar collapse state and renders the
  * client islands (AskBar, switchers, bell). The page content arrives as
  * `children` (server-rendered) and is just slotted into <main>.
+ *
+ * The org/workspace pickers and balance pill resolve from `navDataPromise`
+ * inside <Suspense> slots, so the frame + page children paint immediately while
+ * the heavy nav data streams in (it is NOT awaited by the org layout).
  */
 
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { PanelLeft } from "lucide-react";
 import { Sidebar } from "./sidebar";
@@ -22,9 +26,13 @@ import { resolveSidebarCtx } from "@/lib/sidebar";
 import { AskBar } from "@/components/shell/ask/ask-bar";
 import { NotificationsBell } from "./notifications-bell";
 import { SupportMenu } from "./support-menu";
-import { BalancePill } from "./balance-pill";
-import { OrgSwitcher, type OrgOption } from "@/components/org/org-switcher";
-import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
+import {
+  OrgSwitcherSlot,
+  OrgSwitcherFallback,
+  WorkspaceSwitcherSlot,
+  BalanceSlot,
+  type ShellNavData,
+} from "./shell-nav-slots";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
 import { useSidebar } from "./sidebar-context";
@@ -38,12 +46,10 @@ import type { PlanTier } from "@oxagen/oxagen/types";
 export interface ShellFrameProps {
   org: ResolvedOrg;
   workspace?: ResolvedWorkspace;
-  availableOrgs: OrgOption[];
-  availableWorkspaces?: { publicId: string; slug: string; name: string }[];
+  /** Heavy nav data (org list, workspace list, balance) streamed off the layout's critical path. */
+  navDataPromise: Promise<ShellNavData>;
   /** May be undefined during a transient post-signup render; guarded in UserSwitcher. */
   user: SessionUser | undefined;
-  /** Org credit balance for the always-visible header pill. Null hides it. */
-  balance?: { cents: number; low: boolean } | null;
   /** Org subscription tier — gates enterprise-only nav items (e.g. Access). */
   planTier?: PlanTier;
   /** Bound server action for inline workspace creation dialog. */
@@ -54,10 +60,8 @@ export interface ShellFrameProps {
 export function ShellFrame({
   org,
   workspace,
-  availableOrgs,
-  availableWorkspaces,
+  navDataPromise,
   user,
-  balance,
   planTier,
   createWorkspaceAction,
   children,
@@ -73,14 +77,6 @@ export function ShellFrame({
     orgSlug: org.slug,
     workspaceSlug: workspace?.slug,
   });
-
-  // Active workspace for the picker: prefer the explicit prop, else match the
-  // slug parsed from the path against the org's workspaces. Null on org-level
-  // routes (no workspace in the path) → the picker is hidden.
-  const currentWorkspace =
-    (workspace
-      ? { publicId: workspace.publicId, slug: workspace.slug, name: workspace.name }
-      : availableWorkspaces?.find((w) => w.slug === ctx.workspaceSlug)) ?? null;
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background md:gap-2 md:p-2">
@@ -109,25 +105,21 @@ export function ShellFrame({
             <TooltipPopup>Toggle sidebar</TooltipPopup>
           </Tooltip>
 
-          {/* Top-left: org / workspace pickers (org ▾ / workspace ▾). */}
+          {/* Top-left: org / workspace pickers (org ▾ / workspace ▾). Stream in
+              from navDataPromise so the header paints without waiting on the
+              org-list join. */}
           <div className="flex min-w-0 shrink items-center gap-2">
-            <OrgSwitcher current={org} organizations={availableOrgs} />
-            {currentWorkspace ? (
-              <>
-                <span
-                  className="select-none text-sm text-muted-foreground/50"
-                  aria-hidden="true"
-                >
-                  /
-                </span>
-                <WorkspaceSwitcher
-                  orgSlug={org.slug}
-                  current={currentWorkspace}
-                  workspaces={availableWorkspaces ?? []}
-                  createWorkspaceAction={createWorkspaceAction}
-                />
-              </>
-            ) : null}
+            <Suspense fallback={<OrgSwitcherFallback />}>
+              <OrgSwitcherSlot org={org} navDataPromise={navDataPromise} />
+            </Suspense>
+            <Suspense fallback={null}>
+              <WorkspaceSwitcherSlot
+                org={org}
+                workspace={workspace}
+                navDataPromise={navDataPromise}
+                createWorkspaceAction={createWorkspaceAction}
+              />
+            </Suspense>
           </div>
 
           {/* Ask bar — fills the remaining header width. */}
@@ -139,13 +131,9 @@ export function ShellFrame({
 
           {/* Right cluster: balance · support · notifications. */}
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            {balance ? (
-              <BalancePill
-                orgSlug={org.slug}
-                balanceCents={balance.cents}
-                low={balance.low}
-              />
-            ) : null}
+            <Suspense fallback={null}>
+              <BalanceSlot orgSlug={org.slug} navDataPromise={navDataPromise} />
+            </Suspense>
             <SupportMenu orgSlug={ctx.orgSlug} workspaceSlug={ctx.workspaceSlug} />
             <NotificationsBell />
           </div>
