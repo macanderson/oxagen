@@ -37,10 +37,35 @@ describe("readConfig", () => {
     expect(readConfig()).toEqual({ token: "tok123", orgSlug: "my-org" });
   });
 
-  it("returns empty object on JSON parse error", () => {
+  it("returns empty object and warns on JSON parse error", () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("INVALID JSON {{{");
-    expect(readConfig()).toEqual({});
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const result = readConfig();
+    expect(result).toEqual({});
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining("failed to read config file"),
+    );
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining("oxagen auth login"),
+    );
+    stderrSpy.mockRestore();
+  });
+
+  it("returns empty object and warns when readFileSync throws (e.g. EACCES)", () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockImplementation(() => {
+      const err = new Error("EACCES: permission denied");
+      (err as NodeJS.ErrnoException).code = "EACCES";
+      throw err;
+    });
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const result = readConfig();
+    expect(result).toEqual({});
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining("EACCES"),
+    );
+    stderrSpy.mockRestore();
   });
 });
 

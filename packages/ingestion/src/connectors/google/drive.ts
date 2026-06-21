@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import { verifyGoogleChannelToken } from "./verify-channel-token";
 
 const connectionConfigSchema = z.object({
   sharedDrivesOnly: z.boolean().default(false),
@@ -91,6 +92,12 @@ const googleDrive: ConnectorDefinition<Config> = {
       default:
         throw new Error(`google-drive.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
     }
+  },
+
+  // Google Drive push channels echo the watch `channel.token` back as the
+  // X-Goog-Channel-Token header — verify it against the stored channel secret.
+  verifyWebhook(_payload, headers, secret): boolean {
+    return verifyGoogleChannelToken(headers, secret);
   },
 };
 

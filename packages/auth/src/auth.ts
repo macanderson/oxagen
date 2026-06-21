@@ -406,18 +406,29 @@ export const auth = betterAuth({
             ipAddress?: string | null;
             userAgent?: string | null;
           };
-          const orgId = await resolveFirstOrgId(s.userId);
-          emitSecurityEvent({
-            eventType: "auth.sign_in",
-            actorUserId: s.userId,
-            orgId: orgId ?? NO_ORG_SENTINEL,
-            workspaceId: null,
-            capability: null,
-            outcome: "success",
-            ip: s.ipAddress ?? null,
-            userAgent: s.userAgent ?? null,
-            requestId: null,
-          });
+          // SECURITY: wrap the entire hook body so a transient DB failure in
+          // resolveFirstOrgId cannot propagate through Better Auth's hook runner
+          // and turn a successful sign-in into an HTTP 500. The session is
+          // already committed by the time this after-hook runs; blocking sign-in
+          // for an audit-emit failure would be worse than emitting no event.
+          // Log so the gap is visible in ops; never re-throw (OXA-1422).
+          try {
+            const orgId = await resolveFirstOrgId(s.userId);
+            emitSecurityEvent({
+              eventType: "auth.sign_in",
+              actorUserId: s.userId,
+              orgId: orgId ?? NO_ORG_SENTINEL,
+              workspaceId: null,
+              capability: null,
+              outcome: "success",
+              ip: s.ipAddress ?? null,
+              userAgent: s.userAgent ?? null,
+              requestId: null,
+            });
+          } catch (err) {
+            // Best-effort audit — never block sign-in for an audit failure.
+            console.error("[auth] session.create.after hook failed", { userId: s.userId, err });
+          }
         },
       },
       delete: {
@@ -427,18 +438,27 @@ export const auth = betterAuth({
             ipAddress?: string | null;
             userAgent?: string | null;
           };
-          const orgId = await resolveFirstOrgId(s.userId);
-          emitSecurityEvent({
-            eventType: "auth.sign_out",
-            actorUserId: s.userId,
-            orgId: orgId ?? NO_ORG_SENTINEL,
-            workspaceId: null,
-            capability: null,
-            outcome: "success",
-            ip: s.ipAddress ?? null,
-            userAgent: s.userAgent ?? null,
-            requestId: null,
-          });
+          // SECURITY: same guard as session.create.after — a transient DB
+          // failure must not propagate into Better Auth's hook runner and cause
+          // sign-out to 500. The session is already deleted; audit is
+          // best-effort (OXA-1422).
+          try {
+            const orgId = await resolveFirstOrgId(s.userId);
+            emitSecurityEvent({
+              eventType: "auth.sign_out",
+              actorUserId: s.userId,
+              orgId: orgId ?? NO_ORG_SENTINEL,
+              workspaceId: null,
+              capability: null,
+              outcome: "success",
+              ip: s.ipAddress ?? null,
+              userAgent: s.userAgent ?? null,
+              requestId: null,
+            });
+          } catch (err) {
+            // Best-effort audit — never block sign-out for an audit failure.
+            console.error("[auth] session.delete.after hook failed", { userId: s.userId, err });
+          }
         },
       },
     },

@@ -61,7 +61,7 @@ async function assertWorkspaceMember(
   workspaceId: string,
   userId: string,
 ): Promise<boolean> {
-  const rows = await runInTenantScope({ orgId, workspaceId }, () =>
+  return runInTenantScope({ orgId, workspaceId }, () =>
     withTenantDb((tx) =>
       tx
         .select({ id: schema.workspaceUsers.id })
@@ -74,8 +74,10 @@ async function assertWorkspaceMember(
         )
         .limit(1),
     ),
-  ).then(() => true).catch(() => false); // catch RLS / tenancy errors
-  return rows;
+    // Membership is proven by the row count — a zero-row result means the user
+    // is NOT a workspace member. The previous `.then(() => true)` discarded the
+    // rows and granted access to any caller whenever the DB query succeeded.
+  ).then((rows) => rows.length > 0).catch(() => false); // catch RLS / tenancy errors
 }
 
 /** Resolve org + workspace from slugs, returning null on any lookup failure. */

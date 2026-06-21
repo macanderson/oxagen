@@ -19,6 +19,7 @@ import { isTierDenied } from "@oxagen/billing";
 import { requireEnv } from "@oxagen/config/env";
 import { parseAuditFilter, type RawSearchParams } from "@/lib/audit-filters";
 import { queryAuditForExport } from "@/lib/audit-query";
+import { logger } from "@oxagen/handlers/logger";
 import {
   serializeAuditExport,
   signAuditExport,
@@ -88,7 +89,17 @@ export async function GET(
   const formatParam = url.searchParams.get("format");
   const format: AuditExportFormat = formatParam === "csv" ? "csv" : "ndjson";
 
-  const rows = await queryAuditForExport(tenant.id, filter);
+  // queryAuditForExport PROPAGATES DB/RLS errors (unlike the viewer path) so a
+  // mid-export failure cannot be HMAC-signed as a complete-but-truncated file.
+  // Catch here and return a hard 500 — never a 200 with a partial body — so the
+  // auditor never receives a silently incomplete evidence export.
+  let rows: Awaited<ReturnType<typeof queryAuditForExport>>;
+  try {
+    rows = await queryAuditForExport(tenant.id, filter);
+  } catch (err) {
+    logger.error({ err, orgId: tenant.id }, "audit-export: query failed; refusing partial export");
+    return new Response("Internal error: audit export failed", { status: 500 });
+  }
   const body = serializeAuditExport(rows, format);
   const signature = signAuditExport(body, signingSecret());
   const stamp = new Date().toISOString();

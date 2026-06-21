@@ -56,9 +56,19 @@ vi.mock("@/lib/resolve-org", () => ({
   assertSecurityManager: mockAssertSecurityManager,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
+vi.mock("@oxagen/handlers/logger", () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
 vi.mock("@oxagen/database/security", () => ({
   emitSecurityEvent: mockEmitSecurityEvent,
 }));
+
+/** Error shaped like the sentinel `notFound()` throws (digest carries the 404 fallback code). */
+function authDenial(): Error {
+  const e = new Error("NEXT_HTTP_ERROR_FALLBACK");
+  (e as Error & { digest: string }).digest = "NEXT_HTTP_ERROR_FALLBACK;404";
+  return e;
+}
 vi.mock("@oxagen/database", () => {
   const makeTx = () => ({
     insert: (_table: unknown) => ({
@@ -130,8 +140,8 @@ describe("saveMfaPolicyAction", () => {
     if (!res.ok) expect(res.code).toBe("validation_error");
   });
 
-  it("returns forbidden when assertSecurityManager throws", async () => {
-    mockAssertSecurityManager.mockRejectedValue(new Error("insufficient role"));
+  it("returns forbidden when assertSecurityManager denies (notFound sentinel)", async () => {
+    mockAssertSecurityManager.mockRejectedValue(authDenial());
     const res = await saveMfaPolicyAction({
       orgSlug: "acme",
       mfaRequired: true,
@@ -139,6 +149,19 @@ describe("saveMfaPolicyAction", () => {
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("forbidden");
+  });
+
+  it("returns internal (NOT forbidden) when the auth gate hits a DB/infra error", async () => {
+    // A plain Error has no notFound digest — a degraded DB must NOT be
+    // misclassified as a permission denial.
+    mockAssertSecurityManager.mockRejectedValue(new Error("connection refused"));
+    const res = await saveMfaPolicyAction({
+      orgSlug: "acme",
+      mfaRequired: true,
+      mfaGraceHours: 24,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("internal");
   });
 
   it("returns ok:true and emits security.mfa_policy_updated on success", async () => {

@@ -67,4 +67,19 @@ describe("connector registry", () => {
       expect(typeof c.connectionConfigSchema.parse).toBe("function");
     }
   });
+
+  // Security invariant: the /webhooks route's verification gate fails CLOSED for
+  // any webhook-delivery connector that omits verifyWebhook. Enforce here so a
+  // new webhook connector cannot silently reintroduce the fail-open bypass.
+  it("every webhook-delivery connector implements verifyWebhook", () => {
+    const connectors = listConnectors();
+    const webhookConnectors = connectors.filter((c) => c.deliveryMethod === "webhook");
+    expect(webhookConnectors.length).toBeGreaterThan(0);
+    for (const c of webhookConnectors) {
+      expect(
+        typeof c.verifyWebhook,
+        `connector "${c.connectorId}" declares deliveryMethod "webhook" but has no verifyWebhook`,
+      ).toBe("function");
+    }
+  });
 });

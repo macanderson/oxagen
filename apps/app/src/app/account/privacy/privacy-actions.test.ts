@@ -38,24 +38,38 @@ import { getExportStatusAction } from "./privacy-actions";
 
 const SESSION = { user: { id: "user-1" } };
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  mockGetSession.mockResolvedValue(SESSION);
-  mockWithSystemDb.mockResolvedValue([
-    { status: "ready", exportUrl: "https://blob/x", completedAt: null },
-  ]);
-});
-
 describe("getExportStatusAction", () => {
-  it("requires a session before reading export status", async () => {
-    const res = await getExportStatusAction("prexp_1");
-    expect(mockGetSession).toHaveBeenCalledTimes(1);
-    expect(res).toMatchObject({ status: "ready", exportUrl: "https://blob/x" });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedWhere.value = undefined;
+    dbState.rows = [{ status: "ready", exportUrl: "https://blob/export", completedAt: new Date() }];
+    mockGetSession.mockResolvedValue(SESSION);
   });
 
-  it("does NOT read status when there is no session (redirect)", async () => {
-    mockGetSession.mockRejectedValue(new Error("NEXT_REDIRECT"));
-    await expect(getExportStatusAction("prexp_1")).rejects.toThrow();
-    expect(mockWithSystemDb).not.toHaveBeenCalled();
+  it("requires a session (self-authenticates)", async () => {
+    mockGetSession.mockRejectedValue(new Error("unauthenticated"));
+    await expect(getExportStatusAction("prexp-1")).rejects.toThrow("unauthenticated");
+  });
+
+  it("scopes the lookup to the caller's own userId (cross-user IDOR guard)", async () => {
+    await getExportStatusAction("prexp-1");
+    // The where predicate must include an eq(userId, session.user.id) clause.
+    const where = capturedWhere.value as { __and: Array<{ __eq: [unknown, unknown] }> };
+    expect(where.__and).toBeDefined();
+    const scopedToUser = where.__and.some(
+      (c) => c.__eq?.[0] === "userId_col" && c.__eq?.[1] === "user-1",
+    );
+    expect(scopedToUser).toBe(true);
+  });
+
+  it("returns the row when it belongs to the caller", async () => {
+    const res = await getExportStatusAction("prexp-1");
+    expect(res).toMatchObject({ status: "ready", exportUrl: "https://blob/export" });
+  });
+
+  it("returns null when no owned row matches (foreign or missing export)", async () => {
+    dbState.rows = [];
+    const res = await getExportStatusAction("prexp-foreign");
+    expect(res).toBeNull();
   });
 });

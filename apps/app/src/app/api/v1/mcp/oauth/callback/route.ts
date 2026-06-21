@@ -96,15 +96,21 @@ export async function GET(req: NextRequest) {
       fetchFn: safeFetch,
     });
   } catch (err) {
+    await deleteOAuthState(state).catch(() => undefined);
     logger.error(
-      { err, orgId: stateData.orgId, orgListingId: stateData.orgListingId },
-      "mcp-oauth: token exchange failed",
+      {
+        orgId: stateData.orgId,
+        orgListingId: stateData.orgListingId,
+        err: String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      },
+      "mcp-oauth: mcpAuth threw during callback",
     );
     return NextResponse.redirect(`${url.origin}${stateData.returnTo}?mcp=error`);
-  } finally {
-    // Clean up the ephemeral state regardless of outcome.
-    await deleteOAuthState(state);
   }
+
+  // Clean up the ephemeral state regardless of outcome.
+  await deleteOAuthState(state);
 
   if (result === "AUTHORIZED") {
     // Upsert the workspace install row: create it if it doesn't exist yet

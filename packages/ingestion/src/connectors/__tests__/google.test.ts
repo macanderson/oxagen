@@ -312,3 +312,53 @@ describe("google-bigquery – normalizeRecord", () => {
     expect("bad" in result.properties).toBe(false);
   });
 });
+
+// ── Google push-channel webhook verification (X-Goog-Channel-Token) ─────────────
+//
+// The three Google webhook-delivery connectors (drive, calendar, gmail) verify
+// inbound deliveries by comparing the X-Goog-Channel-Token header — echoed back
+// from the watch `channel.token` — against the stored per-connection secret.
+// This is the security boundary for the unauthenticated /webhooks route; it must
+// fail CLOSED (reject) on a missing secret, missing header, or any mismatch.
+
+const PAYLOAD = new Uint8Array(Buffer.from("{}"));
+
+describe.each([
+  ["google-drive", googleDrive],
+  ["google-calendar", googleCalendar],
+  ["google-gmail", googleGmail],
+])("%s – verifyWebhook (X-Goog-Channel-Token)", (_name, connector) => {
+  it("declares deliveryMethod webhook and implements verifyWebhook", () => {
+    expect(connector.deliveryMethod).toBe("webhook");
+    expect(typeof connector.verifyWebhook).toBe("function");
+  });
+
+  it("accepts a matching channel token", () => {
+    const secret = "channel-token-abc123";
+    expect(
+      connector.verifyWebhook!(PAYLOAD, { "x-goog-channel-token": secret }, secret),
+    ).toBe(true);
+  });
+
+  it("rejects a mismatched channel token (forged delivery)", () => {
+    expect(
+      connector.verifyWebhook!(PAYLOAD, { "x-goog-channel-token": "wrong-token" }, "correct-token"),
+    ).toBe(false);
+  });
+
+  it("rejects when the channel-token header is absent (unsigned delivery)", () => {
+    expect(connector.verifyWebhook!(PAYLOAD, {}, "correct-token")).toBe(false);
+  });
+
+  it("rejects when no secret is configured (fail closed)", () => {
+    expect(
+      connector.verifyWebhook!(PAYLOAD, { "x-goog-channel-token": "anything" }, null),
+    ).toBe(false);
+  });
+
+  it("rejects when the token length differs from the secret (no length leak)", () => {
+    expect(
+      connector.verifyWebhook!(PAYLOAD, { "x-goog-channel-token": "short" }, "a-much-longer-secret"),
+    ).toBe(false);
+  });
+});

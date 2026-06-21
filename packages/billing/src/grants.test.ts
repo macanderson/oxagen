@@ -22,6 +22,19 @@ import type { BillingCheckoutSession, BillingInvoice } from "./provider";
 // Module mocks — registered before any module import.
 // ---------------------------------------------------------------------------
 
+// Logger mock — lets tests assert on warn emissions for silent-failure paths.
+const loggerWarnMock = vi.fn();
+const loggerInfoMock = vi.fn();
+const loggerDebugMock = vi.fn();
+vi.mock("./logger", () => ({
+  logger: {
+    warn: loggerWarnMock,
+    info: loggerInfoMock,
+    debug: loggerDebugMock,
+    error: vi.fn(),
+  },
+}));
+
 const syncSubscriptionMock = vi.fn().mockResolvedValue(undefined);
 vi.mock("./subscriptions", () => ({
   syncSubscriptionFromStripe: syncSubscriptionMock,
@@ -213,6 +226,10 @@ describe("grantPlanCreditsForInvoicePaid", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     syncSubscriptionMock.mockResolvedValue(undefined);
+    // Reset logger mocks.
+    loggerWarnMock.mockReset();
+    loggerInfoMock.mockReset();
+    loggerDebugMock.mockReset();
   });
 
   it("subscription_create billing reason — grants plan credits via withSystemDb", async () => {
@@ -289,6 +306,70 @@ describe("grantPlanCreditsForInvoicePaid", () => {
     await grantPlanCreditsForInvoicePaid(makeInvoice({ subscriptionId: null, billingReason: "subscription_create" }));
 
     expect(syncSubscriptionMock).not.toHaveBeenCalled();
+  });
+
+  it("missing subscription row — emits logger.warn (not silent)", async () => {
+    // Verifies fix for grants.ts:204 silent return — previously returned void
+    // with no log when the subscription row could not be found.
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock, {
+      subscriptions: vi.fn().mockResolvedValue(undefined), // no subscription row
+    });
+
+    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "subscription_create" }));
+
+    expect(txMock._lotInsertCalled).toBe(false);
+    expect(loggerWarnMock).toHaveBeenCalledOnce();
+    expect(loggerWarnMock.mock.calls[0]![1]).toMatch(/no subscription row/);
+  });
+
+  it("plan has zero includedCreditCents — emits logger.warn (not silent)", async () => {
+    // Verifies fix for grants.ts:210-211: includedCreditCents = 0 previously
+    // caused a silent return with no log. A misconfigured plan now surfaces.
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock, {
+      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      plans: vi.fn().mockResolvedValue({ includedCreditCents: 0 }),
+    });
+
+    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "subscription_create" }));
+
+    expect(txMock._lotInsertCalled).toBe(false);
+    expect(loggerWarnMock).toHaveBeenCalledOnce();
+    expect(loggerWarnMock.mock.calls[0]![1]).toMatch(/zero\/null includedCreditCents/);
+  });
+
+  it("plan row missing (undefined) — emits logger.warn (not silent)", async () => {
+    // plan?.includedCreditCents ?? 0 evaluates to 0 when plan is undefined;
+    // the warn must fire in both the plan-missing and the zero-credits cases.
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock, {
+      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      plans: vi.fn().mockResolvedValue(undefined), // plan not found
+    });
+
+    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "subscription_create" }));
+
+    expect(txMock._lotInsertCalled).toBe(false);
+    expect(loggerWarnMock).toHaveBeenCalledOnce();
+    expect(loggerWarnMock.mock.calls[0]![1]).toMatch(/zero\/null includedCreditCents/);
+  });
+
+  it("missing local invoice row — emits logger.warn (not silent)", async () => {
+    // Verifies fix for grants.ts:217-218: missing invoice row previously returned
+    // void with no log, silently skipping the credit grant.
+    const txMock = makeTx(false);
+    dbState.instance = makeDb(txMock, {
+      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      plans: vi.fn().mockResolvedValue({ includedCreditCents: 5000 }),
+      invoices: vi.fn().mockResolvedValue(undefined), // no local invoice row
+    });
+
+    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "subscription_create" }));
+
+    expect(txMock._lotInsertCalled).toBe(false);
+    expect(loggerWarnMock).toHaveBeenCalledOnce();
+    expect(loggerWarnMock.mock.calls[0]![1]).toMatch(/no local invoice row/);
   });
 });
 

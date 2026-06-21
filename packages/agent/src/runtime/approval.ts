@@ -2,6 +2,9 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { eq, and, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import postgres from "postgres";
+import pino from "pino";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { pkg: "agent.approval" } });
 
 // Default expiry window for an approval request. Approvals that age out
 // resolve to `expired` server-side rather than dangling forever.
@@ -50,8 +53,13 @@ async function ensureListener(): Promise<void> {
         waiters.delete(data.approvalId);
         w(data);
       }
-    } catch {
-      // Malformed payload — ignore.
+    } catch (err) {
+      // A malformed or truncated NOTIFY payload (PG's 8000-byte limit, schema
+      // drift, encoding issue) must be logged so ops can detect systematic
+      // corruption. The registered waiter stays in the Map and will resolve as
+      // "expired" after its TTL — the correct fallback for a single corrupted
+      // notification. We deliberately do NOT resolve any waiter here.
+      logger.warn({ err, payload }, "malformed NOTIFY payload on channel agent_approval_resolved");
     }
   });
   listenerStarted = true;

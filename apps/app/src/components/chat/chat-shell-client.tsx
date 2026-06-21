@@ -147,6 +147,11 @@ export function ChatShellClient({
   const [isStreaming, setIsStreaming] = React.useState(false);
   const isStreamingValueRef = useLatestRef(isStreaming);
 
+  // Stream error — set when the SSE fetch returns a non-2xx response or throws
+  // a non-abort error. Cleared at the start of each new turn.
+  const [streamError, setStreamError] = React.useState<string | null>(null);
+  const setStreamErrorRef = useLatestRef(setStreamError);
+
   // Latest conversationId, read inside the send callback (whose deps don't
   // include it) to tell whether THIS turn created the conversation.
   const conversationIdRef = useLatestRef(conversationId);
@@ -255,6 +260,7 @@ export function ChatShellClient({
 
       // Reset prior turn's live state and show the streaming affordance.
       resetRef.current();
+      setStreamErrorRef.current(null);
       setIsStreamingRef.current(true);
 
       const wasNewConversation = !conversationIdRef.current;
@@ -315,6 +321,9 @@ export function ChatShellClient({
           });
 
           if (!res.ok || !res.body) {
+            const errMsg = `Stream request failed (HTTP ${res.status})`;
+            console.warn("[chat]", errMsg);
+            setStreamErrorRef.current(errMsg);
             setIsStreamingRef.current(false);
             return;
           }
@@ -344,8 +353,12 @@ export function ChatShellClient({
         } catch (err) {
           // AbortError is expected on interrupt or unmount — not a warning.
           if (err instanceof Error && err.name !== "AbortError") {
-            // Swallow — the RSC revalidate will still show the persisted reply.
+            // Non-abort stream failures (network drop, mid-stream server crash,
+            // ReadableStream error). Surface to the user so they know to retry
+            // instead of silently leaving a blank or truncated assistant turn.
+            const msg = err.message || "Stream connection lost";
             console.warn("[chat] stream fetch failed", err);
+            setStreamErrorRef.current(msg);
           }
         } finally {
           // Only clear isStreaming when this controller is still the active one
@@ -793,6 +806,19 @@ export function ChatShellClient({
           parentMessageId={activeLeafMessageId}
           className="justify-center"
         />
+      ) : null}
+
+      {/* Stream error banner — visible when an SSE fetch fails (non-2xx or
+          mid-stream network error) so the user knows to retry. Cleared
+          automatically on the next send. */}
+      {streamError ? (
+        <div
+          role="alert"
+          data-testid="stream-error-banner"
+          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+        >
+          {streamError} — please try again.
+        </div>
       ) : null}
 
       <MessageComposer

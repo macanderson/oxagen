@@ -174,6 +174,7 @@ export default function WorkflowProgress({
   const [data, setData] = React.useState<WorkflowData | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [cancelling, setCancelling] = React.useState(false);
+  const [cancelError, setCancelError] = React.useState<string | null>(null);
 
   const isDone = data
     ? STATUS_CONFIG[data.workflow.status].isDone
@@ -216,6 +217,7 @@ export default function WorkflowProgress({
   async function handleCancel() {
     if (!data || isDone || cancelling) return;
     setCancelling(true);
+    setCancelError(null);
     try {
       const res = await fetch(`/api/v1/workflow/${workflowId}`, {
         method: "DELETE",
@@ -227,8 +229,11 @@ export default function WorkflowProgress({
           prev ? { ...prev, workflow: { ...prev.workflow, status: "cancelled" } } : prev,
         );
       }
-    } catch {
-      // non-fatal
+    } catch (err) {
+      // Surface the failure so the user knows the workflow is still running
+      // and consuming credits, rather than believing it was cancelled.
+      const msg = err instanceof Error ? err.message : "Cancel request failed";
+      setCancelError(msg);
     } finally {
       setCancelling(false);
     }
@@ -424,7 +429,17 @@ export default function WorkflowProgress({
 
       {/* Actions */}
       {(workflow.status === "running" || workflow.status === "planning" || workflow.resultUrl) && (
-        <div className="flex items-center gap-2 pt-1 border-t border-border/50">
+        <div className="flex flex-col gap-1.5 pt-1 border-t border-border/50">
+          {cancelError && (
+            <p
+              role="alert"
+              data-testid="cancel-error"
+              className="text-xs text-destructive"
+            >
+              Cancel failed: {cancelError}. The workflow is still running.
+            </p>
+          )}
+          <div className="flex items-center gap-2">
           {(workflow.status === "running" || workflow.status === "planning") && (
             <button
               type="button"
@@ -456,6 +471,7 @@ export default function WorkflowProgress({
               Download {workflow.outputFormat.toUpperCase()}
             </a>
           )}
+          </div>
         </div>
       )}
     </div>

@@ -214,16 +214,31 @@ describe("playbook-run-execute Inngest function", () => {
 
   // ── Run not found ────────────────────────────────────────────────────────────
 
-  it("returns failed when run is not found", async () => {
+  it("throws NonRetriableError (name=NonRetriableError) when run is not found", async () => {
     buildSystemDbForExecution({ run: null });
     buildTenantDb();
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
-    expect(result).toMatchObject({ status: "failed", reason: "run not found" });
+    await expect(
+      capturedHandler!({ event: { data: BASE_EVENT }, step }),
+    ).rejects.toMatchObject({ name: "NonRetriableError" });
     expect(mocks.loggerError).toHaveBeenCalledWith(
       expect.objectContaining({ runId: BASE_RUN_ID }),
       expect.stringContaining("run not found"),
     );
+  });
+
+  it("does not produce a completed result when run is not found", async () => {
+    buildSystemDbForExecution({ run: null });
+    buildTenantDb();
+    const step = makeStep();
+    let result: unknown;
+    try {
+      result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    } catch {
+      result = undefined;
+    }
+    // Must have thrown — any non-thrown result is wrong
+    expect(result).toBeUndefined();
   });
 
   // ── Run not pending ──────────────────────────────────────────────────────────
@@ -664,5 +679,75 @@ describe("playbook-run-execute Inngest function", () => {
       expect.objectContaining({ telErr: expect.any(Error) }),
       expect.stringContaining("insertEvents failed"),
     );
+  });
+
+  // ── step_run insert failure propagates (bad-fallback fix) ────────────────────
+
+  it("throws from step when playbookStepRuns insert returns no row (DB error)", async () => {
+    // This validates the fix for: when the .returning() insert returns [], the
+    // step.run callback now throws instead of returning null and breaking out
+    // of the loop silently as completed.
+    const singleStep = {
+      id: "s1", stepKey: "insert_fail_step", name: "InsertFail", stepType: "prompt",
+      isAsync: false, exitOnError: true,
+      config: { prompt: "should fail" },
+    };
+
+    buildSystemDbForExecution({ run: PENDING_RUN, steps: [singleStep], edges: [] });
+
+    // Simulate a DB insert that returns an empty rows array (constraint violation
+    // or DB error that drizzle surfaces as an empty returning() result).
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn({
+        update: () => ({ set: () => ({ where: () => Promise.resolve(undefined) }) }),
+        insert: (_table: unknown) => ({
+          values: () => ({
+            returning: vi.fn().mockResolvedValue([]), // empty — no row returned
+          }),
+        }),
+      }),
+    );
+
+    const step = makeStep();
+    // The step.run callback throws — which propagates out of the handler.
+    // Under the old code this would have broken out of the loop and returned
+    // { status: "completed" } silently.
+    await expect(
+      capturedHandler!({ event: { data: BASE_EVENT }, step }),
+    ).rejects.toThrow("step_run insert returned no row");
+  });
+
+  it("does NOT return completed status when playbookStepRuns insert returns no row", async () => {
+    // Guards the exact invariant: a missing step_run row must never produce
+    // a completed run result from Inngest's perspective.
+    const singleStep = {
+      id: "s1", stepKey: "bad_insert", name: "BadInsert", stepType: "prompt",
+      isAsync: false, exitOnError: true,
+      config: { prompt: "boom" },
+    };
+
+    buildSystemDbForExecution({ run: PENDING_RUN, steps: [singleStep], edges: [] });
+
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn({
+        update: () => ({ set: () => ({ where: () => Promise.resolve(undefined) }) }),
+        insert: () => ({
+          values: () => ({
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      }),
+    );
+
+    const step = makeStep();
+    let returnedResult: unknown;
+    try {
+      returnedResult = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    } catch {
+      returnedResult = undefined;
+    }
+    // A returned result (no throw) would mean Inngest sees the function as
+    // succeeded — that must not happen when the step_run insert failed.
+    expect(returnedResult).toBeUndefined();
   });
 });

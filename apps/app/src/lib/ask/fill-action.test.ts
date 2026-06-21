@@ -192,4 +192,40 @@ describe("fillFormAction", () => {
       "fillFormAction failed",
     );
   });
+
+  // (b2) Failure fallback carries an `error` so the caller can surface it —
+  // regression for the swallowed IAM/billing-denial silent-failure fix.
+  it("sets `error` on the fallback result when invoke throws (IAM/billing denial surfaces)", async () => {
+    vi.mocked(invoke).mockRejectedValue(new Error("capability_not_installed: form.fill"));
+
+    const result = await fillFormAction(baseInput);
+
+    expect(result.error).toBe("capability_not_installed: form.fill");
+    // Still a safe, all-unchanged result so the UI can render.
+    expect(result.fields.every((f) => f.changed === false)).toBe(true);
+  });
+
+  it("sets `error` on the fallback when session resolution fails", async () => {
+    vi.mocked(getSessionOrRedirect).mockRejectedValue(new Error("session expired"));
+
+    const result = await fillFormAction(baseInput);
+
+    expect(result.error).toBe("session expired");
+  });
+
+  it("does NOT set `error` on a successful fill", async () => {
+    vi.mocked(invoke).mockResolvedValue({ fields: [] });
+
+    const result = await fillFormAction(baseInput);
+
+    expect(result.error).toBeUndefined();
+  });
+
+  it("sets a generic `error` when the thrown value is not an Error", async () => {
+    vi.mocked(invoke).mockRejectedValue("boom");
+
+    const result = await fillFormAction(baseInput);
+
+    expect(result.error).toBe("Unable to fill the form. Please try again.");
+  });
 });

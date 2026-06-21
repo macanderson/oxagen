@@ -4,6 +4,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { eventClient } from "../../event-client";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
+import { logger } from "../../middleware/logger";
 import type { AppEnv } from "../../app";
 
 type WebhookConnRow = {
@@ -75,7 +76,12 @@ webhookRoute.post("/:connectorId/:connectionId", async (c) => {
     return c.json({ error: "Connection not found" }, 404);
   }
 
-  // Decrypt HMAC signing secret
+  // Decrypt HMAC / channel-token signing secret. A secret is stored (conn.secretEnc
+  // present) but cannot be decrypted only on a key-management failure (missing
+  // INGESTION_ENCRYPTION_KEY, corrupted ciphertext, adapter misconfiguration). That
+  // is NOT a verification failure to be silently swallowed — proceeding without the
+  // secret would degrade the gate to unauthenticated for connectors that treat a
+  // null secret as "no secret configured". Log and fail closed (500) instead.
   let webhookSecret: string | undefined;
   if (conn.secretEnc) {
     try {
@@ -83,8 +89,16 @@ webhookRoute.post("/:connectorId/:connectionId", async (c) => {
       const { adapter } = createIngestionCryptoAdapter();
       const plain = await decrypt(Buffer.from(enc.ciphertext, "base64"), enc.keyId, { adapter });
       webhookSecret = plain.toString("utf8");
-    } catch {
-      // Proceed without secret — connector.verifyWebhook will return false
+    } catch (err) {
+      logger.error(
+        {
+          connectorId,
+          connectionId: conn.connectionId,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "webhook secret decryption failed — rejecting delivery (fail closed)",
+      );
+      return c.json({ error: "Webhook secret unavailable" }, 500);
     }
   }
 
@@ -94,8 +108,18 @@ webhookRoute.post("/:connectorId/:connectionId", async (c) => {
     headers[key.toLowerCase()] = value;
   }
 
-  // HMAC / token verification — connector decides the algorithm
-  const verified = connector.verifyWebhook?.(payload, headers, webhookSecret ?? null) ?? true;
+  // HMAC / token verification — connector decides the algorithm. This is the
+  // security boundary, so it must default CLOSED: a connector that ships no
+  // verifyWebhook implementation is an incomplete/misconfigured webhook connector,
+  // and we reject rather than admit unverified payloads into the ingestion pipeline.
+  if (typeof connector.verifyWebhook !== "function") {
+    logger.error(
+      { connectorId, connectionId: conn.connectionId },
+      "connector has no verifyWebhook implementation — rejecting delivery (fail closed)",
+    );
+    return c.json({ error: "Webhook verification unavailable" }, 401);
+  }
+  const verified = connector.verifyWebhook(payload, headers, webhookSecret ?? null);
   if (!verified) {
     return c.json({ error: "Webhook signature invalid" }, 401);
   }
