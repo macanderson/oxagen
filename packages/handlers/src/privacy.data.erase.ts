@@ -50,9 +50,13 @@ export const privacyDataEraseHandler: CapabilityHandler<
         )
         .limit(1),
     );
+    // org_users.role stores the lowercase membership role ("owner" | "admin" |
+    // "member" — see seed.ts / organization.create.ts / the invite contract enum).
+    // Compare against the lowercase value, NOT the capitalized SystemOrgRole
+    // ("Owner") used by the IAM defaultRoles layer — those are different concepts.
     const role = membership[0]?.role;
-    if (role !== "Owner") {
-      throw new Error("Forbidden: org erasure requires Owner role");
+    if (role !== "owner") {
+      throw new Error("Forbidden: org erasure requires owner role");
     }
   }
 

@@ -87,3 +87,59 @@ describe("Combobox — popup opens and shows items", () => {
     }
   });
 });
+
+describe("Combobox — search/filter", () => {
+  it("typing in search narrows the visible items (case-insensitive)", async () => {
+    const { getByRole, getByText, queryByText, getByPlaceholderText } = render(
+      <TestCombobox />,
+    );
+    await userEvent.click(getByRole("combobox"));
+    const searchInput = getByPlaceholderText("Search fruits…");
+    await userEvent.type(searchInput, "ban");
+    // "Banana" matches, others should be filtered out of the list.
+    expect(getByText("Banana")).toBeInTheDocument();
+    expect(queryByText("Apple")).not.toBeInTheDocument();
+    expect(queryByText("Cherry")).not.toBeInTheDocument();
+    expect(queryByText("Durian")).not.toBeInTheDocument();
+  });
+
+  it("clearing the search restores all items", async () => {
+    const { getByRole, getByText, getByPlaceholderText } = render(
+      <TestCombobox />,
+    );
+    await userEvent.click(getByRole("combobox"));
+    const searchInput = getByPlaceholderText("Search fruits…");
+    await userEvent.type(searchInput, "app");
+    // Partially filtered — only Apple visible.
+    expect(getByText("Apple")).toBeInTheDocument();
+    // Clear the search.
+    await userEvent.clear(searchInput);
+    // All items restored.
+    for (const fruit of FRUITS) {
+      expect(getByText(fruit)).toBeInTheDocument();
+    }
+  });
+
+  it("search is case-insensitive (uppercase query)", async () => {
+    const { getByRole, getByText, queryByText, getByPlaceholderText } = render(
+      <TestCombobox />,
+    );
+    await userEvent.click(getByRole("combobox"));
+    const searchInput = getByPlaceholderText("Search fruits…");
+    await userEvent.type(searchInput, "CHERRY");
+    expect(getByText("Cherry")).toBeInTheDocument();
+    expect(queryByText("Apple")).not.toBeInTheDocument();
+  });
+
+  it("no-match search shows no fruit items", async () => {
+    const { getByRole, queryByText, getByPlaceholderText } = render(
+      <TestCombobox />,
+    );
+    await userEvent.click(getByRole("combobox"));
+    const searchInput = getByPlaceholderText("Search fruits…");
+    await userEvent.type(searchInput, "zzz");
+    for (const fruit of FRUITS) {
+      expect(queryByText(fruit)).not.toBeInTheDocument();
+    }
+  });
+});

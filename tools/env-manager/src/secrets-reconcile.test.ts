@@ -1,5 +1,25 @@
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseEnvText, reconcile, STAGE_SUFFIX } from "./secrets-reconcile";
+import { parseEnvFile, parseEnvText, reconcile, STAGE_SUFFIX } from "./secrets-reconcile";
+
+describe("parseEnvFile", () => {
+  it("reads and parses a real file from disk", () => {
+    const dir = mkdtempSync(join(tmpdir(), "env-reconcile-"));
+    const file = join(dir, ".env.local");
+    writeFileSync(file, "REAL_KEY=real_value\n# comment\nANOTHER=123\n");
+    const m = parseEnvFile(file);
+    expect(m.get("REAL_KEY")).toBe("real_value");
+    expect(m.get("ANOTHER")).toBe("123");
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("returns an empty map when the file does not exist", () => {
+    const m = parseEnvFile("/nonexistent/path/.env.local");
+    expect(m.size).toBe(0);
+  });
+});
 
 describe("parseEnvText", () => {
   it("parses standard KEY=value lines, upper-casing the key", () => {
