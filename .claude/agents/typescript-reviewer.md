@@ -44,6 +44,9 @@ You DO NOT refactor or rewrite code — you report findings only.
 - **Prototype pollution**: Merging untrusted objects without `Object.create(null)` or schema validation
 - **`child_process` with user input**: Validate and allowlist before passing to `exec`/`spawn`
 
+### CRITICAL -- Oxagen `any` ban
+- **`any` usage**: TS 6.0.3 with `no any` — CLAUDE.md bans `any` outright. Any occurrence is CRITICAL. Use `unknown` and narrow, or a precise type.
+
 ### HIGH -- Type Safety
 - **`any` without justification**: Disables type checking — use `unknown` and narrow, or a precise type
 - **Non-null assertion abuse**: `value!` without a preceding guard — add a runtime check
@@ -77,7 +80,7 @@ You DO NOT refactor or rewrite code — you report findings only.
 
 ### MEDIUM -- React / Next.js (when applicable)
 
-> **For React-specific review, prefer `react-reviewer` via `/react-review`.** This block remains as a fallback only — when the diff contains `.tsx`/`.jsx` files, both agents should be invoked. See `agents/react-reviewer.md` for the full React-specific CRITICAL/HIGH rule set (hooks rules, `dangerouslySetInnerHTML`, RSC boundaries, accessibility, render performance).
+> **For React-specific review, prefer the `/react-review` slash command** (hooks rules, `dangerouslySetInnerHTML`, RSC boundaries, accessibility, render performance). The block below is the explicit fallback **only when `/react-review` is unavailable** — apply it directly when the diff contains `.tsx`/`.jsx` files.
 
 - **Missing dependency arrays**: `useEffect`/`useCallback`/`useMemo` with incomplete deps — use exhaustive-deps lint rule
 - **State mutation**: Mutating state directly instead of returning new objects
@@ -100,14 +103,23 @@ You DO NOT refactor or rewrite code — you report findings only.
 ## Diagnostic Commands
 
 ```bash
-npm run typecheck --if-present       # Canonical TypeScript check when the project defines one
+pnpm typecheck                       # Canonical TypeScript check across the monorepo
 tsc --noEmit -p <relevant-config>    # Fallback type check for the tsconfig that owns the changed files
 eslint . --ext .ts,.tsx,.js,.jsx    # Linting
 prettier --check .                  # Format check
-npm audit                           # Dependency vulnerabilities (or the equivalent yarn/pnpm/bun audit command)
+pnpm audit                          # Dependency vulnerabilities
 vitest run                          # Tests (Vitest)
-jest --ci                           # Tests (Jest)
 ```
+
+## Oxagen-specific rules (CRITICAL)
+
+Flag any of these in `apps/*` / handler code as CRITICAL:
+
+- **Raw `db()` is banned** — use `withTenantDb` / `withSystemDb` / `scopedSession`.
+- **No direct `@oxagen/ui/components/*` imports in app code** — import from the local re-export layer `@/components/ui/*` instead.
+- **No raw `generateText` / `streamText` / `generateObject` from `'ai'`** — all LLM calls go through `@oxagen/ai` (metering/observability).
+- **`proxy.ts`, not `middleware.ts`** — `middleware.ts` is no longer recognized in Next.js 16.
+- **No `any`** — TS 6.0.3 with `no any`; treat as CRITICAL (see the CRITICAL Type Safety block above).
 
 ## Approval Criteria
 
@@ -117,7 +129,7 @@ jest --ci                           # Tests (Jest)
 
 ## Reference
 
-This repo does not yet ship a dedicated `typescript-patterns` skill. For detailed TypeScript and JavaScript patterns, use `coding-standards` plus `frontend-patterns` or `backend-patterns` based on the code being reviewed.
+This repo does not yet ship a dedicated `typescript-patterns` skill. For Oxagen engineering law (the four-store model, SQL/naming conventions, vendor-neutrality) see `oxagen-engineering-policy`; for web-platform/React technique guides see `frontend-patterns`.
 
 ---
 
