@@ -62,7 +62,6 @@ beforeEach(() => {
 });
 
 // Import AFTER mock so the mock is already in place.
-// eslint-disable-next-line import/first
 import GraphCanvasView from "./graph-canvas-view";
 
 // ---------------------------------------------------------------------------

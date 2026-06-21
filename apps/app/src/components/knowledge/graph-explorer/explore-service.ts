@@ -35,7 +35,6 @@ import type {
   ExplorerSearchPayload,
 } from "./types";
 import {
-  countNodesByLabel,
   edgeFromSemantic,
   edgesFromNeighbors,
   mergeEdges,
