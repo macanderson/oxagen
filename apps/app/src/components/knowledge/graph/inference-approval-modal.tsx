@@ -56,8 +56,9 @@ export interface InferenceApprovalModalProps {
  * Approve / Reject controls with an optional comment field.
  *
  * Implemented without importing from @oxagen/ui to avoid bundle concerns — pure
- * Tailwind + Radix-free overlay. A11y: focus-trapped via autoFocus on the close
- * button; Escape closes.
+ * Tailwind + Radix-free overlay. A11y: full focus trap — prior focus is saved on
+ * open and restored on close; Tab/Shift+Tab cycle within the modal's focusable
+ * descendants; Escape closes.
  */
 export function InferenceApprovalModal({
   edge,
@@ -70,6 +71,7 @@ export function InferenceApprovalModal({
   const [processing, setProcessing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const closeRef = React.useRef<HTMLButtonElement>(null);
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
   // Reset state when the edge changes.
   React.useEffect(() => {
@@ -78,15 +80,64 @@ export function InferenceApprovalModal({
     setProcessing(false);
   }, [edge?.id]);
 
-  // Trap focus / close on Escape.
+  // Real focus trap: save prior focus, move focus into the modal on open,
+  // cycle Tab/Shift+Tab within focusable descendants, restore on unmount.
   React.useEffect(() => {
     if (!edge) return;
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+
+    // Move initial focus to the close button (first focusable element).
     closeRef.current?.focus();
+
+    const FOCUSABLE =
+      'a[href],area[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+
+      if (e.key !== "Tab") return;
+
+      const container = containerRef.current;
+      if (!container) return;
+
+      const focusable = Array.from(
+        container.querySelectorAll<HTMLElement>(FOCUSABLE),
+      ).filter((el) => !el.closest("[disabled]"));
+
+      if (focusable.length === 0) {
+        e.preventDefault();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey) {
+        // Shift+Tab: if focus is at or before the first element, wrap to last.
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        // Tab: if focus is at or after the last element, wrap to first.
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
+
     document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
+
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      // Restore focus to the element that had it before the modal opened.
+      previouslyFocused?.focus();
+    };
   }, [edge, onClose]);
 
   if (!edge) return null;
@@ -130,7 +181,7 @@ export function InferenceApprovalModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-xl border border-border/60 bg-card shadow-2xl">
+      <div ref={containerRef} className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-xl border border-border/60 bg-card shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 border-b border-border/40 px-5 py-4">
           <div className="flex flex-col gap-0.5">
