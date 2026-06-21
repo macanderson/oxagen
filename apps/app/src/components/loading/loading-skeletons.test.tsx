@@ -90,7 +90,7 @@ describe("TableSkeleton", () => {
     const { container } = render(<TableSkeleton rows={3} cols={5} />);
     // The header row is the first child of the outer wrapper
     const outerDiv = container.firstElementChild!;
-    const headerRow = outerDiv.children[0];
+    const headerRow = outerDiv.children[0]!;
     expect(headerRow.querySelectorAll(skeletonSel)).toHaveLength(5);
   });
 
@@ -105,7 +105,7 @@ describe("TableSkeleton", () => {
   it("renders cols skeleton cells per body row", () => {
     const { container } = render(<TableSkeleton rows={2} cols={6} />);
     const outerDiv = container.firstElementChild!;
-    const firstBodyRow = outerDiv.children[1];
+    const firstBodyRow = outerDiv.children[1]!;
     expect(firstBodyRow.querySelectorAll(skeletonSel)).toHaveLength(6);
   });
 
@@ -115,7 +115,7 @@ describe("TableSkeleton", () => {
     // 1 header row + 5 body rows = 6 total children
     expect(outerDiv.children).toHaveLength(6);
     // header has 4 skeletons
-    expect(outerDiv.children[0].querySelectorAll(skeletonSel)).toHaveLength(4);
+    expect(outerDiv.children[0]!.querySelectorAll(skeletonSel)).toHaveLength(4);
   });
 });
 
