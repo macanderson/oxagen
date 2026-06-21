@@ -1,5 +1,5 @@
 pre-commit:
-  parallel: false
+  parallel: true
   commands:
     atlas-validate:
       # Only run when migration files are staged — avoids the overhead on
@@ -27,6 +27,7 @@ pre-commit:
         - "docs/**"
         - ".agents/**"
         - ".claude/**"
+        - "scripts/**"
       run: pnpm typecheck
 
 # pre-push is the test gate for direct-to-main: this repo pushes straight to
@@ -36,20 +37,38 @@ pre-commit:
 # checks that have repeatedly broken CI when skipped. All three were chosen
 # because they are fast and high-signal; the full build/migrate gate stays in CI.
 pre-push:
-  parallel: false
+  parallel: true
   commands:
     # Contract definitions must stay internally consistent (manifest parity is
     # warn-only in CI; this is the hard check).
     contracts:
+      glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
+      exclude:
+        - "docs/**"
+        - ".agents/**"
+        - ".claude/**"
+        - "scripts/**"
       run: pnpm check:contracts
 
     # Registered env vars must validate against the schema — an unregistered var
     # (NEXT_PUBLIC_DOCS_URL, OXAGEN_LOCAL_DEV, …) silently red-jobs the CI gate.
     env-check:
+      glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
+      exclude:
+        - "docs/**"
+        - ".agents/**"
+        - ".claude/**"
+        - "scripts/**"
       run: pnpm env:check
 
     # Unit tests for every package changed since origin/main (and its dependents).
     # Scoped via the turbo filter so a one-package push doesn't run all 30 suites,
     # while a cross-cutting change still fans out to everything it can break.
     test-unit:
+      glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
+      exclude:
+        - "docs/**"
+        - ".agents/**"
+        - ".claude/**"
+        - "scripts/**"
       run: pnpm turbo run test:unit --filter='...[origin/main]'
