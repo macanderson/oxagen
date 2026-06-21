@@ -431,8 +431,12 @@ describe("chat stream: error handling", () => {
     expect(errorEvent?.message).toContain("LLM provider error");
   });
 
-  it("surfaces provider error parts from the stream", async () => {
+  it("propagates provider error parts as typed error events (not inline text)", async () => {
+    // AI SDK yields model-layer failures as `error` parts, not thrown exceptions.
+    // They must surface as a typed { type: "error" } SSE event so clients can
+    // distinguish failure from a complete reply — never injected into the text.
     async function* providerErrorStream() {
+      yield { type: "text-delta", text: "partial " };
       yield { type: "error", error: new Error("rate limited") };
       yield { type: "finish", totalUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } };
     }
@@ -440,11 +444,93 @@ describe("chat stream: error handling", () => {
 
     const res = await app.fetch(post({ content: "check errors" }));
     const events = await readSseEvents(res);
-    const textEvent = events.find(
+
+    const errorEvent = events.find(
+      (e) => (e as { type: string }).type === "error",
+    ) as { type: string; message: string } | undefined;
+    expect(errorEvent).toBeDefined();
+    expect(errorEvent?.message).toContain("rate limited");
+
+    // The error must NOT have been injected as a text delta.
+    const corruptedText = events.find(
       (e) =>
         (e as { type: string }).type === "text" &&
         ((e as { text: string }).text ?? "").includes("rate limited"),
     );
-    expect(textEvent).toBeDefined();
+    expect(corruptedText).toBeUndefined();
+  });
+
+  it("does not persist the assistant turn when the stream errors mid-flight", async () => {
+    async function* providerErrorStream() {
+      yield { type: "text-delta", text: "partial answer" };
+      yield { type: "error", error: new Error("context overflow") };
+      yield { type: "finish", totalUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } };
+    }
+    mocks.streamAgentReply.mockReturnValue({ fullStream: providerErrorStream() });
+
+    const insertSpy = vi.fn().mockReturnThis();
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => {
+      const tx = {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
+        insert: insertSpy,
+        values: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: "msg-id-123" }]),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+      };
+      return fn(tx);
+    });
+
+    await app.fetch(post({ content: "boom", conversationId: "conv-err" }));
+    // History-load select runs, but no message insert should happen on a
+    // mid-stream error (partial text must not be written as a successful turn).
+    expect(insertSpy).not.toHaveBeenCalled();
+  });
+
+  it("logs (does not silently swallow) a message-persistence failure", async () => {
+    const { logger } = await import("../middleware/logger");
+    const errorSpy = vi.mocked(logger.error);
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    // History select succeeds (empty), but the persistence insert rejects.
+    let callCount = 0;
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => {
+      callCount += 1;
+      const isPersistenceCall = callCount >= 2;
+      const tx = {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
+        insert: isPersistenceCall
+          ? vi.fn(() => {
+              throw new Error("RLS violation");
+            })
+          : vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: "msg-id-123" }]),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+      };
+      return fn(tx);
+    });
+
+    const res = await app.fetch(
+      post({ content: "persist me", conversationId: "conv-persist" }),
+    );
+    // SSE response still completes (the failure must not corrupt the stream).
+    expect(res.status).toBe(200);
+    // …but the failure was logged, not silently swallowed.
+    const logged =
+      consoleErrorSpy.mock.calls.some((c) => String(c[0]).includes("persistence failed")) ||
+      errorSpy.mock.calls.length > 0;
+    expect(logged).toBe(true);
+
+    consoleErrorSpy.mockRestore();
   });
 });
