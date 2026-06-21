@@ -144,10 +144,10 @@ function FieldWrapper({
           </Label>
         </div>
         {description && !error && (
-          <p className="text-xs text-muted-foreground pl-[52px]">{description}</p>
+          <p id={`${id}-description`} className="text-xs text-muted-foreground pl-[52px]">{description}</p>
         )}
         {error && (
-          <p role="alert" className="text-xs text-destructive pl-[52px]">{error}</p>
+          <p id={`${id}-error`} role="alert" className="text-xs text-destructive pl-[52px]">{error}</p>
         )}
       </div>
     );
@@ -161,10 +161,10 @@ function FieldWrapper({
       </Label>
       {children}
       {description && !error && (
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <p id={`${id}-description`} className="text-xs text-muted-foreground">{description}</p>
       )}
       {error && (
-        <p role="alert" className="text-xs text-destructive">{error}</p>
+        <p id={`${id}-error`} role="alert" className="text-xs text-destructive">{error}</p>
       )}
     </div>
   );
@@ -353,6 +353,16 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
   const { widget } = field;
   const required = field.validation?.required ?? false;
 
+  // aria-describedby: FieldWrapper renders exactly one of these at a time —
+  // the error paragraph (id="${fieldId}-error") when there is an error to show,
+  // or the description paragraph (id="${fieldId}-description") when there is a
+  // description and no error. Only reference the id that is actually rendered.
+  const ariaDescribedBy = showError
+    ? `${fieldId}-error`
+    : field.description
+      ? `${fieldId}-description`
+      : undefined;
+
   // ── text / email / url ──────────────────────────────────────────────────────
   if (widget === "text" || widget === "email" || widget === "url") {
     return (
@@ -372,7 +382,7 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
           placeholder={field.placeholder}
           disabled={disabled}
           aria-invalid={Boolean(showError)}
-          aria-describedby={showError ? `${fieldId}-error` : undefined}
+          aria-describedby={ariaDescribedBy}
         />
       </FieldWrapper>
     );
@@ -398,6 +408,7 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
           placeholder={field.placeholder ?? "••••••••"}
           disabled={disabled}
           aria-invalid={Boolean(showError)}
+          aria-describedby={ariaDescribedBy}
         />
       </FieldWrapper>
     );
@@ -427,6 +438,7 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
           max={field.validation?.max}
           disabled={disabled}
           aria-invalid={Boolean(showError)}
+          aria-describedby={ariaDescribedBy}
         />
       </FieldWrapper>
     );
@@ -451,6 +463,7 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
           disabled={disabled}
           className="resize-y min-h-[80px]"
           aria-invalid={Boolean(showError)}
+          aria-describedby={ariaDescribedBy}
         />
       </FieldWrapper>
     );
@@ -476,7 +489,11 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
           disabled={disabled}
           name={fieldId}
         >
-          <SelectTrigger id={fieldId} aria-invalid={Boolean(showError)}>
+          <SelectTrigger
+            id={fieldId}
+            aria-invalid={Boolean(showError)}
+            aria-describedby={ariaDescribedBy}
+          >
             <SelectValue placeholder={field.placeholder ?? "Select…"} />
           </SelectTrigger>
           <SelectPopup>
@@ -560,6 +577,7 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
           }}
           disabled={disabled}
           aria-invalid={Boolean(showError)}
+          aria-describedby={ariaDescribedBy}
         />
       </FieldWrapper>
     );
@@ -591,6 +609,7 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
               : 1}
             disabled={disabled}
             className="flex-1"
+            aria-describedby={ariaDescribedBy}
           />
           <span className="min-w-[3rem] text-right text-sm tabular-nums text-foreground">
             {typeof numVal === "number" ? numVal : "—"}
@@ -662,6 +681,7 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
         onChange={(e) => setFieldValue(field.key, e.currentTarget.value)}
         onBlur={handleBlur}
         disabled={disabled}
+        aria-describedby={ariaDescribedBy}
       />
     </FieldWrapper>
   );
