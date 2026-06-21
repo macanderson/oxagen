@@ -220,10 +220,17 @@ export async function parseSourceFile(
 
     return { language, symbols: deduped };
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // Log at error level so WASM init failures and tree-sitter errors are
+    // observable in production. Callers must also inspect result.error and
+    // should not treat an empty symbols list as a successful parse.
+    console.error(
+      `[ingestion/parsers] parseSourceFile failed for "${filePath}" (language: ${language}): ${message}`,
+    );
     return {
       language,
       symbols: [],
-      error: err instanceof Error ? err.message : String(err),
+      error: message,
     };
   }
 }
