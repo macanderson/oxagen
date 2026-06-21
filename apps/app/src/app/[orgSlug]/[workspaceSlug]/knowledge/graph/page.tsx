@@ -1,25 +1,24 @@
 /**
  * page.tsx — Workspace → Knowledge → Graph.
  *
- * Renders:
- *  - Pending inference review list (InferencePendingList)
- *  - Approved edge browser (SemanticEdgeViewer)
+ * Renders three independent <Suspense> sections that stream concurrently:
+ *  - Graph statistics (graph.stats)
+ *  - Pending inference review list (semantic.edge.suggest)
+ *  - Approved edge browser (semantic.edge.list)
  *
- * Both sections are server-fetched via invoke() then passed to client components
- * that support approve/reject mutations.
+ * The auth/resolve work (cheap, security-critical) runs sequentially first.
+ * The three data fetches then run in parallel — each section owns its own
+ * invoke() call and streams in independently as its data arrives.
  */
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { Layers, GitGraph } from "lucide-react";
-import { invoke } from "@oxagen/oxagen";
-import "@oxagen/handlers/register";
-import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
-import type { SemanticEdgeSuggestOutput } from "@oxagen/oxagen/contracts/semantic.edge.suggest";
-import type { SemanticEdgeListOutput } from "@oxagen/oxagen/contracts/semantic.edge.list";
-import { InferencePendingList } from "@/components/knowledge/graph/inference-pending-list";
-import { SemanticEdgeViewer } from "@/components/knowledge/graph/semantic-edge-viewer";
-import { GraphStatsBoxes, type GraphStatsData } from "@/components/knowledge/graph/graph-stats";
+import { StatCardsSkeleton } from "@/components/loading";
+import { TableSkeleton } from "@/components/loading";
+import { GraphStatsSection } from "./_sections/graph-stats-section";
+import { PendingInferencesSection } from "./_sections/pending-inferences-section";
+import { ApprovedEdgesSection } from "./_sections/approved-edges-section";
 
 export const dynamic = "force-dynamic";
 
@@ -39,118 +38,48 @@ export default async function KnowledgeGraphPage({ params }: PageProps) {
 
   await assertOrgMember(org.id, session.user.id);
 
-  const ctx = {
-    orgId: org.id,
-    workspaceId: ws.id,
-    userId: session.user.id,
-    apiKeyId: null as string | null,
-    requestId: crypto.randomUUID(),
-    surface: "app" as const,
-    messageId: null as string | null,
-  };
-
-  // Fetch pending inferences (approval queue).
-  let pendingSuggestions: SemanticEdgeSuggestOutput["suggestions"] = [];
-  let pendingTotal = 0;
-  try {
-    const result = await runInTenantScope(
-      { orgId: org.id, workspaceId: ws.id },
-      () => invoke("semantic.edge.suggest", { limit: 50 }, ctx, { surface: "agent" }),
-    ) as SemanticEdgeSuggestOutput;
-    pendingSuggestions = result.suggestions;
-    pendingTotal = result.total;
-  } catch (e) {
-    console.error("semantic.edge.suggest failed:", e);
-  }
-
-  // Fetch approved edges for the edge browser.
-  let approvedEdges: SemanticEdgeListOutput["edges"] = [];
-  let approvedTotal = 0;
-  try {
-    const result = await runInTenantScope(
-      { orgId: org.id, workspaceId: ws.id },
-      () => invoke("semantic.edge.list", { limit: 100, offset: 0 }, ctx, { surface: "agent" }),
-    ) as SemanticEdgeListOutput;
-    // Show only approved edges in the viewer.
-    approvedEdges = result.edges.filter((e) => e.approved === true);
-    approvedTotal = approvedEdges.length;
-  } catch (e) {
-    console.error("semantic.edge.list failed:", e);
-  }
-
-  // Fetch at-a-glance graph counts (nodes / edges / inferred / sources).
-  let graphStats: GraphStatsData | null = null;
-  try {
-    graphStats = (await runInTenantScope(
-      { orgId: org.id, workspaceId: ws.id },
-      () => invoke("graph.stats", { includeByType: false }, ctx, { surface: "agent" }),
-    )) as GraphStatsData;
-  } catch (e) {
-    console.error("graph.stats failed:", e);
-  }
+  const orgId = org.id;
+  const workspaceId = ws.id;
+  const userId = session.user.id;
 
   return (
     <div className="flex flex-col gap-8 max-w-2xl">
       {/* Graph statistics — node / edge counts at a glance. */}
-      {graphStats ? (
-        <section aria-label="Graph statistics">
-          <GraphStatsBoxes stats={graphStats} />
-        </section>
-      ) : null}
+      <Suspense fallback={<StatCardsSkeleton count={4} />}>
+        <GraphStatsSection orgId={orgId} workspaceId={workspaceId} userId={userId} />
+      </Suspense>
 
       {/* Pending inferences section */}
-      <section aria-labelledby="pending-inferences-heading">
-        <div className="mb-4 flex items-center gap-2">
-          <Layers className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <h2
-            id="pending-inferences-heading"
-            className="text-sm font-semibold text-foreground"
-          >
-            Pending Inferences
-          </h2>
-          {pendingTotal > 0 && (
-            <span className="inline-flex items-center rounded-full bg-warning/12 px-2 py-0.5 text-[10px] font-semibold text-warning">
-              {pendingTotal}
-            </span>
-          )}
-        </div>
-        <p className="mb-4 text-xs text-muted-foreground">
-          These relationship candidates were inferred by the LLM during ingestion. Review and
-          approve edges to materialise them permanently in the knowledge graph.
-        </p>
-        <InferencePendingList
+      <Suspense
+        fallback={
+          <section aria-labelledby="pending-inferences-heading-skeleton">
+            <div className="mb-4 h-5 w-40 rounded bg-muted animate-pulse" aria-hidden="true" />
+            <div className="mb-4 h-3 w-64 rounded bg-muted/60 animate-pulse" aria-hidden="true" />
+            <TableSkeleton rows={3} cols={2} />
+          </section>
+        }
+      >
+        <PendingInferencesSection
+          orgId={orgId}
+          workspaceId={workspaceId}
+          userId={userId}
           orgSlug={orgSlug}
           workspaceSlug={workspaceSlug}
-          initialSuggestions={pendingSuggestions}
-          total={pendingTotal}
         />
-      </section>
+      </Suspense>
 
       {/* Approved edge browser */}
-      <section aria-labelledby="approved-edges-heading">
-        <div className="mb-4 flex items-center gap-2">
-          <GitGraph className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <h2
-            id="approved-edges-heading"
-            className="text-sm font-semibold text-foreground"
-          >
-            Approved Edges
-          </h2>
-          {approvedTotal > 0 && (
-            <span className="inline-flex items-center rounded-full bg-success/12 px-2 py-0.5 text-[10px] font-semibold text-success">
-              {approvedTotal}
-            </span>
-          )}
-        </div>
-        <p className="mb-4 text-xs text-muted-foreground">
-          Approved semantic edges form permanent relationships in the knowledge graph, visible to
-          agents across this workspace.
-        </p>
-        <SemanticEdgeViewer
-          edges={approvedEdges}
-          total={approvedTotal}
-        />
-      </section>
+      <Suspense
+        fallback={
+          <section aria-labelledby="approved-edges-heading-skeleton">
+            <div className="mb-4 h-5 w-36 rounded bg-muted animate-pulse" aria-hidden="true" />
+            <div className="mb-4 h-3 w-72 rounded bg-muted/60 animate-pulse" aria-hidden="true" />
+            <TableSkeleton rows={4} cols={3} />
+          </section>
+        }
+      >
+        <ApprovedEdgesSection orgId={orgId} workspaceId={workspaceId} userId={userId} />
+      </Suspense>
     </div>
   );
 }
