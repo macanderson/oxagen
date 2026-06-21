@@ -26,7 +26,7 @@
  * Where betterAuth() itself is referenced, we mock it at the module boundary
  * and inspect the config object passed to it.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // useSecureCookies logic — extracted from auth.ts for unit testing
@@ -570,5 +570,120 @@ describe("NO_ORG_SENTINEL", () => {
 
   it("is the nil UUID (all zeros)", () => {
     expect(NO_ORG_SENTINEL).toBe("00000000-0000-0000-0000-000000000000");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// session.create.after / session.delete.after hook resilience (SECURITY)
+//
+// Replicates the exact hook-body contract from auth.ts: the entire body is
+// wrapped in try/catch so a transient DB failure in resolveFirstOrgId (or in
+// emitSecurityEvent) can NEVER propagate out of Better Auth's hook runner and
+// turn a committed sign-in / sign-out into an HTTP 500. The session is already
+// committed/deleted by the time the after-hook runs, so audit emission is
+// strictly best-effort and must never re-throw (OXA-1422).
+//
+// This mirrors the file's existing convention (deriveUseSecureCookies etc.) of
+// testing extracted logic in isolation, since the hook closures live inside the
+// betterAuth(...) call and importing `auth` would instantiate the DB adapter.
+// ---------------------------------------------------------------------------
+
+interface SessionAfter {
+  userId: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}
+
+type EmitEvent = (e: { eventType: string; actorUserId: string; orgId: string }) => void;
+
+function makeSessionAfterHook(
+  eventType: "auth.sign_in" | "auth.sign_out",
+  resolveFirstOrgId: (userId: string) => Promise<string | null>,
+  emitSecurityEvent: EmitEvent,
+  onError: (msg: string, ctx: { userId: string; err: unknown }) => void,
+) {
+  return async (session: SessionAfter): Promise<void> => {
+    const s = session;
+    try {
+      const orgId = await resolveFirstOrgId(s.userId);
+      emitSecurityEvent({
+        eventType,
+        actorUserId: s.userId,
+        orgId: orgId ?? NO_ORG_SENTINEL,
+      });
+    } catch (err) {
+      onError(`[auth] session.${eventType === "auth.sign_in" ? "create" : "delete"}.after hook failed`, {
+        userId: s.userId,
+        err,
+      });
+    }
+  };
+}
+
+describe("session after-hook resilience", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("emits a security event with the resolved org on the happy path", async () => {
+    const emit = vi.fn();
+    const onError = vi.fn();
+    const hook = makeSessionAfterHook(
+      "auth.sign_in",
+      async () => "org_123",
+      emit,
+      onError,
+    );
+    await expect(hook({ userId: "user_1" })).resolves.toBeUndefined();
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith({
+      eventType: "auth.sign_in",
+      actorUserId: "user_1",
+      orgId: "org_123",
+    });
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("falls back to NO_ORG_SENTINEL when the user has no org", async () => {
+    const emit = vi.fn();
+    const hook = makeSessionAfterHook("auth.sign_in", async () => null, emit, vi.fn());
+    await hook({ userId: "user_2" });
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: NO_ORG_SENTINEL }),
+    );
+  });
+
+  it("SECURITY: a DB failure in resolveFirstOrgId is swallowed — the hook never throws", async () => {
+    const emit = vi.fn();
+    const onError = vi.fn();
+    const hook = makeSessionAfterHook(
+      "auth.sign_in",
+      async () => {
+        throw new Error("connection terminated");
+      },
+      emit,
+      onError,
+    );
+    // Must resolve, NOT reject — a rejection here would 500 the sign-in.
+    await expect(hook({ userId: "user_3" })).resolves.toBeUndefined();
+    // No event emitted (resolve failed before emit), but the error is logged.
+    expect(emit).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+    const [msg, ctx] = onError.mock.calls[0] as [string, { userId: string; err: unknown }];
+    expect(msg).toContain("session.create.after hook failed");
+    expect(ctx.userId).toBe("user_3");
+    expect(ctx.err).toBeInstanceOf(Error);
+  });
+
+  it("SECURITY: a failure inside emitSecurityEvent is swallowed for sign-out too", async () => {
+    const emit = vi.fn(() => {
+      throw new Error("audit sink down");
+    });
+    const onError = vi.fn();
+    const hook = makeSessionAfterHook("auth.sign_out", async () => "org_9", emit, onError);
+    await expect(hook({ userId: "user_4" })).resolves.toBeUndefined();
+    expect(onError).toHaveBeenCalledTimes(1);
+    const [msg] = onError.mock.calls[0] as [string, unknown];
+    expect(msg).toContain("session.delete.after hook failed");
   });
 });

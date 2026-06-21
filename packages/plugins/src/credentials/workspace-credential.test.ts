@@ -72,4 +72,39 @@ describe("workspace-credential", () => {
     expect(got?.accessToken).toBe("at-1");
     expect(got?.refreshToken).toBe("rt-1");
   });
+
+  it("getWorkspaceSecret returns null AND logs console.error when AUTH_TOKEN_ENCRYPTION_KEY is absent", async () => {
+    // A missing KMS key makes every credential unreadable. Returning null is
+    // type-identical to 'no row', so the misconfiguration must be surfaced.
+    delete process.env.AUTH_TOKEN_ENCRYPTION_KEY;
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    // Reset modules so the module-level kmsAbsentWarned flag starts fresh.
+    vi.resetModules();
+    const { getWorkspaceSecret } = await import("./workspace-credential");
+    try {
+      const got = await getWorkspaceSecret({ orgId: "o1", workspaceId: "w1", orgListingId: "l1" });
+      expect(got).toBeNull();
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const [msg] = errorSpy.mock.calls[0] as [string, ...unknown[]];
+      expect(msg).toContain("AUTH_TOKEN_ENCRYPTION_KEY is not set");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("logs the missing-key warning at most once per process (no log spam)", async () => {
+    delete process.env.AUTH_TOKEN_ENCRYPTION_KEY;
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.resetModules();
+    const { getWorkspaceSecret } = await import("./workspace-credential");
+    try {
+      await getWorkspaceSecret({ orgId: "o1", workspaceId: "w1", orgListingId: "l1" });
+      await getWorkspaceSecret({ orgId: "o1", workspaceId: "w1", orgListingId: "l2" });
+      await getWorkspaceSecret({ orgId: "o1", workspaceId: "w1", orgListingId: "l3" });
+      // Three reads, but only one error logged — the module-level guard holds.
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
 });

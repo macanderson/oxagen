@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   rlsEnforced: vi.fn(() => false),
   // For assertRlsConnectionSafe — db().execute returns rows directly (no .transaction).
   dbExecute: vi.fn(async () => [] as unknown[]),
+  recordIfUnscoped: vi.fn(),
 }));
 
 mocks.transaction.mockImplementation(
@@ -17,6 +18,11 @@ vi.mock("./client", () => ({
 }));
 // rlsEnforced reads env; stub it so the test controls the branch.
 vi.mock("./tenant-flag", () => ({ rlsEnforced: mocks.rlsEnforced }));
+// Spy on the unscoped-access meter so we can assert withSystemDb wires it.
+vi.mock("./unscoped-meter", () => ({
+  recordIfUnscoped: mocks.recordIfUnscoped,
+  __unscopedCountForTests: () => 0,
+}));
 
 import { runInTenantScope } from "@oxagen/tenancy";
 import { withTenantDb, withSystemDb, assertRlsConnectionSafe } from "./tenant";
@@ -32,6 +38,7 @@ function sqlText(call: unknown): string {
 beforeEach(() => {
   mocks.execute.mockClear();
   mocks.dbExecute.mockClear();
+  mocks.recordIfUnscoped.mockClear();
   mocks.rlsEnforced.mockReturnValue(false);
 });
 
@@ -80,6 +87,16 @@ describe("withSystemDb", () => {
       return "ok";
     });
     expect(result).toBe("ok");
+  });
+
+  it("records the call through recordIfUnscoped('withSystemDb') so the seeding-window gate has real signal", async () => {
+    // The unscoped-access meter was dead code until withSystemDb wired it. The
+    // bypass entry point is exactly where an unscoped DB access happens, so the
+    // db.query.unscoped counter must be incremented here or the enforcement-flip
+    // gate is permanently unreachable.
+    await withSystemDb(async () => "ok");
+    expect(mocks.recordIfUnscoped).toHaveBeenCalledTimes(1);
+    expect(mocks.recordIfUnscoped).toHaveBeenCalledWith("withSystemDb");
   });
 
   it("sets app.rls_bypass='on' and no scope GUCs, even when enforcement is on", async () => {

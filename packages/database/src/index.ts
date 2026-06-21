@@ -12,4 +12,5 @@ export {
   type Tx,
 } from "./tenant";
 export { makeWithTenantDbMock, makeWithSystemDbMock } from "./tenant.mock";
+export { recordIfUnscoped, __unscopedCountForTests } from "./unscoped-meter";
 export { isUniqueViolation } from "./errors";

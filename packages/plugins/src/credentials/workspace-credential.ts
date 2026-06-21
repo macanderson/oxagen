@@ -10,6 +10,10 @@ import {
   decryptCredentialSecrets,
 } from "./credential-service";
 
+// Module-level guard: log the missing-key misconfiguration at most once per
+// process so the deployment ops alert is visible without spamming every read.
+let kmsAbsentWarned = false;
+
 export interface SetWorkspaceSecretInput {
   orgId: string;
   workspaceId: string;
@@ -95,7 +99,23 @@ export async function getWorkspaceSecret(key: {
   orgListingId: string;
 }): Promise<WorkspaceSecret | null> {
   const kms = resolveCredentialKms();
-  if (!kms) return null;
+  if (!kms) {
+    // AUTH_TOKEN_ENCRYPTION_KEY is absent. Returning null here is type-identical
+    // to "no credential row exists" at the call site, which silently presents
+    // every plugin as unconnected in a misconfigured deployment. Log the
+    // misconfiguration prominently so it is distinguishable from a genuine
+    // absent-credential path. Warn at most once per process to avoid spam.
+    if (!kmsAbsentWarned) {
+      kmsAbsentWarned = true;
+      console.error(
+        "[plugins] getWorkspaceSecret: AUTH_TOKEN_ENCRYPTION_KEY is not set — " +
+          "all plugin credentials are unreadable and plugins will appear 'not connected'. " +
+          "Set AUTH_TOKEN_ENCRYPTION_KEY in the deployment environment to restore access.",
+        { workspaceId: key.workspaceId, orgListingId: key.orgListingId },
+      );
+    }
+    return null;
+  }
   const row = await withSystemDb(async (tx) => {
     const [r] = await tx
       .select()
