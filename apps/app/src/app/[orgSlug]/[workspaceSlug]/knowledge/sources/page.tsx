@@ -1,19 +1,17 @@
 /**
- * page.tsx — Workspace → Knowledge → Sources (live data).
+ * page.tsx — Workspace → Knowledge → Sources (streaming RSC).
  *
- * RSC that fetches all source connections via the `connection.list` contract,
- * renders the connection list, and provides a "Connect source" button that
- * opens the GitHubConnectionWizard.
+ * Auth + org/workspace resolution happen immediately; the static header is
+ * rendered at once. The data-dependent connection list is deferred behind a
+ * <Suspense> boundary so the header is visible while the fetch streams in.
  */
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { Database } from "lucide-react";
-import { invoke } from "@oxagen/oxagen";
-import "@oxagen/handlers/register";
-import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
-import type { ConnectionListOutput } from "@oxagen/oxagen/contracts/connection.list";
-import { KnowledgeSourcesClient } from "@/components/knowledge/sources/knowledge-sources-client";
+import { TableSkeleton } from "@/components/loading";
+import { SourcesSection } from "./sources-section";
 
 export const dynamic = "force-dynamic";
 
@@ -35,35 +33,13 @@ export default async function KnowledgeSourcesPage({ params, searchParams }: Pag
 
   await assertOrgMember(org.id, session.user.id);
 
-  const ctx = {
-    orgId: org.id,
-    workspaceId: ws.id,
-    userId: session.user.id,
-    apiKeyId: null as string | null,
-    requestId: crypto.randomUUID(),
-    surface: "app" as const,
-    messageId: null as string | null,
-  };
-
-  let connections: ConnectionListOutput["connections"] = [];
-  try {
-    const result = await runInTenantScope(
-      { orgId: org.id, workspaceId: ws.id },
-      () => invoke("connection.list", {}, ctx, { surface: "agent" }),
-    ) as ConnectionListOutput;
-    connections = result.connections;
-  } catch (e) {
-    console.error("connection.list failed:", e);
-    // Render empty state on failure — never throw from RSC page
-  }
-
-  // Parse wizard state from URL params (after OAuth callback)
+  // Parse wizard state from URL params (after OAuth callback) — cheap, no I/O
   const setupConnector = typeof sp.setup === "string" ? sp.setup : undefined;
   const setupConnectionId = typeof sp.connectionId === "string" ? sp.connectionId : undefined;
 
   return (
     <div className="flex flex-col gap-5 max-w-2xl">
-      {/* Header */}
+      {/* Header — rendered immediately, before connection fetch */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <Database className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -78,13 +54,18 @@ export default async function KnowledgeSourcesPage({ params, searchParams }: Pag
         {/* "Connect source" button is client-side — delegates to KnowledgeSourcesClient */}
       </div>
 
-      <KnowledgeSourcesClient
-        connections={connections}
-        orgSlug={orgSlug}
-        workspaceSlug={workspaceSlug}
-        setupConnector={setupConnector}
-        setupConnectionId={setupConnectionId}
-      />
+      {/* Connection list streams in behind a Suspense boundary */}
+      <Suspense fallback={<TableSkeleton rows={4} cols={3} />}>
+        <SourcesSection
+          orgId={org.id}
+          workspaceId={ws.id}
+          userId={session.user.id}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          setupConnector={setupConnector}
+          setupConnectionId={setupConnectionId}
+        />
+      </Suspense>
     </div>
   );
 }
