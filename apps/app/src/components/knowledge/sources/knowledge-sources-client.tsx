@@ -49,13 +49,13 @@ const CONNECTOR_DISPLAY_NAMES: Record<string, string> = {
   salesforce: "Salesforce",
 };
 
-const CONNECTOR_ICONS: Record<string, React.ElementType> = {
+const CONNECTOR_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
   github: GithubIcon,
 };
 
 interface StatusConfig {
   label: string;
-  icon: React.ElementType;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   className: string;
   iconClassName?: string;
 }

@@ -65,7 +65,7 @@ const STATUS_CONFIG: Record<
 
 const TASK_STATUS_CONFIG: Record<
   TaskStatus,
-  { icon: React.ElementType; iconClass: string; cellClass: string; label: string }
+  { icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; iconClass: string; cellClass: string; label: string }
 > = {
   pending: {
     icon: CircleDot,

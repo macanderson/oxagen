@@ -110,7 +110,7 @@ const STATUS_CONFIG: Record<TriggerStatus, { badgeClass: string; label: string }
   },
 };
 
-const KIND_CONFIG: Record<TriggerKind, { icon: React.ElementType; label: string }> = {
+const KIND_CONFIG: Record<TriggerKind, { icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; label: string }> = {
   schedule: { icon: Calendar, label: "Schedule" },
   event: { icon: Radio, label: "Event" },
   webhook: { icon: Webhook, label: "Webhook" },

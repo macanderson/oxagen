@@ -23,7 +23,7 @@ export interface RunTask {
 
 const STATUS_CONFIG: Record<
   TaskStatus,
-  { icon: React.ElementType; iconClass: string; badgeClass: string; label: string }
+  { icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; iconClass: string; badgeClass: string; label: string }
 > = {
   planning: {
     icon: Clock,

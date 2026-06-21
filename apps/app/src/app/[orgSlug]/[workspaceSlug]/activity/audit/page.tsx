@@ -97,7 +97,7 @@ const MOCK_AUDIT: MockAuditEvent[] = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const OUTCOME_CONFIG: Record<AuditOutcome, { icon: React.ElementType; className: string; label: string }> = {
+const OUTCOME_CONFIG: Record<AuditOutcome, { icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; className: string; label: string }> = {
   success: {
     icon: CheckCircle2,
     className: "text-success",
@@ -115,7 +115,7 @@ const OUTCOME_CONFIG: Record<AuditOutcome, { icon: React.ElementType; className:
   },
 };
 
-const PRINCIPAL_ICONS: Record<AuditPrincipalKind, React.ElementType> = {
+const PRINCIPAL_ICONS: Record<AuditPrincipalKind, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
   user: User,
   agent: Bot,
   api_key: Key,
