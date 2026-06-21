@@ -3,7 +3,7 @@ import "@oxagen/handlers/register";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { getSessionOrRedirect } from "@/lib/session";
 import { withSystemDb, schema } from "@oxagen/database";
-import { and, eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 interface ExportResult {
   exportId: string;
@@ -76,13 +76,10 @@ export async function requestUserDataEraseAction(): Promise<EraseResult> {
 }
 
 export async function getExportStatusAction(exportId: string) {
-  // Self-authenticate: server actions are independently POST-callable and the
-  // account-layout auth guard does NOT run for direct action calls.
+  // withSystemDb bypasses RLS: constrain to the caller's own user id. Without
+  // the session + userId filter, any authed user could poll any export id and
+  // read another user's signed download URL (IDOR).
   const session = await getSessionOrRedirect();
-
-  // Scope the lookup to the caller's own request rows. Without the userId
-  // predicate any authenticated caller could poll the signed export URL of
-  // any other user's GDPR archive (cross-user IDOR).
   const rows = await withSystemDb((tx) =>
     tx
       .select({

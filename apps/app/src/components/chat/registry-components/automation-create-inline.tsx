@@ -55,6 +55,14 @@ export interface AutomationStep {
   config?: Record<string, unknown>;
 }
 
+// Editable rows carry a stable `rowId` so React keys survive reordering/removal.
+// Keying these controlled-input lists by array index binds each row's input
+// state to a position, not to the row, so removing a middle row leaks the
+// removed row's values into its neighbour. `rowId` is UI-only — the submit
+// mapping projects the external shape and never sends it.
+type ConditionRow = PropertyCondition & { rowId: string };
+type StepRow = AutomationStep & { rowId: string };
+
 export interface AutomationCreateInlineProps {
   /** Pre-suggested automation name from the agent */
   suggestedName?: string;
@@ -109,12 +117,20 @@ const STEP_TYPE_OPTIONS = [
   { value: "human_input", label: "Human input" },
 ] as const;
 
-function emptyCondition(): PropertyCondition {
-  return { property: "", operator: "eq", toValue: "" };
+function emptyCondition(): ConditionRow {
+  return { rowId: crypto.randomUUID(), property: "", operator: "eq", toValue: "" };
 }
 
-function emptyStep(): AutomationStep {
-  return { name: "", stepType: "agent", config: {} };
+function emptyStep(): StepRow {
+  return { rowId: crypto.randomUUID(), name: "", stepType: "agent", config: {} };
+}
+
+function toConditionRow(c: PropertyCondition): ConditionRow {
+  return { rowId: crypto.randomUUID(), ...c };
+}
+
+function toStepRow(s: AutomationStep): StepRow {
+  return { rowId: crypto.randomUUID(), ...s };
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -141,13 +157,15 @@ export default function AutomationCreateInline({
   const [eventType, setEventType] = React.useState<"node.created" | "node.updated" | "node.deleted" | "">(
     initialEventType ?? "",
   );
-  const [conditions, setConditions] = React.useState<PropertyCondition[]>(
-    initialConditions && initialConditions.length > 0 ? initialConditions : [],
+  const [conditions, setConditions] = React.useState<ConditionRow[]>(() =>
+    initialConditions && initialConditions.length > 0
+      ? initialConditions.map(toConditionRow)
+      : [],
   );
   const [cronExpression, setCronExpression] = React.useState(initialCron);
   const [timezone, setTimezone] = React.useState(initialTimezone);
-  const [steps, setSteps] = React.useState<AutomationStep[]>(
-    initialSteps && initialSteps.length > 0 ? initialSteps : [],
+  const [steps, setSteps] = React.useState<StepRow[]>(() =>
+    initialSteps && initialSteps.length > 0 ? initialSteps.map(toStepRow) : [],
   );
 
   const [formState, setFormState] = React.useState<FormState>("editing");
@@ -513,7 +531,7 @@ export default function AutomationCreateInline({
             <p className="text-xs font-medium text-foreground">Property conditions</p>
             {conditions.map((cond, idx) => (
               <div
-                key={idx}
+                key={cond.rowId}
                 className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end"
                 data-testid={`condition-row-${idx}`}
               >
@@ -657,7 +675,7 @@ export default function AutomationCreateInline({
         )}
         {steps.map((step, idx) => (
           <div
-            key={idx}
+            key={step.rowId}
             className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-3"
             data-testid={`step-row-${idx}`}
           >

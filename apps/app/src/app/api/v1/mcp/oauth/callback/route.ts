@@ -84,11 +84,11 @@ export async function GET(req: NextRequest) {
   });
 
   // Exchange the code for tokens (mcpAuth detects the code and calls the token endpoint).
-  // Mirror the authorize route: a throw here (network failure, invalid grant,
-  // token endpoint 4xx/5xx, JSON parse error) must NOT bubble out as a raw 500.
-  // Log it, clean up the ephemeral PKCE state (so it doesn't leak), and redirect
-  // the user back to the integrations page with ?mcp=error so they can retry.
-  let result: string;
+  // A token-exchange failure must NOT become an unhandled rejection (opaque 500)
+  // and must NOT leak the ephemeral PKCE state: catch it, return the same
+  // ?mcp=error redirect as the unexpected-REDIRECT path, and clean up state in
+  // `finally` so it is deleted on success, failure, AND throw.
+  let result: Awaited<ReturnType<typeof mcpAuth>>;
   try {
     result = await mcpAuth(provider, {
       serverUrl: listing.endpointUrl,

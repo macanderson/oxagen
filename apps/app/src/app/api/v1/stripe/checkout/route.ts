@@ -11,6 +11,7 @@ import {
 // system cannot catch a missing side-effect import). Mirrors models-action.ts.
 import "@oxagen/handlers/register";
 import { loadEnv } from "@oxagen/config/env";
+import { logger } from "@oxagen/handlers/logger";
 import { getSession } from "@/lib/session";
 import { resolveOrg, assertBillingManager } from "@/lib/resolve-org";
 
@@ -63,8 +64,28 @@ export async function POST(req: Request) {
     )) as BillingSubscriptionUpgradeStartOutput;
     return NextResponse.json({ url: result.checkoutUrl });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Checkout failed";
-    const status = message.includes("not found") ? 404 : message.includes("no") ? 400 : 500;
-    return NextResponse.json({ error: message }, { status });
+    // Never echo the raw error to the client — billing/Stripe errors carry
+    // internal detail (customer ids, price ids, provider text). Log server-side
+    // and return a generic message; derive the status from the typed billing
+    // error `code`, not from substring-matching the message (the old
+    // `message.includes("no")` heuristic mis-classified unrelated errors).
+    logger.error(
+      { err, orgSlug: body.data.orgSlug, planSlug: body.data.planSlug },
+      "stripe/checkout: upgrade.start failed",
+    );
+    const code =
+      err instanceof Error && "code" in err
+        ? (err as { code?: unknown }).code
+        : undefined;
+    if (code === "active_subscription_exists") {
+      return NextResponse.json(
+        { error: "This organization already has an active subscription." },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json(
+      { error: "Could not start checkout. Please try again." },
+      { status: 500 },
+    );
   }
 }

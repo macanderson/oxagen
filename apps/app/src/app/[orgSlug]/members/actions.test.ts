@@ -25,6 +25,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const {
   mockGetSession,
   mockResolveOrg,
+  mockGetOrgRole,
   mockRunInTenantScope,
   mockWithTenantDb,
   mockAssertSeatAvailable,
@@ -79,6 +80,7 @@ const {
   return {
     mockGetSession: vi.fn(),
     mockResolveOrg: vi.fn(),
+    mockGetOrgRole: vi.fn(),
     mockRunInTenantScope,
     mockWithTenantDb,
     mockAssertSeatAvailable: vi.fn(),
@@ -95,7 +97,10 @@ const {
 // ---------------------------------------------------------------------------
 
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
-vi.mock("@/lib/resolve-org", () => ({ resolveOrg: mockResolveOrg }));
+vi.mock("@/lib/resolve-org", () => ({
+  resolveOrg: mockResolveOrg,
+  getOrgRole: mockGetOrgRole,
+}));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -153,8 +158,64 @@ describe("inviteMemberAction", () => {
     dbState.updateReturning = [{ id: "inv-1" }];
     mockGetSession.mockResolvedValue(SESSION);
     mockResolveOrg.mockResolvedValue(ORG);
+    // Default caller is an owner so existing happy-path invites (incl. admin
+    // role) clear the authorization gate.
+    mockGetOrgRole.mockResolvedValue("owner");
     mockAssertSeatAvailable.mockResolvedValue(undefined);
     mockSendEmail.mockResolvedValue({ id: "msg-1", accepted: ["newmember@example.com"] });
+  });
+
+  it("returns forbidden when the caller is not a member of the org", async () => {
+    mockGetOrgRole.mockResolvedValue(null);
+    const res = await inviteMemberAction({
+      orgSlug: "acme",
+      email: "newmember@example.com",
+      role: "member",
+    });
+    expect(res).toMatchObject({ ok: false, code: "forbidden" });
+    expect(mockWithTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("returns forbidden when a plain member tries to invite", async () => {
+    mockGetOrgRole.mockResolvedValue("member");
+    const res = await inviteMemberAction({
+      orgSlug: "acme",
+      email: "newmember@example.com",
+      role: "member",
+    });
+    expect(res).toMatchObject({ ok: false, code: "forbidden" });
+    expect(mockWithTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("forbids an admin from granting the owner role (privilege escalation)", async () => {
+    mockGetOrgRole.mockResolvedValue("admin");
+    const res = await inviteMemberAction({
+      orgSlug: "acme",
+      email: "newmember@example.com",
+      role: "owner",
+    });
+    expect(res).toMatchObject({ ok: false, code: "forbidden" });
+    expect(mockWithTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("forbids an admin from granting the admin role", async () => {
+    mockGetOrgRole.mockResolvedValue("admin");
+    const res = await inviteMemberAction({
+      orgSlug: "acme",
+      email: "newmember@example.com",
+      role: "admin",
+    });
+    expect(res).toMatchObject({ ok: false, code: "forbidden" });
+  });
+
+  it("allows an admin to invite a plain member", async () => {
+    mockGetOrgRole.mockResolvedValue("admin");
+    const res = await inviteMemberAction({
+      orgSlug: "acme",
+      email: "newmember@example.com",
+      role: "member",
+    });
+    expect(res).toEqual({ ok: true });
   });
 
   it("returns validation_error for an invalid email", async () => {

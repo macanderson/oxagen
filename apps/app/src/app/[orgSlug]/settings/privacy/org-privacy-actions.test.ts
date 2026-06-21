@@ -1,95 +1,100 @@
 /**
- * org-privacy-actions.test.ts — unit tests for getOrgExportStatusAction.
+ * org-privacy-actions.test.ts — authorization regression tests.
  *
- * Regression for the cross-org IDOR silent-failure fix: the status poll must
- * self-authenticate and assert the caller is a member of the org that owns the
- * export before returning its signed URL. A non-member must be denied (the
- * assertOrgMember 404 sentinel surfaces) rather than receiving any other org's
- * export URL by guessing a UUID.
+ * Covers the two defects fixed in OXA security review:
+ *   requestOrgDataEraseAction — the ownership check was a no-op
+ *     (`rows.find(() => true)`); it must now go through assertSecurityManager
+ *     (owner/admin) before invoking the destructive erase.
+ *   getOrgExportStatusAction — queried by exportId only under withSystemDb
+ *     (RLS bypassed); it must now assert org membership and scope by orgId.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetSession, mockAssertOrgMember, dbState } = vi.hoisted(() => {
-  return {
-    mockGetSession: vi.fn(),
-    mockAssertOrgMember: vi.fn(),
-    dbState: {
-      rows: [] as Array<{ status: string; exportUrl: string | null; orgId: string }>,
-    },
-  };
-});
+const {
+  mockInvoke,
+  mockGetSession,
+  mockResolveOrg,
+  mockAssertOrgMember,
+  mockAssertSecurityManager,
+  mockWithSystemDb,
+} = vi.hoisted(() => ({
+  mockInvoke: vi.fn(),
+  mockGetSession: vi.fn(),
+  mockResolveOrg: vi.fn(),
+  mockAssertOrgMember: vi.fn(),
+  mockAssertSecurityManager: vi.fn(),
+  mockWithSystemDb: vi.fn(),
+}));
 
+vi.mock("@oxagen/handlers/register", () => ({}));
+vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mockInvoke }));
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({
-  resolveOrg: vi.fn(),
+  resolveOrg: mockResolveOrg,
   assertOrgMember: mockAssertOrgMember,
+  assertSecurityManager: mockAssertSecurityManager,
 }));
-vi.mock("@oxagen/handlers/register", () => ({}));
-vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: vi.fn() }));
-vi.mock("drizzle-orm", () => ({
-  eq: (col: unknown, val: unknown) => ({ __eq: [col, val] }),
-}));
-vi.mock("@oxagen/database", () => {
-  const makeTx = () => ({
-    select: (_cols: unknown) => ({
-      from: (_table: unknown) => ({
-        where: (_w: unknown) => ({
-          limit: (_n: number) => Promise.resolve(dbState.rows),
-        }),
-      }),
-    }),
-  });
-  return {
-    withSystemDb: vi.fn((fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx())),
-    schema: {
-      privacyExportRequests: {
-        id: "id_col",
-        status: "status_col",
-        exportUrl: "exportUrl_col",
-        orgId: "orgId_col",
-      },
-      orgUsers: { orgId: "ou_orgId", role: "ou_role" },
+vi.mock("@oxagen/database", () => ({
+  withSystemDb: mockWithSystemDb,
+  schema: {
+    privacyExportRequests: {
+      id: "id",
+      orgId: "orgId",
+      status: "status",
+      exportUrl: "exportUrl",
     },
-  };
-});
+  },
+}));
 
-import { getOrgExportStatusAction } from "./org-privacy-actions";
+import {
+  requestOrgDataEraseAction,
+  getOrgExportStatusAction,
+} from "./org-privacy-actions";
 
+const ORG = { id: "org-1", slug: "acme" };
 const SESSION = { user: { id: "user-1" } };
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockGetSession.mockResolvedValue(SESSION);
+  mockResolveOrg.mockResolvedValue(ORG);
+  mockAssertOrgMember.mockResolvedValue(undefined);
+  mockAssertSecurityManager.mockResolvedValue(undefined);
+  mockInvoke.mockResolvedValue({ requestId: "r1", status: "queued", effectiveAt: "2026-07-01" });
+  mockWithSystemDb.mockResolvedValue([{ status: "ready", exportUrl: "https://blob/x" }]);
+});
+
+describe("requestOrgDataEraseAction", () => {
+  it("gates the destructive erase behind assertSecurityManager (owner/admin)", async () => {
+    await requestOrgDataEraseAction("acme");
+    expect(mockAssertSecurityManager).toHaveBeenCalledWith("org-1", "user-1");
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "privacy.data.erase",
+      expect.objectContaining({ scope: "org", orgId: "org-1", confirm: true }),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("does NOT erase when the security-manager gate rejects (non-owner caller)", async () => {
+    mockAssertSecurityManager.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
+    await expect(requestOrgDataEraseAction("acme")).rejects.toThrow();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+});
+
 describe("getOrgExportStatusAction", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    dbState.rows = [{ status: "ready", exportUrl: "https://blob/org-export", orgId: "org-9" }];
-    mockGetSession.mockResolvedValue(SESSION);
-    mockAssertOrgMember.mockResolvedValue(undefined);
+  it("asserts org membership before reading the export status", async () => {
+    const res = await getOrgExportStatusAction("acme", "prexp_1");
+    expect(mockResolveOrg).toHaveBeenCalledWith("acme");
+    expect(mockAssertOrgMember).toHaveBeenCalledWith("org-1", "user-1");
+    expect(res).toEqual({ status: "ready", exportUrl: "https://blob/x" });
   });
 
-  it("requires a session (self-authenticates)", async () => {
-    mockGetSession.mockRejectedValue(new Error("unauthenticated"));
-    await expect(getOrgExportStatusAction("prexp-1")).rejects.toThrow("unauthenticated");
-  });
-
-  it("asserts org membership against the export's owning org", async () => {
-    await getOrgExportStatusAction("prexp-1");
-    expect(mockAssertOrgMember).toHaveBeenCalledWith("org-9", "user-1");
-  });
-
-  it("propagates the denial (404 sentinel) for a non-member — no cross-org leak", async () => {
+  it("does NOT read status when the membership assertion rejects (cross-org caller)", async () => {
     mockAssertOrgMember.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
-    await expect(getOrgExportStatusAction("prexp-1")).rejects.toThrow("NEXT_NOT_FOUND");
-  });
-
-  it("returns null without asserting membership when the export does not exist", async () => {
-    dbState.rows = [];
-    const res = await getOrgExportStatusAction("prexp-missing");
-    expect(res).toBeNull();
-    expect(mockAssertOrgMember).not.toHaveBeenCalled();
-  });
-
-  it("returns status + url for a member of the owning org", async () => {
-    const res = await getOrgExportStatusAction("prexp-1");
-    expect(res).toEqual({ status: "ready", exportUrl: "https://blob/org-export" });
+    await expect(getOrgExportStatusAction("acme", "prexp_1")).rejects.toThrow();
+    expect(mockWithSystemDb).not.toHaveBeenCalled();
   });
 });

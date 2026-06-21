@@ -445,17 +445,24 @@ export function ChatShellClient({
     shouldAutoScrollRef.current = fromBottom < 80;
   }, []);
 
-  const callbacks: MessageBubbleCallbacks = {
-    onResolveApproval: wrappedResolveApproval,
-    onResolveConsent: wrappedResolveConsent,
-    onResolvePlan: resolvePlanAction,
-    agentCapabilities,
-    onNavigateToChild: (childMessageId) => {
-      if (typeof window !== "undefined") {
-        window.location.hash = `m-${childMessageId}`;
-      }
-    },
-  };
+  // Stable identity: this object is passed to the memoized <MessageTree>. Rebuilt
+  // inline it would change every render (every streaming token re-renders this
+  // component), defeating the memo and re-rendering the entire persisted message
+  // tree on each token. Its deps are all stable (two useCallbacks + two props).
+  const callbacks: MessageBubbleCallbacks = React.useMemo(
+    () => ({
+      onResolveApproval: wrappedResolveApproval,
+      onResolveConsent: wrappedResolveConsent,
+      onResolvePlan: resolvePlanAction,
+      agentCapabilities,
+      onNavigateToChild: (childMessageId: string) => {
+        if (typeof window !== "undefined") {
+          window.location.hash = `m-${childMessageId}`;
+        }
+      },
+    }),
+    [wrappedResolveApproval, wrappedResolveConsent, resolvePlanAction, agentCapabilities],
+  );
 
   // The live turn renders as a single ORDERED timeline (the chain of
   // thought/action): the reducer records every entity's first appearance in

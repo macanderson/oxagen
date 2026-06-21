@@ -2,6 +2,7 @@
 import * as React from "react";
 import { ExternalLink, ArrowUpRight, Check, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { safeHref } from "@/lib/safe-url";
 import { Badge } from "@/components/ui/badge";
 
 /**
@@ -76,10 +77,17 @@ function SmartLink({
   href: string;
   children: React.ReactNode;
 }): React.ReactElement {
-  const external = isHttpUrl(href);
+  // Validate the scheme before rendering: `href` originates from capability
+  // output (an opaque, model-influenced string), so a `javascript:`/`data:`
+  // value must never reach the DOM. Unsafe → render plain text, not a link.
+  const safe = safeHref(href);
+  if (!safe) {
+    return <span className="font-medium text-foreground">{children}</span>;
+  }
+  const external = isHttpUrl(safe);
   return (
     <a
-      href={href}
+      href={safe}
       {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
       className={cn(
         "inline-flex items-center gap-0.5 font-medium text-primary underline-offset-2",
@@ -263,8 +271,13 @@ export default function CapabilityResult(
     return m;
   }, [links]);
 
-  // Deep links that resolved to a real route → prominent "open" chips.
-  const openLinks = links.filter((l) => l.href);
+  // Deep links that resolved to a real route → prominent "open" chips. Only
+  // keep links whose href passes scheme validation (these come from capability
+  // output, so a `javascript:`/`data:` value must never become a chip).
+  const openLinks = links.flatMap((l) => {
+    const href = safeHref(typeof l.href === "string" ? l.href : undefined);
+    return href ? [{ ...l, href }] : [];
+  });
 
   const heading = title ?? (capability ? humanizeCapability(capability) : "Result");
 
@@ -290,8 +303,8 @@ export default function CapabilityResult(
           {openLinks.map((l) => (
             <a
               key={`${l.field}:${l.id}`}
-              href={l.href as string}
-              {...(isHttpUrl(l.href as string)
+              href={l.href}
+              {...(isHttpUrl(l.href)
                 ? { target: "_blank", rel: "noopener noreferrer" }
                 : {})}
               className={cn(
