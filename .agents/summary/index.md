@@ -71,6 +71,17 @@
 
 ---
 
+## Maintenance & Regeneration
+
+These summaries live in `.agents/summary/` and are **manually maintained** — there is no `pnpm docs:generate` script. Regenerate or refresh after major feature additions (e.g. plugins phase 2, new connectors) by re-running the documentation SOP:
+
+- Run the `doc-updater` agent, or the `/update-docs` and `/update-codemaps` skills, to re-derive these files from source-of-truth files (schemas, routes, contracts, exports).
+- Then hand-verify the drift-prone facts:
+  - **Schema count** — `grep -c 'pgSchema(' packages/database/src/schema/_schemas.ts` (keep `data_models.md`, `architecture.md`, `codebase_info.md`, and this file in agreement).
+  - **Surface list** — `api`/`mcp`/`agent`/`cli`/`app`, consistent across `architecture.md` and `interfaces.md`.
+  - **Capability parity** — `pnpm check:manifest`.
+  - **ADR links** — every file under `docs/adr/` should be reachable from `architecture.md` §Architecture Decision Records.
+
 ## Related Files in Repo Root
 
 | File | Purpose |

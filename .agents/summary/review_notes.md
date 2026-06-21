@@ -35,7 +35,9 @@ No inconsistencies found between documents. Cross-references verified:
 
 ## Recommendations
 
-1. **Add `docs/architecture/agent-execution/` content** to `workflows.md` — the architecture folder contains more detail on agent execution than was captured.
-2. **Link `docs/adr/` decisions** into relevant sections (e.g., ADR-009 on unified capability model belongs in `architecture.md`).
-3. **Update `data_models.md`** when new Postgres schemas are added — the 16-schema list will drift as the platform grows.
-4. **Re-run this documentation** after major feature additions (plugins phase 2, new connectors) using: `pnpm docs:generate` or by re-running this SOP.
+All four recommendations below were implemented (2026-06-21).
+
+1. ✅ **Agent-execution content added to `workflows.md`** — new "Agent Execution Telemetry (Four-Store Sync)" section covering the unified `agent_executions` log, Postgres→Neo4j→ClickHouse sync, and the `workflow_runs` vs `agent_executions` distinction. Sourced from `docs/specs/agent-execution/` (the folder is under `docs/specs/`, not `docs/architecture/` as originally noted).
+2. ✅ **`docs/adr/` decisions linked into `architecture.md`** — ADR-009 (unified capability model) and ADR-013 in §Capability Kernel; ADR-001/003/012 in §Data Storage Boundaries; ADR-006/014 in §Multi-tenancy; ADR-002/007/010/011 in §Background Job Architecture; plus a complete ADR index table mapping all 14 ADRs to their relevant sections.
+3. ✅ **`data_models.md` maintenance note added** — points at `packages/database/src/schema/_schemas.ts` as source of truth (verified at 16 schemas) with a `grep -c 'pgSchema('` verification command and a note to keep the count in sync across the four files that assert it.
+4. ✅ **Regeneration SOP documented in `index.md`** — note: there is **no** `pnpm docs:generate` script (the original recommendation referenced a command that does not exist). The accurate path is re-running the `doc-updater` agent / `/update-docs` + `/update-codemaps` skills, followed by hand-verifying the drift-prone facts (schema count, surface list, `pnpm check:manifest`, ADR links).
