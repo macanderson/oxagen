@@ -112,3 +112,6 @@ errors.txt
 test_output.json
 .linear-triage/
 research-swarm-complete-verified.png
+
+# Storybook static build output
+storybook-static/

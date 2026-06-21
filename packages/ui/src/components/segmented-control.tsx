@@ -96,3 +96,4 @@ const SegmentedControlItem = React.forwardRef<
 SegmentedControlItem.displayName = "SegmentedControlItem";
 
 export { SegmentedControl, SegmentedControlItem };
+export type { SegmentedControlProps, SegmentedControlItemProps };
