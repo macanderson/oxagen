@@ -591,6 +591,8 @@ describe("GET /connections/github/installations", () => {
           id: 111,
           account: { login: "acme-org", type: "Organization", avatar_url: "https://avatars.gh.com/111" },
           repository_selection: "all",
+          html_url: "https://github.com/organizations/acme-org/settings/installations/111",
+          app_slug: "oxagen",
         },
         {
           id: 222,
@@ -611,13 +613,68 @@ describe("GET /connections/github/installations", () => {
         accountType: string;
         repositorySelection: string;
         avatarUrl: string;
+        htmlUrl: string | null;
       }>;
+      manageUrl: string;
     };
     expect(body.installations).toHaveLength(2);
     expect(body.installations[0]!.accountLogin).toBe("acme-org");
     expect(body.installations[0]!.accountType).toBe("Organization");
     expect(body.installations[0]!.repositorySelection).toBe("all");
+    // Per-installation management page is mapped through; null when GitHub omits it.
+    expect(body.installations[0]!.htmlUrl).toBe(
+      "https://github.com/organizations/acme-org/settings/installations/111",
+    );
     expect(body.installations[1]!.id).toBe(222);
+    expect(body.installations[1]!.htmlUrl).toBeNull();
+    // manageUrl derives from the installation's app_slug when GITHUB_APP_SLUG is unset.
+    expect(body.manageUrl).toBe("https://github.com/apps/oxagen/installations/new");
+  });
+
+  it("manageUrl uses GITHUB_APP_SLUG when configured", async () => {
+    mocks.requireEnv.mockReturnValue({ ...DEFAULT_ENV, GITHUB_APP_SLUG: "oxagen-prod" });
+    mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(makeTxChain([{ accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+    );
+    mocks.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        total_count: 1,
+        installations: [
+          {
+            id: 111,
+            account: { login: "acme-org", type: "Organization", avatar_url: "https://gh.com" },
+            repository_selection: "all",
+            app_slug: "from-installation",
+          },
+        ],
+      }),
+    });
+
+    const res = await authGet(`${BASE}/installations?connectionId=con_ABC`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { manageUrl: string };
+    // Configured slug wins over the installation-derived slug.
+    expect(body.manageUrl).toBe("https://github.com/apps/oxagen-prod/installations/new");
+  });
+
+  it("manageUrl falls back to GitHub settings when no slug is available", async () => {
+    mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(makeTxChain([{ accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+    );
+    // Zero installations and no GITHUB_APP_SLUG → generic settings page.
+    mocks.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ total_count: 0, installations: [] }),
+    });
+
+    const res = await authGet(`${BASE}/installations?connectionId=con_ABC`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { manageUrl: string; installations: unknown[] };
+    expect(body.installations).toHaveLength(0);
+    expect(body.manageUrl).toBe("https://github.com/settings/installations");
   });
 
   it("paginates when total_count exceeds 100", async () => {

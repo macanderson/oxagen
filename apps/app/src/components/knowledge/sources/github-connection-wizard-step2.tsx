@@ -3,13 +3,25 @@
 /**
  * github-connection-wizard-step2.tsx — Step 2 "Select Repos": cascading
  * org → repo selector rendered after OAuth returns.
+ *
+ * The installed-orgs list is not fixed: a user can add the Oxagen GitHub App to
+ * another org (or remove one, or change which repos an org grants) via GitHub's
+ * install/configure page. We surface that as a "Manage GitHub App access" link
+ * that opens GitHub in a new tab; when the user returns (window regains focus)
+ * we re-fetch installations so newly-installed orgs become selectable. A manual
+ * "Refresh" button covers the case where focus detection misses.
  */
 
 import * as React from "react";
-import { GithubIcon } from "lucide-react";
+import { GithubIcon, ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DialogFooter } from "@oxagen/ui";
-import { type Installation, type Repository, API_BASE } from "./github-connection-wizard-types";
+import {
+  type Installation,
+  type InstallationsResponse,
+  type Repository,
+  API_BASE,
+} from "./github-connection-wizard-types";
 import { Spinner } from "./github-connection-wizard-spinner";
 
 export interface Step2Props {
@@ -21,7 +33,9 @@ export interface Step2Props {
 
 export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext }: Step2Props) {
   const [installations, setInstallations] = React.useState<Installation[]>([]);
+  const [manageUrl, setManageUrl] = React.useState<string | null>(null);
   const [installationsLoading, setInstallationsLoading] = React.useState(true);
+  const [installationsRefreshing, setInstallationsRefreshing] = React.useState(false);
   const [installationsError, setInstallationsError] = React.useState<string | null>(null);
 
   const [selectedInstallationId, setSelectedInstallationId] = React.useState<number | null>(null);
@@ -29,42 +43,74 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
   const [repositories, setRepositories] = React.useState<Repository[]>([]);
   const [reposLoading, setReposLoading] = React.useState(false);
   const [reposError, setReposError] = React.useState<string | null>(null);
+  const [reposReloadNonce, setReposReloadNonce] = React.useState(0);
 
   const [selectedRepos, setSelectedRepos] = React.useState<Set<string>>(new Set());
 
+  // Armed when the user opens GitHub's manage page; the next time the window
+  // regains focus we re-fetch so any orgs/repos they just (un)installed appear.
+  const awaitingRefreshRef = React.useRef(false);
+
+  // Load installations. `mode: "refresh"` keeps the current list visible and
+  // preserves the selected org if it still exists (used by the manual Refresh
+  // button and the on-focus re-fetch); "initial" shows the full-panel spinner.
+  const loadInstallations = React.useCallback(
+    async (mode: "initial" | "refresh") => {
+      if (mode === "initial") {
+        setInstallationsLoading(true);
+      } else {
+        setInstallationsRefreshing(true);
+      }
+      setInstallationsError(null);
+
+      try {
+        const res = await fetch(
+          `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/connections/github/installations?connectionId=${connectionId}`,
+          { credentials: "include" },
+        );
+        if (!res.ok) throw new Error(`Failed to load organizations: ${res.status}`);
+        const data = (await res.json()) as InstallationsResponse;
+        setInstallations(data.installations);
+        setManageUrl(data.manageUrl);
+        // Drop the selection only if the org it pointed at is gone (e.g. removed
+        // on GitHub); otherwise keep it so the repo list stays put.
+        setSelectedInstallationId((prev) =>
+          prev !== null && data.installations.some((i) => i.id === prev) ? prev : null,
+        );
+      } catch (e) {
+        setInstallationsError(e instanceof Error ? e.message : "Failed to load organizations");
+      } finally {
+        setInstallationsLoading(false);
+        setInstallationsRefreshing(false);
+      }
+    },
+    [orgSlug, workspaceSlug, connectionId],
+  );
+
   // Fetch installations on mount.
   React.useEffect(() => {
-    let cancelled = false;
-    setInstallationsLoading(true);
-    setInstallationsError(null);
+    void loadInstallations("initial");
+  }, [loadInstallations]);
 
-    fetch(
-      `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/connections/github/installations?connectionId=${connectionId}`,
-      { credentials: "include" },
-    )
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`Failed to load organizations: ${res.status}`);
-        return res.json() as Promise<{ installations: Installation[] }>;
-      })
-      .then((data) => {
-        if (!cancelled) {
-          setInstallations(data.installations);
-          setInstallationsLoading(false);
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setInstallationsError(e instanceof Error ? e.message : "Failed to load organizations");
-          setInstallationsLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
+  // When the user returns from GitHub's manage page, re-fetch installations and
+  // (if an org is selected) its repos so newly granted access shows up.
+  React.useEffect(() => {
+    const handleReturn = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!awaitingRefreshRef.current) return;
+      awaitingRefreshRef.current = false;
+      void loadInstallations("refresh");
+      setReposReloadNonce((n) => n + 1);
     };
-  }, [orgSlug, workspaceSlug, connectionId]);
+    window.addEventListener("focus", handleReturn);
+    document.addEventListener("visibilitychange", handleReturn);
+    return () => {
+      window.removeEventListener("focus", handleReturn);
+      document.removeEventListener("visibilitychange", handleReturn);
+    };
+  }, [loadInstallations]);
 
-  // Fetch repositories when an installation is selected.
+  // Fetch repositories when an installation is selected (or a reload is forced).
   React.useEffect(() => {
     if (selectedInstallationId === null) {
       setRepositories([]);
@@ -100,7 +146,7 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
     return () => {
       cancelled = true;
     };
-  }, [orgSlug, workspaceSlug, connectionId, selectedInstallationId]);
+  }, [orgSlug, workspaceSlug, connectionId, selectedInstallationId, reposReloadNonce]);
 
   const allSelected =
     repositories.length > 0 && repositories.every((r) => selectedRepos.has(r.fullName));
@@ -127,6 +173,12 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
 
   const selectedInstallation = installations.find((i) => i.id === selectedInstallationId);
 
+  // Arm the on-focus re-fetch and open GitHub's manage page in a new tab.
+  const openManagePage = (url: string) => {
+    awaitingRefreshRef.current = true;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   const handleNext = () => {
     if (selectedInstallationId === null || selectedRepos.size === 0) return;
     onNext(String(selectedInstallationId), Array.from(selectedRepos));
@@ -136,9 +188,26 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
     <div className="flex flex-col gap-4">
       {/* Org list */}
       <div className="flex flex-col gap-1.5">
-        <p className="text-xs font-medium text-muted-foreground">
-          Select organization
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground">
+            Select organization
+          </p>
+          {!installationsLoading && (
+            <button
+              type="button"
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              onClick={() => void loadInstallations("refresh")}
+              disabled={installationsRefreshing}
+              data-testid="refresh-installations-btn"
+            >
+              <RefreshCwIcon
+                className={`h-3 w-3 ${installationsRefreshing ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              />
+              Refresh
+            </button>
+          )}
+        </div>
         {installationsLoading ? (
           <div className="flex h-24 items-center justify-center">
             <Spinner />
@@ -149,7 +218,8 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
           </p>
         ) : installations.length === 0 ? (
           <p className="rounded-md border border-border/60 px-3 py-2 text-xs text-muted-foreground">
-            No GitHub App installations found. Install the GitHub App on your account or organization first.
+            No GitHub App installations found. Install the GitHub App on your account or
+            organization using the link below, then refresh.
           </p>
         ) : (
           <ul
@@ -189,6 +259,21 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
               </li>
             ))}
           </ul>
+        )}
+
+        {/* Manage installation access — add the App to another org or change repos. */}
+        {manageUrl && !installationsLoading && (
+          <button
+            type="button"
+            className="flex items-center gap-1 self-start text-[11px] text-primary hover:underline"
+            onClick={() => openManagePage(manageUrl)}
+            data-testid="manage-installations-link"
+          >
+            <ExternalLinkIcon className="h-3 w-3" aria-hidden="true" />
+            {installations.length === 0
+              ? "Install the GitHub App on an organization"
+              : "Don't see an organization? Manage GitHub App access"}
+          </button>
         )}
       </div>
 
@@ -267,6 +352,19 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
                 );
               })}
             </ul>
+          )}
+
+          {/* Repos missing? Adjust which repos this org grants on GitHub. */}
+          {selectedInstallation?.htmlUrl && (
+            <button
+              type="button"
+              className="flex items-center gap-1 self-start text-[11px] text-primary hover:underline"
+              onClick={() => openManagePage(selectedInstallation.htmlUrl!)}
+              data-testid="configure-repos-link"
+            >
+              <ExternalLinkIcon className="h-3 w-3" aria-hidden="true" />
+              Configure repositories on GitHub
+            </button>
           )}
         </div>
       )}
