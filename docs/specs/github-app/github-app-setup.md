@@ -90,7 +90,7 @@ Create **two** GitHub Apps and keep their credentials in separate environments:
 | App | Used by | API origin (`NEXT_PUBLIC_API_URL`) | App origin (`NEXT_PUBLIC_APP_URL`) |
 | --- | --- | --- | --- |
 | **Oxagen (Dev)** | localhost + Vercel preview | `http://localhost:4000` | `http://localhost:3000` |
-| **Oxagen** | production | `https://oxagen-v2-api.vercel.app` | `https://oxagen-v2-app.vercel.app` |
+| **Oxagen** | production | `https://api.oxagen.sh` | `https://app.oxagen.sh` |
 
 Reasons:
 
@@ -116,14 +116,14 @@ Create each App at **GitHub → Settings → Developer settings → GitHub Apps 
 | Field | Dev | Prod |
 | --- | --- | --- |
 | **GitHub App name** | `Oxagen (Dev)` | `Oxagen` |
-| **Homepage URL** | `http://localhost:3000` | `https://oxagen-v2-app.vercel.app` |
+| **Homepage URL** | `http://localhost:3000` | `https://app.oxagen.sh` |
 | **Description** | Source-code & repo-activity ingestion for the Oxagen knowledge graph. | same |
 
 ### Identifying and authorizing users (OAuth)
 
 | Field | Dev | Prod |
 | --- | --- | --- |
-| **Callback URL** | `http://localhost:4000/oauth/github/callback` | `https://oxagen-v2-api.vercel.app/oauth/github/callback` |
+| **Callback URL** | `http://localhost:4000/oauth/github/callback` | `https://api.oxagen.sh/oauth/github/callback` |
 | **Request user authorization (OAuth) during installation** | ✅ recommended | ✅ recommended |
 | **Enable Device Flow** | ❌ off | ❌ off |
 | **Expire user authorization tokens** | ❌ off (recommended) | ❌ off (recommended) |
@@ -144,7 +144,7 @@ from the OAuth Callback URL**.
 
 | Field | Dev | Prod |
 | --- | --- | --- |
-| **Setup URL** | `http://localhost:3000/connections/github/setup` | `https://oxagen-v2-app.vercel.app/connections/github/setup` |
+| **Setup URL** | `http://localhost:3000/connections/github/setup` | `https://app.oxagen.sh/connections/github/setup` |
 | **Redirect on update** | ✅ on | ✅ on |
 
 **Recommendation: set a Setup URL and enable "Redirect on update".**
@@ -225,7 +225,7 @@ How it works:
 | Field | Dev | Prod |
 | --- | --- | --- |
 | **Active** | ✅ | ✅ |
-| **Webhook URL** | `https://{your-tunnel}/webhooks/github/app` | `https://oxagen-v2-api.vercel.app/webhooks/github/app` |
+| **Webhook URL** | `https://{your-tunnel}/webhooks/github/app` | `https://api.oxagen.sh/webhooks/github/app` |
 | **Secret** | value of `GITHUB_APP_WEBHOOK_SECRET` (dev) | value of `GITHUB_APP_WEBHOOK_SECRET` (prod) |
 | **SSL verification** | Enable | Enable |
 
@@ -266,8 +266,8 @@ All GitHub connector variables live in the **`api`** service (read in `apps/api`
 | `GITHUB_APP_CLIENT_SECRET` | yes | api | Dev App → generated client secret | Prod App → generated client secret |
 | `GITHUB_APP_WEBHOOK_SECRET` | yes | api (required for webhooks) | Dev App webhook secret | Prod App webhook secret |
 | `GITHUB_APP_INSTALL_STATE_SECRET` | yes | api | `openssl rand -hex 32` (dev value) | `openssl rand -hex 32` (distinct prod value) |
-| `NEXT_PUBLIC_API_URL` | no | all | `http://localhost:4000` | `https://oxagen-v2-api.vercel.app` |
-| `NEXT_PUBLIC_APP_URL` | no | all | `http://localhost:3000` | `https://oxagen-v2-app.vercel.app` |
+| `NEXT_PUBLIC_API_URL` | no | all | `http://localhost:4000` | `https://api.oxagen.sh` |
+| `NEXT_PUBLIC_APP_URL` | no | all | `http://localhost:3000` | `https://app.oxagen.sh` |
 | `INGESTION_CRYPTO_PROVIDER` | no | optional | `env` | `env` (or `kms`) |
 | `INGESTION_ENCRYPTION_KEY` | yes | preview/prod | `openssl rand -base64 32` | required — wraps OAuth token encryption |
 | `AUTH_TOKEN_ENCRYPTION_KEY` | yes | preview/prod | blank ok locally | required (auth startup guard) |

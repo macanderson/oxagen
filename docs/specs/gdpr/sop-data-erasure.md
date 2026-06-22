@@ -93,7 +93,7 @@ When a request is received by email or via another channel:
    ```
    Or via API:
    ```bash
-   curl -X POST https://oxagen-v2-api.vercel.app/v1/{org}/{ws}/privacy/erase \
+   curl -X POST https://api.oxagen.sh/v1/{org}/{ws}/privacy/erase \
      -H "Authorization: Bearer <api_key>" \
      -H "Content-Type: application/json" \
      -d '{"scope": "user", "confirm": true}'
