@@ -7,7 +7,7 @@
  * Every capability invocation is recorded with principal, outcome, and a
  * tamper-evident hash. This page shows a workspace-scoped slice.
  */
-import { Info, ScrollText, User, Bot, Key, CheckCircle2, XCircle, Hash } from "lucide-react";
+import { Info, ScrollText, User, Bot, Key, CheckCircle2, XCircle, Hash, type LucideIcon } from "lucide-react";
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
@@ -97,7 +97,7 @@ const MOCK_AUDIT: MockAuditEvent[] = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const OUTCOME_CONFIG: Record<AuditOutcome, { icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; className: string; label: string }> = {
+const OUTCOME_CONFIG: Record<AuditOutcome, { icon: LucideIcon; className: string; label: string }> = {
   success: {
     icon: CheckCircle2,
     className: "text-success",
@@ -115,7 +115,7 @@ const OUTCOME_CONFIG: Record<AuditOutcome, { icon: React.ComponentType<React.SVG
   },
 };
 
-const PRINCIPAL_ICONS: Record<AuditPrincipalKind, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+const PRINCIPAL_ICONS: Record<AuditPrincipalKind, LucideIcon> = {
   user: User,
   agent: Bot,
   api_key: Key,
