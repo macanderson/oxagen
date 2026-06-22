@@ -691,7 +691,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp", "website", "admin"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { "*": "noreply@notifications.oxagen.ai" },
+    staticValue: { "*": "noreply@notifications.oxagen.sh" },
   },
   SMTP_FROM_NAME: {
     group: "Email",
