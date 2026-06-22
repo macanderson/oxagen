@@ -5,13 +5,12 @@
  *
  * Keep every externally-visible support value here so a change (new docs domain,
  * new contact mailbox, updated mailing address) is a one-line edit, never a
- * hunt across components. The docs domain mirrors the interim Vercel deploy
- * (oxagen-v2-docs.vercel.app) and flips to oxagen.ai with the rest of the
- * URL sweep at brand-domain launch.
+ * hunt across components. The docs domain is now the branded oxagen.sh domain
+ * (docs.oxagen.sh) following the domain migration.
  */
 
 /** Base URL of the end-user documentation site. */
-export const DOCS_URL = "https://oxagen-v2-docs.vercel.app";
+export const DOCS_URL = "https://docs.oxagen.sh";
 
 /** Customer-success / support mailbox. */
 export const SUPPORT_EMAIL = "success@oxagen.ai";

@@ -102,7 +102,7 @@ oxagen api-key create   # copy the key that's printed
 
 claude mcp add oxagen \
   --transport http \
-  --url https://oxagen-v2-mcp.vercel.app/mcp \
+  --url https://mcp.oxagen.sh/mcp \
   --header "Authorization: Bearer $OXAGEN_API_KEY"
 ```
 
@@ -354,7 +354,7 @@ Releases are managed monorepo-wide via `pnpm release:patch|minor|major`, which b
 
 ## Support
 
-- Docs: https://oxagen-v2-docs.vercel.app
+- Docs: https://docs.oxagen.sh
 - Issues: https://github.com/oxagen/oxagen-monorepo/issues
 - Email: support@oxagen.ai
 

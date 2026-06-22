@@ -106,12 +106,12 @@ describe("CORS preflight (OPTIONS)", () => {
   });
 
   it("allows the deployed app origin from APP_URL, normalizing a trailing slash", async () => {
-    vi.stubEnv("APP_URL", "https://oxagen-v2-app.vercel.app/");
+    vi.stubEnv("APP_URL", "https://app.oxagen.sh/");
     const res = await app.fetch(
-      preflight("/v1/acme/main/connections", "https://oxagen-v2-app.vercel.app"),
+      preflight("/v1/acme/main/connections", "https://app.oxagen.sh"),
     );
     expect(res.headers.get("access-control-allow-origin")).toBe(
-      "https://oxagen-v2-app.vercel.app",
+      "https://app.oxagen.sh",
     );
   });
 
