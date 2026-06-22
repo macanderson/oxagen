@@ -117,7 +117,7 @@ describe("ingestion.semantic-edge-infer Inngest function", () => {
     expect(opts).toMatchObject({
       id: "ingestion-semantic-edge-infer",
       retries: 2,
-      concurrency: expect.objectContaining({ limit: 8, key: "event.data.orgId" }),
+      concurrency: expect.objectContaining({ limit: 5, key: "event.data.orgId" }),
     });
     expect(trigger).toMatchObject({ event: "ingestion/entity.infer" });
   });
