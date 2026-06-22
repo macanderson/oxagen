@@ -27,7 +27,7 @@ export const [agentWorkflowSupervisor] = createFunction(
   {
     id: "agent.workflow.supervisor",
     retries: 1,
-    concurrency: { limit: 10, key: "event.data.orgId" },
+    concurrency: { limit: 5, key: "event.data.orgId" },
     cancelOn: [
       {
         event: "agent/workflow.cancel",

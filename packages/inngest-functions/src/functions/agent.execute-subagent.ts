@@ -37,7 +37,7 @@ const MAX_FANOUT_DEPTH = 3;
  *   - Depth guard: rejects fanouts that exceed MAX_FANOUT_DEPTH.
  */
 export const [agentExecuteSubagent] = createFunction(
-  { id: "agent.execute-subagent", retries: 0, concurrency: { limit: 8, key: "event.data.orgId" } },
+  { id: "agent.execute-subagent", retries: 0, concurrency: { limit: 5, key: "event.data.orgId" } },
   { event: "agent/subagent.dispatch" },
   async ({ event, step }) => {
     const { orgId, workspaceId, fanoutId, depth: rawDepth } = event.data as {

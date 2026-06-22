@@ -28,7 +28,7 @@ export const [ingestionGithubParseFile] = createFunction(
   {
     id: "ingestion-github-parse-file",
     retries: 3,
-    concurrency: { limit: 20, key: "event.data.orgId" },
+    concurrency: { limit: 5, key: "event.data.orgId" },
   },
   { event: "ingestion/github.parse-file" },
   async ({ event, step }) => {

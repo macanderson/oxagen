@@ -21,7 +21,7 @@ import "@oxagen/oxagen";
  * for downstream consumers (e.g. the research swarm → graph projection).
  */
 export const [agentAggregateFanout] = createFunction(
-  { id: "agent.aggregate-fanout", retries: 1, concurrency: { limit: 16, key: "event.data.orgId" } },
+  { id: "agent.aggregate-fanout", retries: 1, concurrency: { limit: 5, key: "event.data.orgId" } },
   { event: "agent/subagent.aggregate.requested" },
   async ({ event, step }) => {
     const { orgId, workspaceId, fanoutId, timeoutMs } = event.data as {

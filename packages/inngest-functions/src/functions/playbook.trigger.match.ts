@@ -133,7 +133,7 @@ export const [playbookTriggerMatch] = createFunction(
   {
     id: "playbook-trigger-match",
     retries: 3,
-    concurrency: { limit: 16, key: "event.data.orgId" },
+    concurrency: { limit: 5, key: "event.data.orgId" },
   },
   { event: "ingestion/entity.created" },
   async ({ event, step }) => {
