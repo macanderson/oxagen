@@ -409,6 +409,7 @@ export function enumerateNavTargets(
 
     // Sidebar-level items
     targets.push({ label: "Ask", href: workspace.ask(wsCtx), parent: "ask" });
+    targets.push({ label: "Explore", href: workspace.explore(wsCtx), parent: "ask" });
     targets.push({ label: "Knowledge", href: workspace.knowledge.root(wsCtx), parent: "knowledge" });
     targets.push({ label: "Automation", href: workspace.automation.root(wsCtx), parent: "automation" });
     targets.push({ label: "Activity", href: workspace.activity.root(wsCtx), parent: "activity" });

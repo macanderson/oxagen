@@ -23,6 +23,12 @@
 | `privacy` | GDPR | data_export_requests, data_erasure_requests |
 | `graph` | Graph Sync | node_sync_meta |
 
+> **Maintenance — keep this list in sync.** The schema list is the single most drift-prone table in these docs. The source of truth is `packages/database/src/schema/_schemas.ts` (one `pgSchema()` declaration per schema). When a schema is added or removed, update this table in the same change. Verify the count with:
+> ```bash
+> grep -c 'pgSchema(' packages/database/src/schema/_schemas.ts   # currently 16
+> ```
+> The same count is asserted in `architecture.md`, `codebase_info.md`, and `index.md` — update all four together.
+
 ## Key Entity Shapes
 
 ### CapabilityContext (runtime)

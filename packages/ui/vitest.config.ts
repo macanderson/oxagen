@@ -13,7 +13,12 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/components/**/*.tsx", "src/lib/**/*.ts"],
-      exclude: ["src/**/*.test.tsx", "src/**/*.test.ts"],
+      exclude: [
+        "src/**/*.test.tsx",
+        "src/**/*.test.ts",
+        // Storybook stories are visual fixtures, not unit-tested logic.
+        "src/**/*.stories.tsx",
+      ],
       // Ratchet (cap 90, keep >=2.5% headroom): adopting Checkbox/Tooltip + new
       // brand/page render tests lifted coverage to ~85.6% lines/statements,
       // 90.6% funcs, 92.4% branches. lines/statements floored at 83.

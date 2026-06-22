@@ -21,6 +21,28 @@ async function bestEffort(cmd: string, args: string[]): Promise<void> {
   }
 }
 
+// Storybook (apps/app on 6007, packages/ui on 6008) spawns a Vite preview
+// child that can outlive the repo-scoped pkill above; free the ports directly
+// so the next `pnpm dev` never trips a "port already in use". Only listeners on
+// these two ports are touched — no other process is affected.
+const STORYBOOK_PORTS = [6007, 6008] as const;
+
+async function killStorybookPorts(): Promise<void> {
+  for (const port of STORYBOOK_PORTS) {
+    let pids: string[] = [];
+    try {
+      const { stdout } = await execa("lsof", ["-ti", `tcp:${port}`]);
+      pids = stdout.split("\n").map((p) => p.trim()).filter(Boolean);
+    } catch {
+      // lsof exits non-zero when nothing is listening — nothing to kill.
+      continue;
+    }
+    if (pids.length === 0) continue;
+    console.log(kleur.cyan(`[kill] freeing storybook port ${port} (pids: ${pids.join(", ")})`));
+    await bestEffort("kill", ["-9", ...pids]);
+  }
+}
+
 async function main(): Promise<void> {
   // Match tsx / node processes whose argv contains this repo's path.
   // `pgrep -f` matches against the full command line; `pkill -f` likewise.
@@ -29,6 +51,9 @@ async function main(): Promise<void> {
   const pattern = `(tsx|node).*${REPO_ROOT.replace(/[/\\$.*+?()[\]{}^|]/g, "\\$&")}`;
   console.log(kleur.cyan(`[kill] stopping dev processes scoped to ${REPO_ROOT}`));
   await bestEffort("pkill", ["-f", pattern]);
+
+  // Free the Storybook ports (apps/app 6007, packages/ui 6008) explicitly.
+  await killStorybookPorts();
 
   // The Stripe CLI and Inngest dev server are standalone Go binaries the
   // repo-scoped pkill above won't match — stop them via the pidfiles written by

@@ -103,6 +103,9 @@ export const workspace = {
   // Ask — the front door (full-page ask/chat surface).
   ask: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/ask`,
 
+  // Explore — the read-only knowledge-graph explorer, a sibling tab of Ask.
+  explore: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/explore`,
+
   // Knowledge
   knowledge: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge`,

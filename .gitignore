@@ -112,3 +112,10 @@ errors.txt
 test_output.json
 .linear-triage/
 research-swarm-complete-verified.png
+
+# Storybook static build output
+storybook-static/
+.devtools
+
+# transient per-package typecheck configs from tools/scripts/typecheck-staged.mjs
+tsconfig.staged-*.json

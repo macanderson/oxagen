@@ -1,8 +1,34 @@
 # ADR-015 — Graph-edge-driven git hooks (Vitest import-graph) + Biome formatting
 
-- **Status:** Proposed
+- **Status:** Superseded in part (see Update 2026-06-21 below)
 - **Date:** 2026-06-21
 - **Supersedes:** the test-selection strategy in `lefthook.yml` (`pre-push.test-unit`) and the Prettier/ESLint formatting step in `pre-commit`.
+
+## Update 2026-06-21 — no test runner in git hooks at all
+
+The import-graph pre-push test runner this ADR introduced (`pre-push.test-related`,
+`vitest --changed origin/main`) has been **removed entirely**. Decision: keep *all*
+test execution — unit and e2e — in CI, never in a git hook. CI already runs both on
+every `pull_request` and on `push` to `main` (`.github/workflows/pipeline.yml`,
+`test` + `e2e` jobs, affected-only via `--filter=...[<base>]`), so the hook copy was
+redundant feedback that still cost local CPU and remained a herd vector. Even an
+import-graph-scoped Vitest run can fan out when a low-level module changes; the only
+way to guarantee `git push` never spawns a test herd is to run no tests on push.
+
+Two consequences for `lefthook.yml`:
+
+- **pre-push** keeps only the two fast, non-test integrity checks (`check:contracts`,
+  `env:check`). No `vitest`, no `playwright`, no build.
+- **pre-commit `typecheck`** no longer shells to whole-repo `pnpm typecheck`. It now
+  runs `tools/scripts/typecheck-staged.mjs {staged_files}`, which groups the staged
+  files by their owning package `tsconfig.json` and type-checks **only those files**
+  (plus their import closure) via a transient per-package config that extends the real
+  one. `eslint --fix {staged_files}` was already staged-files-only. The authoritative
+  affected-package typecheck stays in CI (`turbo run typecheck --filter=...[origin/main]`).
+
+The Biome formatting decision (§2–§4 below) is unaffected and still pending its phased
+rollout. The sections below are retained as the original rationale for the now-removed
+import-graph test selection.
 
 ## Context
 

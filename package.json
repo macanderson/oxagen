@@ -12,6 +12,7 @@
     "prepare": "lefthook install",
     "dev": "tsx tools/scripts/dev.ts",
     "kill": "tsx tools/scripts/kill.ts",
+    "clean:cache": "rm -rf apps/*/.next/dev/cache",
     "env:pull": "tsx tools/scripts/env-pull.ts",
     "env:manager": "pnpm --filter @oxagen/env-manager dev",
     "env:secrets:pull": "pnpm --filter @oxagen/env-manager pull",

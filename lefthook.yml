@@ -15,8 +15,8 @@ pre-commit:
     # but the pre-commit Biome-format step is intentionally NOT enabled yet — it
     # must follow the one-shot `pnpm format` sweep (a coordinated, isolated commit
     # in a quiet window) so unrelated PRs don't each carry whole-file reformatting.
-    # Until then pre-commit stays ESLint-only; pre-push already moved to the
-    # import-graph test selection below.
+    # Until then pre-commit stays ESLint-only. Test suites run in CI, not in any
+    # git hook (see the pre-push note below).
     lint:
       glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
       exclude:
@@ -26,8 +26,11 @@ pre-commit:
       run: pnpm exec eslint --fix --no-warn-ignored {staged_files}
       stage_fixed: true
 
-    # Typecheck the monorepo, but only when non-excluded TS/JS is staged.
-    # (pnpm typecheck is whole-repo; the glob/exclude just gates whether it runs.)
+    # Typecheck ONLY the staged files, never the whole repo. The wrapper groups
+    # the changed files by their owning package tsconfig and runs `tsc-files`
+    # per group, so tsc loads only those files plus their import closure — fast,
+    # local feedback. The authoritative affected-package typecheck runs in CI
+    # (`turbo run typecheck --filter=...[origin/main]`).
     typecheck:
       glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
       exclude:
@@ -35,14 +38,15 @@ pre-commit:
         - ".agents/**"
         - ".claude/**"
         - "scripts/**"
-      run: pnpm typecheck
+      run: node tools/scripts/typecheck-staged.mjs {staged_files}
 
-# pre-push is the test gate for direct-to-main: this repo pushes straight to
-# main (no PR), and CI on a push is post-hoc — it can flag a red main but can't
-# stop the commit from landing. pre-commit already covers lint + typecheck, so
-# pre-push covers what it can't: the test suite plus the contract/env integrity
-# checks that have repeatedly broken CI when skipped. All three were chosen
-# because they are fast and high-signal; the full build/migrate gate stays in CI.
+# pre-push stays light. The unit-test and e2e suites are NOT run here — they run
+# in CI on every pull request and on push to `main` (see .github/workflows/
+# pipeline.yml: `test` and `e2e` jobs, affected-only). Keeping heavy suites out
+# of the push hook is deliberate: stacked vitest/playwright herds from parallel
+# sessions could saturate the machine. pre-push keeps only the two fast,
+# high-signal integrity checks that have repeatedly broken CI when skipped —
+# contract consistency and env-schema validation. No test runner, no full build.
 pre-push:
   parallel: true
   commands:
@@ -67,18 +71,3 @@ pre-push:
         - ".claude/**"
         - "scripts/**"
       run: pnpm env:check
-
-    # Import-graph-scoped tests (ADR-015): run only the suites whose module-import
-    # edges reach a file changed since origin/main. Vitest's `--changed` walks the
-    # module graph to select affected tests — replacing the blunt turbo
-    # `...[origin/main]` dependency-closure fan-out that herded every core when
-    # several sessions pushed at once. CI still runs the full fan-out as the
-    # authoritative gate; this hook is fast, local, related-only feedback.
-    test-related:
-      glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
-      exclude:
-        - "docs/**"
-        - ".agents/**"
-        - ".claude/**"
-        - "scripts/**"
-      run: pnpm exec vitest run --changed origin/main --passWithNoTests
