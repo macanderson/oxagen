@@ -12,7 +12,7 @@
 // relative compiler paths resolve exactly as they do for the real build. The
 // authoritative affected-package typecheck still runs in CI
 // (`turbo run typecheck --filter=...[origin/main]`).
-import { existsSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -45,11 +45,31 @@ for (const file of files) {
   groups.get(tsconfig).push(resolve(repoRoot, file));
 }
 
+// Ambient .d.ts files that live at the package root (e.g. Next.js's
+// `next-env.d.ts`) carry `/// <reference types="..." />` directives that bring
+// in framework-wide ambient types — JSX, `server-only`, route types, etc.
+// Without them the temp `files` config misses those references and a staged
+// file that imports `server-only` (or uses JSX) gets phantom errors. Pull in
+// every top-level `*.d.ts` so the resolution matches the real build.
+function ambientDtsFiles(pkgDir) {
+  try {
+    return readdirSync(pkgDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".d.ts"))
+      .map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+}
+
 let failed = false;
 for (const [tsconfig, absFiles] of groups) {
   const pkgDir = dirname(tsconfig);
   // Temp config beside the real one so extends/types/paths resolve identically.
   const tempPath = join(pkgDir, `tsconfig.staged-${process.pid}.json`);
+  const stagedRelFiles = absFiles.map((f) => relative(pkgDir, f));
+  const ambientRelFiles = ambientDtsFiles(pkgDir).filter(
+    (name) => !stagedRelFiles.includes(name),
+  );
   writeFileSync(
     tempPath,
     JSON.stringify({
@@ -60,7 +80,7 @@ for (const [tsconfig, absFiles] of groups) {
       // rootDir a pure constraint here with no output effect. Widening it to "."
       // lets src files AND root-level config files be type-checked together.
       compilerOptions: { noEmit: true, rootDir: "." },
-      files: absFiles.map((f) => relative(pkgDir, f)),
+      files: [...stagedRelFiles, ...ambientRelFiles],
       include: [],
     }),
   );
