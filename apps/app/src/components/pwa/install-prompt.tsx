@@ -3,12 +3,17 @@
 /**
  * PWA install prompt.
  *
+ * Mobile-only: this nudge only ever mounts on phones/tablets (`isMobileDevice`).
+ * Desktop browsers also fire `beforeinstallprompt`, but the install affordance
+ * there belongs in the browser's omnibox, not in a banner — so desktop is
+ * suppressed entirely.
+ *
  * Three surfaces — all mutually exclusive:
  *  1. Chrome / Android: capture the `beforeinstallprompt` event and surface an
  *     "Install" CTA that triggers the native dialog.
  *  2. iOS Safari (no `beforeinstallprompt`): show a manual "Add to Home Screen"
  *     instruction sheet.
- *  3. Already installed / dismissed: render nothing.
+ *  3. Already installed / dismissed / desktop: render nothing.
  *
  * Dismissal is persisted in localStorage (`oxagen:pwa-install-dismissed`).
  * Once set, the banner is never shown again in that browser profile.
@@ -56,6 +61,31 @@ function isStandalone(): boolean {
   );
 }
 
+/**
+ * Whether this is a phone/tablet ("smart device"). This nudge is mobile-only:
+ * desktop Chrome/Edge also fire `beforeinstallprompt`, so without this gate the
+ * banner would (and did) surface on desktop, where it doesn't belong.
+ */
+function isMobileDevice(): boolean {
+  if (typeof navigator === "undefined" || typeof window === "undefined") {
+    return false;
+  }
+  // Chromium exposes a first-class mobile hint — trust it when present.
+  const uaData = (
+    navigator as Navigator & { userAgentData?: { mobile?: boolean } }
+  ).userAgentData;
+  if (typeof uaData?.mobile === "boolean") return uaData.mobile;
+
+  // Fallback: UA sniff for known phone/tablet platforms.
+  const ua = navigator.userAgent;
+  if (/android|iphone|ipad|ipod|iemobile|blackberry|opera mini|mobile/i.test(ua)) {
+    return true;
+  }
+
+  // iPadOS 13+ Safari masquerades as desktop macOS; touch points give it away.
+  return /macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+}
+
 function isDismissed(): boolean {
   try {
     return localStorage.getItem(DISMISSED_KEY) === "true";
@@ -80,6 +110,10 @@ export function InstallPrompt() {
   useEffect(() => {
     // Never show if already installed or previously dismissed.
     if (isStandalone() || isDismissed()) return;
+
+    // Mobile-only nudge — never surface on desktop, where the browser's own
+    // omnibox install affordance already covers PWA installation.
+    if (!isMobileDevice()) return;
 
     // iOS: show manual instructions.
     if (isIosSafari()) {
@@ -200,12 +234,11 @@ function ShareIcon({ label, style }: { label?: string; style?: React.CSSProperti
 }
 
 // ── Inline styles ─────────────────────────────────────────────────────────────
-// CSS modules can't be used here without introducing a new file that may
-// conflict with global @media; inline styles keep the component fully
-// self-contained. Tailwind utility classes from @/components/ui/* require
-// the class names to be statically analysable — not reliable in a utility
-// component. We use inline styles + a single @media via a <style> tag inserted
-// once (see bottom of this file).
+// Inline styles keep the component fully self-contained. Tailwind utility
+// classes from @/components/ui/* require statically analysable class names —
+// not reliable in a utility component. Desktop suppression is handled in JS
+// (see `isMobileDevice`), so no viewport @media is needed here: the banner only
+// mounts on phones/tablets.
 
 const bannerStyles = {
   root: {
@@ -217,8 +250,6 @@ const bannerStyles = {
     padding: "0 0 12px",
     display: "flex",
     justifyContent: "center",
-    // Hide on desktop — this is a mobile-first install nudge.
-    // The @media override below reveals it on small viewports only.
   } satisfies React.CSSProperties,
   inner: {
     background: "#1a1d28",

@@ -58,6 +58,11 @@ describe("InstallPrompt — suppression logic", () => {
       value:
         "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36",
     });
+    // Reset touch points (used to detect iPadOS masquerading as desktop).
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      writable: true,
+      value: 0,
+    });
   });
 
   it("renders nothing initially (idle state — no beforeinstallprompt fired yet)", () => {
@@ -110,6 +115,47 @@ describe("InstallPrompt — suppression logic", () => {
     expect(getByRole("region", { name: "Install Oxagen" })).toBeTruthy();
     // Should mention Add to Home Screen.
     expect(getByText(/Add to Home Screen/i)).toBeTruthy();
+  });
+
+  it("renders nothing on desktop even when beforeinstallprompt fires (desktop Chrome)", () => {
+    // Desktop Chrome on macOS — no "Mobile" token, not a touch device.
+    Object.defineProperty(navigator, "userAgent", {
+      writable: true,
+      value:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    });
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      writable: true,
+      value: 0,
+    });
+    const { container } = render(<InstallPrompt />);
+    // Even if the browser fires the deferred install event, desktop is gated out
+    // before the listener is ever registered, so the banner must stay hidden.
+    act(() => {
+      window.dispatchEvent(new Event("beforeinstallprompt"));
+    });
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("treats iPadOS Safari (masquerading as desktop macOS) as a mobile device", () => {
+    // iPadOS 13+ Safari reports a macOS UA; touch points reveal it's a tablet.
+    Object.defineProperty(navigator, "userAgent", {
+      writable: true,
+      value:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+    });
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      writable: true,
+      value: 5,
+    });
+    // Not iOS *Safari* by UA (no iPhone/iPad token), so it takes the Chrome path:
+    // mobile gate passes, listener registers, and firing the event shows the CTA.
+    const { container, queryByRole } = render(<InstallPrompt />);
+    expect(container.firstChild).toBeNull();
+    act(() => {
+      window.dispatchEvent(new Event("beforeinstallprompt"));
+    });
+    expect(queryByRole("region", { name: "Install Oxagen" })).not.toBeNull();
   });
 
   it("persists the dismissed flag when dismiss button is clicked (iOS path)", async () => {
