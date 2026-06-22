@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveIsLocalEnv, type LocalEnvSignals } from "./local-env";
+import { isEmailVerificationRequired, resolveIsLocalEnv, type LocalEnvSignals } from "./local-env";
 
 const base: LocalEnvSignals = {
   nodeEnv: undefined,
@@ -70,5 +70,62 @@ describe("resolveIsLocalEnv", () => {
 
   it("is false when nothing signals local", () => {
     expect(resolveIsLocalEnv(base)).toBe(false);
+  });
+});
+
+describe("isEmailVerificationRequired (OXA-1753)", () => {
+  // The helper must mirror !resolveIsLocalEnv(...) exactly — it's the predicate
+  // the API /health gate uses to decide whether to require SMTP_*. Any drift
+  // between these and the auth-config branch lets prod sign-in silently break.
+  it("is false on a plain local box (NODE_ENV=development)", () => {
+    expect(isEmailVerificationRequired({ NODE_ENV: "development" })).toBe(false);
+  });
+
+  it("is false under the E2E harness", () => {
+    expect(isEmailVerificationRequired({ E2E_TEST: "true" })).toBe(false);
+  });
+
+  it("is false when OXAGEN_LOCAL_DEV is set on a non-Vercel host", () => {
+    expect(
+      isEmailVerificationRequired({ NODE_ENV: "production", OXAGEN_LOCAL_DEV: "1" }),
+    ).toBe(false);
+  });
+
+  it("is true on a real Vercel production deployment", () => {
+    expect(
+      isEmailVerificationRequired({
+        NODE_ENV: "production",
+        VERCEL: "1",
+        VERCEL_ENV: "production",
+      }),
+    ).toBe(true);
+  });
+
+  it("is true on a real Vercel preview deployment", () => {
+    expect(
+      isEmailVerificationRequired({
+        NODE_ENV: "production",
+        VERCEL: "1",
+        VERCEL_ENV: "preview",
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores OXAGEN_LOCAL_DEV on a real Vercel deployment", () => {
+    expect(
+      isEmailVerificationRequired({
+        NODE_ENV: "production",
+        VERCEL: "1",
+        VERCEL_ENV: "production",
+        OXAGEN_LOCAL_DEV: "1",
+      }),
+    ).toBe(true);
+  });
+
+  it("defaults to reading process.env when no env is passed", () => {
+    // Smoke-test the no-arg overload — it should resolve without throwing
+    // regardless of host shape; the value depends on the test runner env
+    // (NODE_ENV=test on vitest) so we just assert it returns a boolean.
+    expect(typeof isEmailVerificationRequired()).toBe("boolean");
   });
 });

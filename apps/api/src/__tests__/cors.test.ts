@@ -22,6 +22,13 @@ vi.mock("@oxagen/auth", () => ({
   parseSessionCookie: vi.fn(),
   resolveOrgScope: vi.fn(),
   resolveWorkspaceScope: vi.fn(),
+  // OXA-1753: /health calls this; mock returns false so the email-transport
+  // gate is inert for tests that hit /health for an unrelated reason (cors).
+  isEmailVerificationRequired: vi.fn().mockReturnValue(false),
+}));
+
+vi.mock("@oxagen/notifications", () => ({
+  isEmailTransportConfigured: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({

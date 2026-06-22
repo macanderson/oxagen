@@ -13,6 +13,9 @@ import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
 import { recordSecurityEvent } from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
+import { isEmailVerificationRequired } from "@oxagen/auth";
+import { isEmailTransportConfigured } from "@oxagen/notifications";
+import { logger } from "./middleware/logger";
 
 let bootPromise: Promise<void> | null = null;
 
@@ -54,6 +57,25 @@ export function bootstrap(): Promise<void> {
  */
 async function runBootstrap(): Promise<void> {
   loadEnv();
+
+  // OXA-1753: surface unconfigured SMTP loudly on deployed envs. Deployed envs
+  // set Better Auth's requireEmailVerification=true, so every credential sign-up
+  // needs the verification email to arrive — if SMTP_* is missing, sendEmail is
+  // fire-and-forget and the failure is invisible to the user. We log here so
+  // the misconfig shows up in deploy logs even if nothing probes /health, and
+  // /health also reports it as 503 (see routes/health.ts). Non-throwing on
+  // purpose — OAuth sign-in does not need SMTP and must keep working.
+  if (isEmailVerificationRequired() && !isEmailTransportConfigured()) {
+    logger.error(
+      {
+        check: "email_transport",
+        ticket: "OXA-1753",
+      },
+      "email transport is unconfigured but requireEmailVerification=true — " +
+        "every credential sign-up will silently fail to deliver the verification email. " +
+        "Set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_EMAIL.",
+    );
+  }
 
   // Refuse to boot if the DB role silently bypasses RLS while enforcement is on.
   await assertRlsConnectionSafe();

@@ -27,6 +27,7 @@
     "@oxagen/iam": "workspace:*",
     "@oxagen/functions": "workspace:*",
     "@oxagen/inngest-functions": "workspace:*",
+    "@oxagen/notifications": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",

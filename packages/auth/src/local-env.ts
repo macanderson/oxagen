@@ -53,3 +53,25 @@ export function resolveIsLocalEnv(signals: LocalEnvSignals): boolean {
     (!isVercelDeploy && signals.e2eTest === "true")
   );
 }
+
+/**
+ * Whether the current environment requires verified-email-before-sign-in
+ * (Better Auth's `requireEmailVerification`). True on deployed Vercel envs,
+ * false on local/CI. Mirrors the exact predicate that gates the auth config
+ * in `auth.ts` — keep them in lockstep so callers (e.g. the API `/health`
+ * gate, OXA-1753) evaluate the same condition the runtime auth actually
+ * enforces.
+ *
+ * Defaults to reading `process.env`; pass an explicit env object for tests.
+ */
+export function isEmailVerificationRequired(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return !resolveIsLocalEnv({
+    nodeEnv: env.NODE_ENV,
+    vercel: env.VERCEL,
+    vercelEnv: env.VERCEL_ENV,
+    e2eTest: env.E2E_TEST,
+    localDevFlag: env.OXAGEN_LOCAL_DEV,
+  });
+}

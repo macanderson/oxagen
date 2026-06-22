@@ -25,6 +25,12 @@ const mocks = vi.hoisted(() => ({
   // prevents any accidental handler registration
   handlersRegister: vi.fn(),
   agentRegister: vi.fn(),
+  // OXA-1753 email-transport boot probe deps.
+  isEmailVerificationRequired: vi.fn().mockReturnValue(false),
+  isEmailTransportConfigured: vi.fn().mockReturnValue(true),
+  loggerError: vi.fn(),
+  loggerWarn: vi.fn(),
+  loggerInfo: vi.fn(),
 }));
 
 vi.mock("@oxagen/config/env", () => ({
@@ -80,6 +86,22 @@ vi.mock("@oxagen/database/security", () => ({
 // Mock the side-effect register imports
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
+
+vi.mock("@oxagen/auth", () => ({
+  isEmailVerificationRequired: mocks.isEmailVerificationRequired,
+}));
+
+vi.mock("@oxagen/notifications", () => ({
+  isEmailTransportConfigured: mocks.isEmailTransportConfigured,
+}));
+
+vi.mock("../middleware/logger", () => ({
+  logger: {
+    error: mocks.loggerError,
+    warn: mocks.loggerWarn,
+    info: mocks.loggerInfo,
+  },
+}));
 
 // ── Import bootstrap and test helper ──────────────────────────────────────────
 
@@ -159,5 +181,57 @@ describe("bootstrap() retry on transient failure", () => {
 
     await expect(bootstrap()).resolves.toBeUndefined();
     expect(mocks.assertRlsConnectionSafe).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("bootstrap() email-transport probe (OXA-1753)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetBootForTesting();
+    // Defaults — clearAllMocks resets the return values, so re-apply.
+    mocks.assertRlsConnectionSafe.mockResolvedValue(undefined);
+    mocks.makeSecurityEventInserter.mockReturnValue(vi.fn());
+  });
+
+  it("logs an error when deployed AND SMTP is unconfigured", async () => {
+    mocks.isEmailVerificationRequired.mockReturnValue(true);
+    mocks.isEmailTransportConfigured.mockReturnValue(false);
+
+    await bootstrap();
+
+    expect(mocks.loggerError).toHaveBeenCalledTimes(1);
+    const [meta, msg] = mocks.loggerError.mock.calls[0]!;
+    expect(meta).toMatchObject({ check: "email_transport", ticket: "OXA-1753" });
+    expect(msg).toContain("email transport is unconfigured");
+  });
+
+  it("does NOT log an error when deployed AND SMTP is configured", async () => {
+    mocks.isEmailVerificationRequired.mockReturnValue(true);
+    mocks.isEmailTransportConfigured.mockReturnValue(true);
+
+    await bootstrap();
+
+    expect(mocks.loggerError).not.toHaveBeenCalled();
+  });
+
+  it("does NOT log an error when running locally even if SMTP is missing", async () => {
+    // Local dev has no real SMTP transport — the probe must not pollute logs.
+    mocks.isEmailVerificationRequired.mockReturnValue(false);
+    mocks.isEmailTransportConfigured.mockReturnValue(false);
+
+    await bootstrap();
+
+    expect(mocks.loggerError).not.toHaveBeenCalled();
+  });
+
+  it("the probe is non-throwing — bootstrap still completes on misconfig", async () => {
+    // OAuth sign-in doesn't need SMTP. The probe must observe-not-throw so a
+    // missing transport never wedges a serverless cold-start.
+    mocks.isEmailVerificationRequired.mockReturnValue(true);
+    mocks.isEmailTransportConfigured.mockReturnValue(false);
+
+    await expect(bootstrap()).resolves.toBeUndefined();
+    expect(mocks.bootstrapIAMRuntime).toHaveBeenCalledTimes(1);
+    expect(mocks.setSecurityEventEmitter).toHaveBeenCalledTimes(1);
   });
 });
