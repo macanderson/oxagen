@@ -349,6 +349,16 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  GITHUB_APP_SLUG: {
+    group: "github",
+    description:
+      "GitHub App public slug (the path segment in https://github.com/apps/<slug>). Used to deep-link users to GitHub's install/configure page so they can add or remove orgs and repos. Optional — when unset the connection dialog derives the slug from an existing installation.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
 
   // ── Stripe ──────────────────────────────────────────────────────────────────
   STRIPE_SECRET_KEY: {

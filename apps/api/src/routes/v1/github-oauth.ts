@@ -58,6 +58,25 @@ async function decryptToken(enc: { keyId: string; ciphertext: string }): Promise
   return plain.toString("utf8");
 }
 
+/**
+ * Build the GitHub URL that lets a user add/remove which orgs and repos the
+ * Oxagen GitHub App is installed into.
+ *
+ * Prefers the canonical GITHUB_APP_SLUG env (works even when the user currently
+ * has zero installations), falls back to the slug reported on an existing
+ * installation, and finally to GitHub's generic installed-apps settings page so
+ * the link is always actionable.
+ */
+function buildManageInstallationsUrl(
+  configuredSlug: string | undefined,
+  installations: GitHubInstallation[],
+): string {
+  const slug = configuredSlug?.trim() || installations.find((i) => i.app_slug)?.app_slug;
+  return slug
+    ? `https://github.com/apps/${slug}/installations/new`
+    : "https://github.com/settings/installations";
+}
+
 // ── GET /connections/github/auth-url ─────────────────────────────────────────
 
 /**
@@ -131,6 +150,10 @@ interface GitHubInstallation {
     avatar_url: string;
   };
   repository_selection: string;
+  /** App-specific page where the user manages this installation's org/repo access. */
+  html_url?: string;
+  /** Public slug of the GitHub App (path segment in github.com/apps/<slug>). */
+  app_slug?: string;
 }
 
 interface GitHubInstallationsResponse {
@@ -233,13 +256,20 @@ githubOauthRoute.get("/installations", async (c) => {
     page++;
   } while (allInstallations.length < totalCount);
 
+  const { GITHUB_APP_SLUG } = requireEnv(["GITHUB_APP_SLUG"] as const);
+
   return c.json({
+    // Top-level link to GitHub's install/configure page so the user can add the
+    // App to another org (or remove one) and have it appear after a refresh.
+    manageUrl: buildManageInstallationsUrl(GITHUB_APP_SLUG, allInstallations),
     installations: allInstallations.map((inst) => ({
       id: inst.id,
       accountLogin: inst.account.login,
       accountType: inst.account.type,
       repositorySelection: inst.repository_selection,
       avatarUrl: inst.account.avatar_url,
+      // Per-installation page for managing which repos this org grants access to.
+      htmlUrl: inst.html_url ?? null,
     })),
   });
 });
