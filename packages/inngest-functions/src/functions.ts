@@ -5,7 +5,7 @@ import { stripeSyncInvoice } from "./functions/stripe.sync-invoice";
 import { chatPersistStream } from "./functions/chat.persist-stream";
 import { agentExecuteSubagent } from "./functions/agent.execute-subagent";
 import { agentAggregateFanout } from "./functions/agent.aggregate-fanout";
-import { researchSwarmIngestGraph } from "./functions/research.swarm.ingest-graph";
+import { webSearchIngestGraph } from "./functions/web.search.ingest-graph";
 import { agentBackgroundTaskExecute } from "./functions/agent.background-task.execute";
 import { agentVideoRender, agentVideoRenderOnFailure } from "./functions/agent.video-render";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
@@ -41,7 +41,7 @@ export const functions: any[] = [
   chatPersistStream,
   agentExecuteSubagent,
   agentAggregateFanout,
-  researchSwarmIngestGraph,
+  webSearchIngestGraph,
   agentBackgroundTaskExecute,
   agentVideoRender,
   agentVideoRenderOnFailure,
