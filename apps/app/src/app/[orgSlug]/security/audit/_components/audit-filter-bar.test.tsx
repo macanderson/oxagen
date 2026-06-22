@@ -106,9 +106,7 @@ function noFiltersProps() {
 
 // Helper: parse the URL passed to router.push
 function parsedPush(callIndex = 0): URLSearchParams {
-  const call = mockPush.mock.calls[callIndex];
-  if (!call) throw new Error(`mockPush was not called at index ${callIndex}`);
-  const url: string = call[0] as string;
+  const url: string = mockPush.mock.calls[callIndex]![0];
   const qs = url.includes("?") ? url.split("?")[1]! : "";
   return new URLSearchParams(qs);
 }
@@ -151,7 +149,7 @@ describe("AuditFilterBar", () => {
     const select = screen.getByLabelText(/outcome filter/i) as HTMLSelectElement;
     expect(select).toBeInTheDocument();
     // The first option should be "All outcomes"
-    expect(select.options.item(0)?.text).toBe("All outcomes");
+    expect(select.options[0]!.text).toBe("All outcomes");
     expect(select.value).toBe("");
   });
 
@@ -293,7 +291,7 @@ describe("AuditFilterBar", () => {
     const badges = screen.getAllByTestId("badge");
     expect(badges.length).toBeGreaterThanOrEqual(types.length);
     for (const t of types) {
-      expect(badges.some((b) => b.textContent === t)).toBe(true);
+      expect(screen.getAllByTestId("badge").some((b) => b.textContent === t)).toBe(true);
     }
   });
 
