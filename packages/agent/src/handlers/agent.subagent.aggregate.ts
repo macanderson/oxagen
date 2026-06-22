@@ -233,7 +233,13 @@ export async function agentSubagentAggregateHandler(
     fanoutId: input.fanoutId,
     status,
     totalChildren: fanout.totalChildren,
-    completedChildren: fanout.completedChildren,
+    // Live count derived from the child runs — NOT fanout.completedChildren,
+    // which the executor only writes once in its final `finalize` step. Reading
+    // the stale column made every in-flight poll report 0 completed, so the
+    // research-swarm / workflow progress bars sat at 0% and only jumped at the
+    // very end (the "progress bar never updates" bug). completedCount reflects
+    // each child the moment its run row flips to "completed".
+    completedChildren: completedCount,
     aggregatedData,
     conflicts,
     timeline,

@@ -228,6 +228,31 @@ describe("agent.subagent.aggregate handler", () => {
     expect(result.aggregatedData).toBeNull();
   });
 
+  it("reports a LIVE completedChildren from runs, not the stale fanout column (progress-bar regression)", async () => {
+    // The executor only writes fanout.completedChildren in its final `finalize`
+    // step, so an in-flight fanout's column is 0 even as children finish.
+    // research.swarm.status surfaces completedChildren as the progress numerator,
+    // so reading the stale column pinned the bar at 0% until the swarm ended.
+    // The aggregate must report the live count derived from the run rows.
+    setupMocks(
+      fanout({ status: "running", completedChildren: 0, totalChildren: 3, createdAt: new Date() }),
+      [
+        run("sar_1", { a: 1 }),
+        run("sar_2", { b: 2 }),
+        run("sar_3", null, { status: "running", outputPayload: null, completedAt: null }),
+      ],
+    );
+
+    const result = await agentSubagentAggregateHandler(
+      { fanoutId: "fan_1", timeoutMs: 30 * 60 * 1000 },
+      CTX,
+    );
+
+    expect(result.status).toBe("running");
+    expect(result.completedChildren).toBe(2); // live (2 of 3), despite fanout column = 0
+    expect(result.totalChildren).toBe(3);
+  });
+
   it("reports 'timed_out' for an in-progress fanout older than the snapshot window", async () => {
     setupMocks(
       fanout({ status: "running", completedChildren: 1, createdAt: new Date("2020-01-01T00:00:00Z") }),
