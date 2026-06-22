@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+/// <reference types="@testing-library/jest-dom" />
 /**
  * workflow-progress.test.tsx
  *
@@ -12,10 +13,6 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-// Loads the jest-dom matcher type augmentation (toBeInTheDocument, etc.) into
-// this file's scope so the staged typecheck — which checks files in isolation
-// and doesn't pull in the global vitest setup — resolves them.
-import "@testing-library/jest-dom";
 import { render, screen, cleanup, waitFor } from "@testing-library/react";
 
 afterEach(cleanup);
