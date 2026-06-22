@@ -6,10 +6,13 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import type { AgentSubagentDispatchOutput } from "@oxagen/oxagen/contracts/agent.subagent.dispatch";
 import { logger } from "./logger";
 
-// Result → knowledge-graph projection is wired in the inngest-functions package:
-// `research.swarm.ingest-graph` listens for agent/subagent.fanout.completed and
-// feeds each completed web.search child's hits to graph.ingest (LLM extraction →
-// idempotent node/edge upserts). The swarm stays fire-and-forget here.
+// Result → knowledge-graph projection happens at the web.search handler, not
+// here: every fanned-out web.search child runs through the kernel
+// (agent.execute-subagent → invoke("web.search")), and that handler emits
+// `web/search.completed`, which `web.search.ingest-graph` feeds to graph.ingest
+// (LLM extraction → idempotent node/edge upserts). So swarm searches AND the
+// in-chat agent's direct searches build the graph through the same path. The
+// swarm stays fire-and-forget here.
 
 const DEPTH_QUERY_COUNTS: Record<string, number> = {
   shallow: 3,
