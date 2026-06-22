@@ -104,6 +104,24 @@ describe("repo.metrics handler", () => {
     expect(out.lastErrorAt).toBe(UPDATED_AT.toISOString());
   });
 
+  it("collapses a deleting connection to pending_setup with no interval/next-sync", async () => {
+    setup({
+      publicId: "con_del",
+      displayName: "del",
+      deliveryMethod: "rest_polling",
+      deliveryConfig: { syncMethod: "polling", syncIntervalSeconds: 600 },
+      status: "deleting",
+      entityCount: 5,
+      lastSyncAt: SYNCED_AT,
+      errorMessage: null,
+      updatedAt: UPDATED_AT,
+    });
+    const out = await repoMetricsHandler({ repoId: "con_del" }, CTX);
+    expect(out.status).toBe("pending_setup");
+    // status !== active → no next-sync estimate even for a polling connection.
+    expect(out.estimatedNextSyncAt).toBeNull();
+  });
+
   it("throws 404 when the connection does not exist", async () => {
     setup(null);
     await expect(repoMetricsHandler({ repoId: "con_missing" }, CTX)).rejects.toThrow(

@@ -112,6 +112,30 @@ describe("repo.configure handler", () => {
     expect(out.pathFilters).toBeNull();
     expect(out.labelFilters).toBeNull();
     expect(out.recordTypes).toEqual([]);
+    expect(out.pollingIntervalSeconds).toBeNull();
+  });
+
+  it("round-trips ontologyPrompt and fieldMappings into deliveryConfig", async () => {
+    const { setSpy } = setup({
+      id: "c1",
+      displayName: "acme/app",
+      deliveryConfig: null,
+      deliveryMethod: "webhook",
+    });
+    await repoConfigureHandler(
+      {
+        repoId: "con_1",
+        ontologyPrompt: "Extract product features from issues",
+        fieldMappings: { title: "name", body: "description" },
+        syncCadence: "manual",
+      },
+      CTX,
+    );
+    const persisted = setSpy.mock.calls[0]![0] as Record<string, unknown>;
+    expect((persisted["semanticInference"] as Record<string, unknown>)["ontologyPrompt"]).toBe(
+      "Extract product features from issues",
+    );
+    expect(persisted["fieldMappings"]).toEqual({ title: "name", body: "description" });
   });
 
   it("throws 404 when the connection does not exist", async () => {

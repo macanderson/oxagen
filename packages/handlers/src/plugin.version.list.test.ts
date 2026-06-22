@@ -132,6 +132,39 @@ describe("plugin.version.list handler", () => {
     expect(out.versions[0]).toMatchObject({ changelog: "Added webhooks" });
   });
 
+  it("omits changelog when requested but absent from the cached schema", async () => {
+    setup({
+      builtIn: { metadata: { version: "2.1.0", schemaVersion: "v1" } },
+      history: [{ pluginVersion: "2.1.0", schemaVersion: "v1", cachedAt: D2, schema: {} }],
+      installed: false,
+    });
+    const out = await pluginVersionListHandler(
+      { pluginId: "github", limit: 20, includeChangelog: true },
+      CTX,
+    );
+    expect(out.versions[0]).not.toHaveProperty("changelog");
+  });
+
+  it("surfaces minimumPlatformVersion from the cached schema metadata when present", async () => {
+    setup({
+      builtIn: { metadata: { version: "2.1.0", schemaVersion: "v1" } },
+      history: [
+        {
+          pluginVersion: "2.1.0",
+          schemaVersion: "v1",
+          cachedAt: D2,
+          schema: { metadata: { minimumPlatformVersion: "1.5.0" } },
+        },
+      ],
+      installed: false,
+    });
+    const out = await pluginVersionListHandler(
+      { pluginId: "github", limit: 20, includeChangelog: false },
+      CTX,
+    );
+    expect(out.versions[0]).toMatchObject({ minimumPlatformVersion: "1.5.0" });
+  });
+
   it("falls back to the Oxagen plugin-registry manifest version for non-connector plugins", async () => {
     setup({ builtIn: null, manifest: { version: "3.0.0" }, history: [], installed: false });
     const out = await pluginVersionListHandler(

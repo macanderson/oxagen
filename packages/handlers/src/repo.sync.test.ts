@@ -93,4 +93,11 @@ describe("repo.sync handler", () => {
     const incremental = await repoSyncHandler({ repoId: "con_1", mode: "incremental" }, CTX);
     expect(incremental.estimatedRecords).toBe(0);
   });
+
+  it("falls back to the connection deliveryMethod when deliveryConfig has no syncMethod", async () => {
+    setup(makeRow({ deliveryConfig: null, deliveryMethod: "rest_polling" }));
+    await repoSyncHandler({ repoId: "con_1", mode: "incremental" }, CTX);
+    const [event] = mocks.inngestSend.mock.calls[0] as [Record<string, unknown>];
+    expect((event["data"] as Record<string, unknown>)["syncMethod"]).toBe("rest_polling");
+  });
 });

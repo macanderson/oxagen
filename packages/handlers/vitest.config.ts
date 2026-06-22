@@ -21,26 +21,31 @@ export default defineConfig({
         // Preserve vitest default exclusions (test files, type declarations, etc.)
         ...coverageConfigDefaults.exclude,
         // plugin.*.ts — handlers shipped as part of the installable-plugins epic
-        // (OXA-1573+). These files are explicitly OUT OF SCOPE for testing right
-        // now because the plugin API surface is subject to change. They will be
-        // covered once the plugin contracts stabilise. Tracked in Linear.
-        "src/plugin.*.ts",
-        // integration.*.ts — integration management handlers (list, get, install,
-        // delete, metrics). These are data-passthrough stubs pending live API
-        // integration tests. Excluded to preserve the coverage gate while those
-        // tests are scaffolded. Tracked in Linear (OXA-integration-coverage).
-        "src/integration.delete.ts",
-        "src/integration.get.ts",
-        "src/integration.install.ts",
-        "src/integration.list.ts",
-        "src/integration.metrics.ts",
-        // repo.*.ts — repo management handlers (configure, metrics, pause,
-        // resume, sync) are stub pass-throughs pending integration-level tests.
-        "src/repo.configure.ts",
-        "src/repo.metrics.ts",
-        "src/repo.pause.ts",
-        "src/repo.resume.ts",
-        "src/repo.sync.ts",
+        // (OXA-1573+ / re-inclusion tracked by OXA-1611). Still OUT OF SCOPE for
+        // unit coverage because the plugin API surface is subject to change.
+        // Listed explicitly (not "src/plugin.*.ts") so plugin.version.list.ts —
+        // now wired to the connector_schemas catalog with real unit tests — is
+        // re-included in the coverage gate while the rest stay excluded.
+        "src/plugin.catalog.browse.ts",
+        "src/plugin.catalog.get.ts",
+        "src/plugin.credential.reauth.ts",
+        "src/plugin.credential.set_secret.ts",
+        "src/plugin.org.install.ts",
+        "src/plugin.org.install_bulk.ts",
+        "src/plugin.org.list.ts",
+        "src/plugin.org.set_enabled.ts",
+        "src/plugin.org.uninstall.ts",
+        "src/plugin.registry.add.ts",
+        "src/plugin.registry.list.ts",
+        "src/plugin.registry.remove.ts",
+        "src/plugin.schema.get.ts",
+        "src/plugin.schema.validate.ts",
+        "src/plugin.settings.set_auth_alerts.ts",
+        "src/plugin.workspace.set_enabled.ts",
+        // NOTE: repo.*.ts and integration.{delete,get,install,list,metrics}.ts
+        // were previously excluded here as "stubs pending tests". They are now
+        // wired to ingestion.source_connections / connector_schemas / Inngest and
+        // carry full unit tests, so they are back IN the coverage gate.
         // research.swarm.status.ts — depends on external job-store lookups;
         // integration-tested at the API layer. Stub excluded from unit coverage.
         "src/research.swarm.status.ts",

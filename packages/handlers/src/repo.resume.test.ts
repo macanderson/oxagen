@@ -67,6 +67,13 @@ describe("repo.resume handler", () => {
     expect(delta).toBe(900 * 1000);
   });
 
+  it("is idempotent when resuming an already-connected connection", async () => {
+    setup({ id: "c1", status: "connected", deliveryMethod: "webhook", deliveryConfig: null });
+    const out = await repoResumeHandler({ repoId: "con_1" }, CTX);
+    expect(out.status).toBe("active");
+    expect(out.nextSyncAt).toBeNull();
+  });
+
   it("rejects resuming a connection in the error state (409)", async () => {
     setup({ id: "c1", status: "error", deliveryMethod: "webhook", deliveryConfig: null });
     await expect(repoResumeHandler({ repoId: "con_1" }, CTX)).rejects.toThrow(

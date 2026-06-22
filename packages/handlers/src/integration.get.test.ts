@@ -99,6 +99,25 @@ describe("integration.get handler", () => {
     expect(out.status).toBe("pending_setup");
   });
 
+  it("maps error status to failed and surfaces the error message", async () => {
+    mocks.loadBuiltInSchema.mockReturnValue(null);
+    setup({
+      publicId: "con_e",
+      connectorId: "linear",
+      displayName: "Broken Linear",
+      status: "error",
+      deliveryConfig: null,
+      entityCount: 2,
+      lastSyncAt: null,
+      errorMessage: "token expired",
+      createdAt: CREATED,
+      updatedAt: UPDATED,
+    });
+    const out = await integrationGetHandler({ integrationId: "con_e" }, CTX);
+    expect(out.status).toBe("failed");
+    expect(out.errorMessage).toBe("token expired");
+  });
+
   it("throws 404 when the integration does not exist", async () => {
     mocks.loadBuiltInSchema.mockReturnValue(null);
     setup(null);

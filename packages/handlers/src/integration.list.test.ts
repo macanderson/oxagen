@@ -4,16 +4,30 @@ import { makeCTX } from "./test-utils/fixtures";
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   loadBuiltInSchema: vi.fn(() => ({ metadata: { version: "2.1.0" } })),
+  eqSpy: vi.fn(),
 }));
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return { ...real, withTenantDb: mocks.withTenantDb };
+});
+// Wrap eq so we can assert the ACTUAL predicate value (e.g. the translated DB
+// status) while still building a real condition the query chain accepts.
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const real = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...real,
+    eq: (col: unknown, val: unknown) => {
+      mocks.eqSpy(col, val);
+      return real.eq(col as never, val as never);
+    },
+  };
 });
 vi.mock("@oxagen/ingestion/connector-schema-loader", () => ({
   loadBuiltInSchema: mocks.loadBuiltInSchema,
 }));
 vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
+import { schema } from "@oxagen/database";
 import { integrationListHandler } from "./integration.list";
 
 const CTX = makeCTX({ orgId: "org-1", workspaceId: "ws-1" });
@@ -129,11 +143,18 @@ describe("integration.list handler", () => {
     expect(out.hasMore).toBe(false);
   });
 
-  it("translates a contract status filter into the DB status before querying", async () => {
+  it("translates the contract status filter to the DB status in the predicate", async () => {
     setup([], 0);
     await integrationListHandler({ status: "failed", limit: 50, offset: 0 }, CTX);
-    // 'failed' must map to the DB 'error' — the filter was applied (count query ran).
+    // 'failed' must become the DB 'error' value in the ACTUAL where predicate,
+    // not merely "a filter ran".
+    expect(mocks.eqSpy).toHaveBeenCalledWith(schema.sourceConnections.status, "error");
     expect(whereSpy).toHaveBeenCalled();
-    expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
+  });
+
+  it("filters by pluginId on the connectorId column when provided", async () => {
+    setup([], 0);
+    await integrationListHandler({ pluginId: "github", limit: 50, offset: 0 }, CTX);
+    expect(mocks.eqSpy).toHaveBeenCalledWith(schema.sourceConnections.connectorId, "github");
   });
 });
