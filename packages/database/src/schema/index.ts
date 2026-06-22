@@ -18,7 +18,6 @@ export * from "./plugin";
 export * from "./notification";
 export * from "./privacy";
 export * from "./ingestion";
-export * from "./graph";
 
 // Relations must be exported for Drizzle to include them in the schema
 export * from "../relations";

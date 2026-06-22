@@ -134,7 +134,7 @@ describe("tenant policy manifest", () => {
     // 62 = 63 baseline − plugin.org_denylist (removed 2026-06-17 workspace-scoping rebuild).
     // 65 = 62 + mcp.consents + mcp.tool_snapshots + security.mcp_server_changes
     //      (OXA-816 / OXA-820 external-MCP consent + snapshot tables).
-    // 64 = 65 − graph.outbox (dropped 20260621120000_drop_graph_outbox.sql; the
+    // 64 = 65 − graph.outbox (dropped 20260622000000_drop_graph_outbox.sql; the
     //      outbox/projection_checkpoints tables were never wired).
     // 66 = 64 + org.org_slug_history + workspace.workspace_slug_history
     //      (OXA-1779 slug-rename redirect history).
