@@ -138,6 +138,24 @@ describe("CommandMenu", () => {
     expect(updatedOptions[1]?.getAttribute("aria-selected")).toBe("true");
   });
 
+  it("passes the workspace ctx through to enumerateNavTargets (OXA-1464)", () => {
+    // Regression guard: the org-layout previously mounted CommandMenu with only
+    // {orgSlug} so workspace nav targets were missing from Cmd+K on workspace
+    // pages. The workspace-layout mount now passes the full {orgSlug,
+    // workspaceSlug} ctx — this test fails if a future change drops it.
+    mockPageCtx.isCommandOpen = true;
+    const wsCtx = { orgSlug: "acme", workspaceSlug: "prod" } as Parameters<
+      typeof CommandMenu
+    >[0]["ctx"];
+    render(<CommandMenu ctx={wsCtx} />);
+    expect(mockEnumerateNavTargets).toHaveBeenCalled();
+    const firstCallCtx = mockEnumerateNavTargets.mock.calls[0]?.[0] as
+      | { orgSlug: string; workspaceSlug?: string }
+      | undefined;
+    expect(firstCallCtx?.orgSlug).toBe("acme");
+    expect(firstCallCtx?.workspaceSlug).toBe("prod");
+  });
+
   it("Escape key calls closeCommand via onOpenChange", () => {
     mockPageCtx.isCommandOpen = true;
     render(<CommandMenu ctx={mockCtx} />);

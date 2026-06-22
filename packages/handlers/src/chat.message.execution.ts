@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { chatMessageExecution } from "@oxagen/oxagen/contracts/chat.message.execution";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
+import { emitExecutionSyncEvent } from "./agent.execution.sync-event";
 import { logger } from "./logger";
 
 /**
@@ -13,7 +14,7 @@ export const chatMessageExecutionHandler: CapabilityHandler<typeof chatMessageEx
   input,
   ctx,
 ) => {
-  return await withTenantDb(async (tx) => {
+  const result = await withTenantDb(async (tx) => {
     // 1. Verify message exists and belongs to current workspace
     const message = await tx.query.messages.findFirst({
       where: and(
@@ -149,4 +150,26 @@ export const chatMessageExecutionHandler: CapabilityHandler<typeof chatMessageEx
 
     return executionResult;
   });
+
+  // Mirror the finished chat run into the knowledge graph as lineage
+  // (best-effort, terminal-only — see emitExecutionSyncEvent). origin is the
+  // chat message, matching the origin_type='chat' row written above.
+  await emitExecutionSyncEvent({
+    executionId: result.executionId,
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    status: input.status,
+    originType: "chat",
+    originId: input.messageId,
+    agentId: input.agentId,
+    startedAt: input.startedAt ?? null,
+    completedAt: input.completedAt ?? null,
+    latencyMs: input.latencyMs ?? null,
+    inputTokens: input.inputTokens ?? null,
+    outputTokens: input.outputTokens ?? null,
+    estimatedCostUsd: input.estimatedCostUsd ?? null,
+    steps: input.steps,
+  });
+
+  return result;
 };

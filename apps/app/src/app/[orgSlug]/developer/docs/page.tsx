@@ -56,37 +56,37 @@ const SECTIONS: DocSection[] = [
     icon: Terminal,
     title: "Quickstart",
     description: "Stream your first chat response in under 5 minutes.",
-    href: "https://oxagen-v2-docs.vercel.app/docs/quickstart",
+    href: "https://docs.oxagen.sh/docs/quickstart",
   },
   {
     icon: Code2,
     title: "REST API reference",
     description: "Full OpenAPI spec for all v1 endpoints, schemas, and error codes.",
-    href: "https://oxagen-v2-docs.vercel.app/docs/api",
+    href: "https://docs.oxagen.sh/docs/api",
   },
   {
     icon: Zap,
     title: "MCP server",
     description: "Connect any MCP-compatible agent client to your Oxagen workspace.",
-    href: "https://oxagen-v2-docs.vercel.app/docs/mcp",
+    href: "https://docs.oxagen.sh/docs/mcp",
   },
   {
     icon: Layers,
     title: "SDK & client libraries",
     description: "TypeScript and Python SDKs with type-safe wrappers around the REST API.",
-    href: "https://oxagen-v2-docs.vercel.app/docs/sdk",
+    href: "https://docs.oxagen.sh/docs/sdk",
   },
   {
     icon: Sparkles,
     title: "Agent authoring guide",
     description: "Build, schedule, and observe multi-step agents with Oxagen Automation.",
-    href: "https://oxagen-v2-docs.vercel.app/docs/agents",
+    href: "https://docs.oxagen.sh/docs/agents",
   },
   {
     icon: BookOpen,
     title: "Webhooks",
     description: "Receive real-time event payloads for completed runs, member changes, and more.",
-    href: "https://oxagen-v2-docs.vercel.app/docs/webhooks",
+    href: "https://docs.oxagen.sh/docs/webhooks",
   },
 ];
 
@@ -142,7 +142,7 @@ export default async function DeveloperDocsPage() {
         <p className="mb-4 text-sm text-muted-foreground">
           Base URL:{" "}
           <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
-            https://oxagen-v2-api.vercel.app
+            https://api.oxagen.sh
           </code>
         </p>
         <div className="flex flex-col divide-y divide-border/60">

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { invitationEmailTemplate } from "./invitation-email-template";
 
 const BASE_INPUT = {
-  inviteUrl: "https://oxagen-v2-app.vercel.app/invite?token=invite123",
+  inviteUrl: "https://app.oxagen.sh/invite?token=invite123",
   inviterName: "Jane Smith",
   orgName: "Acme Corp",
   role: "member",

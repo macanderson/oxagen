@@ -19,7 +19,7 @@ import type { McpTabEntry } from "./mcp-install-tabs";
 // Sentinel workspaceId for org-only routes. — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
-const MCP_URL = "https://oxagen-v2-mcp.vercel.app/mcp";
+const MCP_URL = "https://mcp.oxagen.sh/mcp";
 
 /** Build the install snippets with a real (or placeholder) API key. */
 function buildSnippets(apiKey: string): Omit<McpTabEntry, "highlightedHtml">[] {

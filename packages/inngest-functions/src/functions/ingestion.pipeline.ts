@@ -30,7 +30,7 @@ export const [ingestionPipeline] = createFunction(
   {
     id: "ingestion-pipeline",
     retries: 3,
-    concurrency: { limit: 8, key: "event.data.orgId" },
+    concurrency: { limit: 5, key: "event.data.orgId" },
   },
   { event: "ingestion/entity.received" },
   async ({ event, step }) => {

@@ -16,6 +16,7 @@ import { PageContextProvider } from "@/lib/page-context";
 import { AskDrawer } from "@/components/shell/ask/ask-drawer";
 import { CommandMenu } from "@/components/shell/ask/command-menu";
 import { FillOverlay } from "@/components/shell/ask/fill-overlay";
+import { OrgOnlyMount } from "@/components/shell/ask/org-only-mount";
 import { resolvedTierCatalog } from "@oxagen/ai";
 import { WandButton, WandPanel } from "@/components/shell/wand";
 import type { PlanTier } from "@oxagen/oxagen/types";
@@ -225,17 +226,25 @@ export default async function OrgLayout({
         {children}
       </AppShell>
 
-      {/* Ask drawer — mounted once at the org shell boundary; workspace list streams. */}
-      <Suspense fallback={null}>
-        <AskDrawerStreamed
-          orgSlug={orgSlug}
-          navDataPromise={navDataPromise}
-          modelConfig={modelConfig}
-        />
-      </Suspense>
-
-      {/* Command menu — Cmd+K overlay */}
-      <CommandMenu ctx={ctx} />
+      {/*
+        AskDrawer + CommandMenu at the org boundary serve org-only routes
+        (`/{org}`, `/{org}/settings`, `/{org}/members`, …). On workspace pages
+        the nested `[workspaceSlug]/layout.tsx` mounts the same pair with the
+        full `{orgSlug, workspaceSlug}` context, so `enumerateNavTargets`
+        surfaces workspace-scoped routes. `OrgOnlyMount` suppresses these
+        copies on workspace paths to keep a single set of overlays in the
+        tree (acceptance: "No double-mount of CommandMenu or AskDrawer").
+      */}
+      <OrgOnlyMount orgSlug={orgSlug}>
+        <Suspense fallback={null}>
+          <AskDrawerStreamed
+            orgSlug={orgSlug}
+            navDataPromise={navDataPromise}
+            modelConfig={modelConfig}
+          />
+        </Suspense>
+        <CommandMenu ctx={ctx} />
+      </OrgOnlyMount>
 
       {/* Fill overlay — renders AI form-fill suggestions from AskBar */}
       <FillOverlay />

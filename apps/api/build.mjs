@@ -2,6 +2,7 @@ import { build } from "esbuild";
 import { mkdir, writeFile, copyFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
+import { connectorSchemaAssets } from "./build-assets.mjs";
 
 // Emit a Vercel Build Output API directory (.vercel/output) directly, instead
 // of relying on the api/ + functions convention. Why:
@@ -66,6 +67,18 @@ const WASM_ASSETS = [
 for (const [pkg, file] of WASM_ASSETS) {
   const pkgDir = dirname(require.resolve(`${pkg}/package.json`));
   await copyFile(`${pkgDir}/${file}`, `${FUNC}/${file}`);
+}
+
+// Built-in connector schema YAMLs: packages/ingestion's loadBuiltInSchema reads
+// these at runtime via readFileSync to drive connector install / "Configure"
+// forms (plugin.schema.get). They are data assets esbuild can't inline — copy
+// each connectors/<id>/schema.yaml next to the bundle, preserving the
+// connectors/<id>/ layout so the loader's moduleDir()-relative resolution finds
+// them inside the function (mirrors the .wasm copy above).
+for (const { src, dest } of connectorSchemaAssets()) {
+  const destPath = `${FUNC}/${dest}`;
+  await mkdir(dirname(destPath), { recursive: true });
+  await copyFile(src, destPath);
 }
 
 await writeFile(

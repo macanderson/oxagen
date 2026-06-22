@@ -60,7 +60,7 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
   {
     id: "ingestion-semantic-edge-infer",
     retries: 2,
-    concurrency: { limit: 8, key: "event.data.orgId" },
+    concurrency: { limit: 5, key: "event.data.orgId" },
   },
   { event: "ingestion/entity.infer" },
   async ({ event, step }) => {

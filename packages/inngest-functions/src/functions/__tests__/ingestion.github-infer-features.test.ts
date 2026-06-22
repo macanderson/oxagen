@@ -114,7 +114,7 @@ describe("ingestion.github-infer-features Inngest function", () => {
     expect(opts).toMatchObject({
       id: "ingestion-github-infer-features",
       retries: 2,
-      concurrency: expect.objectContaining({ limit: 10, key: "event.data.orgId" }),
+      concurrency: expect.objectContaining({ limit: 5, key: "event.data.orgId" }),
     });
     expect(trigger).toMatchObject({ event: "ingestion/github.infer-features" });
   });

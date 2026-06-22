@@ -134,7 +134,7 @@ const NO_ORG_SENTINEL = "00000000-0000-0000-0000-000000000000";
 
 // ---------------------------------------------------------------------------
 // OXA-1504: Trusted origins — built from env vars so switching from the
-// interim Vercel domains to oxagen.ai is a one-line env change, not a
+// interim Vercel domains to oxagen.sh is a one-line env change, not a
 // code change.
 //
 // BETTER_AUTH_TRUSTED_ORIGINS may be a comma-separated list of origins.
@@ -146,25 +146,25 @@ const envTrustedOrigins: string[] = process.env.BETTER_AUTH_TRUSTED_ORIGINS
   : [];
 
 // Production app origins trusted for CSRF / OAuth redirect validation.
-// Interim Vercel-managed domains AND the branded oxagen.ai domains are both
+// Interim Vercel-managed domains AND the branded oxagen.sh domains are both
 // listed so the brand-domain cutover needs no auth code change. Additional
 // per-environment origins can still be appended via BETTER_AUTH_TRUSTED_ORIGINS.
 const PROD_ORIGINS = [
   // Interim Vercel-managed domains.
-  "https://oxagen-v2-app.vercel.app",
-  "https://oxagen-v2-website.vercel.app",
-  "https://oxagen-v2-api.vercel.app",
-  "https://oxagen-v2-admin.vercel.app",
-  // Branded oxagen.ai domains.
-  "https://app.oxagen.ai",
+  "https://app.oxagen.sh",
+  "https://www.oxagen.sh",
+  "https://api.oxagen.sh",
+  "https://admin.oxagen.sh",
+  // Branded oxagen.sh domains.
+  "https://app.oxagen.sh",
   // Stable preview alias — a Vercel branch-tracking domain that always serves
   // the latest preview deployment, so Google OAuth (which forbids wildcard
   // redirect URIs) works on previews via this one fixed hostname.
-  "https://preview-app.oxagen.ai",
-  "https://oxagen.ai",
-  "https://www.oxagen.ai",
-  "https://api.oxagen.ai",
-  "https://admin.oxagen.ai",
+  "https://preview-app.oxagen.sh",
+  "https://oxagen.sh",
+  "https://www.oxagen.sh",
+  "https://api.oxagen.sh",
+  "https://admin.oxagen.sh",
 ];
 
 // Local dev origins — only included in non-production so they cannot

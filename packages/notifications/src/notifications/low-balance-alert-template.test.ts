@@ -5,7 +5,7 @@ const BASE_INPUT = {
   orgName: "Acme Corp",
   balanceCents: 1050,
   thresholdCents: 2000,
-  topUpUrl: "https://oxagen-v2-app.vercel.app/billing/top-up",
+  topUpUrl: "https://app.oxagen.sh/billing/top-up",
 };
 
 describe("lowBalanceAlertTemplate", () => {

@@ -153,6 +153,19 @@ function deriveAggregateStatus(
   now: number,
 ): AggStatus {
   if (IN_PROGRESS_STATUSES.has(fanout.status)) {
+    // The executor (agent.execute-subagent) is what advances the fan-out row to
+    // running/completed. If it never ran — e.g. the dispatch event was emitted
+    // but no Inngest function picked it up (app not synced / signing-key
+    // mismatch), or the emit failed and marked every child failed — the row is
+    // stuck at `pending`. When every child has already reached a terminal state
+    // we can report the true outcome immediately instead of waiting out the
+    // snapshot window and reporting a misleading `running`/`timed_out`.
+    const terminalCount = completedCount + failedCount;
+    if (fanout.totalChildren > 0 && terminalCount >= fanout.totalChildren) {
+      if (failedCount === 0) return "completed";
+      if (completedCount === 0) return "failed";
+      return "partial";
+    }
     const ageMs = fanout.createdAt ? now - fanout.createdAt.getTime() : 0;
     return ageMs >= timeoutMs ? "timed_out" : "running";
   }
@@ -220,7 +233,13 @@ export async function agentSubagentAggregateHandler(
     fanoutId: input.fanoutId,
     status,
     totalChildren: fanout.totalChildren,
-    completedChildren: fanout.completedChildren,
+    // Live count derived from the child runs — NOT fanout.completedChildren,
+    // which the executor only writes once in its final `finalize` step. Reading
+    // the stale column made every in-flight poll report 0 completed, so the
+    // research-swarm / workflow progress bars sat at 0% and only jumped at the
+    // very end (the "progress bar never updates" bug). completedCount reflects
+    // each child the moment its run row flips to "completed".
+    completedChildren: completedCount,
     aggregatedData,
     conflicts,
     timeline,

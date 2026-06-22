@@ -14,7 +14,11 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
+import { existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
+  BUILT_IN_PLUGIN_IDS,
   loadBuiltInSchema,
   loadSchema,
   validateConfigAgainstSchema,
@@ -114,6 +118,34 @@ describe("loadBuiltInSchema — built-in plugins", () => {
     const schema = loadBuiltInSchema("google-drive");
     expect(schema?.metadata.id).toBe("google-drive");
     expect(schema?.metadata.displayName).toBe("Google Drive");
+  });
+
+  // Regression: every declared built-in MUST have a schema file that resolves
+  // on disk and loads. In prod, apps/api esbuild-bundles this loader (CJS) and
+  // copies these YAMLs next to the function; a built-in id without a matching
+  // file — or a loader that can't find it — 500s the connector "Configure" flow.
+  it("loads every declared built-in plugin id without throwing", () => {
+    for (const id of BUILT_IN_PLUGIN_IDS) {
+      const schema = loadBuiltInSchema(id);
+      expect(schema, `built-in "${id}" should load`).not.toBeNull();
+      expect(schema?.metadata.id).toBe(id);
+      expect(schema?.apiVersion).toBe("oxagen.ai/v1alpha1");
+      expect(schema?.kind).toBe("ConnectorPlugin");
+    }
+  });
+
+  it("resolves each built-in schema file from the loader module directory", () => {
+    // Mirror the loader's primary resolution path (moduleDir() → connectors/<id>).
+    // The bundle copy in apps/api/build.mjs relies on this exact layout, so a
+    // drift here would break prod even while dev/vitest pass via the fallback.
+    const moduleDir = dirname(fileURLToPath(import.meta.url));
+    const connectorsDir = resolve(moduleDir, "..", "connectors");
+    for (const id of BUILT_IN_PLUGIN_IDS) {
+      expect(
+        existsSync(resolve(connectorsDir, id, "schema.yaml")),
+        `connectors/${id}/schema.yaml must exist`,
+      ).toBe(true);
+    }
   });
 
   it("returns null for an unknown plugin id", () => {

@@ -168,9 +168,20 @@ function TaskCell({ task }: { task: WorkflowTaskSnapshot }) {
 
 export default function WorkflowProgress({
   workflowId,
-  orgSlug: _orgSlug = "",
-  workspaceSlug: _workspaceSlug = "",
+  orgSlug = "",
+  workspaceSlug = "",
 }: WorkflowProgressProps): React.ReactElement {
+  // The workflow status/cancel/result routes are org+workspace scoped on the
+  // Hono API (`/v1/:org/:ws/workflows/:id`, plural), and apps/app has NO local
+  // Next route for `/api/v1/workflow*` — so the call falls through the
+  // next.config rewrite to the API. A bare `/api/v1/workflow/:id` (singular, no
+  // slugs) therefore 404s ("Failed to load workflow"). Build the scoped, plural
+  // URL, and only poll once the slugs are present (translate-stream injects
+  // orgSlug/workspaceSlug into every render component's props).
+  const baseUrl =
+    orgSlug !== "" && workspaceSlug !== ""
+      ? `/api/v1/${encodeURIComponent(orgSlug)}/${encodeURIComponent(workspaceSlug)}/workflows/${encodeURIComponent(workflowId)}`
+      : null;
   const [data, setData] = React.useState<WorkflowData | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [cancelling, setCancelling] = React.useState(false);
@@ -180,14 +191,20 @@ export default function WorkflowProgress({
     ? STATUS_CONFIG[data.workflow.status].isDone
     : false;
 
-  // Poll /api/v1/workflow/:id every 3s until terminal status
+  // Poll the scoped workflow status route every 3s until terminal status.
   React.useEffect(() => {
+    if (!baseUrl) {
+      // No org/workspace context to scope the request — surface it rather than
+      // firing a slug-less request that would 404.
+      setError("missing workspace context");
+      return;
+    }
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
 
     async function poll() {
       try {
-        const res = await fetch(`/api/v1/workflow/${workflowId}`, {
+        const res = await fetch(baseUrl as string, {
           headers: { "Content-Type": "application/json" },
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -212,14 +229,14 @@ export default function WorkflowProgress({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [workflowId]);
+  }, [baseUrl]);
 
   async function handleCancel() {
-    if (!data || isDone || cancelling) return;
+    if (!data || isDone || cancelling || !baseUrl) return;
     setCancelling(true);
     setCancelError(null);
     try {
-      const res = await fetch(`/api/v1/workflow/${workflowId}`, {
+      const res = await fetch(baseUrl, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -289,9 +306,12 @@ export default function WorkflowProgress({
     })
     .slice(0, 5);
 
-  const downloadUrl = workflow.resultUrl
-    ? workflow.resultUrl
-    : `/api/v1/workflow/${workflowId}/result`;
+  // Only the backend-provided absolute result URL is trustworthy. The old
+  // client-built `/api/v1/workflow/:id/result` fallback was both slug-less and
+  // pointed at a route that doesn't exist (the workflow router only serves
+  // GET/DELETE `/:id`), so it always 404'd — drop it and gate the button on a
+  // real resultUrl instead of shipping a download that fails.
+  const downloadUrl = workflow.resultUrl;
 
   return (
     <div
@@ -457,7 +477,7 @@ export default function WorkflowProgress({
               {cancelling ? "Cancelling…" : "Cancel"}
             </button>
           )}
-          {workflow.status === "completed" && (
+          {workflow.status === "completed" && downloadUrl && (
             <a
               href={downloadUrl}
               download

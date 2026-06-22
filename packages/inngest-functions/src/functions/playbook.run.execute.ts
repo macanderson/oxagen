@@ -179,7 +179,7 @@ export const [playbookRunExecute] = createFunction(
   {
     id: "playbook-run-execute",
     retries: 2,
-    concurrency: { limit: 20, key: "event.data.orgId" },
+    concurrency: { limit: 5, key: "event.data.orgId" },
   },
   { event: "playbook/run.execute" },
   async ({ event, step }) => {

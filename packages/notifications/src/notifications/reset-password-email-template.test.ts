@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { resetPasswordEmailTemplate } from "./reset-password-email-template";
 
 const BASE_INPUT = {
-  resetUrl: "https://oxagen-v2-app.vercel.app/reset-password?token=abc123",
+  resetUrl: "https://app.oxagen.sh/reset-password?token=abc123",
   email: "user@example.com",
 };
 

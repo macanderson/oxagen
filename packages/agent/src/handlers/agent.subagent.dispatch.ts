@@ -1,4 +1,5 @@
 import { withTenantDb, schema } from "@oxagen/database";
+import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getInngestClient } from "../dispatch/inngest-client";
 import { getOxagenRegistry } from "../registry-loader";
@@ -97,17 +98,56 @@ export async function agentSubagentDispatchHandler(
   // The executor (agent.execute-subagent) reads `fanoutId` (the uuid) and loads
   // the child runs from the DB itself, so we do not re-send them here. depth=1:
   // children execute one level below this root dispatch (OXA-1498 depth guard).
-  await getInngestClient().send({
-    name: "agent/subagent.dispatch",
-    data: {
-      orgId: ctx.orgId,
-      workspaceId: ctx.workspaceId,
-      fanoutId: fanout.id,
-      depth: 1,
-      maxParallel,
-      timeoutSeconds,
-    },
-  });
+  //
+  // Two failure modes are made observable here, because both manifested as a
+  // fan-out that silently "never fires" in production:
+  //   1. The emit itself throws (e.g. INNGEST_EVENT_KEY missing): the just-created
+  //      child runs would otherwise be orphaned as perpetually `pending` (which
+  //      the aggregate reports as `running` until its snapshot window). Mark them
+  //      `failed` with the cause and rethrow a clear error so the caller surfaces
+  //      it instead of returning a dispatchId that can never make progress.
+  //   2. The emit succeeds but Inngest Cloud never invokes the function (app not
+  //      synced / signing-key mismatch): persist the returned Inngest event id on
+  //      the fan-out so the dispatch can be traced in the Inngest dashboard.
+  let inngestEventId: string | null = null;
+  try {
+    const sent = (await getInngestClient().send({
+      name: "agent/subagent.dispatch",
+      data: {
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        fanoutId: fanout.id,
+        depth: 1,
+        maxParallel,
+        timeoutSeconds,
+      },
+    })) as { ids?: string[] } | undefined;
+    inngestEventId = sent?.ids?.[0] ?? null;
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    await withTenantDb((tx) =>
+      tx
+        .update(schema.subagentRuns)
+        .set({
+          status: "failed" as const,
+          errorReason: `dispatch emit failed: ${reason}`,
+          completedAt: new Date(),
+        })
+        .where(eq(schema.subagentRuns.fanoutId, fanout.id)),
+    );
+    throw new Error(`Failed to emit subagent dispatch event: ${reason}`);
+  }
+
+  // Persist the Inngest event id (inngest_event_id) — the breadcrumb that lets a
+  // dispatch that never fired be traced from the DB row to the Inngest dashboard.
+  if (inngestEventId) {
+    await withTenantDb((tx) =>
+      tx
+        .update(schema.subagentFanouts)
+        .set({ inngestEventId })
+        .where(eq(schema.subagentFanouts.id, fanout.id)),
+    );
+  }
 
   return {
     dispatchId: fanout.publicId,

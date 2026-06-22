@@ -133,10 +133,13 @@ describe("GET /connections", () => {
 
   it("forwards status filter to invoke", async () => {
     mocks.invoke.mockResolvedValue({ connections: [] });
-    const res = await get(`${BASE}?status=active`);
+    // "connected" is a member of the connection.list status enum
+    // (pending_setup | connected | paused | error | deleting | deleted).
+    // The old "active" value was dropped from the contract, so it now 400s.
+    const res = await get(`${BASE}?status=connected`);
     expect(res.status).toBe(200);
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(input.status).toBe("active");
+    expect(input.status).toBe("connected");
   });
 
   it("forwards connectorId filter to invoke", async () => {

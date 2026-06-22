@@ -50,5 +50,5 @@ base schema, enforced at first send):
 | `SMTP_PORT` | `587` | 465 ⇒ implicit TLS; 587/25 ⇒ STARTTLS (TLS required) |
 | `SMTP_USERNAME` | `resend` | Resend's SMTP username is the literal `resend` |
 | `SMTP_PASSWORD` | `re_…` | secret — for Resend this is an API key |
-| `SMTP_FROM_EMAIL` | `noreply@notifications.oxagen.ai` | default sender (domain must be verified) |
+| `SMTP_FROM_EMAIL` | `noreply@notifications.oxagen.sh` | default sender (domain must be verified) |
 | `SMTP_FROM_NAME` | `Oxagen (DO NOT REPLY)` | optional default display name |

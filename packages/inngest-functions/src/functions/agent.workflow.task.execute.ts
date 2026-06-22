@@ -17,7 +17,7 @@ export const [agentWorkflowTaskExecute] = createFunction(
   {
     id: "agent.workflow.task.execute",
     retries: 1,
-    concurrency: { limit: 100, key: "event.data.orgId" },
+    concurrency: { limit: 5, key: "event.data.orgId" },
     cancelOn: [
       {
         event: "agent/workflow.cancel",

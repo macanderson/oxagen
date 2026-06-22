@@ -37,7 +37,7 @@ export const [ingestionGithubInferFeatures] = createFunction(
   {
     id: "ingestion-github-infer-features",
     retries: 2,
-    concurrency: { limit: 10, key: "event.data.orgId" },
+    concurrency: { limit: 5, key: "event.data.orgId" },
   },
   { event: "ingestion/github.infer-features" },
   async ({ event, step }) => {

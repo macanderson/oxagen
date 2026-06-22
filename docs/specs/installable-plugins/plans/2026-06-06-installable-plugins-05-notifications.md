@@ -802,7 +802,7 @@ export async function markCredentialNeedsReauth(
   }
 
   const serverName = listing.title ?? listing.name;
-  const appUrl = process.env["APP_URL"] ?? "https://oxagen-v2-app.vercel.app";
+  const appUrl = process.env["APP_URL"] ?? "https://app.oxagen.sh";
 
   // The deep-link goes to the workspace re-auth page; workspaceId is the uuid.
   // The re-auth route accepts the orgListingId as a path segment (Plan 4 Task 7).

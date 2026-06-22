@@ -23,7 +23,7 @@ export const [agentBackgroundTaskExecute] = createFunction(
   {
     id: "agent.background-task.execute",
     retries: 0,
-    concurrency: { limit: 16, key: "event.data.orgId" },
+    concurrency: { limit: 5, key: "event.data.orgId" },
     // Cancel the in-flight Inngest execution when the cancel event arrives for
     // the same task + org. Without cancelOn the DB row is marked cancelled but
     // the execution continues running until it finishes naturally.

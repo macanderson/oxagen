@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { emailVerificationTemplate } from "./email-verification-template";
 
 const BASE_INPUT = {
-  verificationUrl: "https://oxagen-v2-app.vercel.app/verify-email?token=abc123",
+  verificationUrl: "https://app.oxagen.sh/verify-email?token=abc123",
   email: "user@example.com",
 };
 

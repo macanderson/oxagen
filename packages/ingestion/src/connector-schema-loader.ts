@@ -18,15 +18,36 @@
  */
 
 import { lookup } from "node:dns/promises";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { isIP } from "node:net";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 
-// ESM-compatible __dirname.
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+/**
+ * Resolve this module's directory LAZILY and in both module systems. This must
+ * never run at module scope: apps/api bundles this package with esbuild in CJS
+ * mode, which rewrites `import.meta` to an empty object, so a module-scope
+ * `fileURLToPath(import.meta.url)` throws ERR_INVALID_ARG_TYPE on every cold
+ * start and takes the whole API function down (this is what broke the connector
+ * "Configure" flow in prod). Same failure class fixed for the tree-sitter wasm
+ * loader in parsers/loader.ts (P0 2026-06-12).
+ */
+function moduleDir(): string {
+  try {
+    // Real ESM (tsx dev, vitest): import.meta.url is a file:// string.
+    if (typeof import.meta.url === "string" && import.meta.url.length > 0) {
+      return dirname(fileURLToPath(import.meta.url));
+    }
+  } catch {
+    // fall through to the CJS path
+  }
+  // esbuild CJS bundle: the Node module-wrapper __dirname global exists and
+  // points at the function directory (where apps/api build.mjs copies the
+  // bundled connector schema.yaml files).
+  if (typeof __dirname === "string") return __dirname;
+  return process.cwd();
+}
 
 // ── Local structural type ──────────────────────────────────────────────────────
 // Mirrors the shape produced by parsing a connector plugin YAML schema.
@@ -132,12 +153,37 @@ const schemaCache = new Map<string, LoadedConnectorSchema>();
  * Connector IDs that ship with bundled YAML schema files.
  * Folder name under packages/ingestion/src/connectors/ must match the id.
  */
-const BUILT_IN_PLUGIN_IDS = new Set([
+export const BUILT_IN_PLUGIN_IDS = new Set([
   "github",
   "google-drive",
   "linear",
   "slack",
 ]);
+
+/**
+ * Locate a built-in connector's bundled schema.yaml. Checks, in order:
+ *  1. next to this module (apps/api esbuild bundle — build.mjs copies the
+ *     connector schemas into the function directory, preserving the
+ *     connectors/<id>/ layout),
+ *  2. the connectors dir relative to the process cwd (defensive fallback).
+ * In dev/vitest, (1) resolves to packages/ingestion/src/connectors/<id>/.
+ *
+ * Throws with a descriptive message (listing the paths searched) when the file
+ * is absent — a deployment/bundling error that must surface loudly rather than
+ * degrade silently.
+ */
+function resolveBuiltInSchemaPath(pluginId: string): string {
+  const candidates = [
+    resolve(moduleDir(), "connectors", pluginId, "schema.yaml"),
+    resolve(process.cwd(), "connectors", pluginId, "schema.yaml"),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    `connector-schema-loader: built-in schema file not found for "${pluginId}" (looked in: ${candidates.join(", ")})`,
+  );
+}
 
 // ── Public API ─────────────────────────────────────────────────────────────────
 
@@ -160,8 +206,7 @@ export function loadBuiltInSchema(pluginId: string): LoadedConnectorSchema | nul
     return hit;
   }
 
-  const schemaPath = resolve(__dirname, "connectors", pluginId, "schema.yaml");
-  const content = readFileSync(schemaPath, "utf-8");
+  const content = readFileSync(resolveBuiltInSchemaPath(pluginId), "utf-8");
   const parsed = parseYaml(content) as unknown;
 
   if (typeof parsed !== "object" || parsed === null) {

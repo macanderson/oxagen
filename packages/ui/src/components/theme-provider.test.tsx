@@ -7,7 +7,7 @@
  *  - setTheme updates the resolved theme and writes the cookie
  *  - initialTheme prop wires through correctly
  *  - "system" theme resolves against the OS preference (window.matchMedia)
- *  - useTheme throws outside provider
+ *  - useTheme degrades to an inert default (no throw) outside a provider
  *  - BroadcastChannel cross-tab sync
  *  - cookie adoption on mount when no initialTheme
  *  - enableColorScheme / disableTransitionOnChange options
@@ -421,16 +421,46 @@ describe("useTheme — outside provider", () => {
     });
   });
 
-  it("throws when used outside ThemeProvider", () => {
-    function BadConsumer() {
+  it("returns an inert default theme instead of throwing", () => {
+    const seen: { theme?: string; resolvedTheme?: string; themesLen?: number } = {};
+    function BareConsumer() {
+      const { theme, resolvedTheme, themes } = useTheme();
+      seen.theme = theme;
+      seen.resolvedTheme = resolvedTheme;
+      seen.themesLen = themes.length;
+      return null;
+    }
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(() => render(<BareConsumer />)).not.toThrow();
+    expect(seen.theme).toBe("system");
+    expect(seen.resolvedTheme).toBe("light");
+    expect(seen.themesLen).toBeGreaterThan(0);
+    warnSpy.mockRestore();
+  });
+
+  it("warns (in non-production) when no provider is present", () => {
+    function BareConsumer() {
       useTheme();
       return null;
     }
-    // Suppress React's error boundary output in test logs.
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(() => render(<BadConsumer />)).toThrow(
-      "useTheme must be used within a <ThemeProvider>",
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    render(<BareConsumer />);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("no <ThemeProvider> ancestor found"),
     );
-    consoleSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it("exposes a setTheme that is a safe no-op outside a provider", () => {
+    let setter: ((t: "light" | "dark" | "system") => void) | null = null;
+    function BareConsumer() {
+      setter = useTheme().setTheme;
+      return null;
+    }
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    render(<BareConsumer />);
+    expect(setter).not.toBeNull();
+    expect(() => setter?.("dark")).not.toThrow();
+    warnSpy.mockRestore();
   });
 });
