@@ -264,4 +264,34 @@ describe("Button — render", () => {
     const { getByRole } = render(<Button>Safe</Button>);
     expect(getByRole("button", { name: "Safe" })).toHaveAttribute("type", "button");
   });
+
+  it("wraps a disabled button in a focusable tooltip anchor when disabledTooltip is set", () => {
+    const { getByRole } = render(
+      <Button disabled disabledTooltip="You need the Editor role.">
+        Publish
+      </Button>,
+    );
+    const btn = getByRole("button", { name: "Publish" });
+    expect(btn).toBeDisabled();
+    // A disabled <button> emits no pointer events, so it is wrapped in a
+    // focusable span that anchors the tooltip (hover/focus lands on the span).
+    const anchor = btn.closest("[data-base-ui-tooltip-trigger]");
+    expect(anchor).not.toBeNull();
+    expect(anchor).toHaveAttribute("tabindex", "0");
+  });
+
+  it("does not wrap when enabled, even if disabledTooltip is provided", () => {
+    const { getByRole } = render(
+      <Button disabledTooltip="You need the Editor role.">Publish</Button>,
+    );
+    const btn = getByRole("button", { name: "Publish" });
+    expect(btn).not.toBeDisabled();
+    expect(btn.closest("[data-base-ui-tooltip-trigger]")).toBeNull();
+  });
+
+  it("does not wrap a disabled button that has no disabledTooltip", () => {
+    const { getByRole } = render(<Button disabled>Off</Button>);
+    const btn = getByRole("button", { name: "Off" });
+    expect(btn.closest("[data-base-ui-tooltip-trigger]")).toBeNull();
+  });
 });

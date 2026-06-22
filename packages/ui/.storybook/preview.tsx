@@ -10,6 +10,16 @@ import type { Decorator, Preview } from "@storybook/react-vite";
  */
 const withTheme: Decorator = (Story, context) => {
   const theme = (context.globals.theme as string | undefined) ?? "light";
+  // Base UI overlays (Select / Menu / Dialog / Combobox / Tooltip popups) portal
+  // to document.body — OUTSIDE the wrapper div below — so the wrapper's `.dark`
+  // class never reaches them. Mirror the class onto <html> so portalled content
+  // inherits the same token theme it does in the real app, where the
+  // ThemeProvider sets `.dark` on <html>.
+  React.useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("dark", theme === "dark");
+    return () => root.classList.remove("dark");
+  }, [theme]);
   return (
     <div
       className={[

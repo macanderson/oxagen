@@ -17,11 +17,13 @@ describe("Checkbox", () => {
     expect(getByRole("checkbox", { name: "Accept terms" })).toBeInTheDocument();
   });
 
-  it("styles the track and border with --control-* tokens (no raw palette)", () => {
+  it("renders unchecked as a transparent box with a foreground outline", () => {
     const { getByRole } = render(<Checkbox aria-label="t" />);
     const cls = getByRole("checkbox", { name: "t" }).className;
-    expect(cls).toContain("border-control-border");
-    expect(cls).toContain("bg-control-track-bg");
+    // Unchecked: transparent fill + foreground-coloured outline (flips with theme).
+    expect(cls).toContain("border-foreground");
+    expect(cls).toContain("bg-transparent");
+    // Checked: primary fill via the --control-* token; focus ring stays tokenized.
     expect(cls).toContain("data-[checked]:bg-control-track-bg-checked");
     expect(cls).toContain("focus-visible:ring-control-ring");
   });

@@ -48,28 +48,76 @@ async function up(): Promise<void> {
   });
 }
 
+interface ContainerState {
+  service: string;
+  health: string;
+  state: string;
+}
+
+async function readContainerStates(): Promise<ContainerState[]> {
+  const { stdout } = await execa("docker", [
+    "compose",
+    "-f",
+    COMPOSE_FILE,
+    "ps",
+    "--format",
+    "json",
+  ]);
+  // Compose emits one JSON object per line.
+  return stdout
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        const row = JSON.parse(line) as { Service?: string; Health?: string; State?: string };
+        return { service: row.Service ?? "?", health: row.Health ?? "", state: row.State ?? "?" };
+      } catch {
+        return { service: "?", health: "", state: "?" };
+      }
+    });
+}
+
+// On failure, an opaque "timed out" is useless — a crash-looping datastore (e.g.
+// a corrupt ClickHouse volume) hides its fatal error in its own logs. Dump the
+// state table and the tail of each offending container so the root cause is on
+// screen instead of needing a manual `docker logs` archaeology dig.
+async function dumpDiagnostics(states: ContainerState[]): Promise<void> {
+  console.error(kleur.red("[dev] container states:"));
+  for (const s of states) {
+    console.error(kleur.red(`  - ${s.service}: state=${s.state} health=${s.health || "<none>"}`));
+  }
+  const broken = states.filter(
+    (s) => !(s.health === "healthy" || (s.health === "" && s.state === "running")),
+  );
+  for (const s of broken) {
+    console.error(kleur.yellow(`\n[dev] last 40 log lines for ${s.service}:`));
+    try {
+      await execa("docker", ["compose", "-f", COMPOSE_FILE, "logs", "--no-color", "--tail", "40", s.service], {
+        stdio: "inherit",
+      });
+    } catch {
+      console.error(kleur.red(`[dev] could not read logs for ${s.service}`));
+    }
+  }
+}
+
 async function waitForHealthy(): Promise<void> {
   console.log(kleur.cyan("[dev] waiting for containers to report healthy"));
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
-    const { stdout } = await execa("docker", [
-      "compose",
-      "-f",
-      COMPOSE_FILE,
-      "ps",
-      "--format",
-      "json",
-    ]);
-    // Compose emits one JSON object per line.
-    const lines = stdout.split("\n").filter(Boolean);
-    const states = lines.map((line) => {
-      try {
-        const row = JSON.parse(line) as { Service?: string; Health?: string; State?: string };
-        return { service: row.Service, health: row.Health, state: row.State };
-      } catch {
-        return { service: "?", health: "?", state: "?" };
-      }
-    });
+    const states = await readContainerStates();
+    // A container stuck in restarting/exited will never become healthy — bail
+    // immediately with diagnostics rather than burning the full 60s deadline.
+    const crashed = states.filter((s) => s.state === "restarting" || s.state === "exited");
+    if (crashed.length > 0) {
+      console.error(
+        kleur.red(
+          `[dev] container(s) crash-looping: ${crashed.map((s) => s.service).join(", ")}`,
+        ),
+      );
+      await dumpDiagnostics(states);
+      process.exit(1);
+    }
     const ready = states.every(
       (s) => s.health === "healthy" || (s.health === "" && s.state === "running"),
     );
@@ -80,6 +128,7 @@ async function waitForHealthy(): Promise<void> {
     await new Promise((r) => setTimeout(r, 1500));
   }
   console.error(kleur.red("[dev] timed out waiting for containers"));
+  await dumpDiagnostics(await readContainerStates());
   process.exit(1);
 }
 

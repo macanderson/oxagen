@@ -5,11 +5,13 @@ import { Check, Minus } from "lucide-react";
 import { cn } from "../lib/utils";
 
 /**
- * coss ui Checkbox — Base UI `Checkbox.Root` + `Checkbox.Indicator`, fully
- * token-driven via the shared --control-* tokens (the same set Radio and Switch
- * consume). Flat (no shadow); the track fills on check and the mark fades in.
- * Supports the indeterminate state (renders a minus glyph in place of the
- * check) — the check colour is the --control-indicator token.
+ * coss ui Checkbox — Base UI `Checkbox.Root` + `Checkbox.Indicator`. Flat (no
+ * shadow). UNCHECKED: a transparent box with a `--foreground`-coloured outline
+ * (so it reads dark in light mode, light in dark mode — never a filled white
+ * chip). CHECKED / INDETERMINATE: fills with the primary track colour and the
+ * outline disappears into the fill; the mark colour is --control-indicator.
+ * (The checked track + indicator colours stay on the shared --control-* tokens
+ * that Radio and Switch also consume.)
  *
  * State attributes: `data-[checked]`, `data-[unchecked]`,
  * `data-[indeterminate]`, `data-[disabled]`.
@@ -26,8 +28,10 @@ const Checkbox = React.forwardRef<
   <CheckboxPrimitive.Root
     ref={ref}
     className={cn(
-      "peer inline-flex size-4 shrink-0 items-center justify-center rounded-sm border border-control-border bg-control-track-bg",
+      // Unchecked: transparent fill, foreground-coloured outline (flips with theme).
+      "peer inline-flex size-4 shrink-0 items-center justify-center rounded-sm border border-foreground bg-transparent",
       "transition-colors duration-[var(--motion-base)]",
+      // Checked / indeterminate: primary fill, outline folds into the fill.
       "data-[checked]:border-control-track-bg-checked data-[checked]:bg-control-track-bg-checked",
       "data-[indeterminate]:border-control-track-bg-checked data-[indeterminate]:bg-control-track-bg-checked",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-control-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",

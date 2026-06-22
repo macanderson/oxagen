@@ -71,7 +71,7 @@ async function main(): Promise<void> {
   const result = await seedSkillsFromFilesystem(buildAdapter(), { fsRoot });
 
   console.log(
-    kleur.green(`[seed-skills] done — ${result.seeded} skills processed`),
+    kleur.green(`[seed-skills] done — ${result.processed} skills processed`),
   );
 }
 

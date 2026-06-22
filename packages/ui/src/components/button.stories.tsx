@@ -63,3 +63,11 @@ export const Sizes: Story = {
 };
 
 export const Disabled: Story = { args: { disabled: true } };
+
+export const DisabledWithTooltip: Story = {
+  args: {
+    disabled: true,
+    children: "Publish",
+    disabledTooltip: "You need the Editor role to publish.",
+  },
+};

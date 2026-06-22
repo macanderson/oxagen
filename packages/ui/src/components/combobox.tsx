@@ -71,8 +71,11 @@ Combobox.displayName = "Combobox";
 
 // ── Trigger ──────────────────────────────────────────────────────────────────
 
+// Mirrors the Select trigger: a real input surface via the --input-* tokens, so
+// the field reads as a solid (dark-in-dark) field rather than a transparent
+// cut-out. (Was `border-input bg-transparent`, which showed the page through.)
 const comboboxTriggerVariants = cva(
-  "flex w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+  "flex w-full items-center justify-between whitespace-nowrap rounded-md border border-input-border bg-input-bg px-3 py-2 text-sm text-input-fg placeholder:text-input-placeholder hover:border-input-border-hover focus:outline-none focus:border-input-border-focus focus:ring-1 focus:ring-input-ring disabled:cursor-not-allowed disabled:bg-input-disabled-bg disabled:text-input-disabled-fg [&>span]:line-clamp-1",
   {
     variants: {
       size: {
@@ -200,7 +203,9 @@ const ComboboxItem = React.forwardRef<
     ref={ref}
     className={cn(
       "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none",
-      "data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground",
+      // Highlighted option uses the PRIMARY button colours (per design), not the
+      // subtle neutral accent the menus use.
+      "data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground",
       "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className,
     )}
