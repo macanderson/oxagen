@@ -12,6 +12,10 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
+// Loads the jest-dom matcher type augmentation (toBeInTheDocument, etc.) into
+// this file's scope so the staged typecheck — which checks files in isolation
+// and doesn't pull in the global vitest setup — resolves them.
+import "@testing-library/jest-dom";
 import { render, screen, cleanup, waitFor } from "@testing-library/react";
 
 afterEach(cleanup);
@@ -81,7 +85,7 @@ describe("WorkflowProgress", () => {
   it("renders loading skeleton when fetch is pending", async () => {
     global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
     const { default: WorkflowProgress } = await import("./workflow-progress");
-    render(<WorkflowProgress workflowId="wf_123" />);
+    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
     // Loading skeleton has animate-pulse class
     expect(document.querySelector(".animate-pulse")).toBeInTheDocument();
   });
@@ -89,7 +93,7 @@ describe("WorkflowProgress", () => {
   it("renders error state when fetch fails", async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error("Network error"));
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" />);
+    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
     await waitFor(() => {
       expect(screen.getByText(/Failed to load workflow/)).toBeInTheDocument();
     });
@@ -101,7 +105,7 @@ describe("WorkflowProgress", () => {
       json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" />);
+    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
     await waitFor(() => {
       expect(screen.getByText("Data Analysis Pipeline")).toBeInTheDocument();
     });
@@ -113,7 +117,7 @@ describe("WorkflowProgress", () => {
       json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" />);
+    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
     await waitFor(() => {
       expect(screen.getByText("Analyze customer data")).toBeInTheDocument();
     });
@@ -125,7 +129,7 @@ describe("WorkflowProgress", () => {
       json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" />);
+    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
     await waitFor(() => {
       expect(screen.getByText("Running")).toBeInTheDocument();
     });
@@ -137,7 +141,7 @@ describe("WorkflowProgress", () => {
       json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" />);
+    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
     await waitFor(() => {
       const progressbar = screen.getByRole("progressbar");
       expect(progressbar).toBeInTheDocument();
@@ -152,7 +156,7 @@ describe("WorkflowProgress", () => {
       json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" />);
+    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Cancel/ })).toBeInTheDocument();
     });
@@ -164,11 +168,39 @@ describe("WorkflowProgress", () => {
       json: () => Promise.resolve({ workflow: COMPLETED_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" />);
+    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
     await waitFor(() => {
       // The link uses aria-label "Download results as JSON"
       expect(screen.getByRole("link", { name: /Download results as JSON/i })).toBeInTheDocument();
     });
+  });
+
+  it("polls the org+workspace-scoped, plural workflows URL (regression: 404 from slug-less /api/v1/workflow/:id)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
+    });
+    global.fetch = fetchMock;
+    const WorkflowProgress = (await import("./workflow-progress")).default;
+    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    await waitFor(() => {
+      expect(screen.getByText("Data Analysis Pipeline")).toBeInTheDocument();
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/acme/main/workflows/wf_123",
+      expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
+    );
+  });
+
+  it("does not fetch and surfaces missing-context error when org/workspace slugs are absent", async () => {
+    const fetchMock = vi.fn();
+    global.fetch = fetchMock;
+    const WorkflowProgress = (await import("./workflow-progress")).default;
+    render(<WorkflowProgress workflowId="wf_123" />);
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to load workflow/)).toBeInTheDocument();
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("shows task cells when tasks are present", async () => {
@@ -177,7 +209,7 @@ describe("WorkflowProgress", () => {
       json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" />);
+    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
     await waitFor(() => {
       expect(screen.getByText("Tasks")).toBeInTheDocument();
     });
@@ -185,7 +217,7 @@ describe("WorkflowProgress", () => {
 });
 
 // ── Cancel error surfacing ────────────────────────────────────────────────────
-// Tests that a failed DELETE /api/v1/workflow/:id call surfaces a visible
+// Tests that a failed DELETE /api/v1/:org/:ws/workflows/:id call surfaces a visible
 // error to the user instead of being silently swallowed.
 
 import { fireEvent } from "@testing-library/react";
@@ -208,7 +240,7 @@ describe("WorkflowProgress — cancel error surfacing", () => {
     });
 
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" />);
+    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Cancel/ })).toBeInTheDocument();
@@ -235,7 +267,7 @@ describe("WorkflowProgress — cancel error surfacing", () => {
     });
 
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" />);
+    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Cancel/ })).toBeInTheDocument();
@@ -264,7 +296,7 @@ describe("WorkflowProgress — cancel error surfacing", () => {
     });
 
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" />);
+    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Cancel/ })).toBeInTheDocument();
