@@ -64,7 +64,7 @@ describe("emailTransport", () => {
       port: 587,
       user: "resend",
       pass: "re_secret",
-      fromEmail: "noreply@notifications.oxagen.ai",
+      fromEmail: "noreply@notifications.oxagen.sh",
       fromName: "Oxagen (DO NOT REPLY)",
     });
   });

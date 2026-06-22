@@ -54,7 +54,22 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<typeof workspaceSe
       return existing;
     }
 
+    // Slug-rename capture must precede the UPDATE so a unique-violation throw
+    // rolls back the history insert with the rest of the transaction (no
+    // dangling history rows pointing at slugs the rename never actually
+    // produced) — spec §4.5; OXA-1779.
+    const slugChanged =
+      input.slug !== undefined && input.slug !== existing.slug;
+
     try {
+      if (slugChanged && input.slug !== undefined) {
+        await tx.insert(schema.workspaceSlugHistory).values({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          oldSlug: existing.slug,
+          newSlug: input.slug,
+        });
+      }
       await tx
         .update(schema.workspaces)
         .set({ ...updates, updatedAt: new Date() })

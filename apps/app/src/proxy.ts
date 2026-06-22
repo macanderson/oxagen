@@ -67,15 +67,24 @@ export function proxy(request: NextRequest): NextResponse {
     }
   }
 
-  // 3. Public pages need no session.
-  if (PUBLIC_PATHS.some((re) => re.test(pathname))) return NextResponse.next();
+  // 3. Surface the request URL on a request header so RSCs and layouts can
+  //    read pathname + search reliably. Next.js does NOT expose either to RSC
+  //    natively — the slug-history resolver (OXA-1779) needs them to build a
+  //    redirect URL that preserves the rest of the path and the query.
+  const downstreamHeaders = new Headers(request.headers);
+  downstreamHeaders.set("x-url", request.nextUrl.pathname + request.nextUrl.search);
 
-  // 4. Auth boundary for every other matched (page) route.
+  // 4. Public pages need no session.
+  if (PUBLIC_PATHS.some((re) => re.test(pathname))) {
+    return NextResponse.next({ request: { headers: downstreamHeaders } });
+  }
+
+  // 5. Auth boundary for every other matched (page) route.
   if (!hasSession(request)) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  return NextResponse.next();
+  return NextResponse.next({ request: { headers: downstreamHeaders } });
 }
 
 export const config = {

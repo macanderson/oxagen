@@ -4,10 +4,18 @@
 // that extends tsconfig.base.json, so we group the changed files by their
 // nearest owning tsconfig and run `tsc` once per group against a temporary
 // config that extends the package config but narrows `files` to just the
-// changed set (and clears `include`). tsc then loads only those files plus
-// their import closure — fast, local feedback. Workspace packages expose `src`
-// directly (main/types -> ./src/index.ts) and tsconfig.base has skipLibCheck,
-// so no dependency build is required. The temp config must live inside the
+// changed set, with `include` scoped to the package's ambient declaration
+// files (`**/*.d.ts`). tsc then loads the staged files plus their import
+// closure AND the global/ambient type files that nothing imports — chiefly
+// `next-env.d.ts` (which supplies Next's `declare module "server-only"`) and
+// hand-written augmentations like `apps/app/src/types/navigator-ua.d.ts`
+// (`Navigator.userAgentData`). Dropping those (an empty `include`) makes
+// side-effect imports and global augmentations spuriously fail (TS2882 /
+// TS2551) even though the real build — which loads them via its own `include`
+// — is green. `.d.ts` files are declaration-only and `skipLibCheck` is on, so
+// this stays fast. Workspace packages expose `src` directly
+// (main/types -> ./src/index.ts) and tsconfig.base has skipLibCheck, so no
+// dependency build is required. The temp config must live inside the
 // package directory so `extends: ./tsconfig.json`, `types: ["node"]`, and any
 // relative compiler paths resolve exactly as they do for the real build. The
 // authoritative affected-package typecheck still runs in CI
@@ -74,14 +82,13 @@ for (const [tsconfig, absFiles] of groups) {
     tempPath,
     JSON.stringify({
       extends: "./tsconfig.json",
-      // rootDir is relaxed to the package directory: a staged package-root config
-      // file (e.g. vitest.config.ts) is outside the package's build rootDir ("src"),
-      // which would trip TS6059 ("not under rootDir") even though noEmit makes
-      // rootDir a pure constraint here with no output effect. Widening it to "."
-      // lets src files AND root-level config files be type-checked together.
-      compilerOptions: { noEmit: true, rootDir: "." },
-      files: [...stagedRelFiles, ...ambientRelFiles],
-      include: [],
+      compilerOptions: { noEmit: true },
+      files: absFiles.map((f) => relative(pkgDir, f)),
+      // Load only ambient declaration files (next-env.d.ts, src/types/*.d.ts,
+      // etc.) on top of `files` — NOT the whole source tree. Carries the global
+      // module declarations + augmentations that side-effect imports and global
+      // type extensions depend on, without re-typechecking every package file.
+      include: ["**/*.d.ts"],
     }),
   );
   try {

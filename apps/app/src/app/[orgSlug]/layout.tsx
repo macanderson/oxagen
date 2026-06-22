@@ -1,9 +1,10 @@
 import { Suspense } from "react";
+import { headers } from "next/headers";
 import { eq, and } from "drizzle-orm";
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
+import { assertOrgMember, resolveOrgOrRedirect } from "@/lib/resolve-org";
 
 // Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
@@ -67,6 +68,23 @@ async function WandPanelStreamed({
   );
 }
 
+// Pull the pathname + search off whatever URL form Next.js handed us. The
+// header value may be a full URL ("https://host/path?q") or a path-only string
+// ("/path?q") — both are valid inputs to URL with a base. Falls back to a bare
+// org root when parsing fails (defensive — prevents a malformed header from
+// 500-ing the layout).
+function parseRequestUrl(
+  raw: string,
+  orgSlug: string,
+): { pathname: string; search: string } {
+  try {
+    const u = new URL(raw, "http://internal.local");
+    return { pathname: u.pathname, search: u.search };
+  } catch {
+    return { pathname: `/${orgSlug}`, search: "" };
+  }
+}
+
 export default async function OrgLayout({
   children,
   params,
@@ -76,7 +94,19 @@ export default async function OrgLayout({
 }) {
   const session = await getSessionOrRedirect();
   const { orgSlug } = await params;
-  const org = await resolveOrg(orgSlug);
+  // Surface the current request URL so the resolver can build a 308 redirect
+  // to the canonical slug, preserving the rest of the path and the query.
+  // Next.js exposes the URL on the synthetic `x-url` / `next-url` header in
+  // RSC; we fall back to a bare org root if neither is present (defensive —
+  // production always sets one). — OXA-1779
+  const hdrs = await headers();
+  const rawUrl =
+    hdrs.get("x-url") ??
+    hdrs.get("next-url") ??
+    hdrs.get("x-invoke-path") ??
+    `/${orgSlug}`;
+  const { pathname, search } = parseRequestUrl(rawUrl, orgSlug);
+  const org = await resolveOrgOrRedirect(orgSlug, pathname, search);
   // Tenant isolation: gate EVERY org-scoped page on membership. Without this
   // an authenticated user could read any org's data by guessing the slug
   // (IDOR). Non-members get a 404 via notFound() — indistinguishable from an

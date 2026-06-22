@@ -44,7 +44,7 @@ export interface PolicyEntry {
 // workflow.playbook_versions → workflow.playbooks, ingestion.oauth_tokens →
 // ingestion.source_connections) or they are shared/system catalogs
 // (billing.plans, billing.stripe_events, mcp.catalog_servers,
-// ingestion.connector_schemas, graph.projection_checkpoints, Better Auth).
+// ingestion.connector_schemas, Better Auth).
 export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ── agent.* (orgScopeMixin: org_id + workspace_id NOT NULL) ──────────────
   // agent.agent_versions excluded: immutable child, no org cols, FK → agents.
@@ -90,11 +90,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "content.forms", policyClass: "standard" },
   { table: "content.form_submissions", policyClass: "standard" },
 
-  // ── graph.* — transactional outbox rows carry the writing tenant's scope.
-  //   The Neo4j projector reads cross-tenant via withSystemDb
-  //   (app.rls_bypass='on'); tenant sessions only ever see their own rows.
-  //   projection_checkpoints excluded: system bookkeeping, no tenant columns.
-  { table: "graph.outbox", policyClass: "standard" },
+  // ── graph.* — the transactional-outbox tables (graph.outbox,
+  //   graph.projection_checkpoints) were dropped 2026-06-21: never wired
+  //   (zero writers/readers; projection runs directly from the Inngest
+  //   sync-execution-to-graph function). No graph.* tenant tables remain.
 
   // ── iam.* — the 2026-06-11 rebuild moved IAM out of org.* into iam.*.
   //   principals and principal_role_assignments have nullable workspace_id
@@ -136,6 +135,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   organizations.id IS the tenant key, there is no org_id column). ───────
   { table: "org.org_users", policyClass: "org_only" },
   { table: "org.invitations", policyClass: "org_only" },
+  // Slug-rename audit (OXA-1779). org_id NOT NULL, no workspace_id → org_only.
+  // Resolver reads via withSystemDb (bypass); writes happen inside tenant scope.
+  { table: "org.org_slug_history", policyClass: "org_only" },
 
   // ── plugin.* (workspace-scoped; org_denylist was removed 2026-06-17) ────────
   { table: "plugin.installed_plugins", policyClass: "standard" },
@@ -169,4 +171,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   RLS and member rows leak across tenants.
   { table: "workspace.workspaces", policyClass: "org_only" },
   { table: "workspace.workspace_users", policyClass: "workspace_only" },
+  // Slug-rename audit (OXA-1779). org_id + workspace_id both NOT NULL →
+  // standard. Resolver reads via withSystemDb (bypass) — workspace slugs are
+  // only unique within an org, so the read filters on (org_id, old_slug).
+  { table: "workspace.workspace_slug_history", policyClass: "standard" },
 ];

@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
-import { notFound } from "next/navigation";
-import { eq, and } from "drizzle-orm";
+import { notFound, permanentRedirect } from "next/navigation";
+import { eq, and, desc } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 // tenancy: unscoped seam (resolves the active org/workspace from slugs/session
 // before a tenant scope exists — this is the canonical bootstrap step that
@@ -49,6 +49,115 @@ export const resolveOrg = cache(async (slug: string): Promise<ResolvedOrg> => {
   };
 });
 
+/**
+ * History-aware org resolver. Tries the current slug first; on a miss, looks
+ * up org_slug_history for a redirect-enabled entry and resolves the org from
+ * its id. Returns the resolved org WITH the canonical slug so the caller can
+ * compare against the URL slug and issue a 308 permanent redirect when they
+ * differ (spec §4.5; OXA-1779).
+ *
+ * Why this is separate from resolveOrg(): resolveOrg's contract is "current
+ * slug → org or 404". Several call sites depend on that contract (the writer
+ * actions, IAM gates), so widening it would be unsafe. The layout uses this
+ * stricter variant; everything downstream of the layout continues using
+ * resolveOrg() with the (now canonical) slug.
+ */
+export const resolveOrgWithRedirect = cache(
+  async (slug: string): Promise<ResolvedOrg> => {
+    const direct = await withSystemDb((tx) =>
+      tx
+        .select()
+        .from(schema.organizations)
+        .where(eq(schema.organizations.slug, slug))
+        .limit(1),
+    );
+    if (direct[0]) {
+      const row = direct[0];
+      return {
+        id: row.id,
+        publicId: row.publicId,
+        name: row.name,
+        slug: row.slug,
+      };
+    }
+    // History fallback. ORDER BY changed_at DESC handles slug recycling — when
+    // an old slug appears in multiple history rows (because it was freed and
+    // re-used by another org), the most recent rename wins. redirect_enabled
+    // gives admins a kill switch (404 the old URL on demand) without deleting
+    // the audit row.
+    const historyRows = await withSystemDb((tx) =>
+      tx
+        .select({ orgId: schema.orgSlugHistory.orgId })
+        .from(schema.orgSlugHistory)
+        .where(
+          and(
+            eq(schema.orgSlugHistory.oldSlug, slug),
+            eq(schema.orgSlugHistory.redirectEnabled, true),
+          ),
+        )
+        .orderBy(desc(schema.orgSlugHistory.changedAt))
+        .limit(1),
+    );
+    const history = historyRows[0];
+    if (!history) notFound();
+    return resolveOrgById(history.orgId);
+  },
+);
+
+const resolveOrgById = cache(async (orgId: string): Promise<ResolvedOrg> => {
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select()
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, orgId))
+      .limit(1),
+  );
+  const row = rows[0];
+  // The org could have been deleted between writing the history row and a
+  // bookmark click landing here. Treat as 404 — there is no canonical URL to
+  // redirect to.
+  if (!row) notFound();
+  return {
+    id: row.id,
+    publicId: row.publicId,
+    name: row.name,
+    slug: row.slug,
+  };
+});
+
+/**
+ * Convenience layered on top of resolveOrgWithRedirect for the [orgSlug]
+ * layout: resolve the org and, when the URL's slug is stale, throw a 308
+ * permanent redirect to the canonical URL with the rest of the path preserved.
+ *
+ * The layout passes the full pathname + search; this helper rewrites only the
+ * first path segment (the org slug). Returns the canonical org on a current-
+ * slug match so the caller can continue rendering without an extra round trip.
+ */
+export async function resolveOrgOrRedirect(
+  urlSlug: string,
+  pathname: string,
+  search: string,
+): Promise<ResolvedOrg> {
+  const org = await resolveOrgWithRedirect(urlSlug);
+  if (org.slug !== urlSlug) {
+    permanentRedirect(rewriteOrgSlug(pathname, urlSlug, org.slug) + search);
+  }
+  return org;
+}
+
+function rewriteOrgSlug(pathname: string, oldSlug: string, newSlug: string): string {
+  // pathname is always /{orgSlug}/... — replace only the first segment so a
+  // path like /old/old/foo stays /new/old/foo (the second "old" is real data).
+  if (pathname === `/${oldSlug}`) return `/${newSlug}`;
+  const prefix = `/${oldSlug}/`;
+  if (pathname.startsWith(prefix)) return `/${newSlug}/${pathname.slice(prefix.length)}`;
+  // Defensive fallback: redirect to the org root rather than render at the
+  // stale URL. Should never trigger if the layout's params actually came from
+  // the request URL.
+  return `/${newSlug}`;
+}
+
 export const resolveWorkspace = cache(
   async (orgId: string, slug: string): Promise<ResolvedWorkspace> => {
     const rows = await withSystemDb((tx) =>
@@ -60,24 +169,121 @@ export const resolveWorkspace = cache(
     );
     const row = rows[0];
     if (!row) notFound();
-    // Mirror mapWorkspaceSettingsRow: read description out of the settings
-    // JSONB bag (same `settings.description` key the write handler targets).
-    const settings =
-      row.settings && typeof row.settings === "object"
-        ? (row.settings as Record<string, unknown>)
-        : {};
-    const description =
-      typeof settings.description === "string" ? settings.description : "";
-    return {
-      id: row.id,
-      publicId: row.publicId,
-      orgId: row.orgId,
-      name: row.name,
-      slug: row.slug,
-      description,
-    };
+    return mapWorkspaceRow(row);
   },
 );
+
+function mapWorkspaceRow(
+  row: typeof schema.workspaces.$inferSelect,
+): ResolvedWorkspace {
+  // Mirror mapWorkspaceSettingsRow: read description out of the settings
+  // JSONB bag (same `settings.description` key the write handler targets).
+  const settings =
+    row.settings && typeof row.settings === "object"
+      ? (row.settings as Record<string, unknown>)
+      : {};
+  const description =
+    typeof settings.description === "string" ? settings.description : "";
+  return {
+    id: row.id,
+    publicId: row.publicId,
+    orgId: row.orgId,
+    name: row.name,
+    slug: row.slug,
+    description,
+  };
+}
+
+/**
+ * History-aware workspace resolver. Same shape as resolveOrgWithRedirect but
+ * scoped to (orgId, oldSlug) — workspace slugs are only unique within their
+ * org, so the lookup never collides across tenants (spec §4.5; OXA-1779).
+ */
+export const resolveWorkspaceWithRedirect = cache(
+  async (orgId: string, slug: string): Promise<ResolvedWorkspace> => {
+    const direct = await withSystemDb((tx) =>
+      tx
+        .select()
+        .from(schema.workspaces)
+        .where(and(eq(schema.workspaces.orgId, orgId), eq(schema.workspaces.slug, slug)))
+        .limit(1),
+    );
+    if (direct[0]) return mapWorkspaceRow(direct[0]);
+
+    const historyRows = await withSystemDb((tx) =>
+      tx
+        .select({ workspaceId: schema.workspaceSlugHistory.workspaceId })
+        .from(schema.workspaceSlugHistory)
+        .where(
+          and(
+            eq(schema.workspaceSlugHistory.orgId, orgId),
+            eq(schema.workspaceSlugHistory.oldSlug, slug),
+            eq(schema.workspaceSlugHistory.redirectEnabled, true),
+          ),
+        )
+        .orderBy(desc(schema.workspaceSlugHistory.changedAt))
+        .limit(1),
+    );
+    const history = historyRows[0];
+    if (!history) notFound();
+
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select()
+        .from(schema.workspaces)
+        .where(
+          and(
+            eq(schema.workspaces.orgId, orgId),
+            eq(schema.workspaces.id, history.workspaceId),
+          ),
+        )
+        .limit(1),
+    );
+    const row = rows[0];
+    if (!row) notFound();
+    return mapWorkspaceRow(row);
+  },
+);
+
+/**
+ * Resolve the workspace and 308-redirect when the URL's workspace slug is
+ * stale (the orgSlug is preserved verbatim — only the workspace segment moves).
+ */
+export async function resolveWorkspaceOrRedirect(
+  orgId: string,
+  orgSlug: string,
+  urlWorkspaceSlug: string,
+  pathname: string,
+  search: string,
+): Promise<ResolvedWorkspace> {
+  const ws = await resolveWorkspaceWithRedirect(orgId, urlWorkspaceSlug);
+  if (ws.slug !== urlWorkspaceSlug) {
+    permanentRedirect(
+      rewriteWorkspaceSlug(pathname, orgSlug, urlWorkspaceSlug, ws.slug) + search,
+    );
+  }
+  return ws;
+}
+
+function rewriteWorkspaceSlug(
+  pathname: string,
+  orgSlug: string,
+  oldWs: string,
+  newWs: string,
+): string {
+  // pathname is /{orgSlug}/{workspaceSlug}/... — rewrite only the workspace
+  // segment. The org slug is passed through to anchor the match (so a literal
+  // workspace name that happens to equal another path segment downstream is
+  // not accidentally rewritten).
+  if (pathname === `/${orgSlug}/${oldWs}`) return `/${orgSlug}/${newWs}`;
+  const prefix = `/${orgSlug}/${oldWs}/`;
+  if (pathname.startsWith(prefix)) {
+    return `/${orgSlug}/${newWs}/${pathname.slice(prefix.length)}`;
+  }
+  // Defensive fallback — should never trigger for a layout invoked from this
+  // path. Land on the workspace root rather than a stale URL.
+  return `/${orgSlug}/${newWs}`;
+}
 
 /**
  * Assert that the given user is a member of the given org.
