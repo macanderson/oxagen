@@ -34,6 +34,13 @@ const { ApiError } = apiClientModule as unknown as {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // privacyEraseCommand is a module-level singleton; Commander retains parsed
+  // option values across parseAsync() calls, so a prior test's `--scope org`
+  // leaks into the next parse and trips the org-id guard. Reset to declared
+  // defaults before each test so every parse starts from a clean slate.
+  privacyEraseCommand.setOptionValue("scope", "user");
+  privacyEraseCommand.setOptionValue("orgId", undefined);
+  privacyEraseCommand.setOptionValue("yes", undefined);
 });
 
 /**
