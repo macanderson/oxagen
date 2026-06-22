@@ -8,9 +8,9 @@
  *   Settings → /account
  *   Sign out → better-auth client signOut + redirect to /login
  *
- * Theme switching lives in the topbar (ThemeToggle), so it is intentionally not
- * duplicated here. The avatar renders the user's initials when no image is
- * present, or an <img> when one is available.
+ * The menu also exposes theme switching (Light / Dark / System) via the shared
+ * useTheme() hook, mirroring the topbar ThemeToggle. The avatar renders the
+ * user's initials when no image is present, or an <img> when one is available.
  */
 
 import * as React from "react";
