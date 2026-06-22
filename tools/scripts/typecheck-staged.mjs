@@ -74,7 +74,12 @@ for (const [tsconfig, absFiles] of groups) {
     tempPath,
     JSON.stringify({
       extends: "./tsconfig.json",
-      compilerOptions: { noEmit: true },
+      // rootDir is relaxed to the package directory: a staged package-root config
+      // file (e.g. vitest.config.ts) is outside the package's build rootDir ("src"),
+      // which would trip TS6059 ("not under rootDir") even though noEmit makes
+      // rootDir a pure constraint here with no output effect. Widening it to "."
+      // lets src files AND root-level config files be type-checked together.
+      compilerOptions: { noEmit: true, rootDir: "." },
       files: [...stagedRelFiles, ...ambientRelFiles],
       include: [],
     }),
