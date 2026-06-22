@@ -70,9 +70,9 @@ export interface EnvVarMeta {
 const ALL: EnvName[] = ["development", "preview", "production"];
 const DEPLOYED: EnvName[] = ["preview", "production"];
 
-const APP_PROD_URL = "https://oxagen-v2-app.vercel.app";
-const API_PROD_URL = "https://oxagen-v2-api.vercel.app";
-const MCP_PROD_URL = "https://oxagen-v2-mcp.vercel.app";
+const APP_PROD_URL = "https://app.oxagen.sh";
+const API_PROD_URL = "https://api.oxagen.sh";
+const MCP_PROD_URL = "https://mcp.oxagen.sh";
 
 /**
  * The registry. Ordered for `.env.example` layout. `services`/`requiredIn`
@@ -691,7 +691,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp", "website", "admin"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { "*": "noreply@notifications.oxagen.ai" },
+    staticValue: { "*": "noreply@notifications.oxagen.sh" },
   },
   SMTP_FROM_NAME: {
     group: "Email",
@@ -1059,7 +1059,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { development: "http://localhost:4000", production: "https://oxagen-v2-api.vercel.app" },
+    staticValue: { development: "http://localhost:4000", production: "https://api.oxagen.sh" },
   },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",

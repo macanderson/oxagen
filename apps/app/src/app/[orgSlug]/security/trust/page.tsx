@@ -86,7 +86,7 @@ export default async function SecurityTrustPage({
             size="sm"
             render={
               <a
-                href="https://oxagen-v2-docs.vercel.app/security"
+                href="https://docs.oxagen.sh/security"
                 target="_blank"
                 rel="noreferrer noopener"
               />

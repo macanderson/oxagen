@@ -83,7 +83,7 @@ const ctx = {
   orgId: "org-1",
   workspaceId: "ws-1",
   orgListingId: "ol-1",
-  redirectUrl: "https://app.oxagen.ai/api/v1/mcp/oauth/callback",
+  redirectUrl: "https://app.oxagen.sh/api/v1/mcp/oauth/callback",
   state: "test-state-abc",
   returnTo: "/org/ws/settings/integrations",
   clientName: "Oxagen",

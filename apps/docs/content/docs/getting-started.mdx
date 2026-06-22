@@ -5,7 +5,7 @@ description: Sign up, create your organization and workspace, have your first ag
 
 ## Sign up
 
-Go to [oxagen-v2-app.vercel.app](https://oxagen-v2-app.vercel.app) and click **Sign up**. Enter your name, email address, and a password. Email verification is not required in the current release — you are signed in immediately after signup.
+Go to [app.oxagen.sh](https://app.oxagen.sh) and click **Sign up**. Enter your name, email address, and a password. Email verification is not required in the current release — you are signed in immediately after signup.
 
 Social sign-in (Google, GitHub) is also available on the signup screen.
 
@@ -45,7 +45,7 @@ Workspace access is granted separately under **Workspace settings → Members**.
 
 ## Connect via the REST API
 
-Every capability available in the app is also reachable via the versioned REST API at `https://oxagen-v2-api.vercel.app/v1/`.
+Every capability available in the app is also reachable via the versioned REST API at `https://api.oxagen.sh/v1/`.
 
 **Create an API key:**
 
@@ -63,7 +63,7 @@ See [API authentication](/docs/api/authentication) for the full reference.
 
 ## Connect via MCP
 
-Oxagen exposes all capabilities as an MCP server at `https://oxagen-v2-mcp.vercel.app/mcp` over streamable HTTP. Org and workspace scope are determined by the API key — no path segment is required.
+Oxagen exposes all capabilities as an MCP server at `https://mcp.oxagen.sh/mcp` over streamable HTTP. Org and workspace scope are determined by the API key — no path segment is required.
 
 **Connect from Claude Desktop:**
 
@@ -71,7 +71,7 @@ Oxagen exposes all capabilities as an MCP server at `https://oxagen-v2-mcp.verce
 {
   "mcpServers": {
     "oxagen": {
-      "url": "https://oxagen-v2-mcp.vercel.app/mcp",
+      "url": "https://mcp.oxagen.sh/mcp",
       "headers": {
         "Authorization": "Bearer oxk_live_…"
       }
