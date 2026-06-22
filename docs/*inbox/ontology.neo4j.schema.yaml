@@ -1,0 +1,1039 @@
+version: 3.0.0
+dataModel:
+  version: 3.0.0
+  graphSchemaRepresentation:
+    version: 1.0.0
+    graphSchema:
+      nodeLabels:
+      - $id: nl:1
+        token: SourceCodeRepository
+        properties:
+        - $id: p:1
+          token: name
+          type:
+            type: string
+          nullable: false
+        - $id: p:2
+          token: url
+          type:
+            type: string
+          nullable: false
+      - $id: nl:10
+        token: PullRequest
+        properties:
+        - $id: p:28
+          token: id
+          type:
+            type: string
+          nullable: false
+        - $id: p:29
+          token: title
+          type:
+            type: string
+          nullable: false
+        - $id: p:30
+          token: status
+          type:
+            type: string
+          nullable: false
+        - $id: p:31
+          token: created_at
+          type:
+            type: datetime
+          nullable: false
+        - $id: p:32
+          token: merged_at
+          type:
+            type: datetime
+          nullable: false
+      - $id: nl:11
+        token: Customer
+        properties:
+        - $id: p:33
+          token: id
+          type:
+            type: string
+          nullable: false
+        - $id: p:34
+          token: name
+          type:
+            type: string
+          nullable: false
+        - $id: p:35
+          token: email
+          type:
+            type: string
+          nullable: false
+      - $id: nl:12
+        token: SubscriptionType
+        properties:
+        - $id: p:36
+          token: name
+          type:
+            type: string
+          nullable: false
+        - $id: p:37
+          token: price
+          type:
+            type: float
+          nullable: false
+        - $id: p:38
+          token: duration_months
+          type:
+            type: integer
+          nullable: false
+      - $id: nl:13
+        token: Subscription
+        properties:
+        - $id: p:39
+          token: id
+          type:
+            type: string
+          nullable: false
+        - $id: p:40
+          token: start_date
+          type:
+            type: date
+          nullable: false
+        - $id: p:41
+          token: end_date
+          type:
+            type: date
+          nullable: false
+        - $id: p:42
+          token: status
+          type:
+            type: string
+          nullable: false
+      - $id: nl:14
+        token: Renewal
+        properties:
+        - $id: p:43
+          token: id
+          type:
+            type: string
+          nullable: false
+        - $id: p:44
+          token: renewal_date
+          type:
+            type: date
+          nullable: false
+        - $id: p:45
+          token: status
+          type:
+            type: string
+          nullable: false
+      - $id: nl:15
+        token: Payment
+        properties:
+        - $id: p:46
+          token: id
+          type:
+            type: string
+          nullable: false
+        - $id: p:47
+          token: amount
+          type:
+            type: float
+          nullable: false
+        - $id: p:48
+          token: date
+          type:
+            type: date
+          nullable: false
+        - $id: p:49
+          token: status
+          type:
+            type: string
+          nullable: false
+      - $id: nl:16
+        token: UsageCreditPurchase
+        properties:
+        - $id: p:50
+          token: id
+          type:
+            type: string
+          nullable: false
+        - $id: p:51
+          token: amount
+          type:
+            type: float
+          nullable: false
+        - $id: p:52
+          token: purchased_date
+          type:
+            type: date
+          nullable: false
+        - $id: p:53
+          token: expiry_date
+          type:
+            type: date
+          nullable: false
+      - $id: nl:2
+        token: File
+        properties:
+        - $id: p:3
+          token: path
+          type:
+            type: string
+          nullable: false
+        - $id: p:4
+          token: content
+          type:
+            type: string
+          nullable: false
+      - $id: nl:3
+        token: FunctionOrMethod
+        properties:
+        - $id: p:5
+          token: name
+          type:
+            type: string
+          nullable: false
+        - $id: p:6
+          token: start_line
+          type:
+            type: integer
+          nullable: false
+        - $id: p:7
+          token: end_line
+          type:
+            type: integer
+          nullable: false
+        - $id: p:8
+          token: signature
+          type:
+            type: string
+          nullable: false
+      - $id: nl:4
+        token: ClassOrStruct
+        properties:
+        - $id: p:9
+          token: name
+          type:
+            type: string
+          nullable: false
+        - $id: p:10
+          token: start_line
+          type:
+            type: integer
+          nullable: false
+        - $id: p:11
+          token: end_line
+          type:
+            type: integer
+          nullable: false
+      - $id: nl:5
+        token: Feature
+        properties:
+        - $id: p:12
+          token: name
+          type:
+            type: string
+          nullable: false
+        - $id: p:13
+          token: description
+          type:
+            type: string
+          nullable: false
+      - $id: nl:6
+        token: Domain
+        properties:
+        - $id: p:14
+          token: name
+          type:
+            type: string
+          nullable: false
+        - $id: p:15
+          token: description
+          type:
+            type: string
+          nullable: false
+      - $id: nl:7
+        token: Issue
+        properties:
+        - $id: p:16
+          token: id
+          type:
+            type: string
+          nullable: false
+        - $id: p:17
+          token: title
+          type:
+            type: string
+          nullable: false
+        - $id: p:18
+          token: status
+          type:
+            type: string
+          nullable: false
+        - $id: p:19
+          token: created_at
+          type:
+            type: datetime
+          nullable: false
+        - $id: p:20
+          token: closed_at
+          type:
+            type: datetime
+          nullable: false
+      - $id: nl:8
+        token: TestCoverage
+        properties:
+        - $id: p:21
+          token: id
+          type:
+            type: string
+          nullable: false
+        - $id: p:22
+          token: percentage
+          type:
+            type: float
+          nullable: false
+        - $id: p:23
+          token: date
+          type:
+            type: date
+          nullable: false
+      - $id: nl:9
+        token: CIRun
+        properties:
+        - $id: p:24
+          token: id
+          type:
+            type: string
+          nullable: false
+        - $id: p:25
+          token: status
+          type:
+            type: string
+          nullable: false
+        - $id: p:26
+          token: start_time
+          type:
+            type: datetime
+          nullable: false
+        - $id: p:27
+          token: end_time
+          type:
+            type: datetime
+          nullable: false
+      - $id: nl:17
+        token: AgentExecution
+        properties:
+        - $id: p:54
+          token: id
+          type:
+            type: string
+          nullable: false
+        - $id: p:55
+          token: timestamp
+          type:
+            type: datetime
+          nullable: false
+        - $id: p:56
+          token: model_used
+          type:
+            type: string
+          nullable: false
+        - $id: p:57
+          token: input_tokens
+          type:
+            type: integer
+          nullable: false
+        - $id: p:58
+          token: output_tokens
+          type:
+            type: integer
+          nullable: false
+        - $id: p:59
+          token: cost
+          type:
+            type: float
+          nullable: false
+        - $id: p:60
+          token: status
+          type:
+            type: string
+          nullable: false
+      - $id: nl:19
+        token: Memory
+        properties:
+        - $id: p:68
+          token: id
+          type:
+            type: string
+          nullable: true
+        - $id: p:69
+          token: subject
+          type:
+            type: string
+          nullable: true
+        - $id: p:70
+          token: description
+          type:
+            type: string
+          nullable: true
+        - $id: p:71
+          token: type
+          type:
+            type: string
+          nullable: true
+        - $id: p:72
+          token: status
+          type:
+            type: string
+          nullable: true
+        - $id: p:73
+          token: created_at
+          type:
+            type: datetime
+          nullable: true
+        - $id: p:74
+          token: observation_count
+          type:
+            type: integer
+          nullable: true
+        - $id: p:75
+          token: parent_memory_id
+          type:
+            type: string
+          nullable: true
+      relationshipTypes:
+      - $id: rt:1
+        token: CONTAINS
+        properties: []
+      - $id: rt:10
+        token: HAS_ISSUE
+        properties: []
+      - $id: rt:11
+        token: HAS_ISSUE
+        properties: []
+      - $id: rt:12
+        token: HAS_ISSUE
+        properties: []
+      - $id: rt:13
+        token: HAS_ISSUE
+        properties: []
+      - $id: rt:14
+        token: COVERS
+        properties: []
+      - $id: rt:15
+        token: COVERS
+        properties: []
+      - $id: rt:16
+        token: COVERS
+        properties: []
+      - $id: rt:17
+        token: RAN_IN
+        properties: []
+      - $id: rt:18
+        token: AFFECTS
+        properties: []
+      - $id: rt:19
+        token: AFFECTS
+        properties: []
+      - $id: rt:2
+        token: DEFINES
+        properties: []
+      - $id: rt:20
+        token: AFFECTS
+        properties: []
+      - $id: rt:21
+        token: SUBMITTED_FOR
+        properties: []
+      - $id: rt:22
+        token: CLOSES
+        properties: []
+      - $id: rt:23
+        token: HAS_CUSTOMER
+        properties: []
+      - $id: rt:24
+        token: HAS_SUBSCRIPTION_TYPE
+        properties: []
+      - $id: rt:25
+        token: SUBSCRIBES_TO
+        properties: []
+      - $id: rt:26
+        token: RENEWED_BY
+        properties: []
+      - $id: rt:27
+        token: MADE_PAYMENT
+        properties: []
+      - $id: rt:28
+        token: MADE_PAYMENT
+        properties: []
+      - $id: rt:29
+        token: PURCHASED
+        properties: []
+      - $id: rt:3
+        token: DEFINES
+        properties: []
+      - $id: rt:30
+        token: USES
+        properties: []
+      - $id: rt:4
+        token: CALLS
+        properties: []
+      - $id: rt:5
+        token: BELONGS_TO_FEATURE
+        properties: []
+      - $id: rt:6
+        token: BELONGS_TO_FEATURE
+        properties: []
+      - $id: rt:7
+        token: BELONGS_TO_DOMAIN
+        properties: []
+      - $id: rt:8
+        token: BELONGS_TO_DOMAIN
+        properties: []
+      - $id: rt:9
+        token: BELONGS_TO_DOMAIN
+        properties: []
+      - $id: rt:34
+        token: OPERATED_ON_REPOSITORY
+        properties: []
+      - $id: rt:35
+        token: OPERATED_ON_FILE
+        properties: []
+      - $id: rt:36
+        token: RELATED_TO_ISSUE
+        properties: []
+      - $id: rt:37
+        token: RELATED_TO_PULL_REQUEST
+        properties: []
+      - $id: rt:32
+        token: ''
+        properties: []
+      nodeObjectTypes:
+      - $id: n:1
+        labels:
+        - $ref: '#nl:1'
+      - $id: n:2
+        labels:
+        - $ref: '#nl:2'
+      - $id: n:3
+        labels:
+        - $ref: '#nl:3'
+      - $id: n:4
+        labels:
+        - $ref: '#nl:4'
+      - $id: n:5
+        labels:
+        - $ref: '#nl:5'
+      - $id: n:6
+        labels:
+        - $ref: '#nl:6'
+      - $id: n:7
+        labels:
+        - $ref: '#nl:7'
+      - $id: n:8
+        labels:
+        - $ref: '#nl:8'
+      - $id: n:9
+        labels:
+        - $ref: '#nl:9'
+      - $id: n:10
+        labels:
+        - $ref: '#nl:10'
+      - $id: n:11
+        labels:
+        - $ref: '#nl:11'
+      - $id: n:12
+        labels:
+        - $ref: '#nl:12'
+      - $id: n:13
+        labels:
+        - $ref: '#nl:13'
+      - $id: n:14
+        labels:
+        - $ref: '#nl:14'
+      - $id: n:15
+        labels:
+        - $ref: '#nl:15'
+      - $id: n:16
+        labels:
+        - $ref: '#nl:16'
+      - $id: n:17
+        labels:
+        - $ref: '#nl:17'
+      - $id: n:19
+        labels:
+        - $ref: '#nl:19'
+      relationshipObjectTypes:
+      - $id: r:1
+        type:
+          $ref: '#rt:1'
+        from:
+          $ref: '#n:1'
+        to:
+          $ref: '#n:2'
+      - $id: r:2
+        type:
+          $ref: '#rt:2'
+        from:
+          $ref: '#n:2'
+        to:
+          $ref: '#n:3'
+      - $id: r:3
+        type:
+          $ref: '#rt:3'
+        from:
+          $ref: '#n:2'
+        to:
+          $ref: '#n:4'
+      - $id: r:4
+        type:
+          $ref: '#rt:4'
+        from:
+          $ref: '#n:3'
+        to:
+          $ref: '#n:3'
+      - $id: r:5
+        type:
+          $ref: '#rt:5'
+        from:
+          $ref: '#n:3'
+        to:
+          $ref: '#n:5'
+      - $id: r:6
+        type:
+          $ref: '#rt:6'
+        from:
+          $ref: '#n:4'
+        to:
+          $ref: '#n:5'
+      - $id: r:7
+        type:
+          $ref: '#rt:7'
+        from:
+          $ref: '#n:5'
+        to:
+          $ref: '#n:6'
+      - $id: r:8
+        type:
+          $ref: '#rt:8'
+        from:
+          $ref: '#n:3'
+        to:
+          $ref: '#n:6'
+      - $id: r:9
+        type:
+          $ref: '#rt:9'
+        from:
+          $ref: '#n:4'
+        to:
+          $ref: '#n:6'
+      - $id: r:10
+        type:
+          $ref: '#rt:10'
+        from:
+          $ref: '#n:1'
+        to:
+          $ref: '#n:7'
+      - $id: r:11
+        type:
+          $ref: '#rt:11'
+        from:
+          $ref: '#n:2'
+        to:
+          $ref: '#n:7'
+      - $id: r:12
+        type:
+          $ref: '#rt:12'
+        from:
+          $ref: '#n:3'
+        to:
+          $ref: '#n:7'
+      - $id: r:13
+        type:
+          $ref: '#rt:13'
+        from:
+          $ref: '#n:4'
+        to:
+          $ref: '#n:7'
+      - $id: r:14
+        type:
+          $ref: '#rt:14'
+        from:
+          $ref: '#n:8'
+        to:
+          $ref: '#n:2'
+      - $id: r:15
+        type:
+          $ref: '#rt:15'
+        from:
+          $ref: '#n:8'
+        to:
+          $ref: '#n:3'
+      - $id: r:16
+        type:
+          $ref: '#rt:16'
+        from:
+          $ref: '#n:8'
+        to:
+          $ref: '#n:4'
+      - $id: r:17
+        type:
+          $ref: '#rt:17'
+        from:
+          $ref: '#n:9'
+        to:
+          $ref: '#n:1'
+      - $id: r:18
+        type:
+          $ref: '#rt:18'
+        from:
+          $ref: '#n:9'
+        to:
+          $ref: '#n:2'
+      - $id: r:19
+        type:
+          $ref: '#rt:19'
+        from:
+          $ref: '#n:9'
+        to:
+          $ref: '#n:3'
+      - $id: r:20
+        type:
+          $ref: '#rt:20'
+        from:
+          $ref: '#n:9'
+        to:
+          $ref: '#n:4'
+      - $id: r:21
+        type:
+          $ref: '#rt:21'
+        from:
+          $ref: '#n:10'
+        to:
+          $ref: '#n:1'
+      - $id: r:22
+        type:
+          $ref: '#rt:22'
+        from:
+          $ref: '#n:10'
+        to:
+          $ref: '#n:7'
+      - $id: r:23
+        type:
+          $ref: '#rt:23'
+        from:
+          $ref: '#n:1'
+        to:
+          $ref: '#n:11'
+      - $id: r:24
+        type:
+          $ref: '#rt:24'
+        from:
+          $ref: '#n:13'
+        to:
+          $ref: '#n:12'
+      - $id: r:25
+        type:
+          $ref: '#rt:25'
+        from:
+          $ref: '#n:11'
+        to:
+          $ref: '#n:13'
+      - $id: r:26
+        type:
+          $ref: '#rt:26'
+        from:
+          $ref: '#n:13'
+        to:
+          $ref: '#n:14'
+      - $id: r:27
+        type:
+          $ref: '#rt:27'
+        from:
+          $ref: '#n:11'
+        to:
+          $ref: '#n:15'
+      - $id: r:28
+        type:
+          $ref: '#rt:28'
+        from:
+          $ref: '#n:13'
+        to:
+          $ref: '#n:15'
+      - $id: r:29
+        type:
+          $ref: '#rt:29'
+        from:
+          $ref: '#n:11'
+        to:
+          $ref: '#n:16'
+      - $id: r:30
+        type:
+          $ref: '#rt:30'
+        from:
+          $ref: '#n:16'
+        to:
+          $ref: '#n:13'
+      - $id: r:34
+        type:
+          $ref: '#rt:34'
+        from:
+          $ref: '#n:17'
+        to:
+          $ref: '#n:1'
+      - $id: r:35
+        type:
+          $ref: '#rt:35'
+        from:
+          $ref: '#n:17'
+        to:
+          $ref: '#n:2'
+      - $id: r:36
+        type:
+          $ref: '#rt:36'
+        from:
+          $ref: '#n:17'
+        to:
+          $ref: '#n:7'
+      - $id: r:37
+        type:
+          $ref: '#rt:37'
+        from:
+          $ref: '#n:17'
+        to:
+          $ref: '#n:10'
+      - $id: r:32
+        type:
+          $ref: '#rt:32'
+        from:
+          $ref: '#n:17'
+        to:
+          $ref: '#n:19'
+      constraints:
+      - $id: c:1
+        name: name_SourceCodeRepository_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:1'
+        properties:
+        - $ref: '#p:1'
+      - $id: c:2
+        name: path_File_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:2'
+        properties:
+        - $ref: '#p:3'
+      - $id: c:3
+        name: name_FunctionOrMethod_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:3'
+        properties:
+        - $ref: '#p:5'
+      - $id: c:4
+        name: name_ClassOrStruct_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:4'
+        properties:
+        - $ref: '#p:9'
+      - $id: c:5
+        name: name_Feature_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:5'
+        properties:
+        - $ref: '#p:12'
+      - $id: c:6
+        name: name_Domain_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:6'
+        properties:
+        - $ref: '#p:14'
+      - $id: c:7
+        name: id_Issue_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:7'
+        properties:
+        - $ref: '#p:16'
+      - $id: c:8
+        name: id_TestCoverage_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:8'
+        properties:
+        - $ref: '#p:21'
+      - $id: c:9
+        name: id_CIRun_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:9'
+        properties:
+        - $ref: '#p:24'
+      - $id: c:10
+        name: id_PullRequest_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:10'
+        properties:
+        - $ref: '#p:28'
+      - $id: c:11
+        name: id_Customer_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:11'
+        properties:
+        - $ref: '#p:33'
+      - $id: c:12
+        name: name_SubscriptionType_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:12'
+        properties:
+        - $ref: '#p:36'
+      - $id: c:13
+        name: id_Subscription_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:13'
+        properties:
+        - $ref: '#p:39'
+      - $id: c:14
+        name: id_Renewal_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:14'
+        properties:
+        - $ref: '#p:43'
+      - $id: c:15
+        name: id_Payment_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:15'
+        properties:
+        - $ref: '#p:46'
+      - $id: c:16
+        name: id_UsagePurchaseCredit_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:16'
+        properties:
+        - $ref: '#p:50'
+      - $id: c:17
+        name: id_AgentExecution_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:17'
+        properties:
+        - $ref: '#p:54'
+      - $id: c:18
+        name: id_Memory_key
+        constraintType: key
+        entityType: node
+        nodeLabel:
+          $ref: '#nl:19'
+        properties:
+        - $ref: '#p:68'
+      indexes: []
+  graphSchemaExtensionsRepresentation:
+    nodeKeyProperties:
+    - node:
+        $ref: '#n:1'
+      keyProperties:
+      - $ref: '#p:1'
+    - node:
+        $ref: '#n:2'
+      keyProperties:
+      - $ref: '#p:3'
+    - node:
+        $ref: '#n:3'
+      keyProperties:
+      - $ref: '#p:5'
+    - node:
+        $ref: '#n:4'
+      keyProperties:
+      - $ref: '#p:9'
+    - node:
+        $ref: '#n:5'
+      keyProperties:
+      - $ref: '#p:12'
+    - node:
+        $ref: '#n:6'
+      keyProperties:
+      - $ref: '#p:14'
+    - node:
+        $ref: '#n:7'
+      keyProperties:
+      - $ref: '#p:16'
+    - node:
+        $ref: '#n:8'
+      keyProperties:
+      - $ref: '#p:21'
+    - node:
+        $ref: '#n:9'
+      keyProperties:
+      - $ref: '#p:24'
+    - node:
+        $ref: '#n:10'
+      keyProperties:
+      - $ref: '#p:28'
+    - node:
+        $ref: '#n:11'
+      keyProperties:
+      - $ref: '#p:33'
+    - node:
+        $ref: '#n:12'
+      keyProperties:
+      - $ref: '#p:36'
+    - node:
+        $ref: '#n:13'
+      keyProperties:
+      - $ref: '#p:39'
+    - node:
+        $ref: '#n:14'
+      keyProperties:
+      - $ref: '#p:43'
+    - node:
+        $ref: '#n:15'
+      keyProperties:
+      - $ref: '#p:46'
+    - node:
+        $ref: '#n:16'
+      keyProperties:
+      - $ref: '#p:50'
+    - node:
+        $ref: '#n:17'
+      keyProperties:
+      - $ref: '#p:54'
+    - node:
+        $ref: '#n:19'
+      keyProperties:
+      - $ref: '#p:68'
+    relationshipKeyProperties: []
+  graphMappingRepresentation:
+    dataSourceSchema:
+      type: local-unstructured
+      tableSchemas: []
+    nodeMappings: []
+    relationshipMappings: []
+  configurations:
+    idsToIgnore: []
+    arrayDelimiter: '|'
+    vectorDelimiter: '|'
