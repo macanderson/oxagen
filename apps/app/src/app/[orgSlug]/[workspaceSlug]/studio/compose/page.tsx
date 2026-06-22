@@ -30,7 +30,7 @@ function KindButton({
   description,
   active,
 }: {
-  icon: React.ElementType;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   label: string;
   description: string;
   active: boolean;

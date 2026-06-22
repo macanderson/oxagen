@@ -58,7 +58,7 @@ const PROVIDERS = [
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-const STATUS_CONFIG: Record<KeyStatus, { label: string; icon: React.ElementType; className: string }> = {
+const STATUS_CONFIG: Record<KeyStatus, { label: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; className: string }> = {
   active: {
     label: "Active",
     icon: Check,

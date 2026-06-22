@@ -3,6 +3,7 @@ import * as React from "react";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "./tooltip";
 
 /*
  * Button — token-driven cva variants. The ONLY decorative motion kept anywhere
@@ -75,18 +76,38 @@ export interface ButtonProps
   startIcon?: React.ReactNode;
   /** Trailing icon rendered after the label. */
   endIcon?: React.ReactNode;
+  /**
+   * When the button is `disabled`, show this content in a tooltip on hover/focus
+   * (typically the reason it is disabled). The button is rendered inside a
+   * focusable wrapper so the tooltip stays reachable even though a disabled
+   * `<button>` emits no pointer events.
+   */
+  disabledTooltip?: React.ReactNode;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
-    { className, variant, size, render, children, startIcon, endIcon, type, ...props },
+    {
+      className,
+      variant,
+      size,
+      render,
+      children,
+      startIcon,
+      endIcon,
+      type,
+      disabled,
+      disabledTooltip,
+      ...props
+    },
     ref,
-  ) =>
-    useRender({
+  ) => {
+    const element = useRender({
       render: render ?? <button type={type ?? "button"} />,
       ref,
       props: {
         className: cn(buttonVariants({ variant, size }), className),
+        disabled,
         ...props,
         children:
           startIcon || endIcon ? (
@@ -99,7 +120,25 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             children
           ),
       },
-    }),
+    });
+
+    // A disabled button emits no pointer events (`disabled:pointer-events-none`),
+    // so a tooltip attached directly to it would never open. Wrap it in a
+    // focusable span that acts as the tooltip anchor: hover/focus lands on the
+    // span and the tooltip explains why the action is unavailable.
+    if (disabled && disabledTooltip != null) {
+      return (
+        <Tooltip>
+          <TooltipTrigger render={<span tabIndex={0} className="inline-flex" />}>
+            {element}
+          </TooltipTrigger>
+          <TooltipPopup>{disabledTooltip}</TooltipPopup>
+        </Tooltip>
+      );
+    }
+
+    return element;
+  },
 );
 Button.displayName = "Button";
 

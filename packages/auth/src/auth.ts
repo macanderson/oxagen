@@ -198,9 +198,12 @@ export const auth = betterAuth({
     // critically the rate-limiter's internal model rateLimit→rateLimits. The key
     // here must therefore be the PLURAL "rateLimits" (not "rateLimit"), or the
     // Drizzle adapter throws `model "rateLimits" was not found` on EVERY auth
-    // request when storage:"database" rate limiting is enabled (prod-only — it is
-    // disabled in dev, which is why this only ever 500'd in production). Maps to
-    // the auth.rate_limit table (migration 0009).
+    // request. storage:"database" rate limiting is enabled in every environment
+    // except the E2E harness (`enabled: !isE2E` below), so this mapping — and a
+    // reachable Postgres — is exercised on every sign-in/sign-up in LOCAL DEV too,
+    // not just production. A DB outage therefore 500s auth in dev as well (it
+    // surfaces as ECONNREFUSED on the auth.rate_limit query). Maps to the
+    // auth.rate_limit table (migration 0009).
     schema: {
       users: schema.users,
       sessions: schema.sessions,

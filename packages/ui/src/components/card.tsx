@@ -34,10 +34,12 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
 Card.displayName = "Card";
 
 /**
- * CardHeader — a DARK header bar (Graphite skin): charcoal in light mode, an
- * elevated charcoal in dark mode, with light text. `rounded-t-xl` matches the
- * Card radius so it sits flush; the descendant `[&_p]` rule dims CardDescription
- * to 70% of the light header ink so it stays legible on the dark bar.
+ * CardHeader — a SUBTLY TINTED header (Graphite skin): just a hint of separation
+ * from the card surface — a touch of gray on the white card in light mode, one
+ * step up from the near-black card in dark mode — with the normal flipping ink
+ * (dark text in light, soft white in dark). `rounded-t-xl` matches the Card
+ * radius so it sits flush; the descendant `[&_p]` rule dims CardDescription to
+ * 70% of the header ink so it stays legible.
  */
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (

@@ -242,12 +242,14 @@
     --app-link-hover-fg: var(--foreground);
     --app-link-active-fg: var(--primary);
 
-    /* ── Headers (card + table) — dark bars in BOTH modes for dramatic contrast.
-     *    Light: charcoal bar on white panels. Dark: a stepped-up charcoal that
-     *    reads as an elevated header against the darker card (re-declared in
-     *    .dark). Foreground stays the soft white in both modes. ─────────────── */
-    --card-header-bg: var(--_header-dark);
-    --card-header-fg: var(--_ink-white);
+    /* ── Headers. CARD header is a SUBTLE TINT — just a hint of separation from
+     *    the card surface (a touch of gray on the white card in light; one step
+     *    up from the near-black card in dark, re-declared in .dark) — with the
+     *    normal flipping ink (re-declared in .dark so it does not freeze to the
+     *    light value). TABLE header keeps the dramatic dark charcoal bar with
+     *    soft-white ink in both modes. ─────────────────────────────────────── */
+    --card-header-bg: var(--_stone-100);
+    --card-header-fg: var(--foreground);
     --table-header-bg: var(--_header-dark);
     --table-header-fg: var(--_ink-white);
 
@@ -359,7 +361,9 @@
     --secondary: var(--_stone-850);
     --secondary-foreground: var(--_stone-200);
     --muted: var(--_stone-850);
-    --muted-foreground: var(--_stone-500);
+    /* Brighter secondary ink in dark for legibility — stone-500 (#797670) read
+     * as low-contrast mud on the near-black surfaces. */
+    --muted-foreground: var(--_stone-400);
     --accent: var(--_stone-800);
     --accent-foreground: var(--_ink-white);
     --destructive: var(--_clay-light);
@@ -397,11 +401,64 @@
     --sidebar-border: oklch(0.42 0.006 75 / 0.4);
     --sidebar-ring: var(--ring);
 
-    /* Header bars sit one step ABOVE the card so they read as elevated. */
-    --card-header-bg: var(--_stone-800);
+    /* Card header: just a hint above the card surface (stone-900) — subtle, not
+     * a bar. Its ink flips back to the soft white here. Table header keeps the
+     * elevated charcoal bar. */
+    --card-header-bg: var(--_stone-850);
+    --card-header-fg: var(--foreground);
     --table-header-bg: var(--_stone-800);
 
     --overlay-scrim: oklch(0 0 0 / 0.6);
+
+    /* ── Component tokens that indirect through theme-flipping core tokens must
+     *    be re-declared in the dark context. A token declared ONLY on :root has
+     *    its inner var() resolved at :root (LIGHT) and then inherits that frozen
+     *    light value into .dark — it never flips (proven: an outline button's
+     *    computed color stayed dark ink while --foreground was white). Re-
+     *    declaring here forces each to recompute against the dark core above.
+     *    Fixes: invisible outline/ghost button text, secondary text vanishing on
+     *    hover, white inputs/selects, and light badges/dialogs in dark mode. ── */
+    --button-default-fg: var(--foreground);
+    --button-default-border: var(--border);
+    --button-default-hover-bg: var(--accent);
+    --button-default-active-bg: color-mix(in oklch, var(--accent) 84%, var(--foreground));
+    --button-primary-hover-bg: color-mix(in oklch, var(--primary) 88%, var(--background));
+    --button-primary-active-bg: color-mix(in oklch, var(--primary) 78%, var(--background));
+    --button-disabled-bg: var(--muted);
+    --button-disabled-fg: var(--muted-foreground);
+
+    --input-bg: var(--background);
+    --input-fg: var(--foreground);
+    --input-placeholder: var(--muted-foreground);
+    --input-border: var(--border);
+    --input-border-hover: color-mix(in oklch, var(--border) 60%, var(--foreground));
+    --input-disabled-bg: var(--muted);
+    --input-disabled-fg: var(--muted-foreground);
+
+    --menu-popup-bg: var(--popover);
+    --menu-popup-fg: var(--popover-foreground);
+    --menu-popup-border: var(--border);
+    --menu-item-fg: var(--popover-foreground);
+    --menu-item-highlighted-bg: var(--accent);
+    --menu-item-highlighted-fg: var(--accent-foreground);
+    --menu-item-disabled-fg: var(--muted-foreground);
+    --menu-item-selected-bg: var(--accent);
+    --menu-item-selected-fg: var(--accent-foreground);
+    --menu-separator: var(--border);
+    --menu-group-label-fg: var(--muted-foreground);
+
+    --control-track-bg: var(--input);
+    --control-thumb: var(--card);
+    --control-border: var(--border);
+
+    --badge-bg: var(--secondary);
+    --badge-fg: var(--secondary-foreground);
+    --badge-border: var(--border);
+    --dialog-bg: var(--popover);
+    --dialog-fg: var(--popover-foreground);
+    --dialog-border: var(--border);
+    --tooltip-bg: var(--foreground);
+    --tooltip-fg: var(--background);
   }
 
   /* "System" = DARK with zero JS. KEEP IN SYNC with .dark above. */
@@ -420,7 +477,8 @@
       --secondary: var(--_stone-850);
       --secondary-foreground: var(--_stone-200);
       --muted: var(--_stone-850);
-      --muted-foreground: var(--_stone-500);
+      /* Brighter secondary ink in dark for legibility (matches .dark). */
+      --muted-foreground: var(--_stone-400);
       --accent: var(--_stone-800);
       --accent-foreground: var(--_ink-white);
       --destructive: var(--_clay-light);
@@ -458,11 +516,57 @@
       --sidebar-border: oklch(0.42 0.006 75 / 0.4);
       --sidebar-ring: var(--ring);
 
-      /* Header bars sit one step ABOVE the card so they read as elevated. */
-      --card-header-bg: var(--_stone-800);
+      /* Card header: a hint above the card surface; ink flips to soft white.
+       * Table header keeps the elevated charcoal bar. */
+      --card-header-bg: var(--_stone-850);
+      --card-header-fg: var(--foreground);
       --table-header-bg: var(--_stone-800);
 
       --overlay-scrim: oklch(0 0 0 / 0.6);
+
+      /* Re-declare component tokens against the dark core (see .dark above for
+       * why a :root-only declaration freezes to the light value). */
+      --button-default-fg: var(--foreground);
+      --button-default-border: var(--border);
+      --button-default-hover-bg: var(--accent);
+      --button-default-active-bg: color-mix(in oklch, var(--accent) 84%, var(--foreground));
+      --button-primary-hover-bg: color-mix(in oklch, var(--primary) 88%, var(--background));
+      --button-primary-active-bg: color-mix(in oklch, var(--primary) 78%, var(--background));
+      --button-disabled-bg: var(--muted);
+      --button-disabled-fg: var(--muted-foreground);
+
+      --input-bg: var(--background);
+      --input-fg: var(--foreground);
+      --input-placeholder: var(--muted-foreground);
+      --input-border: var(--border);
+      --input-border-hover: color-mix(in oklch, var(--border) 60%, var(--foreground));
+      --input-disabled-bg: var(--muted);
+      --input-disabled-fg: var(--muted-foreground);
+
+      --menu-popup-bg: var(--popover);
+      --menu-popup-fg: var(--popover-foreground);
+      --menu-popup-border: var(--border);
+      --menu-item-fg: var(--popover-foreground);
+      --menu-item-highlighted-bg: var(--accent);
+      --menu-item-highlighted-fg: var(--accent-foreground);
+      --menu-item-disabled-fg: var(--muted-foreground);
+      --menu-item-selected-bg: var(--accent);
+      --menu-item-selected-fg: var(--accent-foreground);
+      --menu-separator: var(--border);
+      --menu-group-label-fg: var(--muted-foreground);
+
+      --control-track-bg: var(--input);
+      --control-thumb: var(--card);
+      --control-border: var(--border);
+
+      --badge-bg: var(--secondary);
+      --badge-fg: var(--secondary-foreground);
+      --badge-border: var(--border);
+      --dialog-bg: var(--popover);
+      --dialog-fg: var(--popover-foreground);
+      --dialog-border: var(--border);
+      --tooltip-bg: var(--foreground);
+      --tooltip-fg: var(--background);
     }
   }
 }

@@ -31,7 +31,7 @@ const MOCK_ASSETS: MockAsset[] = [
   { id: "ast-06", kind: "image",    title: "Social banner — launch announcement",brandKit: "Campaign — Q2",   model: "gpt-image-1",       createdAt: "2026-06-01 11:00", sizeLabel: "780 KB",  dimensions: "1200×628" },
 ];
 
-const KIND_ICONS: Record<AssetKind, React.ElementType> = {
+const KIND_ICONS: Record<AssetKind, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
   image:    Image,
   video:    Video,
   document: FileText,
