@@ -59,7 +59,16 @@ export function Step1Connect({ orgSlug, workspaceSlug, onConnectionCreated, erro
         { credentials: "include" },
       );
       if (!authUrlRes.ok) {
-        throw new Error("Failed to get OAuth URL");
+        // Surface the API's actual error (e.g. a 503 "GitHub App is not
+        // configured") instead of a generic message — a misconfigured
+        // deployment is otherwise undiagnosable from the UI. Mirrors how
+        // the connection-create step above reads its error body.
+        const body = (await authUrlRes.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(
+          body?.error
+            ? `Failed to get OAuth URL: ${body.error}`
+            : `Failed to get OAuth URL (${authUrlRes.status})`,
+        );
       }
       const { authUrl } = (await authUrlRes.json()) as { authUrl: string };
       window.location.href = authUrl;
