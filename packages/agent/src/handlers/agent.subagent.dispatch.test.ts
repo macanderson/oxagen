@@ -8,7 +8,12 @@ const insertFanoutSpy = vi.fn(async () => [{ id: "fanuuid_123", publicId: "fan_1
 // Captures the rows passed to the subagent_runs batch insert so tests can
 // assert the fanout_id uuid and per-child message ids are correct.
 let insertedRuns: Array<Record<string, unknown>> = [];
-const inngestSendSpy = vi.fn(async () => undefined);
+// Captures `.set()` payloads for the post-emit UPDATEs so tests can assert the
+// persisted inngest_event_id and the on-emit-failure run cleanup.
+let fanoutUpdates: Array<Record<string, unknown>> = [];
+let runUpdates: Array<Record<string, unknown>> = [];
+// send() resolves to Inngest's real shape ({ ids: [...] }); tests can override.
+const inngestSendSpy = vi.fn(async () => ({ ids: ["evt_abc"] }));
 
 const drizzleTableName = (table: unknown): string => {
   try {
@@ -35,6 +40,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
             then: (resolve: (x: unknown) => void) => resolve(undefined),
           };
         },
+      }),
+      update: (table: unknown) => ({
+        set: (vals: Record<string, unknown>) => ({
+          where: () => {
+            const name = drizzleTableName(table);
+            if (name === "subagent_fanouts") fanoutUpdates.push(vals);
+            if (name === "subagent_runs") runUpdates.push(vals);
+            return Promise.resolve(undefined);
+          },
+        }),
       }),
     }),
 
@@ -72,8 +87,12 @@ describe("agent.subagent.dispatch handler", () => {
     insertFanoutSpy.mockClear();
     inngestSendSpy.mockClear();
     insertedRuns = [];
+    fanoutUpdates = [];
+    runUpdates = [];
     // Reset insert mock to return fanout row by default
     insertFanoutSpy.mockResolvedValue([{ id: "fanuuid_123", publicId: "fan_123" }]);
+    // Reset send mock to the success shape by default.
+    inngestSendSpy.mockResolvedValue({ ids: ["evt_abc"] });
   });
 
   it("creates a fanout record and queues an Inngest event keyed by the uuid", async () => {
@@ -183,5 +202,48 @@ describe("agent.subagent.dispatch handler", () => {
     );
     const sentEvent = (inngestSendSpy.mock.calls[0] as unknown as [{ data: { timeoutSeconds: number } }])[0];
     expect(sentEvent.data.timeoutSeconds).toBe(300);
+  });
+
+  it("persists the returned Inngest event id on the fan-out (trace breadcrumb)", async () => {
+    inngestSendSpy.mockResolvedValueOnce({ ids: ["evt_xyz"] });
+    await agentSubagentDispatchHandler(
+      {
+        parentMessageId: "msg_evt",
+        tasks: [{ capabilityName: "agent.tool.list", input: {} }],
+        maxParallel: 1,
+      },
+      CTX,
+    );
+    // The fan-out row is updated with the event id so a dispatch that never
+    // fired can be traced from the DB to the Inngest dashboard.
+    expect(fanoutUpdates).toEqual([{ inngestEventId: "evt_xyz" }]);
+    expect(runUpdates).toHaveLength(0);
+  });
+
+  it("marks child runs failed and rethrows when the Inngest emit throws", async () => {
+    inngestSendSpy.mockRejectedValueOnce(new Error("INNGEST_EVENT_KEY missing"));
+    await expect(
+      agentSubagentDispatchHandler(
+        {
+          parentMessageId: "msg_fail",
+          tasks: [
+            { capabilityName: "agent.tool.list", input: {} },
+            { capabilityName: "agent.memory.recall", input: { query: "x" } },
+          ],
+          maxParallel: 5,
+        },
+        CTX,
+      ),
+    ).rejects.toThrow(/Failed to emit subagent dispatch event: INNGEST_EVENT_KEY missing/);
+    // The just-created child runs are marked failed with the cause, not left
+    // orphaned as perpetually `pending`. No event id was persisted.
+    expect(runUpdates).toEqual([
+      {
+        status: "failed",
+        errorReason: "dispatch emit failed: INNGEST_EVENT_KEY missing",
+        completedAt: expect.any(Date),
+      },
+    ]);
+    expect(fanoutUpdates).toHaveLength(0);
   });
 });
