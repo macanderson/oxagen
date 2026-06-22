@@ -6,7 +6,10 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import type { AgentSubagentDispatchOutput } from "@oxagen/oxagen/contracts/agent.subagent.dispatch";
 import { logger } from "./logger";
 
-// TODO: OXA-XXXX wire result aggregation to graph.node.upsert via agent.subagent.aggregate once results land
+// Result → knowledge-graph projection is wired in the inngest-functions package:
+// `research.swarm.ingest-graph` listens for agent/subagent.fanout.completed and
+// feeds each completed web.search child's hits to graph.ingest (LLM extraction →
+// idempotent node/edge upserts). The swarm stays fire-and-forget here.
 
 const DEPTH_QUERY_COUNTS: Record<string, number> = {
   shallow: 3,
