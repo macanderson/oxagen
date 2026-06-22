@@ -4,7 +4,7 @@ import { paymentFailedTemplate } from "./payment-failed-template";
 const BASE_INPUT = {
   orgName: "Acme Corp",
   graceDays: 7,
-  billingUrl: "https://oxagen-v2-app.vercel.app/billing/payment-methods",
+  billingUrl: "https://app.oxagen.sh/billing/payment-methods",
 };
 
 describe("paymentFailedTemplate", () => {

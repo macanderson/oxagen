@@ -18,7 +18,7 @@ function cfg(over: Partial<SmtpTransportConfig> = {}): SmtpTransportConfig {
     port: 587,
     user: "resend",
     pass: "re_secret",
-    fromEmail: "noreply@notifications.oxagen.ai",
+    fromEmail: "noreply@notifications.oxagen.sh",
     fromName: "Oxagen (DO NOT REPLY)",
     ...over,
   };
@@ -72,7 +72,7 @@ describe("createSmtpTransport", () => {
 
     expect(sendMailMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: { name: "Oxagen (DO NOT REPLY)", address: "noreply@notifications.oxagen.ai" },
+        from: { name: "Oxagen (DO NOT REPLY)", address: "noreply@notifications.oxagen.sh" },
         to: "a@x.com",
         subject: "Hi",
         text: "yo",
@@ -89,7 +89,7 @@ describe("createSmtpTransport", () => {
       text: "t",
     });
     expect(sendMailMock).toHaveBeenCalledWith(
-      expect.objectContaining({ from: "noreply@notifications.oxagen.ai" }),
+      expect.objectContaining({ from: "noreply@notifications.oxagen.sh" }),
     );
   });
 

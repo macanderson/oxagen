@@ -145,12 +145,12 @@ Auth → `vendor-better-auth` + Better Auth `*-best-practices`. New features →
 
 ## Production URLs (interim)
 
-- App: `https://oxagen-v2-app.vercel.app`
-- API: `https://oxagen-v2-api.vercel.app` (Hono REST; no MCP protocol endpoint)
-- MCP: `https://oxagen-v2-mcp.vercel.app` (connect at `/mcp` over streamable HTTP; org+workspace scope carried by API key)
-- Docs: `https://oxagen-v2-docs.vercel.app`
+- App: `https://app.oxagen.sh`
+- API: `https://api.oxagen.sh` (Hono REST; no MCP protocol endpoint)
+- MCP: `https://mcp.oxagen.sh` (connect at `/mcp` over streamable HTTP; org+workspace scope carried by API key)
+- Docs: `https://docs.oxagen.sh`
 
-Use Vercel domains in OAuth callbacks, env values, allowedOrigins, docs. Keep URLs isolated to env vars — oxagen.ai switch is a single env-var sweep.
+Use oxagen.sh domains in OAuth callbacks, env values, allowedOrigins, docs. Keep URLs isolated to env vars — oxagen.sh domain migration is a single env-var sweep.
 
 ## Linear
 

@@ -314,10 +314,10 @@ describe("social provider guard", () => {
 
 // Mirror the prod origins from auth.ts.
 const PROD_ORIGINS = [
-  "https://oxagen-v2-app.vercel.app",
-  "https://oxagen-v2-website.vercel.app",
-  "https://oxagen-v2-api.vercel.app",
-  "https://oxagen-v2-admin.vercel.app",
+  "https://app.oxagen.sh",
+  "https://www.oxagen.sh",
+  "https://api.oxagen.sh",
+  "https://admin.oxagen.sh",
 ];
 
 const DEV_ORIGINS_LOCAL = [
