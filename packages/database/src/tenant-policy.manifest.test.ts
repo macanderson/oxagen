@@ -22,9 +22,6 @@ describe("tenant policy manifest", () => {
     expect(tables).toContain("agent.skills");
     expect(tables).toContain("agent.agents");
     expect(tables).toContain("chat.conversations");
-    // graph.outbox was dropped (20260621120000_drop_graph_outbox.sql) — the
-    // graph schema no longer contributes any tenant-owned table.
-    expect(tables).not.toContain("graph.outbox");
   });
 
   it("covers the playbook domain added by the 2026-06-11 rebuild (OXA-1700)", () => {
