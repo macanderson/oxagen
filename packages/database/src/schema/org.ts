@@ -1,4 +1,4 @@
-import { check, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { orgSchema } from "./_schemas";
 import { auditMixin, citext, idMixin } from "./_mixins";
@@ -63,6 +63,37 @@ export const orgUsers = orgSchema.table(
 // Each invitation occupies a seat (pending invites count as used seats).
 // One active invitation per (orgId, email); multiple can exist historically
 // (accepted/declined/revoked/expired are not blocked by the partial unique index).
+
+// Slug-history capture for org renames. Every time organizations.slug changes,
+// the write path inserts one row in the SAME transaction as the slug UPDATE
+// (atomic capture). The resolver consults this table on a current-slug miss to
+// 301/308-redirect the old URL to the canonical new one (spec §4.5, §6.1).
+// redirect_enabled=false freezes a row so the old URL 404s again — used when a
+// slug is intentionally retired or recycled.
+//
+// old_slug is intentionally NOT unique: a re-rename chain (a→b, then b→c, then
+// a→c by another org after the first org freed "a") can produce repeated
+// old_slug values. The resolver picks the most recent matching row by
+// changed_at DESC.
+export const orgSlugHistory = orgSchema.table(
+  "org_slug_history",
+  {
+    ...idMixin("osh"),
+    orgId: uuid("org_id").notNull(),
+    oldSlug: citext("old_slug").notNull(),
+    newSlug: citext("new_slug").notNull(),
+    changedAt: timestamp("changed_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    redirectEnabled: boolean("redirect_enabled").notNull().default(true),
+  },
+  (t) => ({
+    // Resolver hot path: lookup by old_slug.
+    oldSlugIdx: index("org_slug_history_old_slug_idx").on(t.oldSlug),
+    // Inverse lookup for admin tooling ("show rename history for this org").
+    orgIdx: index("org_slug_history_org_idx").on(t.orgId, t.changedAt),
+  }),
+);
 
 export const invitations = orgSchema.table(
   "invitations",
