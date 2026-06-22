@@ -68,7 +68,10 @@ export function AskBar({ ctx, className }: AskBarProps) {
   const kbdHint = React.useSyncExternalStore(
     _stableNoopSubscribe,
     () => {
-      const platform = (navigator.userAgentData?.platform ?? navigator.platform ?? "").toLowerCase();
+      // `navigator.userAgentData` is a Chromium-only API not in lib.dom.d.ts,
+      // so it is read through a narrowed cast that falls back to `platform`.
+      const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+      const platform = (nav.userAgentData?.platform ?? navigator.platform ?? "").toLowerCase();
       return platform.includes("mac") ? "⌘K" : "Ctrl+K";
     },
     () => "⌘K",
