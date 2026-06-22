@@ -18,7 +18,7 @@ docs/       capability specs, ADRs, architecture docs
 | `api` | `apps/api/src/app.ts` | Hono HTTP API + Inngest webhook handler |
 | `app` | `apps/app/src/app/` | Next.js 16 enterprise web app (App Router) |
 | `mcp` | `apps/mcp/src/` | MCP server exposing all platform capabilities as tools |
-| `cli` | `apps/cli/src/index.tsx` | Commander + Ink CLI, 108 command files |
+| `cli` | `apps/cli/src/index.tsx` | Commander + Ink CLI, 124 command files |
 | `docs` | `apps/docs/src/` | Fumadocs documentation site |
 
 ### Core Packages
@@ -26,7 +26,7 @@ docs/       capability specs, ADRs, architecture docs
 | Package | Key File | Purpose |
 |---|---|---|
 | `oxagen` | `src/kernel.ts` | Capability kernel — the one `invoke()` path |
-| `oxagen` | `src/contracts/` | ~140 capability contracts (Zod schemas + metadata) |
+| `oxagen` | `src/contracts/` | ~173 capability contracts (Zod schemas + metadata) |
 | `oxagen` | `src/iam/resolve.ts` | IAM policy resolution |
 | `handlers` | `src/register.ts` | All built-in capability handler registrations |
 | `agent` | `src/runtime/materialize-tools.ts` | Agent tool list builder |

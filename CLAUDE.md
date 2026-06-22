@@ -218,10 +218,10 @@ Authorized and encouraged every session without asking permission. Use `creds.js
 - `apps/mcp` — xmcp. Tools at `apps/mcp/src/tools/<capability>.ts`. Connect at `/mcp`.
 - **Capability parity rule:** new user-facing action → contract in `packages/oxagen/src/contracts/` → API route → MCP tool → CLI command. Run `pnpm check:manifest` to verify.
 - **Static mock sections** (`knowledge.*`, `access.*`, `security.*`, `activity.*`, `developer.*`, `tools/studio.*`, several billing/settings/profile actions) must NOT be wired to live data until a contract exists. Correct order: contract → API route → MCP tool → UI wire-up.
-- **`check:manifest` false positives:** combined route files report false-positive gaps. `workflow.ts` covers `workflow.run/cancel/status`; `connection.ts` covers all 8 `connection.*` capabilities; `integration.ts` covers all 7 `integration.*` capabilities; `repo.ts` covers all 5 `repo.*` capabilities; `semantic-edge.ts` covers all 4 `semantic.edge.*` capabilities; `plugin-schema.ts` covers `plugin.schema.get/validate` + `plugin.version.list`. All are mounted in `apps/api/src/app.ts`. Verify by reading the file before filing a parity ticket.
+- **`check:manifest` false positives:** combined route files report false-positive gaps. `workflow.ts` covers `workflow.run/cancel/status`; `connection.ts` covers all 10 `connection.*` capabilities (create/delete/get/list/mappings.get/mappings.set/mappings.suggest/pause/preview/update); `integration.ts` covers all 7 `integration.*` capabilities; `repo.ts` covers all 5 `repo.*` capabilities; `semantic-edge.ts` covers all 4 `semantic.edge.*` capabilities; `plugin-schema.ts` covers `plugin.schema.get/validate` + `plugin.version.list`. All are mounted in `apps/api/src/app.ts`. Verify by reading the file before filing a parity ticket.
 
 ### `apps/cli`
-Commander + Ink. Entry: `apps/cli/src/index.tsx`. 108 command files. `oxagen dev` is the dev-stack launcher.
+Commander + Ink. Entry: `apps/cli/src/index.tsx`. 124 command files. `oxagen dev` is the dev-stack launcher.
 
 ### `apps/docs`
 Fumadocs/MDX. Statically generated. No interactive runtime.
@@ -231,7 +231,7 @@ Fumadocs/MDX. Statically generated. No interactive runtime.
 ```bash
 pnpm dev                         # start all apps + Docker (Postgres :5433, ClickHouse :8123, Neo4j :7687)
 pnpm typecheck                   # run TS across the monorepo
-pnpm test                        # run test suite
+pnpm test                        # DO NOT run directly (see "NEVER run all tests"); use `pnpm --filter <pkg> test:unit -- <file>` for narrow runs
 pnpm check:manifest              # verify API↔MCP capability parity (warn-only)
 pnpm check:manifest --json       # machine-readable parity output
 pnpm check:contracts             # verify contract definitions
