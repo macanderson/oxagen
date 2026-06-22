@@ -29,6 +29,12 @@ export interface OrgOnlyMountProps {
 
 export function OrgOnlyMount({ orgSlug, children }: OrgOnlyMountProps) {
   const pathname = usePathname();
+  // `usePathname()` is typed `string | null` in the App Router (null during
+  // SSR / edge transitions). `resolveSidebarMode` reaches for `.startsWith`,
+  // so we fail closed and hide the org-only overlays for the single frame
+  // until the path resolves — the workspace-layout mount will cover the rare
+  // case where pathname briefly resolves to null on a workspace route.
+  if (!pathname) return null;
   const mode = resolveSidebarMode(pathname, { orgSlug });
   if (mode === "workspace") return null;
   return <>{children}</>;

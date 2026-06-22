@@ -79,6 +79,18 @@ describe("OrgOnlyMount", () => {
     expect(screen.queryByTestId("overlay")).toBeNull();
   });
 
+  it("returns null when usePathname() returns null (SSR/edge transition)", () => {
+    // App Router's usePathname() is typed `string | null`. resolveSidebarMode
+    // calls .startsWith on the value, so the wrapper must fail closed.
+    mockPathname.mockReturnValue(null as unknown as string);
+    render(
+      <OrgOnlyMount orgSlug="acme">
+        <div data-testid="overlay">overlay</div>
+      </OrgOnlyMount>,
+    );
+    expect(screen.queryByTestId("overlay")).toBeNull();
+  });
+
   it("does NOT confuse /{org}/billing/usage (org tab) for a workspace path", () => {
     // 'billing' is a reserved org-scope route, so /{org}/billing/usage is org mode.
     mockPathname.mockReturnValue("/acme/billing/usage");
