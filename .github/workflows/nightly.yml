@@ -209,6 +209,7 @@ jobs:
       GITHUB_APP_CLIENT_ID: Iv1.cie2e0000000000
       GITHUB_APP_CLIENT_SECRET: ci-github-app-secret
       GITHUB_APP_INSTALL_STATE_SECRET: ci-github-install-state-secret
+      GITHUB_APP_SLUG: ci-github-app-slug
       # Social-login OAuth clients change Better Auth provider registration;
       # dummy CI values keep the auth surface under test consistent.
       GITHUB_LOGIN_CLIENT_ID: ci-github-login-client-id
