@@ -9,7 +9,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { RunsView } from "./runs-view";
 import type { RunTask } from "./task-table";
 import type { AgentSubagentFanoutListOutput } from "./fanout-actions";
@@ -84,7 +84,16 @@ export async function RunsSection({
           db
             .select()
             .from(schema.agentExecutions)
-            .where(eq(schema.agentExecutions.workspaceId, workspaceId))
+            // The Runs view lists workflow runs (workflow.run → agent_executions
+            // with origin_type='workflow_run'). Chat-origin executions are
+            // conversations, not runs — excluding them stops them being
+            // mislabeled as parallel tasks here.
+            .where(
+              and(
+                eq(schema.agentExecutions.workspaceId, workspaceId),
+                eq(schema.agentExecutions.originType, "workflow_run"),
+              ),
+            )
             .orderBy(desc(schema.agentExecutions.createdAt))
             .limit(50),
         ),

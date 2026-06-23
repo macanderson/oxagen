@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   inngestSend: vi.fn(),
 }));
 
-const ROW = { id: "wfr-uuid-1", publicId: "wfr_ABCDEF" };
+const ROW = { id: "aex-uuid-1", publicId: "aex_ABCDEF" };
 
 mocks.insertReturning.mockResolvedValue([ROW]);
 mocks.insertValues.mockReturnValue({ returning: mocks.insertReturning });
@@ -55,7 +55,7 @@ describe("workflow.run handler", () => {
     ).rejects.toThrow("workflow.run requires an authenticated user");
   });
 
-  it("inserts a workflow_runs row and fires inngest event", async () => {
+  it("inserts an agent_executions row and fires inngest event", async () => {
     const result = await workflowRunHandler(BASE_INPUT, CTX);
 
     expect(mocks.insertValues).toHaveBeenCalledTimes(1);
@@ -73,6 +73,16 @@ describe("workflow.run handler", () => {
     expect(result.workflowId).toBe(ROW.id);
     expect(result.publicId).toBe(ROW.publicId);
     expect(result.status).toBe("planning");
+  });
+
+  it("inserts origin_type='workflow_run' (underscore) to satisfy the agent_executions CHECK constraint", async () => {
+    // Regression: the handler previously inserted "workflow.run" (dot), which
+    // the agent_executions_origin_type_check CHECK rejects, so every real
+    // workflow run failed at INSERT. The DB mock can't catch the violation, so
+    // assert the literal value explicitly.
+    await workflowRunHandler(BASE_INPUT, CTX);
+    const insertCall = mocks.insertValues.mock.calls[0]![0] as Record<string, unknown>;
+    expect(insertCall.originType).toBe("workflow_run");
   });
 
   it("returns a render directive for workflow-progress", async () => {
