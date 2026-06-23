@@ -1,4 +1,13 @@
 import { relations } from "drizzle-orm";
+import {
+  schemaRegistries,
+  schemaVersions,
+  schemas,
+  schemaActivations,
+  nodeLabels,
+  relationshipTypes,
+  schemaProperties,
+} from "./schema/schema-registry";
 import { organizations, orgUsers, invitations } from "./schema/org";
 import {
   principals,
@@ -449,6 +458,92 @@ export const playbookApprovalsRelations = relations(playbookApprovals, ({ one })
   stepRun: one(playbookStepRuns, {
     fields: [playbookApprovals.stepRunId],
     references: [playbookStepRuns.id],
+  }),
+}));
+
+// ── Schema Registry relations (§4.1–§4.6) ────────────────────────────────────
+// Cross-domain joins are app-enforced; in-domain FK links use Drizzle relations.
+
+export const schemaRegistriesRelations = relations(schemaRegistries, ({ one, many }) => ({
+  // The currently pinned (immutable, published) version.
+  pinnedVersion: one(schemaVersions, {
+    fields: [schemaRegistries.pinnedVersionId],
+    references: [schemaVersions.id],
+    relationName: "registry_pinned_version",
+  }),
+  // The current mutable draft version.
+  draftVersion: one(schemaVersions, {
+    fields: [schemaRegistries.draftVersionId],
+    references: [schemaVersions.id],
+    relationName: "registry_draft_version",
+  }),
+  versions: many(schemaVersions),
+}));
+
+export const schemaVersionsRelations = relations(schemaVersions, ({ one, many }) => ({
+  registry: one(schemaRegistries, {
+    fields: [schemaVersions.registryId],
+    references: [schemaRegistries.id],
+  }),
+  parentVersion: one(schemaVersions, {
+    fields: [schemaVersions.parentVersionId],
+    references: [schemaVersions.id],
+    relationName: "schema_version_parent",
+  }),
+  childVersions: many(schemaVersions, { relationName: "schema_version_parent" }),
+  schemas: many(schemas),
+}));
+
+export const schemasRelations = relations(schemas, ({ one, many }) => ({
+  version: one(schemaVersions, {
+    fields: [schemas.versionId],
+    references: [schemaVersions.id],
+  }),
+  nodeLabels: many(nodeLabels),
+  relationshipTypes: many(relationshipTypes),
+}));
+
+export const schemaActivationsRelations = relations(schemaActivations, (_helpers) => ({
+  // schema_activations is keyed on schema_name (stable string identity), not a UUID FK.
+  // Cross-workspace lookups are app-enforced; no Drizzle join needed here.
+}));
+
+export const nodeLabelsRelations = relations(nodeLabels, ({ one, many }) => ({
+  version: one(schemaVersions, {
+    fields: [nodeLabels.versionId],
+    references: [schemaVersions.id],
+  }),
+  schema: one(schemas, {
+    fields: [nodeLabels.schemaId],
+    references: [schemas.id],
+  }),
+  properties: many(schemaProperties),
+}));
+
+export const relationshipTypesRelations = relations(relationshipTypes, ({ one, many }) => ({
+  version: one(schemaVersions, {
+    fields: [relationshipTypes.versionId],
+    references: [schemaVersions.id],
+  }),
+  schema: one(schemas, {
+    fields: [relationshipTypes.schemaId],
+    references: [schemas.id],
+  }),
+  properties: many(schemaProperties),
+}));
+
+export const schemaPropertiesRelations = relations(schemaProperties, ({ one }) => ({
+  version: one(schemaVersions, {
+    fields: [schemaProperties.versionId],
+    references: [schemaVersions.id],
+  }),
+  nodeLabel: one(nodeLabels, {
+    fields: [schemaProperties.nodeLabelId],
+    references: [nodeLabels.id],
+  }),
+  relationshipType: one(relationshipTypes, {
+    fields: [schemaProperties.relationshipTypeId],
+    references: [relationshipTypes.id],
   }),
 }));
 
