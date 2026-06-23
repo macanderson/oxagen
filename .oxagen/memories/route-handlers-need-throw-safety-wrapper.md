@@ -3,7 +3,7 @@ name: route-handlers-need-throw-safety-wrapper
 type: observation
 domain: api
 severity: P2
-linear: OXA-1812
+linear: OXA-1814
 date: 2026-06-23
 ---
 

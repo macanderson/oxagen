@@ -3,7 +3,7 @@ name: notfound-in-route-handler-crashes-502
 type: bug
 domain: api
 severity: P1
-linear: OXA-1812
+linear: OXA-1814
 date: 2026-06-23
 ---
 
