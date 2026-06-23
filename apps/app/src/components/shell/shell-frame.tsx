@@ -147,7 +147,7 @@ export function ShellFrame({
           </div>
         </header>
 
-        <main id="main-content" className="flex-1 overflow-y-auto p-4 pb-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap)+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
+        <main id="main-content" className="flex-1 overflow-y-auto p-4 max-md:pb-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap)+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
           {children}
         </main>
       </div>
