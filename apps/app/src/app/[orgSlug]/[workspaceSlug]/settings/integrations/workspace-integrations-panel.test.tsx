@@ -185,7 +185,15 @@ vi.mock("@oxagen/database", () => ({
 }));
 
 vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
-  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
+  // HealthIcon passes aria-label to the lucide icon and the tests query it via
+  // getByLabelText — forward aria-label (and don't set aria-hidden, which would
+  // remove the element from the accessibility tree).
+  get: (_t, prop) =>
+    prop === "then"
+      ? undefined
+      : (props: { "aria-label"?: string }) => (
+          <svg data-icon={String(prop)} aria-label={props?.["aria-label"]} />
+        ),
   has: (_t, prop) => prop !== "then",
 }));
 
