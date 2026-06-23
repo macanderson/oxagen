@@ -145,8 +145,9 @@ describe("graphNodeListHandler", () => {
     expect(params.labels).toEqual(["Issue"]);
     expect(params.sourceId).toBe("intg_jira");
     expect(params.query).toBe("auth");
-    expect(params.offset).toBe(10);
-    expect(params.limit).toBe(25);
+    // offset/limit are sent as BigInt so the Bolt driver emits INTEGER (not Float) for SKIP/LIMIT
+    expect(params.offset).toBe(10n);
+    expect(params.limit).toBe(25n);
   });
 
   it("omits optional filter clauses when not supplied", async () => {
