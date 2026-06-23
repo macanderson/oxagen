@@ -59,7 +59,7 @@ async function ghList(url: string, token: string): Promise<unknown[]> {
     throw new Error(`ingestion-github-initial-sync: GitHub list API ${resp.status} for ${url}`);
   }
   const data = (await resp.json()) as unknown;
-  return Array.isArray(data) ? data : [];
+  return Array.isArray(data) ? (data as unknown[]) : [];
 }
 
 /**
@@ -107,6 +107,11 @@ export const [ingestionGithubInitialSync] = createFunction(
           "Ensure the GitHub connection wizard sends owner/repo in the connection.mappings.set payload.",
       );
     }
+
+    // Base REST URL for this repo; every sub-resource fetch below derives from it.
+    // (Restored: the multi-repo merge dropped this declaration, leaving repoBase
+    // undeclared → TS2304 + a runtime ReferenceError that broke GitHub ingestion.)
+    const repoBase = `https://api.github.com/repos/${owner}/${repo}`;
 
     // ── Step 1: Fetch access token from Postgres ─────────────────────────────
     const accessToken = await step.run("fetch-access-token", async () => {
