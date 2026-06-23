@@ -147,12 +147,37 @@ export const [ingestionDeleteConnection] = createFunction(
             { connectionId, orgId },
           );
 
+          // ── Pass 5: Sweep concept placeholders this source's deletion orphaned
+          // Semantic-edge inference MERGEs lightweight :KnowledgeNode concept
+          // targets (carrying type/name, NOT connectionId or naturalKey) and links
+          // source entities to them. They are intentionally connection-agnostic so
+          // a concept seen by several sources survives — so they're matched here
+          // ONLY when they have no remaining relationships after Passes 1–3, i.e.
+          // nothing else references them. naturalKey-keyed nodes (ingested entities,
+          // graph.node.upsert, web-search) are excluded so only inferred orphans go.
+          const orphanResult = await session.run(
+            `
+            MATCH (n:KnowledgeNode {orgId: $orgId, workspaceId: $workspaceId})
+            WHERE n.connectionId IS NULL
+              AND n.naturalKey IS NULL
+              AND NOT (n)--()
+            DELETE n
+            RETURN count(n) AS deleted
+            `,
+            { connectionId, orgId },
+          );
+          const orphanDeletedCount =
+            (orphanResult.records[0]?.get("deleted") as number | undefined) ?? 0;
+
           logger.info(
-            { connectionId, orgId, deletedCount, sourceDeletedCount },
-            "ingestion-delete: neo4j nodes deleted (entities + source files/symbols + meta)",
+            { connectionId, orgId, deletedCount, sourceDeletedCount, orphanDeletedCount },
+            "ingestion-delete: neo4j nodes deleted (entities + source files/symbols + orphaned concepts + meta)",
           );
 
-          return { promoted: promotedCount, deleted: deletedCount + sourceDeletedCount };
+          return {
+            promoted: promotedCount,
+            deleted: deletedCount + sourceDeletedCount + orphanDeletedCount,
+          };
         }),
       );
     }
