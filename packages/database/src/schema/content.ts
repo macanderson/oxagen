@@ -47,6 +47,14 @@ export const generatedAssets = contentSchema.table(
     orgIdx: index("generated_assets_org_idx").on(t.orgId, t.workspaceId),
     userIdx: index("generated_assets_user_idx").on(t.userId),
     conversationIdx: index("generated_assets_conversation_idx").on(t.conversationId),
+    // conversation.files.list filters conversation_id (+ deleted_at IS NULL,
+    // status='ready') and keyset-paginates on created_at DESC. The bare
+    // conversation_idx above doesn't cover the created_at keyset/sort; this
+    // composite serves the keyset scan directly.
+    conversationCreatedIdx: index("generated_assets_conversation_created_idx").on(
+      t.conversationId,
+      t.createdAt,
+    ),
     kindCheck: check(
       "generated_assets_kind_check",
       sql`${t.kind} IN ('image', 'video', 'document', 'spreadsheet', 'presentation', 'pdf', 'archive')`,

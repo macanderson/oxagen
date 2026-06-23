@@ -18,38 +18,13 @@ CREATE TABLE IF NOT EXISTS execution_logs (
   org_id UUID,
   workspace_id UUID,
   log_level LowCardinality(String),
-  message String,
-  metadata String,
-  created_at DateTime64(3)
+  message String CODEC(ZSTD(3)),
+  metadata String CODEC(ZSTD(3)),
+  created_at DateTime64(3) CODEC(DoubleDelta, ZSTD(1))
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(created_at)
 ORDER BY (org_id, execution_id, created_at)
 TTL toDateTime(created_at) + INTERVAL 90 DAY;
-
-CREATE TABLE IF NOT EXISTS traces (
-  trace_id String,
-  execution_id UUID,
-  org_id UUID,
-  started_at DateTime64(3),
-  completed_at Nullable(DateTime64(3))
-) ENGINE = MergeTree()
-PARTITION BY toYYYYMM(started_at)
-ORDER BY (org_id, trace_id, started_at)
-TTL toDateTime(started_at) + INTERVAL 90 DAY;
-
-CREATE TABLE IF NOT EXISTS spans (
-  span_id String,
-  trace_id String,
-  parent_span_id Nullable(String),
-  span_type LowCardinality(String),
-  org_id UUID,
-  started_at DateTime64(3),
-  completed_at Nullable(DateTime64(3)),
-  metadata String
-) ENGINE = MergeTree()
-PARTITION BY toYYYYMM(started_at)
-ORDER BY (org_id, trace_id, started_at)
-TTL toDateTime(started_at) + INTERVAL 90 DAY;
 
 CREATE TABLE IF NOT EXISTS events (
   event_id UUID,
@@ -58,25 +33,12 @@ CREATE TABLE IF NOT EXISTS events (
   event_type LowCardinality(String),
   source_system LowCardinality(String),
   stream_offset Nullable(String),
-  payload String,
-  emitted_at DateTime64(3)
+  payload String CODEC(ZSTD(3)),
+  emitted_at DateTime64(3) CODEC(DoubleDelta, ZSTD(1))
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(emitted_at)
 ORDER BY (org_id, event_type, emitted_at)
 TTL toDateTime(emitted_at) + INTERVAL 90 DAY;
-
-CREATE TABLE IF NOT EXISTS api_key_events (
-  api_key_id UUID,
-  org_id UUID,
-  ip_address IPv6,
-  user_agent String,
-  request_path String,
-  response_code UInt16,
-  created_at DateTime64(3)
-) ENGINE = MergeTree()
-PARTITION BY toYYYYMM(created_at)
-ORDER BY (org_id, api_key_id, created_at)
-TTL toDateTime(created_at) + INTERVAL 90 DAY;
 
 CREATE TABLE IF NOT EXISTS token_usage (
   execution_step_id UUID,
@@ -84,14 +46,17 @@ CREATE TABLE IF NOT EXISTS token_usage (
   workspace_id UUID DEFAULT toUUID('00000000-0000-0000-0000-000000000000'),
   model LowCardinality(String),
   provider LowCardinality(String) DEFAULT '',
-  input_tokens UInt64,
-  output_tokens UInt64,
-  cached_tokens UInt64,
-  cost_usd_micros UInt64,
+  input_tokens UInt64 CODEC(T64, ZSTD(1)),
+  output_tokens UInt64 CODEC(T64, ZSTD(1)),
+  cached_tokens UInt64 CODEC(T64, ZSTD(1)),
+  cost_usd_micros UInt64 CODEC(T64, ZSTD(1)),
   duration_ms UInt32 DEFAULT 0,
   surface LowCardinality(String) DEFAULT '',
   prompt_hash String DEFAULT '',
-  created_at DateTime64(3)
+  created_at DateTime64(3) CODEC(DoubleDelta, ZSTD(1)),
+  -- model is LowCardinality and not in the ORDER BY key; a set skip index
+  -- prunes granules for per-model cost/usage rollups (migration 0009).
+  INDEX idx_token_model model TYPE set(0) GRANULARITY 4
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(created_at)
 ORDER BY (org_id, created_at, execution_step_id)
@@ -121,38 +86,15 @@ CREATE TABLE IF NOT EXISTS tool_invocations (
   required_approval UInt8,
   surface LowCardinality(String) DEFAULT '',
   provider LowCardinality(String) DEFAULT '',
-  created_at DateTime64(3)
+  created_at DateTime64(3) CODEC(DoubleDelta, ZSTD(1)),
+  -- Secondary filters not led by the key (capability_name leads): status for
+  -- failed-call dashboards, message_id for per-message trace expansion (0009).
+  INDEX idx_tool_status status TYPE set(0) GRANULARITY 4,
+  INDEX idx_tool_message_id message_id TYPE bloom_filter(0.01) GRANULARITY 4
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(created_at)
 ORDER BY (org_id, capability_name, created_at)
 TTL toDateTime(created_at) + INTERVAL 180 DAY;
-
--- Typed agent model (docs/reference/agent-schema.ts §6). One row per
--- AgentLogEntry — the append-only, info+ baseline traceability record for a
--- run. DebugOptions raises verbosity (promoting debug-level entries into this
--- stream); it does not toggle logging. Definition id/version and org/workspace
--- are denormalized so logs are queryable in isolation without a join back to
--- the Postgres definition. entry_data carries the type-specific payload as a
--- JSON string (the SEAM left loosely typed in agent-schema.ts).
-CREATE TABLE IF NOT EXISTS agent_logs (
-  log_id String,
-  run_id String,
-  definition_id String,
-  definition_version String,
-  org_id String,
-  workspace_id String,
-  entry_id String,
-  entry_type LowCardinality(String),
-  entry_level LowCardinality(String),
-  entry_message String,
-  entry_data String,
-  entry_timestamp DateTime64(3),
-  created_at DateTime64(3) DEFAULT now64(3)
-) ENGINE = MergeTree()
-PARTITION BY toYYYYMM(entry_timestamp)
-ORDER BY (org_id, workspace_id, run_id, entry_timestamp)
--- Matches execution_logs' 90-day window: agent logs are raw run telemetry.
-TTL toDateTime(entry_timestamp) + INTERVAL 90 DAY;
 
 -- Skill lifecycle telemetry (OXA-1750). One row per skill load — emitted when a
 -- workspace skill is loaded into an agent run (agent.skill.load) or surfaced
@@ -168,9 +110,14 @@ CREATE TABLE IF NOT EXISTS skill_loads (
   skill_slug String,
   skill_version UInt32,
   execution_step_id Nullable(String),
-  surface String,
+  surface LowCardinality(String),
   load_latency_ms Nullable(UInt32),
-  created_at DateTime DEFAULT now()
+  created_at DateTime DEFAULT now() CODEC(DoubleDelta, ZSTD(1))
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(created_at)
-ORDER BY (org_id, workspace_id, skill_id, created_at);
+ORDER BY (org_id, workspace_id, skill_id, created_at)
+-- Skill-load metrics keep billing-grade (365-day) retention rather than the
+-- 90-day raw-log window: readSkillMetrics' last_used reaches back arbitrarily,
+-- and aggregate load counts have long-tail value (migration 0009). created_at
+-- is plain DateTime, so no toDateTime() cast is needed.
+TTL created_at + INTERVAL 365 DAY;

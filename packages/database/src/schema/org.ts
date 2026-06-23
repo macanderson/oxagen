@@ -56,6 +56,16 @@ export const orgUsers = orgSchema.table(
   (t) => ({
     orgUserIdx: uniqueIndex("org_users_org_user_idx").on(t.orgId, t.userId),
     userIdx: index("org_users_user_idx").on(t.userId),
+    // Membership role is written in BOTH casings today: lowercase by the
+    // org/workspace create + onboarding paths, Capitalized by
+    // workspace.invite.send's mapRole() and the IAM-role-name path in
+    // org.member.role.change. Case-insensitive CHECK over the canonical role
+    // set (iam-provision.ts ORG_ROLES/WORKSPACE_ROLES — a fixed seeded set, no
+    // custom-role path) rejects garbage without breaking either writer.
+    roleCheck: check(
+      "org_users_role_check",
+      sql`lower(${t.role}) IN ('owner', 'admin', 'member', 'billing', 'compliance', 'viewer')`,
+    ),
   }),
 );
 
@@ -121,6 +131,14 @@ export const invitations = orgSchema.table(
     statusCheck: check(
       "invitations_status_check",
       sql`${t.status} IN ('pending','accepted','declined','revoked','expired')`,
+    ),
+    // invitations.role holds the IAM role NAME to assign on accept — a value
+    // from the fixed per-org seeded set (iam-provision.ts), stored Title-cased
+    // (e.g. 'Admin', 'Member'). Case-insensitive CHECK over the canonical set;
+    // there is no custom-role-creation path, so the set is closed.
+    roleCheck: check(
+      "invitations_role_check",
+      sql`lower(${t.role}) IN ('owner', 'admin', 'member', 'billing', 'compliance', 'viewer')`,
     ),
   }),
 );

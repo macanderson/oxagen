@@ -137,6 +137,9 @@ export const skills = agentSchema.table(
   (t) => ({
     workspaceSlugIdx: uniqueIndex("skills_workspace_slug_idx").on(t.workspaceId, t.slug),
     orgIdx: index("skills_org_idx").on(t.orgId, t.workspaceId),
+    // FK → agent.skill_versions (skills_active_version_id_skill_versions_id_fk).
+    // Index the FK so skill_versions mutations don't seq-scan skills.
+    activeVersionIdx: index("skills_active_version_idx").on(t.activeVersionId),
   }),
 );
 
@@ -303,6 +306,9 @@ export const agentExecutions = agentSchema.table(
     orgStatusIdx: index("agent_executions_org_status_idx").on(t.orgId, t.workspaceId, t.status),
     originIdx: index("agent_executions_origin_idx").on(t.originType, t.originId),
     agentIdx: index("agent_executions_agent_idx").on(t.agentId),
+    // FK → agent.agent_versions. Index the FK so agent_versions mutations don't
+    // seq-scan the high-write executions table (only agent_id was indexed).
+    agentVersionIdx: index("agent_executions_agent_version_idx").on(t.agentVersionId),
     parentExecutionIdx: index("agent_executions_parent_execution_idx").on(t.parentExecutionId),
     createdAtIdx: index("agent_executions_created_at_idx").on(t.createdAt),
     statusCheck: check("agent_executions_status_check", sql`${t.status} IN ('planning', 'running', 'completed', 'failed', 'cancelled')`),

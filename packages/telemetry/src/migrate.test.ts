@@ -137,8 +137,11 @@ describe("skill_loads migration inputs", () => {
       "skill_slug String",
       "skill_version UInt32",
       "execution_step_id Nullable(String)",
-      "surface String",
+      // surface narrowed to LowCardinality(String) for compression (0011).
+      "surface LowCardinality(String)",
       "load_latency_ms Nullable(UInt32)",
+      // created_at carries DEFAULT now() + CODEC(DoubleDelta, ZSTD(1)) (0011);
+      // "created_at DateTime" stays a valid prefix substring.
       "created_at DateTime",
     ]) {
       expect(stmt).toContain(col);

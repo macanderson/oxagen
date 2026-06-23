@@ -8,15 +8,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { hashPrompt, providerFromModelId } from "./clickhouse";
 import type {
-  AgentLogRow,
-  ApiKeyEventRow,
   AuditEventRow,
   EventRow,
   ExecutionLogRow,
-  SpanRow,
   TokenUsageRow,
   ToolInvocationRow,
-  TraceRow,
 } from "./clickhouse";
 
 // ---------------------------------------------------------------------------
@@ -268,41 +264,6 @@ describe("insert helpers — insertRows delegation", () => {
     });
   });
 
-  it("insertTraces delegates to traces table", async () => {
-    const row: TraceRow = {
-      trace_id: "t1",
-      execution_id: "e1",
-      org_id: "o1",
-      started_at: new Date().toISOString(),
-      completed_at: null,
-    };
-    await mod.insertTraces([row]);
-    expect(insertMock).toHaveBeenCalledWith({
-      table: "traces",
-      values: [row],
-      format: "JSONEachRow",
-    });
-  });
-
-  it("insertSpans delegates to spans table", async () => {
-    const row: SpanRow = {
-      span_id: "s1",
-      trace_id: "t1",
-      parent_span_id: null,
-      span_type: "llm",
-      org_id: "o1",
-      started_at: new Date().toISOString(),
-      completed_at: null,
-      metadata: "{}",
-    };
-    await mod.insertSpans([row]);
-    expect(insertMock).toHaveBeenCalledWith({
-      table: "spans",
-      values: [row],
-      format: "JSONEachRow",
-    });
-  });
-
   it("insertEvents delegates to events table", async () => {
     const row: EventRow = {
       event_id: "ev1",
@@ -317,24 +278,6 @@ describe("insert helpers — insertRows delegation", () => {
     await mod.insertEvents([row]);
     expect(insertMock).toHaveBeenCalledWith({
       table: "events",
-      values: [row],
-      format: "JSONEachRow",
-    });
-  });
-
-  it("insertApiKeyEvents delegates to api_key_events table", async () => {
-    const row: ApiKeyEventRow = {
-      api_key_id: "ak1",
-      org_id: "o1",
-      ip_address: "1.2.3.4",
-      user_agent: "test-agent",
-      request_path: "/api/v1/test",
-      response_code: 200,
-      created_at: new Date().toISOString(),
-    };
-    await mod.insertApiKeyEvents([row]);
-    expect(insertMock).toHaveBeenCalledWith({
-      table: "api_key_events",
       values: [row],
       format: "JSONEachRow",
     });
@@ -394,35 +337,6 @@ describe("insert helpers — insertRows delegation", () => {
     });
   });
 
-  it("insertAgentLogs delegates to agent_logs table", async () => {
-    const row: AgentLogRow = {
-      log_id: "log-1",
-      run_id: "run-1",
-      definition_id: "agt-1",
-      definition_version: "1",
-      org_id: "o1",
-      workspace_id: "w1",
-      entry_id: "entry-1",
-      entry_type: "tool_call",
-      entry_level: "info",
-      entry_message: "called tool",
-      entry_data: "{}",
-      entry_timestamp: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-    };
-    await mod.insertAgentLogs([row]);
-    expect(insertMock).toHaveBeenCalledWith({
-      table: "agent_logs",
-      values: [row],
-      format: "JSONEachRow",
-    });
-  });
-
-  it("no-ops when rows array is empty (insertAgentLogs)", async () => {
-    await mod.insertAgentLogs([]);
-    expect(insertMock).not.toHaveBeenCalled();
-  });
-
   it("insertAuditEvent delegates to audit_events table", async () => {
     const row: AuditEventRow = {
       occurred_at: new Date().toISOString(),
@@ -456,8 +370,7 @@ describe("insert helpers — insertRows delegation", () => {
   });
 
   it("no-ops when rows array is empty (any insert helper)", async () => {
-    await mod.insertTraces([]);
-    await mod.insertSpans([]);
+    await mod.insertExecutionLogs([]);
     await mod.insertEvents([]);
     await mod.insertTokenUsage([]);
     expect(insertMock).not.toHaveBeenCalled();

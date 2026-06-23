@@ -1,4 +1,4 @@
-import { boolean, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { workspaceSchema } from "./_schemas";
 import { auditMixin, citext, idMixin } from "./_mixins";
@@ -73,5 +73,12 @@ export const workspaceUsers = workspaceSchema.table(
   (t) => ({
     workspaceUserIdx: uniqueIndex("workspace_users_workspace_user_idx").on(t.workspaceId, t.userId),
     userIdx: index("workspace_users_user_idx").on(t.userId),
+    // Workspace membership role is written in BOTH casings (lowercase by the
+    // workspace create path, Capitalized via IAM role names). Case-insensitive
+    // CHECK over the canonical role set rejects garbage without breaking either.
+    roleCheck: check(
+      "workspace_users_role_check",
+      sql`lower(${t.role}) IN ('owner', 'admin', 'member', 'billing', 'compliance', 'viewer')`,
+    ),
   }),
 );

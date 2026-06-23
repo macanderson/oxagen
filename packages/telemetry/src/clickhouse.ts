@@ -122,25 +122,6 @@ export interface ExecutionLogRow {
   created_at: string;
 }
 
-export interface TraceRow {
-  trace_id: string;
-  execution_id: string;
-  org_id: string;
-  started_at: string;
-  completed_at: string | null;
-}
-
-export interface SpanRow {
-  span_id: string;
-  trace_id: string;
-  parent_span_id: string | null;
-  span_type: string;
-  org_id: string;
-  started_at: string;
-  completed_at: string | null;
-  metadata: string;
-}
-
 export interface EventRow {
   event_id: string;
   org_id: string;
@@ -150,16 +131,6 @@ export interface EventRow {
   stream_offset: string | null;
   payload: string;
   emitted_at: string;
-}
-
-export interface ApiKeyEventRow {
-  api_key_id: string;
-  org_id: string;
-  ip_address: string;
-  user_agent: string;
-  request_path: string;
-  response_code: number;
-  created_at: string;
 }
 
 export type Surface = "api" | "mcp" | "app" | "runner" | "ingestion" | "";
@@ -206,11 +177,7 @@ async function insertRows<T>(table: string, rows: readonly T[]): Promise<void> {
 
 export const insertExecutionLogs = (rows: readonly ExecutionLogRow[]) =>
   insertRows("execution_logs", rows);
-export const insertTraces = (rows: readonly TraceRow[]) => insertRows("traces", rows);
-export const insertSpans = (rows: readonly SpanRow[]) => insertRows("spans", rows);
 export const insertEvents = (rows: readonly EventRow[]) => insertRows("events", rows);
-export const insertApiKeyEvents = (rows: readonly ApiKeyEventRow[]) =>
-  insertRows("api_key_events", rows);
 export const insertTokenUsage = (rows: readonly TokenUsageRow[]) =>
   insertRows("token_usage", rows);
 
@@ -242,37 +209,6 @@ export interface ToolInvocationRow {
 
 export const insertToolInvocation = (row: ToolInvocationRow) =>
   insertRows("tool_invocations", [row]);
-
-// Typed agent model (docs/reference/agent-schema.ts §6). One row per
-// AgentLogEntry; the durable definition stays in Postgres. definition_id/version
-// and org/workspace are denormalized so logs query in isolation.
-export interface AgentLogRow {
-  log_id: string;
-  run_id: string;
-  definition_id: string;
-  definition_version: string;
-  org_id: string;
-  workspace_id: string;
-  entry_id: string;
-  entry_type:
-    | "lifecycle"
-    | "decision"
-    | "graph_query"
-    | "graph_write"
-    | "tool_call"
-    | "subagent_call"
-    | "memory"
-    | "error";
-  entry_level: "debug" | "info" | "warn" | "error";
-  entry_message: string;
-  /** Type-specific structured payload, serialized to a JSON string. */
-  entry_data: string;
-  entry_timestamp: string;
-  created_at: string;
-}
-
-export const insertAgentLogs = (rows: readonly AgentLogRow[]) =>
-  insertRows("agent_logs", rows);
 
 /**
  * Deterministic, PII-free cohort key for prompts. SHA-256, first 16 bytes
