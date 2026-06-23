@@ -8,6 +8,8 @@ import {
   resolveApprovalAction,
   resolveConsentAction,
   resolvePlanAction,
+  saveMessageAsKnowledgeAction,
+  saveMessageAsMemoryAction,
   sendMessageAction,
 } from "./actions";
 
@@ -41,6 +43,8 @@ export default async function AskPage({
             resolvePlanAction,
             cancelBackgroundTaskAction,
             readBackgroundTaskAction,
+            saveMessageAsKnowledgeAction,
+            saveMessageAsMemoryAction,
           }}
         />
       </div>

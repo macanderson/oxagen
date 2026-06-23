@@ -48,6 +48,9 @@ export type PlanDecision = "approved" | "denied" | "amended";
 
 export type SubagentStatus = "running" | "completed" | "partial" | "timed_out";
 
+/** Status for a background-task progress event (kind=async runs spawned by the agent). */
+export type BackgroundTaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+
 export type MemoryWeight = "ignore" | "consider" | "fact";
 
 export interface PlanStep {
@@ -187,6 +190,19 @@ export type StreamEvent =
       nodeRef: string;
       weight: MemoryWeight | string;
     }
+  // ── Background tasks ─────────────────────────────────────────────────────
+  // Emitted when the agent dispatches a long-running Inngest job
+  // (agent.task.background.start) and as it transitions states. The chat UI
+  // renders a progress indicator linked to the background-task tray.
+  | {
+      type: "background-task-progress";
+      taskId: string;
+      kind: string;
+      label?: string;
+      status: BackgroundTaskStatus;
+      inngestRunId?: string;
+      progressPct?: number;
+    }
   | {
       /**
        * Emitted when a tool result contains a `render` field. The client
@@ -309,6 +325,16 @@ export interface MemoryRecallContentBlock {
   memories: MemoryRecallHit[];
 }
 
+/** Persisted background-task block (terminal). */
+export interface BackgroundTaskContentBlock {
+  type: "background-task";
+  taskId: string;
+  kind: string;
+  label?: string;
+  status: BackgroundTaskStatus;
+  inngestRunId?: string;
+}
+
 /**
  * A persisted component block — the terminal form of a "component" stream
  * event written to `chat.messages.content_blocks`. The bubble renders
@@ -332,4 +358,5 @@ export type AssistantContentBlock =
   | PlanContentBlock
   | SubagentFanoutContentBlock
   | MemoryRecallContentBlock
+  | BackgroundTaskContentBlock
   | ComponentContentBlock;

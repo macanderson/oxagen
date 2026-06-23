@@ -8,12 +8,14 @@ import { ConsentCard } from "./consent-card";
 import { PlanCard, type AgentCapability } from "./plan-card";
 import { SubagentFanout } from "./subagent-fanout";
 import { MemoryCard } from "./memory-card";
+import { BackgroundTaskCard } from "./background-task-card";
 import { CodeExecuteCard } from "./code-execute-card";
 import { ReasoningCard } from "./reasoning-card";
 import { ActivityTimeline, TimelineItem, type TimelineItemProps } from "./activity-timeline";
 import { CHAT_COMPONENTS, logUnknownComponent, UnknownComponentCard } from "./chat-component-registry";
 import type { AssistantContentBlock } from "./stream-event-types";
 import { MarkdownMessage } from "./markdown-message";
+import { MessageFooter } from "./message-footer";
 
 export interface ChatMessage {
   publicId: string;
@@ -25,6 +27,10 @@ export interface ChatMessage {
   // the plain `content` for legacy / text-only rendering and let the
   // bubble dispatch each block to the matching card when blocks exist.
   contentBlocks?: AssistantContentBlock[];
+  /** Persisted credit cost (cents) for the turn that produced this message. */
+  creditsCharged?: number;
+  /** Persisted total tokens for the turn that produced this message. */
+  totalTokens?: number;
 }
 
 export interface MessageBubbleCallbacks {
@@ -44,6 +50,10 @@ export interface MessageBubbleCallbacks {
   ) => Promise<{ ok: boolean; error?: string }>;
   onNavigateToChild?: (childMessageId: string) => void;
   agentCapabilities?: readonly AgentCapability[];
+  /** Save-as-Knowledge handler. Surfaced as the assistant footer's Network icon. */
+  onSaveKnowledge?: (text: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Save-as-Memory handler. Surfaced as the assistant footer's BrainCircuit icon. */
+  onSaveMemory?: (text: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 export function MessageBubble({
@@ -97,6 +107,16 @@ export function MessageBubble({
         ) : (
           <MarkdownMessage>{message.content}</MarkdownMessage>
         )}
+
+        {!isUser && message.role === "assistant" ? (
+          <MessageFooter
+            text={message.content}
+            creditsCharged={message.creditsCharged}
+            totalTokens={message.totalTokens}
+            onSaveKnowledge={callbacks?.onSaveKnowledge}
+            onSaveMemory={callbacks?.onSaveMemory}
+          />
+        ) : null}
 
         {children}
       </div>
@@ -214,6 +234,17 @@ function renderBlock(
       );
     case "memory-recall":
       return <MemoryCard key={`memory:${block.queryId}`} queryId={block.queryId} memories={block.memories} />;
+    case "background-task":
+      return (
+        <BackgroundTaskCard
+          key={`bgtask:${block.taskId}`}
+          taskId={block.taskId}
+          kind={block.kind}
+          label={block.label}
+          status={block.status}
+          inngestRunId={block.inngestRunId}
+        />
+      );
     case "component": {
       const Component = CHAT_COMPONENTS[block.componentId];
       if (!Component) {
@@ -269,6 +300,12 @@ function blockTone(
     case "memory-recall":
     case "component":
       return "done";
+    case "background-task":
+      return block.status === "running"
+        ? "running"
+        : block.status === "failed"
+          ? "failed"
+          : "done";
     case "tool-call":
     case "code-execute":
       return block.status === "completed"
@@ -316,6 +353,8 @@ function blockKey(block: AssistantContentBlock, idx: number): string {
       return `fanout:${block.fanoutId}`;
     case "memory-recall":
       return `memory:${block.queryId}`;
+    case "background-task":
+      return `bgtask:${block.taskId}`;
     case "text":
       return `text-${idx}`;
     default: {

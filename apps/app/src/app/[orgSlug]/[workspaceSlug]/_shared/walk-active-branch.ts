@@ -27,12 +27,21 @@ export function walkActiveBranch(rows: DbMessageRow[], leafId: string | null): C
     path.unshift(cursor);
     cursor = cursor.parentMessageId ? byId.get(cursor.parentMessageId) : undefined;
   }
-  return path.map((r) => ({
-    publicId: r.publicId,
-    role: r.role as "user" | "assistant" | "system" | "tool",
-    content: r.content,
-    branchReason: r.branchReason,
-    siblingCount: r.parentMessageId ? (childCount.get(r.parentMessageId) ?? 1) : 1,
-    contentBlocks: Array.isArray(r.contentBlocks) ? (r.contentBlocks as AssistantContentBlock[]) : undefined,
-  }));
+  return path.map((r) => {
+    // Pull persisted turn usage (creditsCharged, totalTokens) out of the metadata
+    // jsonb column so the assistant footer can keep showing them after a refresh.
+    // The stream route writes them under `metadata.usage` when the turn completes.
+    const meta = (r.metadata ?? null) as { usage?: { creditsCharged?: number; totalTokens?: number } } | null;
+    const usage = meta?.usage;
+    return {
+      publicId: r.publicId,
+      role: r.role as "user" | "assistant" | "system" | "tool",
+      content: r.content,
+      branchReason: r.branchReason,
+      siblingCount: r.parentMessageId ? (childCount.get(r.parentMessageId) ?? 1) : 1,
+      contentBlocks: Array.isArray(r.contentBlocks) ? (r.contentBlocks as AssistantContentBlock[]) : undefined,
+      ...(typeof usage?.creditsCharged === "number" ? { creditsCharged: usage.creditsCharged } : {}),
+      ...(typeof usage?.totalTokens === "number" ? { totalTokens: usage.totalTokens } : {}),
+    } satisfies ChatMessage;
+  });
 }

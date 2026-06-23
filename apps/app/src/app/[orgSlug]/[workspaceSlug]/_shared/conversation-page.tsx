@@ -65,6 +65,18 @@ export interface ConversationPageActions {
     ctx: { orgId: string; workspaceId: string },
     taskId: string,
   ) => Promise<BackgroundTaskSnapshot>;
+  /** Save-as-Knowledge action — ingests assistant message text into the graph. */
+  saveMessageAsKnowledgeAction: (
+    ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
+    text: string,
+    sourceUrl?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  /** Save-as-Memory action — creates a Memory node + ingests message text. */
+  saveMessageAsMemoryAction: (
+    ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
+    text: string,
+    conversationPublicId?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
 }
 
 interface ConversationPageProps {
@@ -166,6 +178,12 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
     orgId: tenant.id,
     workspaceId: workspace.id,
   });
+  // The footer wants a (text) => Promise signature; bind the heavyweight ctx +
+  // optional second arg here so the bubble never holds a workspace id.
+  const boundSaveKnowledge = (text: string) =>
+    actions.saveMessageAsKnowledgeAction(actionCtx, text);
+  const boundSaveMemory = (text: string) =>
+    actions.saveMessageAsMemoryAction(actionCtx, text, conv?.publicId);
 
   // User preferences + effective model defaults — fetched in parallel with
   // the capability list. Failures are non-fatal: fall back to defaults so
@@ -298,6 +316,8 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
             pendingPromptBehavior={userPrefs.pendingPromptBehavior}
             initialModelState={initialModelState}
             availableMcpServers={availableMcpServers}
+            saveKnowledgeAction={boundSaveKnowledge}
+            saveMemoryAction={boundSaveMemory}
           />
         </div>
       </div>

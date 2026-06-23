@@ -18,6 +18,7 @@ import {
   type ModelMessage,
 } from "@oxagen/ai";
 import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
+import { resolveMeterMarkup } from "@oxagen/billing";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
@@ -483,14 +484,18 @@ export async function POST(request: NextRequest): Promise<Response> {
         });
 
         // Consume fullStream: emit SSE events + accumulate the ordered assistant
-        // content blocks for refresh re-render and history.
-        const { assistantText, persistedBlocks } = await translateAgentStream({
+        // content blocks for refresh re-render and history. modelId/meterMarkup
+        // are forwarded so the "usage" event carries display-only creditsCharged
+        // priced from the same rate card + markup the gate uses.
+        const { assistantText, persistedBlocks, usage: turnUsage } = await translateAgentStream({
           fullStream: result.fullStream as AsyncIterable<unknown>,
           requestId,
           toolNameMap,
           orgSlug,
           workspaceSlug,
           emit,
+          modelId: modelIdOf(turnModel),
+          meterMarkup: resolveMeterMarkup(),
         });
 
         // Persist the assistant reply so it survives a refresh and is included
@@ -517,7 +522,23 @@ export async function POST(request: NextRequest): Promise<Response> {
                       // for history/model context.
                       contentBlocks: persistedBlocks,
                       isActiveInBranch: true,
-                      metadata: { status: "complete" },
+                      // Persist usage under metadata.usage so the message
+                      // footer can re-show creditsCharged + totalTokens after
+                      // a page refresh (walk-active-branch reads it back). The
+                      // turn-level debit itself is authoritatively done inside
+                      // streamAgentReply's onFinish via the billing gate; this
+                      // is display state only.
+                      metadata: {
+                        status: "complete",
+                        ...(turnUsage !== undefined
+                          ? {
+                              usage: {
+                                creditsCharged: turnUsage.creditsCharged,
+                                totalTokens: turnUsage.totalTokens,
+                              },
+                            }
+                          : {}),
+                      },
                       createdByUserId: session.user.id,
                       updatedByUserId: session.user.id,
                     })

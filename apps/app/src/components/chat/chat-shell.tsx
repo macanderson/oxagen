@@ -37,6 +37,10 @@ export interface ChatShellProps {
   fetchBackgroundTask: (taskId: string) => Promise<BackgroundTaskSnapshot>;
   cancelBackgroundTask?: (taskId: string) => Promise<{ ok: boolean; error?: string }>;
   initialBackgroundTaskIds?: string[];
+  /** Save-as-Knowledge action — invoked from the assistant message footer. */
+  saveKnowledgeAction?: (text: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Save-as-Memory action — invoked from the assistant message footer. */
+  saveMemoryAction?: (text: string) => Promise<{ ok: boolean; error?: string }>;
   agentCapabilities?: readonly import("./plan-card").AgentCapability[];
   /** Slug values forwarded to ChatShellClient for /api/v1/chat/stream requests. */
   orgSlug: string;
@@ -74,6 +78,8 @@ export function ChatShell({
   pendingPromptBehavior,
   initialModelState,
   availableMcpServers,
+  saveKnowledgeAction,
+  saveMemoryAction,
 }: ChatShellProps) {
   return (
     <>
@@ -94,6 +100,8 @@ export function ChatShell({
           pendingPromptBehavior={pendingPromptBehavior}
           initialModelState={initialModelState}
           availableMcpServers={availableMcpServers}
+          saveKnowledgeAction={saveKnowledgeAction}
+          saveMemoryAction={saveMemoryAction}
         />
       </Suspense>
       <BackgroundTaskTray
@@ -121,6 +129,8 @@ async function AsyncShell({
   pendingPromptBehavior,
   initialModelState,
   availableMcpServers,
+  saveKnowledgeAction,
+  saveMemoryAction,
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
@@ -137,6 +147,8 @@ async function AsyncShell({
   pendingPromptBehavior?: "queue" | "interrupt";
   initialModelState?: ComposerModelState;
   availableMcpServers?: McpServerSummary[];
+  saveKnowledgeAction?: ChatShellProps["saveKnowledgeAction"];
+  saveMemoryAction?: ChatShellProps["saveMemoryAction"];
 }) {
   const messages = await promise;
   const modelConfig = resolvedTierCatalog();
@@ -158,6 +170,8 @@ async function AsyncShell({
       pendingPromptBehavior={pendingPromptBehavior}
       initialModelState={initialModelState}
       availableMcpServers={availableMcpServers}
+      saveKnowledgeAction={saveKnowledgeAction}
+      saveMemoryAction={saveMemoryAction}
     />
   );
 }

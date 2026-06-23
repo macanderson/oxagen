@@ -12,11 +12,13 @@ import { ConsentCard } from "./consent-card";
 import { ToolCallCard } from "./tool-call-card";
 import { CodeExecuteCard } from "./code-execute-card";
 import { MemoryCard } from "./memory-card";
+import { BackgroundTaskCard } from "./background-task-card";
 import { SubagentFanout } from "./subagent-fanout";
 import { CHAT_COMPONENTS, logUnknownComponent, UnknownComponentCard } from "./chat-component-registry";
 import { StreamingText } from "./streaming-text";
 import { ReasoningCard } from "./reasoning-card";
 import { ActivityTimeline, TimelineItem } from "./activity-timeline";
+import { MessageFooter } from "./message-footer";
 import { useToolStream } from "./use-tool-stream";
 import type { ChatShellProps } from "./chat-shell";
 import type { StreamEvent } from "./stream-event-types";
@@ -79,6 +81,8 @@ export function ChatShellClient({
   pageContext,
   onFormFillStart,
   onFormFillEnd,
+  saveKnowledgeAction,
+  saveMemoryAction,
 }: {
   conversationId: string | null;
   /** publicId used for the files-panel fetch. */
@@ -117,6 +121,10 @@ export function ChatShellClient({
    * Use this to set fillResult in PageContext.
    */
   onFormFillEnd?: (result: import("@/lib/ask/fill-types").FormFillResult) => void;
+  /** Save-as-Knowledge action — invoked from the assistant message footer. */
+  saveKnowledgeAction?: (text: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Save-as-Memory action — invoked from the assistant message footer. */
+  saveMemoryAction?: (text: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const {
     plans,
@@ -128,6 +136,7 @@ export function ChatShellClient({
     textSegments,
     memoryRecalls,
     memoryWrites,
+    backgroundTasks,
     activeFanouts,
     components: liveComponents,
     order,
@@ -460,8 +469,17 @@ export function ChatShellClient({
           window.location.hash = `m-${childMessageId}`;
         }
       },
+      onSaveKnowledge: saveKnowledgeAction,
+      onSaveMemory: saveMemoryAction,
     }),
-    [wrappedResolveApproval, wrappedResolveConsent, resolvePlanAction, agentCapabilities],
+    [
+      wrappedResolveApproval,
+      wrappedResolveConsent,
+      resolvePlanAction,
+      agentCapabilities,
+      saveKnowledgeAction,
+      saveMemoryAction,
+    ],
   );
 
   // The live turn renders as a single ORDERED timeline (the chain of
@@ -663,6 +681,33 @@ export function ChatShellClient({
           active: false,
         };
       }
+      case "bgtask": {
+        const t = backgroundTasks[id];
+        if (!t) return null;
+        const tone: TimelineTone =
+          t.status === "completed"
+            ? "done"
+            : t.status === "failed"
+              ? "failed"
+              : t.status === "cancelled"
+                ? "idle"
+                : "running";
+        const active = t.status === "queued" || t.status === "running";
+        return {
+          node: (
+            <BackgroundTaskCard
+              taskId={t.taskId}
+              kind={t.kind}
+              label={t.label}
+              status={t.status}
+              inngestRunId={t.inngestRunId}
+              progressPct={t.progressPct}
+            />
+          ),
+          tone,
+          active,
+        };
+      }
       case "fanout": {
         const f = activeFanouts[id];
         if (!f) return null;
@@ -785,12 +830,17 @@ export function ChatShellClient({
                   ))}
                 </ActivityTimeline>
                 {turnUsage !== undefined ? (
-                  <div className="mt-1 text-right text-xs tabular-nums text-muted-foreground">
-                    {turnUsage.totalTokens.toLocaleString()} tokens
-                    {turnUsage.creditsCharged !== undefined
-                      ? ` · ${turnUsage.creditsCharged} credit${turnUsage.creditsCharged === 1 ? "" : "s"}`
-                      : null}
-                  </div>
+                  <MessageFooter
+                    text={
+                      Object.values(textSegments)
+                        .map((s) => s.text)
+                        .join("\n")
+                    }
+                    creditsCharged={turnUsage.creditsCharged}
+                    totalTokens={turnUsage.totalTokens}
+                    onSaveKnowledge={saveKnowledgeAction}
+                    onSaveMemory={saveMemoryAction}
+                  />
                 ) : null}
               </div>
             ) : null}

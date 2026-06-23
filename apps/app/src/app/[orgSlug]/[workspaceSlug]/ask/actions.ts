@@ -17,6 +17,8 @@ import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp.conse
 import { agentPlanApprove } from "@oxagen/oxagen/contracts/agent.plan.approve";
 import { agentTaskBackgroundCancel } from "@oxagen/oxagen/contracts/agent.task.background.cancel";
 import { agentTaskBackgroundRead } from "@oxagen/oxagen/contracts/agent.task.background.read";
+import { graphIngest } from "@oxagen/oxagen/contracts/graph.ingest";
+import { graphNodeUpsert } from "@oxagen/oxagen/contracts/graph.node.upsert";
 import { invoke } from "@oxagen/oxagen";
 import type { PlanStep } from "@/components/chat/stream-event-types";
 import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
@@ -298,6 +300,138 @@ export async function cancelBackgroundTaskAction(
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to cancel task" };
   }
+}
+
+// ── Save assistant message to knowledge graph / memory ────────────────────
+// Both actions are user-initiated from the chat message footer's icon buttons.
+// They run the message text through the SAME entity-extraction + embedding
+// pipeline the rest of the platform uses (graph.ingest), so the saved nodes
+// are discoverable globally via the workspace entity search contract
+// (graph.node.search). Save-as-Memory creates a dedicated "Memory" labeled
+// node first, then runs ingestion against the same text so derived entities
+// link to the workspace ontology.
+
+export interface SaveAssistantTextResult {
+  ok: boolean;
+  /** Saved Memory node id (Save-as-Memory only). */
+  memoryNodeId?: string;
+  /** Count of new entities the ingestion pipeline extracted. */
+  entitiesCreated?: number;
+  error?: string;
+}
+
+const MAX_SAVE_LEN = 50_000;
+
+function trimToLimit(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.length > MAX_SAVE_LEN ? trimmed.slice(0, MAX_SAVE_LEN) : trimmed;
+}
+
+export async function saveMessageAsKnowledgeAction(
+  ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
+  text: string,
+  sourceUrl?: string,
+): Promise<SaveAssistantTextResult> {
+  const session = await getSessionOrRedirect();
+  const trimmed = trimToLimit(text);
+  if (trimmed.length === 0) return { ok: false, error: "Message is empty" };
+
+  return runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, async () => {
+    try {
+      const parsed = graphIngest.input.safeParse({
+        text: trimmed,
+        ...(sourceUrl ? { sourceUrl } : {}),
+      });
+      if (!parsed.success) {
+        return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+      }
+      const out = (await invoke(
+        "graph.ingest",
+        parsed.data,
+        capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
+        { surface: "api" },
+      )) as import("@oxagen/oxagen/contracts/graph.ingest").GraphIngestOutput;
+      return {
+        ok: true,
+        entitiesCreated: out.entities.filter((e) => e.created).length,
+      };
+    } catch (err) {
+      logger.error(
+        { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        "[chat] saveMessageAsKnowledgeAction failed",
+      );
+      return { ok: false, error: err instanceof Error ? err.message : "Save failed" };
+    }
+  });
+}
+
+export async function saveMessageAsMemoryAction(
+  ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
+  text: string,
+  conversationPublicId?: string,
+): Promise<SaveAssistantTextResult> {
+  const session = await getSessionOrRedirect();
+  const trimmed = trimToLimit(text);
+  if (trimmed.length === 0) return { ok: false, error: "Message is empty" };
+
+  return runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, async () => {
+    try {
+      // First-line summary makes a stable displayName, the full text becomes the
+      // node's description so the workspace entity-search contract finds it.
+      const firstLine = trimmed.split("\n", 1)[0]?.trim() ?? trimmed;
+      const displayName = firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine;
+      const description = trimmed.length > 2000 ? trimmed.slice(0, 2000) : trimmed;
+      const upsertInput = graphNodeUpsert.input.safeParse({
+        label: "Memory",
+        displayName: displayName.length === 0 ? "Memory" : displayName,
+        description,
+        properties: {
+          source: "chat-message",
+          ...(conversationPublicId ? { conversationPublicId } : {}),
+          savedBy: session.user.id,
+          savedAt: new Date().toISOString(),
+        },
+      });
+      if (!upsertInput.success) {
+        return { ok: false, error: upsertInput.error.issues[0]?.message ?? "Invalid input" };
+      }
+      const upsertOut = (await invoke(
+        "graph.node.upsert",
+        upsertInput.data,
+        capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
+        { surface: "api" },
+      )) as import("@oxagen/oxagen/contracts/graph.node.upsert").GraphNodeUpsertOutput;
+
+      // Run the ingestion pipeline too so embeddings + derived entity edges land
+      // in the graph — same as Save-as-Knowledge does, just with a Memory anchor.
+      // Best-effort: a graph.ingest failure must NOT roll back the Memory node.
+      let entitiesCreated = 0;
+      try {
+        const ingestInput = graphIngest.input.safeParse({ text: trimmed });
+        if (ingestInput.success) {
+          const ingestOut = (await invoke(
+            "graph.ingest",
+            ingestInput.data,
+            capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
+            { surface: "api" },
+          )) as import("@oxagen/oxagen/contracts/graph.ingest").GraphIngestOutput;
+          entitiesCreated = ingestOut.entities.filter((e) => e.created).length;
+        }
+      } catch (ingestErr) {
+        logger.warn(
+          { err: ingestErr, memoryNodeId: upsertOut.nodeId },
+          "[chat] saveMessageAsMemoryAction — ingestion follow-up failed",
+        );
+      }
+      return { ok: true, memoryNodeId: upsertOut.nodeId, entitiesCreated };
+    } catch (err) {
+      logger.error(
+        { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        "[chat] saveMessageAsMemoryAction failed",
+      );
+      return { ok: false, error: err instanceof Error ? err.message : "Save failed" };
+    }
+  });
 }
 
 export async function readBackgroundTaskAction(

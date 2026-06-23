@@ -137,6 +137,39 @@ export function providerCostUsdMicros(usage: TokenUsageInput, rateCard: RateCard
   return Math.round(providerCostUsd(usage, rateCard) * 1_000_000);
 }
 
+/**
+ * Token-driven credit cost for the chat UI per-turn footer.
+ *
+ * `creditsCharged` on the database meter is `ceil(providerCostUsd × markup ÷
+ * creditValue)` — but its inputs (markup, USD, atomic debit, balance clamp) live
+ * inside the gate and are unavailable to the chat stream route on the
+ * `onFinish` boundary. This helper exposes the same math as a PURE function
+ * keyed on a `markup` parameter so the route can compute a display-only credit
+ * cost from the AI SDK's `result.usage`, write it into the SSE `usage` event,
+ * and render it inline below the assistant message — without re-charging.
+ *
+ * The route resolves `markup` once via `resolveMeterMarkup()` (cached) and
+ * passes it in; tests can override it deterministically.
+ */
+export function tokenUsageCreditsExact(
+  usage: TokenUsageInput,
+  markup: number,
+  rateCard: RateCard = PROVIDER_RATE_CARD,
+): number {
+  const cost = providerCostUsd(usage, rateCard);
+  if (cost <= 0) return 0;
+  return (cost * markup) / CREDIT_VALUE_USD;
+}
+
+/** Same as {@link tokenUsageCreditsExact} but rounded up — matches the gate's `ceil` debit semantics. */
+export function tokenUsageCreditsCeiling(
+  usage: TokenUsageInput,
+  markup: number,
+  rateCard: RateCard = PROVIDER_RATE_CARD,
+): number {
+  return Math.ceil(tokenUsageCreditsExact(usage, markup, rateCard));
+}
+
 // ── Media cost meter: image + video (per-asset, not per-token) ──────────────
 // Image and video models bill PER GENERATED ASSET — an image, or a clip of N
 // seconds — which the per-1M-token ProviderModelRate above cannot express. These

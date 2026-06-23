@@ -2,6 +2,7 @@
 import * as React from "react";
 import type {
   ApprovalResolution,
+  BackgroundTaskStatus,
   ConsentResolution,
   MemoryRecallHit,
   MemoryWeight,
@@ -125,6 +126,16 @@ export interface LiveMemoryWrite {
   weight: MemoryWeight | string;
 }
 
+/** A live background-task row, surfaced inline + in the background-task tray. */
+export interface LiveBackgroundTask {
+  taskId: string;
+  kind: string;
+  label?: string;
+  status: BackgroundTaskStatus;
+  inngestRunId?: string;
+  progressPct?: number;
+}
+
 /**
  * A live component directive received from a "component" stream event.
  * Keyed by toolCallId in `ToolStreamState.components`.
@@ -151,6 +162,8 @@ export interface ToolStreamState {
   activeFanouts: Record<string, LiveFanout>;
   memoryRecalls: Record<string, LiveMemoryRecall>;
   memoryWrites: Record<string, LiveMemoryWrite>;
+  /** Live background tasks dispatched this turn, keyed by taskId. */
+  backgroundTasks: Record<string, LiveBackgroundTask>;
   /** Live component directives received this turn, keyed by toolCallId. */
   components: Record<string, LiveComponent>;
   /**
@@ -181,6 +194,7 @@ export const INITIAL_STATE: ToolStreamState = {
   activeFanouts: {},
   memoryRecalls: {},
   memoryWrites: {},
+  backgroundTasks: {},
   components: {},
   order: [],
   activeTextKey: null,
@@ -513,6 +527,26 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
           },
         },
         order: withOrder(state.order, `memwrite:${e.memoryId}`),
+        activeTextKey: null,
+      };
+    }
+    case "background-task-progress": {
+      const existing = state.backgroundTasks[e.taskId];
+      return {
+        ...state,
+        backgroundTasks: {
+          ...state.backgroundTasks,
+          [e.taskId]: {
+            ...(existing ?? { taskId: e.taskId, kind: e.kind, status: e.status }),
+            taskId: e.taskId,
+            kind: e.kind,
+            ...(e.label !== undefined ? { label: e.label } : {}),
+            status: e.status,
+            ...(e.inngestRunId !== undefined ? { inngestRunId: e.inngestRunId } : {}),
+            ...(e.progressPct !== undefined ? { progressPct: e.progressPct } : {}),
+          },
+        },
+        order: withOrder(state.order, `bgtask:${e.taskId}`),
         activeTextKey: null,
       };
     }

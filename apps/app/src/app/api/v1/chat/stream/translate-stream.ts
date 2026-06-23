@@ -1,9 +1,13 @@
 import type {
   AssistantContentBlock,
+  BackgroundTaskStatus,
+  PlanStep,
   RenderDirective,
   StreamEvent,
+  SubagentChild,
 } from "@/components/chat/stream-event-types";
 import { resolveRenderDirective } from "@oxagen/oxagen/capability-meta";
+import { tokenUsageCreditsCeiling } from "@oxagen/billing";
 import {
   partType,
   isRecord,
@@ -24,6 +28,13 @@ export interface TranslatedTurn {
   assistantText: string;
   /** Ordered content blocks (reasoning → tools → text) for refresh re-render. */
   persistedBlocks: AssistantContentBlock[];
+  /**
+   * Turn usage observed from the SDK's `finish` part. Persisted under the
+   * assistant message's `metadata.usage` so the message footer can show the
+   * same credits + tokens after a refresh. `undefined` if the turn ended
+   * before any LLM call produced usage (e.g. a tool-side error).
+   */
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number; creditsCharged: number };
 }
 
 /**
@@ -47,12 +58,23 @@ export async function translateAgentStream(args: {
   orgSlug: string;
   workspaceSlug: string;
   emit: (event: StreamEvent) => void;
+  /**
+   * Resolved gateway model id for this turn (e.g. "anthropic/claude-sonnet-4.6").
+   * Used to price the SSE `usage` event's `creditsCharged` field — display only;
+   * the authoritative debit happens inside `streamAgentReply`'s `onFinish` via
+   * the billing gate.
+   */
+  modelId: string;
+  /** Solved meter markup (cached) — see {@link tokenUsageCreditsCeiling}. */
+  meterMarkup: number;
 }): Promise<TranslatedTurn> {
-  const { fullStream, requestId, toolNameMap, orgSlug, workspaceSlug, emit } = args;
+  const { fullStream, requestId, toolNameMap, orgSlug, workspaceSlug, emit, modelId, meterMarkup } = args;
 
   const toolStartedAt: Record<string, number> = {};
   // Accumulate the assistant's text so we can persist the full reply.
   let assistantText = "";
+  // Captured here so we can return it to the route for metadata persistence.
+  let finalUsage: TranslatedTurn["usage"] = undefined;
 
   // ── Ordered content-block accumulator ──────────────────────────────────────
   // `currentText` buffers contiguous text deltas; flushText() commits them as a
@@ -198,6 +220,158 @@ export async function translateAgentStream(args: {
         output: part.output,
         durationMs,
       });
+      // High-level capability → stream-event translation. Certain capability
+      // tool calls carry semantic meaning (a plan was proposed, a fanout was
+      // dispatched, a memory was written, a background task was started). We
+      // emit a typed event for each so the chat UI renders the matching live
+      // card (PlanCard/SubagentFanout/MemoryCard/BackgroundTaskCard) — without
+      // these, those cards only appear after a refresh from persisted blocks.
+      const capForTranslate = toolCapability[part.toolCallId];
+      if (capForTranslate !== undefined) {
+        const out = isRecord(part.output) ? part.output : null;
+        if (out !== null) {
+          if (capForTranslate === "agent.plan.create") {
+            const planId = typeof out.planId === "string" ? out.planId : null;
+            const tasksRaw = Array.isArray(out.tasks) ? out.tasks : [];
+            const goalsRaw = Array.isArray(out.goals) ? out.goals : [];
+            if (planId !== null) {
+              const steps: PlanStep[] = tasksRaw.map((t) => {
+                const r = isRecord(t) ? t : {};
+                return {
+                  id: typeof r.id === "string" ? r.id : "",
+                  summary: typeof r.title === "string" ? r.title : "",
+                  intent: typeof r.description === "string" ? r.description : "",
+                  capability: typeof r.capability === "string" ? r.capability : null,
+                  dependsOn: Array.isArray(r.dependsOn)
+                    ? r.dependsOn.filter((d): d is string => typeof d === "string")
+                    : [],
+                };
+              });
+              const title = goalsRaw.find((g): g is string => typeof g === "string") ?? "Proposed plan";
+              blocks.push({
+                type: "plan",
+                planId,
+                title,
+                steps,
+                status: "pending",
+              });
+              emit({
+                type: "plan-proposed",
+                planId,
+                title,
+                steps,
+              });
+            }
+          } else if (capForTranslate === "agent.subagent.dispatch") {
+            const dispatchId = typeof out.dispatchId === "string" ? out.dispatchId : null;
+            if (dispatchId !== null) {
+              // The dispatch result carries totalTasks but not the per-child
+              // capability list; we read it back from the tool input preview
+              // (the agent passed the tasks array in).
+              const tasksFromInput = (() => {
+                const blk = blocks[idx ?? -1];
+                if (!blk || blk.type !== "tool-call") return [];
+                const ip = blk.inputPreview;
+                if (!isRecord(ip) || !Array.isArray(ip.tasks)) return [];
+                return ip.tasks;
+              })();
+              const children: SubagentChild[] = tasksFromInput.map((t, ci) => {
+                const r = isRecord(t) ? t : {};
+                return {
+                  childMessageId: `${dispatchId}:${ci}`,
+                  capability: typeof r.capabilityName === "string" ? r.capabilityName : "agent.compose",
+                  status: "running" as const,
+                };
+              });
+              blocks.push({
+                type: "subagent-fanout",
+                fanoutId: dispatchId,
+                parentMessageId: requestId,
+                children,
+                status: "running",
+              });
+              emit({
+                type: "subagent-dispatched",
+                fanoutId: dispatchId,
+                parentMessageId: requestId,
+                children: children.map((c) => ({
+                  childMessageId: c.childMessageId,
+                  capability: c.capability,
+                  ...(c.label !== undefined ? { label: c.label } : {}),
+                })),
+              });
+            }
+          } else if (capForTranslate === "agent.memory.write") {
+            const memoryId = typeof out.memoryId === "string" ? out.memoryId : null;
+            const nodeRef = typeof out.nodeRef === "string" ? out.nodeRef : null;
+            if (memoryId !== null && nodeRef !== null) {
+              // Pull weight from the recorded tool input preview when present.
+              const weight = (() => {
+                const blk = blocks[idx ?? -1];
+                if (!blk || blk.type !== "tool-call") return "consider";
+                const ip = blk.inputPreview;
+                if (!isRecord(ip) || typeof ip.weight !== "string") return "consider";
+                return ip.weight;
+              })();
+              emit({
+                type: "memory-written",
+                memoryId,
+                nodeRef,
+                weight,
+              });
+            }
+          } else if (capForTranslate === "agent.memory.recall") {
+            const memoriesRaw = Array.isArray(out.memories) ? out.memories : [];
+            if (memoriesRaw.length > 0) {
+              const memories = memoriesRaw
+                .map((m) => (isRecord(m) ? m : null))
+                .filter((m): m is Record<string, unknown> => m !== null)
+                .map((m) => ({
+                  id: typeof m.id === "string" ? m.id : "",
+                  lesson: typeof m.lesson === "string" ? m.lesson : "",
+                  weight: typeof m.weight === "string" ? m.weight : "consider",
+                  score: typeof m.score === "number" ? m.score : 0,
+                  ...(typeof m.nodeRef === "string" ? { nodeRef: m.nodeRef } : {}),
+                }));
+              const queryId = part.toolCallId;
+              blocks.push({ type: "memory-recall", queryId, memories });
+              emit({ type: "memory-recalled", queryId, memories });
+            }
+          } else if (capForTranslate === "agent.task.background.start") {
+            const taskId = typeof out.taskId === "string" ? out.taskId : null;
+            const inngestRunId = typeof out.inngestRunId === "string" ? out.inngestRunId : undefined;
+            if (taskId !== null) {
+              const kindLabel = (() => {
+                const blk = blocks[idx ?? -1];
+                if (!blk || blk.type !== "tool-call") return { kind: "agent.task", label: undefined };
+                const ip = blk.inputPreview;
+                if (!isRecord(ip)) return { kind: "agent.task", label: undefined };
+                return {
+                  kind: typeof ip.kind === "string" ? ip.kind : "agent.task",
+                  label: typeof ip.label === "string" ? ip.label : undefined,
+                };
+              })();
+              const status: BackgroundTaskStatus = "queued";
+              blocks.push({
+                type: "background-task",
+                taskId,
+                kind: kindLabel.kind,
+                ...(kindLabel.label !== undefined ? { label: kindLabel.label } : {}),
+                status,
+                ...(inngestRunId !== undefined ? { inngestRunId } : {}),
+              });
+              emit({
+                type: "background-task-progress",
+                taskId,
+                kind: kindLabel.kind,
+                ...(kindLabel.label !== undefined ? { label: kindLabel.label } : {}),
+                status,
+                ...(inngestRunId !== undefined ? { inngestRunId } : {}),
+              });
+            }
+          }
+        }
+      }
       // Render directive resolution (generic capability engine):
       //   1. If the output EMBEDS its own `render` directive (the archive.create
       //      / graph.stats / media pattern — flat, component-specific props),
@@ -300,13 +474,28 @@ export async function translateAgentStream(args: {
     } else if (pType === "finish") {
       const part = raw as FinishPart;
       // Emit usage so the client can show credits consumed this turn.
+      const inputTokens = part.totalUsage.inputTokens ?? 0;
+      const outputTokens = part.totalUsage.outputTokens ?? 0;
+      const totalTokens = part.totalUsage.totalTokens ?? 0;
+      // Credits priced from the same rate card + meter markup the gate uses.
+      // Display-only: the authoritative debit happens inside streamAgentReply's
+      // onFinish via the billing gate. We just mirror the math so the chat UI
+      // can show "X credits · Y tokens" inline below the assistant message.
+      // Zero-usage turns (errors before any LLM call) get creditsCharged === 0
+      // and the footer suppresses the display per the acceptance criteria.
+      const creditsCharged =
+        totalTokens > 0
+          ? tokenUsageCreditsCeiling({ model: modelId, inputTokens, outputTokens }, meterMarkup)
+          : 0;
+      finalUsage = {
+        promptTokens: inputTokens,
+        completionTokens: outputTokens,
+        totalTokens,
+        creditsCharged,
+      };
       emit({
         type: "usage",
-        usage: {
-          promptTokens: part.totalUsage.inputTokens ?? 0,
-          completionTokens: part.totalUsage.outputTokens ?? 0,
-          totalTokens: part.totalUsage.totalTokens ?? 0,
-        },
+        usage: finalUsage,
       });
     } else if (pType === "error") {
       // streamText surfaces provider/gateway failures (e.g. a 400 from a bad
@@ -339,5 +528,9 @@ export async function translateAgentStream(args: {
     (b) => b.type !== "reasoning" || b.text.length > 0 || b.durationMs !== undefined,
   );
 
-  return { assistantText, persistedBlocks };
+  return {
+    assistantText,
+    persistedBlocks,
+    ...(finalUsage !== undefined ? { usage: finalUsage } : {}),
+  };
 }

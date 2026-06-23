@@ -17,6 +17,8 @@ import {
   providerCostUsdMicros,
   solveMeterMarkup,
   derivePricing,
+  tokenUsageCreditsExact,
+  tokenUsageCreditsCeiling,
 } from "./pricing";
 
 describe("resolveRate", () => {
@@ -108,3 +110,39 @@ describe("derivePricing", () => {
     expect(d.products).toHaveLength(SUBSCRIPTION_PLANS.length + CREDIT_PACKS.length);
   });
 });
+
+describe('tokenUsageCreditsExact / tokenUsageCreditsCeiling', () => {
+  // Sonnet rate: $3/M input, $15/M output. With markup M = 3:
+  //   cost = (10_000*3 + 2_000*15) / 1_000_000 = 0.030 + 0.030 = 0.06 USD
+  //   credits = 0.06 * 3 / 0.01 = 18 credits exact
+  const usage = { model: 'claude-sonnet-4-6', inputTokens: 10_000, outputTokens: 2_000 };
+
+  it('prices a known usage at exact credit cost using the supplied markup', () => {
+    expect(tokenUsageCreditsExact(usage, 3)).toBeCloseTo(18, 10);
+  });
+
+  it('returns 0 for zero-cost usage (no negative credit charge)', () => {
+    expect(tokenUsageCreditsExact({ model: usage.model, inputTokens: 0, outputTokens: 0 }, 3)).toBe(0);
+  });
+
+  it('ceiling matches the gates ceil semantics for fractional credit costs', () => {
+    // 1 input + 1 output token Sonnet: (1*3 + 1*15) / 1e6 = 18e-6 USD * 3 / 0.01 = 0.0054 credits
+    // exact ~ 0.0054 → ceiling 1
+    expect(tokenUsageCreditsCeiling({ model: usage.model, inputTokens: 1, outputTokens: 1 }, 3)).toBe(1);
+  });
+
+  it('ceiling equals 0 only for truly zero-cost calls', () => {
+    expect(tokenUsageCreditsCeiling({ model: usage.model, inputTokens: 0, outputTokens: 0 }, 3)).toBe(0);
+  });
+
+  it('a higher markup yields strictly more credits for the same usage', () => {
+    expect(tokenUsageCreditsExact(usage, 4)).toBeGreaterThan(tokenUsageCreditsExact(usage, 2));
+  });
+
+  it('falls back to the Sonnet rate card for an unknown model id', () => {
+    const knownCost = tokenUsageCreditsExact(usage, 2.5);
+    const unknownCost = tokenUsageCreditsExact({ model: 'mistral-large-2', inputTokens: 10_000, outputTokens: 2_000 }, 2.5);
+    expect(unknownCost).toBeCloseTo(knownCost, 10);
+  });
+});
+
