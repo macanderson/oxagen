@@ -14,16 +14,17 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "generate:templates": "node scripts/generate-builtins.mjs"
   },
   "dependencies": {
-    "yaml": "2.9.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
     "typescript": "6.0.3",
     "vitest": "2.1.9",
-    "@vitest/coverage-v8": "2.1.9"
+    "@vitest/coverage-v8": "2.1.9",
+    "yaml": "2.9.0"
   }
 }
