@@ -10,7 +10,20 @@ import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, afterEach, vi } from "vitest";
 
-vi.mock("lucide-react", () => new Proxy({}, { get: () => () => <svg aria-hidden="true" /> }));
+// The `has` trap declares every icon as "present" (so named imports resolve)
+// EXCEPT `then`: a catch-all that makes `then` a function turns this mock
+// namespace thenable, so ESM resolution awaits a never-resolving function and
+// hangs vitest when this file shares a worker with another suite — the root cause
+// of the apps/app `test:unit` CI timeout.
+vi.mock("lucide-react", () =>
+  new Proxy(
+    {},
+    {
+      get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" />),
+      has: (_t, prop) => prop !== "then",
+    },
+  ),
+);
 vi.mock("@/components/ui/card", () => ({
   Card: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   CardPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
