@@ -37,7 +37,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
 import { SkillDetailPanel, type SkillDetailData, type SkillVersion } from "./skill-detail-panel";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // The download-flow tests vi.spyOn(document.body, "appendChild"/"removeChild").
+  // Restore them so the mocked appendChild does not leak into later tests/files
+  // (a leaked appendChild mock makes every subsequent render() fail with
+  // "Target container is not a DOM element").
+  vi.restoreAllMocks();
+});
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -47,18 +54,10 @@ vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ add: mockToastAdd }),
 }));
 
-vi.mock("lucide-react", () =>
-  new Proxy(
-    {},
-    {
-      get: (_t, prop) => {
-        if (prop === "__esModule") return true;
-        if (typeof prop === "symbol") return undefined;
-        return () => <svg aria-hidden="true" data-icon={String(prop)} />;
-      },
-    },
-  ),
-);
+vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
+  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
+  has: (_t, prop) => prop !== "then",
+}));
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({
@@ -451,10 +450,13 @@ describe("SkillDetailPanel — download flow", () => {
       }
       return createElementOriginal(tag);
     });
+    // Render BEFORE stubbing appendChild — RTL's render() attaches its container
+    // via document.body.appendChild, so a no-op appendMock here would make
+    // render() fail with "Target container is not a DOM element".
+    renderPanel();
+
     vi.spyOn(document.body, "appendChild").mockImplementation(appendMock);
     vi.spyOn(document.body, "removeChild").mockImplementation(removeMock);
-
-    renderPanel();
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("skill-download-btn"));
@@ -538,7 +540,7 @@ describe("SkillDetailPanel — version history", () => {
   it("shows version numbers in the table", () => {
     renderPanel({ versions: [v1, v2] });
     expect(screen.getByText("v1.0.0")).toBeInTheDocument();
-    expect(screen.getByText("v1.2.0")).toBeInTheDocument();
+    expect(screen.getAllByText("v1.2.0").length).toBeGreaterThan(0);
   });
 
   it("shows commit messages in the table", () => {

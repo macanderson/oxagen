@@ -52,6 +52,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": new URL("./src", import.meta.url).pathname,
+      // server-only throws when imported outside a Server Component; unit tests
+      // have no RSC boundary, so stub it to a no-op (otherwise any test that
+      // imports a server-only module fails to even collect).
+      "server-only": new URL("./src/test/server-only-stub.ts", import.meta.url).pathname,
     },
   },
 });

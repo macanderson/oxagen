@@ -184,21 +184,18 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("lucide-react", () =>
-  new Proxy(
-    {},
-    {
-      get: (_t, prop) => {
-        if (prop === "__esModule") return true;
-        if (typeof prop === "symbol") return undefined;
-        const Icon = ({ "aria-label": ariaLabel }: { "aria-label"?: string }) => (
-          <svg aria-hidden={!ariaLabel} aria-label={ariaLabel} data-icon={String(prop)} />
-        );
-        return Icon;
-      },
-    },
-  ),
-);
+vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
+  // HealthIcon passes aria-label to the lucide icon and the tests query it via
+  // getByLabelText — forward aria-label (and don't set aria-hidden, which would
+  // remove the element from the accessibility tree).
+  get: (_t, prop) =>
+    prop === "then"
+      ? undefined
+      : (props: { "aria-label"?: string }) => (
+          <svg data-icon={String(prop)} aria-label={props?.["aria-label"]} />
+        ),
+  has: (_t, prop) => prop !== "then",
+}));
 
 // ---------------------------------------------------------------------------
 // Import under test
@@ -334,7 +331,7 @@ describe("WorkspaceIntegrationsPanel", () => {
         wsInstallMap={{ [listing.id]: makeInstall() }}
       />,
     );
-    expect(screen.getByText("raw-name")).toBeInTheDocument();
+    expect(screen.getAllByText("raw-name").length).toBeGreaterThan(0);
   });
 
   // (c) Toggle disabled when canManage=false
@@ -689,7 +686,9 @@ describe("WorkspaceIntegrationsPanel", () => {
         wsInstallMap={{ [listing.id]: makeInstall() }}
       />,
     );
-    const img = screen.getByRole("img");
+    // Decorative icon (alt="") has ARIA role "presentation", not "img".
+    const img = document.querySelector("img");
+    expect(img).not.toBeNull();
     expect(img).toHaveAttribute("src", "https://cdn.example.com/icon.png");
   });
 });

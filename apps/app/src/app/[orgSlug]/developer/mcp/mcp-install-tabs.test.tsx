@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import * as React from "react";
-import { render, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import { McpInstallTabs } from "./mcp-install-tabs";
 import type { McpTabEntry } from "./mcp-install-tabs";
 
@@ -32,12 +32,9 @@ vi.mock("@/components/ui/tabs", () => ({
   TabsIndicator: () => null,
 }));
 
-vi.mock("lucide-react", () => new Proxy({} as Record<string, unknown>, {
-  get: (_t, prop) => {
-    if (prop === "__esModule") return true;
-    if (typeof prop === "symbol") return undefined;
-    return () => <svg aria-hidden="true" data-icon={String(prop)} />;
-  },
+vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
+  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
+  has: (_t, prop) => prop !== "then",
 }));
 
 // ---------------------------------------------------------------------------
@@ -163,11 +160,9 @@ describe("McpInstallTabs", () => {
         fireEvent.click(copyBtn);
       });
 
-      await waitFor(() => {
-        expect(
-          getByRole("button", { name: "Claude Code install command copied" })
-        ).toBeDefined();
-      });
+      expect(
+        getByRole("button", { name: "Claude Code install command copied" }),
+      ).toBeDefined();
     });
 
     it("reverts aria-label back after 2 seconds", async () => {
@@ -184,23 +179,21 @@ describe("McpInstallTabs", () => {
         fireEvent.click(copyBtn);
       });
 
-      // Should show "copied" state
-      await waitFor(() => {
-        expect(
-          getByRole("button", { name: "Claude Code install command copied" })
-        ).toBeDefined();
-      });
+      // Should show "copied" state. (waitFor() would deadlock here under fake
+      // timers — its polling uses the faked clock — and act() above already
+      // flushed the state update, so assert directly.)
+      expect(
+        getByRole("button", { name: "Claude Code install command copied" }),
+      ).toBeDefined();
 
       // Advance timers past the 2-second reset
       await act(async () => {
         vi.advanceTimersByTime(2001);
       });
 
-      await waitFor(() => {
-        expect(
-          getByRole("button", { name: "Copy Claude Code install command" })
-        ).toBeDefined();
-      });
+      expect(
+        getByRole("button", { name: "Copy Claude Code install command" }),
+      ).toBeDefined();
 
       vi.useRealTimers();
     });
