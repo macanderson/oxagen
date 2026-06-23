@@ -11,12 +11,19 @@ export interface FakeTxController {
   tx: unknown;
   /** Queue one or more result values, consumed in FIFO order per query. */
   enqueue: (...results: unknown[]) => void;
-  /** Reset the queue between tests. */
+  /** Reset the queue (and mutation counters) between tests. */
   reset: () => void;
+  /**
+   * Counts of mutating builder entrypoints invoked since the last reset. Lets a
+   * test assert that a guard rejected BEFORE any write was issued (the
+   * read-only invariant for product-managed agents).
+   */
+  mutations: { insert: number; update: number; delete: number };
 }
 
 export function createFakeTx(): FakeTxController {
   const queue: unknown[] = [];
+  const mutations = { insert: 0, update: 0, delete: 0 };
 
   function nextResult(): unknown {
     return queue.length > 0 ? queue.shift() : [];
@@ -48,18 +55,31 @@ export function createFakeTx(): FakeTxController {
 
   const tx = {
     select: () => makeChain(),
-    insert: () => makeChain(),
-    update: () => makeChain(),
-    delete: () => makeChain(),
+    insert: () => {
+      mutations.insert += 1;
+      return makeChain();
+    },
+    update: () => {
+      mutations.update += 1;
+      return makeChain();
+    },
+    delete: () => {
+      mutations.delete += 1;
+      return makeChain();
+    },
   };
 
   return {
     tx,
+    mutations,
     enqueue: (...results: unknown[]) => {
       queue.push(...results);
     },
     reset: () => {
       queue.length = 0;
+      mutations.insert = 0;
+      mutations.update = 0;
+      mutations.delete = 0;
     },
   };
 }
