@@ -1,0 +1,22 @@
+id: why-is-trigger-failing
+title: Why is this trigger failing?
+description: Diagnose why this trigger is not firing successfully and suggest fixes.
+category: investigate
+tags: [trigger, failure, debug, automation]
+applicableTo:
+  - routePattern: /{org}/{ws}/automation/triggers/:triggerId
+capability: trigger.read
+autoSubmit: true
+variables:
+  - name: trigger_id
+    resolver: param
+    source: params.triggerId
+    required: true
+  - name: trigger_name
+    resolver: page
+    source: page.entity.label
+    required: false
+body: |
+  Diagnose why trigger {{trigger_name}} ({{trigger_id}}) is failing. Look at the recent
+  execution history, error logs, and configuration. Explain the root cause and suggest
+  the most likely fix. If it's a configuration issue, show me what to change.

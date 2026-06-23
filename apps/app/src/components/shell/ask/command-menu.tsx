@@ -5,9 +5,10 @@
  * A Radix Dialog with WAI-ARIA combobox keyboard navigation.
  *
  * Sections (in render order):
- *   Navigate   — all nav targets from enumerateNavTargets, filtered by query
- *   Recent     — last-5 queries from localStorage
- *   Ask        — free-text "Ask Oxagen" fallback
+ *   Quick Actions — prompt templates applicable to the current page (OXA-1769)
+ *   Navigate      — all nav targets from enumerateNavTargets, filtered by query
+ *   Recent        — last-5 queries from localStorage
+ *   Ask           — free-text "Ask Oxagen" fallback
  *
  * Keyboard navigation:
  *   ArrowDown / ArrowUp  — move active item
@@ -18,14 +19,16 @@
  */
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
-import { Search, ArrowRight, Clock, Navigation, Sparkles } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { Search, ArrowRight, Clock, Navigation, Sparkles, Zap, PlusCircle, ScanSearch, Settings, MessageSquare, BarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePageContext } from "@/lib/page-context";
 import { enumerateNavTargets } from "@/lib/sidebar";
 import { classifyIntent } from "@/lib/command-menu/intent-router";
 import { useRecent } from "@/lib/command-menu/use-recent";
 import type { ScopeContext } from "@/lib/scope";
+import { getApplicableTemplates, renderTemplate, resolveVariables } from "@oxagen/prompt-templates";
+import type { PromptTemplate } from "@oxagen/prompt-templates";
 import {
   Dialog,
   DialogPopup,
@@ -37,10 +40,27 @@ export interface CommandMenuProps {
   ctx: ScopeContext;
 }
 
-type CommandItem = { type: "navigate" | "recent" | "ask"; label: string; href?: string };
+type CommandItem =
+  | { type: "navigate"; label: string; href: string }
+  | { type: "recent"; label: string }
+  | { type: "quick-action"; label: string; template: PromptTemplate }
+  | { type: "ask"; label: string };
+
+/** Map from template category to a Lucide icon component. */
+function categoryIcon(category: PromptTemplate["category"]): React.ReactNode {
+  switch (category) {
+    case "create": return <PlusCircle className="h-4 w-4" aria-hidden="true" />;
+    case "investigate": return <ScanSearch className="h-4 w-4" aria-hidden="true" />;
+    case "configure": return <Settings className="h-4 w-4" aria-hidden="true" />;
+    case "communicate": return <MessageSquare className="h-4 w-4" aria-hidden="true" />;
+    case "analyze": return <BarChart2 className="h-4 w-4" aria-hidden="true" />;
+    default: return <Zap className="h-4 w-4" aria-hidden="true" />;
+  }
+}
 
 export function CommandMenu({ ctx }: CommandMenuProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const pageCtx = usePageContext();
   const { recent, push: pushRecent } = useRecent();
 
@@ -95,8 +115,47 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
 
   const showRecent = !query.trim() && recent.length > 0;
 
+  // Quick Actions — applicable prompt templates for the current page context.
+  // Only shown when input is empty (templates don't need to be searched; they
+  // are already pre-filtered by route/capability).
+  const quickActions = React.useMemo(() => {
+    if (query.trim()) return [];
+    // Build a minimal page context from available runtime data.
+    const currentPathname = pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
+    // Extract route params from the pathname by comparing it to known segment counts.
+    // We pass an empty routeParams; templates that need specific route params will
+    // be filtered out unless those params can be inferred. The page entity from
+    // PageContext is passed for page.* resolver templates.
+    const pageEntity = pageCtx.entity
+      ? {
+          kind: pageCtx.entity.kind,
+          id: pageCtx.entity.id,
+          label: pageCtx.entity.label,
+          summary: pageCtx.entity.summary,
+        }
+      : undefined;
+
+    // Parse routeParams from the current pathname against each template's
+    // routePattern. We attempt a best-effort extraction without the full
+    // router; templates with required params that can't be extracted are
+    // filtered out by getApplicableTemplates.
+    const routeParams = extractRouteParams(currentPathname);
+
+    return getApplicableTemplates({
+      pathname: currentPathname,
+      routeParams,
+      queryParams: {},
+      pageEntity,
+      capabilities: [], // TODO: wire real user capabilities (OXA-1773)
+      locale: "en",
+    });
+  }, [query, pathname, ctx.orgSlug, ctx.workspaceSlug, pageCtx.entity]);
+
   const items: CommandItem[] = React.useMemo(() => {
     const result: CommandItem[] = [];
+    for (const t of quickActions) {
+      result.push({ type: "quick-action", label: t.title, template: t });
+    }
     for (const t of filteredTargets) {
       result.push({ type: "navigate", label: t.label, href: t.href });
     }
@@ -107,14 +166,36 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
     }
     result.push({ type: "ask", label: query.trim() || "Ask Oxagen anything…" });
     return result;
-  }, [filteredTargets, showRecent, recent, query]);
+  }, [quickActions, filteredTargets, showRecent, recent, query]);
 
   // Declared before handleKeyDown so it can be used in the callback dep array.
   const activateItem = React.useCallback(
     (item: CommandItem) => {
-      if (item.type === "navigate" && item.href) {
+      if (item.type === "navigate") {
         pageCtx.closeCommand();
         router.push(item.href);
+      } else if (item.type === "quick-action") {
+        // Render the template against the current page context and open the
+        // Ask Drawer with the rendered prompt pre-filled.
+        const template = item.template;
+        const currentPathname = pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
+        const routeParams = extractRouteParams(currentPathname);
+        const pageEntity = pageCtx.entity
+          ? {
+              kind: pageCtx.entity.kind,
+              id: pageCtx.entity.id,
+              label: pageCtx.entity.label,
+              summary: pageCtx.entity.summary,
+            }
+          : undefined;
+        const { resolved } = resolveVariables(template.variables, {
+          routeParams,
+          queryParams: {},
+          pageEntity,
+        });
+        const { rendered } = renderTemplate(template.body, resolved);
+        pageCtx.closeCommand();
+        pageCtx.openAskWithText(rendered, template.autoSubmit);
       } else if (item.type === "recent") {
         const intent = classifyIntent({
           query: item.label,
@@ -135,7 +216,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
         pageCtx.openAsk();
       }
     },
-    [ctx, pageCtx, pushRecent, query, router],
+    [ctx, pageCtx, pathname, pushRecent, query, router],
   );
 
   const handleKeyDown = React.useCallback(
@@ -212,21 +293,47 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
           aria-label="Commands"
           className="max-h-[360px] overflow-y-auto py-2"
         >
+          {/* Quick Actions section — shown when empty query and templates match current route */}
+          {quickActions.length > 0 && (
+            <CommandSection label="Quick Actions">
+              {quickActions.map((template, i) => (
+                <CommandItemRow
+                  key={template.id}
+                  id={`cmd-item-${i}`}
+                  label={template.title}
+                  icon={categoryIcon(template.category)}
+                  active={clampedActiveIndex === i}
+                  onMouseEnter={() => setClampedActiveIndex(i)}
+                  onSelect={() => void activateItem({ type: "quick-action", label: template.title, template })}
+                  secondary={template.description}
+                  trailing={template.shortcut ? (
+                    <kbd className="hidden rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:block">
+                      {template.shortcut}
+                    </kbd>
+                  ) : undefined}
+                />
+              ))}
+            </CommandSection>
+          )}
+
           {/* Navigate section */}
           {filteredTargets.length > 0 && (
             <CommandSection label="Navigate">
-              {filteredTargets.map((target, i) => (
-                <CommandItemRow
-                  key={target.href}
-                  id={`cmd-item-${i}`}
-                  label={target.label}
-                  icon={<Navigation className="h-4 w-4" aria-hidden="true" />}
-                  active={clampedActiveIndex === i}
-                  onMouseEnter={() => setClampedActiveIndex(i)}
-                  onSelect={() => void activateItem({ type: "navigate", label: target.label, href: target.href })}
-                  trailing={<ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" aria-hidden="true" />}
-                />
-              ))}
+              {filteredTargets.map((target, i) => {
+                const globalIdx = quickActions.length + i;
+                return (
+                  <CommandItemRow
+                    key={target.href}
+                    id={`cmd-item-${globalIdx}`}
+                    label={target.label}
+                    icon={<Navigation className="h-4 w-4" aria-hidden="true" />}
+                    active={clampedActiveIndex === globalIdx}
+                    onMouseEnter={() => setClampedActiveIndex(globalIdx)}
+                    onSelect={() => void activateItem({ type: "navigate", label: target.label, href: target.href })}
+                    trailing={<ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" aria-hidden="true" />}
+                  />
+                );
+              })}
             </CommandSection>
           )}
 
@@ -234,7 +341,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
           {showRecent && (
             <CommandSection label="Recent">
               {recent.map((entry, i) => {
-                const globalIdx = filteredTargets.length + i;
+                const globalIdx = quickActions.length + filteredTargets.length + i;
                 return (
                   <CommandItemRow
                     key={entry.query}
@@ -316,6 +423,7 @@ function CommandItemRow({
   icon,
   active,
   trailing,
+  secondary,
   onMouseEnter,
   onSelect,
 }: {
@@ -324,6 +432,8 @@ function CommandItemRow({
   icon: React.ReactNode;
   active: boolean;
   trailing?: React.ReactNode;
+  /** Optional one-line secondary description shown below the label. */
+  secondary?: string;
   onMouseEnter: () => void;
   onSelect: () => void;
 }) {
@@ -346,8 +456,57 @@ function CommandItemRow({
       <span className={cn("shrink-0", active ? "text-accent-foreground" : "text-muted-foreground/60")}>
         {icon}
       </span>
-      <span className="flex-1 truncate">{label}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block truncate">{label}</span>
+        {secondary && (
+          <span className={cn("block truncate text-[11px]", active ? "text-accent-foreground/70" : "text-muted-foreground/50")}>
+            {secondary}
+          </span>
+        )}
+      </span>
       {trailing && <span className="shrink-0">{trailing}</span>}
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Route param extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Best-effort extraction of route params from a pathname.
+ *
+ * Splits the pathname into segments and returns a map keyed by common param
+ * names inferred from position. This is intentionally simple — templates that
+ * require specific params (e.g. runId) will only match on detail pages where
+ * those params are present and the page entity is registered via
+ * useRegisterPageEntity.
+ *
+ * A more complete implementation would use the Next.js router's `params` map
+ * (available only in RSC), but the Command Menu is a client component. This
+ * approach is sufficient because:
+ *   1. Templates with required params filter themselves out when the param
+ *      can't be resolved (getApplicableTemplates returns empty for those).
+ *   2. For detail pages, the page entity registered via useRegisterPageEntity
+ *      carries the id via the `page.*` resolver, not `param.*`.
+ */
+function extractRouteParams(pathname: string): Record<string, string> {
+  const segments = pathname.split("/").filter(Boolean);
+  const params: Record<string, string> = {};
+  // Convention-based extraction for common Oxagen route shapes:
+  //   0: orgSlug, 1: workspaceSlug, 2: section, 3: subsection, 4: entityId
+  //
+  // Use the 5th segment (index 4) as a generic entity id, mapped to all
+  // common param names so templates using different names match the same
+  // positional slot.
+  if (segments.length >= 5) {
+    const id = segments[4];
+    if (id) {
+      params.runId = id;
+      params.triggerId = id;
+      params.eventId = id;
+      params.playbookId = id;
+    }
+  }
+  return params;
 }

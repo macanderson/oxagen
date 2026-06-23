@@ -37,6 +37,8 @@ export function PageContextProvider({ children }: { children: React.ReactNode })
   const [isAskOpen, setIsAskOpen] = React.useState(false);
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
   const [isWandOpen, setIsWandOpen] = React.useState(false);
+  const [pendingAskText, setPendingAskText] = React.useState<string | null>(null);
+  const [pendingAskAutoSubmit, setPendingAskAutoSubmit] = React.useState(false);
 
   // Stable callbacks: useCallback with [] dep so these function references
   // never change. This prevents the pageCtx object from being recreated (via
@@ -51,6 +53,15 @@ export function PageContextProvider({ children }: { children: React.ReactNode })
   const closeCommand = React.useCallback(() => setIsCommandOpen(false), []);
   const openWand = React.useCallback(() => setIsWandOpen(true), []);
   const closeWand = React.useCallback(() => setIsWandOpen(false), []);
+  const openAskWithText = React.useCallback((text: string, autoSubmit = false) => {
+    setPendingAskText(text);
+    setPendingAskAutoSubmit(autoSubmit);
+    setIsAskOpen(true);
+  }, []);
+  const _clearPendingAskText = React.useCallback(() => {
+    setPendingAskText(null);
+    setPendingAskAutoSubmit(false);
+  }, []);
 
   const value = React.useMemo<PageContextValue>(
     () => ({
@@ -71,8 +82,12 @@ export function PageContextProvider({ children }: { children: React.ReactNode })
       isWandOpen,
       openWand,
       closeWand,
+      pendingAskText,
+      pendingAskAutoSubmit,
+      openAskWithText,
+      _clearPendingAskText,
     }),
-    [entity, fillableForm, fillResult, isFilling, isAskOpen, openAsk, closeAsk, isCommandOpen, openCommand, closeCommand, isWandOpen, openWand, closeWand],
+    [entity, fillableForm, fillResult, isFilling, isAskOpen, openAsk, closeAsk, isCommandOpen, openCommand, closeCommand, isWandOpen, openWand, closeWand, pendingAskText, pendingAskAutoSubmit, openAskWithText, _clearPendingAskText],
   );
 
   return <PageContext.Provider value={value}>{children}</PageContext.Provider>;

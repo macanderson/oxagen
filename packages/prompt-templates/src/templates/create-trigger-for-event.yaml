@@ -1,0 +1,17 @@
+id: create-trigger-for-event
+title: Create trigger for this event
+description: Create a new automation trigger that fires when this event type occurs.
+category: create
+tags: [trigger, automation, event]
+applicableTo:
+  - routePattern: /{org}/{ws}/automation/events/:eventId
+autoSubmit: false
+shortcut: "⌘+E"
+variables:
+  - name: event_id
+    resolver: param
+    source: params.eventId
+    required: true
+body: |
+  Create a new automation trigger for event {{event_id}}. Help me configure the trigger conditions,
+  filter criteria, and the action to perform when this event fires.
