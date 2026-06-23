@@ -163,6 +163,27 @@ describe("installBulkPlugin server action", () => {
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/settings/plugins");
   });
 
+  it("wraps the invoke call in runInTenantScope with the correct org and workspace ids", async () => {
+    // Guard: installBulkPlugin must call runInTenantScope({ orgId, workspaceId }, fn)
+    // so that the invoke() runs inside the right tenant scope. A future accidental
+    // removal of the runInTenantScope wrapper would break tenant isolation and
+    // this assertion catches it immediately.
+    mockInvoke.mockResolvedValue(
+      bulkResult([
+        { pluginId: "cap-a", orgListingId: "listing-a", error: null },
+        { pluginId: "mcp-b", orgListingId: "listing-b", error: null },
+      ]),
+    );
+
+    await installBulkPlugin({ orgSlug: "acme", workspaceSlug: "main", items: ITEMS });
+
+    // ORG.id === "org-1", WS.id === "ws-1" (set up in beforeEach via mocks).
+    expect(mockRunInTenantScope).toHaveBeenCalledWith(
+      { orgId: "org-1", workspaceId: "ws-1" },
+      expect.any(Function),
+    );
+  });
+
   it("calls invoke with plugin.org.install_bulk and normalises 'capability' → agent_capability", async () => {
     mockInvoke.mockResolvedValue(
       bulkResult([{ pluginId: "cap-a", orgListingId: "listing-a", error: null }]),
