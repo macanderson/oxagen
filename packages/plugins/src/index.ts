@@ -28,3 +28,8 @@ export {
   clearEntitlementCacheForTests,
 } from "./entitlements/entitlement-service";
 export { bootstrapEntitlementRuntime } from "./entitlements/bootstrap";
+export {
+  GITHUB_MCP_SERVER,
+  FIRST_PARTY_MCP_SERVERS,
+} from "./first-party-mcp";
+export type { FirstPartyMcpServer } from "./first-party-mcp";
