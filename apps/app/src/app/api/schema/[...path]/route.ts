@@ -9,6 +9,12 @@ import { invoke } from "@oxagen/oxagen";
 
 export const runtime = "nodejs";
 
+// Schema-registry browser proxy. Lives at /api/schema/* (NOT /api/v1/schema/*)
+// on purpose: apps/app rewrites /api/v1/:path* to the Hono API, which would
+// shadow a catch-all filesystem route. /api/schema/* sits outside that rewrite
+// so this route reliably handles the call and drives invoke() in-process with
+// explicit IAM (apps/app does not bootstrap IAM).
+//
 // Capabilities that require the caller to hold owner or admin role.
 const ADMIN_ONLY_CAPABILITIES = new Set([
   "schema.toggle",
@@ -31,10 +37,6 @@ export async function POST(
   // ── Resolve capability from path segments ─────────────────────────────
   const { path } = await params;
   const capability = `schema.${path.join(".")}`;
-
-  if (!capability.startsWith("schema.")) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
 
   // ── Parse body ────────────────────────────────────────────────────────
   let rawBody: Record<string, unknown>;

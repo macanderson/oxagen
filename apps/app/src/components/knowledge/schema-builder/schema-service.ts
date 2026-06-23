@@ -299,7 +299,7 @@ async function delay(ms: number): Promise<void> {
 }
 
 async function post<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(`/api/v1/schema/${path}`, {
+  const res = await fetch(`/api/schema/${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
