@@ -38,6 +38,26 @@ export const connectionMappingsSet = registerCapability({
       .describe(
         "If true, sets connection status to active and queues initial sync after saving mappings",
       ),
+    // ── GitHub source-selection (persisted to deliveryConfig, drives the sync) ──
+    // The connect wizard picks one or more repos and (for GitHub Apps) an
+    // installation. These were previously sent by the client but silently dropped
+    // by the contract, so the initial sync fired with an empty owner/repo and
+    // 404'd — leaving the knowledge graph empty. They are persisted to
+    // deliveryConfig and one initial-sync is queued per selected repo.
+    selectedRepos: z
+      .array(z.string().min(1))
+      .optional()
+      .describe('Full repo names ("owner/repo") selected for sync (GitHub).'),
+    installationId: z
+      .string()
+      .optional()
+      .describe("GitHub App installation id the repos belong to."),
+    syncDepthDays: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("How far back to backfill history on the first sync."),
   }),
   output: z.object({
     mappingsCreated: z.number(),

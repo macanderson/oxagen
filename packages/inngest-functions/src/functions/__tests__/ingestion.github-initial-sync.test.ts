@@ -80,12 +80,44 @@ const BASE_EVENT = {
   workspaceId: "ws-gh-1",
   owner: "acme",
   repo: "api",
-  defaultBranch: "main",
+  syncDepthDays: 90,
 };
+
+const REPO_META = {
+  id: 42,
+  name: "api",
+  full_name: "acme/api",
+  description: "The API",
+  html_url: "https://github.com/acme/api",
+  default_branch: "trunk", // deliberately not "main" — verifies branch resolution
+  owner: { login: "acme" },
+  language: "TypeScript",
+  stargazers_count: 7,
+};
+
+const PULLS = [
+  { number: 1, title: "Add auth", html_url: "https://github.com/acme/api/pull/1", user: { login: "a" }, labels: [], state: "open" },
+  { number: 2, title: "Fix billing", html_url: "https://github.com/acme/api/pull/2", user: { login: "b" }, labels: [], state: "closed" },
+];
+
+// GitHub's issues API returns PRs too (they carry a `pull_request` key) — those
+// must be filtered out so they aren't double-ingested.
+const ISSUES_RAW = [
+  { number: 10, title: "Bug report", html_url: "https://github.com/acme/api/issues/10", user: { login: "c" }, labels: [] },
+  { number: 2, title: "Fix billing", html_url: "https://github.com/acme/api/pull/2", user: { login: "b" }, labels: [], pull_request: { url: "x" } },
+];
+
+const RELEASES = [
+  { id: 99, name: "v1.0.0", tag_name: "v1.0.0", html_url: "https://github.com/acme/api/releases/v1.0.0", author: { login: "a" } },
+];
+
+const COMMITS = [
+  { sha: "deadbeef", html_url: "https://github.com/acme/api/commit/deadbeef", commit: { message: "init", author: { name: "a", email: "a@x.com", date: "2026-01-01" } } },
+];
 
 const TREE_RESPONSE = {
   sha: "abc123",
-  url: "https://api.github.com/repos/acme/api/git/trees/main",
+  url: "https://api.github.com/repos/acme/api/git/trees/trunk",
   truncated: false,
   tree: [
     { path: "src/auth.ts", mode: "100644", type: "blob", sha: "sha-auth", size: 1000, url: "" },
@@ -105,29 +137,33 @@ const TREE_RESPONSE = {
 
 const ACCESS_TOKEN_ENC = { keyId: "key-1", ciphertext: Buffer.from("token123").toString("base64") };
 
+function ok(body: unknown) {
+  return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+}
+
+/** Route the GitHub REST calls the sync makes to their fixture responses. */
+function routedFetch(treeOverride?: unknown) {
+  return (url: string) => {
+    if (url.includes("/git/trees/")) return ok(treeOverride ?? TREE_RESPONSE);
+    if (url.includes("/pulls")) return ok(PULLS);
+    if (url.includes("/issues")) return ok(ISSUES_RAW);
+    if (url.includes("/releases")) return ok(RELEASES);
+    if (url.includes("/commits")) return ok(COMMITS);
+    return ok(REPO_META); // GET /repos/{owner}/{repo}
+  };
+}
+
 function setupDefaultMocks(): void {
-  // Crypto
-  mocks.createIngestionCryptoAdapter.mockReturnValue({
-    keyId: "key-1",
-    adapter: {},
-  });
+  mocks.createIngestionCryptoAdapter.mockReturnValue({ keyId: "key-1", adapter: {} });
   mocks.decrypt.mockResolvedValue(Buffer.from("ghp_test_token"));
 
-  // Database: return oauth account row
   mocks.withSystemDb.mockImplementation((fn: (tx: unknown) => unknown) =>
-    fn({
-      execute: vi.fn().mockResolvedValue([{ access_token_enc: ACCESS_TOKEN_ENC }]),
-    }),
+    fn({ execute: vi.fn().mockResolvedValue([{ access_token_enc: ACCESS_TOKEN_ENC }]) }),
   );
 
-  // Tenancy
   mocks.runInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
 
-  // GitHub API tree response
-  mocks.fetchMock.mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve(TREE_RESPONSE),
-  });
+  mocks.fetchMock.mockImplementation(routedFetch());
 }
 
 function makeStep(overrides: Partial<HandlerCtx["step"]> = {}): HandlerCtx["step"] {
@@ -136,6 +172,20 @@ function makeStep(overrides: Partial<HandlerCtx["step"]> = {}): HandlerCtx["step
     sendEvent: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
+}
+
+/** Flatten all events passed to step.sendEvent across calls. */
+function allEventsFrom(sendEvent: ReturnType<typeof vi.fn>): Array<{ name: string; data: Record<string, unknown> }> {
+  return sendEvent.mock.calls.flatMap((c) => {
+    const payload = c[1];
+    return (Array.isArray(payload) ? payload : [payload]) as Array<{ name: string; data: Record<string, unknown> }>;
+  });
+}
+
+function entitiesOfType(sendEvent: ReturnType<typeof vi.fn>, sourceRecordType: string) {
+  return allEventsFrom(sendEvent).filter(
+    (e) => e.name === "ingestion/entity.received" && e.data?.["sourceRecordType"] === sourceRecordType,
+  );
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -160,75 +210,69 @@ describe("ingestion.github-initial-sync Inngest function", () => {
   it("decrypts the access token from oauth_accounts", async () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
-
     expect(mocks.decrypt).toHaveBeenCalledTimes(1);
   });
 
-  it("fetches the repo file tree from GitHub with Bearer auth", async () => {
+  it("throws when owner/repo are missing", async () => {
+    const step = makeStep();
+    await expect(
+      capturedHandler!({ event: { data: { ...BASE_EVENT, owner: "", repo: "" } }, step }),
+    ).rejects.toThrow(/missing owner\/repo/);
+  });
+
+  it("resolves the repo's real default branch and uses it for the tree fetch", async () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
-
+    // REPO_META.default_branch === "trunk" — the tree must be fetched on trunk.
     expect(mocks.fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("api.github.com/repos/acme/api/git/trees/main"),
+      expect.stringContaining("api.github.com/repos/acme/api/git/trees/trunk"),
       expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: expect.stringContaining("Bearer"),
-        }),
+        headers: expect.objectContaining({ Authorization: expect.stringContaining("Bearer") }),
       }),
     );
   });
 
-  it("filters tree to only .ts/.tsx/.py blobs with size > 0, excluding banned prefixes", async () => {
+  it("emits a repository entity.received", async () => {
     const step = makeStep();
     const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
-
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
-    // Should have dispatched events for: auth.ts, billing.ts, utils.py (3 files)
-    // NOT for: node_modules, dist, README.md, empty.ts, tree entry
-    expect(sendEvent).toHaveBeenCalled();
-    const allEvents: unknown[] = sendEvent.mock.calls.flatMap((c) => {
-      const payload = c[1];
-      return Array.isArray(payload) ? payload : [payload];
+    const repos = entitiesOfType(sendEvent, "repository");
+    expect(repos).toHaveLength(1);
+    expect(repos[0]!.data).toMatchObject({
+      connectorType: "github",
+      connectionId: "conn-gh-1",
+      orgId: "org-gh-1",
+      workspaceId: "ws-gh-1",
     });
-    expect(allEvents.length).toBe(3);
+    expect((repos[0]!.data["payload"] as Record<string, unknown>)["full_name"]).toBe("acme/api");
   });
 
-  it("dispatches ingestion/github.parse-file events for each accepted file", async () => {
+  it("backfills pull_request, issue, release, and commit entities", async () => {
     const step = makeStep();
     const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
-
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
-    const allEvents: Array<{ name: string; data: unknown }> = sendEvent.mock.calls.flatMap(
-      (c) => {
-        const payload = c[1];
-        return Array.isArray(payload) ? payload : [payload];
-      },
-    );
-
-    const names = allEvents.map((e) => e.name);
-    expect(names.every((n) => n === "ingestion/github.parse-file")).toBe(true);
+    expect(entitiesOfType(sendEvent, "pull_request")).toHaveLength(2);
+    // ISSUES_RAW has 2 entries but one is a PR (has pull_request key) → filtered out.
+    expect(entitiesOfType(sendEvent, "issue")).toHaveLength(1);
+    expect(entitiesOfType(sendEvent, "release")).toHaveLength(1);
+    const commits = entitiesOfType(sendEvent, "commit");
+    expect(commits).toHaveLength(1);
+    // git_branch is injected so trigger conditions can match on it.
+    expect((commits[0]!.data["payload"] as Record<string, unknown>)["git_branch"]).toBe("trunk");
   });
 
-  it("dispatched events include owner, repo, sha, path, and connectionId", async () => {
+  it("dispatches one ingestion/github.parse-file per accepted source file (3)", async () => {
     const step = makeStep();
     const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
-
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
-    const allEvents: Array<{ name: string; data: Record<string, unknown> }> = sendEvent.mock.calls.flatMap(
-      (c) => {
-        const payload = c[1];
-        return Array.isArray(payload) ? payload : [payload];
-      },
-    );
-
-    for (const ev of allEvents) {
+    const parseFiles = allEventsFrom(sendEvent).filter((e) => e.name === "ingestion/github.parse-file");
+    expect(parseFiles).toHaveLength(3);
+    for (const ev of parseFiles) {
       expect(ev.data).toMatchObject({
         connectionId: "conn-gh-1",
-        orgId: "org-gh-1",
-        workspaceId: "ws-gh-1",
         owner: "acme",
         repo: "api",
         sha: expect.any(String),
@@ -240,7 +284,6 @@ describe("ingestion.github-initial-sync Inngest function", () => {
   it("calls upsertSourceConnectionMeta inside runInTenantScope", async () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
-
     expect(mocks.upsertSourceConnectionMeta).toHaveBeenCalledWith(
       expect.objectContaining({
         connectionId: "conn-gh-1",
@@ -252,30 +295,30 @@ describe("ingestion.github-initial-sync Inngest function", () => {
     );
   });
 
-  it("calls withSystemDb to update source_connections status to connected", async () => {
-    // The update-status step calls withSystemDb. Verify withSystemDb is called
-    // more than once (once for token fetch + once for update-status).
+  it("calls withSystemDb for token fetch + status update (2)", async () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
-
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
   });
 
-  it("returns connectionId, owner, repo, and fileCount", async () => {
+  it("returns connectionId, owner, repo, fileCount, and entityCount", async () => {
     const step = makeStep();
     const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
-
     expect(result).toMatchObject({
       connectionId: "conn-gh-1",
       owner: "acme",
       repo: "api",
       fileCount: 3,
+      // 1 repo + 2 PRs + 1 issue + 1 release + 1 commit
+      entityCount: 6,
     });
   });
 
-  it("throws when GitHub tree API returns non-OK status", async () => {
-    mocks.fetchMock.mockResolvedValueOnce({ ok: false, status: 404 });
-
+  it("throws when the GitHub tree API returns non-OK status", async () => {
+    mocks.fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/git/trees/")) return Promise.resolve({ ok: false, status: 404 });
+      return routedFetch()(url);
+    });
     const step = makeStep();
     await expect(capturedHandler!({ event: { data: BASE_EVENT }, step })).rejects.toThrow(
       /GitHub tree API returned 404/,
@@ -286,15 +329,13 @@ describe("ingestion.github-initial-sync Inngest function", () => {
     mocks.withSystemDb.mockImplementationOnce((fn: (tx: unknown) => unknown) =>
       fn({ execute: vi.fn().mockResolvedValue([]) }),
     );
-
     const step = makeStep();
     await expect(capturedHandler!({ event: { data: BASE_EVENT }, step })).rejects.toThrow(
       /no oauth token/,
     );
   });
 
-  it("dispatches files in batches when tree has > 50 files", async () => {
-    // Build a large tree (75 .ts files, all valid).
+  it("dispatches parse-file events in batches of 50 when the tree has > 50 files", async () => {
     const largeTrees = Array.from({ length: 75 }, (_, i) => ({
       path: `src/file${i}.ts`,
       mode: "100644",
@@ -303,17 +344,17 @@ describe("ingestion.github-initial-sync Inngest function", () => {
       size: 1000,
       url: "",
     }));
-    mocks.fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ ...TREE_RESPONSE, tree: largeTrees }),
-    });
+    mocks.fetchMock.mockImplementation(routedFetch({ ...TREE_RESPONSE, tree: largeTrees }));
 
     const step = makeStep();
     const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
-
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
-    // With BATCH_SIZE=50, 75 files → 2 sendEvent calls.
-    expect(sendEvent.mock.calls.length).toBe(2);
+    // Count parse-file batches specifically (other sendEvent calls emit entities).
+    const parseFileBatches = sendEvent.mock.calls.filter((c) => {
+      const payload = c[1];
+      return Array.isArray(payload) && payload[0]?.name === "ingestion/github.parse-file";
+    });
+    expect(parseFileBatches).toHaveLength(2); // 75 files / 50 = 2 batches
   });
 });

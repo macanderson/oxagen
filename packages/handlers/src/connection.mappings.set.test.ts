@@ -127,8 +127,9 @@ describe("connectionMappingsSetHandler — not found", () => {
 
 describe("connectionMappingsSetHandler — new mapping (insert)", () => {
   it("inserts a new mapping when none exists and returns mappingsCreated=1", async () => {
-    // connection found, no existing mapping → insert path
-    setupDbSequence([{ ...GITHUB_CONN_ROW, status: "connected" }], []);
+    // Non-GitHub connector → no default-mapping seeding, so the raw insert count
+    // is exactly the one supplied mapping.
+    setupDbSequence([{ ...GITHUB_CONN_ROW, connectorId: "linear", status: "connected" }], []);
 
     const result = await connectionMappingsSetHandler(
       { ...ONE_MAPPING_INPUT, activateConnection: false },
@@ -153,9 +154,10 @@ describe("connectionMappingsSetHandler — new mapping (insert)", () => {
 
 describe("connectionMappingsSetHandler — update existing mapping", () => {
   it("updates an existing mapping and returns mappingsUpdated=1", async () => {
-    // connection found (active), existing mapping found → update path
+    // Non-GitHub connector (no seeding) so the supplied pull_request mapping is
+    // the only one written; it already exists → pure update path.
     setupDbSequence(
-      [{ ...GITHUB_CONN_ROW, status: "connected" }],
+      [{ ...GITHUB_CONN_ROW, connectorId: "linear", status: "connected" }],
       [{ id: "etm-uuid-1", sourceRecordType: "pull_request" }],
     );
 
@@ -202,7 +204,7 @@ describe("connectionMappingsSetHandler — connection activation", () => {
 // ── GitHub initial-sync event ─────────────────────────────────────────────────
 
 describe("connectionMappingsSetHandler — GitHub initial-sync event", () => {
-  it("fires ingestion/github.initial-sync when github connector is activated from pending_setup", async () => {
+  it("fires ingestion/github.initial-sync (owner/repo from deliveryConfig) when activated", async () => {
     setupDbSequence([GITHUB_CONN_ROW], []);
 
     await connectionMappingsSetHandler(ONE_MAPPING_INPUT, CTX);
@@ -216,7 +218,7 @@ describe("connectionMappingsSetHandler — GitHub initial-sync event", () => {
         workspaceId: string;
         owner: string;
         repo: string;
-        defaultBranch: string;
+        syncDepthDays: number;
       };
     };
     expect(sent.name).toBe("ingestion/github.initial-sync");
@@ -225,29 +227,51 @@ describe("connectionMappingsSetHandler — GitHub initial-sync event", () => {
     expect(sent.data.workspaceId).toBe(CTX.workspaceId);
     expect(sent.data.owner).toBe("acme");
     expect(sent.data.repo).toBe("my-api");
-    expect(sent.data.defaultBranch).toBe("main");
+    // The sync resolves the real default branch itself — none is passed.
+    expect(sent.data).not.toHaveProperty("defaultBranch");
+    expect(sent.data.syncDepthDays).toBe(90); // default when unspecified
   });
 
-  it("defaults to 'main' branch when deliveryConfig has no defaultBranch", async () => {
-    setupDbSequence(
-      [{ ...GITHUB_CONN_ROW, deliveryConfig: { owner: "acme", repo: "my-api" } }],
-      [],
+  it("fires one sync per selectedRepo and persists them to deliveryConfig", async () => {
+    setupDbSequence([{ ...GITHUB_CONN_ROW, deliveryConfig: null }], []);
+
+    await connectionMappingsSetHandler(
+      { ...ONE_MAPPING_INPUT, selectedRepos: ["acme/api", "acme/web"], syncDepthDays: 30 },
+      CTX,
     );
 
-    await connectionMappingsSetHandler(ONE_MAPPING_INPUT, CTX);
-
-    const sent = mocks.inngestSend.mock.calls[0]?.[0] as { data: { defaultBranch: string } };
-    expect(sent.data.defaultBranch).toBe("main");
+    expect(mocks.inngestSend).toHaveBeenCalledTimes(2);
+    const calls = mocks.inngestSend.mock.calls.map(
+      (c) => c[0] as { data: { owner: string; repo: string; syncDepthDays: number } },
+    );
+    expect(calls.map((c) => `${c.data.owner}/${c.data.repo}`)).toEqual(["acme/api", "acme/web"]);
+    expect(calls[0]!.data.syncDepthDays).toBe(30);
   });
 
-  it("sends empty owner/repo when deliveryConfig is null", async () => {
+  it("seeds default mappings for every GitHub record type", async () => {
+    // The wizard only confirms `repository`; the handler must also create
+    // pull_request/issue/release/commit so the pipeline doesn't skip them.
+    setupDbSequence([GITHUB_CONN_ROW], []);
+
+    const result = await connectionMappingsSetHandler(
+      {
+        connectionId: "con_ABC",
+        mappings: [{ sourceRecordType: "repository", oxagenEntityType: "source_repository", propertyMappings: {} }],
+        activateConnection: true,
+        selectedRepos: ["acme/my-api"],
+      },
+      CTX,
+    );
+    // repository (user) + pull_request + issue + release + commit (seeded) = 5.
+    expect(result.mappingsCreated).toBe(5);
+  });
+
+  it("queues no sync when a GitHub connection activates with no repos", async () => {
+    // deliveryConfig null + no selectedRepos → nothing to sync (no empty-repo 404).
     setupDbSequence([{ ...GITHUB_CONN_ROW, deliveryConfig: null }], []);
 
     await connectionMappingsSetHandler(ONE_MAPPING_INPUT, CTX);
-
-    const sent = mocks.inngestSend.mock.calls[0]?.[0] as { data: { owner: string; repo: string } };
-    expect(sent.data.owner).toBe("");
-    expect(sent.data.repo).toBe("");
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 
   it("does NOT fire event for non-GitHub connectors", async () => {
