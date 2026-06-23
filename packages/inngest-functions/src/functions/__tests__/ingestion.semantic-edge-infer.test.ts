@@ -133,7 +133,8 @@ describe("ingestion.semantic-edge-infer Inngest function", () => {
           orgId: "org-1",
           workspaceId: "ws-1",
           surface: "ingestion",
-          messageId: "semantic-edge-infer:node-uuid-1",
+          // messageId is null: non-UUID strings must not flood token_usage.execution_step_id (OXA-1813)
+          messageId: null,
         }),
       }),
     );

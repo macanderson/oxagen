@@ -129,7 +129,8 @@ describe("ingestion.github-infer-features Inngest function", () => {
           orgId: "org-gh-1",
           workspaceId: "ws-gh-1",
           surface: "ingestion",
-          messageId: "feat-infer:github:conn-gh-1:acme/api:src/auth.ts",
+          // messageId is null: non-UUID strings must not flood token_usage.execution_step_id (OXA-1813)
+          messageId: null,
         }),
       }),
     );
