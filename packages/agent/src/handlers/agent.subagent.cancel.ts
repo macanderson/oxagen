@@ -6,6 +6,7 @@ import type {
   AgentSubagentCancelInput,
   AgentSubagentCancelOutput,
 } from "@oxagen/oxagen/contracts/agent.subagent.cancel";
+import { FanoutNotFoundError } from "./subagent-errors";
 
 export type { AgentSubagentCancelInput, AgentSubagentCancelOutput };
 
@@ -57,7 +58,7 @@ export async function agentSubagentCancelHandler(
     return row ?? null;
   });
 
-  if (!fanout) throw new Error(`Fanout ${input.fanoutId} not found`);
+  if (!fanout) throw new FanoutNotFoundError(input.fanoutId);
 
   // 2. Transition non-terminal child runs to the terminal cancel status.
   //    Scope by orgId + workspaceId + fanoutId so no other tenant's runs

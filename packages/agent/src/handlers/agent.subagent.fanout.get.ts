@@ -5,6 +5,7 @@ import type {
   AgentSubagentFanoutGetInput,
   AgentSubagentFanoutGetOutput,
 } from "@oxagen/oxagen/contracts/agent.subagent.fanout.get";
+import { FanoutNotFoundError } from "./subagent-errors";
 
 export type { AgentSubagentFanoutGetInput, AgentSubagentFanoutGetOutput };
 
@@ -67,7 +68,7 @@ export async function agentSubagentFanoutGetHandler(
     return row ?? null;
   });
 
-  if (!fanout) throw new Error(`Fanout ${input.fanoutId} not found`);
+  if (!fanout) throw new FanoutNotFoundError(input.fanoutId);
 
   const runs = await withTenantDb((tx) =>
     tx

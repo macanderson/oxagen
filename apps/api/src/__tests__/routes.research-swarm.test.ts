@@ -66,6 +66,7 @@ vi.mock("../middleware/logger", () => ({
 }));
 
 import { app } from "../app";
+import { FanoutNotFoundError } from "@oxagen/agent";
 import { makeRequest, bearerHeader, makeApiKeyOk } from "./_helpers";
 
 const BASE = "/v1/test-org/test-ws";
@@ -106,17 +107,18 @@ describe("GET /research/swarm/status", () => {
 
   // ── Regression: the 500-loop bug ────────────────────────────────────────────
   //
-  // agent.subagent.aggregate throws new Error("Fanout <id> not found") for an
-  // unknown / cross-tenant swarmId. Before the fix, that plain Error was not
-  // caught by any specific case in the error middleware, fell through to the
-  // catch-all handler, and returned HTTP 500. The client poller then treated the
-  // 500 as transient, doubled the retry interval, and kept retrying — producing
-  // 60+ consecutive 500s while the research card stayed at "Running 0/3" forever.
+  // agent.subagent.aggregate throws a typed FanoutNotFoundError for an unknown /
+  // cross-tenant swarmId. Before the fix, that error was not caught by any
+  // specific case in the error middleware, fell through to the catch-all handler,
+  // and returned HTTP 500. The client poller then treated the 500 as transient,
+  // doubled the retry interval, and kept retrying — producing 60+ consecutive
+  // 500s while the research card stayed at "Running 0/3" forever.
   //
-  // After the fix the route handler catches the "not found" message, converts it
-  // to an HTTPException(404), and the error middleware maps that to HTTP 404.
-  it("returns 404 (not 500) when agent.subagent.aggregate reports the fanout not found", async () => {
-    mocks.invoke.mockRejectedValue(new Error(`Fanout ${SWARM_ID} not found`));
+  // After the fix the route handler structurally matches the TYPED error (via
+  // isFanoutNotFoundError, NOT a brittle message regex), converts it to an
+  // HTTPException(404), and the error middleware maps that to HTTP 404.
+  it("returns 404 (not 500) when agent.subagent.aggregate throws FanoutNotFoundError", async () => {
+    mocks.invoke.mockRejectedValue(new FanoutNotFoundError(SWARM_ID));
 
     const res = await app.fetch(get(`${PATH}?swarmId=${SWARM_ID}`));
     // Must be 404, not 500. A 500 would have caused the client to retry in a loop.
@@ -125,9 +127,9 @@ describe("GET /research/swarm/status", () => {
     expect(body.error?.code).toBe("not_found");
   });
 
-  it("returns 404 for a cross-tenant swarmId (same 'not found' error shape)", async () => {
+  it("returns 404 for a cross-tenant swarmId (typed FanoutNotFoundError)", async () => {
     const crossTenantId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
-    mocks.invoke.mockRejectedValue(new Error(`Fanout ${crossTenantId} not found`));
+    mocks.invoke.mockRejectedValue(new FanoutNotFoundError(crossTenantId));
 
     const res = await app.fetch(get(`${PATH}?swarmId=${crossTenantId}`));
     expect(res.status).toBe(404);
@@ -139,6 +141,27 @@ describe("GET /research/swarm/status", () => {
 
     const res = await app.fetch(get(`${PATH}?swarmId=${SWARM_ID}`));
     expect(res.status).toBe(500);
+  });
+
+  // ── Hardening: the route must NOT over-match on the "not found" string ───────
+  //
+  // The previous fix matched /not found/i against err.message, which would
+  // misclassify ANY error whose message merely contains "not found" — a Postgres
+  // "relation ... not found", a kernel unknown-capability error, or a future
+  // refactor of the aggregate message — as a 404. The poller would then mark a
+  // legitimately-running swarm as failed and stop. Now that the route matches the
+  // TYPED error only, an unrelated error whose message contains "not found" must
+  // still return 500.
+  it("returns 500 (not 404) for an UNRELATED error whose message merely contains 'not found'", async () => {
+    mocks.invoke.mockRejectedValue(
+      new Error('relation "subagent_fanouts" not found'),
+    );
+
+    const res = await app.fetch(get(`${PATH}?swarmId=${SWARM_ID}`));
+    // The route no longer over-matches on the string — only the typed error is a 404.
+    expect(res.status).toBe(500);
+    const body = await res.json() as { error?: { code: string } };
+    expect(body.error?.code).toBe("internal_error");
   });
 
   it("returns 200 with terminal failed status for an orphaned (timed-out) swarm", async () => {
