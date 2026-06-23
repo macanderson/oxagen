@@ -1,0 +1,18 @@
+id: show-similar-failed-runs
+title: Show similar failed runs
+description: Find other runs that hit the same error as this one, across all playbooks.
+category: investigate
+tags: [run, failure, similarity, debug]
+applicableTo:
+  - routePattern: /{org}/{ws}/activity/runs/:runId
+capability: activity.run.read
+autoSubmit: true
+variables:
+  - name: run_id
+    resolver: param
+    source: params.runId
+    required: true
+body: |
+  Show me other runs in this workspace that failed with the same error as run {{run_id}}.
+  Group by playbook and error type. For each group, show the failure rate over the last 7 days
+  and the most recent occurrence.

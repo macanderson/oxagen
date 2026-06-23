@@ -7,13 +7,16 @@ const mockRouter = { push: vi.fn() };
 
 vi.mock("next/navigation", () => ({
   useRouter: () => mockRouter,
+  usePathname: () => "/acme/prod",
 }));
 
 const mockPageCtx = {
   isCommandOpen: false,
   closeCommand: vi.fn(),
   openAsk: vi.fn(),
+  openAskWithText: vi.fn(),
   fillableForm: null as null | unknown,
+  entity: null as null | unknown,
 };
 
 vi.mock("@/lib/page-context", () => ({
@@ -56,6 +59,18 @@ vi.mock("lucide-react", () => ({
   Clock: () => <span />,
   Navigation: () => <span />,
   Sparkles: () => <span />,
+  Zap: () => <span />,
+  PlusCircle: () => <span />,
+  ScanSearch: () => <span />,
+  Settings: () => <span />,
+  MessageSquare: () => <span />,
+  BarChart2: () => <span />,
+}));
+
+vi.mock("@oxagen/prompt-templates", () => ({
+  getApplicableTemplates: () => [],
+  renderTemplate: (body: string) => ({ rendered: body, missing: [] }),
+  resolveVariables: () => ({ resolved: {}, unresolved: [] }),
 }));
 
 vi.mock("@/lib/utils", () => ({
@@ -73,7 +88,9 @@ beforeEach(() => {
   mockPageCtx.isCommandOpen = false;
   mockPageCtx.closeCommand = vi.fn();
   mockPageCtx.openAsk = vi.fn();
+  mockPageCtx.openAskWithText = vi.fn();
   mockPageCtx.fillableForm = null;
+  mockPageCtx.entity = null;
   mockRouter.push = vi.fn();
   mockEnumerateNavTargets.mockReturnValue([{ label: "Ask", href: "/acme/prod/ask" }]);
 });

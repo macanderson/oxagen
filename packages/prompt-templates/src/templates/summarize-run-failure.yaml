@@ -1,0 +1,18 @@
+id: summarize-run-failure
+title: Summarize this run's failure
+description: Generate a root-cause summary for a failed run, including the failing step and most likely cause.
+category: investigate
+tags: [run, failure, summary, debug]
+applicableTo:
+  - routePattern: /{org}/{ws}/activity/runs/:runId
+capability: activity.run.read
+autoSubmit: true
+variables:
+  - name: run_id
+    resolver: param
+    source: params.runId
+    required: true
+body: |
+  Summarize the failure of run {{run_id}}. Include the failing step,
+  the error message, and the most likely root cause based on the run's trace
+  and related recent runs. Format as: Problem → Root Cause → Recommended Fix.

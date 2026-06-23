@@ -88,4 +88,21 @@ export interface PageContextValue {
   isWandOpen: boolean;
   openWand: () => void;
   closeWand: () => void;
+
+  /**
+   * Pending text to seed into the Ask Drawer's composer input the next time
+   * the drawer opens. Consumed (read + cleared) once by the drawer on open.
+   *
+   * Set via `openAskWithText(text)`. When `autoSubmit` is also true the
+   * drawer should submit immediately after seeding.
+   */
+  pendingAskText: string | null;
+  pendingAskAutoSubmit: boolean;
+  /**
+   * Open the Ask Drawer and pre-fill the composer with `text`.
+   * If `autoSubmit` is true the drawer submits the prompt immediately.
+   */
+  openAskWithText: (text: string, autoSubmit?: boolean) => void;
+  /** Clear the pending ask text (called by the drawer after consuming it). */
+  _clearPendingAskText: () => void;
 }

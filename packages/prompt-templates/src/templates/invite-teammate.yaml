@@ -1,0 +1,14 @@
+id: invite-teammate
+title: Invite a teammate
+description: Invite a new member to this organization and assign them the right role.
+category: communicate
+tags: [invite, members, team, access]
+applicableTo:
+  - routePattern: /{org}/members
+  - routePattern: /{org}/settings/members
+capability: org.member.invite
+autoSubmit: false
+variables: []
+body: |
+  I need to invite a teammate to this organization. Help me fill in the invite form:
+  suggest the right role for a developer/analyst/admin and explain what permissions each role grants.
