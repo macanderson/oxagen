@@ -108,7 +108,7 @@ const DATA = {
     { name: "Platform stability",  value: 70, conf: "high" }
   ],
   apps: [
-    { name: "api",  value: 87, finding: "Hono REST; coverage lines 87 / branches 88 / functions 90 — strongest-tested surface." },
+    { name: "api",  value: 84, finding: "Hono REST; coverage had silently regressed to 83.64% (gate 87) — restored to 87.17% in PR #138 by testing connection resync/patch/pause, skill.export/edit, graph.ingest, and the chat.stream SOC 2 audit block. Margin now thin; warrants more route tests." },
     { name: "app",  value: 70, finding: "Next.js 16 web app; line floor 57 over a huge surface, but e2e covers all money paths (auth, isolation, billing, chat)." },
     { name: "mcp",  value: 78, finding: "MCP tool server; ~153 src files vs ~13 tests; threshold 85 holds but unit breadth is thin." },
     { name: "cli",  value: 62, finding: "126 command files, only ~6 test files — unit breadth is poor; relies on contract parity for safety." },
@@ -154,7 +154,7 @@ const DATA = {
     { n: 10, name: "Env vars & secrets",         status: "WARN", finding: "Registry-driven .env.example is excellent; secrets correctly encrypted in all 4 Vercel prod projects. But 11 prod keys drifted out of the registry (several orphaned) + VERCEL_SANDBOX_TEAM vs _TEAM_ID name mismatch." },
     { n: 11, name: "Skill adherence",            status: "WARN", finding: "Branch diff is clean. Violation: 614afac8 bundled 4 graph-handler changes into a 'fix(ui):spinner' commit without updating tests (one-ticket-one-PR + finish-what-you-touch)." },
     { n: 12, name: "Regressions",                status: "FAIL", finding: "main test-red: handler BigInt + inngest messageId source fixes shipped without test updates. FIXED in PR #138 (verified locally: handlers 1094 + inngest 298 tests green)." },
-    { n: 13, name: "Test coverage",              status: "WARN", finding: "packages/functions has NO coverage.thresholds; auth lines:53 & database lines:33 floors are anomalously low; apps/docs has no vitest config." },
+    { n: 13, name: "Test coverage",              status: "WARN", finding: "apps/api had silently regressed below its 87% gate (83.64%) — masked by main's red unit step; restored to 87.17% in PR #138. Still open: packages/functions has NO coverage.thresholds; auth lines:53 & database lines:33 floors anomalously low; apps/docs has no vitest config." },
     { n: 14, name: "Headless parity",            status: "PASS", finding: "check:manifest: 0 real API/MCP parity fails after subtracting 32 documented combined-route false positives. Residual = e2e/doc gaps, not parity." },
     { n: 15, name: "Turbo cache hygiene",        status: "WARN", finding: "Tasks declare inputs/outputs/dependsOn well, but APP_URL is consumed by 5 packages and not listed in build/test env[] — potential cache-key gap (verify build-vs-runtime usage before changing)." },
     { n: 16, name: "Remote cache PR↔Vercel",     status: "PASS", finding: "remoteCache enabled; one shared TURBO_TOKEN/TURBO_TEAM across CI + Vercel; all 4 vercel.json use `turbo run build --filter`." },
@@ -175,7 +175,8 @@ const DATA = {
     "Realigned @oxagen/inngest-functions tests (github-infer-features, semantic-edge-infer) to assert `messageId: null` matching the OXA-1813 source fix.",
     "Realigned @oxagen/handlers tests (graph.node.list, graph.node.search) to expect `BigInt(...)` matching the Neo4j Bolt INTEGER fix.",
     "Verified locally before push: `@oxagen/handlers test:unit` → 137 files / 1094 tests pass; `@oxagen/inngest-functions test:unit` → 28 files / 298 tests pass.",
-    "Pushed branch + opened PR against main; CI in progress (atlas-validate / migrate / rls-integration / Vercel previews already green)."
+    "Restored apps/api coverage from a pre-existing 83.64% (below its 87% gate, masked by the red unit step) to 87.17% — new real tests for connection resync/patch/pause, skill.export/edit, graph.ingest, and the chat.stream SOC 2 audit block (apps/api: 31 files / 767 tests pass).",
+    "Pushed branch + opened PR #138 against main; CI driven green (test / checks / rls-integration / atlas-validate / migrate / e2e all passing)."
   ],
   human: [
     "<strong>Gated — merge + deploy:</strong> PR #138 modifies shared `main` and triggers a production deploy. Awaiting your go-ahead to merge once CI is green, then watch the Vercel rollout to production-green.",
