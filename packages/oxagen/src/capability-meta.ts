@@ -103,11 +103,27 @@ export function readOutputPath(obj: unknown, path: string): unknown {
 }
 
 /**
+ * The public-id prefix of a generated asset (`generated_assets` → idMixin("gen")).
+ * Only a `gen_`-prefixed id is a real, servable asset under `/api/v1/assets/{id}`.
+ */
+const GENERATED_ASSET_ID_PREFIX = "gen_";
+
+/**
  * Heuristic field-name → record-type inference, used by the generic fallback
  * when a capability declares no explicit recordLinks. Conservative: only field
  * names that unambiguously denote a linkable record map to a type.
+ *
+ * `publicId` is the AMBIGUOUS case — every entity (agents `agt_…`, conversations
+ * `cnv_…`, mcp servers, …) carries a `publicId`, NOT just generated assets. A
+ * bare field-name match therefore over-claims: it produced a dead
+ * `/api/v1/assets/agt_…` deep-link for `agent.definition.*` outputs, which
+ * surfaced the API's raw `{"error":{"code":"not_found","message":"Organization
+ * not found"}}` JSON (the request fell through to the org-scoped API rewrite).
+ * So `publicId` only maps to `asset` when its VALUE carries the generated-asset
+ * `gen_` prefix; otherwise it is not a linkable asset and yields no link. Pass
+ * the value when scanning a `publicId` field so the gate can apply.
  */
-export function inferRecordTypeForField(field: string): string | null {
+export function inferRecordTypeForField(field: string, value?: string): string | null {
   const f = field.toLowerCase();
   if (f === "nodeid" || f === "fromnodeid" || f === "tonodeid" || f === "node_id") {
     return "graph.node";
@@ -115,7 +131,13 @@ export function inferRecordTypeForField(field: string): string | null {
   if (f === "conversationid" || f === "conversation_id" || f === "conversationpublicid") {
     return "conversation";
   }
-  if (f === "assetid" || f === "asset_id" || f === "publicid") return "asset";
+  // Explicit asset fields are always assets; the value isn't gated (an upstream
+  // assetId field is asset-typed by contract).
+  if (f === "assetid" || f === "asset_id") return "asset";
+  // Ambiguous generic id: only an actual generated-asset (`gen_…`) value links.
+  if (f === "publicid") {
+    return value !== undefined && value.startsWith(GENERATED_ASSET_ID_PREFIX) ? "asset" : null;
+  }
   return null;
 }
 
@@ -164,7 +186,7 @@ export function resolveRecordLinks(
   // Heuristic fallback: scan TOP-LEVEL string fields for inferable record ids.
   for (const [key, val] of Object.entries(output as Record<string, unknown>)) {
     if (typeof val !== "string" || val.length === 0) continue;
-    const recordType = inferRecordTypeForField(key);
+    const recordType = inferRecordTypeForField(key, val);
     if (!recordType) continue;
     links.push({
       field: key,
