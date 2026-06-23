@@ -287,6 +287,45 @@ describe("ingestion.pipeline Inngest function", () => {
         "org-123",
       );
     });
+
+    it("runs upsert-node (step 4) and embed (step 5) inside an active tenant scope (regression: OXA-1790 no_tenant_scope)", async () => {
+      // Production invariant: upsertEntityNode → scopedSession() and
+      // embedEntity → upsertEmbedding → scopedSession() THROW without an active
+      // tenant scope. Each Inngest step.run is a separate execution, so the
+      // scope opened in steps 1–3 does not carry over — steps 4 and 5 must open
+      // their own. Previously they did not, so all ingestion 500'd in prod with
+      // TenantScopeError(no_tenant_scope).
+      //
+      // Track scope depth through the runInTenantScope mock and record the depth
+      // observed when each Neo4j-writing mutation actually runs. A missing wrap
+      // shows up as depth 0.
+      let scopeDepth = 0;
+      const depthWhenCalled: Record<string, number> = {};
+      mocks.runInTenantScope.mockImplementation(
+        async (_scope: unknown, fn: () => unknown) => {
+          scopeDepth++;
+          try {
+            return await fn();
+          } finally {
+            scopeDepth--;
+          }
+        },
+      );
+      mocks.upsertEntityNode.mockImplementation(() => {
+        depthWhenCalled.upsert = scopeDepth;
+        return Promise.resolve({ nodeId: "neo4j-node-1" });
+      });
+      mocks.embedEntity.mockImplementation(() => {
+        depthWhenCalled.embed = scopeDepth;
+        return Promise.resolve(undefined);
+      });
+
+      const step = makeStep();
+      await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+      expect(depthWhenCalled.upsert).toBeGreaterThan(0);
+      expect(depthWhenCalled.embed).toBeGreaterThan(0);
+    });
   });
 
   describe("error propagation (step retry)", () => {
