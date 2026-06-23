@@ -581,4 +581,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "audit.log.query",
     async () => (await import("./audit.log.query")).auditLogQueryHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "command.menu.search",
+    async () =>
+      (await import("./command.menu.search")).commandMenuSearchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "command.menu.suggest",
+    async () =>
+      (await import("./command.menu.suggest")).commandMenuSuggestHandler as CapabilityHandlerFn,
+  );
 });

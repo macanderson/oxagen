@@ -5,10 +5,13 @@
  * A Radix Dialog with WAI-ARIA combobox keyboard navigation.
  *
  * Sections (in render order):
- *   Quick Actions — prompt templates applicable to the current page (OXA-1769)
- *   Navigate      — all nav targets from enumerateNavTargets, filtered by query
- *   Recent        — last-5 queries from localStorage
- *   Ask           — free-text "Ask Oxagen" fallback
+ *   Suggested for this page — LLM suggestions (OXA-1770); above Quick Actions when no query
+ *   Quick Actions           — prompt templates applicable to current page (OXA-1769)
+ *   Navigate                — all nav targets from enumerateNavTargets, filtered by query
+ *   Search results          — entity search replacing Quick Actions + Navigate when query
+ *                             matches an entity prefix (OXA-1771)
+ *   Recent                  — last-5 queries from localStorage
+ *   Ask                     — free-text "Ask Oxagen" fallback
  *
  * Keyboard navigation:
  *   ArrowDown / ArrowUp  — move active item
@@ -20,12 +23,34 @@
 
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Search, ArrowRight, Clock, Navigation, Sparkles, Zap, PlusCircle, ScanSearch, Settings, MessageSquare, BarChart2 } from "lucide-react";
+import {
+  Search,
+  ArrowRight,
+  Clock,
+  Navigation,
+  Sparkles,
+  Zap,
+  PlusCircle,
+  ScanSearch,
+  Settings,
+  MessageSquare,
+  BarChart2,
+  User,
+  BookOpen,
+  Zap as TriggerIcon,
+  CalendarClock,
+  Bot,
+  Loader2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePageContext } from "@/lib/page-context";
 import { enumerateNavTargets } from "@/lib/sidebar";
 import { classifyIntent } from "@/lib/command-menu/intent-router";
 import { useRecent } from "@/lib/command-menu/use-recent";
+import { matchEntityPrefix } from "@/lib/command-menu/entity-prefix";
+import type { EntityKind } from "@/lib/command-menu/entity-prefix";
+import { useSuggestions } from "@/lib/command-menu/use-suggestions";
+import type { SuggestionItem } from "@/lib/command-menu/use-suggestions";
 import type { ScopeContext } from "@/lib/scope";
 import { getApplicableTemplates, renderTemplate, resolveVariables } from "@oxagen/prompt-templates";
 import type { PromptTemplate } from "@oxagen/prompt-templates";
@@ -40,14 +65,29 @@ export interface CommandMenuProps {
   ctx: ScopeContext;
 }
 
+// ── Search result row (from /api/command-menu/search) ─────────────────────────
+
+interface SearchResultRow {
+  kind: EntityKind;
+  id: string;
+  label: string;
+  scope: string;
+  contextLine: string | null;
+  href: string;
+}
+
 type CommandItem =
   | { type: "navigate"; label: string; href: string }
   | { type: "recent"; label: string }
   | { type: "quick-action"; label: string; template: PromptTemplate }
+  | { type: "suggestion"; label: string; category: SuggestionItem["category"] }
+  | { type: "search-result"; label: string; row: SearchResultRow }
   | { type: "ask"; label: string };
 
 /** Map from template category to a Lucide icon component. */
-function categoryIcon(category: PromptTemplate["category"]): React.ReactNode {
+function categoryIcon(
+  category: PromptTemplate["category"] | SuggestionItem["category"],
+): React.ReactNode {
   switch (category) {
     case "create": return <PlusCircle className="h-4 w-4" aria-hidden="true" />;
     case "investigate": return <ScanSearch className="h-4 w-4" aria-hidden="true" />;
@@ -58,6 +98,83 @@ function categoryIcon(category: PromptTemplate["category"]): React.ReactNode {
   }
 }
 
+/** Map from entity kind to a Lucide icon for Search result rows. */
+function entityKindIcon(kind: EntityKind): React.ReactNode {
+  switch (kind) {
+    case "run": return <CalendarClock className="h-4 w-4" aria-hidden="true" />;
+    case "principal": return <User className="h-4 w-4" aria-hidden="true" />;
+    case "playbook": return <BookOpen className="h-4 w-4" aria-hidden="true" />;
+    case "trigger": return <TriggerIcon className="h-4 w-4" aria-hidden="true" />;
+    case "event": return <CalendarClock className="h-4 w-4" aria-hidden="true" />;
+    case "agent": return <Bot className="h-4 w-4" aria-hidden="true" />;
+    default: return <Search className="h-4 w-4" aria-hidden="true" />;
+  }
+}
+
+// ── Entity search hook ────────────────────────────────────────────────────────
+
+interface UseEntitySearchResult {
+  rows: SearchResultRow[];
+  loading: boolean;
+}
+
+function useEntitySearch(args: {
+  kind: EntityKind | undefined;
+  query: string;
+  orgSlug: string;
+  workspaceSlug: string;
+  enabled: boolean;
+}): UseEntitySearchResult {
+  const [rows, setRows] = React.useState<SearchResultRow[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!args.enabled) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    let cancelled = false;
+    const controller = new AbortController();
+
+    fetch("/api/command-menu/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orgSlug: args.orgSlug,
+        workspaceSlug: args.workspaceSlug,
+        kind: args.kind,
+        query: args.query,
+      }),
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        if (cancelled || !res.ok) return;
+        const data = (await res.json()) as { rows?: SearchResultRow[] };
+        if (!cancelled && Array.isArray(data.rows)) {
+          setRows(data.rows);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setRows([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [args.enabled, args.kind, args.query, args.orgSlug, args.workspaceSlug]);
+
+  return { rows, loading };
+}
+
+// ── Main CommandMenu component ────────────────────────────────────────────────
+
 export function CommandMenu({ ctx }: CommandMenuProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -67,11 +184,8 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
   const [query, setQuery] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  // activeIndex and the query it was set for — used to auto-reset to 0 when
-  // the query changes without triggering setState inside an effect.
   const [activeIndex, setActiveIndex] = React.useState(0);
   const [indexQuery, setIndexQuery] = React.useState("");
-  // When query changes, derive the effective active index as 0 without effect.
   const clampedActiveIndex = indexQuery === query ? activeIndex : 0;
   const setClampedActiveIndex = React.useCallback(
     (next: number | ((prev: number) => number)) => {
@@ -81,16 +195,12 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
     [query],
   );
 
-  // Detect menu-close transitions: watch the previous isCommandOpen value with
-  // a ref so the effect body only resets state when the menu actually closes.
+  // Detect menu-close transitions.
   const prevIsOpenRef = React.useRef(pageCtx.isCommandOpen);
   React.useEffect(() => {
     const wasOpen = prevIsOpenRef.current;
     prevIsOpenRef.current = pageCtx.isCommandOpen;
     if (wasOpen && !pageCtx.isCommandOpen) {
-      // Menu just closed — reset search state.  These setStates are driven by
-      // the generation-counter indirection (wasOpen→!isOpen), not directly by
-      // isCommandOpen changing, which satisfies react-hooks/set-state-in-effect.
       setQuery("");
       setActiveIndex(0);
       setIndexQuery("");
@@ -105,27 +215,50 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
     }
   }, [pageCtx.isCommandOpen]);
 
-  // Build filtered nav targets.
+  // ── Entity prefix detection ─────────────────────────────────────────────────
+  const entityMatch = React.useMemo(() => matchEntityPrefix(query), [query]);
+  const isSearchMode = entityMatch !== null;
+
+  // ── LLM suggestions (OXA-1770) ─────────────────────────────────────────────
+  const currentPathname = pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
+  const { suggestions, loading: suggestionsLoading } = useSuggestions({
+    pathname: currentPathname,
+    orgSlug: ctx.orgSlug ?? "",
+    workspaceSlug: ctx.workspaceSlug ?? "",
+    pageEntity: pageCtx.entity ?? null,
+    recentLabels: recent.map((r) => r.query),
+    isOpen: pageCtx.isCommandOpen,
+  });
+
+  // Show suggestions section only when: no query, menu is open, and results exist OR loading.
+  const showSuggestions = !query.trim() && (suggestions.length > 0 || suggestionsLoading);
+
+  // ── Entity search results (OXA-1771) ───────────────────────────────────────
+  const { rows: searchRows, loading: searchLoading } = useEntitySearch({
+    kind: entityMatch?.kind,
+    query: entityMatch?.queryRemainder ?? "",
+    orgSlug: ctx.orgSlug ?? "",
+    workspaceSlug: ctx.workspaceSlug ?? "",
+    enabled: isSearchMode,
+  });
+
+  // ── Build nav targets ───────────────────────────────────────────────────────
   const allTargets = React.useMemo(() => enumerateNavTargets(ctx), [ctx]);
   const filteredTargets = React.useMemo(() => {
+    // In search mode the Navigate section is replaced by search results.
+    if (isSearchMode) return [];
     if (!query.trim()) return allTargets.slice(0, 8);
     const q = query.toLowerCase();
     return allTargets.filter((t) => t.label.toLowerCase().includes(q)).slice(0, 8);
-  }, [allTargets, query]);
+  }, [allTargets, query, isSearchMode]);
 
   const showRecent = !query.trim() && recent.length > 0;
 
-  // Quick Actions — applicable prompt templates for the current page context.
-  // Only shown when input is empty (templates don't need to be searched; they
-  // are already pre-filtered by route/capability).
+  // ── Quick Actions ──────────────────────────────────────────────────────────
   const quickActions = React.useMemo(() => {
-    if (query.trim()) return [];
-    // Build a minimal page context from available runtime data.
-    const currentPathname = pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
-    // Extract route params from the pathname by comparing it to known segment counts.
-    // We pass an empty routeParams; templates that need specific route params will
-    // be filtered out unless those params can be inferred. The page entity from
-    // PageContext is passed for page.* resolver templates.
+    // In search mode the Quick Actions section is replaced by search results.
+    if (query.trim() || isSearchMode) return [];
+    const currentPathname_ = pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
     const pageEntity = pageCtx.entity
       ? {
           kind: pageCtx.entity.kind,
@@ -134,52 +267,66 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
           summary: pageCtx.entity.summary,
         }
       : undefined;
-
-    // Parse routeParams from the current pathname against each template's
-    // routePattern. We attempt a best-effort extraction without the full
-    // router; templates with required params that can't be extracted are
-    // filtered out by getApplicableTemplates.
-    const routeParams = extractRouteParams(currentPathname);
-
+    const routeParams = extractRouteParams(currentPathname_);
     return getApplicableTemplates({
-      pathname: currentPathname,
+      pathname: currentPathname_,
       routeParams,
       queryParams: {},
       pageEntity,
-      capabilities: [], // TODO: wire real user capabilities (OXA-1773)
+      capabilities: [],
       locale: "en",
     });
-  }, [query, pathname, ctx.orgSlug, ctx.workspaceSlug, pageCtx.entity]);
+  }, [query, isSearchMode, pathname, ctx.orgSlug, ctx.workspaceSlug, pageCtx.entity]);
 
+  // ── Unified items list for keyboard navigation ─────────────────────────────
   const items: CommandItem[] = React.useMemo(() => {
     const result: CommandItem[] = [];
+    // Suggestions (only when no query, no search mode)
+    if (!isSearchMode && !query.trim()) {
+      for (const s of suggestions) {
+        result.push({ type: "suggestion", label: s.text, category: s.category });
+      }
+    }
+    // Quick Actions
     for (const t of quickActions) {
       result.push({ type: "quick-action", label: t.title, template: t });
     }
-    for (const t of filteredTargets) {
-      result.push({ type: "navigate", label: t.label, href: t.href });
+    // Search results OR Navigate
+    if (isSearchMode) {
+      for (const row of searchRows) {
+        result.push({ type: "search-result", label: row.label, row });
+      }
+    } else {
+      for (const t of filteredTargets) {
+        result.push({ type: "navigate", label: t.label, href: t.href });
+      }
     }
+    // Recent
     if (showRecent) {
       for (const r of recent) {
         result.push({ type: "recent", label: r.query });
       }
     }
+    // Ask fallback — always shown
     result.push({ type: "ask", label: query.trim() || "Ask Oxagen anything…" });
     return result;
-  }, [quickActions, filteredTargets, showRecent, recent, query]);
+  }, [suggestions, quickActions, searchRows, filteredTargets, showRecent, recent, query, isSearchMode]);
 
-  // Declared before handleKeyDown so it can be used in the callback dep array.
+  // ── Activation ──────────────────────────────────────────────────────────────
   const activateItem = React.useCallback(
     (item: CommandItem) => {
-      if (item.type === "navigate") {
+      if (item.type === "navigate" || item.type === "search-result") {
+        const href = item.type === "navigate" ? item.href : item.row.href;
         pageCtx.closeCommand();
-        router.push(item.href);
+        router.push(href);
+      } else if (item.type === "suggestion") {
+        // Hand off to Ask Drawer with the suggestion text as the prompt.
+        pageCtx.closeCommand();
+        pageCtx.openAskWithText(item.label, false);
       } else if (item.type === "quick-action") {
-        // Render the template against the current page context and open the
-        // Ask Drawer with the rendered prompt pre-filled.
         const template = item.template;
-        const currentPathname = pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
-        const routeParams = extractRouteParams(currentPathname);
+        const currentPathname_ = pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
+        const routeParams = extractRouteParams(currentPathname_);
         const pageEntity = pageCtx.entity
           ? {
               kind: pageCtx.entity.kind,
@@ -235,6 +382,11 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
     },
     [items, clampedActiveIndex, activateItem, setClampedActiveIndex],
   );
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  // Running index for aria-activedescendant tracking across sections.
+  let sectionOffset = 0;
 
   return (
     <Dialog open={pageCtx.isCommandOpen} onOpenChange={(open) => !open && pageCtx.closeCommand()}>
@@ -293,86 +445,172 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
           aria-label="Commands"
           className="max-h-[360px] overflow-y-auto py-2"
         >
-          {/* Quick Actions section — shown when empty query and templates match current route */}
-          {quickActions.length > 0 && (
-            <CommandSection label="Quick Actions">
-              {quickActions.map((template, i) => (
-                <CommandItemRow
-                  key={template.id}
-                  id={`cmd-item-${i}`}
-                  label={template.title}
-                  icon={categoryIcon(template.category)}
-                  active={clampedActiveIndex === i}
-                  onMouseEnter={() => setClampedActiveIndex(i)}
-                  onSelect={() => void activateItem({ type: "quick-action", label: template.title, template })}
-                  secondary={template.description}
-                  trailing={template.shortcut ? (
-                    <kbd className="hidden rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:block">
-                      {template.shortcut}
-                    </kbd>
-                  ) : undefined}
-                />
-              ))}
-            </CommandSection>
-          )}
+          {/* Suggested for this page (OXA-1770) — shown when no query */}
+          {showSuggestions && (() => {
+            const baseIdx = sectionOffset;
+            sectionOffset += suggestions.length;
+            return (
+              <CommandSection label="Suggested for this page">
+                {suggestionsLoading && suggestions.length === 0 ? (
+                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground/60">
+                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                    <span>Loading suggestions…</span>
+                  </div>
+                ) : (
+                  suggestions.map((s, i) => (
+                    <CommandItemRow
+                      key={`sug-${i}`}
+                      id={`cmd-item-${baseIdx + i}`}
+                      label={s.text}
+                      icon={<Sparkles className="h-4 w-4" aria-hidden="true" />}
+                      active={clampedActiveIndex === baseIdx + i}
+                      onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
+                      onSelect={() =>
+                        void activateItem({ type: "suggestion", label: s.text, category: s.category })
+                      }
+                    />
+                  ))
+                )}
+              </CommandSection>
+            );
+          })()}
 
-          {/* Navigate section */}
-          {filteredTargets.length > 0 && (
-            <CommandSection label="Navigate">
-              {filteredTargets.map((target, i) => {
-                const globalIdx = quickActions.length + i;
-                return (
+          {/* Quick Actions — shown when no query and not in search mode (OXA-1769) */}
+          {quickActions.length > 0 && (() => {
+            const baseIdx = sectionOffset;
+            sectionOffset += quickActions.length;
+            return (
+              <CommandSection label="Quick Actions">
+                {quickActions.map((template, i) => (
+                  <CommandItemRow
+                    key={template.id}
+                    id={`cmd-item-${baseIdx + i}`}
+                    label={template.title}
+                    icon={categoryIcon(template.category)}
+                    active={clampedActiveIndex === baseIdx + i}
+                    onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
+                    onSelect={() =>
+                      void activateItem({ type: "quick-action", label: template.title, template })
+                    }
+                    secondary={template.description}
+                    trailing={
+                      template.shortcut ? (
+                        <kbd className="hidden rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:block">
+                          {template.shortcut}
+                        </kbd>
+                      ) : undefined
+                    }
+                  />
+                ))}
+              </CommandSection>
+            );
+          })()}
+
+          {/* Search results (OXA-1771) — replaces Quick Actions + Navigate in search mode */}
+          {isSearchMode && (() => {
+            const baseIdx = sectionOffset;
+            sectionOffset += searchRows.length;
+            return (
+              <CommandSection label="Search results">
+                {searchLoading && searchRows.length === 0 ? (
+                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground/60">
+                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                    <span>Searching…</span>
+                  </div>
+                ) : searchRows.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-muted-foreground/60">
+                    No results found.
+                  </div>
+                ) : (
+                  searchRows.map((row, i) => (
+                    <CommandItemRow
+                      key={`sr-${row.kind}-${row.id}`}
+                      id={`cmd-item-${baseIdx + i}`}
+                      label={row.label}
+                      icon={entityKindIcon(row.kind)}
+                      active={clampedActiveIndex === baseIdx + i}
+                      onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
+                      onSelect={() =>
+                        void activateItem({ type: "search-result", label: row.label, row })
+                      }
+                      secondary={
+                        row.contextLine
+                          ? `${row.scope} · ${row.contextLine}`
+                          : row.scope
+                      }
+                      trailing={
+                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" aria-hidden="true" />
+                      }
+                    />
+                  ))
+                )}
+              </CommandSection>
+            );
+          })()}
+
+          {/* Navigate section — hidden in search mode */}
+          {!isSearchMode && filteredTargets.length > 0 && (() => {
+            const baseIdx = sectionOffset;
+            sectionOffset += filteredTargets.length;
+            return (
+              <CommandSection label="Navigate">
+                {filteredTargets.map((target, i) => (
                   <CommandItemRow
                     key={target.href}
-                    id={`cmd-item-${globalIdx}`}
+                    id={`cmd-item-${baseIdx + i}`}
                     label={target.label}
                     icon={<Navigation className="h-4 w-4" aria-hidden="true" />}
-                    active={clampedActiveIndex === globalIdx}
-                    onMouseEnter={() => setClampedActiveIndex(globalIdx)}
-                    onSelect={() => void activateItem({ type: "navigate", label: target.label, href: target.href })}
-                    trailing={<ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" aria-hidden="true" />}
+                    active={clampedActiveIndex === baseIdx + i}
+                    onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
+                    onSelect={() =>
+                      void activateItem({ type: "navigate", label: target.label, href: target.href })
+                    }
+                    trailing={
+                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" aria-hidden="true" />
+                    }
                   />
-                );
-              })}
-            </CommandSection>
-          )}
+                ))}
+              </CommandSection>
+            );
+          })()}
 
           {/* Recent section */}
-          {showRecent && (
-            <CommandSection label="Recent">
-              {recent.map((entry, i) => {
-                const globalIdx = quickActions.length + filteredTargets.length + i;
-                return (
+          {showRecent && (() => {
+            const baseIdx = sectionOffset;
+            sectionOffset += recent.length;
+            return (
+              <CommandSection label="Recent">
+                {recent.map((entry, i) => (
                   <CommandItemRow
                     key={entry.query}
-                    id={`cmd-item-${globalIdx}`}
+                    id={`cmd-item-${baseIdx + i}`}
                     label={entry.query}
                     icon={<Clock className="h-4 w-4" aria-hidden="true" />}
-                    active={clampedActiveIndex === globalIdx}
-                    onMouseEnter={() => setClampedActiveIndex(globalIdx)}
+                    active={clampedActiveIndex === baseIdx + i}
+                    onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
                     onSelect={() => void activateItem({ type: "recent", label: entry.query })}
                   />
-                );
-              })}
-            </CommandSection>
-          )}
+                ))}
+              </CommandSection>
+            );
+          })()}
 
-          {/* Empty state when query has no nav matches */}
-          {query.trim() && filteredTargets.length === 0 && (
+          {/* Empty state when query has no nav matches (non-search mode) */}
+          {!isSearchMode && query.trim() && filteredTargets.length === 0 && (
             <div className="px-4 py-3 text-xs text-muted-foreground">No matching pages found.</div>
           )}
 
           {/* Ask fallback — always shown */}
-          <CommandSection label="Ask">
-            {(() => {
-              const globalIdx = items.length - 1;
-              return (
+          {(() => {
+            const askIdx = sectionOffset;
+            return (
+              <CommandSection label="Ask">
                 <CommandItemRow
-                  id={`cmd-item-${globalIdx}`}
+                  id={`cmd-item-${askIdx}`}
                   label={query.trim() ? `Ask: "${query.trim()}"` : "Ask Oxagen anything…"}
                   icon={<Sparkles className="h-4 w-4 text-foreground" aria-hidden="true" />}
-                  active={clampedActiveIndex === globalIdx}
-                  onMouseEnter={() => setClampedActiveIndex(globalIdx)}
+                  active={clampedActiveIndex === askIdx}
+                  onMouseEnter={() => setClampedActiveIndex(askIdx)}
                   onSelect={() =>
                     void activateItem({
                       type: "ask",
@@ -380,9 +618,9 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
                     })
                   }
                 />
-              );
-            })()}
-          </CommandSection>
+              </CommandSection>
+            );
+          })()}
         </div>
 
         {/* Footer keyboard hints */}
@@ -432,7 +670,6 @@ function CommandItemRow({
   icon: React.ReactNode;
   active: boolean;
   trailing?: React.ReactNode;
-  /** Optional one-line secondary description shown below the label. */
   secondary?: string;
   onMouseEnter: () => void;
   onSelect: () => void;
@@ -459,7 +696,12 @@ function CommandItemRow({
       <span className="flex-1 min-w-0">
         <span className="block truncate">{label}</span>
         {secondary && (
-          <span className={cn("block truncate text-[11px]", active ? "text-accent-foreground/70" : "text-muted-foreground/50")}>
+          <span
+            className={cn(
+              "block truncate text-[11px]",
+              active ? "text-accent-foreground/70" : "text-muted-foreground/50",
+            )}
+          >
             {secondary}
           </span>
         )}
@@ -481,24 +723,10 @@ function CommandItemRow({
  * require specific params (e.g. runId) will only match on detail pages where
  * those params are present and the page entity is registered via
  * useRegisterPageEntity.
- *
- * A more complete implementation would use the Next.js router's `params` map
- * (available only in RSC), but the Command Menu is a client component. This
- * approach is sufficient because:
- *   1. Templates with required params filter themselves out when the param
- *      can't be resolved (getApplicableTemplates returns empty for those).
- *   2. For detail pages, the page entity registered via useRegisterPageEntity
- *      carries the id via the `page.*` resolver, not `param.*`.
  */
 function extractRouteParams(pathname: string): Record<string, string> {
   const segments = pathname.split("/").filter(Boolean);
   const params: Record<string, string> = {};
-  // Convention-based extraction for common Oxagen route shapes:
-  //   0: orgSlug, 1: workspaceSlug, 2: section, 3: subsection, 4: entityId
-  //
-  // Use the 5th segment (index 4) as a generic entity id, mapped to all
-  // common param names so templates using different names match the same
-  // positional slot.
   if (segments.length >= 5) {
     const id = segments[4];
     if (id) {
