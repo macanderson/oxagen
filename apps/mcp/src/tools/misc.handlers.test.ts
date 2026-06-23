@@ -340,6 +340,8 @@ describe("user.preferences.read handler", () => {
       defaultTextModel: null,
       defaultImageModel: null,
       defaultVideoModel: null,
+      timezone: "UTC",
+      language: "en",
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -378,6 +380,8 @@ describe("user.preferences.write handler", () => {
       defaultTextModel: null,
       defaultImageModel: null,
       defaultVideoModel: null,
+      timezone: "America/New_York",
+      language: "en",
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -390,6 +394,8 @@ describe("user.preferences.write handler", () => {
       defaultTextModel: undefined,
       defaultImageModel: undefined,
       defaultVideoModel: undefined,
+      timezone: undefined,
+      language: undefined,
     };
     await handler_userPreferencesWrite(args);
 

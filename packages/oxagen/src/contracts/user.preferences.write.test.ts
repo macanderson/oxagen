@@ -63,6 +63,8 @@ describe("user.preferences.write capability", () => {
       defaultTextModel: null,
       defaultImageModel: null,
       defaultVideoModel: null,
+      timezone: "UTC",
+      language: "en",
     });
     expect(parsed.fontSize).toBe("medium");
     expect(parsed.defaultTextTier).toBeNull();

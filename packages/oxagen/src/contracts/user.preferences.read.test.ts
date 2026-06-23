@@ -24,6 +24,8 @@ describe("user.preferences.read capability", () => {
       defaultTextModel: "anthropic/claude-opus-4.8",
       defaultImageModel: "bfl/flux-2-max",
       defaultVideoModel: "google/veo-3.0-generate-001",
+      timezone: "America/New_York",
+      language: "en",
     });
     expect(parsed.fontSize).toBe("large");
     expect(parsed.defaultTextTier).toBe("precise");
@@ -39,6 +41,8 @@ describe("user.preferences.read capability", () => {
       defaultTextModel: null,
       defaultImageModel: null,
       defaultVideoModel: null,
+      timezone: "UTC",
+      language: "en",
     });
     expect(parsed.defaultTextTier).toBeNull();
     expect(parsed.defaultTextModel).toBeNull();
