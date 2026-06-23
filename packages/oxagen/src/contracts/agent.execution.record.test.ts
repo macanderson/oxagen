@@ -123,6 +123,39 @@ describe("agent.execution.record capability", () => {
     ).toThrow();
   });
 
+  // ── input: originType enum (must match the agent_executions CHECK) ─────────
+
+  it("accepts every canonical originType", () => {
+    for (const originType of ["chat", "event_trigger", "scheduled_job", "mcp_request", "workflow_run"]) {
+      const parsed = agentExecutionRecord.input.parse({
+        agentId: BASE_UUID_A,
+        agentVersionId: BASE_UUID_B,
+        originType,
+        originId: BASE_UUID_C,
+        status: "completed",
+        inputPayload: {},
+      });
+      expect(parsed.originType).toBe(originType);
+    }
+  });
+
+  it("rejects an originType outside the CHECK constraint set", () => {
+    // "workflow.run" (dot) and "user" are NOT valid — the DB CHECK only permits
+    // the underscore tokens, so the contract must reject them at the boundary.
+    for (const bad of ["user", "workflow.run", "api", ""]) {
+      expect(() =>
+        agentExecutionRecord.input.parse({
+          agentId: BASE_UUID_A,
+          agentVersionId: BASE_UUID_B,
+          originType: bad,
+          originId: BASE_UUID_C,
+          status: "completed",
+          inputPayload: {},
+        }),
+      ).toThrow();
+    }
+  });
+
   // ── input: optional fields ────────────────────────────────────────────────
 
   it("accepts optional outputPayload", () => {
