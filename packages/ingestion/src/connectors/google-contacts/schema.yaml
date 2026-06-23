@@ -1,0 +1,96 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: google-contacts
+  displayName: Google Contacts
+  description: Sync contacts and people from Google Contacts (Google People API).
+  icon: google-contacts
+  category: productivity
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: oauth2
+      kind: oauth2_authorization_code
+      displayName: Connect with Google
+      scopes:
+        - https://www.googleapis.com/auth/contacts.readonly
+
+config:
+  fields:
+    - key: includeOtherContacts
+      label: Include Other Contacts
+      widget: checkbox
+      description: Sync contacts from the "Other contacts" list (people interacted with via Gmail) in addition to the main contacts directory.
+      defaultValue: false
+
+    - key: resourceNames
+      label: Resource Names (optional)
+      widget: tag-input
+      description: Restrict sync to specific person resource names (e.g. people/c12345). Leave empty to sync all accessible contacts.
+      validation:
+        itemPattern: "^people/[a-zA-Z0-9_\\-]{1,100}$"
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: false
+  items:
+    - id: person
+      displayName: Contacts
+      description: Contact records with name, email addresses, phone numbers, and organization details.
+      defaultEnabled: true
+
+filters:
+  pathFilters:
+    enabled: false
+  labelFilters:
+    enabled: false
+
+inference:
+  enabled: true
+  defaultEnabled: false
+  toggleLabel: Enable AI relationship inference
+  perRecordType:
+    person: true
+  confidenceThreshold:
+    defaultValue: 0.75
+    min: 0.50
+    max: 0.99
+  ontologyPrompt: |
+    Infer person-to-organization relationships from Google Contacts.
+
+    Look for:
+    - Contact organization names matching known customer accounts or partner companies
+    - Job titles indicating engineering, product, or leadership roles
+    - Email domains that identify the person's company or organization
+
+    Create edges:
+    - Person -[member_of]-> Organization (when organization field matches a known account)
+    - Person -[has_role]-> JobFunction (when job title maps to engineering, product, sales, etc.)
+
+    Cross-source links:
+    - If contact email matches a known GitHub or Linear user, create an ALIAS_OF edge
+    - If organization name matches a Salesforce Account, link to that node
+
+sync:
+  delivery: polling
+  pollingSupported: true
+  polling:
+    defaultIntervalSeconds: 3600
+    minIntervalSeconds: 900
+    maxIntervalSeconds: 86400
+
+defaultFieldMappings:
+  person:
+    displayName: displayName
+    givenName: firstName
+    familyName: lastName
+    email: email
+    organization: organization
+    jobTitle: jobTitle
+    updatedAt: updatedAt

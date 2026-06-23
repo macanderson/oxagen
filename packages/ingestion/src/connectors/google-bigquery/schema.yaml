@@ -1,0 +1,131 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: google-bigquery
+  displayName: Google BigQuery
+  description: Query rows from BigQuery datasets using custom SQL and sync them into the knowledge graph.
+  icon: bigquery
+  category: analytics
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: oauth2
+      kind: oauth2_authorization_code
+      displayName: Connect with Google (OAuth)
+      scopes:
+        - https://www.googleapis.com/auth/bigquery.readonly
+
+    - id: service_account
+      kind: api_key
+      displayName: Service Account JSON
+      fields:
+        - key: apiKey
+          label: Service Account JSON Key
+          widget: secret
+          description: JSON key file for a GCP service account with BigQuery Data Viewer and Job User roles.
+          validation:
+            required: true
+            pattern: "^\\{.{10,}\\}$"
+
+config:
+  fields:
+    - key: projectId
+      label: GCP Project ID
+      widget: text
+      description: The Google Cloud project that contains your BigQuery dataset.
+      validation:
+        required: true
+        pattern: "^[a-z][a-z0-9\\-]{4,28}[a-z0-9]$"
+
+    - key: datasetId
+      label: Dataset ID
+      widget: text
+      description: The BigQuery dataset to query.
+      validation:
+        required: true
+        pattern: "^[a-zA-Z][a-zA-Z0-9_]{0,1023}$"
+
+    - key: query
+      label: SQL Query
+      widget: code
+      description: "BigQuery SQL query. Use a cursor column for incremental sync. Example: SELECT * FROM `project.dataset.table` WHERE updated_at > @cursor ORDER BY updated_at"
+      validation:
+        required: true
+
+    - key: cursorColumn
+      label: Cursor Column
+      widget: text
+      description: Column used for incremental polling (must be a timestamp or integer). Default is "updated_at".
+      defaultValue: updated_at
+      validation:
+        pattern: "^[a-zA-Z_][a-zA-Z0-9_]{0,127}$"
+
+    - key: recordType
+      label: Record Type Name
+      widget: text
+      description: Name for the entity type produced by this query (e.g. "analytics_event", "user_session").
+      validation:
+        required: true
+        pattern: "^[a-z][a-z0-9_]{0,63}$"
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: true
+  items:
+    - id: bigquery_row
+      displayName: BigQuery Rows
+      description: Rows returned by your configured SQL query. Record type is set by the recordType config field.
+      defaultEnabled: true
+
+filters:
+  pathFilters:
+    enabled: false
+  labelFilters:
+    enabled: false
+
+inference:
+  enabled: true
+  defaultEnabled: false
+  toggleLabel: Enable AI relationship inference
+  perRecordType:
+    bigquery_row: true
+  confidenceThreshold:
+    defaultValue: 0.75
+    min: 0.50
+    max: 0.99
+  ontologyPrompt: |
+    Infer business entities and relationships from BigQuery query results.
+
+    Look for:
+    - Columns with name/title values mapping to known product features or customers
+    - Foreign key columns (user_id, account_id, product_id) implying relationships
+    - Status or lifecycle columns (active, churned, converted)
+    - Timestamp columns establishing temporal ordering
+
+    Create edges:
+    - Entity -[related_to]-> Entity (when a foreign-key column references another entity by ID)
+    - Entity -[owned_by]-> Account (when an account_id or org_id column is present)
+    - Entity -[has_status]-> LifecycleState (when a status column maps to a known state)
+
+sync:
+  delivery: polling
+  pollingSupported: true
+  polling:
+    defaultIntervalSeconds: 900
+    minIntervalSeconds: 300
+    maxIntervalSeconds: 86400
+
+defaultFieldMappings:
+  bigquery_row:
+    id: externalId
+    name: title
+    title: title
+    description: description
+    created_at: createdAt
+    updated_at: updatedAt
