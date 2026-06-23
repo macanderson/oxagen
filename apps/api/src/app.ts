@@ -42,6 +42,8 @@ import { agentSubagentAggregateRoute } from "./routes/v1/agent.subagent.aggregat
 import { agentSubagentFanoutListRoute } from "./routes/v1/agent.subagent.fanout.list";
 import { agentSubagentFanoutGetRoute } from "./routes/v1/agent.subagent.fanout.get";
 import { formFillRoute } from "./routes/v1/form.fill";
+import { commandMenuSearchRoute } from "./routes/v1/command.menu.search";
+import { commandMenuSuggestRoute } from "./routes/v1/command.menu.suggest";
 import { archiveCreateRoute } from "./routes/v1/archive.create";
 import { documentsGenerateRoute } from "./routes/v1/documents.generate";
 import { documentsPdfCreateRoute } from "./routes/v1/documents.pdf.create";
@@ -265,6 +267,8 @@ orgScoped.route("/agent/triggers/delete", agentTriggerDeleteRoute);
 orgScoped.route("/agent/triggers", agentTriggerCreateRoute);
 orgScoped.route("/agent/triggers", agentTriggerListRoute);
 orgScoped.route("/forms/fill", formFillRoute);
+orgScoped.route("/command/menu/search", commandMenuSearchRoute);
+orgScoped.route("/command/menu/suggest", commandMenuSuggestRoute);
 orgScoped.route("/archive/create", archiveCreateRoute);
 orgScoped.route("/documents/generate", documentsGenerateRoute);
 orgScoped.route("/documents/pdf", documentsPdfCreateRoute);
