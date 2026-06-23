@@ -12,9 +12,20 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import { agentTriggerUpdateHandler } from "./agent.trigger.update";
+import { AgentManagedReadOnlyError } from "./_agent-definition";
 import { TEST_CTX as CTX, makeCTX } from "../test-utils/fixtures";
 
-const TRIGGER_ROW = { id: "t-uuid", publicId: "atr_1", agentId: "uuid-1" };
+const TRIGGER_ROW = {
+  id: "t-uuid",
+  publicId: "atr_1",
+  agentId: "uuid-1",
+  agentType: "custom",
+};
+
+const MANAGED_TRIGGER_ROW = {
+  ...TRIGGER_ROW,
+  agentType: "interactive_chat",
+};
 
 beforeEach(() => fake.reset());
 
@@ -33,6 +44,19 @@ describe("agent.trigger.update handler", () => {
     );
     expect(out.triggerType).toBe("schedule");
     expect(out.enabled).toBe(false);
+  });
+
+  it("throws AgentManagedReadOnlyError when the trigger belongs to a managed agent", async () => {
+    fake.enqueue([MANAGED_TRIGGER_ROW]); // resolveTrigger → managed parent
+    const err = await agentTriggerUpdateHandler(
+      {
+        triggerId: "atr_1",
+        trigger: { type: "manual", enabled: false },
+      },
+      CTX,
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
+    expect((err as AgentManagedReadOnlyError).code).toBe("agent_managed_read_only");
   });
 
   it("throws when the trigger is not found", async () => {

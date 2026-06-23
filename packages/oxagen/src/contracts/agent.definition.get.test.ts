@@ -8,7 +8,7 @@ describe("agent.definition.get capability", () => {
     expect(parsed.agentId).toBe("agt_1");
   });
 
-  it("parses a valid output including the config", () => {
+  it("parses a valid output including the config and managed flag", () => {
     const out = agentDefinitionGet.output.parse({
       agentId: "agt_1",
       publicId: "agt_1",
@@ -20,6 +20,7 @@ describe("agent.definition.get capability", () => {
       deploymentStatus: "active",
       version: 1,
       isPublished: true,
+      managed: true,
       config: {
         graph: {
           ontologyId: "ont",
@@ -33,6 +34,34 @@ describe("agent.definition.get capability", () => {
     });
     expect(out.status).toBe("active");
     expect(out.config.graph.ontologyId).toBe("ont");
+    expect(out.managed).toBe(true);
+  });
+
+  it("rejects output missing the managed field", () => {
+    expect(() =>
+      agentDefinitionGet.output.parse({
+        agentId: "a",
+        publicId: "a",
+        slug: "s",
+        name: "n",
+        description: null,
+        agentType: "custom",
+        status: "active",
+        deploymentStatus: "active",
+        version: 1,
+        isPublished: false,
+        // managed intentionally omitted
+        config: {
+          graph: {
+            ontologyId: "o",
+            retrieval: { strategy: "hybrid" },
+            budget: { maxHops: 1, maxNodes: 1 },
+          },
+          agentTools: [],
+          triggers: [],
+        },
+      }),
+    ).toThrow();
   });
 
   it("rejects an unknown status in output", () => {

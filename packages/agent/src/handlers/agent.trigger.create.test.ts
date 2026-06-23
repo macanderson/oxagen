@@ -12,18 +12,26 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import { agentTriggerCreateHandler } from "./agent.trigger.create";
+import { AgentManagedReadOnlyError } from "./_agent-definition";
 import { TEST_CTX as CTX, makeCTX } from "../test-utils/fixtures";
 
 const AGENT_ROW = {
   id: "uuid-1",
   publicId: "agt_1",
-  slug: "qa-chat",
-  name: "QA",
+  slug: "my-agent",
+  name: "My Agent",
   description: null,
-  agentType: "interactive_chat",
+  agentType: "custom",
   status: "active",
   deploymentStatus: "active",
   activeVersionId: "ver-1",
+};
+
+const MANAGED_AGENT_ROW = {
+  ...AGENT_ROW,
+  publicId: "agt_builtin",
+  slug: "qa-chat",
+  agentType: "interactive_chat",
 };
 
 beforeEach(() => fake.reset());
@@ -50,6 +58,16 @@ describe("agent.trigger.create handler", () => {
         CTX,
       ),
     ).rejects.toThrow();
+  });
+
+  it("throws AgentManagedReadOnlyError for a managed agent and performs no insert", async () => {
+    fake.enqueue([MANAGED_AGENT_ROW]); // resolveAgent → managed
+    const err = await agentTriggerCreateHandler(
+      { agentId: "agt_builtin", trigger: { type: "manual", enabled: true } },
+      CTX,
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
+    expect((err as AgentManagedReadOnlyError).code).toBe("agent_managed_read_only");
   });
 
   it("throws when the agent is not found", async () => {

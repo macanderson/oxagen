@@ -6,7 +6,7 @@ import type {
   AgentDefinitionGetOutput,
 } from "@oxagen/oxagen/contracts/agent.definition.get";
 import type { CapabilityContext } from "../types";
-import { resolveAgent } from "./_agent-definition";
+import { resolveAgent, isManagedAgentType } from "./_agent-definition";
 
 export type { AgentDefinitionGetInput, AgentDefinitionGetOutput };
 
@@ -77,6 +77,7 @@ export async function agentDefinitionGetHandler(
       deploymentStatus: agent.deploymentStatus,
       version: versionRow.version,
       isPublished: versionRow.isPublished,
+      managed: isManagedAgentType(agent.agentType),
       config,
     };
   });
